@@ -661,9 +661,9 @@ public:
     // ============================================================================
     // Change Monitoring Implementation
     // ============================================================================
-    
+
     bool hasChanged() const override {
-        // Windows doesn't provide built-in change detection, 
+        // Windows doesn't provide built-in change detection,
         // so we'll use a simple sequence number approach
         DWORD currentSequence = GetClipboardSequenceNumber();
         if (currentSequence != m_lastSequenceNumber) {
@@ -672,7 +672,7 @@ public:
         }
         return false;
     }
-    
+
     void updateChangeCount() override {
         m_lastSequenceNumber = GetClipboardSequenceNumber();
     }std::vector<ClipboardFormat> getAvailableFormats() override {

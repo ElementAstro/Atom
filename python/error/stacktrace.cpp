@@ -27,8 +27,8 @@ PYBIND11_MODULE(stacktrace, m) {
         m, "StackTrace",
         R"(Class for capturing and representing a stack trace with enhanced details.
 
-This class captures the stack trace of the current execution context and represents 
-it as a string, including file names, line numbers, function names, module 
+This class captures the stack trace of the current execution context and represents
+it as a string, including file names, line numbers, function names, module
 information, and memory addresses when available.
 
 Examples:
@@ -129,7 +129,7 @@ Examples:
     ...     print(error_report)
     Exception: ValueError
     Message: Invalid input
-    
+
     Native Stack Trace:
       [0] format_exception_with_traceback at ...
       [1] __main__ at ...

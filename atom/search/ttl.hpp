@@ -41,25 +41,25 @@ namespace atom::search {
 #if defined(ATOM_USE_BOOST_THREAD)
   template <typename T>
   using SharedMutex = boost::shared_mutex;
-  
+
   template <typename T>
   using SharedLock = boost::shared_lock<T>;
-  
+
   template <typename T>
   using UniqueLock = boost::unique_lock<T>;
-  
+
   using CondVarAny = boost::condition_variable_any;
   using Thread = boost::thread;
 #else
   template <typename T>
   using SharedMutex = std::shared_mutex;
-  
+
   template <typename T>
   using SharedLock = std::shared_lock<T>;
-  
+
   template <typename T>
   using UniqueLock = std::unique_lock<T>;
-  
+
   using CondVarAny = std::condition_variable_any;
   using Thread = std::thread;
 #endif
@@ -119,7 +119,7 @@ struct CacheConfig {
  * @tparam Hash The hash function type for keys (defaults to std::hash<Key>).
  * @tparam KeyEqual The key equality comparison type (defaults to std::equal_to<Key>).
  */
-template <typename Key, typename Value, 
+template <typename Key, typename Value,
           typename Hash = std::hash<Key>,
           typename KeyEqual = std::equal_to<Key>>
 class TTLCache {
@@ -142,7 +142,7 @@ public:
      * @param eviction_callback Optional callback for eviction events.
      * @throws TTLCacheException if ttl <= 0 or max_capacity == 0
      */
-    explicit TTLCache(Duration ttl, 
+    explicit TTLCache(Duration ttl,
                      size_t max_capacity,
                      std::optional<Duration> cleanup_interval = std::nullopt,
                      CacheConfig config = CacheConfig{},
@@ -175,7 +175,7 @@ public:
      * @throws std::bad_alloc if memory allocation fails
      * @throws TTLCacheException for other internal errors
      */
-    void put(const Key& key, const Value& value, 
+    void put(const Key& key, const Value& value,
              std::optional<Duration> custom_ttl = std::nullopt);
 
     /**
@@ -239,7 +239,7 @@ public:
      * @param update_access_time Whether to update access times (default: true).
      * @return Vector of optional values corresponding to the keys.
      */
-    [[nodiscard]] ValueContainer batch_get(const KeyContainer& keys, 
+    [[nodiscard]] ValueContainer batch_get(const KeyContainer& keys,
                                           bool update_access_time = true);
 
     /**
@@ -410,7 +410,7 @@ private:
         ValuePtr value;
         TimePoint expiry_time;
         TimePoint access_time;
-        
+
         CacheItem(const Key& k, const Value& v, const TimePoint& expiry, const TimePoint& access);
         CacheItem(const Key& k, Value&& v, const TimePoint& expiry, const TimePoint& access);
         template<typename... Args>
@@ -430,7 +430,7 @@ private:
     CacheMap cache_map_;
 
     mutable SharedMutex<std::shared_mutex> mutex_;
-    
+
     Atomic<size_t> hit_count_{0};
     Atomic<size_t> miss_count_{0};
     Atomic<size_t> eviction_count_{0};
@@ -459,7 +459,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(
       max_capacity_(max_capacity),
       config_(std::move(config)),
       eviction_callback_(std::move(eviction_callback)) {
-    
+
     if (ttl <= Duration::zero()) {
         throw TTLCacheException("TTL must be greater than zero");
     }
@@ -499,7 +499,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(TTLCache&& other) noexcept
       miss_count_(other.miss_count_.load()),
       eviction_count_(other.eviction_count_.load()),
       expiration_count_(other.expiration_count_.load()) {
-    
+
     UniqueLock lock(other.mutex_);
     cache_list_ = std::move(other.cache_list_);
     cache_map_ = std::move(other.cache_map_);
@@ -517,7 +517,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::TTLCache(TTLCache&& other) noexcept
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
-TTLCache<Key, Value, Hash, KeyEqual>& 
+TTLCache<Key, Value, Hash, KeyEqual>&
 TTLCache<Key, Value, Hash, KeyEqual>::operator=(TTLCache&& other) noexcept {
     if (this != &other) {
         stop_flag_ = true;
@@ -559,7 +559,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::operator=(TTLCache&& other) noexcept {
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::put(
     const Key& key, const Value& value, std::optional<Duration> custom_ttl) {
-    
+
     try {
         UniqueLock lock(mutex_);
         auto now = Clock::now();
@@ -587,7 +587,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::put(
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::put(
     const Key& key, Value&& value, std::optional<Duration> custom_ttl) {
-    
+
     try {
         UniqueLock lock(mutex_);
         auto now = Clock::now();
@@ -616,7 +616,7 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 template<typename... Args>
 void TTLCache<Key, Value, Hash, KeyEqual>::emplace(
     const Key& key, std::optional<Duration> custom_ttl, Args&&... args) {
-    
+
     try {
         UniqueLock lock(mutex_);
         auto now = Clock::now();
@@ -645,7 +645,7 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::batch_put(
     const std::vector<std::pair<Key, Value>>& items,
     std::optional<Duration> custom_ttl) {
-    
+
     if (items.empty()) return;
 
     try {
@@ -657,7 +657,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::batch_put(
 
         for (const auto& [key, value] : items) {
             auto expiry = now + ttl_to_use;
-            
+
             auto it = cache_map_.find(key);
             if (it != cache_map_.end()) {
                 notify_eviction(it->second->key, *(it->second->value), false);
@@ -680,7 +680,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::batch_put(
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 std::optional<Value> TTLCache<Key, Value, Hash, KeyEqual>::get(
     const Key& key, bool update_access_time) {
-    
+
     try {
         if (config_.thread_safe) {
             SharedLock lock(mutex_);
@@ -698,9 +698,9 @@ std::optional<Value> TTLCache<Key, Value, Hash, KeyEqual>::get(
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
-typename TTLCache<Key, Value, Hash, KeyEqual>::ValuePtr 
+typename TTLCache<Key, Value, Hash, KeyEqual>::ValuePtr
 TTLCache<Key, Value, Hash, KeyEqual>::get_shared(const Key& key, bool update_access_time) {
-    
+
     try {
         if (config_.thread_safe) {
             SharedLock lock(mutex_);
@@ -721,7 +721,7 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 typename TTLCache<Key, Value, Hash, KeyEqual>::ValueContainer
 TTLCache<Key, Value, Hash, KeyEqual>::batch_get(
     const KeyContainer& keys, bool update_access_time) {
-    
+
     if (keys.empty()) return {};
 
     ValueContainer results;
@@ -735,12 +735,12 @@ TTLCache<Key, Value, Hash, KeyEqual>::batch_get(
             auto it = cache_map_.find(key);
             if (it != cache_map_.end() && !is_expired(it->second->expiry_time)) {
                 if (config_.enable_statistics) hit_count_++;
-                
+
                 if (update_access_time) {
                     it->second->access_time = now;
                     move_to_front(it->second);
                 }
-                
+
                 results.emplace_back(*(it->second->value));
             } else {
                 if (config_.enable_statistics) miss_count_++;
@@ -761,7 +761,7 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 template<typename Factory>
 Value TTLCache<Key, Value, Hash, KeyEqual>::get_or_compute(
     const Key& key, Factory&& factory, std::optional<Duration> custom_ttl) {
-    
+
     auto cached_value = get_shared(key);
     if (cached_value) {
         return *cached_value;
@@ -880,7 +880,7 @@ CacheStatistics TTLCache<Key, Value, Hash, KeyEqual>::get_statistics() const noe
         stats.expirations = expiration_count_.load();
         stats.current_size = cache_map_.size();
         stats.max_capacity = max_capacity_;
-        
+
         size_t total = stats.hits + stats.misses;
         stats.hit_rate = total > 0 ? static_cast<double>(stats.hits) / total : 0.0;
     } catch (...) {
@@ -901,7 +901,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::reset_statistics() noexcept {
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 double TTLCache<Key, Value, Hash, KeyEqual>::hit_rate() const noexcept {
     if (!config_.enable_statistics) return 0.0;
-    
+
     size_t hits = hit_count_.load();
     size_t misses = miss_count_.load();
     size_t total = hits + misses;
@@ -931,7 +931,7 @@ TTLCache<Key, Value, Hash, KeyEqual>::get_keys() const {
         SharedLock lock(mutex_);
         auto now = Clock::now();
         keys.reserve(cache_map_.size());
-        
+
         for (const auto& [key, iter] : cache_map_) {
             if (!is_expired(iter->expiry_time)) {
                 keys.push_back(key);
@@ -946,16 +946,16 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::clear() noexcept {
     try {
         UniqueLock lock(mutex_);
-        
+
         if (eviction_callback_) {
             for (const auto& item : cache_list_) {
                 notify_eviction(item.key, *(item.value), false);
             }
         }
-        
+
         cache_list_.clear();
         cache_map_.clear();
-        
+
         if (config_.enable_statistics) {
             hit_count_ = 0;
             miss_count_ = 0;
@@ -1038,7 +1038,7 @@ template <typename Key, typename Value, typename Hash, typename KeyEqual>
 template<typename... Args>
 TTLCache<Key, Value, Hash, KeyEqual>::CacheItem::CacheItem(
     const Key& k, const TimePoint& expiry, const TimePoint& access, Args&&... args)
-    : key(k), value(std::make_shared<Value>(std::forward<Args>(args)...)), 
+    : key(k), value(std::make_shared<Value>(std::forward<Args>(args)...)),
       expiry_time(expiry), access_time(access) {}
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
@@ -1062,7 +1062,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::cleaner_task() noexcept {
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::evict_items(
     UniqueLock<std::shared_mutex>& lock, size_t count) noexcept {
-    
+
     try {
         auto now = Clock::now();
         size_t expired_removed = 0;
@@ -1080,7 +1080,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::evict_items(
                 cache_map_.erase(key);
                 --count;
                 ++expired_removed;
-                
+
                 if (config_.enable_statistics) {
                     expiration_count_++;
                 }
@@ -1095,7 +1095,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::evict_items(
             cache_map_.erase(last.key);
             cache_list_.pop_back();
             --count;
-            
+
             if (config_.enable_statistics) {
                 eviction_count_++;
             }
@@ -1130,11 +1130,11 @@ inline bool TTLCache<Key, Value, Hash, KeyEqual>::is_expired(const TimePoint& ex
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
 void TTLCache<Key, Value, Hash, KeyEqual>::cleanup_expired_items(
     UniqueLock<std::shared_mutex>& lock) noexcept {
-    
+
     try {
         auto now = Clock::now();
         size_t batch_count = 0;
-        
+
         auto it = cache_list_.begin();
         while (it != cache_list_.end() && batch_count < config_.cleanup_batch_size) {
             if (is_expired(it->expiry_time)) {
@@ -1142,10 +1142,10 @@ void TTLCache<Key, Value, Hash, KeyEqual>::cleanup_expired_items(
                 auto value = it->value;
                 it = cache_list_.erase(it);
                 cache_map_.erase(key);
-                
+
                 notify_eviction(key, *value, true);
                 ++batch_count;
-                
+
                 if (config_.enable_statistics) {
                     expiration_count_++;
                 }

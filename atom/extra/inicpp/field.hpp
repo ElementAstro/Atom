@@ -168,7 +168,7 @@ public:
 class IniFieldPool {
 private:
     static boost::object_pool<IniField> pool_;
-    
+
 public:
     /**
      * @brief Allocate a new IniField from the pool.
@@ -177,7 +177,7 @@ public:
     static IniField* allocate() {
         return pool_.construct();
     }
-    
+
     /**
      * @brief Allocate a new IniField from the pool with an initial value.
      * @param value The initial value.
@@ -188,7 +188,7 @@ public:
     static IniField* allocate(StringType value) {
         return pool_.construct(value);
     }
-    
+
     /**
      * @brief Free an IniField back to the pool.
      * @param field The field to free.

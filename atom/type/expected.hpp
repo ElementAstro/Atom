@@ -133,7 +133,7 @@ public:
         std::is_nothrow_constructible_v<E, U>)
         : error_(std::forward<U>(error)) {}
 
-    
+
 
     /**
      * @brief Gets a const reference to the error value.

@@ -33,7 +33,7 @@ namespace lockfree {
  *
  * 这个队列允许多个线程并发地入队和出队，无需互斥锁。
  * 适用于高性能并发系统和并行计算。
- * 
+ *
  * @tparam T 元素类型
  * @tparam Capacity 队列容量
  */
@@ -47,7 +47,7 @@ public:
 
     /**
      * @brief 将元素推入队列
-     * 
+     *
      * @param item 要入队的元素
      * @return bool 如果成功返回true，如果队列已满则返回false
      */
@@ -57,7 +57,7 @@ public:
 
     /**
      * @brief 从队列弹出元素
-     * 
+     *
      * @param item 接收弹出元素的引用
      * @return bool 如果成功返回true，如果队列为空则返回false
      */
@@ -67,9 +67,9 @@ public:
 
     /**
      * @brief 检查队列是否为空
-     * 
+     *
      * 注意：在多线程环境中，此操作结果可能立即过期
-     * 
+     *
      * @return bool 如果队列为空返回true
      */
     bool empty() const {
@@ -79,10 +79,10 @@ public:
 
 /**
  * @brief 单生产者单消费者无锁队列
- * 
+ *
  * 这个高度优化的队列适用于只有一个线程生产数据和一个线程消费数据的场景。
  * 比多生产者多消费者版本有更低的开销。
- * 
+ *
  * @tparam T 元素类型
  * @tparam Capacity 队列容量
  */
@@ -96,7 +96,7 @@ public:
 
     /**
      * @brief 将元素推入队列
-     * 
+     *
      * @param item 要入队的元素
      * @return bool 如果成功返回true，如果队列已满则返回false
      */
@@ -106,7 +106,7 @@ public:
 
     /**
      * @brief 从队列弹出元素
-     * 
+     *
      * @param item 接收弹出元素的引用
      * @return bool 如果成功返回true，如果队列为空则返回false
      */
@@ -116,7 +116,7 @@ public:
 
     /**
      * @brief 检查队列是否为空
-     * 
+     *
      * @return bool 如果队列为空返回true
      */
     bool empty() const {
@@ -126,9 +126,9 @@ public:
 
 /**
  * @brief 无锁栈
- * 
+ *
  * 线程安全的LIFO数据结构，允许多个线程并发地压入和弹出元素，无需互斥锁。
- * 
+ *
  * @tparam T 元素类型
  * @tparam Capacity 栈容量
  */
@@ -142,7 +142,7 @@ public:
 
     /**
      * @brief 将元素压入栈
-     * 
+     *
      * @param item 要压入的元素
      * @return bool 如果成功返回true，如果栈已满则返回false
      */
@@ -152,7 +152,7 @@ public:
 
     /**
      * @brief 从栈弹出元素
-     * 
+     *
      * @param item 接收弹出元素的引用
      * @return bool 如果成功返回true，如果栈为空则返回false
      */
@@ -162,9 +162,9 @@ public:
 
     /**
      * @brief 检查栈是否为空
-     * 
+     *
      * 注意：在多线程环境中，此操作结果可能立即过期
-     * 
+     *
      * @return bool 如果栈为空返回true
      */
     bool empty() const {

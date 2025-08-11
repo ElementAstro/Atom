@@ -93,13 +93,13 @@ public:
         size_t peakUsage = 0;     ///< Peak memory usage.
 
         MemoryStats() noexcept = default;
-        
+
         /**
          * @brief Constructor with explicit initialization values
          * @param current Current memory usage
          * @param peak Peak memory usage
          */
-        MemoryStats(size_t current, size_t peak) noexcept 
+        MemoryStats(size_t current, size_t peak) noexcept
             : currentUsage(current), peakUsage(peak) {}
 
         /**

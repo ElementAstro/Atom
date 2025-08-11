@@ -32,7 +32,7 @@ TEST_F(SmallListTest, CopyConstructor) {
     list.pushBack(1);
     list.pushBack(2);
     list.pushBack(3);
-    
+
     SmallList<int> copy(list);
     EXPECT_EQ(copy.size(), list.size());
     EXPECT_TRUE(std::equal(copy.begin(), copy.end(), list.begin()));
@@ -42,7 +42,7 @@ TEST_F(SmallListTest, MoveConstructor) {
     list.pushBack(1);
     list.pushBack(2);
     size_t originalSize = list.size();
-    
+
     SmallList<int> moved(std::move(list));
     EXPECT_EQ(moved.size(), originalSize);
     EXPECT_TRUE(list.empty());
@@ -59,10 +59,10 @@ TEST_F(SmallListTest, PushBackAndFront) {
 TEST_F(SmallListTest, PopBackAndFront) {
     list.pushBack(1);
     list.pushBack(2);
-    
+
     list.popFront();
     EXPECT_EQ(list.front(), 2);
-    
+
     list.popBack();
     EXPECT_TRUE(list.empty());
 }
@@ -73,7 +73,7 @@ TEST_F(SmallListTest, EmplaceOperations) {
     auto it = list.begin();
     ++it;
     list.emplace(it, 3);
-    
+
     std::vector<int> expected = {2, 3, 1};
     EXPECT_TRUE(std::equal(list.begin(), list.end(), expected.begin()));
 }
@@ -83,7 +83,7 @@ TEST_F(SmallListTest, IteratorOperations) {
     for(int i = 0; i < 5; ++i) {
         list.pushBack(i);
     }
-    
+
     auto it = list.begin();
     EXPECT_EQ(*it, 0);
     ++it;
@@ -95,7 +95,7 @@ TEST_F(SmallListTest, IteratorOperations) {
 TEST_F(SmallListTest, ConstIterator) {
     list.pushBack(1);
     list.pushBack(2);
-    
+
     const SmallList<int>& constList = list;
     auto it = constList.begin();
     EXPECT_EQ(*it, 1);
@@ -118,7 +118,7 @@ TEST_F(SmallListTest, InsertAndErase) {
     ++it;
     list.insert(it, 3);
     EXPECT_THAT(list, ElementsAre(1, 2, 3, 4, 5));
-    
+
     it = list.begin();
     ++it;
     list.erase(it);
@@ -137,7 +137,7 @@ TEST_F(SmallListTest, Resize) {
     list.resize(5, 0);
     EXPECT_EQ(list.size(), 5);
     EXPECT_EQ(list.back(), 0);
-    
+
     list.resize(2);
     EXPECT_EQ(list.size(), 2);
     EXPECT_EQ(list.back(), 2);
@@ -203,7 +203,7 @@ TEST_F(SmallListTest, LargeListOperations) {
     for(int i = 0; i < TEST_SIZE; ++i) {
         list.pushBack(i);
     }
-    
+
     list.sort();
     EXPECT_TRUE(std::is_sorted(list.begin(), list.end()));
     EXPECT_EQ(list.size(), TEST_SIZE);
@@ -213,7 +213,7 @@ TEST_F(SmallListTest, LargeListOperations) {
 struct ThrowingCopy {
     int value;
     static bool shouldThrow;
-    
+
     ThrowingCopy(int v) : value(v) {}
     ThrowingCopy(const ThrowingCopy& other) {
         if(shouldThrow) throw std::runtime_error("Copy error");
@@ -228,7 +228,7 @@ TEST_F(SmallListTest, ExceptionSafety) {
     ThrowingCopy::shouldThrow = false;
     SmallList<ThrowingCopy> throwingList;
     throwingList.pushBack(ThrowingCopy(1));
-    
+
     ThrowingCopy::shouldThrow = true;
     EXPECT_THROW(throwingList.pushBack(ThrowingCopy(2)), std::runtime_error);
     EXPECT_EQ(throwingList.size(), 1); // List should remain unchanged

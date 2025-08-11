@@ -130,7 +130,7 @@ Examples:
         R"(A signal class that allows asynchronous slot execution.
 
 This class provides a mechanism for implementing the observer pattern where functions
-(slots) can be connected to a signal and will be called asynchronously when the 
+(slots) can be connected to a signal and will be called asynchronously when the
 signal is emitted.
 
 Examples:
@@ -254,7 +254,7 @@ Returns:
         m, "ChainedSignal",
         R"(A signal class that allows chaining of signals.
 
-This class provides a mechanism for implementing signal chains where emitting 
+This class provides a mechanism for implementing signal chains where emitting
 one signal will trigger others connected in a chain.
 
 Examples:

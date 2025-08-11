@@ -42,10 +42,10 @@ class FITSDataException : public std::system_error {
 public:
     explicit FITSDataException(FITSDataErrorCode code, const std::string& message = "")
         : std::system_error(make_error_code(code), message) {}
-    
+
     explicit FITSDataException(const std::string& message)
         : std::system_error(make_error_code(FITSDataErrorCode::InternalError), message) {}
-        
+
     [[nodiscard]] FITSDataErrorCode errorCode() const noexcept {
         return static_cast<FITSDataErrorCode>(code().value());
     }
@@ -96,7 +96,7 @@ public:
      * @param chunkSize The size of each chunk to read (default 1MB).
      * @throws FITSDataException If there is an error reading data
      */
-    virtual void readDataChunked(std::ifstream& file, int64_t dataSize, 
+    virtual void readDataChunked(std::ifstream& file, int64_t dataSize,
                                 size_t chunkSize = 1024 * 1024) = 0;
 
     /**
@@ -178,7 +178,7 @@ public:
 
 protected:
     DataProgressCallback progressCallback;  ///< Callback for progress reporting
-    
+
     /**
      * @brief Reports progress to the registered callback, if any.
      * @param progress Progress value (0.0 to 1.0).
@@ -240,7 +240,7 @@ public:
      * @param chunkSize The size of each chunk to read (default 1MB).
      * @throws FITSDataException If there is an error reading data
      */
-    void readDataChunked(std::ifstream& file, int64_t dataSize, 
+    void readDataChunked(std::ifstream& file, int64_t dataSize,
                         size_t chunkSize = 1024 * 1024) override;
 
     /**

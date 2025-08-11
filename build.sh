@@ -130,7 +130,7 @@ fi
 # Build using the selected system
 if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
     echo "Building with XMake..."
-    
+
     # Configure XMake options
     XMAKE_ARGS=""
     if [[ "$BUILD_TYPE" == "debug" ]]; then XMAKE_ARGS="$XMAKE_ARGS -m debug"; fi
@@ -140,7 +140,7 @@ if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
     if [[ "$BUILD_TESTS" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --tests=y"; fi
     if [[ "$BUILD_CFITSIO" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --cfitsio=y"; fi
     if [[ "$BUILD_SSH" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --ssh=y"; fi
-    
+
     # Run XMake
     echo "Configuring XMake project..."
     xmake f $XMAKE_ARGS
@@ -148,7 +148,7 @@ if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
         echo "Error: XMake configuration failed"
         exit 1
     fi
-    
+
     echo "Building project..."
     xmake
     if [ $? -ne 0 ]; then
@@ -157,7 +157,7 @@ if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
     fi
 else
     echo "Building with CMake..."
-    
+
     # Configure CMake options
     CMAKE_ARGS="-B build"
     if [[ "$BUILD_TYPE" == "debug" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=Debug"; fi
@@ -168,7 +168,7 @@ else
     if [[ "$BUILD_TESTS" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DATOM_BUILD_TESTS=ON"; fi
     if [[ "$BUILD_CFITSIO" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DATOM_USE_CFITSIO=ON"; fi
     if [[ "$BUILD_SSH" == "y" ]]; then CMAKE_ARGS="$CMAKE_ARGS -DATOM_USE_SSH=ON"; fi
-    
+
     # Run CMake
     echo "Configuring CMake project..."
     cmake $CMAKE_ARGS .
@@ -176,7 +176,7 @@ else
         echo "Error: CMake configuration failed"
         exit 1
     fi
-    
+
     # Determine number of CPU cores for parallel build
     if command -v nproc &> /dev/null; then
         CORES=$(nproc)
@@ -185,7 +185,7 @@ else
     else
         CORES=4  # Default to 4 cores if we can't determine
     fi
-    
+
     echo "Building project using $CORES cores..."
     cmake --build build --config $BUILD_TYPE --parallel $CORES
     if [ $? -ne 0 ]; then

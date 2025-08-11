@@ -61,7 +61,7 @@ detect_os() {
     else
         OS="unknown"
     fi
-    
+
     log "Detected operating system: $OS"
 }
 
@@ -75,10 +75,10 @@ create_directories() {
 # Download models
 download_models() {
     log "Downloading OCR models and resources..."
-    
+
     # Create models directory if it doesn't exist
     mkdir -p "$MODELS_DIR"
-    
+
     # Download EAST text detection model
     log "Downloading EAST text detection model..."
     if command -v wget &> /dev/null; then
@@ -100,7 +100,7 @@ download_models() {
         error "Download URL: https://github.com/oyyd/frozen_east_text_detection.pb/raw/master/frozen_east_text_detection.pb"
         error "Save to: $MODELS_DIR/east_text_detection.pb"
     fi
-    
+
     # Download super resolution model
     log "Downloading ESPCN super resolution model..."
     if command -v wget &> /dev/null; then
@@ -122,7 +122,7 @@ download_models() {
         error "Download URL: https://github.com/fannymonori/TF-ESPCN/raw/master/export/ESPCN_x4.pb"
         error "Save to: $MODELS_DIR/ESPCN_x4.pb"
     fi
-    
+
     # Download English dictionary for spell checking
     log "Downloading English dictionary for spell checking..."
     if command -v wget &> /dev/null; then
@@ -144,7 +144,7 @@ download_models() {
         error "Download URL: https://raw.githubusercontent.com/dwyl/english-words/master/words.txt"
         error "Save to: $DICT_DIR/english.txt"
     fi
-    
+
     # Check if files were downloaded successfully
     if [ -f "$MODELS_DIR/east_text_detection.pb" ] && [ -f "$MODELS_DIR/ESPCN_x4.pb" ]; then
         success "Models downloaded successfully"
@@ -156,13 +156,13 @@ download_models() {
 # Install dependencies on Debian/Ubuntu
 install_debian() {
     log "Installing dependencies on Debian/Ubuntu..."
-    
+
     # Update package lists
     sudo apt-get update
-    
+
     # Install build tools and basic dependencies
     sudo apt-get install -y build-essential cmake git pkg-config wget curl
-    
+
     # Install OpenCV dependencies
     sudo apt-get install -y \
         libopencv-dev \
@@ -180,7 +180,7 @@ install_debian() {
         gfortran \
         openexr \
         libatlas-base-dev
-    
+
     # Install Tesseract OCR and language data
     sudo apt-get install -y \
         tesseract-ocr \
@@ -188,26 +188,26 @@ install_debian() {
         libleptonica-dev \
         tesseract-ocr-eng \
         tesseract-ocr-osd
-    
+
     # Optional: Install additional language packs
     sudo apt-get install -y \
         tesseract-ocr-fra \
         tesseract-ocr-deu \
         tesseract-ocr-spa
-    
+
     success "Dependencies installed successfully on Debian/Ubuntu"
 }
 
 # Install dependencies on Fedora
 install_fedora() {
     log "Installing dependencies on Fedora..."
-    
+
     # Update package lists
     sudo dnf update -y
-    
+
     # Install build tools and basic dependencies
     sudo dnf install -y gcc-c++ cmake git pkgconfig wget curl
-    
+
     # Install OpenCV and its dependencies
     sudo dnf install -y \
         opencv \
@@ -222,42 +222,42 @@ install_fedora() {
         lapack-devel \
         atlas-devel \
         openexr-devel
-    
+
     # Install Tesseract OCR and language data
     sudo dnf install -y \
         tesseract \
         tesseract-devel \
         tesseract-langpack-eng \
         leptonica-devel
-    
+
     # Optional: Install additional language packs
     sudo dnf install -y \
         tesseract-langpack-fra \
         tesseract-langpack-deu \
         tesseract-langpack-spa
-    
+
     success "Dependencies installed successfully on Fedora"
 }
 
 # Install dependencies on RHEL/CentOS
 install_rhel() {
     log "Installing dependencies on RHEL/CentOS..."
-    
+
     # Enable EPEL repository
     sudo yum install -y epel-release
-    
+
     # Update package lists
     sudo yum update -y
-    
+
     # Install build tools and basic dependencies
     sudo yum groupinstall -y "Development Tools"
     sudo yum install -y cmake3 git pkgconfig wget curl
-    
+
     # Create link for cmake if needed
     if ! command -v cmake &> /dev/null && command -v cmake3 &> /dev/null; then
         sudo ln -s /usr/bin/cmake3 /usr/bin/cmake
     fi
-    
+
     # Install OpenCV dependencies
     sudo yum install -y \
         opencv \
@@ -270,34 +270,34 @@ install_rhel() {
         libtiff-devel \
         atlas-devel \
         openexr-devel
-    
+
     # Install Tesseract OCR and language data
     sudo yum install -y \
         tesseract \
         tesseract-devel \
         leptonica-devel
-    
+
     # Download and install English language data
     if [ ! -d "/usr/share/tesseract/tessdata" ]; then
         sudo mkdir -p /usr/share/tesseract/tessdata
     fi
-    
+
     wget -O /tmp/eng.traineddata https://github.com/tesseract-ocr/tessdata/raw/4.0.0/eng.traineddata
     sudo mv /tmp/eng.traineddata /usr/share/tesseract/tessdata/
-    
+
     success "Dependencies installed successfully on RHEL/CentOS"
 }
 
 # Install dependencies on Arch Linux
 install_arch() {
     log "Installing dependencies on Arch Linux..."
-    
+
     # Update package database
     sudo pacman -Syu --noconfirm
-    
+
     # Install build tools and basic dependencies
     sudo pacman -S --noconfirm base-devel cmake git pkgconf wget curl
-    
+
     # Install OpenCV and its dependencies
     sudo pacman -S --noconfirm \
         opencv \
@@ -310,33 +310,33 @@ install_arch() {
         openblas \
         lapack \
         openexr
-    
+
     # Install Tesseract OCR and language data
     sudo pacman -S --noconfirm \
         tesseract \
         tesseract-data-eng \
         leptonica
-    
+
     # Optional: Install additional language data
     sudo pacman -S --noconfirm \
         tesseract-data-fra \
         tesseract-data-deu \
         tesseract-data-spa
-    
+
     success "Dependencies installed successfully on Arch Linux"
 }
 
 # Install dependencies on openSUSE
 install_suse() {
     log "Installing dependencies on openSUSE..."
-    
+
     # Update package database
     sudo zypper refresh
-    
+
     # Install build tools and basic dependencies
     sudo zypper install -y -t pattern devel_basis
     sudo zypper install -y cmake git pkgconfig wget curl
-    
+
     # Install OpenCV and its dependencies
     sudo zypper install -y \
         opencv \
@@ -350,27 +350,27 @@ install_suse() {
         blas-devel \
         lapack-devel \
         OpenEXR-devel
-    
+
     # Install Tesseract OCR and language data
     sudo zypper install -y \
         tesseract-ocr \
         tesseract-ocr-devel \
         tesseract-ocr-traineddata-english \
         leptonica-devel
-    
+
     # Optional: Install additional language data
     sudo zypper install -y \
         tesseract-ocr-traineddata-french \
         tesseract-ocr-traineddata-german \
         tesseract-ocr-traineddata-spanish
-    
+
     success "Dependencies installed successfully on openSUSE"
 }
 
 # Install dependencies on macOS using Homebrew
 install_macos() {
     log "Installing dependencies on macOS..."
-    
+
     # Check if Homebrew is installed, install if not
     if ! command -v brew &> /dev/null; then
         log "Installing Homebrew..."
@@ -379,26 +379,26 @@ install_macos() {
         log "Homebrew already installed, updating..."
         brew update
     fi
-    
+
     # Install build tools and basic dependencies
     brew install cmake git wget curl
-    
+
     # Install OpenCV and its dependencies
     brew install opencv
-    
+
     # Install Tesseract OCR and language data
     brew install tesseract
-    
+
     # Optional: Install additional language data
     brew install tesseract-lang
-    
+
     success "Dependencies installed successfully on macOS"
 }
 
 # Install dependencies on Windows using Chocolatey and vcpkg
 create_windows_script() {
     log "Creating Windows installation script..."
-    
+
     cat > Install-OCRDependencies.ps1 << 'EOF'
 # Enhanced OCR System - Windows Dependency Installer
 # Run this script with administrator privileges
@@ -413,31 +413,31 @@ $VCPKG_DIR = "C:\vcpkg"
 # Create directories
 function Create-Directories {
     Write-Host "Creating necessary directories..."
-    
+
     if (-not (Test-Path $MODELS_DIR)) { New-Item -ItemType Directory -Force -Path $MODELS_DIR | Out-Null }
     if (-not (Test-Path $CACHE_DIR)) { New-Item -ItemType Directory -Force -Path $CACHE_DIR | Out-Null }
     if (-not (Test-Path $LOG_DIR)) { New-Item -ItemType Directory -Force -Path $LOG_DIR | Out-Null }
     if (-not (Test-Path $DICT_DIR)) { New-Item -ItemType Directory -Force -Path $DICT_DIR | Out-Null }
-    
+
     Write-Host "Directories created successfully" -ForegroundColor Green
 }
 
 # Download models
 function Download-Models {
     Write-Host "Downloading OCR models and resources..."
-    
+
     # Download EAST text detection model
     Write-Host "Downloading EAST text detection model..."
     Invoke-WebRequest -Uri "https://github.com/oyyd/frozen_east_text_detection.pb/raw/master/frozen_east_text_detection.pb" -OutFile "$MODELS_DIR\east_text_detection.pb"
-    
+
     # Download super resolution model
     Write-Host "Downloading ESPCN super resolution model..."
     Invoke-WebRequest -Uri "https://github.com/fannymonori/TF-ESPCN/raw/master/export/ESPCN_x4.pb" -OutFile "$MODELS_DIR\ESPCN_x4.pb"
-    
+
     # Download English dictionary for spell checking
     Write-Host "Downloading English dictionary for spell checking..."
     Invoke-WebRequest -Uri "https://raw.githubusercontent.com/dwyl/english-words/master/words.txt" -OutFile "$DICT_DIR\english.txt"
-    
+
     if ((Test-Path "$MODELS_DIR\east_text_detection.pb") -and (Test-Path "$MODELS_DIR\ESPCN_x4.pb")) {
         Write-Host "Models downloaded successfully" -ForegroundColor Green
     } else {
@@ -461,22 +461,22 @@ function Install-Chocolatey {
 function Install-Vcpkg {
     if (-not (Test-Path $VCPKG_DIR)) {
         Write-Host "Installing vcpkg..."
-        
+
         # Clone vcpkg repository
         git clone https://github.com/Microsoft/vcpkg.git $VCPKG_DIR
-        
+
         # Run bootstrap script
         & "$VCPKG_DIR\bootstrap-vcpkg.bat" -disableMetrics
-        
+
         # Add vcpkg to PATH
         $env:Path += ";$VCPKG_DIR"
         [Environment]::SetEnvironmentVariable("Path", $env:Path, [EnvironmentVariableTarget]::User)
-        
+
         # Integrate vcpkg with Visual Studio
         & "$VCPKG_DIR\vcpkg" integrate install
     } else {
         Write-Host "vcpkg is already installed"
-        
+
         # Update vcpkg
         Push-Location $VCPKG_DIR
         git pull
@@ -499,40 +499,40 @@ function Install-BuildTools {
 # Install dependencies using vcpkg
 function Install-Dependencies {
     Write-Host "Installing dependencies using vcpkg..."
-    
+
     # Install OpenCV
     & "$VCPKG_DIR\vcpkg" install opencv:x64-windows
-    
+
     # Install Tesseract OCR
     & "$VCPKG_DIR\vcpkg" install tesseract:x64-windows
-    
+
     # Install additional dependencies
     & "$VCPKG_DIR\vcpkg" install leptonica:x64-windows
-    
+
     Write-Host "Dependencies installed successfully" -ForegroundColor Green
 }
 
 # Install additional tools
 function Install-AdditionalTools {
     Write-Host "Installing additional tools..."
-    
+
     # Install Git if not already installed
     if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
         choco install git -y
     }
-    
+
     # Install CMake if not already installed
     if (-not (Get-Command cmake -ErrorAction SilentlyContinue)) {
         choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System' -y
     }
-    
+
     Write-Host "Additional tools installed successfully" -ForegroundColor Green
 }
 
 # Configure environment
 function Configure-Environment {
     Write-Host "Configuring environment..."
-    
+
     # Create a sample config file
     $configJson = @"
 {
@@ -574,16 +574,16 @@ function Configure-Environment {
     }
 }
 "@
-    
+
     Set-Content -Path "ocr_config.json" -Value $configJson
-    
+
     Write-Host "Environment configured successfully" -ForegroundColor Green
 }
 
 # Create example compilation script
 function Create-CompilationScript {
     Write-Host "Creating compilation script..."
-    
+
     $compileBat = @"
 @echo off
 REM Compile Enhanced OCR system
@@ -605,49 +605,49 @@ cd ..
 
 echo Build completed. Check the 'build' directory for output.
 "@
-    
+
     Set-Content -Path "compile.bat" -Value $compileBat
-    
+
     Write-Host "Compilation script created successfully" -ForegroundColor Green
 }
 
 # Main function
 function Main {
     Write-Host "Starting OCR dependencies installation for Windows..." -ForegroundColor Cyan
-    
+
     # Create directories
     Create-Directories
-    
+
     # Check if only downloading models
     if ($args[0] -eq "--models-only") {
         Download-Models
         return
     }
-    
+
     # Install Chocolatey
     Install-Chocolatey
-    
+
     # Install additional tools
     Install-AdditionalTools
-    
+
     # Install Visual Studio Build Tools
     Install-BuildTools
-    
+
     # Install vcpkg
     Install-Vcpkg
-    
+
     # Install dependencies
     Install-Dependencies
-    
+
     # Download models
     Download-Models
-    
+
     # Configure environment
     Configure-Environment
-    
+
     # Create compilation script
     Create-CompilationScript
-    
+
     Write-Host "Installation completed successfully!" -ForegroundColor Green
     Write-Host "You can now build the Enhanced OCR system using the generated compile.bat script."
 }
@@ -661,7 +661,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 # Run main function with passed arguments
 Main $args
 EOF
-    
+
     success "Windows installation script created: Install-OCRDependencies.ps1"
     log "Please run this script on Windows with administrator privileges."
 }
@@ -669,20 +669,20 @@ EOF
 # Main function
 main() {
     log "Starting OCR dependencies installation..."
-    
+
     # Create directories
     create_directories
-    
+
     # Check if only downloading models
     if [[ "$1" == "--models-only" ]]; then
         download_models
         success "Models downloaded successfully. Exiting."
         exit 0
     fi
-    
+
     # Detect OS
     detect_os
-    
+
     # Install dependencies based on OS
     case $OS in
         debian)
@@ -726,10 +726,10 @@ EOF
             exit 1
             ;;
     esac
-    
+
     # Download models
     download_models
-    
+
     # Create sample config file
     log "Creating sample configuration file..."
     cat > ocr_config.json << EOF
@@ -772,7 +772,7 @@ EOF
     }
 }
 EOF
-    
+
     # Create CMakeLists.txt file
     log "Creating CMakeLists.txt file..."
     cat > CMakeLists.txt << EOF
@@ -829,7 +829,7 @@ file(MAKE_DIRECTORY \${CMAKE_BINARY_DIR}/.ocr_cache)
 # Create logs directory in build directory
 file(MAKE_DIRECTORY \${CMAKE_BINARY_DIR}/logs)
 EOF
-    
+
     # Create compilation script
     log "Creating compilation script..."
     cat > compile.sh << EOF
@@ -854,7 +854,7 @@ cd ..
 echo "Build completed. Check the 'build' directory for output."
 EOF
     chmod +x compile.sh
-    
+
     success "Installation completed successfully!"
     log "You can now build the Enhanced OCR system using the generated compile.sh script."
 }

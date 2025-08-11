@@ -30,7 +30,7 @@ PYBIND11_MODULE(json_schema, m) {
     // Bind SchemaVersion enum
     py::enum_<SchemaVersion>(m, "SchemaVersion", R"(
         JSON Schema specification versions.
-        
+
         Enum values:
             DRAFT4: JSON Schema draft 4
             DRAFT6: JSON Schema draft 6
@@ -50,7 +50,7 @@ PYBIND11_MODULE(json_schema, m) {
     // Bind ValidationError struct
     py::class_<ValidationError>(m, "ValidationError", R"(
         Structure representing a JSON Schema validation error.
-        
+
         Attributes:
             message (str): Error message describing the validation failure
             path (str): JSON path to the location where validation failed
@@ -78,7 +78,7 @@ PYBIND11_MODULE(json_schema, m) {
     // Bind ValidationOptions struct
     py::class_<ValidationOptions>(m, "ValidationOptions", R"(
         Configuration options for JSON Schema validation.
-        
+
         Attributes:
             fail_fast (bool): Stop on first error
             validate_schema (bool): Validate schema against meta-schema
@@ -107,10 +107,10 @@ PYBIND11_MODULE(json_schema, m) {
     // Bind the JsonValidator class
     py::class_<JsonValidator>(m, "JsonValidator", R"(
         Enhanced JSON Schema validator with full JSON Schema draft support.
-        
+
         This class provides methods for validating JSON instances against JSON Schemas
         following various draft versions of the specification.
-        
+
         Args:
             options: Validation options
 
@@ -163,7 +163,7 @@ Raises:
 
 Args:
     format_name: Name of the format
-    validator: Function that validates strings against this format. 
+    validator: Function that validates strings against this format.
                Should take a string and return a boolean.
 )")
         .def("set_schema_manager", &JsonValidator::setSchemaManager,
@@ -180,9 +180,9 @@ Args:
     py::class_<SchemaManager, std::shared_ptr<SchemaManager>>(
         m, "SchemaManager", R"(
         Schema Manager for handling multiple schemas and references.
-        
+
         This class manages multiple JSON schemas and resolves references between them.
-        
+
         Args:
             options: Validation options to use for schemas
 

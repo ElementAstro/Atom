@@ -82,7 +82,7 @@ public:
 
     // Initialize for compression
     bool initDeflate(int level, int windowBits = 7) {
-        int ret = deflateInit2(&stream_, level, Z_DEFLATED, windowBits, 
+        int ret = deflateInit2(&stream_, level, Z_DEFLATED, windowBits,
                               8, Z_DEFAULT_STRATEGY);
         if (ret == Z_OK) {
             initialized_ = true;
@@ -2064,27 +2064,27 @@ std::pair<CompressionResult, Vector<unsigned char>> compressData(
         zs.next_in = const_cast<Bytef*>(reinterpret_cast<const Bytef*>(data_ptr));
         zs.avail_out = static_cast<uInt>(compressed_bound);
         zs.next_out = reinterpret_cast<Bytef*>(compressed_data.data());
-        
+
         // Initialize deflate with window_bits from options
-        int ret = deflateInit2(&zs, options.level, Z_DEFLATED, options.window_bits, 
+        int ret = deflateInit2(&zs, options.level, Z_DEFLATED, options.window_bits,
                               8, Z_DEFAULT_STRATEGY);
         if (ret != Z_OK) {
             compression_result.error_message = getZlibErrorMessage(ret);
             return result_pair;
         }
-        
+
         // Use RAII for zstream cleanup
         std::unique_ptr<z_stream, decltype(&deflateEnd)> deflate_guard(&zs, deflateEnd);
-        
+
         // Perform compression in one step
         ret = deflate(&zs, Z_FINISH);
-        
+
         if (ret != Z_STREAM_END) {
-            compression_result.error_message = 
+            compression_result.error_message =
                 String("Compression failed: ") + getZlibErrorMessage(ret);
             return result_pair;
         }
-        
+
         // Use actual bytes written
         uLongf actual_compressed_size = zs.total_out;
 
@@ -2156,7 +2156,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             // Try to detect compression type from header bytes for better buffer estimation
             if (compressed_data_size >= 2) {
                 const unsigned char* header = reinterpret_cast<const unsigned char*>(compressed_data_ptr);
-                
+
                 // Check for gzip magic signature (0x1F, 0x8B)
                 if (header[0] == 0x1F && header[1] == 0x8B) {
                     // Gzip typically has 2:1 to 10:1 compression ratio
@@ -2176,12 +2176,12 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
                 buffer_size = 4096;
             }
         }
-        
+
         // Ensure minimum buffer size
         if (buffer_size < 1024) {
             buffer_size = 1024;
         }
-        
+
         decompressed_data.resize(buffer_size);
 
         // Use z_stream for more control, especially for potential resizing
@@ -2199,7 +2199,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
         // For gzip/zlib auto-detection, add 32 (15+32)
         // For raw deflate with no header, use negative value (-15)
         int windowBits = options.window_bits;
-        
+
         // Auto-detect based on header bytes if possible
         if (compressed_data_size >= 2) {
             const unsigned char* header = reinterpret_cast<const unsigned char*>(compressed_data_ptr);
@@ -2215,7 +2215,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             }
             // If not recognized, use as-is (for raw deflate)
         }
-        
+
         int ret = inflateInit2(&zs, windowBits);
         if (ret != Z_OK) {
             compression_result.error_message = getZlibErrorMessage(ret);
@@ -2236,7 +2236,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
             if (zs.avail_out == 0) {
                 // Buffer is full, resize it with an optimized growth strategy
                 size_t old_size = decompressed_data.size();
-                
+
                 // Smart growth strategy:
                 // - For small buffers (<64KB): double the size
                 // - For medium buffers (64KB-1MB): grow by 50%
@@ -2250,14 +2250,14 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
                     size_t increment = std::max(old_size / 4, size_t(1048576));
                     new_size = old_size + increment;
                 }
-                
+
                 // Check for overflow
                 if (new_size <= old_size) {
                     compression_result.error_message =
                         "Decompression buffer size overflow";
                     return result_pair;  // inflate_guard handles cleanup
                 }
-                
+
                 // Allocate new buffer
                 try {
                     decompressed_data.resize(new_size);
@@ -2266,7 +2266,7 @@ std::pair<CompressionResult, Vector<unsigned char>> decompressData(
                         "Memory allocation failed during decompression";
                     return result_pair;
                 }
-                
+
                 // Update stream pointers after resize
                 zs.avail_out =
                     static_cast<uInt>(decompressed_data.size() - zs.total_out);

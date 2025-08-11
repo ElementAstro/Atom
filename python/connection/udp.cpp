@@ -132,7 +132,7 @@ PYBIND11_MODULE(udp, m) {
         m, "UdpClient",
         R"(A modern UDP client for sending and receiving datagrams.
 
-This class provides methods for UDP socket communication, including sending 
+This class provides methods for UDP socket communication, including sending
 and receiving datagrams, multicast support, broadcast support, and asynchronous operations.
 
 Examples:

@@ -9,39 +9,39 @@ PYBIND11_MODULE(huffman, m) {
     m.doc() = R"pbdoc(
         Huffman Encoding and Compression
         -------------------------------
-        
+
         This module provides functions for compressing and decompressing data
         using Huffman encoding, an efficient variable-length prefix coding
         algorithm.
-        
+
         **Basic Usage:**
-        
+
         ```python
         from atom.algorithm.huffman import compress, decompress
-        
+
         # Compress some data
         data = b"This is an example string with repeating characters"
         compressed_data, serialized_tree = compress(data)
-        
+
         # Print compression statistics
         print(f"Original size: {len(data)} bytes")
         print(f"Compressed size: {len(compressed_data) // 8} bytes")
         print(f"Compression ratio: {len(compressed_data) / (len(data) * 8):.2%}")
-        
+
         # Decompress the data
         decompressed_data = decompress(compressed_data, serialized_tree)
-        
+
         # Verify the data matches
         assert data == decompressed_data
         ```
-        
+
         **Convenience Functions:**
-        
+
         For simpler usage with built-in serialization:
-        
+
         ```python
         from atom.algorithm.huffman import encode, decode
-        
+
         compressed = encode(b"Hello, world!")
         original = decode(compressed)
         ```
@@ -95,13 +95,13 @@ PYBIND11_MODULE(huffman, m) {
           py::arg("frequencies"),
           R"pbdoc(
           Create a Huffman tree from a frequency map.
-          
+
           Args:
               frequencies: A dictionary mapping bytes to their frequencies
-              
+
           Returns:
               The root node of the Huffman tree
-              
+
           Raises:
               RuntimeError: If the frequency map is empty
           )pbdoc");
@@ -116,13 +116,13 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("root"),
         R"pbdoc(
     Generate a mapping of bytes to their Huffman codes.
-    
+
     Args:
         root: The root node of the Huffman tree
-        
+
     Returns:
         A dictionary mapping bytes to their Huffman codes (as strings of '0's and '1's)
-        
+
     Raises:
         RuntimeError: If the root node is null
     )pbdoc");
@@ -131,14 +131,14 @@ PYBIND11_MODULE(huffman, m) {
           py::arg("huffman_codes"),
           R"pbdoc(
           Compress data using Huffman codes.
-          
+
           Args:
               data: The data to compress as a bytes-like object
               huffman_codes: A dictionary mapping bytes to Huffman codes
-              
+
           Returns:
               A string of '0's and '1's representing the compressed data
-              
+
           Raises:
               RuntimeError: If a byte in the data doesn't have a corresponding Huffman code
           )pbdoc");
@@ -147,14 +147,14 @@ PYBIND11_MODULE(huffman, m) {
           py::arg("compressed_data"), py::arg("root"),
           R"pbdoc(
           Decompress Huffman-encoded data.
-          
+
           Args:
               compressed_data: The compressed data as a string of '0's and '1's
               root: The root node of the Huffman tree
-              
+
           Returns:
               The decompressed data as bytes
-              
+
           Raises:
               RuntimeError: If the compressed data is invalid or the tree is null
           )pbdoc");
@@ -162,10 +162,10 @@ PYBIND11_MODULE(huffman, m) {
     m.def("serialize_tree", &atom::algorithm::serializeTree, py::arg("root"),
           R"pbdoc(
           Serialize a Huffman tree to a binary string.
-          
+
           Args:
               root: The root node of the Huffman tree
-              
+
           Returns:
               A string of '0's and '1's representing the serialized tree
           )pbdoc");
@@ -179,13 +179,13 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("serialized_tree"),
         R"pbdoc(
     Deserialize a binary string back into a Huffman tree.
-    
+
     Args:
         serialized_tree: The serialized tree as a string of '0's and '1's
-        
+
     Returns:
         The root node of the reconstructed Huffman tree
-        
+
     Raises:
         RuntimeError: If the serialized tree format is invalid
     )pbdoc");
@@ -194,11 +194,11 @@ PYBIND11_MODULE(huffman, m) {
           py::arg("root"), py::arg("indent") = "",
           R"pbdoc(
           Print a visualization of a Huffman tree.
-          
+
           Args:
               root: The root node of the Huffman tree
               indent: The indentation to use (mostly for internal recursion)
-          
+
           Note:
               This function prints to standard output and doesn't return anything.
           )pbdoc");
@@ -238,15 +238,15 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("data"),
         R"pbdoc(
     Compress data using Huffman encoding.
-    
+
     Args:
         data: The data to compress as a bytes-like object
-        
+
     Returns:
         A tuple of (compressed_data, serialized_tree) where:
         - compressed_data: A string of '0's and '1's representing the compressed data
         - serialized_tree: A string of '0's and '1's representing the serialized Huffman tree
-        
+
     Raises:
         RuntimeError: If compression fails
     )pbdoc");
@@ -271,14 +271,14 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("compressed_data"), py::arg("serialized_tree"),
         R"pbdoc(
     Decompress Huffman-encoded data.
-    
+
     Args:
         compressed_data: The compressed data as a string of '0's and '1's
         serialized_tree: The serialized Huffman tree as a string of '0's and '1's
-        
+
     Returns:
         The decompressed data as bytes
-        
+
     Raises:
         RuntimeError: If decompression fails
     )pbdoc");
@@ -348,13 +348,13 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("data"),
         R"pbdoc(
     Compress data using Huffman encoding and pack everything into a single binary format.
-    
+
     Args:
         data: The data to compress as a bytes-like object
-        
+
     Returns:
         A bytes object containing the compressed data and Huffman tree
-        
+
     Raises:
         RuntimeError: If compression fails
     )pbdoc");
@@ -427,13 +427,13 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("encoded_data"),
         R"pbdoc(
     Decompress data that was compressed with the encode() function.
-    
+
     Args:
         encoded_data: The encoded data as returned by encode()
-        
+
     Returns:
         The original decompressed data as bytes
-        
+
     Raises:
         ValueError: If the encoded data format is invalid
         RuntimeError: If decompression fails
@@ -453,10 +453,10 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("data"),
         R"pbdoc(
     Calculate the frequency of each byte in the data.
-    
+
     Args:
         data: The data as a bytes-like object
-        
+
     Returns:
         A dictionary mapping bytes to their frequencies
     )pbdoc");
@@ -473,11 +473,11 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("original_data"), py::arg("compressed_bit_string"),
         R"pbdoc(
     Calculate the compression ratio (compressed size / original size).
-    
+
     Args:
         original_data: The original uncompressed data
         compressed_bit_string: The compressed data as a string of '0's and '1's
-        
+
     Returns:
         The compression ratio as a float (smaller is better)
     )pbdoc");
@@ -500,10 +500,10 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("bit_string"),
         R"pbdoc(
     Convert a string of '0's and '1's to bytes.
-    
+
     Args:
         bit_string: A string of '0's and '1's
-        
+
     Returns:
         The packed bytes
     )pbdoc");
@@ -527,11 +527,11 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("data"), py::arg("bit_count"),
         R"pbdoc(
     Convert bytes to a string of '0's and '1's.
-    
+
     Args:
         data: The bytes to convert
         bit_count: The number of bits to extract
-        
+
     Returns:
         A string of '0's and '1's
     )pbdoc");
@@ -577,10 +577,10 @@ PYBIND11_MODULE(huffman, m) {
         py::arg("codes"),
         R"pbdoc(
     Analyze the properties of a set of Huffman codes.
-    
+
     Args:
         codes: A dictionary mapping bytes to Huffman codes
-        
+
     Returns:
         A dictionary containing statistics about the codes
     )pbdoc");

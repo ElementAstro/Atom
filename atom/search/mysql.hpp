@@ -29,7 +29,7 @@ namespace database {
 
 /**
  * @brief Custom exception class for MySQL-related errors
- * 
+ *
  * This exception is thrown when MySQL operations fail or encounter errors.
  * It provides detailed error messages to help with debugging.
  */
@@ -37,7 +37,7 @@ class MySQLException : public std::runtime_error {
 public:
     /**
      * @brief Construct a new MySQL Exception object
-     * 
+     *
      * @param message Error message describing the exception
      */
     explicit MySQLException(const std::string& message)
@@ -46,7 +46,7 @@ public:
 
 /**
  * @brief Structure to hold database connection parameters
- * 
+ *
  * This structure encapsulates all the necessary parameters needed
  * to establish a connection to a MySQL/MariaDB database.
  */
@@ -67,7 +67,7 @@ struct ConnectionParams {
 
 /**
  * @brief Enum for transaction isolation levels
- * 
+ *
  * Defines the different isolation levels available for database transactions,
  * controlling how transactions interact with each other.
  */
@@ -80,7 +80,7 @@ enum class TransactionIsolation {
 
 /**
  * @brief Class representing a database row
- * 
+ *
  * This class provides methods to access field values in different data types
  * from a single row of a MySQL result set.
  */
@@ -88,7 +88,7 @@ class Row {
 public:
     /**
      * @brief Construct a new Row object
-     * 
+     *
      * @param row MySQL row data
      * @param lengths Array of field lengths
      * @param numFields Number of fields in the row
@@ -97,7 +97,7 @@ public:
 
     /**
      * @brief Get a string value from the specified field
-     * 
+     *
      * @param index Field index (0-based)
      * @return std::string Field value as string, empty if null or invalid index
      */
@@ -105,7 +105,7 @@ public:
 
     /**
      * @brief Get an integer value from the specified field
-     * 
+     *
      * @param index Field index (0-based)
      * @return int Field value as integer, 0 if null or invalid index
      */
@@ -113,7 +113,7 @@ public:
 
     /**
      * @brief Get a 64-bit integer value from the specified field
-     * 
+     *
      * @param index Field index (0-based)
      * @return int64_t Field value as 64-bit integer, 0 if null or invalid index
      */
@@ -121,7 +121,7 @@ public:
 
     /**
      * @brief Get a double value from the specified field
-     * 
+     *
      * @param index Field index (0-based)
      * @return double Field value as double, 0.0 if null or invalid index
      */
@@ -129,7 +129,7 @@ public:
 
     /**
      * @brief Get a boolean value from the specified field
-     * 
+     *
      * @param index Field index (0-based)
      * @return bool Field value as boolean, false if null or invalid index
      */
@@ -137,7 +137,7 @@ public:
 
     /**
      * @brief Check if the specified field is null
-     * 
+     *
      * @param index Field index (0-based)
      * @return true if field is null, false otherwise
      */
@@ -145,7 +145,7 @@ public:
 
     /**
      * @brief Get the number of fields in this row
-     * 
+     *
      * @return unsigned int Number of fields
      */
     unsigned int getFieldCount() const { return numFields; }
@@ -159,7 +159,7 @@ private:
 /**
  * @class ResultSet
  * @brief Represents the result of a MySQL query
- * 
+ *
  * This class wraps the MYSQL_RES structure and provides methods to navigate
  * through the result set, retrieve field values, field names, count rows and
  * columns. It implements iterator support for modern C++ iteration patterns.
@@ -172,14 +172,14 @@ class ResultSet {
 public:
     /**
      * @brief Construct a new ResultSet object
-     * 
+     *
      * @param result MySQL result set pointer
      */
     explicit ResultSet(MYSQL_RES* result);
 
     /**
      * @brief Destroy the ResultSet object
-     * 
+     *
      * Automatically frees the MySQL result set.
      */
     ~ResultSet();
@@ -189,14 +189,14 @@ public:
 
     /**
      * @brief Move constructor
-     * 
+     *
      * @param other Source ResultSet to move from
      */
     ResultSet(ResultSet&& other) noexcept;
 
     /**
      * @brief Move assignment operator
-     * 
+     *
      * @param other Source ResultSet to move from
      * @return ResultSet& Reference to this object
      */
@@ -204,14 +204,14 @@ public:
 
     /**
      * @brief Move to the next row in the result set
-     * 
+     *
      * @return true if there is a next row, false if end of result set
      */
     bool next();
 
     /**
      * @brief Get the current row
-     * 
+     *
      * @return Row Current row object
      * @throws std::runtime_error if no current row
      */
@@ -219,14 +219,14 @@ public:
 
     /**
      * @brief Get the number of fields in the result set
-     * 
+     *
      * @return unsigned int Number of fields
      */
     unsigned int getFieldCount() const;
 
     /**
      * @brief Get the name of a field by index
-     * 
+     *
      * @param index Field index (0-based)
      * @return std::string Field name, empty if invalid index
      */
@@ -234,14 +234,14 @@ public:
 
     /**
      * @brief Get the total number of rows in the result set
-     * 
+     *
      * @return unsigned long long Number of rows
      */
     unsigned long long getRowCount() const;
 
     /**
      * @brief Reset the result set to the beginning
-     * 
+     *
      * @return true if successful, false otherwise
      */
     bool reset();
@@ -274,7 +274,7 @@ public:
 
     /**
      * @brief Get iterator to the beginning of the result set
-     * 
+     *
      * @return iterator Iterator to the first row
      */
     iterator begin() {
@@ -289,7 +289,7 @@ public:
 
     /**
      * @brief Get iterator to the end of the result set
-     * 
+     *
      * @return iterator Iterator representing end
      */
     iterator end() { return iterator(this, true); }
@@ -304,7 +304,7 @@ private:
 
 /**
  * @brief Class for prepared statements
- * 
+ *
  * This class provides a safe way to execute SQL statements with parameters,
  * preventing SQL injection attacks and improving performance for repeated
  * queries.
@@ -313,7 +313,7 @@ class PreparedStatement {
 public:
     /**
      * @brief Construct a new PreparedStatement object
-     * 
+     *
      * @param connection MySQL connection handle
      * @param query SQL query with parameter placeholders (?)
      * @throws MySQLException if statement preparation fails
@@ -322,7 +322,7 @@ public:
 
     /**
      * @brief Destroy the PreparedStatement object
-     * 
+     *
      * Automatically closes the MySQL statement.
      */
     ~PreparedStatement();
@@ -332,14 +332,14 @@ public:
 
     /**
      * @brief Move constructor
-     * 
+     *
      * @param other Source PreparedStatement to move from
      */
     PreparedStatement(PreparedStatement&& other) noexcept;
 
     /**
      * @brief Move assignment operator
-     * 
+     *
      * @param other Source PreparedStatement to move from
      * @return PreparedStatement& Reference to this object
      */
@@ -347,7 +347,7 @@ public:
 
     /**
      * @brief Bind a string parameter
-     * 
+     *
      * @param index Parameter index (0-based)
      * @param value String value to bind
      * @return PreparedStatement& Reference to this object for method chaining
@@ -356,7 +356,7 @@ public:
 
     /**
      * @brief Bind an integer parameter
-     * 
+     *
      * @param index Parameter index (0-based)
      * @param value Integer value to bind
      * @return PreparedStatement& Reference to this object for method chaining
@@ -365,7 +365,7 @@ public:
 
     /**
      * @brief Bind a 64-bit integer parameter
-     * 
+     *
      * @param index Parameter index (0-based)
      * @param value 64-bit integer value to bind
      * @return PreparedStatement& Reference to this object for method chaining
@@ -374,7 +374,7 @@ public:
 
     /**
      * @brief Bind a double parameter
-     * 
+     *
      * @param index Parameter index (0-based)
      * @param value Double value to bind
      * @return PreparedStatement& Reference to this object for method chaining
@@ -383,7 +383,7 @@ public:
 
     /**
      * @brief Bind a boolean parameter
-     * 
+     *
      * @param index Parameter index (0-based)
      * @param value Boolean value to bind
      * @return PreparedStatement& Reference to this object for method chaining
@@ -392,7 +392,7 @@ public:
 
     /**
      * @brief Bind a null parameter
-     * 
+     *
      * @param index Parameter index (0-based)
      * @return PreparedStatement& Reference to this object for method chaining
      */
@@ -400,14 +400,14 @@ public:
 
     /**
      * @brief Execute the prepared statement
-     * 
+     *
      * @return true if execution was successful, false otherwise
      */
     bool execute();
 
     /**
      * @brief Execute the prepared statement and return results
-     * 
+     *
      * @return std::unique_ptr<ResultSet> Result set containing query results
      * @throws MySQLException if execution fails
      */
@@ -415,7 +415,7 @@ public:
 
     /**
      * @brief Execute an update/insert/delete statement
-     * 
+     *
      * @return int Number of affected rows
      * @throws MySQLException if execution fails
      */
@@ -423,7 +423,7 @@ public:
 
     /**
      * @brief Reset the statement for reuse
-     * 
+     *
      * @throws MySQLException if reset fails
      */
     void reset();
@@ -435,7 +435,7 @@ public:
 
     /**
      * @brief Get the number of parameters in the statement
-     * 
+     *
      * @return unsigned int Number of parameters
      */
     unsigned int getParameterCount() const;
@@ -451,7 +451,7 @@ private:
 /**
  * @class MysqlDB
  * @brief Enhanced class for interacting with a MySQL/MariaDB database
- * 
+ *
  * This class provides a comprehensive interface for MySQL database operations
  * including connection management, query execution, transaction handling,
  * prepared statements, and error management. It is thread-safe and supports
@@ -461,7 +461,7 @@ class MysqlDB {
 public:
     /**
      * @brief Constructor with connection parameters structure
-     * 
+     *
      * @param params Connection parameters
      * @throws MySQLException if connection fails
      */
@@ -469,7 +469,7 @@ public:
 
     /**
      * @brief Constructor with individual connection parameters
-     * 
+     *
      * @param host Database server hostname or IP
      * @param user Database username
      * @param password Database password
@@ -494,14 +494,14 @@ public:
 
     /**
      * @brief Move constructor
-     * 
+     *
      * @param other Source MysqlDB to move from
      */
     MysqlDB(MysqlDB&& other) noexcept;
 
     /**
      * @brief Move assignment operator
-     * 
+     *
      * @param other Source MysqlDB to move from
      * @return MysqlDB& Reference to this object
      */
@@ -509,14 +509,14 @@ public:
 
     /**
      * @brief Connect to the database with stored parameters
-     * 
+     *
      * @return true if connection successful, false otherwise
      */
     bool connect();
 
     /**
      * @brief Reconnect to the database if connection was lost
-     * 
+     *
      * @return true if reconnection successful, false otherwise
      */
     bool reconnect();
@@ -528,14 +528,14 @@ public:
 
     /**
      * @brief Check if the connection is alive
-     * 
+     *
      * @return true if connected, false otherwise
      */
     bool isConnected();
 
     /**
      * @brief Execute a SQL query without returning results
-     * 
+     *
      * @param query SQL query string
      * @return true if execution successful, false otherwise
      */
@@ -543,7 +543,7 @@ public:
 
     /**
      * @brief Execute a query and return results
-     * 
+     *
      * @param query SQL SELECT query string
      * @return std::unique_ptr<ResultSet> Result set containing query results
      * @throws MySQLException if execution fails
@@ -552,7 +552,7 @@ public:
 
     /**
      * @brief Execute a data modification query and return affected rows
-     * 
+     *
      * @param query SQL INSERT/UPDATE/DELETE query
      * @return int Number of affected rows, -1 if error
      * @throws MySQLException if execution fails
@@ -561,7 +561,7 @@ public:
 
     /**
      * @brief Get a single integer value from a query
-     * 
+     *
      * @param query SQL query that returns a single integer
      * @return std::optional<int> Integer value if successful, nullopt otherwise
      */
@@ -569,7 +569,7 @@ public:
 
     /**
      * @brief Get a single double value from a query
-     * 
+     *
      * @param query SQL query that returns a single double
      * @return std::optional<double> Double value if successful, nullopt otherwise
      */
@@ -577,7 +577,7 @@ public:
 
     /**
      * @brief Get a single string value from a query
-     * 
+     *
      * @param query SQL query that returns a single string
      * @return std::optional<std::string> String value if successful, nullopt otherwise
      */
@@ -585,7 +585,7 @@ public:
 
     /**
      * @brief Search for data matching criteria
-     * 
+     *
      * @param query Base SQL query
      * @param column Column name to search in
      * @param searchTerm Term to search for
@@ -596,7 +596,7 @@ public:
 
     /**
      * @brief Create a prepared statement for safe query execution
-     * 
+     *
      * @param query SQL query with parameter placeholders (?)
      * @return std::unique_ptr<PreparedStatement> Prepared statement object
      * @throws MySQLException if preparation fails
@@ -605,28 +605,28 @@ public:
 
     /**
      * @brief Begin a database transaction
-     * 
+     *
      * @return true if transaction started successfully, false otherwise
      */
     bool beginTransaction();
 
     /**
      * @brief Commit the current transaction
-     * 
+     *
      * @return true if transaction committed successfully, false otherwise
      */
     bool commitTransaction();
 
     /**
      * @brief Rollback the current transaction
-     * 
+     *
      * @return true if transaction rolled back successfully, false otherwise
      */
     bool rollbackTransaction();
 
     /**
      * @brief Set a savepoint within a transaction
-     * 
+     *
      * @param savepointName Name of the savepoint
      * @return true if savepoint created successfully, false otherwise
      */
@@ -634,7 +634,7 @@ public:
 
     /**
      * @brief Rollback to a specific savepoint
-     * 
+     *
      * @param savepointName Name of the savepoint
      * @return true if rollback successful, false otherwise
      */
@@ -642,7 +642,7 @@ public:
 
     /**
      * @brief Set transaction isolation level
-     * 
+     *
      * @param level Isolation level to set
      * @return true if isolation level set successfully, false otherwise
      */
@@ -650,7 +650,7 @@ public:
 
     /**
      * @brief Execute multiple queries in sequence
-     * 
+     *
      * @param queries Vector of SQL queries to execute
      * @return true if all queries executed successfully, false otherwise
      */
@@ -658,7 +658,7 @@ public:
 
     /**
      * @brief Execute multiple queries within a transaction
-     * 
+     *
      * @param queries Vector of SQL queries to execute
      * @return true if all queries executed successfully, false if any failed (transaction rolled back)
      */
@@ -666,7 +666,7 @@ public:
 
     /**
      * @brief Execute operations within a transaction with automatic rollback
-     * 
+     *
      * @param operations Function containing database operations to execute
      * @throws Re-throws any exceptions from operations after rollback
      */
@@ -674,7 +674,7 @@ public:
 
     /**
      * @brief Call a stored procedure
-     * 
+     *
      * @param procedureName Name of the stored procedure
      * @param params Vector of parameters for the procedure
      * @return std::unique_ptr<ResultSet> Result set if procedure returns data
@@ -685,7 +685,7 @@ public:
 
     /**
      * @brief Get list of databases on the server
-     * 
+     *
      * @return std::vector<std::string> Vector of database names
      * @throws MySQLException if query fails
      */
@@ -693,7 +693,7 @@ public:
 
     /**
      * @brief Get list of tables in the current database
-     * 
+     *
      * @return std::vector<std::string> Vector of table names
      * @throws MySQLException if query fails
      */
@@ -701,7 +701,7 @@ public:
 
     /**
      * @brief Get list of columns for a specific table
-     * 
+     *
      * @param tableName Name of the table
      * @return std::vector<std::string> Vector of column names
      * @throws MySQLException if query fails
@@ -710,7 +710,7 @@ public:
 
     /**
      * @brief Check if a table exists in the database
-     * 
+     *
      * @param tableName Name of the table to check
      * @return true if table exists, false otherwise
      */
@@ -718,21 +718,21 @@ public:
 
     /**
      * @brief Get the last error message
-     * 
+     *
      * @return std::string Error message
      */
     std::string getLastError() const;
 
     /**
      * @brief Get the last error code
-     * 
+     *
      * @return unsigned int Error code
      */
     unsigned int getLastErrorCode() const;
 
     /**
      * @brief Set a custom error callback function
-     * 
+     *
      * @param callback Function to call when errors occur
      */
     void setErrorCallback(
@@ -740,7 +740,7 @@ public:
 
     /**
      * @brief Escape a string for safe use in SQL queries
-     * 
+     *
      * @param str String to escape
      * @return std::string Escaped string
      * @throws MySQLException if not connected
@@ -749,21 +749,21 @@ public:
 
     /**
      * @brief Get the ID of the last inserted row
-     * 
+     *
      * @return unsigned long long Last insert ID
      */
     unsigned long long getLastInsertId() const;
 
     /**
      * @brief Get the number of rows affected by the last statement
-     * 
+     *
      * @return unsigned long long Number of affected rows
      */
     unsigned long long getAffectedRows() const;
 
     /**
      * @brief Execute a query with pagination
-     * 
+     *
      * @param query Base SQL SELECT query
      * @param limit Maximum number of rows to return
      * @param offset Number of rows to skip
@@ -775,28 +775,28 @@ public:
 
     /**
      * @brief Get database server version
-     * 
+     *
      * @return std::string Server version string
      */
     std::string getServerVersion() const;
 
     /**
      * @brief Get client library version
-     * 
+     *
      * @return std::string Client library version string
      */
     std::string getClientVersion() const;
 
     /**
      * @brief Ping the server to check connection
-     * 
+     *
      * @return true if connection is alive, false otherwise
      */
     bool ping();
 
     /**
      * @brief Set connection timeout
-     * 
+     *
      * @param timeout Timeout in seconds
      * @return true if timeout set successfully, false otherwise
      */
@@ -811,7 +811,7 @@ private:
 
     /**
      * @brief Handle database errors
-     * 
+     *
      * @param operation Description of the operation that failed
      * @param throwOnError Whether to throw exception on error
      * @return true if error occurred, false otherwise

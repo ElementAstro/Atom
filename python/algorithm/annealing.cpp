@@ -273,8 +273,8 @@ PYBIND11_MODULE(annealing, m) {
         R"pbdoc(
         Calculate a cooling rate for exponential cooling.
 
-        This function computes a cooling rate that will reduce the acceptance 
-        probability from an initial value to a final value over the specified 
+        This function computes a cooling rate that will reduce the acceptance
+        probability from an initial value to a final value over the specified
         number of iterations.
 
         Args:
@@ -437,14 +437,14 @@ PYBIND11_MODULE(annealing, m) {
         py::arg("num_cities") = 20, py::arg("num_runs") = 5,
         R"pbdoc(
       Benchmark different cooling strategies for TSP.
-      
+
       This function runs the simulated annealing algorithm with different
       cooling strategies and reports the average tour length and execution time.
-      
+
       Args:
           num_cities: Number of cities in the random TSP instance (default: 20)
           num_runs: Number of runs per strategy (default: 5)
-          
+
       Returns:
           List of (strategy_name, avg_tour_length, execution_time) tuples
      )pbdoc");
@@ -489,13 +489,13 @@ PYBIND11_MODULE(annealing, m) {
         py::arg("cities"), py::arg("tour"),
         R"pbdoc(
       Visualize a TSP tour using matplotlib.
-      
+
       This function plots the cities and the tour path connecting them.
-      
+
       Args:
           cities: List of (x,y) coordinates for each city
           tour: List of city indices representing the tour
-          
+
       Note:
           This function requires matplotlib to be installed
      )pbdoc");
@@ -523,14 +523,14 @@ PYBIND11_MODULE(annealing, m) {
         py::arg("cities"), py::arg("tour"),
         R"pbdoc(
       Compute the total length of a TSP tour.
-      
+
       This is a convenience function to calculate the total distance
       of a tour without creating a TSP instance.
-      
+
       Args:
           cities: List of (x,y) coordinates for each city
           tour: List of city indices representing the tour
-          
+
       Returns:
           The total distance of the tour
      )pbdoc");
@@ -580,13 +580,13 @@ PYBIND11_MODULE(annealing, m) {
         py::arg("cities"), py::arg("start_city") = 0,
         R"pbdoc(
       Generate a TSP tour using a greedy nearest neighbor heuristic.
-      
+
       This function builds a tour by always choosing the closest unvisited city.
-      
+
       Args:
           cities: List of (x,y) coordinates for each city
           start_city: Index of the starting city (default: 0)
-          
+
       Returns:
           A tour constructed using the nearest neighbor heuristic
      )pbdoc");
@@ -640,15 +640,15 @@ PYBIND11_MODULE(annealing, m) {
         py::arg("cities"), py::arg("tour"), py::arg("max_iterations") = 1000,
         R"pbdoc(
       Improve a TSP tour using the 2-opt local search heuristic.
-      
+
       This algorithm iteratively removes two edges and reconnects the tour in the
       other possible way, keeping the change if it improves the tour length.
-      
+
       Args:
           cities: List of (x,y) coordinates for each city
           tour: Initial tour to improve
           max_iterations: Maximum number of improvement iterations
-          
+
       Returns:
           An improved tour
      )pbdoc");
@@ -667,11 +667,11 @@ class CustomProblem:
   Example custom problem implementation compatible with the C++ AnnealingProblem concept.
   Replace with your own problem definition.
   """
-  
+
   def __init__(self, problem_data: Any):
       """Initialize your problem with specific data"""
       self.problem_data = problem_data
-  
+
   def energy(self, solution: Any) -> float:
       """
       Calculate the objective function value (energy) of a solution.
@@ -679,17 +679,17 @@ class CustomProblem:
       """
       # Replace with your actual objective function
       return 0.0
-  
+
   def neighbor(self, solution: Any) -> Any:
       """Generate a slightly modified neighboring solution"""
       # Replace with your neighbor generation logic
       return solution
-  
+
   def random_solution(self) -> Any:
       """Generate a random initial solution"""
       # Replace with code to generate a valid random solution
       return None
-  
+
   def validate(self, solution: Any) -> bool:
       """Check if a solution is valid"""
       # Replace with your validation logic
@@ -698,29 +698,29 @@ class CustomProblem:
 # Example usage with the atom.algorithm.annealing module:
 def solve_custom_problem():
   from atom.algorithm.annealing import SimulatedAnnealing, AnnealingStrategy
-  
+
   # Create your problem instance
   problem = CustomProblem(your_problem_data)
-  
+
   # Set up the annealing solver
   annealing = SimulatedAnnealing(problem)
   annealing.set_max_iterations(10000)
   annealing.set_initial_temperature(100.0)
   annealing.set_cooling_strategy(AnnealingStrategy.EXPONENTIAL)
-  
+
   # Run the optimization
   best_solution = annealing.optimize()
-  
+
   return best_solution
 )code";
         },
         R"pbdoc(
       Provides a Python template for creating custom problem types.
-      
+
       This function returns a string containing Python code that shows
       how to create a custom problem compatible with the simulated annealing
       algorithm interface.
-      
+
       Returns:
           Python code template as a string
      )pbdoc");

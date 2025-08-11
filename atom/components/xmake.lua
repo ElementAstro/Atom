@@ -27,7 +27,7 @@ add_requires("loguru")
 -- Define sources and headers
 local sources = {
     "component.cpp",
-    "dispatch.cpp", 
+    "dispatch.cpp",
     "registry.cpp",
     "var.cpp"
 }
@@ -43,38 +43,38 @@ local headers = {
 target("atom-component")
     -- Set target kind to shared library
     set_kind("shared")
-    
+
     -- Add source files
     add_files(sources)
-    
+
     -- Add header files
     add_headerfiles(headers)
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("loguru")
-    
+
     -- Add dependencies (assuming these are other xmake targets)
     add_deps("atom-error", "atom-utils")
-    
+
     -- Add system libraries
     add_syslinks("pthread")
-    
+
     -- Enable position independent code (automatic for shared libraries)
     set_policy("build.optimization.lto", true)
-    
+
     -- Set version info
     set_version("1.0.0")
-    
+
     -- Set output name
     set_basename("atom-component")
-    
+
     -- Set target and object directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Installation rules
     after_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -91,17 +91,17 @@ target("atom-component")
 -- Optional: Create object library target (equivalent to CMake's object library)
 target("atom-component-object")
     set_kind("object")
-    
+
     -- Add the same source files
     add_files(sources)
     add_headerfiles(headers)
-    
+
     -- Configuration
     add_includedirs(".")
     add_packages("loguru")
     add_deps("atom-error", "atom-utils")
     add_syslinks("pthread")
-    
+
     -- Enable position independent code
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
     add_cflags("-fPIC", {tools = {"gcc", "clang"}})

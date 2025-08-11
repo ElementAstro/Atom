@@ -42,18 +42,18 @@ local headers = {
 -- Object Library
 target("atom-utils-object")
     set_kind("object")
-    
+
     -- Add files
     add_headerfiles(table.unpack(headers))
     add_files(table.unpack(sources))
-    
+
     -- Add dependencies
     add_packages("loguru", "tinyxml2")
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
     add_includedirs("..", {public = true})
-    
+
     -- Set C++ standard
     set_languages("c++20")
 target_end()
@@ -62,18 +62,18 @@ target_end()
 target("atom-utils")
     -- Set library type based on parent project option
     set_kind(has_config("shared_libs") and "shared" or "static")
-    
+
     -- Add dependencies
     add_deps("atom-utils-object")
     add_packages("loguru", "tinyxml2")
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
-    
+
     -- Set output directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))

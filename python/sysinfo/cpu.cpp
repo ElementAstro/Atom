@@ -105,7 +105,7 @@ Examples:
     py::class_<CacheSizes>(m, "CacheSizes",
                            R"(CPU cache size information.
 
-This class provides information about the sizes and characteristics of the 
+This class provides information about the sizes and characteristics of the
 various CPU caches.
 
 Examples:
@@ -804,7 +804,7 @@ usage, temperature, and frequency and calls the provided callback with this data
 Args:
     interval_sec: How often to check CPU status, in seconds (default: 1.0).
     callback: Function to call with CPU data. The callback receives six arguments:
-              usage (float), temperature (float), frequency (float), 
+              usage (float), temperature (float), frequency (float),
               core_usage (list), core_temperatures (list), core_frequencies (list).
 
 Returns:
@@ -813,16 +813,16 @@ Returns:
 Examples:
     >>> from atom.sysinfo import cpu
     >>> import time
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def cpu_callback(usage, temp, freq, core_usage, core_temps, core_freqs):
     ...     print(f"CPU Usage: {usage:.1f}%, Temp: {temp:.1f}°C, Freq: {freq:.2f} GHz")
-    ... 
+    ...
     >>> # Use as a context manager
     >>> with cpu.monitor_cpu(0.5, cpu_callback):
     ...     print("Monitoring CPU for 5 seconds...")
     ...     time.sleep(5)
-    ... 
+    ...
     >>> print("Monitoring stopped")
 )");
 

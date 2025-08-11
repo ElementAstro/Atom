@@ -29,7 +29,7 @@ class StreamableClass {
 public:
     int value;
     explicit StreamableClass(int val) : value(val) {}
-    
+
     friend std::ostream& operator<<(std::ostream& os, const StreamableClass& obj) {
         os << "StreamableClass(" << obj.value << ")";
         return os;
@@ -51,7 +51,7 @@ protected:
     void SetUp() override {
         // Setup test environment
     }
-    
+
     void TearDown() override {
         // Clean up test environment
     }
@@ -62,23 +62,23 @@ TEST_F(ToStringTest, StringTypes) {
     // std::string
     std::string str = "hello";
     EXPECT_EQ(toString(str), "hello");
-    
+
     // const char*
     const char* cstr = "hello";
     EXPECT_EQ(toString(cstr), "hello");
-    
+
     // char*
     char mutable_str[] = "hello";
     EXPECT_EQ(toString(mutable_str), "hello");
-    
+
     // std::string_view
     std::string_view str_view = "hello";
     EXPECT_EQ(toString(str_view), "hello");
-    
+
     // Null C-string pointer
     const char* null_str = nullptr;
     EXPECT_EQ(toString(null_str), "null");
-    
+
     // Empty string
     EXPECT_EQ(toString(""), "");
 }
@@ -102,14 +102,14 @@ TEST_F(ToStringTest, PointerType) {
     int value = 42;
     int* ptr = &value;
     std::string result = toString(ptr);
-    
+
     EXPECT_THAT(result, StartsWith("Pointer("));
     EXPECT_THAT(result, HasSubstr("42"));
-    
+
     // Null pointer
     int* null_ptr = nullptr;
     EXPECT_EQ(toString(null_ptr), "nullptr");
-    
+
     // Pointer to complex type
     std::string str = "test";
     std::string* str_ptr = &str;
@@ -121,14 +121,14 @@ TEST_F(ToStringTest, PointerType) {
 TEST_F(ToStringTest, SmartPointerType) {
     auto shared_ptr = std::make_shared<int>(42);
     std::string result = toString(shared_ptr);
-    
+
     EXPECT_THAT(result, StartsWith("SmartPointer("));
     EXPECT_THAT(result, HasSubstr("42"));
-    
+
     // Null smart pointer
     std::shared_ptr<int> null_shared_ptr;
     EXPECT_EQ(toString(null_shared_ptr), "nullptr");
-    
+
     // Unique pointer
     auto unique_ptr = std::make_unique<int>(123);
     result = toString(unique_ptr);
@@ -140,20 +140,20 @@ TEST_F(ToStringTest, SmartPointerType) {
 TEST_F(ToStringTest, VectorContainer) {
     std::vector<int> vec = {1, 2, 3, 4, 5};
     std::string result = toString(vec);
-    
+
     EXPECT_EQ(result, "[1, 2, 3, 4, 5]");
-    
+
     // Empty vector
     std::vector<int> empty_vec;
     EXPECT_EQ(toString(empty_vec), "[]");
-    
+
     // Vector with custom separator
     EXPECT_EQ(toString(vec, " | "), "[1 | 2 | 3 | 4 | 5]");
-    
+
     // Vector of strings
     std::vector<std::string> str_vec = {"hello", "world"};
     EXPECT_EQ(toString(str_vec), "[hello, world]");
-    
+
     // Nested vector
     std::vector<std::vector<int>> nested_vec = {{1, 2}, {3, 4}};
     EXPECT_EQ(toString(nested_vec), "[[1, 2], [3, 4]]");
@@ -163,7 +163,7 @@ TEST_F(ToStringTest, VectorContainer) {
 TEST_F(ToStringTest, ListContainer) {
     std::list<int> list = {1, 2, 3, 4, 5};
     EXPECT_EQ(toString(list), "[1, 2, 3, 4, 5]");
-    
+
     // Empty list
     std::list<int> empty_list;
     EXPECT_EQ(toString(empty_list), "[]");
@@ -174,7 +174,7 @@ TEST_F(ToStringTest, SetContainer) {
     std::set<int> set = {5, 3, 1, 4, 2};
     // Set will be ordered
     EXPECT_EQ(toString(set), "[1, 2, 3, 4, 5]");
-    
+
     // Empty set
     std::set<int> empty_set;
     EXPECT_EQ(toString(empty_set), "[]");
@@ -184,27 +184,27 @@ TEST_F(ToStringTest, SetContainer) {
 TEST_F(ToStringTest, MapType) {
     std::map<int, std::string> map = {{1, "one"}, {2, "two"}, {3, "three"}};
     std::string result = toString(map);
-    
+
     EXPECT_EQ(result, "{1: one, 2: two, 3: three}");
-    
+
     // Empty map
     std::map<int, std::string> empty_map;
     EXPECT_EQ(toString(empty_map), "{}");
-    
+
     // Map with custom separator
     EXPECT_EQ(toString(map, " | "), "{1: one | 2: two | 3: three}");
-    
+
     // Map with string keys
     std::map<std::string, int> str_map = {{"one", 1}, {"two", 2}, {"three", 3}};
     EXPECT_EQ(toString(str_map), "{one: 1, three: 3, two: 2}");
-    
+
     // Nested map
     std::map<int, std::map<int, std::string>> nested_map = {
         {1, {{1, "one-one"}, {2, "one-two"}}},
         {2, {{1, "two-one"}, {2, "two-two"}}}
     };
     EXPECT_EQ(toString(nested_map), "{1: {1: one-one, 2: one-two}, 2: {1: two-one, 2: two-two}}");
-    
+
     // Unordered map (order is not guaranteed, so just check length and specific elements)
     std::unordered_map<int, std::string> umap = {{1, "one"}, {2, "two"}, {3, "three"}};
     result = toString(umap);
@@ -219,7 +219,7 @@ TEST_F(ToStringTest, MapType) {
 TEST_F(ToStringTest, ArrayType) {
     std::array<int, 5> arr = {1, 2, 3, 4, 5};
     EXPECT_EQ(toString(arr), "[1, 2, 3, 4, 5]");
-    
+
     // Empty array
     std::array<int, 0> empty_arr = {};
     EXPECT_EQ(toString(empty_arr), "[]");
@@ -229,18 +229,18 @@ TEST_F(ToStringTest, ArrayType) {
 TEST_F(ToStringTest, TupleType) {
     auto tuple = std::make_tuple(1, "hello", 3.14);
     EXPECT_EQ(toString(tuple), "(1, hello, 3.140000)");
-    
+
     // Empty tuple
     auto empty_tuple = std::make_tuple();
     EXPECT_EQ(toString(empty_tuple), "()");
-    
+
     // Single element tuple
     auto single_tuple = std::make_tuple(42);
     EXPECT_EQ(toString(single_tuple), "(42)");
-    
+
     // Tuple with custom separator
     EXPECT_EQ(toString(tuple, " - "), "(1 - hello - 3.140000)");
-    
+
     // Nested tuple
     auto nested_tuple = std::make_tuple(std::make_tuple(1, 2), std::make_tuple("a", "b"));
     EXPECT_EQ(toString(nested_tuple), "((1, 2), (a, b))");
@@ -250,11 +250,11 @@ TEST_F(ToStringTest, TupleType) {
 TEST_F(ToStringTest, OptionalType) {
     std::optional<int> opt = 42;
     EXPECT_EQ(toString(opt), "Optional(42)");
-    
+
     // Empty optional
     std::optional<int> empty_opt;
     EXPECT_EQ(toString(empty_opt), "nullopt");
-    
+
     // Optional with complex type
     std::optional<std::vector<int>> opt_vec = std::vector<int>{1, 2, 3};
     EXPECT_EQ(toString(opt_vec), "Optional([1, 2, 3])");
@@ -264,13 +264,13 @@ TEST_F(ToStringTest, OptionalType) {
 TEST_F(ToStringTest, VariantType) {
     std::variant<int, std::string, double> var = 42;
     EXPECT_EQ(toString(var), "42");
-    
+
     var = "hello";
     EXPECT_EQ(toString(var), "hello");
-    
+
     var = 3.14;
     EXPECT_EQ(toString(var), "3.140000");
-    
+
     // Variant with complex type
     std::variant<int, std::vector<int>> var2 = std::vector<int>{1, 2, 3};
     EXPECT_EQ(toString(var2), "[1, 2, 3]");
@@ -281,11 +281,11 @@ TEST_F(ToStringTest, GeneralTypesStdToString) {
     // Integer
     EXPECT_EQ(toString(42), "42");
     EXPECT_EQ(toString(-42), "-42");
-    
+
     // Float/Double
     EXPECT_EQ(toString(3.14f), "3.140000");
     EXPECT_EQ(toString(-3.14), "-3.140000");
-    
+
     // Boolean
     EXPECT_EQ(toString(true), "1");
     EXPECT_EQ(toString(false), "0");
@@ -305,16 +305,16 @@ TEST_F(ToStringTest, ErrorHandling) {
         nullptr,
         std::make_shared<int>(3)
     };
-    
+
     std::string result = toString(vec);
     EXPECT_THAT(result, HasSubstr("[SmartPointer"));
     EXPECT_THAT(result, HasSubstr("nullptr"));
-    
+
     // Exception in conversion should be caught and reported
     try {
         // This would cause a static_assert failure in actual code
         //toString(NonStreamableClass(42));
-        
+
         // Instead, simulate a conversion error
         throw ToStringException("Test exception");
     } catch (const ToStringException& e) {
@@ -326,17 +326,17 @@ TEST_F(ToStringTest, ErrorHandling) {
 // Test toStringArray function
 TEST_F(ToStringTest, ToStringArray) {
     std::vector<int> vec = {1, 2, 3, 4, 5};
-    
+
     // Default separator (space)
     EXPECT_EQ(toStringArray(vec), "1 2 3 4 5");
-    
+
     // Custom separator
     EXPECT_EQ(toStringArray(vec, ", "), "1, 2, 3, 4, 5");
-    
+
     // Empty array
     std::vector<int> empty_vec;
     EXPECT_EQ(toStringArray(empty_vec), "");
-    
+
     // Array with complex types
     std::vector<std::vector<int>> nested_vec = {{1, 2}, {3, 4}};
     EXPECT_EQ(toStringArray(nested_vec), "[1, 2] [3, 4]");
@@ -345,16 +345,16 @@ TEST_F(ToStringTest, ToStringArray) {
 // Test toStringRange function
 TEST_F(ToStringTest, ToStringRange) {
     std::vector<int> vec = {1, 2, 3, 4, 5};
-    
+
     // Default separator
     EXPECT_EQ(toStringRange(vec.begin(), vec.end()), "[1, 2, 3, 4, 5]");
-    
+
     // Custom separator
     EXPECT_EQ(toStringRange(vec.begin(), vec.end(), " | "), "[1 | 2 | 3 | 4 | 5]");
-    
+
     // Empty range
     EXPECT_EQ(toStringRange(vec.begin(), vec.begin()), "[]");
-    
+
     // Partial range
     EXPECT_EQ(toStringRange(vec.begin() + 1, vec.begin() + 4), "[2, 3, 4]");
 }
@@ -363,13 +363,13 @@ TEST_F(ToStringTest, ToStringRange) {
 TEST_F(ToStringTest, JoinCommandLine) {
     // Basic join
     EXPECT_EQ(joinCommandLine("program", "-f", "file.txt"), "program -f file.txt");
-    
+
     // Join with mixed types
     EXPECT_EQ(joinCommandLine("program", 42, 3.14, true), "program 42 3.140000 1");
-    
+
     // Join with no arguments
     EXPECT_EQ(joinCommandLine(), "");
-    
+
     // Join with single argument
     EXPECT_EQ(joinCommandLine("program"), "program");
 }
@@ -378,7 +378,7 @@ TEST_F(ToStringTest, JoinCommandLine) {
 TEST_F(ToStringTest, DequeContainer) {
     std::deque<int> deq = {1, 2, 3, 4, 5};
     EXPECT_EQ(toString(deq), "[1, 2, 3, 4, 5]");
-    
+
     // Empty deque
     std::deque<int> empty_deq;
     EXPECT_EQ(toString(empty_deq), "[]");
@@ -388,10 +388,10 @@ TEST_F(ToStringTest, DequeContainer) {
 TEST_F(ToStringTest, CustomDelimiters) {
     std::vector<int> vec = {1, 2, 3};
     EXPECT_EQ(toString(vec, " -> "), "[1 -> 2 -> 3]");
-    
+
     std::map<int, std::string> map = {{1, "one"}, {2, "two"}};
     EXPECT_EQ(toString(map, " => "), "{1: one => 2: two}");
-    
+
     auto tuple = std::make_tuple(1, "hello", 3.14);
     EXPECT_EQ(toString(tuple, "; "), "(1; hello; 3.140000)");
 }
@@ -404,7 +404,7 @@ TEST_F(ToStringTest, NestedComplexStructures) {
         {2, {4, 5, 6}}
     };
     EXPECT_EQ(toString(map_of_vecs), "{1: [1, 2, 3], 2: [4, 5, 6]}");
-    
+
     // Vector of optionals
     std::vector<std::optional<int>> vec_of_opts = {
         std::optional<int>{1},
@@ -412,15 +412,15 @@ TEST_F(ToStringTest, NestedComplexStructures) {
         std::optional<int>{3}
     };
     EXPECT_EQ(toString(vec_of_opts), "[Optional(1), nullopt, Optional(3)]");
-    
+
     // Optional of vector
     std::optional<std::vector<int>> opt_vec = std::vector<int>{1, 2, 3};
     EXPECT_EQ(toString(opt_vec), "Optional([1, 2, 3])");
-    
+
     // Variant of container
     std::variant<int, std::vector<int>> var_vec = std::vector<int>{1, 2, 3};
     EXPECT_EQ(toString(var_vec), "[1, 2, 3]");
-    
+
     // Tuple with complex elements
     auto complex_tuple = std::make_tuple(
         std::vector<int>{1, 2, 3},
@@ -434,15 +434,15 @@ TEST_F(ToStringTest, NestedComplexStructures) {
 TEST_F(ToStringTest, PointersToContainers) {
     auto vec_ptr = std::make_shared<std::vector<int>>(std::vector<int>{1, 2, 3});
     std::string result = toString(vec_ptr);
-    
+
     EXPECT_THAT(result, StartsWith("SmartPointer("));
     EXPECT_THAT(result, HasSubstr("[1, 2, 3]"));
-    
+
     // Raw pointer to container
     std::vector<int> vec = {1, 2, 3};
     std::vector<int>* raw_ptr = &vec;
     result = toString(raw_ptr);
-    
+
     EXPECT_THAT(result, StartsWith("Pointer("));
     EXPECT_THAT(result, HasSubstr("[1, 2, 3]"));
 }
@@ -455,7 +455,7 @@ TEST_F(ToStringTest, ErrorInContainers) {
         nullptr,
         std::make_shared<int>(3)
     };
-    
+
     std::string result = toString(vec);
     EXPECT_THAT(result, HasSubstr("[SmartPointer"));
     EXPECT_THAT(result, HasSubstr("nullptr"));
@@ -478,20 +478,20 @@ TEST_F(ToStringTest, RecursiveStructures) {
         int value;
         std::shared_ptr<Node> next;
     };
-    
+
     auto node1 = std::make_shared<Node>();
     auto node2 = std::make_shared<Node>();
     auto node3 = std::make_shared<Node>();
-    
+
     node1->value = 1;
     node1->next = node2;
-    
+
     node2->value = 2;
     node2->next = node3;
-    
+
     node3->value = 3;
     node3->next = nullptr;
-    
+
     std::string result = toString(node1);
     EXPECT_THAT(result, HasSubstr("SmartPointer"));
     EXPECT_THAT(result, HasSubstr("1"));
@@ -507,18 +507,18 @@ TEST_F(ToStringTest, LargeStructurePerformance) {
     for (int i = 0; i < 10000; i++) {
         large_vec[i] = i;
     }
-    
+
     // Measure time to convert to string
     auto start = std::chrono::high_resolution_clock::now();
     std::string result = toString(large_vec);
     auto end = std::chrono::high_resolution_clock::now();
-    
+
     auto duration_ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-    
+
     // Verify correct conversion
     EXPECT_THAT(result, StartsWith("[0, 1, 2"));
     EXPECT_THAT(result, EndsWith("9998, 9999]"));
-    
+
     // Just log performance - no strict assertion as it will vary by system
     std::cout << "Converted vector of 10000 elements in " << duration_ms << "ms" << std::endl;
 }
@@ -527,18 +527,18 @@ TEST_F(ToStringTest, LargeStructurePerformance) {
 TEST_F(ToStringTest, ContainerAdaptors) {
     // stack, queue, and priority_queue don't satisfy the Container concept directly
     // but their underlying containers do when accessed properly
-    
+
     // For testing purposes, we can use a custom adaptor wrapper
     std::vector<int> vec = {1, 2, 3, 4, 5};
-    
+
     // Test with a custom wrapper that simulates container adaptors
     struct AdaptorWrapper {
         std::vector<int>& container;
-        
+
         auto begin() const { return container.begin(); }
         auto end() const { return container.end(); }
     };
-    
+
     AdaptorWrapper wrapper{vec};
     EXPECT_EQ(toString(wrapper), "[1, 2, 3, 4, 5]");
 }
@@ -560,9 +560,9 @@ TEST_F(ToStringTest, RealWorldExample) {
             {"absent", std::nullopt}
         }}
     };
-    
+
     std::string result = toString(complex_data);
-    
+
     // Check for key components in the result
     EXPECT_THAT(result, HasSubstr("int_value: 42"));
     EXPECT_THAT(result, HasSubstr("string_value: hello world"));

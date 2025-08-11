@@ -17,7 +17,7 @@ Description: System Information Module - Disk
 
 /**
  * @brief Disk module for system information
- * 
+ *
  * This module provides functionality for retrieving disk information,
  * monitoring disk events, and managing disk security.
  */

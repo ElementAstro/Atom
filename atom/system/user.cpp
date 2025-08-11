@@ -92,7 +92,7 @@ auto getUserGroups() -> std::vector<std::wstring> {
         spdlog::error("Failed to open process token for group enumeration");
         return groups;
     }
-    
+
     DWORD bufferSize = 0;
     GetTokenInformation(hToken, TokenGroups, nullptr, 0, &bufferSize);
     if (GetLastError() != ERROR_INSUFFICIENT_BUFFER) {
@@ -501,7 +501,7 @@ auto getLoggedInUsers() -> std::vector<std::string> {
                                               WTSUserName, &buffer, &bytesReturned)) {
                     if (buffer && bytesReturned > 1) {
                         std::string username(buffer);
-                        if (!username.empty() && 
+                        if (!username.empty() &&
                             std::find(users.begin(), users.end(), username) == users.end()) {
                             users.push_back(username);
                             spdlog::debug("Found logged-in user: {}", username);
@@ -522,7 +522,7 @@ auto getLoggedInUsers() -> std::vector<std::string> {
     while ((entry = getutent()) != nullptr) {
         if (entry->ut_type == USER_PROCESS) {
             std::string username(entry->ut_user);
-            if (!username.empty() && 
+            if (!username.empty() &&
                 std::find(users.begin(), users.end(), username) == users.end()) {
                 users.push_back(username);
                 spdlog::debug("Found logged-in user: {}", username);

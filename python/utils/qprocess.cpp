@@ -73,7 +73,7 @@ PYBIND11_MODULE(process, m) {
         m, "Process",
         R"(A class to manage and interact with external processes.
 
-This class provides methods to start and control external processes. 
+This class provides methods to start and control external processes.
 It allows setting working directories, managing environment variables,
 and reading from or writing to the process's standard output and error streams.
 
@@ -129,7 +129,7 @@ Args:
 Returns:
     bool: True if the process was started successfully, False otherwise.
 
-In detached mode, the process will run independently of the parent process 
+In detached mode, the process will run independently of the parent process
 and will not be terminated when the parent process exits.
 )")
         .def(
