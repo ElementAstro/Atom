@@ -170,20 +170,22 @@ int main() {
         std::chrono::duration<double, std::milli> std_time = end - start;
 
         start = std::chrono::high_resolution_clock::now();
-        BigNumber result2 = a.multiplyKaratsuba(b);
+        BigNumber result2 = a.multiply(b);  // Use the public multiply method
         end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> karatsuba_time = end - start;
+        std::chrono::duration<double, std::milli> multiply_time = end - start;
 
+        // Note: parallelMultiply method doesn't exist in the public interface
+        // Using multiply method for demonstration
         start = std::chrono::high_resolution_clock::now();
-        BigNumber result3 = a.parallelMultiply(b);
+        BigNumber result3 = a * b;  // Use operator* which calls multiply()
         end = std::chrono::high_resolution_clock::now();
-        std::chrono::duration<double, std::milli> parallel_time = end - start;
+        std::chrono::duration<double, std::milli> operator_time = end - start;
 
         std::cout << "Standard multiplication: " << std_time.count() << " ms"
                   << std::endl;
-        std::cout << "Karatsuba multiplication: " << karatsuba_time.count()
+        std::cout << "Method multiplication: " << multiply_time.count()
                   << " ms" << std::endl;
-        std::cout << "Parallel multiplication: " << parallel_time.count()
+        std::cout << "Operator multiplication: " << operator_time.count()
                   << " ms" << std::endl;
 
         // Verify all methods produce the same result

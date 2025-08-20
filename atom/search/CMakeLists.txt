@@ -5,10 +5,33 @@ project(
   LANGUAGES C CXX)
 
 # Sources
-set(SOURCES search.cpp sqlite.cpp)
+set(SOURCES
+    # Core search functionality
+    core/search.cpp
+
+    # Database backends
+    database/sqlite.cpp
+)
 
 # Headers
-set(HEADERS cache.hpp search.hpp sqlite.hpp)
+set(HEADERS
+    # Backwards compatibility headers (in root)
+    cache.hpp
+    lru.hpp
+    ttl.hpp
+    mysql.hpp
+    sqlite.hpp
+    search.hpp
+
+    # Actual implementation headers (in subdirectories)
+    core/search.hpp
+
+    database/sqlite.hpp
+
+    cache/cache.hpp
+    cache/lru.hpp
+    cache/ttl.hpp
+)
 
 # Dependencies
 set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} ${SQLite3_LIBRARIES})
@@ -17,8 +40,8 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(MARIADB libmariadb)
 if(MARIADB_FOUND)
   message(STATUS "Found libmariadb: ${MARIADB_VERSION}")
-  list(APPEND SOURCES mysql.cpp)
-  list(APPEND HEADERS mysql.hpp)
+  list(APPEND SOURCES database/mysql.cpp)
+  list(APPEND HEADERS database/mysql.hpp)
   list(APPEND LIBS ${MARIADB_LIBRARIES})
   include_directories(${MARIADB_INCLUDE_DIRS})
 else()

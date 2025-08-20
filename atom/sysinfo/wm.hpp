@@ -1,30 +1,20 @@
-#ifndef ATOM_SYSINFO_WM_HPP
-#define ATOM_SYSINFO_WM_HPP
-
-#include <string>
-
-#include "atom/macro.hpp"
-
-namespace atom::system {
-
 /**
- * @brief Contains system desktop environment and window manager information.
+ * @file wm.hpp
+ * @brief System window manager information functionality (compatibility header)
+ *
+ * This file serves as a compatibility header that includes the reorganized
+ * window manager system. It maintains backward compatibility with existing code
+ * that includes this header.
+ *
+ * @deprecated This header location is deprecated. Please use
+ * "atom/sysinfo/interfaces/wm.hpp" instead.
+ * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
-struct SystemInfo {
-    std::string desktopEnvironment;  //!< Desktop environment (e.g., Fluent, GNOME, KDE)
-    std::string windowManager;       //!< Window manager (e.g., Desktop Window Manager, i3, bspwm)
-    std::string wmTheme;            //!< Window manager theme information
-    std::string icons;              //!< Icon theme or icon information
-    std::string font;               //!< System font information
-    std::string cursor;             //!< Cursor theme information
-} ATOM_ALIGNAS(128);
 
-/**
- * @brief Retrieves system desktop environment and window manager information.
- * @return SystemInfo structure containing desktop environment details
- */
-[[nodiscard]] auto getSystemInfo() -> SystemInfo;
+#ifndef ATOM_SYSINFO_WM_COMPAT_HPP
+#define ATOM_SYSINFO_WM_COMPAT_HPP
 
-}  // namespace atom::system
+// Forward to the new location
+#include "info/wm.hpp"
 
-#endif
+#endif  // ATOM_SYSINFO_WM_COMPAT_HPP

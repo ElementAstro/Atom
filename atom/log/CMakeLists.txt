@@ -332,6 +332,65 @@ if (LOGURU_INSTALL)
 
 endif() # LOGURU_INSTALL
 
+# --- Add atom-log library
+# ----------------------------------------------------------
+
+# Only build atom-log if we're not the top-level project (i.e., we're being included by Atom)
+if (NOT PROJECT_IS_TOP_LEVEL)
+
+  # Define atom-log sources
+  set(ATOM_LOG_SOURCES
+    async_logger.cpp
+    atomlog.cpp
+    log_manager.cpp
+    logger.cpp
+    mmap_logger.cpp
+  )
+
+  # Define atom-log headers
+  set(ATOM_LOG_HEADERS
+    async_logger.hpp
+    atomlog.hpp
+    log_manager.hpp
+    logger.hpp
+    mmap_logger.hpp
+  )
+
+  # Create atom-log library
+  add_library(atom-log SHARED ${ATOM_LOG_SOURCES} ${ATOM_LOG_HEADERS})
+
+  # Link dependencies
+  target_link_libraries(atom-log
+    PUBLIC
+      loguru
+      atom-error
+      atom-utils
+      atom-web
+      ZLIB::ZLIB
+  )
+
+  # Include directories
+  target_include_directories(atom-log
+    PUBLIC
+      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+      $<INSTALL_INTERFACE:include/atom/log>
+  )
+
+  # Set target properties
+  set_target_properties(atom-log PROPERTIES
+    VERSION 1.0.0
+    SOVERSION 1
+    OUTPUT_NAME atom-log
+  )
+
+  # Add module to global target list
+  get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
+  list(APPEND ATOM_MODULE_TARGETS atom-log)
+  set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
+
+  message(STATUS "atom-log library configured")
+
+endif()
 
 # -- Setup CPack
 # ----------------------------------------------------------

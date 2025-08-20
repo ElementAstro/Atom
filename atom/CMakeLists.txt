@@ -272,6 +272,18 @@ foreach(dir ${SUBDIRECTORIES})
 endforeach()
 
 # =============================================================================
+# Add Extra Components
+# =============================================================================
+
+# Add extra components directory if it exists
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extra" AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extra/CMakeLists.txt")
+    message(STATUS "Adding extra components directory")
+    add_subdirectory(extra)
+else()
+    message(STATUS "Skipping extra components directory as it does not exist or does not contain CMakeLists.txt")
+endif()
+
+# =============================================================================
 # Create Combined Library
 # =============================================================================
 

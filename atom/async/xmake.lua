@@ -19,25 +19,20 @@ target("atom-async")
     -- Set target kind
     set_kind("static")
     
-    -- Add source files (explicitly specified)
-    add_files("limiter.cpp", "lock.cpp", "timer.cpp")
-    
-    -- Add header files (explicitly specified)
-    add_headerfiles(
-        "async.hpp",
-        "daemon.hpp", 
-        "eventstack.hpp",
-        "limiter.hpp",
-        "lock.hpp",
-        "message_bus.hpp",
-        "message_queue.hpp", 
-        "pool.hpp",
-        "queue.hpp",
-        "safetype.hpp",
-        "thread_wrapper.hpp",
-        "timer.hpp",
-        "trigger.hpp"
-    )
+    -- Add source files from new structure
+    add_files("core/*.cpp")
+    add_files("threading/*.cpp")
+    add_files("sync/*.cpp")
+    add_files("utils/*.cpp")
+
+    -- Add header files from new structure
+    add_headerfiles("*.hpp")  -- Backwards compatibility headers
+    add_headerfiles("core/*.hpp")
+    add_headerfiles("threading/*.hpp")
+    add_headerfiles("messaging/*.hpp")
+    add_headerfiles("execution/*.hpp")
+    add_headerfiles("sync/*.hpp")
+    add_headerfiles("utils/*.hpp")
     
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -79,8 +74,15 @@ target("atom-async-object")
     set_kind("object")
     
     -- Add the same source files
-    add_files("limiter.cpp", "lock.cpp", "timer.cpp")
+    add_files("core/*.cpp")
+    add_files("threading/*.cpp")
+    add_files("sync/*.cpp")
+    add_files("utils/*.cpp")
     add_headerfiles(
-        "async.hpp",
-        "daemon.hpp", 
-        "eventstack.hpp",
+        "*.hpp",  -- Backwards compatibility headers
+        "core/*.hpp",
+        "threading/*.hpp",
+        "messaging/*.hpp",
+        "execution/*.hpp",
+        "sync/*.hpp",
+        "utils/*.hpp"

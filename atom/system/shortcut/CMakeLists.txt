@@ -26,11 +26,11 @@ add_library(shortcut_detector SHARED
 
 # Set include directories
 target_include_directories(shortcut_detector
-    PUBLIC 
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 # Link against required libraries
@@ -50,27 +50,17 @@ add_library(shortcut_detector_static STATIC
 )
 
 target_include_directories(shortcut_detector_static
-    PUBLIC 
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
         $<INSTALL_INTERFACE:include>
     PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_link_libraries(shortcut_detector_static
     PRIVATE
         psapi
         spdlog::spdlog
-)
-
-# Example executable
-add_executable(shortcut_detector_example
-    examples/shortcut_detector_example.cpp
-)
-
-target_link_libraries(shortcut_detector_example
-    PRIVATE
-        shortcut_detector
 )
 
 # Create test executable
@@ -101,11 +91,11 @@ install(
 )
 
 install(
-    FILES 
-        include/detector.h
-        include/shortcut.h
-        include/factory.h
-        include/tatus.h
+    FILES
+        detector.hpp
+        shortcut.h
+        factory.h
+        status.h
     DESTINATION include/shortcut_detector
 )
 

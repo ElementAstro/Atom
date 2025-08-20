@@ -8,13 +8,51 @@ cmake_minimum_required(VERSION 3.21)
 # Define library name
 set(LIB_NAME atom-serial)
 
-# Find all source files
-file(GLOB_RECURSE SOURCES "*.cpp")
-file(GLOB_RECURSE HEADERS "*.h" "*.hpp")
+# Sources
+set(SOURCES
+    # Core files
+    core/scanner.cpp
+    core/serial_port.cpp
+
+    # Bluetooth files
+    bluetooth/bluetooth_serial.cpp
+
+    # USB files
+    usb/usb.cpp
+)
+
+# Add platform-specific sources
 if(APPLE)
-    file(GLOB_RECURSE MM_SOURCES "*.mm")
-    list(APPEND SOURCES ${MM_SOURCES})
+    list(APPEND SOURCES bluetooth/bluetooth_serial_mac.mm)
 endif()
+
+# Headers
+set(HEADERS
+    # Backwards compatibility headers (in root)
+    scanner.hpp
+    serial_port.hpp
+    bluetooth_serial.hpp
+    bluetooth_serial_mac.hpp
+    bluetooth_serial_unix.hpp
+    bluetooth_serial_win.hpp
+    serial_port_unix.hpp
+    serial_port_win.hpp
+    usb.hpp
+
+    # Actual implementation headers (in subdirectories)
+    core/scanner.hpp
+    core/serial_port.hpp
+
+    bluetooth/bluetooth_serial.hpp
+    bluetooth/bluetooth_serial_mac.hpp
+    bluetooth/bluetooth_serial_unix.hpp
+    bluetooth/bluetooth_serial_win.hpp
+
+    usb/usb.hpp
+
+    platform/serial_port_unix.hpp
+    platform/serial_port_win.hpp
+)
 
 # Create library target
 add_library(${LIB_NAME} ${SOURCES} ${HEADERS})

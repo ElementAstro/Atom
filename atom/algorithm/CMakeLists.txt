@@ -4,6 +4,10 @@ project(
   VERSION 1.0.0
   LANGUAGES C CXX)
 
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Find OpenSSL package
 find_package(OpenSSL REQUIRED)
 
@@ -28,9 +32,107 @@ foreach(dep ${ATOM_ALGORITHM_DEPENDS})
   endif()
 endforeach()
 
-# Automatically collect source files and headers
-file(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
-file(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/*.hpp)
+# Sources and Headers
+set(SOURCES
+    # Core files
+    core/algorithm.cpp
+
+    # Crypto files
+    crypto/md5.cpp
+    crypto/sha1.cpp
+    crypto/blowfish.cpp
+    crypto/tea.cpp
+
+    # Hash files
+    hash/mhash.cpp
+
+    # Math files
+    math/math.cpp
+    math/fraction.cpp
+    math/bignumber.cpp
+
+    # Compression files
+    compression/huffman.cpp
+    compression/matrix_compress.cpp
+
+    # Signal processing files
+    signal/convolve.cpp
+
+    # Optimization files
+    optimization/pathfinding.cpp
+
+    # Encoding files
+    encoding/base.cpp
+
+    # Graphics files
+    graphics/flood.cpp
+
+    # Utils files
+    utils/fnmatch.cpp
+)
+
+set(HEADERS
+    # Backwards compatibility headers (in root)
+    algorithm.hpp
+    annealing.hpp
+    base.hpp
+    bignumber.hpp
+    blowfish.hpp
+    convolve.hpp
+    error_calibration.hpp
+    flood.hpp
+    fnmatch.hpp
+    fraction.hpp
+    hash.hpp
+    huffman.hpp
+    math.hpp
+    matrix.hpp
+    matrix_compress.hpp
+    md5.hpp
+    mhash.hpp
+    pathfinding.hpp
+    perlin.hpp
+    rust_numeric.hpp
+    sha1.hpp
+    snowflake.hpp
+    tea.hpp
+    weight.hpp
+
+    # Actual implementation headers (in subdirectories)
+    core/algorithm.hpp
+    core/rust_numeric.hpp
+
+    crypto/md5.hpp
+    crypto/sha1.hpp
+    crypto/blowfish.hpp
+    crypto/tea.hpp
+
+    hash/hash.hpp
+    hash/mhash.hpp
+
+    math/math.hpp
+    math/matrix.hpp
+    math/fraction.hpp
+    math/bignumber.hpp
+
+    compression/huffman.hpp
+    compression/matrix_compress.hpp
+
+    signal/convolve.hpp
+
+    optimization/annealing.hpp
+    optimization/pathfinding.hpp
+
+    encoding/base.hpp
+
+    graphics/flood.hpp
+    graphics/perlin.hpp
+
+    utils/error_calibration.hpp
+    utils/fnmatch.hpp
+    utils/snowflake.hpp
+    utils/weight.hpp
+)
 
 set(LIBS ${ATOM_ALGORITHM_DEPENDS})
 
@@ -59,3 +161,8 @@ set_target_properties(
              OUTPUT_NAME ${PROJECT_NAME})
 
 install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+
+# Register this module to the global target list
+get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
+list(APPEND ATOM_MODULE_TARGETS ${PROJECT_NAME})
+set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

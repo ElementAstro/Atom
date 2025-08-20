@@ -21,9 +21,9 @@ protected:
     void SetUp() override {
         // Start the SocketHub on a separate thread
         socketHub_ = std::make_unique<SocketHub>();
-        socketHub_->addHandler([this](const std::string &message) {
+        socketHub_->addHandler([this](std::string_view message) {
             std::scoped_lock lock(mutex_);
-            messages_.push_back(message);
+            messages_.emplace_back(message);
         });
         socketHub_->start(port_);
         std::this_thread::sleep_for(

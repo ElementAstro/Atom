@@ -70,7 +70,7 @@ public:
                         asio::ip::udp::endpoint(asio::ip::udp::v4(), port);
                 }
             } else {
-                auto addr = asio::ip::address::from_string(address);
+                auto addr = asio::ip::make_address(address);
                 endpoint = asio::ip::udp::endpoint(addr, port);
             }
 
@@ -427,7 +427,7 @@ public:
                 return false;
             }
 
-            auto multicast = asio::ip::address::from_string(multicastAddress);
+            auto multicast = asio::ip::make_address(multicastAddress);
 
             if (!multicast.is_multicast()) {
                 if (onErrorCallback_) {
@@ -442,7 +442,7 @@ public:
 
                 if (!interfaceAddress.empty()) {
                     auto interface_addr =
-                        asio::ip::address_v6::from_string(interfaceAddress);
+                        asio::ip::make_address_v6(interfaceAddress);
                     option = asio::ip::multicast::join_group(
                         multicast.to_v6(), interface_addr.to_bytes()[0]);
                 } else {
@@ -455,7 +455,7 @@ public:
 
                 if (!interfaceAddress.empty()) {
                     auto interface_addr =
-                        asio::ip::address_v4::from_string(interfaceAddress);
+                        asio::ip::make_address_v4(interfaceAddress);
                     option = asio::ip::multicast::join_group(multicast.to_v4(),
                                                              interface_addr);
                 } else {
@@ -499,7 +499,7 @@ public:
                 return false;
             }
 
-            auto multicast = asio::ip::address::from_string(multicastAddress);
+            auto multicast = asio::ip::make_address(multicastAddress);
 
             if (!multicast.is_multicast()) {
                 if (onErrorCallback_) {
@@ -514,7 +514,7 @@ public:
 
                 if (!interfaceAddress.empty()) {
                     auto interface_addr =
-                        asio::ip::address_v6::from_string(interfaceAddress);
+                        asio::ip::make_address_v6(interfaceAddress);
                     option = asio::ip::multicast::leave_group(
                         multicast.to_v6(), interface_addr.to_bytes()[0]);
                 } else {
@@ -528,7 +528,7 @@ public:
 
                 if (!interfaceAddress.empty()) {
                     auto interface_addr =
-                        asio::ip::address_v4::from_string(interfaceAddress);
+                        asio::ip::make_address_v4(interfaceAddress);
                     option = asio::ip::multicast::leave_group(multicast.to_v4(),
                                                               interface_addr);
                 } else {

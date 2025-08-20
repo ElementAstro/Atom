@@ -22,10 +22,10 @@ int main() {
         std::cout << "========================\n\n";
 
         // 创建一个带自定义配置的扫描器
-        SerialPortScanner::ScannerConfig config;
+        ScannerConfig config;
         config.detect_ch340 = true;
         config.include_virtual_ports = false;
-        config.timeout = std::chrono::milliseconds(2000);
+        config.scan_timeout = std::chrono::milliseconds(2000);
         
         SerialPortScanner scanner(config);
         

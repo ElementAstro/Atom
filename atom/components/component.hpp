@@ -19,6 +19,8 @@ Description: Basic Component Definition
 #include "module_macro.hpp"
 #include "var.hpp"
 
+#include "atom/memory/memory_pool.hpp"
+#include "atom/memory/object.hpp"
 #include "atom/meta/concept.hpp"
 #include "atom/meta/constructor.hpp"
 #include "atom/meta/conversion.hpp"
@@ -55,13 +57,160 @@ enum class ComponentState : uint8_t {
 };
 
 /**
- * @brief Base class for components, providing the basic infrastructure for
- * component services.
- *
- * The Component class is the base class for all components, providing features
- * such as component registration, command dispatching, and event handling.
+ * @brief Cache-aligned performance statistics for optimal memory access
  */
-class Component : public std::enable_shared_from_this<Component> {
+struct alignas(64) ComponentPerformanceStats {
+    // Hot path data - frequently accessed together
+    std::atomic<uint64_t> commandCallCount{0};
+    std::atomic<uint64_t> commandErrorCount{0};
+    std::atomic<uint64_t> eventCount{0};
+    std::atomic<uint64_t> memoryAllocations{0};
+
+    // Timing data - separate cache line for less frequent access
+    alignas(64) struct {
+        std::atomic<uint64_t> totalExecutionTimeNs{0};
+        std::atomic<uint64_t> maxExecutionTimeNs{0};
+        std::atomic<uint64_t> minExecutionTimeNs{UINT64_MAX};
+        std::atomic<uint64_t> avgExecutionTimeNs{0};
+    } timing;
+
+    // Default constructor
+    ComponentPerformanceStats() = default;
+
+    // Copy constructor - loads atomic values
+    ComponentPerformanceStats(const ComponentPerformanceStats& other) noexcept
+        : commandCallCount(
+              other.commandCallCount.load(std::memory_order_relaxed)),
+          commandErrorCount(
+              other.commandErrorCount.load(std::memory_order_relaxed)),
+          eventCount(other.eventCount.load(std::memory_order_relaxed)),
+          memoryAllocations(
+              other.memoryAllocations.load(std::memory_order_relaxed)) {
+        timing.totalExecutionTimeNs.store(
+            other.timing.totalExecutionTimeNs.load(std::memory_order_relaxed));
+        timing.maxExecutionTimeNs.store(
+            other.timing.maxExecutionTimeNs.load(std::memory_order_relaxed));
+        timing.minExecutionTimeNs.store(
+            other.timing.minExecutionTimeNs.load(std::memory_order_relaxed));
+        timing.avgExecutionTimeNs.store(
+            other.timing.avgExecutionTimeNs.load(std::memory_order_relaxed));
+    }
+
+    // Copy assignment operator
+    ComponentPerformanceStats& operator=(
+        const ComponentPerformanceStats& other) noexcept {
+        if (this != &other) {
+            commandCallCount.store(
+                other.commandCallCount.load(std::memory_order_relaxed));
+            commandErrorCount.store(
+                other.commandErrorCount.load(std::memory_order_relaxed));
+            eventCount.store(other.eventCount.load(std::memory_order_relaxed));
+            memoryAllocations.store(
+                other.memoryAllocations.load(std::memory_order_relaxed));
+            timing.totalExecutionTimeNs.store(
+                other.timing.totalExecutionTimeNs.load(
+                    std::memory_order_relaxed));
+            timing.maxExecutionTimeNs.store(
+                other.timing.maxExecutionTimeNs.load(
+                    std::memory_order_relaxed));
+            timing.minExecutionTimeNs.store(
+                other.timing.minExecutionTimeNs.load(
+                    std::memory_order_relaxed));
+            timing.avgExecutionTimeNs.store(
+                other.timing.avgExecutionTimeNs.load(
+                    std::memory_order_relaxed));
+        }
+        return *this;
+    }
+
+    // Move constructor and assignment (same as copy for atomics)
+    ComponentPerformanceStats(ComponentPerformanceStats&& other) noexcept
+        : ComponentPerformanceStats(other) {}
+    ComponentPerformanceStats& operator=(
+        ComponentPerformanceStats&& other) noexcept {
+        return *this = other;
+    }
+
+    constexpr void reset() noexcept {
+        commandCallCount.store(0, std::memory_order_relaxed);
+        commandErrorCount.store(0, std::memory_order_relaxed);
+        eventCount.store(0, std::memory_order_relaxed);
+        memoryAllocations.store(0, std::memory_order_relaxed);
+        timing.totalExecutionTimeNs.store(0, std::memory_order_relaxed);
+        timing.maxExecutionTimeNs.store(0, std::memory_order_relaxed);
+        timing.minExecutionTimeNs.store(UINT64_MAX, std::memory_order_relaxed);
+        timing.avgExecutionTimeNs.store(0, std::memory_order_relaxed);
+    }
+
+    void updateExecutionTime(std::chrono::nanoseconds executionTime) noexcept {
+        const auto timeNs = static_cast<uint64_t>(executionTime.count());
+
+        timing.totalExecutionTimeNs.fetch_add(timeNs,
+                                              std::memory_order_relaxed);
+
+        // Update max time
+        uint64_t currentMax =
+            timing.maxExecutionTimeNs.load(std::memory_order_relaxed);
+        while (timeNs > currentMax &&
+               !timing.maxExecutionTimeNs.compare_exchange_weak(
+                   currentMax, timeNs, std::memory_order_relaxed)) {
+            // Retry if another thread updated max
+        }
+
+        // Update min time
+        uint64_t currentMin =
+            timing.minExecutionTimeNs.load(std::memory_order_relaxed);
+        while (timeNs < currentMin &&
+               !timing.minExecutionTimeNs.compare_exchange_weak(
+                   currentMin, timeNs, std::memory_order_relaxed)) {
+            // Retry if another thread updated min
+        }
+
+        // Update average (approximate for performance)
+        const auto count = std::max(
+            uint64_t{1}, commandCallCount.load(std::memory_order_relaxed));
+        const auto total =
+            timing.totalExecutionTimeNs.load(std::memory_order_relaxed);
+        timing.avgExecutionTimeNs.store(total / count,
+                                        std::memory_order_relaxed);
+    }
+
+    // Legacy compatibility methods
+    [[nodiscard]] std::chrono::microseconds getTotalExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.totalExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
+    }
+
+    [[nodiscard]] std::chrono::microseconds getMaxExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.maxExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
+    }
+
+    [[nodiscard]] std::chrono::microseconds getMinExecutionTime()
+        const noexcept {
+        const auto minNs =
+            timing.minExecutionTimeNs.load(std::memory_order_relaxed);
+        return std::chrono::microseconds{minNs == UINT64_MAX ? 0
+                                                             : minNs / 1000};
+    }
+
+    [[nodiscard]] std::chrono::microseconds getAvgExecutionTime()
+        const noexcept {
+        return std::chrono::microseconds{
+            timing.avgExecutionTimeNs.load(std::memory_order_relaxed) / 1000};
+    }
+};
+
+/**
+ * @brief Optimized base class for components with cache-friendly layout
+ *
+ * The Component class provides the basic infrastructure for component services
+ * with optimized memory layout for better cache performance and reduced virtual
+ * function overhead in hot paths.
+ */
+class alignas(64) Component : public std::enable_shared_from_this<Component> {
 public:
     /**
      * @brief Type definition for initialization function.
@@ -74,44 +223,9 @@ public:
     using CleanupFunc = std::function<void()>;
 
     /**
-     * @brief Performance statistics structure
+     * @brief Legacy alias for backward compatibility
      */
-    struct PerformanceStats {
-        std::atomic<uint64_t> commandCallCount{0};
-        std::atomic<uint64_t> commandErrorCount{0};
-        std::atomic<uint64_t> eventCount{0};
-
-        struct {
-            std::chrono::microseconds totalExecutionTime{0};
-            std::chrono::microseconds maxExecutionTime{0};
-            std::chrono::microseconds minExecutionTime{
-                std::chrono::microseconds::max()};
-            std::chrono::microseconds avgExecutionTime{0};
-        } timing;
-
-        constexpr void reset() noexcept {
-            commandCallCount = 0;
-            commandErrorCount = 0;
-            eventCount = 0;
-            timing.totalExecutionTime = std::chrono::microseconds{0};
-            timing.maxExecutionTime = std::chrono::microseconds{0};
-            timing.minExecutionTime = std::chrono::microseconds::max();
-            timing.avgExecutionTime = std::chrono::microseconds{0};
-        }
-
-        void updateExecutionTime(
-            std::chrono::microseconds executionTime) noexcept {
-            timing.totalExecutionTime += executionTime;
-            timing.maxExecutionTime =
-                std::max(timing.maxExecutionTime, executionTime);
-            timing.minExecutionTime =
-                std::min(timing.minExecutionTime, executionTime);
-            const auto count = std::max(
-                uint64_t{1}, commandCallCount.load(std::memory_order_relaxed));
-            timing.avgExecutionTime = std::chrono::microseconds{
-                timing.totalExecutionTime.count() / count};
-        }
-    };
+    using PerformanceStats = ComponentPerformanceStats;
 
     /**
      * @brief Constructs a new Component object.
@@ -196,12 +310,31 @@ public:
      * @return Const reference to performance statistics.
      */
     [[nodiscard]] auto getPerformanceStats() const noexcept
-        -> const PerformanceStats&;
+        -> const ComponentPerformanceStats&;
 
     /**
      * @brief Resets the performance statistics.
      */
     void resetPerformanceStats() noexcept;
+
+    /**
+     * @brief Gets performance statistics in legacy format for backward
+     * compatibility
+     * @return Legacy performance statistics structure
+     */
+    [[nodiscard]] auto getLegacyPerformanceStats() const noexcept
+        -> PerformanceStats {
+        PerformanceStats legacy;
+        legacy.commandCallCount.store(m_PerformanceStats_.commandCallCount.load(
+            std::memory_order_relaxed));
+        legacy.commandErrorCount.store(
+            m_PerformanceStats_.commandErrorCount.load(
+                std::memory_order_relaxed));
+        legacy.eventCount.store(
+            m_PerformanceStats_.eventCount.load(std::memory_order_relaxed));
+        // Note: timing fields are accessed via getter methods for thread safety
+        return legacy;
+    }
 
 #if ENABLE_EVENT_SYSTEM
     /**
@@ -713,7 +846,7 @@ public:
                     std::chrono::milliseconds timeout) const;
 
     /**
-     * @brief Dispatches a command with variadic arguments.
+     * @brief Dispatches a command with variadic arguments (optimized version).
      * @tparam Args Argument types.
      * @param name Command name.
      * @param args Command arguments.
@@ -727,15 +860,41 @@ public:
         try {
             auto result = m_CommandDispatcher_->dispatch(
                 std::string(name), std::forward<Args>(args)...);
+
             const auto endTime = std::chrono::high_resolution_clock::now();
             const auto duration =
-                std::chrono::duration_cast<std::chrono::microseconds>(
-                    endTime - startTime);
+                std::chrono::duration_cast<std::chrono::nanoseconds>(endTime -
+                                                                     startTime);
 
+            // Optimized atomic updates - single increment, then timing update
             m_PerformanceStats_.commandCallCount.fetch_add(
                 1, std::memory_order_relaxed);
             m_PerformanceStats_.updateExecutionTime(duration);
 
+            return result;
+        } catch (const std::exception&) {
+            m_PerformanceStats_.commandErrorCount.fetch_add(
+                1, std::memory_order_relaxed);
+            throw;
+        }
+    }
+
+    /**
+     * @brief Fast dispatch for hot paths with minimal overhead
+     * @tparam Args Argument types
+     * @param name Command name
+     * @param args Command arguments
+     * @return Command execution result
+     */
+    template <typename... Args>
+    [[gnu::hot]] auto fastDispatch(std::string_view name, Args&&... args)
+        -> std::any {
+        // Skip timing for maximum performance in hot paths
+        try {
+            auto result = m_CommandDispatcher_->dispatch(
+                std::string(name), std::forward<Args>(args)...);
+            m_PerformanceStats_.commandCallCount.fetch_add(
+                1, std::memory_order_relaxed);
             return result;
         } catch (const std::exception&) {
             m_PerformanceStats_.commandErrorCount.fetch_add(
@@ -889,23 +1048,22 @@ public:
     CleanupFunc cleanupFunc;
 
 private:
-    std::string m_name_;
+    // Hot path data - first cache line (64 bytes)
+    alignas(64) std::atomic<ComponentState> m_state_{ComponentState::Created};
+    mutable ComponentPerformanceStats m_PerformanceStats_;
+
+    // Frequently accessed strings - second cache line
+    alignas(64) std::string m_name_;
     std::string m_doc_;
+
+    // Less frequently accessed data
     std::string m_configPath_;
     std::string m_infoPath_;
     atom::meta::TypeInfo m_typeInfo_{atom::meta::userType<Component>()};
-    std::unordered_map<std::string_view, atom::meta::TypeInfo> m_classes_;
 
-    std::atomic<ComponentState> m_state_{ComponentState::Created};
-    mutable PerformanceStats m_PerformanceStats_;
-
+    // Shared resources - grouped for locality
     std::shared_ptr<VariableManager> m_VariableManager_{
         std::make_shared<VariableManager>()};
-
-    std::unordered_map<std::string, std::weak_ptr<Component>>
-        m_OtherComponents_;
-    mutable std::shared_mutex m_ComponentsMutex_;
-
     std::shared_ptr<atom::meta::TypeCaster> m_TypeCaster_{
         atom::meta::TypeCaster::createShared()};
     std::shared_ptr<atom::meta::TypeConversions> m_TypeConverter_{
@@ -913,11 +1071,24 @@ private:
     std::shared_ptr<CommandDispatcher> m_CommandDispatcher_{
         std::make_shared<CommandDispatcher>(m_TypeCaster_)};
 
+    // Component relationships - separate cache line for thread safety
+    alignas(64) std::unordered_map<std::string,
+                                   std::weak_ptr<Component>> m_OtherComponents_;
+    mutable std::shared_mutex m_ComponentsMutex_;
+
+    // Type registry - cold data
+    std::unordered_map<std::string_view, atom::meta::TypeInfo> m_classes_;
+
 #if ENABLE_EVENT_SYSTEM
-    struct EventHandler {
+    // Event system data - separate cache line
+    alignas(64) struct EventHandler {
         atom::components::EventCallbackId id;
         atom::components::EventCallback callback;
         bool once;
+
+        EventHandler(atom::components::EventCallbackId i,
+                     atom::components::EventCallback cb, bool o)
+            : id(i), callback(std::move(cb)), once(o) {}
     };
 
     std::unordered_map<std::string, std::vector<EventHandler>> m_EventHandlers_;

@@ -4,7 +4,6 @@
 #include "exception.h"
 #include "ser_format.h"
 
-
 #include <concepts>
 #include <filesystem>
 #include <fstream>
@@ -16,7 +15,6 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
-
 
 namespace serastro {
 

@@ -70,14 +70,15 @@ LogFilter::FilterFunc BuiltinFilters::keyword_filter(
 }
 
 LogFilter::FilterFunc BuiltinFilters::sampling_filter(double sample_rate) {
-    return [sample_rate, counter = std::atomic<size_t>{0}](
-               const std::string&, Level, const LogContext&) mutable {
+    auto counter = std::make_shared<std::atomic<size_t>>(0);
+    return [sample_rate, counter](
+               const std::string&, Level, const LogContext&) {
         if (sample_rate >= 1.0)
             return true;
         if (sample_rate <= 0.0)
             return false;
 
-        size_t current = counter.fetch_add(1);
+        size_t current = counter->fetch_add(1);
         return (current % static_cast<size_t>(1.0 / sample_rate)) == 0;
     };
 }

@@ -98,11 +98,11 @@ int main() {
     std::cout << "Selected index with BottomHeavySelectionStrategy: "
               << selectedIndex << std::endl;
 
-    // Change selection strategy to TopHeavySelectionStrategy
+    // Change selection strategy to BottomHeavySelectionStrategy
     selector.setSelectionStrategy(
-        std::make_unique<TopHeavySelectionStrategy<double>>());
+        std::make_unique<WeightSelector<double>::BottomHeavySelectionStrategy>());
     selectedIndex = selector.select();
-    std::cout << "Selected index with TopHeavySelectionStrategy: "
+    std::cout << "Selected index with BottomHeavySelectionStrategy: "
               << selectedIndex << std::endl;
 
     // Use WeightedRandomSampler to sample indices

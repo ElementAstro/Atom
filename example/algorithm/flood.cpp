@@ -122,13 +122,14 @@ int main() {
         simdConfig.useSIMD = true;
 
         try {
-            size_t simdFilledCells = atom::algorithm::FloodFill::fillSIMD(
-                simdGrid, 1, 1, 2, 8, simdConfig);
+            // Note: fillSIMD is not implemented, using fillBFS instead
+            size_t simdFilledCells = atom::algorithm::FloodFill::fillBFS(
+                simdGrid, 1, 1, 2, 8, simdConfig.connectivity);
 
-            std::cout << "\nGrid after SIMD flood fill:" << std::endl;
+            std::cout << "\nGrid after BFS flood fill (SIMD not available):" << std::endl;
             printGrid(simdGrid);
             std::cout << "Filled " << simdFilledCells
-                      << " cells using SIMD algorithm" << std::endl;
+                      << " cells using BFS algorithm" << std::endl;
         } catch (const std::exception& e) {
             std::cout << "SIMD flood fill not supported: " << e.what()
                       << std::endl;
@@ -161,12 +162,12 @@ int main() {
         blockConfig.useBlockProcessing = true;
         blockConfig.blockSize = 4;
 
+        // Note: fillBlockOptimized is not implemented, using fillBFS instead
         size_t blockFilledCells =
-            atom::algorithm::FloodFill::fillBlockOptimized(blockGrid, 0, 0, 3,
-                                                           7, blockConfig);
+            atom::algorithm::FloodFill::fillBFS(blockGrid, 0, 0, 3, 7, blockConfig.connectivity);
 
         std::cout << "Filled " << blockFilledCells
-                  << " cells using block-optimized algorithm" << std::endl;
+                  << " cells using BFS algorithm (block-optimized not available)" << std::endl;
     }
 
     // Example demonstrating different connectivity types

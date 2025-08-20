@@ -95,8 +95,8 @@ constexpr auto FindIf(const L&, F&&, std::index_sequence<>) -> std::size_t {
 }
 
 template <class L, class F, std::size_t N0, std::size_t... Ns>
-constexpr auto FindIf(const L& list, F&& func,
-                      std::index_sequence<N0, Ns...>) -> std::size_t {
+constexpr auto FindIf(const L& list, F&& func, std::index_sequence<N0, Ns...>)
+    -> std::size_t {
     return func(list.template Get<N0>()) ? N0
                                          : FindIf(list, std::forward<F>(func),
                                                   std::index_sequence<Ns...>{});

@@ -19,7 +19,6 @@ Description: UDP Client Class
 #include <string>
 #include <vector>
 
-
 namespace atom::async::connection {
 
 /**

@@ -1,6 +1,7 @@
 #include <chrono>
 #include <iostream>
 #include <thread>
+#include <span>
 
 #include "atom/connection/tcpclient.hpp"
 
@@ -15,19 +16,20 @@ void onDisconnected() {
 }
 
 // Function to handle incoming data
-void onDataReceived(const std::vector<char>& data) {
+void onDataReceived(std::span<const char> data) {
     std::string received(data.begin(), data.end());
     std::cout << "Received data: " << received << std::endl;
 }
 
 // Function to handle errors
-void onError(const std::string& errorMessage) {
-    std::cerr << "Error: " << errorMessage << std::endl;
+void onError(const std::system_error& error) {
+    std::cerr << "Error: " << error.what() << std::endl;
 }
 
 // Function to run the TCP client
 void runTcpClient(const std::string& host, int port) {
-    atom::connection::TcpClient tcpClient;
+    atom::connection::TcpClient::Options options{};
+    atom::connection::TcpClient tcpClient(options);
 
     // Set callbacks for various events
     tcpClient.setOnConnectedCallback(onConnected);
@@ -36,15 +38,18 @@ void runTcpClient(const std::string& host, int port) {
     tcpClient.setOnErrorCallback(onError);
 
     // Try to connect to the server
-    if (!tcpClient.connect(host, port, std::chrono::milliseconds(5000))) {
+    auto connectResult = tcpClient.connect(host, static_cast<uint16_t>(port), std::chrono::milliseconds(5000));
+    if (!connectResult.has_value()) {
         std::cerr << "Failed to connect to the server." << std::endl;
         return;
     }
 
     // Sending a message to the server
     std::string message = "Hello, Server!";
-    if (tcpClient.send(std::vector<char>(message.begin(), message.end()))) {
-        std::cout << "Sent message: " << message << std::endl;
+    std::span<const char> data_span(message.data(), message.size());
+    auto sendResult = tcpClient.send(data_span);
+    if (sendResult.has_value()) {
+        std::cout << "Sent message: " << message << " (" << sendResult.value() << " bytes)" << std::endl;
     } else {
         std::cerr << "Failed to send message." << std::endl;
     }

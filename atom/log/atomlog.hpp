@@ -107,83 +107,182 @@ public:
      * @tparam Args The types of the arguments.
      * @param format The format string.
      * @param args The arguments to format.
-     * @param location The source location information (auto-captured).
      */
     template <typename... Args>
-    void trace(std::string_view format, Args&&... args,
-               const std::source_location& location =
-                   std::source_location::current()) {
+    void trace(std::string_view format, Args&&... args) {
+        trace_impl(std::source_location::current(), format,
+                   std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Logs a trace level message with explicit source location.
+     * @param format The format string.
+     * @param location The source location.
+     */
+    void trace_at(std::string_view format,
+                  const std::source_location& location) {
         if (shouldLog(LogLevel::TRACE)) {
-            log(LogLevel::TRACE,
-                std::vformat(format, std::make_format_args(args...)), location);
+            log(LogLevel::TRACE, std::string(format), location);
         }
     }
 
+private:
+    template <typename... Args>
+    void trace_impl(const std::source_location& location,
+                    std::string_view format, Args&&... args) {
+        if (shouldLog(LogLevel::TRACE)) {
+            if constexpr (sizeof...(args) == 0) {
+                log(LogLevel::TRACE, std::string(format), location);
+            } else {
+                log(LogLevel::TRACE,
+                    std::vformat(format, std::make_format_args(args...)),
+                    location);
+            }
+        }
+    }
+
+public:
     /**
      * @brief Logs a debug level message with source location information.
      * @tparam Args The types of the arguments.
      * @param format The format string.
      * @param args The arguments to format.
-     * @param location The source location information (auto-captured).
      */
     template <typename... Args>
-    void debug(std::string_view format, Args&&... args,
-               const std::source_location& location =
-                   std::source_location::current()) {
+    void debug(std::string_view format, Args&&... args) {
+        debug_impl(std::source_location::current(), format,
+                   std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Logs a debug level message with explicit source location.
+     * @param format The format string.
+     * @param location The source location.
+     */
+    void debug_at(std::string_view format,
+                  const std::source_location& location) {
         if (shouldLog(LogLevel::DEBUG)) {
-            log(LogLevel::DEBUG,
-                std::vformat(format, std::make_format_args(args...)), location);
+            log(LogLevel::DEBUG, std::string(format), location);
         }
     }
 
+private:
+    template <typename... Args>
+    void debug_impl(const std::source_location& location,
+                    std::string_view format, Args&&... args) {
+        if (shouldLog(LogLevel::DEBUG)) {
+            if constexpr (sizeof...(args) == 0) {
+                log(LogLevel::DEBUG, std::string(format), location);
+            } else {
+                log(LogLevel::DEBUG,
+                    std::vformat(format, std::make_format_args(args...)),
+                    location);
+            }
+        }
+    }
+
+public:
     /**
      * @brief Logs an info level message with source location information.
      * @tparam Args The types of the arguments.
      * @param format The format string.
      * @param args The arguments to format.
-     * @param location The source location information (auto-captured).
      */
     template <typename... Args>
-    void info(std::string_view format, Args&&... args,
-              const std::source_location& location =
-                  std::source_location::current()) {
+    void info(std::string_view format, Args&&... args) {
+        info_impl(std::source_location::current(), format,
+                  std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Logs an info level message with explicit source location.
+     * @param format The format string.
+     * @param location The source location.
+     */
+    void info_at(std::string_view format,
+                 const std::source_location& location) {
         if (shouldLog(LogLevel::INFO)) {
-            log(LogLevel::INFO,
-                std::vformat(format, std::make_format_args(args...)), location);
+            log(LogLevel::INFO, std::string(format), location);
         }
     }
 
+private:
+    template <typename... Args>
+    void info_impl(const std::source_location& location,
+                   std::string_view format, Args&&... args) {
+        if (shouldLog(LogLevel::INFO)) {
+            if constexpr (sizeof...(args) == 0) {
+                log(LogLevel::INFO, std::string(format), location);
+            } else {
+                log(LogLevel::INFO,
+                    std::vformat(format, std::make_format_args(args...)),
+                    location);
+            }
+        }
+    }
+
+public:
     /**
      * @brief Logs a warn level message with source location information.
      * @tparam Args The types of the arguments.
      * @param format The format string.
      * @param args The arguments to format.
-     * @param location The source location information (auto-captured).
      */
     template <typename... Args>
-    void warn(std::string_view format, Args&&... args,
-              const std::source_location& location =
-                  std::source_location::current()) {
+    void warn(std::string_view format, Args&&... args) {
+        warn_impl(std::source_location::current(), format,
+                  std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Logs a warn level message with explicit source location.
+     * @param format The format string.
+     * @param location The source location.
+     */
+    void warn_at(std::string_view format,
+                 const std::source_location& location) {
         if (shouldLog(LogLevel::WARN)) {
-            log(LogLevel::WARN,
-                std::vformat(format, std::make_format_args(args...)), location);
+            log(LogLevel::WARN, std::string(format), location);
         }
     }
 
+private:
+    template <typename... Args>
+    void warn_impl(const std::source_location& location,
+                   std::string_view format, Args&&... args) {
+        if (shouldLog(LogLevel::WARN)) {
+            if constexpr (sizeof...(args) == 0) {
+                log(LogLevel::WARN, std::string(format), location);
+            } else {
+                log(LogLevel::WARN,
+                    std::vformat(format, std::make_format_args(args...)),
+                    location);
+            }
+        }
+    }
+
+public:
     /**
      * @brief Logs an error level message with source location information.
      * @tparam Args The types of the arguments.
      * @param format The format string.
      * @param args The arguments to format.
-     * @param location The source location information (auto-captured).
      */
     template <typename... Args>
-    void error(std::string_view format, Args&&... args,
-               const std::source_location& location =
-                   std::source_location::current()) {
+    void error(std::string_view format, Args&&... args) {
+        error_impl(std::source_location::current(), format,
+                   std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Logs an error level message with explicit source location.
+     * @param format The format string.
+     * @param location The source location.
+     */
+    void error_at(std::string_view format,
+                  const std::source_location& location) {
         if (shouldLog(LogLevel::ERROR)) {
-            log(LogLevel::ERROR,
-                std::vformat(format, std::make_format_args(args...)), location);
+            log(LogLevel::ERROR, std::string(format), location);
         }
     }
 
@@ -192,18 +291,55 @@ public:
      * @tparam Args The types of the arguments.
      * @param format The format string.
      * @param args The arguments to format.
-     * @param location The source location information (auto-captured).
      */
     template <typename... Args>
-    void critical(std::string_view format, Args&&... args,
-                  const std::source_location& location =
-                      std::source_location::current()) {
+    void critical(std::string_view format, Args&&... args) {
+        critical_impl(std::source_location::current(), format,
+                      std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Logs a critical level message with explicit source location.
+     * @param format The format string.
+     * @param location The source location.
+     */
+    void critical_at(std::string_view format,
+                     const std::source_location& location) {
         if (shouldLog(LogLevel::CRITICAL)) {
-            log(LogLevel::CRITICAL,
-                std::vformat(format, std::make_format_args(args...)), location);
+            log(LogLevel::CRITICAL, std::string(format), location);
         }
     }
 
+private:
+    template <typename... Args>
+    void error_impl(const std::source_location& location,
+                    std::string_view format, Args&&... args) {
+        if (shouldLog(LogLevel::ERROR)) {
+            if constexpr (sizeof...(args) == 0) {
+                log(LogLevel::ERROR, std::string(format), location);
+            } else {
+                log(LogLevel::ERROR,
+                    std::vformat(format, std::make_format_args(args...)),
+                    location);
+            }
+        }
+    }
+
+    template <typename... Args>
+    void critical_impl(const std::source_location& location,
+                       std::string_view format, Args&&... args) {
+        if (shouldLog(LogLevel::CRITICAL)) {
+            if constexpr (sizeof...(args) == 0) {
+                log(LogLevel::CRITICAL, std::string(format), location);
+            } else {
+                log(LogLevel::CRITICAL,
+                    std::vformat(format, std::make_format_args(args...)),
+                    location);
+            }
+        }
+    }
+
+public:
     /**
      * @brief Sets the logging level.
      * @param level The log level to set.

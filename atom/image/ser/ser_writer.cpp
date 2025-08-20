@@ -4,7 +4,6 @@
 #include <mutex>
 #include <opencv2/imgproc.hpp>
 
-
 namespace serastro {
 
 struct SERWriter::Impl {

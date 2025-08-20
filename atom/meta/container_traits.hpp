@@ -23,7 +23,6 @@
 #include <vector>
 #include "atom/meta/abi.hpp"
 
-
 namespace atom::meta {
 
 /**
@@ -43,15 +42,13 @@ struct ContainerTraitsBase {
     using value_type = T;
     using container_type = Container;
     // Only define size_type and difference_type if present in Container
-    using size_type = std::conditional_t<
-        requires { typename Container::size_type; },
-        typename Container::size_type,
-        std::size_t>;
+    using size_type = std::conditional_t<requires {
+        typename Container::size_type;
+    }, typename Container::size_type, std::size_t>;
     // Only define difference_type if present, otherwise void for adapters
-    using difference_type = std::conditional_t<
-        requires { typename Container::difference_type; },
-        typename Container::difference_type,
-        void>;
+    using difference_type = std::conditional_t<requires {
+        typename Container::difference_type;
+    }, typename Container::difference_type, void>;
 
     // Default iterator types (will be overridden if available)
     using iterator = void;

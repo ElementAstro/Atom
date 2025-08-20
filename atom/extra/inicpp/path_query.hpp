@@ -31,7 +31,8 @@ public:
      * @brief 从路径部分构造
      * @param pathParts 路径部分的向量
      */
-    explicit PathQuery(std::vector<std::string> pathParts) : pathParts_(std::move(pathParts)) {}
+    explicit PathQuery(std::vector<std::string> pathParts)
+        : pathParts_(std::move(pathParts)) {}
 
     /**
      * @brief 获取路径部分
@@ -45,9 +46,7 @@ public:
      * @brief 获取路径部分
      * @return 路径部分向量的引用
      */
-    std::vector<std::string>& parts() noexcept {
-        return pathParts_;
-    }
+    std::vector<std::string>& parts() noexcept { return pathParts_; }
 
     /**
      * @brief 获取段路径
@@ -57,7 +56,8 @@ public:
         if (pathParts_.empty()) {
             return {};
         }
-        return std::vector<std::string>(pathParts_.begin(), pathParts_.end() - 1);
+        return std::vector<std::string>(pathParts_.begin(),
+                                        pathParts_.end() - 1);
     }
 
     /**
@@ -86,25 +86,19 @@ public:
      * @brief 检查路径是否为空
      * @return 如果路径为空则为true，否则为false
      */
-    [[nodiscard]] bool empty() const noexcept {
-        return pathParts_.empty();
-    }
+    [[nodiscard]] bool empty() const noexcept { return pathParts_.empty(); }
 
     /**
      * @brief 获取路径长度
      * @return 路径部分的数量
      */
-    [[nodiscard]] size_t size() const noexcept {
-        return pathParts_.size();
-    }
+    [[nodiscard]] size_t size() const noexcept { return pathParts_.size(); }
 
     /**
      * @brief 获取完整路径字符串
      * @return 完整的点分隔路径
      */
-    [[nodiscard]] std::string toString() const {
-        return joinPath(pathParts_);
-    }
+    [[nodiscard]] std::string toString() const { return joinPath(pathParts_); }
 
     /**
      * @brief 获取父路径
@@ -114,7 +108,8 @@ public:
         if (pathParts_.empty()) {
             return PathQuery();
         }
-        return PathQuery(std::vector<std::string>(pathParts_.begin(), pathParts_.end() - 1));
+        return PathQuery(
+            std::vector<std::string>(pathParts_.begin(), pathParts_.end() - 1));
     }
 
     /**
@@ -133,10 +128,12 @@ public:
      * @param extension 扩展路径
      * @return 组合的新路径查询
      */
-    static PathQuery combine(const PathQuery& base, const PathQuery& extension) {
+    static PathQuery combine(const PathQuery& base,
+                             const PathQuery& extension) {
         std::vector<std::string> combinedParts = base.parts();
         const auto& extensionParts = extension.parts();
-        combinedParts.insert(combinedParts.end(), extensionParts.begin(), extensionParts.end());
+        combinedParts.insert(combinedParts.end(), extensionParts.begin(),
+                             extensionParts.end());
         return PathQuery(std::move(combinedParts));
     }
 
@@ -160,6 +157,6 @@ public:
     }
 };
 
-} // namespace inicpp
+}  // namespace inicpp
 
-#endif // ATOM_EXTRA_INICPP_PATH_QUERY_HPP
+#endif  // ATOM_EXTRA_INICPP_PATH_QUERY_HPP

@@ -28,7 +28,7 @@ Description: A super enhanced string class.
 #include <vector>
 
 #ifdef ATOM_USE_SIMD
-#include "../utils/simd_wrapper.hpp"
+#include "../utils/memory/simd_wrapper.hpp"
 #endif
 
 #ifdef ATOM_USE_BOOST

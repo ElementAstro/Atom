@@ -42,11 +42,11 @@ enum class SectionEventType {
  * @brief Event data for section events.
  */
 struct SectionEventData {
-    std::string sectionName;        ///< Name of the section.
-    std::string fieldName;          ///< Name of the field (if applicable).
-    std::string oldValue;           ///< Old value (if applicable).
-    std::string newValue;           ///< New value (if applicable).
-    SectionEventType eventType;     ///< Type of the event.
+    std::string sectionName;     ///< Name of the section.
+    std::string fieldName;       ///< Name of the field (if applicable).
+    std::string oldValue;        ///< Old value (if applicable).
+    std::string newValue;        ///< New value (if applicable).
+    SectionEventType eventType;  ///< Type of the event.
 };
 
 /**
@@ -99,11 +99,13 @@ public:
         : sectionName_(name)
 #endif
 #if INICPP_CONFIG_NESTED_SECTIONS && INICPP_CONFIG_EVENT_LISTENERS
-        , parentSectionName_("")
+          ,
+          parentSectionName_("")
 #elif INICPP_CONFIG_NESTED_SECTIONS
         : parentSectionName_("")
 #endif
-    {}
+    {
+    }
 
     /**
      * @brief Destructor.
@@ -115,9 +117,7 @@ public:
      * @brief Set the section name.
      * @param name The name of the section.
      */
-    void setSectionName(const std::string& name) {
-        sectionName_ = name;
-    }
+    void setSectionName(const std::string& name) { sectionName_ = name; }
 
     /**
      * @brief Get the section name.
@@ -138,9 +138,7 @@ public:
     /**
      * @brief Remove all event listeners.
      */
-    void clearEventListeners() noexcept {
-        eventListeners_.clear();
-    }
+    void clearEventListeners() noexcept { eventListeners_.clear(); }
 #endif
 
 #if INICPP_CONFIG_NESTED_SECTIONS
@@ -154,7 +152,8 @@ public:
 
     /**
      * @brief Get the parent section name.
-     * @return The parent section name, or empty string if this is a top-level section.
+     * @return The parent section name, or empty string if this is a top-level
+     * section.
      */
     [[nodiscard]] const std::string& getParentSectionName() const noexcept {
         return parentSectionName_;
@@ -190,7 +189,8 @@ public:
      * @return A vector containing the names of all child sections.
      */
     [[nodiscard]] std::vector<std::string> getChildSectionNames() const {
-        return std::vector<std::string>(childSections_.begin(), childSections_.end());
+        return std::vector<std::string>(childSections_.begin(),
+                                        childSections_.end());
     }
 
     /**
@@ -282,7 +282,7 @@ public:
             // 检查字段是否已存在
             auto it = this->find(key);
             bool fieldExists = (it != this->end());
-            
+
             // 如果启用了事件监听，准备事件数据
 #if INICPP_CONFIG_EVENT_LISTENERS
             std::string oldValue;
@@ -293,7 +293,7 @@ public:
 
             // 设置或更新字段值
             (*this)[key] = value;
-            
+
             // 如果启用了事件监听，触发事件
 #if INICPP_CONFIG_EVENT_LISTENERS
             // 准备事件数据
@@ -301,18 +301,18 @@ public:
             eventData.sectionName = sectionName_;
             eventData.fieldName = key;
             eventData.newValue = (*this)[key].template as<std::string>();
-            
+
             if (fieldExists) {
                 eventData.oldValue = oldValue;
                 eventData.eventType = SectionEventType::FIELD_MODIFIED;
             } else {
                 eventData.eventType = SectionEventType::FIELD_ADDED;
             }
-            
+
             // 通知监听器
             notifyListeners(eventData);
 #endif
-            
+
         } catch (const std::exception& ex) {
             throw std::invalid_argument("Failed to set field '" + key +
                                         "': " + ex.what());
@@ -329,7 +329,7 @@ public:
         if (it == this->end()) {
             return false;
         }
-        
+
 #if INICPP_CONFIG_EVENT_LISTENERS
         // 准备事件数据
         SectionEventData eventData;
@@ -338,15 +338,15 @@ public:
         eventData.oldValue = it->second.template as<std::string>();
         eventData.eventType = SectionEventType::FIELD_REMOVED;
 #endif
-        
+
         // 删除字段
         this->erase(it);
-        
+
 #if INICPP_CONFIG_EVENT_LISTENERS
         // 通知监听器
         notifyListeners(eventData);
 #endif
-        
+
         return true;
     }
 
@@ -369,10 +369,10 @@ public:
         eventData.sectionName = sectionName_;
         eventData.eventType = SectionEventType::SECTION_CLEARED;
 #endif
-        
+
         // 清空所有字段
         this->clear();
-        
+
 #if INICPP_CONFIG_EVENT_LISTENERS
         // 通知监听器
         notifyListeners(eventData);
@@ -391,7 +391,8 @@ public:
     [[nodiscard]] T getPath(const std::string& path) const {
         auto parts = splitPath(path);
         if (parts.size() != 1) {
-            throw std::out_of_range("Path query cannot be processed in a section.");
+            throw std::out_of_range(
+                "Path query cannot be processed in a section.");
         }
         return get<T>(parts[0]);
     }
@@ -407,7 +408,8 @@ public:
     void setPath(const std::string& path, const T& value) {
         auto parts = splitPath(path);
         if (parts.size() != 1) {
-            throw std::out_of_range("Path query cannot be processed in a section.");
+            throw std::out_of_range(
+                "Path query cannot be processed in a section.");
         }
         set<T>(parts[0], value);
     }
@@ -433,7 +435,8 @@ using IniSectionHash = hash_map_type<std::string, IniField>;
 /**
  * @brief Case-insensitive hash-based INI section.
  */
-using IniSectionHashCaseInsensitive = hash_map_type<std::string, IniField, StringInsensitiveHash>;
+using IniSectionHashCaseInsensitive =
+    hash_map_type<std::string, IniField, StringInsensitiveHash>;
 #endif
 
 }  // namespace inicpp

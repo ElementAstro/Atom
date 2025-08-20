@@ -17,7 +17,6 @@
 #include "stacking.h"
 #include "utils.h"
 
-
 namespace serastro {
 
 // Library information

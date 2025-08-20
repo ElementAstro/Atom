@@ -272,7 +272,7 @@ public:
     }
 
     void setCategoryFilter(std::span<const MmapLogger::Category> categories) {
-        std::lock_guard<std::mutex> lock(filter_mutex_);
+        std::lock_guard<std::shared_mutex> lock(filter_mutex_);
 
         // Clear existing filters and add new ones
         category_filters_.clear();
@@ -282,7 +282,7 @@ public:
     }
 
     void addFilterPattern(std::string_view pattern) {
-        std::lock_guard<std::mutex> lock(filter_mutex_);
+        std::lock_guard<std::shared_mutex> lock(filter_mutex_);
         try {
             pattern_filters_.push_back(
                 std::regex(pattern.data(), std::regex::optimize));
@@ -362,7 +362,7 @@ public:
 
         // Check category filters
         {
-            std::shared_lock<std::mutex> lock(filter_mutex_);
+            std::shared_lock<std::shared_mutex> lock(filter_mutex_);
             if (!category_filters_.empty() &&
                 !category_filters_.contains(category)) {
                 stats_->filtered_out_count++;
@@ -385,7 +385,7 @@ public:
 
         // Check message against pattern filters
         {
-            std::shared_lock<std::mutex> lock(filter_mutex_);
+            std::shared_lock<std::shared_mutex> lock(filter_mutex_);
             for (const auto& pattern : pattern_filters_) {
                 if (std::regex_search(formattedMsg, pattern)) {
                     stats_->filtered_out_count++;
@@ -452,10 +452,10 @@ private:
 #endif
 
     // Optimized synchronization primitives
-    std::mutex file_mutex_;          // For file operations
-    std::shared_mutex level_mutex_;  // For log level (read-heavy)
-    std::mutex thread_mutex_;        // For thread name updates
-    std::mutex filter_mutex_;        // For filter modifications
+    std::mutex file_mutex_;           // For file operations
+    std::shared_mutex level_mutex_;   // For log level (read-heavy)
+    std::mutex thread_mutex_;         // For thread name updates
+    std::shared_mutex filter_mutex_;  // For filter modifications
 
     // Auto-flush thread control
     std::thread auto_flush_thread_;

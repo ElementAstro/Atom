@@ -5,7 +5,6 @@
 #include <numeric>
 #include <opencv2/imgproc.hpp>
 
-
 namespace serastro {
 namespace utils {
 

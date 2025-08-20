@@ -5,14 +5,21 @@
 #include <atomic>
 #include <cassert>
 #include <cstddef>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <memory_resource>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
+#include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <vector>
+
+#ifdef _WIN32
+#include <malloc.h>
+#endif
 
 #ifdef ATOM_USE_BOOST
 #include <boost/pool/pool.hpp>
@@ -427,7 +434,11 @@ protected:
         }
 
         // Fall back to aligned allocation
+#ifdef _WIN32
+        void* ptr = _aligned_malloc(bytes, alignment);
+#else
         void* ptr = aligned_alloc(alignment, bytes);
+#endif
         if (!ptr) {
             throw atom::memory::MemoryPoolException(
                 "Aligned allocation failed");
@@ -452,7 +463,11 @@ protected:
         } else {
             std::unique_lock lock(mutex_);
             updateStats(bytes, false);
-            free(p);  // Use free for aligned-allocated memory
+#ifdef _WIN32
+            _aligned_free(p);  // Use _aligned_free for _aligned_malloc memory
+#else
+            free(p);  // Use free for aligned_alloc memory
+#endif
         }
     }
 

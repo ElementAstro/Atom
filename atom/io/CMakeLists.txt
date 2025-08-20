@@ -11,25 +11,49 @@ project(atom-io VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources
 set(SOURCES
-    async_compress.cpp
-    async_glob.cpp
-    async_io.cpp
-    compress.cpp
-    file_permission.cpp
-    io.cpp
-    pushd.cpp
+    # Async operations
+    async/async_compress.cpp
+    async/async_glob.cpp
+    async/async_io.cpp
+
+    # Compression functionality
+    compression/compress.cpp
+
+    # Filesystem operations
+    filesystem/file_info.cpp
+    filesystem/file_permission.cpp
+    filesystem/pushd.cpp
+
+    # Core I/O
+    core/io.cpp
 )
 
 # Headers
 set(HEADERS
+    # Backwards compatibility headers (in root)
     async_compress.hpp
     async_glob.hpp
     async_io.hpp
     compress.hpp
+    file_info.hpp
     file_permission.hpp
     glob.hpp
     io.hpp
     pushd.hpp
+
+    # Actual implementation headers (in subdirectories)
+    async/async_compress.hpp
+    async/async_glob.hpp
+    async/async_io.hpp
+
+    compression/compress.hpp
+
+    filesystem/file_info.hpp
+    filesystem/file_permission.hpp
+    filesystem/pushd.hpp
+
+    core/glob.hpp
+    core/io.hpp
 )
 
 # Dependencies

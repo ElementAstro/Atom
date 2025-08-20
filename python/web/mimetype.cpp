@@ -5,10 +5,15 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(mimetype, m) {
-    m.doc() = "MIME type handling module for the atom package";
-
-    // Register exception translations
+/**
+ * @brief Registers exception translations for the MIME type module.
+ *
+ * This function sets up proper exception handling to translate C++ exceptions
+ * to appropriate Python exceptions for better error reporting.
+ *
+ * @param m The pybind11 module to register exceptions for
+ */
+void registerExceptionTranslations(py::module_& m) {
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
@@ -23,8 +28,17 @@ PYBIND11_MODULE(mimetype, m) {
             PyErr_SetString(PyExc_Exception, e.what());
         }
     });
+}
 
-    // MimeTypeConfig struct binding
+/**
+ * @brief Binds the MimeTypeConfig struct to Python.
+ *
+ * This function creates Python bindings for the MimeTypeConfig struct which
+ * provides configuration options for the MimeTypes class.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindMimeTypeConfig(py::module_& m) {
     py::class_<MimeTypeConfig>(
         m, "MimeTypeConfig",
         R"(Configuration options for the MimeTypes class.
@@ -59,8 +73,18 @@ Examples:
                        "Whether to enable deep content scanning.")
         .def_readwrite("default_type", &MimeTypeConfig::defaultType,
                        "Default MIME type when unknown.");
+}
 
-    // MimeTypes class binding
+/**
+ * @brief Binds the MimeTypes class to Python.
+ *
+ * This function creates Python bindings for the MimeTypes class which
+ * provides methods to detect MIME types from file extensions and manage
+ * the MIME type database.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindMimeTypes(py::module_& m) {
     py::class_<MimeTypes>(
         m, "MimeTypes",
         R"(A class for handling MIME types and file extensions.
@@ -93,6 +117,8 @@ Examples:
              py::arg("known_files"), py::arg("config"),
              "Constructs a MimeTypes object with known files and custom "
              "configuration.")
+
+        // File I/O operations
         .def("read_json", &MimeTypes::readJson, py::arg("json_file"),
              R"(Reads MIME types from a JSON file.
 
@@ -111,6 +137,26 @@ Args:
 Raises:
     RuntimeError: If reading the XML file fails.
 )")
+        .def("export_to_json", &MimeTypes::exportToJson, py::arg("json_file"),
+             R"(Exports all MIME types to a JSON file.
+
+Args:
+    json_file: The path to the output JSON file.
+
+Raises:
+    RuntimeError: If exporting fails.
+)")
+        .def("export_to_xml", &MimeTypes::exportToXml, py::arg("xml_file"),
+             R"(Exports all MIME types to an XML file.
+
+Args:
+    xml_file: The path to the output XML file.
+
+Raises:
+    RuntimeError: If exporting fails.
+)")
+
+        // Core MIME type operations
         .def("guess_type", &MimeTypes::guessType, py::arg("url"),
              R"(Guesses the MIME type and charset of a URL.
 
@@ -141,6 +187,25 @@ Args:
 Returns:
     The guessed file extension, if available, or None.
 )")
+        .def(
+            "guess_type_by_content",
+            [](const MimeTypes& self, const std::string& filePath) {
+                return self.guessTypeByContent(filePath);
+            },
+            py::arg("file_path"),
+            R"(Guesses the MIME type of a file based on its content.
+
+Args:
+    file_path: The path to the file.
+
+Returns:
+    The guessed MIME type, if available, or None.
+
+Raises:
+    RuntimeError: If the file cannot be accessed.
+)")
+
+        // Database management
         .def("add_type", &MimeTypes::addType, py::arg("mime_type"),
              py::arg("extension"),
              R"(Adds a new MIME type and file extension pair.
@@ -160,51 +225,6 @@ Args:
 )")
         .def("list_all_types", &MimeTypes::listAllTypes,
              "Lists all known MIME types and their associated file extensions.")
-        .def(
-            "guess_type_by_content",
-            [](const MimeTypes& self, const std::string& filePath) {
-                return self.guessTypeByContent(filePath);
-            },
-            py::arg("file_path"),
-            R"(Guesses the MIME type of a file based on its content.
-
-Args:
-    file_path: The path to the file.
-
-Returns:
-    The guessed MIME type, if available, or None.
-
-Raises:
-    RuntimeError: If the file cannot be accessed.
-)")
-        .def("export_to_json", &MimeTypes::exportToJson, py::arg("json_file"),
-             R"(Exports all MIME types to a JSON file.
-
-Args:
-    json_file: The path to the output JSON file.
-
-Raises:
-    RuntimeError: If exporting fails.
-)")
-        .def("export_to_xml", &MimeTypes::exportToXml, py::arg("xml_file"),
-             R"(Exports all MIME types to an XML file.
-
-Args:
-    xml_file: The path to the output XML file.
-
-Raises:
-    RuntimeError: If exporting fails.
-)")
-        .def("clear_cache", &MimeTypes::clearCache,
-             "Clears the internal cache to free memory.")
-        .def("update_config", &MimeTypes::updateConfig, py::arg("config"),
-             R"(Updates the configuration settings.
-
-Args:
-    config: New configuration options.
-)")
-        .def("get_config", &MimeTypes::getConfig,
-             "Gets the current configuration.")
         .def("has_mime_type", &MimeTypes::hasMimeType, py::arg("mime_type"),
              R"(Checks if a MIME type is registered.
 
@@ -222,9 +242,31 @@ Args:
 
 Returns:
     True if the extension is registered, false otherwise.
-)");
+)")
 
-    // Convenience functions
+        // Configuration and cache management
+        .def("clear_cache", &MimeTypes::clearCache,
+             "Clears the internal cache to free memory.")
+        .def("update_config", &MimeTypes::updateConfig, py::arg("config"),
+             R"(Updates the configuration settings.
+
+Args:
+    config: New configuration options.
+)")
+        .def("get_config", &MimeTypes::getConfig,
+             "Gets the current configuration.");
+}
+
+/**
+ * @brief Binds convenience functions to Python.
+ *
+ * This function creates Python bindings for standalone convenience functions
+ * that provide quick access to MIME type operations without creating instances.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindConvenienceFunctions(py::module_& m) {
+    // Convenience function for guessing MIME type
     m.def(
         "guess_type",
         [](const std::string& url, const std::vector<std::string>& db_files,
@@ -251,6 +293,7 @@ Examples:
     text/plain
 )");
 
+    // Convenience function for guessing file extension
     m.def(
         "guess_extension",
         [](const std::string& mime_type,
@@ -276,7 +319,7 @@ Examples:
     .txt
 )");
 
-    // Create empty default database for simple usage
+    // Factory function for creating default database
     m.def(
         "create_default_database",
         []() { return MimeTypes(std::vector<std::string>{}); },
@@ -296,4 +339,91 @@ Examples:
     >>> print(mime_type)
     text/plain
 )");
+}
+
+/**
+ * @brief Adds comprehensive module documentation.
+ *
+ * This function sets the module's __doc__ attribute with detailed documentation
+ * including usage examples for MIME type operations.
+ *
+ * @param m The pybind11 module to add documentation to
+ */
+void addModuleDocumentation(py::module_& m) {
+    m.attr("__doc__") = R"(MIME type handling module for the atom package.
+
+This module provides comprehensive MIME type detection and management capabilities,
+including file extension mapping, content-based detection, and database management.
+
+Key Features:
+- MIME type detection from file extensions
+- Content-based MIME type detection
+- File extension guessing from MIME types
+- Configurable caching for performance
+- JSON and XML database import/export
+- Batch operations for efficiency
+- Lenient detection modes
+
+Core Classes:
+- MimeTypes: Main class for MIME type operations
+- MimeTypeConfig: Configuration options for behavior control
+
+Convenience Functions:
+- guess_type(): Quick MIME type detection
+- guess_extension(): Quick extension detection
+- create_default_database(): Factory for empty database
+
+Examples:
+    >>> from atom.web.mimetype import MimeTypes, MimeTypeConfig, guess_type
+    >>>
+    >>> # Quick usage with convenience function
+    >>> mime_type, charset = guess_type("document.pdf", ["/etc/mime.types"])
+    >>> print(f"MIME type: {mime_type}")
+    >>>
+    >>> # Advanced usage with configuration
+    >>> config = MimeTypeConfig(lenient=True, cache_size=2000, enable_deep_scanning=True)
+    >>> mime = MimeTypes(["/etc/mime.types", "/usr/share/mime/types"], config)
+    >>>
+    >>> # Detect MIME type from file extension
+    >>> mime_type, charset = mime.guess_type("example.html")
+    >>> print(f"HTML file: {mime_type}")  # text/html
+    >>>
+    >>> # Guess extension from MIME type
+    >>> ext = mime.guess_extension("application/json")
+    >>> print(f"JSON extension: {ext}")  # .json
+    >>>
+    >>> # Content-based detection
+    >>> content_type = mime.guess_type_by_content("/path/to/unknown/file")
+    >>> print(f"Content-based type: {content_type}")
+    >>>
+    >>> # Database management
+    >>> mime.add_type("application/custom", ".custom")
+    >>> mime.export_to_json("custom_types.json")
+    >>>
+    >>> # Batch operations
+    >>> new_types = [("text/markdown", ".md"), ("text/yaml", ".yml")]
+    >>> mime.add_types_batch(new_types)
+    >>>
+    >>> # Cache management
+    >>> mime.clear_cache()  # Free memory
+    >>> stats = mime.get_config()
+    >>> print(f"Cache size: {stats.cache_size}")
+)";
+}
+
+PYBIND11_MODULE(mimetype, m) {
+    m.doc() = "MIME type handling module for the atom package";
+
+    // Register exception translations
+    registerExceptionTranslations(m);
+
+    // Bind core data structures and classes
+    bindMimeTypeConfig(m);
+    bindMimeTypes(m);
+
+    // Bind convenience functions
+    bindConvenienceFunctions(m);
+
+    // Add module documentation
+    addModuleDocumentation(m);
 }

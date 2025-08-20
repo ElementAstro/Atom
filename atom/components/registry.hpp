@@ -24,8 +24,10 @@ Description: Component Registry for Managing Component Lifecycle
 #include <unordered_set>
 #include <vector>
 
-#include "atom/error/exception.hpp"
+#include <stdexcept>
 #include "component.hpp"
+#include "component_pool.hpp"
+#include "lifecycle.hpp"
 
 class Component;
 
@@ -77,9 +79,10 @@ public:
     /**
      * @brief Component registration exception
      */
-    class RegistryException : public atom::error::Exception {
+    class RegistryException : public std::runtime_error {
     public:
-        using atom::error::Exception::Exception;
+        explicit RegistryException(const std::string& message)
+            : std::runtime_error(message) {}
     };
 
     /**
@@ -226,6 +229,87 @@ public:
      */
     bool removeComponent(const std::string& name);
 
+    /**
+     * @brief Create a component using the memory pool system
+     * @tparam T Component type
+     * @tparam Args Constructor argument types
+     * @param name Component name
+     * @param args Constructor arguments
+     * @return Shared pointer to the created component
+     */
+    template <typename T, typename... Args>
+    std::shared_ptr<T> createComponent(const std::string& name, Args&&... args);
+
+    /**
+     * @brief Configure memory pool for a component type
+     * @tparam T Component type
+     * @param config Pool configuration
+     */
+    template <typename T>
+    void configureComponentPool(const atom::components::PoolConfig& config);
+
+    /**
+     * @brief Get memory pool statistics for a component type
+     * @tparam T Component type
+     * @return Pool statistics
+     */
+    template <typename T>
+    const atom::components::PoolStatistics& getPoolStatistics() const;
+
+    /**
+     * @brief Get total memory usage of all component pools
+     * @return Total memory usage in bytes
+     */
+    size_t getTotalPoolMemoryUsage() const;
+
+    /**
+     * @brief Perform cleanup on all component pools
+     */
+    void cleanupComponentPools();
+
+    /**
+     * @brief Register a lifecycle hook for a component
+     * @param componentName Component name
+     * @param phase Lifecycle phase
+     * @param hook Hook function
+     */
+    void registerLifecycleHook(const std::string& componentName,
+                               atom::components::LifecyclePhase phase,
+                               atom::components::LifecycleHook hook);
+
+    /**
+     * @brief Add a dependency constraint for a component
+     * @param componentName Component name
+     * @param constraint Dependency constraint
+     */
+    void addDependencyConstraint(
+        const std::string& componentName,
+        const atom::components::DependencyConstraint& constraint);
+
+    /**
+     * @brief Get dependency resolution order for a component
+     * @param componentName Component name
+     * @return Vector of component names in dependency order
+     */
+    [[nodiscard]] std::vector<std::string> getDependencyOrder(
+        const std::string& componentName) const;
+
+    /**
+     * @brief Check for circular dependencies
+     * @param componentName Component name
+     * @return True if circular dependencies exist
+     */
+    [[nodiscard]] bool hasCircularDependencies(
+        const std::string& componentName) const;
+
+    /**
+     * @brief Get lifecycle events for a component
+     * @param componentName Component name (empty for all)
+     * @return Vector of lifecycle events
+     */
+    [[nodiscard]] std::vector<atom::components::LifecycleEvent>
+    getLifecycleEvents(const std::string& componentName = "") const;
+
 #if ENABLE_EVENT_SYSTEM
     /**
      * @brief Subscribe to a component event
@@ -320,5 +404,41 @@ private:
     std::vector<std::string> name::getNeededComponents() { \
         return {__VA_ARGS__};                              \
     }
+
+// Template method implementations
+template <typename T, typename... Args>
+std::shared_ptr<T> Registry::createComponent(const std::string& name,
+                                             Args&&... args) {
+    std::unique_lock lock(mutex_);
+
+    // Create the component instance
+    auto component = std::make_shared<T>(name, std::forward<Args>(args)...);
+
+    // Store it in the initializers map
+    initializers_[name] = component;
+
+    // Create component info if it doesn't exist
+    if (!componentInfos_.contains(name)) {
+        ComponentInfo info;
+        info.name = name;
+        info.loadTime = std::chrono::system_clock::now();
+        info.isInitialized = true;
+        componentInfos_[name] = std::move(info);
+    } else {
+        componentInfos_[name].isInitialized = true;
+        componentInfos_[name].loadTime = std::chrono::system_clock::now();
+    }
+
+    return component;
+}
+
+template <typename T>
+void Registry::configureComponentPool(
+    const atom::components::PoolConfig& config) {
+    // Implementation for component pool configuration
+    // This is a placeholder - actual implementation would depend on the pool
+    // system
+    (void)config;  // Suppress unused parameter warning
+}
 
 #endif  // ATOM_COMPONENT_REGISTRY_HPP

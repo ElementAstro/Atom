@@ -16,6 +16,7 @@ Description: Memory-mapped File Logger for Atom with C++20 Features
 #ifndef ATOM_LOG_MMAP_LOGGER_HPP
 #define ATOM_LOG_MMAP_LOGGER_HPP
 
+#include "async_logger.hpp"
 #include "atomlog.hpp"
 
 #include <concepts>
@@ -29,12 +30,6 @@ Description: Memory-mapped File Logger for Atom with C++20 Features
 namespace fs = std::filesystem;
 
 namespace atom::log {
-
-// Concept for valid log message arguments
-template <typename T>
-concept Loggable = requires(T t) {
-    { std::format("{}", t) } -> std::convertible_to<std::string>;
-};
 
 /**
  * @brief Custom exception class hierarchy for MmapLogger
@@ -179,7 +174,8 @@ public:
                const std::source_location& location =
                    std::source_location::current()) {
         log(LogLevel::TRACE, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -195,7 +191,8 @@ public:
                const std::source_location& location =
                    std::source_location::current()) {
         log(LogLevel::DEBUG, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -211,7 +208,8 @@ public:
               const std::source_location& location =
                   std::source_location::current()) {
         log(LogLevel::INFO, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -227,7 +225,8 @@ public:
               const std::source_location& location =
                   std::source_location::current()) {
         log(LogLevel::WARN, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -243,7 +242,8 @@ public:
                const std::source_location& location =
                    std::source_location::current()) {
         log(LogLevel::ERROR, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -259,7 +259,8 @@ public:
                   const std::source_location& location =
                       std::source_location::current()) {
         log(LogLevel::CRITICAL, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -278,7 +279,8 @@ public:
                          const std::source_location& location =
                              std::source_location::current()) {
         log(level, category,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**

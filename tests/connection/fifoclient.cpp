@@ -13,15 +13,15 @@ protected:
     void SetUp() override {
         fifo_path_ = "/tmp/test_fifo";
         server_ = std::make_unique<FIFOServer>(fifo_path_);
-        client_ = std::make_unique<FifoClient>(fifo_path_);
+        ClientConfig config{};
+        client_ = std::make_unique<FifoClient>(fifo_path_, config);
         server_->start();
     }
 
     void TearDown() override {
         server_->stop();
-        client_->close();
-        server_.reset();
         client_.reset();
+        server_.reset();
         std::filesystem::remove(fifo_path_);
     }
 

@@ -1,33 +1,20 @@
-/*
- * disk.hpp
- *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
- */
-
-/*************************************************
-
-Date: 2024-2-21
-
-Description: System Information Module - Disk
-
-**************************************************/
-
-#ifndef ATOM_SYSTEM_MODULE_DISK_HPP
-#define ATOM_SYSTEM_MODULE_DISK_HPP
-
 /**
- * @brief Disk module for system information
- * 
- * This module provides functionality for retrieving disk information,
- * monitoring disk events, and managing disk security.
+ * @file disk.hpp
+ * @brief System disk information functionality (compatibility header)
+ *
+ * This file serves as a compatibility header that includes the reorganized disk
+ * system. It maintains backward compatibility with existing code that includes
+ * this header.
+ *
+ * @deprecated This header location is deprecated. Please use
+ * "atom/sysinfo/interfaces/disk.hpp" instead.
+ * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-// Include all disk submodule headers
-#include "atom/sysinfo/disk/disk_types.hpp"
-#include "atom/sysinfo/disk/disk_info.hpp"
-#include "atom/sysinfo/disk/disk_util.hpp"
-#include "atom/sysinfo/disk/disk_device.hpp"
-#include "atom/sysinfo/disk/disk_security.hpp"
-#include "atom/sysinfo/disk/disk_monitor.hpp"
+#ifndef ATOM_SYSINFO_DISK_COMPAT_HPP
+#define ATOM_SYSINFO_DISK_COMPAT_HPP
 
-#endif // ATOM_SYSTEM_MODULE_DISK_HPP
+// Forward to the new location
+#include "storage/disk.hpp"
+
+#endif  // ATOM_SYSINFO_DISK_COMPAT_HPP

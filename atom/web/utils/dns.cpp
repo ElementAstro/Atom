@@ -15,9 +15,9 @@
 
 
 #ifdef _WIN32
-#include <iphlpapi.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#include <iphlpapi.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "Ws2_32.lib")
 #pragma comment(lib, "Iphlpapi.lib")

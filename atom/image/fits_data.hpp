@@ -5,11 +5,11 @@
 #include <cstdint>
 #include <fstream>
 #include <functional>
+#include <future>
 #include <memory>
 #include <span>
-#include <vector>
-#include <future>
 #include <system_error>
+#include <vector>
 
 /**
  * @enum FITSDataErrorCode
@@ -40,12 +40,14 @@ std::error_code make_error_code(FITSDataErrorCode);
  */
 class FITSDataException : public std::system_error {
 public:
-    explicit FITSDataException(FITSDataErrorCode code, const std::string& message = "")
+    explicit FITSDataException(FITSDataErrorCode code,
+                               const std::string& message = "")
         : std::system_error(make_error_code(code), message) {}
-    
+
     explicit FITSDataException(const std::string& message)
-        : std::system_error(make_error_code(FITSDataErrorCode::InternalError), message) {}
-        
+        : std::system_error(make_error_code(FITSDataErrorCode::InternalError),
+                            message) {}
+
     [[nodiscard]] FITSDataErrorCode errorCode() const noexcept {
         return static_cast<FITSDataErrorCode>(code().value());
     }
@@ -54,7 +56,8 @@ public:
 /**
  * @brief Callback type for progress reporting.
  */
-using DataProgressCallback = std::function<void(float progress, const std::string& status)>;
+using DataProgressCallback =
+    std::function<void(float progress, const std::string& status)>;
 
 /**
  * @enum DataType
@@ -90,14 +93,15 @@ public:
     virtual void readData(std::ifstream& file, int64_t dataSize) = 0;
 
     /**
-     * @brief Read data in chunks for better memory efficiency and progress reporting.
+     * @brief Read data in chunks for better memory efficiency and progress
+     * reporting.
      * @param file The input file stream to read data from.
      * @param dataSize The size of the data to read.
      * @param chunkSize The size of each chunk to read (default 1MB).
      * @throws FITSDataException If there is an error reading data
      */
-    virtual void readDataChunked(std::ifstream& file, int64_t dataSize, 
-                                size_t chunkSize = 1024 * 1024) = 0;
+    virtual void readDataChunked(std::ifstream& file, int64_t dataSize,
+                                 size_t chunkSize = 1024 * 1024) = 0;
 
     /**
      * @brief Asynchronously reads data from a file.
@@ -105,7 +109,8 @@ public:
      * @param dataSize The size of the data to read.
      * @return A future that can be waited on for completion.
      */
-    virtual std::future<void> readDataAsync(std::ifstream& file, int64_t dataSize) = 0;
+    virtual std::future<void> readDataAsync(std::ifstream& file,
+                                            int64_t dataSize) = 0;
 
     /**
      * @brief Pure virtual function to write data to a file.
@@ -141,7 +146,8 @@ public:
 
     /**
      * @brief Pure virtual function to get the size of compressed data in bytes.
-     * @return The size in bytes of the compressed data, or 0 if data is not compressed.
+     * @return The size in bytes of the compressed data, or 0 if data is not
+     * compressed.
      */
     [[nodiscard]] virtual size_t getCompressedSize() const noexcept = 0;
 
@@ -174,11 +180,12 @@ public:
      * @return A unique pointer to the new FITSData instance.
      * @throws std::invalid_argument If the data type is not supported.
      */
-    [[nodiscard]] static std::unique_ptr<FITSData> createData(DataType type, size_t size);
+    [[nodiscard]] static std::unique_ptr<FITSData> createData(DataType type,
+                                                              size_t size);
 
 protected:
     DataProgressCallback progressCallback;  ///< Callback for progress reporting
-    
+
     /**
      * @brief Reports progress to the registered callback, if any.
      * @param progress Progress value (0.0 to 1.0).
@@ -234,14 +241,15 @@ public:
     void readData(std::ifstream& file, int64_t dataSize) override;
 
     /**
-     * @brief Read data in chunks for better memory efficiency and progress reporting.
+     * @brief Read data in chunks for better memory efficiency and progress
+     * reporting.
      * @param file The input file stream to read data from.
      * @param dataSize The size of the data to read.
      * @param chunkSize The size of each chunk to read (default 1MB).
      * @throws FITSDataException If there is an error reading data
      */
-    void readDataChunked(std::ifstream& file, int64_t dataSize, 
-                        size_t chunkSize = 1024 * 1024) override;
+    void readDataChunked(std::ifstream& file, int64_t dataSize,
+                         size_t chunkSize = 1024 * 1024) override;
 
     /**
      * @brief Asynchronously reads data from a file.
@@ -249,7 +257,8 @@ public:
      * @param dataSize The size of the data to read.
      * @return A future that can be waited on for completion.
      */
-    std::future<void> readDataAsync(std::ifstream& file, int64_t dataSize) override;
+    std::future<void> readDataAsync(std::ifstream& file,
+                                    int64_t dataSize) override;
 
     /**
      * @brief Writes data to a file.
@@ -285,7 +294,8 @@ public:
 
     /**
      * @brief Gets the size of compressed data in bytes.
-     * @return The size in bytes of the compressed data, or 0 if data is not compressed.
+     * @return The size in bytes of the compressed data, or 0 if data is not
+     * compressed.
      */
     [[nodiscard]] size_t getCompressedSize() const noexcept override;
 
@@ -398,14 +408,16 @@ public:
     [[nodiscard]] bool isCompressed() const noexcept { return compressed; }
 
     /**
-     * @brief Tries to recover from data errors by fixing or filtering problematic values.
+     * @brief Tries to recover from data errors by fixing or filtering
+     * problematic values.
      * @param fixNaN Whether to fix NaN values (default true).
      * @param fixInfinity Whether to fix infinity values (default true).
      * @param replacementValue The value to replace invalid values with.
      * @return Number of fixed values or 0 if no fixes needed.
      * @throws FITSDataException If recovery fails or data is compressed
      */
-    size_t tryRecover(bool fixNaN = true, bool fixInfinity = true, T replacementValue = T{});
+    size_t tryRecover(bool fixNaN = true, bool fixInfinity = true,
+                      T replacementValue = T{});
 
     /**
      * @brief Applies a transformation function to the data.

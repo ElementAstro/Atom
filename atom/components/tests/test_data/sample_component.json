@@ -1,0 +1,46 @@
+{
+  "metadata": {
+    "version": 1,
+    "timestamp": 1702300800000,
+    "format": "JSON",
+    "serializer": "JsonSerializer"
+  },
+  "name": "SampleComponent",
+  "state": 1,
+  "performance": {
+    "commandCallCount": 0,
+    "commandErrorCount": 0,
+    "eventCount": 0
+  },
+  "variables": {
+    "testInteger": 42,
+    "testDouble": 3.14159,
+    "testString": "Hello, World!",
+    "testBoolean": true
+  },
+  "commands": [
+    {
+      "name": "initialize",
+      "description": "Initialize the component",
+      "parameters": []
+    },
+    {
+      "name": "process",
+      "description": "Process component data",
+      "parameters": [
+        {
+          "name": "input",
+          "type": "string",
+          "required": true
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "name": "BaseComponent",
+      "type": "required",
+      "version": ">=1.0.0"
+    }
+  ]
+}

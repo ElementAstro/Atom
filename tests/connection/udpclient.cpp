@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 #include <future>
 #include <thread>
+#include <span>
 
 using namespace atom::connection;
 
@@ -18,52 +19,67 @@ protected:
     std::unique_ptr<UdpClient> client_;
 };
 
-TEST_F(UdpClientTest, Bind) { EXPECT_TRUE(client_->bind(12345)); }
+TEST_F(UdpClientTest, Bind) {
+    auto result = client_->bind(12345);
+    EXPECT_TRUE(result.has_value());
+}
 
 TEST_F(UdpClientTest, SendReceive) {
-    EXPECT_TRUE(client_->bind(12345));
+    auto bindResult = client_->bind(12345);
+    EXPECT_TRUE(bindResult.has_value());
+
     std::string message = "Hello, UDP!";
-    std::vector<char> data(message.begin(), message.end());
+    std::span<const char> data_span(message.data(), message.size());
 
     std::thread sender([&]() {
         UdpClient senderClient;
-        EXPECT_TRUE(senderClient.send("127.0.0.1", 12345, data));
+        RemoteEndpoint endpoint{"127.0.0.1", 12345};
+        auto sendResult = senderClient.send(endpoint, data_span);
+        EXPECT_TRUE(sendResult.has_value());
     });
 
-    std::string remoteHost;
-    int remotePort;
-    auto receivedData = client_->receive(1024, remoteHost, remotePort,
-                                         std::chrono::milliseconds(1000));
-    EXPECT_EQ(receivedData, data);
-    EXPECT_EQ(remoteHost, "127.0.0.1");
+    auto receiveResult = client_->receive(1024);
+    EXPECT_TRUE(receiveResult.has_value());
+    auto [receivedData, remoteEndpoint] = receiveResult.value();
+
+    std::string receivedMessage(receivedData.begin(), receivedData.end());
+    EXPECT_EQ(receivedMessage, message);
+    EXPECT_EQ(remoteEndpoint.host, "127.0.0.1");
 
     sender.join();
 }
 
 TEST_F(UdpClientTest, AsyncReceive) {
-    EXPECT_TRUE(client_->bind(12345));
+    auto bindResult = client_->bind(12345);
+    EXPECT_TRUE(bindResult.has_value());
 
     std::promise<std::vector<char>> promise;
     auto future = promise.get_future();
 
     client_->setOnDataReceivedCallback(
-        [&](const std::vector<char>& data,
-            [[maybe_unused]] const std::string& host,
-            [[maybe_unused]] int port) { promise.set_value(data); });
+        [&](std::span<const char> data, const RemoteEndpoint& endpoint) {
+            std::vector<char> vec_data(data.begin(), data.end());
+            promise.set_value(vec_data);
+        });
 
-    client_->startReceiving(1024);
+    auto startResult = client_->startReceiving(1024);
+    EXPECT_TRUE(startResult.has_value());
 
     std::string message = "Hello, Async UDP!";
-    std::vector<char> data(message.begin(), message.end());
+    std::span<const char> data_span(message.data(), message.size());
 
     std::thread sender([&]() {
         UdpClient senderClient;
-        EXPECT_TRUE(senderClient.send("127.0.0.1", 12345, data));
+        RemoteEndpoint endpoint{"127.0.0.1", 12345};
+        auto sendResult = senderClient.send(endpoint, data_span);
+        EXPECT_TRUE(sendResult.has_value());
     });
 
     auto status = future.wait_for(std::chrono::seconds(5));
     ASSERT_EQ(status, std::future_status::ready);
-    EXPECT_EQ(future.get(), data);
+    auto receivedData = future.get();
+    std::string receivedMessage(receivedData.begin(), receivedData.end());
+    EXPECT_EQ(receivedMessage, message);
 
     client_->stopReceiving();
     sender.join();

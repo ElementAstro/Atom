@@ -13,12 +13,12 @@
 #define ATOM_IMAGE_FITS_HEADER_HPP
 
 #include <array>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <string_view>
-#include <vector>
-#include <optional>
 #include <unordered_map>
+#include <vector>
 
 /**
  * @namespace FITSHeaderErrors
@@ -93,7 +93,7 @@ public:
         : BaseException("FITS header deserialization error: " + message) {}
 };
 
-} // namespace FITSHeaderErrors
+}  // namespace FITSHeaderErrors
 
 // 保持向后兼容
 using FITSHeaderException = FITSHeaderErrors::BaseException;
@@ -157,7 +157,8 @@ public:
     /**
      * @brief Construct a FITSHeader from raw data
      * @param data The raw FITS header data
-     * @throws FITSHeaderErrors::DeserializationException if deserialization fails
+     * @throws FITSHeaderErrors::DeserializationException if deserialization
+     * fails
      */
     explicit FITSHeader(const std::vector<char>& data);
 
@@ -176,7 +177,8 @@ public:
      *
      * @param keyword The keyword to look up
      * @return The value associated with the keyword as a string
-     * @throws FITSHeaderErrors::KeywordNotFoundException if the keyword is not found
+     * @throws FITSHeaderErrors::KeywordNotFoundException if the keyword is not
+     * found
      */
     [[nodiscard]] std::string getKeywordValue(std::string_view keyword) const;
 
@@ -184,9 +186,11 @@ public:
      * @brief Tries to get the value associated with a keyword
      *
      * @param keyword The keyword to look up
-     * @return An optional containing the value if the keyword exists, or empty if not found
+     * @return An optional containing the value if the keyword exists, or empty
+     * if not found
      */
-    [[nodiscard]] std::optional<std::string> tryGetKeywordValue(std::string_view keyword) const noexcept;
+    [[nodiscard]] std::optional<std::string> tryGetKeywordValue(
+        std::string_view keyword) const noexcept;
 
     /**
      * @brief Serializes the FITS header to a byte vector
@@ -206,7 +210,8 @@ public:
      *
      * @param data The vector of bytes to parse
      * @throws FITSHeaderErrors::DeserializationException if the data is invalid
-     * @throws FITSHeaderErrors::InvalidDataException if the data format is wrong
+     * @throws FITSHeaderErrors::InvalidDataException if the data format is
+     * wrong
      */
     void deserialize(const std::vector<char>& data);
 
@@ -251,21 +256,21 @@ public:
 
     /**
      * @brief Removes all comments from the header
-     * 
+     *
      * @return The number of comments removed
      */
     size_t clearComments() noexcept;
 
     /**
      * @brief Get the number of records in the header
-     * 
+     *
      * @return The number of keyword records
      */
     [[nodiscard]] size_t size() const noexcept { return records.size(); }
 
     /**
      * @brief Check if the header is empty
-     * 
+     *
      * @return true if there are no records, false otherwise
      */
     [[nodiscard]] bool empty() const noexcept { return records.empty(); }
@@ -273,11 +278,15 @@ public:
     /**
      * @brief Clear all records from the header
      */
-    void clear() noexcept { records.clear(); keywordCache.clear(); }
+    void clear() noexcept {
+        records.clear();
+        keywordCache.clear();
+    }
 
 private:
     std::vector<KeywordRecord> records; /**< Storage for all keyword records */
-    mutable std::unordered_map<std::string, size_t> keywordCache; /**< Cache for keyword lookups */
+    mutable std::unordered_map<std::string, size_t>
+        keywordCache; /**< Cache for keyword lookups */
 
     /**
      * @brief Updates the keyword cache after modifications
@@ -286,11 +295,13 @@ private:
 
     /**
      * @brief Finds a keyword in the records
-     * 
+     *
      * @param keyword The keyword to find
-     * @return The index of the keyword record, or std::string::npos if not found
+     * @return The index of the keyword record, or std::string::npos if not
+     * found
      */
-    [[nodiscard]] size_t findKeywordIndex(std::string_view keyword) const noexcept;
+    [[nodiscard]] size_t findKeywordIndex(
+        std::string_view keyword) const noexcept;
 };
 
 #endif  // ATOM_IMAGE_FITS_HEADER_HPP

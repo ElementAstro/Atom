@@ -17,10 +17,15 @@ add_subdirectory(time)
 
 # Sources
 set(SOURCES
-    curl.cpp
-    downloader.cpp
-    httpparser.cpp
-    minetype.cpp
+    # HTTP functionality
+    http/curl.cpp
+    http/downloader.cpp
+    http/httpparser.cpp
+
+    # MIME type functionality
+    mime/minetype.cpp
+
+    # Utility functionality
     utils/addr_info.cpp
     utils/dns.cpp
     utils/ip.cpp
@@ -34,11 +39,22 @@ list(APPEND SOURCES ${TIME_SOURCES})
 
 # Headers
 set(HEADERS
+    # Backwards compatibility headers (in root)
     curl.hpp
     downloader.hpp
     httpparser.hpp
     minetype.hpp
+    address.hpp
+    time.hpp
     utils.hpp
+
+    # Actual implementation headers (in subdirectories)
+    http/curl.hpp
+    http/downloader.hpp
+    http/httpparser.hpp
+
+    mime/minetype.hpp
+
     utils/common.hpp
     utils/addr_info.hpp
     utils/dns.hpp
@@ -89,3 +105,8 @@ set_target_properties(${PROJECT_NAME} PROPERTIES
 install(TARGETS ${PROJECT_NAME}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
 )
+
+# Register this module to the global target list
+get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
+list(APPEND ATOM_MODULE_TARGETS ${PROJECT_NAME})
+set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

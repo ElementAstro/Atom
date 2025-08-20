@@ -5,7 +5,6 @@
 #include <deque>
 #include <opencv2/imgproc.hpp>
 
-
 namespace serastro {
 
 struct SERReader::Impl {

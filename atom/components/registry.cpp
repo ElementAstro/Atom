@@ -18,11 +18,11 @@ Description: Registry Pattern Implementation
 #include <chrono>
 
 #include "atom/utils/to_string.hpp"
+#include "fmt/format.h"
 #include "spdlog/spdlog.h"
 
-#define THROW_REGISTRY_EXCEPTION(...)                                 \
-    throw Registry::RegistryException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
-                                      ATOM_FUNC_NAME, __VA_ARGS__)
+#define THROW_REGISTRY_EXCEPTION(...) \
+    throw Registry::RegistryException(fmt::format(__VA_ARGS__))
 
 auto Registry::instance() -> Registry& {
     static Registry instance;
@@ -434,7 +434,7 @@ bool Registry::updateComponentInfo(const std::string& name,
     return true;
 }
 
-bool Registry::loadComponentFromFile(const std::string& path) {
+bool Registry::loadComponentFromFile(const std::string& path [[maybe_unused]]) {
 #if ENABLE_HOT_RELOAD
     namespace fs = std::filesystem;
 
@@ -456,7 +456,7 @@ bool Registry::loadComponentFromFile(const std::string& path) {
 #endif
 }
 
-bool Registry::watchComponentChanges(bool enable) {
+bool Registry::watchComponentChanges(bool enable [[maybe_unused]]) {
 #if ENABLE_HOT_RELOAD
     std::unique_lock lock(mutex_);
 

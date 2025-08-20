@@ -23,26 +23,50 @@ add_rules("mode.debug", "mode.release")
 -- Add required packages
 add_requires("loguru", "minizip", "zlib", "tbb")
 
--- Define sources and headers
+-- Define sources and headers from new structure
 local sources = {
-    "async_compress.cpp",
-    "async_glob.cpp",
-    "async_io.cpp",
-    "compress.cpp",
-    "file_permission.cpp",
-    "io.cpp",
-    "pushd.cpp"
+    -- Async operations
+    "async/async_compress.cpp",
+    "async/async_glob.cpp",
+    "async/async_io.cpp",
+
+    -- Compression functionality
+    "compression/compress.cpp",
+
+    -- Filesystem operations
+    "filesystem/file_info.cpp",
+    "filesystem/file_permission.cpp",
+    "filesystem/pushd.cpp",
+
+    -- Core I/O
+    "core/io.cpp"
 }
 
 local headers = {
+    -- Backwards compatibility headers
     "async_compress.hpp",
     "async_glob.hpp",
     "async_io.hpp",
     "compress.hpp",
+    "file_info.hpp",
     "file_permission.hpp",
     "glob.hpp",
     "io.hpp",
-    "pushd.hpp"
+    "pushd.hpp",
+
+    -- Implementation headers
+    "async/async_compress.hpp",
+    "async/async_glob.hpp",
+    "async/async_io.hpp",
+
+    "compression/compress.hpp",
+
+    "filesystem/file_info.hpp",
+    "filesystem/file_permission.hpp",
+    "filesystem/pushd.hpp",
+
+    "core/glob.hpp",
+    "core/io.hpp"
 }
 
 -- Main static library target
@@ -90,11 +114,15 @@ target("atom-io")
         -- Install static library
         os.cp(target:targetfile(), path.join(installdir, "lib"))
         -- Install headers
-        local headerdir = path.join(installdir, "include", "atom-io")
+        local headerdir = path.join(installdir, "include", "atom", "io")
         os.mkdir(headerdir)
-        for _, header in ipairs(headers) do
-            os.cp(header, headerdir)
-        end
+        -- Install compatibility headers
+        os.cp("*.hpp", headerdir)
+        -- Install implementation headers
+        os.cp("async/*.hpp", path.join(headerdir, "async"))
+        os.cp("compression/*.hpp", path.join(headerdir, "compression"))
+        os.cp("filesystem/*.hpp", path.join(headerdir, "filesystem"))
+        os.cp("core/*.hpp", path.join(headerdir, "core"))
     end)
 
 -- Optional: Create object library target (equivalent to CMake's object library)

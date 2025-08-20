@@ -326,8 +326,7 @@ public:
      * @return JSON string representation
      */
     [[nodiscard]] auto toJson() const -> std::string {
-        static constexpr std::string_view template_str =
-            R"({"typeName":"{}","bareTypeName":"{}","traits":{})";
+        // Removed unused template_str placeholder to silence -Wunused warnings.
 
         std::string traits;
         traits.reserve(512);

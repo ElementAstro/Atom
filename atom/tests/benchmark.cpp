@@ -1,8 +1,8 @@
 #include "benchmark.hpp"
 
 #include <cstring>  // Needed for memset
-#include <fstream>  // Needed for getMemoryUsage on Linux
 #include <filesystem>
+#include <fstream>  // Needed for getMemoryUsage on Linux
 #include <nlohmann/json.hpp>
 
 #ifdef _WIN32

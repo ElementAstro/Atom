@@ -113,8 +113,8 @@ auto JsonParser::parse(const std::string& str) -> JsonValue {
     return parseValue(str, index);
 }
 
-auto JsonParser::parseValue(const std::string& str,
-                            size_t& index) -> JsonValue {
+auto JsonParser::parseValue(const std::string& str, size_t& index)
+    -> JsonValue {
     skipWhitespace(str, index);
     if (str[index] == '"') {
         return JsonValue(parseString(str, index));
@@ -138,8 +138,8 @@ auto JsonParser::parseValue(const std::string& str,
     THROW_INVALID_ARGUMENT("Invalid JSON value");
 }
 
-auto JsonParser::parseString(const std::string& str,
-                             size_t& index) -> std::string {
+auto JsonParser::parseString(const std::string& str, size_t& index)
+    -> std::string {
     ++index;  // Skip opening quote
     std::string result;
     while (str[index] != '"') {
@@ -153,8 +153,8 @@ auto JsonParser::parseString(const std::string& str,
     return result;
 }
 
-auto JsonParser::parseEscapedChar(const std::string& str,
-                                  size_t& index) -> char {
+auto JsonParser::parseEscapedChar(const std::string& str, size_t& index)
+    -> char {
     ++index;  // Skip backslash
     switch (str[index++]) {
         case '"':
@@ -239,8 +239,8 @@ void JsonParser::parseNull(const std::string& str, size_t& index) {
     }
 }
 
-auto JsonParser::parseObject(const std::string& str,
-                             size_t& index) -> JsonObject {
+auto JsonParser::parseObject(const std::string& str, size_t& index)
+    -> JsonObject {
     ++index;  // Skip opening '{'
     JsonObject obj;
     skipWhitespace(str, index);
@@ -273,8 +273,8 @@ auto JsonParser::parseObject(const std::string& str,
     return obj;
 }
 
-auto JsonParser::parseArray(const std::string& str,
-                            size_t& index) -> JsonArray {
+auto JsonParser::parseArray(const std::string& str, size_t& index)
+    -> JsonArray {
     ++index;  // Skip opening '['
     JsonArray arr;
     skipWhitespace(str, index);

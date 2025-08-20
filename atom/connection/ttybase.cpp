@@ -28,7 +28,6 @@
 #include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
 
-
 class TTYBase::Impl {
 public:
     explicit Impl(std::string_view driverName)

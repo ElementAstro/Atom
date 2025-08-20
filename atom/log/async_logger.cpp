@@ -716,22 +716,22 @@ private:
             // 基于日志级别使用公共API
             switch (level) {
                 case LogLevel::TRACE:
-                    logger_->trace(String(message), location);
+                    logger_->trace_at(String(message), location);
                     break;
                 case LogLevel::DEBUG:
-                    logger_->debug(String(message), location);
+                    logger_->debug_at(String(message), location);
                     break;
                 case LogLevel::INFO:
-                    logger_->info(String(message), location);
+                    logger_->info_at(String(message), location);
                     break;
                 case LogLevel::WARN:
-                    logger_->warn(String(message), location);
+                    logger_->warn_at(String(message), location);
                     break;
                 case LogLevel::ERROR:
-                    logger_->error(String(message), location);
+                    logger_->error_at(String(message), location);
                     break;
                 case LogLevel::CRITICAL:
-                    logger_->critical(String(message), location);
+                    logger_->critical_at(String(message), location);
                     break;
                 case LogLevel::OFF:
                     // 级别为OFF时不记录
@@ -742,10 +742,9 @@ private:
             try {
                 stats_.errors_occurred.fetch_add(1, std::memory_order_relaxed);
                 std::shared_lock read_lock(logger_mutex_);
-                logger_->error(
-                    std::format("Exception during log processing: {}",
-                                e.what()),
-                    std::source_location::current());
+                auto error_msg = std::format(
+                    "Exception during log processing: {}", e.what());
+                logger_->error(error_msg);
             } catch (...) {
                 // 忽略嵌套异常
             }
@@ -754,8 +753,8 @@ private:
             try {
                 stats_.errors_occurred.fetch_add(1, std::memory_order_relaxed);
                 std::shared_lock read_lock(logger_mutex_);
-                logger_->error("Unknown exception during log processing",
-                               std::source_location::current());
+                logger_->error_at("Unknown exception during log processing",
+                                  std::source_location::current());
             } catch (...) {
                 // 忽略嵌套异常
             }

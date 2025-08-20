@@ -6,7 +6,6 @@
 #include <stdexcept>
 #include <string>
 
-
 namespace serastro {
 
 // Base exception class for all SER-related errors

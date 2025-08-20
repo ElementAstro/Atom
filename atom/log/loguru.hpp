@@ -620,8 +620,8 @@ auto add_syslog(const char* app_name, Verbosity verbosity) -> bool;
 LOGURU_EXPORT
 // Send logs to syslog with your own choice of facility (LOG_USER, LOG_AUTH,
 // ...) see loguru.cpp: syslog_log() for more details.
-auto add_syslog(const char* app_name, Verbosity verbosity,
-                int facility) -> bool;
+auto add_syslog(const char* app_name, Verbosity verbosity, int facility)
+    -> bool;
 
 /*  Will be called right before abort().
         You can for instance use this to print custom error messages, or throw

@@ -15,25 +15,29 @@ set_license("GPL3")
 -- Object Library
 target("atom-search-object")
     set_kind("object")
-    
-    -- Add source files
-    add_files("*.cpp")
-    
-    -- Add header files
-    add_headerfiles("*.hpp")
-    
+
+    -- Add source files from new structure
+    add_files("core/*.cpp")
+    add_files("database/*.cpp")
+
+    -- Add header files from new structure
+    add_headerfiles("*.hpp")  -- Backwards compatibility headers
+    add_headerfiles("core/*.hpp")
+    add_headerfiles("database/*.hpp")
+    add_headerfiles("cache/*.hpp")
+
     -- Add dependencies
     add_packages("loguru")
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
     add_includedirs("..", {public = true})
-    
+
     -- Platform-specific settings
     if is_plat("linux") then
         add_syslinks("pthread")
     end
-    
+
     -- Set C++ standard
     set_languages("c++20")
 target_end()

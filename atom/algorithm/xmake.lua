@@ -6,7 +6,7 @@ set_project("atom-algorithm")
 set_version("1.0.0", {build = "%Y%m%d%H%M"})
 
 -- Set languages
-set_languages("c11", "cxx17")
+set_languages("c11", "cxx20")
 
 -- Add build modes
 add_rules("mode.debug", "mode.release")
@@ -22,11 +22,30 @@ target("atom-algorithm")
     -- Set target kind
     set_kind("static")
     
-    -- Add source files (automatically collect .cpp files)
-    add_files("*.cpp")
-    
-    -- Add header files (automatically collect .hpp files)  
-    add_headerfiles("*.hpp")
+    -- Add source files from new structure
+    add_files("core/*.cpp")
+    add_files("crypto/*.cpp")
+    add_files("hash/*.cpp")
+    add_files("math/*.cpp")
+    add_files("compression/*.cpp")
+    add_files("signal/*.cpp")
+    add_files("optimization/*.cpp")
+    add_files("encoding/*.cpp")
+    add_files("graphics/*.cpp")
+    add_files("utils/*.cpp")
+
+    -- Add header files from new structure
+    add_headerfiles("*.hpp")  -- Backwards compatibility headers
+    add_headerfiles("core/*.hpp")
+    add_headerfiles("crypto/*.hpp")
+    add_headerfiles("hash/*.hpp")
+    add_headerfiles("math/*.hpp")
+    add_headerfiles("compression/*.hpp")
+    add_headerfiles("signal/*.hpp")
+    add_headerfiles("optimization/*.hpp")
+    add_headerfiles("encoding/*.hpp")
+    add_headerfiles("graphics/*.hpp")
+    add_headerfiles("utils/*.hpp")
     
     -- Add include directories
     add_includedirs(".", {public = true})

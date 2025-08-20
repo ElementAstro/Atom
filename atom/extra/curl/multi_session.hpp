@@ -47,10 +47,10 @@ public:
      * the request. It takes an Error object as input.
      * @throws Error if curl_easy_init or curl_multi_add_handle fails.
      */
-    void add_request(const Request& request,
-                     std::function<void(Response)> callback = nullptr,
-                     std::function<void(const Error&)> error_callback =
-                         nullptr);
+    void add_request(
+        const Request& request,
+        std::function<void(Response)> callback = nullptr,
+        std::function<void(const Error&)> error_callback = nullptr);
 
     /**
      * @brief Performs all added requests and waits for them to complete.

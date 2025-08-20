@@ -137,7 +137,7 @@ void Component::setState(ComponentState state) noexcept {
 }
 
 auto Component::getPerformanceStats() const noexcept
-    -> const Component::PerformanceStats& {
+    -> const ComponentPerformanceStats& {
     return m_PerformanceStats_;
 }
 

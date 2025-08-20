@@ -10,6 +10,7 @@
 #endif
 #include <future>
 #include <thread>
+#include <span>
 
 using namespace atom::connection;
 
@@ -111,39 +112,44 @@ protected:
     void TearDown() override { mockServer_.stop(); }
 
     MockServer mockServer_{8080};
-    TcpClient client_;
+    TcpClient client_{TcpClient::Options{}};
 };
 
 TEST_F(TcpClientTest, ConnectToServer) {
-    ASSERT_TRUE(
-        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000)));
+    auto result = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(result.has_value());
     ASSERT_TRUE(client_.isConnected());
 }
 
 TEST_F(TcpClientTest, SendData) {
-    ASSERT_TRUE(
-        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000)));
+    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
     std::string message = "Hello, server!";
-    ASSERT_TRUE(
-        client_.send(std::vector<char>(message.begin(), message.end())));
+    std::span<const char> data_span(message.data(), message.size());
+    auto sendResult = client_.send(data_span);
+    ASSERT_TRUE(sendResult.has_value());
 }
 
 TEST_F(TcpClientTest, ReceiveData) {
-    ASSERT_TRUE(
-        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000)));
-    std::string message = "Hello, server!";
-    ASSERT_TRUE(
-        client_.send(std::vector<char>(message.begin(), message.end())));
+    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
 
-    auto futureData = client_.receive(1024);
-    auto data = futureData.get();
+    std::string message = "Hello, server!";
+    std::span<const char> data_span(message.data(), message.size());
+    auto sendResult = client_.send(data_span);
+    ASSERT_TRUE(sendResult.has_value());
+
+    auto receiveResult = client_.receive(1024);
+    ASSERT_TRUE(receiveResult.has_value());
+    auto data = receiveResult.value();
 
     ASSERT_EQ(std::string(data.begin(), data.end()), message);
 }
 
 TEST_F(TcpClientTest, DisconnectFromServer) {
-    ASSERT_TRUE(
-        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000)));
+    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
     client_.disconnect();
     ASSERT_FALSE(client_.isConnected());
 }
@@ -152,24 +158,26 @@ TEST_F(TcpClientTest, Callbacks) {
     bool connected = false;
     bool disconnected = false;
     std::string receivedData;
-    std::string errorMessage;
+    std::system_error lastError{std::error_code{}, ""};
 
     client_.setOnConnectedCallback([&]() { connected = true; });
     client_.setOnDisconnectedCallback([&]() { disconnected = true; });
-    client_.setOnDataReceivedCallback([&](const std::vector<char>& data) {
+    client_.setOnDataReceivedCallback([&](std::span<const char> data) {
         receivedData = std::string(data.begin(), data.end());
     });
     client_.setOnErrorCallback(
-        [&](const std::string& error) { errorMessage = error; });
+        [&](const std::system_error& error) { lastError = error; });
 
-    ASSERT_TRUE(
-        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000)));
+    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
     ASSERT_TRUE(connected);
 
     std::string message = "Hello, server!";
-    ASSERT_TRUE(
-        client_.send(std::vector<char>(message.begin(), message.end())));
+    std::span<const char> data_span(message.data(), message.size());
+    auto sendResult = client_.send(data_span);
+    ASSERT_TRUE(sendResult.has_value());
 
+    client_.startReceiving(1024);
     std::this_thread::sleep_for(
         std::chrono::seconds(1));  // Give some time to receive the message
 

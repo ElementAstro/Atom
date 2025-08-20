@@ -1,7 +1,7 @@
 #pragma once
 
+#include "binding.hpp"
 #include "common.hpp"
+#include "container.hpp"
 #include "inject.hpp"
 #include "resolver.hpp"
-#include "binding.hpp"
-#include "container.hpp"
