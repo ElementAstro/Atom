@@ -14,7 +14,7 @@ with C++20/23 Features:
 - High-performance containers
 - Optimized synchronization primitives
 - Cross-platform system logging support
-- Enhanced error handling with std::expected
+- Enhanced error handling with expected
 - Modern pattern matching with C++23 features
 - Highly optimized string handling
 - Category-based message filtering
@@ -24,6 +24,7 @@ with C++20/23 Features:
 **************************************************/
 
 #include "mmap_logger.hpp"
+#include "atom/type/compat.hpp"
 
 #include <atomic>
 #include <chrono>
@@ -319,13 +320,13 @@ public:
                 : 0);
     }
 
-    std::expected<void, LoggerErrorCode> flush() noexcept {
+    atom::type::expected<void, LoggerErrorCode> flush() noexcept {
         std::lock_guard<std::mutex> lock(file_mutex_);
         LogStats::ScopedTimer timer(flush_time_);
 
         if (map_ptr_ == nullptr) {
             stats_->error_count++;
-            return std::unexpected(LoggerErrorCode::MappingError);
+            return atom::type::unexpected(LoggerErrorCode::MappingError);
         }
 
         try {
@@ -333,20 +334,20 @@ public:
             if (!FlushViewOfFile(
                     map_ptr_, current_pos_.load(std::memory_order_acquire))) {
                 stats_->error_count++;
-                return std::unexpected(LoggerErrorCode::UnmapError);
+                return atom::type::unexpected(LoggerErrorCode::UnmapError);
             }
 #else
             if (msync(map_ptr_, current_pos_.load(std::memory_order_acquire),
                       MS_SYNC) != 0) {
                 stats_->error_count++;
-                return std::unexpected(LoggerErrorCode::UnmapError);
+                return atom::type::unexpected(LoggerErrorCode::UnmapError);
             }
 #endif
             stats_->flush_count++;
             return {};
         } catch (...) {
             stats_->error_count++;
-            return std::unexpected(LoggerErrorCode::UnmapError);
+            return atom::type::unexpected(LoggerErrorCode::UnmapError);
         }
     }
 
@@ -657,7 +658,7 @@ private:
                         log(LogLevel::ERROR, Category::General,
                             "Auto-flush failed with error code: " +
                                 std::to_string(
-                                    static_cast<int>(result.error())),
+                                    static_cast<int>(result.error().error())),
                             std::source_location::current());
                     }
                 }
@@ -1144,7 +1145,7 @@ void MmapLogger::enableSystemLogging(bool enable) {
     impl_->enableSystemLogging(enable);
 }
 
-std::expected<void, LoggerErrorCode> MmapLogger::flush() noexcept {
+atom::type::expected<void, LoggerErrorCode> MmapLogger::flush() noexcept {
     return impl_->flush();
 }
 

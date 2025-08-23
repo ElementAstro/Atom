@@ -25,6 +25,7 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
+#include <ostream>
 
 #ifdef _MSC_VER
 #include <windows.h>
@@ -38,6 +39,7 @@
 #include "atom/macro.hpp"
 #include "atom/type/expected.hpp"
 
+#include "atom/meta/func_traits.hpp"
 #ifdef ATOM_USE_BOOST
 #include <boost/any.hpp>
 #include <boost/asio.hpp>
@@ -88,6 +90,11 @@ inline auto to_string(FFIError error) -> std::string {
     const auto index = static_cast<size_t>(error);
     return index < error_strings.size() ? std::string(error_strings[index])
                                         : "Unknown error";
+}
+
+// Stream FFIError for logging/Exception formatting
+inline std::ostream& operator<<(std::ostream& os, FFIError e) {
+    return os << to_string(e);
 }
 
 /**
@@ -640,7 +647,7 @@ public:
 
         auto symbolResult = handle_.getSymbol(functionName);
         if (!symbolResult) {
-            return type::unexpected(symbolResult.error());
+            return type::unexpected(symbolResult.error().error());
         }
 
         void* symbol = symbolResult.value();
@@ -682,7 +689,7 @@ public:
         if (funcPtr == nullptr) {
             auto symbolResult = handle_.getSymbol(functionName);
             if (!symbolResult) {
-                return type::unexpected(symbolResult.error());
+                return type::unexpected(symbolResult.error().error());
             }
 
             funcPtr = symbolResult.value();
@@ -828,10 +835,13 @@ public:
     void registerCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        using FuncType = std::decay_t<Func>;
+        using Traits = FunctionTraits<std::decay_t<Func>>;
+        using FuncSig = typename Traits::return_type(
+            typename std::tuple_element<0, typename Traits::argument_types>::type,
+            typename std::tuple_element<1, typename Traits::argument_types>::type);
         callbackMap_.emplace(
             std::string(callbackName),
-            std::make_any<std::function<FuncType>>(std::forward<Func>(func)));
+            std::any{std::in_place_type<std::function<FuncSig>>, std::function<FuncSig>(std::forward<Func>(func))});
     }
 
     /**
@@ -867,11 +877,17 @@ public:
     void registerAsyncCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        using FuncType = std::decay_t<Func>;
+        using Traits = FunctionTraits<std::decay_t<Func>>;
+        using RawRet = typename Traits::return_type;
+        using ArgsTuple = typename Traits::argument_types;
+        using FuncSig = std::future<RawRet>(
+            typename std::tuple_element<0, ArgsTuple>::type,
+            typename std::tuple_element<1, ArgsTuple>::type);
         callbackMap_.emplace(
             std::string(callbackName),
-            std::make_any<std::function<FuncType>>(
-                [f = std::forward<Func>(func)](auto&&... args) {
+            std::make_any<std::function<FuncSig>>(
+                [f = std::function<RawRet(typename std::tuple_element<0, ArgsTuple>::type,
+                                          typename std::tuple_element<1, ArgsTuple>::type)>(std::forward<Func>(func))](auto&&... args) {
                     return std::async(std::launch::async, f,
                                       std::forward<decltype(args)>(args)...);
                 }));
@@ -928,7 +944,7 @@ public:
         -> FFIResult<LibraryObject<T>> {
         auto factoryResult = library.getFunction<T*(void)>(factoryFuncName);
         if (!factoryResult) {
-            return type::unexpected(factoryResult.error());
+            return type::unexpected(factoryResult.error().error());
         }
 
         auto factory = *factoryResult;

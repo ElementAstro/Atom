@@ -464,6 +464,13 @@ private:
     [[nodiscard]] inline bool is_expired(
         const TimePoint& expiry_time) const noexcept;
     void cleanup_expired_items(UniqueLock<std::shared_mutex>& lock) noexcept;
+
+    // Helper methods for get operations
+    template<typename LockType>
+    std::optional<Value> get_impl(const Key& key, bool update_access_time, LockType& lock);
+
+    template<typename LockType>
+    ValuePtr get_shared_impl(const Key& key, bool update_access_time, LockType& lock);
 };
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
@@ -1200,6 +1207,87 @@ void TTLCache<Key, Value, Hash, KeyEqual>::cleanup_expired_items(
         }
     } catch (...) {
     }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+template<typename LockType>
+std::optional<Value> TTLCache<Key, Value, Hash, KeyEqual>::get_impl(
+    const Key& key, bool update_access_time, LockType& lock) {
+    auto map_it = cache_map_.find(key);
+    if (map_it == cache_map_.end()) {
+        if (config_.enable_statistics) {
+            miss_count_++;
+        }
+        return std::nullopt;
+    }
+
+    auto& item = *map_it->second;
+
+    // Check if item has expired
+    if (is_expired(item.expiry_time)) {
+        cache_map_.erase(map_it);
+        cache_list_.erase(map_it->second);
+        if (config_.enable_statistics) {
+            miss_count_++;
+            expiration_count_++;
+        }
+        return std::nullopt;
+    }
+
+    // Update access time if requested
+    if (update_access_time) {
+        item.access_time = Clock::now();
+        move_to_front(map_it->second);
+    }
+
+    if (config_.enable_statistics) {
+        hit_count_++;
+    }
+
+    if constexpr (std::is_same_v<ValuePtr, std::shared_ptr<Value>>) {
+        return *item.value;
+    } else {
+        return item.value;
+    }
+}
+
+template <typename Key, typename Value, typename Hash, typename KeyEqual>
+template<typename LockType>
+typename TTLCache<Key, Value, Hash, KeyEqual>::ValuePtr
+TTLCache<Key, Value, Hash, KeyEqual>::get_shared_impl(
+    const Key& key, bool update_access_time, LockType& lock) {
+    auto map_it = cache_map_.find(key);
+    if (map_it == cache_map_.end()) {
+        if (config_.enable_statistics) {
+            miss_count_++;
+        }
+        return nullptr;
+    }
+
+    auto& item = *map_it->second;
+
+    // Check if item has expired
+    if (is_expired(item.expiry_time)) {
+        cache_map_.erase(map_it);
+        cache_list_.erase(map_it->second);
+        if (config_.enable_statistics) {
+            miss_count_++;
+            expiration_count_++;
+        }
+        return nullptr;
+    }
+
+    // Update access time if requested
+    if (update_access_time) {
+        item.access_time = Clock::now();
+        move_to_front(map_it->second);
+    }
+
+    if (config_.enable_statistics) {
+        hit_count_++;
+    }
+
+    return item.value;
 }
 
 }  // namespace atom::search

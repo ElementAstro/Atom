@@ -193,7 +193,7 @@ public:
      */
     void write(const T& data,
                std::chrono::milliseconds timeout = std::chrono::milliseconds(0),
-               bool notifyListeners = true);
+               bool notify = true);
 
     /**
      * @brief Reads data from shared memory.
@@ -799,7 +799,7 @@ auto SharedMemory<T>::withLock(Func&& func,
 
 template <TriviallyCopyable T>
 void SharedMemory<T>::write(const T& data, std::chrono::milliseconds timeout,
-                            bool notifyListeners) {
+                            bool notify) {
     withLock(
         [&]() {
             std::memcpy(getDataPtr(), &data, sizeof(T));
@@ -821,8 +821,8 @@ void SharedMemory<T>::write(const T& data, std::chrono::milliseconds timeout,
         },
         timeout);
 
-    if (notifyListeners) {
-        notifyListeners(data);
+    if (notify) {
+        this->notifyListeners(data);
         changeCondition_.notify_all();
     }
 }

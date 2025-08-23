@@ -6,8 +6,8 @@
  * "atom/io/filesystem/pushd.hpp" instead.
  */
 
-#ifndef ATOM_IO_PUSHD_HPP
-#define ATOM_IO_PUSHD_HPP
+#ifndef ATOM_IO_PUSHD_COMPAT_HPP
+#define ATOM_IO_PUSHD_COMPAT_HPP
 
 // Forward to the new location
 #include "filesystem/pushd.hpp"

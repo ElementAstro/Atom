@@ -110,17 +110,45 @@ jobs:
     - name: Install
       run: cmake --install build --config ${{ env.BUILD_TYPE }}
 
-    - name: Create distribution package
+    - name: Create distribution packages
       shell: bash
       run: |
-        mkdir -p dist
-        cd install
+        # Create comprehensive distribution packages
+        python scripts/build-and-package.py \
+          --source . \
+          --output dist \
+          --build-type release \
+          --no-tests \
+          --verbose
 
-        if [ "${{ matrix.os }}" = "windows-latest" ]; then
-          7z a ../dist/${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}.zip .
-        else
-          tar -czf ../dist/${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}.tar.gz .
+        # Create platform-specific packages
+        if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+          # Create Debian and RPM packages
+          ./scripts/package-manager.sh create-deb
+          ./scripts/package-manager.sh create-rpm
+
+          # Create AppImage (if tools available)
+          if command -v linuxdeploy &> /dev/null; then
+            echo "Creating AppImage..."
+            # AppImage creation logic would go here
+          fi
+        elif [ "${{ matrix.os }}" = "windows-latest" ]; then
+          # Create Windows installer packages
+          if command -v candle &> /dev/null; then
+            echo "Creating MSI installer..."
+            # WiX installer creation logic would go here
+          fi
+        elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+          # Create macOS packages
+          echo "Creating macOS packages..."
+          # DMG and PKG creation logic would go here
         fi
+
+        # Create portable distribution
+        python scripts/create-portable.py \
+          --source . \
+          --output dist \
+          --build-type Release
 
     - name: Upload release artifacts
       uses: actions/upload-artifact@v3

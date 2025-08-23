@@ -198,7 +198,7 @@ auto anyCastVal(const std::any& operand) -> T {
 template <typename T>
 auto anyCastConstRef(const std::any& operand) -> const T& {
     try {
-        return std::any_cast<T>(operand);
+        return std::any_cast<const T&>(operand);
     } catch (const std::bad_any_cast& e) {
         throw ProxyTypeError(
             std::string("Failed to cast to const reference type ") +
@@ -264,7 +264,9 @@ template <typename T>
 bool tryConvertType(std::any& src) {
     const auto& typeInfo = src.type();
 
-    if constexpr (std::is_integral_v<std::decay_t<T>>) {
+    if constexpr (std::is_reference_v<T>) {
+        return false;
+    } else if constexpr (std::is_integral_v<std::decay_t<T>>) {
         if (typeInfo == typeid(int)) {
             src = static_cast<T>(std::any_cast<int>(src));
             return true;
@@ -517,7 +519,7 @@ protected:
  * @tparam Func Function type to wrap
  */
 template <typename Func>
-class ProxyFunction : protected BaseProxyFunction<Func> {
+class ProxyFunction : public BaseProxyFunction<Func> {
     using Base = BaseProxyFunction<Func>;
     using Traits = typename Base::Traits;
     static constexpr std::size_t ARITY = Base::ARITY;

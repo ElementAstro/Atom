@@ -208,37 +208,7 @@ DEFINE_HAS_METHOD(print);
 DEFINE_HAS_STATIC_METHOD(staticPrint);
 DEFINE_HAS_CONST_METHOD(print);
 
-// 添加函数特化
-namespace atom::meta {
-// 特化 FunctionTraits 为 noexcept 函数
-template <typename R, typename... Args>
-struct FunctionTraits<R(Args...) noexcept> : FunctionTraitsBase<R, Args...> {
-    static constexpr bool is_noexcept = true;
-    static constexpr std::string_view full_name = "R(Args...) noexcept";
-};
-
-// 特化 FunctionTraits 为 noexcept 函数指针
-template <typename R, typename... Args>
-struct FunctionTraits<R (*)(Args...) noexcept>
-    : FunctionTraitsBase<R, Args...> {
-    static constexpr bool is_noexcept = true;
-    static constexpr std::string_view full_name = "R(*)(Args...) noexcept";
-};
-
-// 添加变参函数特化
-template <typename R, typename Arg>
-struct FunctionTraits<R(Arg, ...)> : FunctionTraitsBase<R, Arg> {
-    static constexpr bool is_variadic = true;
-    static constexpr std::string_view full_name = "R(Arg, ...)";
-};
-
-// 添加变参函数指针特化
-template <typename R, typename Arg>
-struct FunctionTraits<R (*)(Arg, ...)> : FunctionTraitsBase<R, Arg> {
-    static constexpr bool is_variadic = true;
-    static constexpr std::string_view full_name = "R(*)(Arg, ...)";
-};
-}  // namespace atom::meta
+// NOTE: FunctionTraits specializations are defined in atom/meta/func_traits.hpp
 
 //===========================================================================
 // Main function with examples

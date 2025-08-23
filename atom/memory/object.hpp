@@ -630,7 +630,7 @@ private:
      * @param lock The unique lock that is already held.
      * @return A shared pointer to the acquired object.
      */
-    std::shared_ptr<T> acquireImpl(std::unique_lock<std::mutex>& lock) {
+    std::shared_ptr<T> acquireImpl(std::unique_lock<std::shared_mutex>& lock) {
         std::shared_ptr<T> obj;
 
 #ifdef ATOM_USE_BOOST
@@ -794,8 +794,7 @@ private:
     // Core pool data
     size_t max_size_;
     size_t available_;
-    mutable std::shared_mutex
-        mutex_;  // Shared mutex for better read concurrency
+    mutable std::shared_mutex mutex_;
     std::condition_variable_any cv_;
     std::vector<std::shared_ptr<T>> pool_;
     std::vector<

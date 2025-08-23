@@ -69,9 +69,12 @@ struct atom::meta::EnumTraits<Color> {
         std::string_view{"Blue"},    std::string_view{"Yellow"},
         std::string_view{"Magenta"}, std::string_view{"Cyan"},
         std::string_view{"Black"},   std::string_view{"White"}};
+
+    static constexpr size_t size() noexcept { return values.size(); }
+    static constexpr bool empty() noexcept { return values.size() == 0; }
 };
 
-// Implement EnumTraits specialization for Permission
+// Implement EnumTraits specialization for Permission with aliases
 template <>
 struct atom::meta::EnumTraits<Permission> {
     static constexpr std::array values = {
@@ -82,11 +85,7 @@ struct atom::meta::EnumTraits<Permission> {
         std::string_view{"None"},  std::string_view{"Read"},
         std::string_view{"Write"}, std::string_view{"Execute"},
         std::string_view{"Admin"}, std::string_view{"All"}};
-};
 
-// EnumAliasTraits specialization for Permission
-template <>
-struct atom::meta::EnumAliasTraits<Permission> {
     static constexpr std::array aliases = {
         std::string_view{"0"}, std::string_view{"R"}, std::string_view{"W"},
         std::string_view{"X"}, std::string_view{"A"}, std::string_view{"RWX"}};
@@ -328,11 +327,11 @@ int main() {
     printValue("With all permissions", std::string(enum_name(userPermission)));
 
     // Get the underlying bitmask
-    auto permBitmask = enum_bitmask(userPermission);
+    auto permBitmask = enum_to_integer(userPermission);
     printValue("Permission bitmask", static_cast<int>(permBitmask));
 
     // Convert bitmask back to enum
-    auto permFromBitmask = bitmask_to_enum<Permission>(0x03);  // Read + Write
+    auto permFromBitmask = integer_to_enum<Permission>(0x03);  // Read + Write
     printOptional<Permission>(
         "bitmask_to_enum<Permission>(0x03)", permFromBitmask,
         [](const Permission& p) { return std::string(enum_name(p)); });
@@ -343,12 +342,12 @@ int main() {
     printHeader("7. Enum Aliases");
 
     // Use alias to get enum value
-    auto readPerm1 = enum_cast_with_alias<Permission>("Read");
+    auto readPerm1 = enum_cast_icase<Permission>("Read");
     printOptional<Permission>(
         "enum_cast_with_alias<Permission>(\"Read\")", readPerm1,
         [](const Permission& p) { return std::string(enum_name(p)); });
 
-    auto readPerm2 = enum_cast_with_alias<Permission>("R");  // Using alias
+    auto readPerm2 = enum_cast_icase<Permission>("R");  // Using alias
     printOptional<Permission>(
         "enum_cast_with_alias<Permission>(\"R\")", readPerm2,
         [](const Permission& p) { return std::string(enum_name(p)); });

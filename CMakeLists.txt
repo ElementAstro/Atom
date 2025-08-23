@@ -32,6 +32,8 @@ include(cmake/module_dependencies.cmake)
 include(cmake/ExamplesBuildOptions.cmake)
 include(cmake/TestsBuildOptions.cmake)
 include(cmake/ScanModule.cmake)
+include(cmake/PackagingConfig.cmake)
+include(cmake/ModularInstall.cmake)
 
 # -----------------------------------------------------------------------------
 # Options
@@ -63,7 +65,16 @@ endforeach()
 # -----------------------------------------------------------------------------
 # C++ Standard
 # -----------------------------------------------------------------------------
-set(CMAKE_CXX_STANDARD 23)
+# Prefer C++23, but fall back to C++20 when compiler lacks full support
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "13.0")
+    set(CMAKE_CXX_STANDARD 20)
+  else()
+    set(CMAKE_CXX_STANDARD 23)
+  endif()
+else()
+  set(CMAKE_CXX_STANDARD 23)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -271,6 +282,35 @@ if(ATOM_BUILD_DOCS)
     message(WARNING "Doxygen not found. Documentation will not be generated.")
     set(ATOM_BUILD_DOCS OFF)
   endif()
+endif()
+
+# -----------------------------------------------------------------------------
+# Component Registration
+# -----------------------------------------------------------------------------
+
+# Register all Atom components for modular installation
+foreach(MODULE ${ATOM_MODULES})
+    string(TOLOWER ${MODULE} MODULE_LOWER)
+    atom_register_component(${MODULE_LOWER}
+        DESCRIPTION "Atom ${MODULE} module"
+        VERSION ${PROJECT_VERSION}
+        DEPENDS ${ATOM_MODULE_DEPS_${MODULE}}
+    )
+endforeach()
+
+# Setup modular installation system
+atom_setup_modular_installation()
+
+# -----------------------------------------------------------------------------
+# Packaging Configuration
+# -----------------------------------------------------------------------------
+
+# Setup CPack for package generation
+atom_setup_cpack()
+
+# Create modular packages
+if(ATOM_INSTALL_COMPONENT_PACKAGES)
+    atom_create_modular_packages()
 endif()
 
 # -----------------------------------------------------------------------------

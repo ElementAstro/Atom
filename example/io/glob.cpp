@@ -21,14 +21,14 @@ void demonstrateGlobFunctions() {
 
     // Example: Using glob
     std::cout << "Using glob to find .txt files:\n";
-    auto txtFiles = glob::glob("test_dir/*.txt");
+    auto txtFiles = atom::io::glob(atom::containers::String{"test_dir/*.txt"}, false, false);
     for (const auto& file : txtFiles) {
         std::cout << " - " << file << '\n';
     }
 
     // Example: Using rglob (recursive glob)
     std::cout << "Using rglob to find .cpp files:\n";
-    auto cppFiles = glob::rglob("test_dir/**/*.cpp");
+    auto cppFiles = atom::io::rglob("test_dir/**/*.cpp");
     for (const auto& file : cppFiles) {
         std::cout << " - " << file << '\n';
     }
@@ -36,7 +36,7 @@ void demonstrateGlobFunctions() {
     // Example: Using glob with multiple patterns
     std::cout << "Using glob with multiple file patterns:\n";
     std::vector<std::string> patterns = {"test_dir/*.txt", "test_dir/*.md"};
-    auto matchedFiles = glob::glob(patterns);
+    auto matchedFiles = atom::io::glob(std::vector<std::string>{"test_dir/*.txt", "test_dir/*.md"});
     for (const auto& file : matchedFiles) {
         std::cout << " - " << file << '\n';
     }

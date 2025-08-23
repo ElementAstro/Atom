@@ -91,6 +91,12 @@ struct FunctionTraits<Return(Args..., ...)>
     static constexpr bool is_variadic = true;
 };
 
+// Variadic function pointer types
+template <typename Return, typename... Args>
+struct FunctionTraits<Return (*)(Args..., ...)> : FunctionTraitsBase<Return, Args...> {
+    static constexpr bool is_variadic = true;
+};
+
 /**
  * \brief Traits for variadic noexcept function types
  */
@@ -261,6 +267,17 @@ struct FunctionTraits<Return (Class::*)(Args...) const volatile &&>
 template <typename Return, typename Class, typename... Args>
 struct FunctionTraits<Return (Class::*)(Args...) noexcept>
     : MemberFunctionTraitsBase<Return, Class, Args...> {
+    static constexpr bool is_noexcept = true;
+};
+
+
+// noexcept qualified rvalue reference and const volatile variants
+template <typename Return, typename Class, typename... Args>
+struct FunctionTraits<Return (Class::*)(Args...) const volatile && noexcept>
+    : MemberFunctionTraitsBase<Return, Class, Args...> {
+    static constexpr bool is_const_member_function = true;
+    static constexpr bool is_volatile_member_function = true;
+    static constexpr bool is_rvalue_reference_member_function = true;
     static constexpr bool is_noexcept = true;
 };
 

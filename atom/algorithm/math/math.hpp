@@ -23,7 +23,7 @@ Description: Extra Math Library
 #include <unordered_map>
 #include <vector>
 
-#include "../rust_numeric.hpp"
+#include "atom/algorithm/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 namespace atom::algorithm {

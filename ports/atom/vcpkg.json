@@ -107,12 +107,180 @@
         "readline"
       ]
     },
+    "algorithm": {
+      "description": "Algorithm utilities and data structures",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "async": {
+      "description": "Asynchronous programming utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "components": {
+      "description": "Component system framework",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "connection": {
+      "description": "Network and IPC connection utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "async"]
+        }
+      ]
+    },
+    "containers": {
+      "description": "Advanced container data structures",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "image": {
+      "description": "Image processing and FITS support",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "io"]
+        }
+      ]
+    },
+    "io": {
+      "description": "Input/output utilities and file handling",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "memory": {
+      "description": "Memory management utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "meta": {
+      "description": "Metaprogramming and reflection utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "search": {
+      "description": "Search algorithms and indexing",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "algorithm"]
+        }
+      ]
+    },
+    "secret": {
+      "description": "Cryptographic and security utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "serial": {
+      "description": "Serial communication utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "io"]
+        }
+      ]
+    },
+    "sysinfo": {
+      "description": "System information and monitoring",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core"]
+        }
+      ]
+    },
+    "system": {
+      "description": "System utilities and process management",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "sysinfo"]
+        }
+      ]
+    },
+    "web": {
+      "description": "Web server and HTTP utilities",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["core", "async", "connection"]
+        },
+        "cpp-httplib"
+      ]
+    },
+    "networking": {
+      "description": "Meta-package for networking components",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["connection", "web", "async"]
+        }
+      ]
+    },
+    "imaging": {
+      "description": "Meta-package for image processing components",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": ["image", "io", "algorithm"]
+        }
+      ]
+    },
+    "full": {
+      "description": "All components",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": [
+            "algorithm", "async", "components", "connection",
+            "containers", "image", "io", "memory", "meta",
+            "search", "secret", "serial", "sysinfo", "system", "web"
+          ]
+        }
+      ]
+    },
     "all": {
       "description": "Enable all optional features",
       "dependencies": [
         {
           "name": "atom",
           "features": [
+            "full",
             "python",
             "examples",
             "tests",

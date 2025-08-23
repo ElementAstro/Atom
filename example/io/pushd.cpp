@@ -1,58 +1,40 @@
 #include "atom/io/pushd.hpp"
 
 #include <iostream>
+#include <filesystem>
 
 int main() {
-    // 创建一个 DirectoryStack 实例
-    DirectoryStack dirStack;
+    ::atom::io::DirectoryStack dirStack; // Uses default (synchronous) constructor
 
-    // 显示当前目录
-    std::cout << "当前目录: ";
-    dirStack.show_current_directory();
+    std::cout << "Current directory: " << std::filesystem::current_path() << "\n";
 
-    // 将当前目录压入堆栈并切换到新目录
-    std::filesystem::path newDir = "/path/to/new/directory";
+    // Pushd to a new directory (use current path for a safe demo)
+    std::filesystem::path newDir = std::filesystem::current_path();
     dirStack.pushd(newDir);
-    std::cout << "切换到新目录: ";
-    dirStack.show_current_directory();
+    std::cout << "Changed to: " << std::filesystem::current_path() << "\n";
 
-    // 查看堆栈顶部的目录
-    std::cout << "堆栈顶部的目录: ";
-    dirStack.peek();
+    // Peek top
+    auto top = dirStack.peek();
+    std::cout << "Top of stack: " << top << "\n";
 
-    // 显示当前的目录堆栈
-    std::cout << "当前的目录堆栈: ";
-    dirStack.dirs();
+    // Show stack size and list
+    auto list = dirStack.dirs();
+    std::cout << "Stack has " << list.size() << " entries\n";
 
-    // 从堆栈中弹出目录并切换回去
+    // Popd back
     dirStack.popd();
-    std::cout << "切换回原目录: ";
-    dirStack.show_current_directory();
+    std::cout << "Back to: " << std::filesystem::current_path() << "\n";
 
-    // 将目录堆栈保存到文件
+    // Save/load stack demo
     std::string filename = "dir_stack.txt";
-    dirStack.save_stack_to_file(filename);
-    std::cout << "目录堆栈已保存到文件: " << filename << std::endl;
+    dirStack.saveStackToFile(filename);
+    std::cout << "Saved stack to: " << filename << "\n";
 
-    // 清空目录堆栈
-    dirStack.clear();
-    std::cout << "目录堆栈已清空" << std::endl;
+    dirStack.loadStackFromFile(filename);
+    std::cout << "Loaded stack from: " << filename << "\n";
 
-    // 从文件加载目录堆栈
-    dirStack.load_stack_from_file(filename);
-    std::cout << "目录堆栈已从文件加载: " << filename << std::endl;
-
-    // 显示加载后的目录堆栈
-    std::cout << "加载后的目录堆栈: ";
-    dirStack.dirs();
-
-    // 获取目录堆栈的大小
-    size_t stackSize = dirStack.size();
-    std::cout << "目录堆栈的大小: " << stackSize << std::endl;
-
-    // 检查目录堆栈是否为空
-    bool isEmpty = dirStack.is_empty();
-    std::cout << "目录堆栈是否为空: " << (isEmpty ? "是" : "否") << std::endl;
+    std::cout << "Is empty? " << (dirStack.isEmpty() ? "yes" : "no") << "\n";
+    std::cout << "Size: " << dirStack.size() << "\n";
 
     return 0;
 }

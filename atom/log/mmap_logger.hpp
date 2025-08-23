@@ -20,7 +20,7 @@ Description: Memory-mapped File Logger for Atom with C++20 Features
 #include "atomlog.hpp"
 
 #include <concepts>
-#include <expected>
+#include "atom/type/compat.hpp"
 #include <filesystem>
 #include <memory>
 #include <source_location>
@@ -57,7 +57,7 @@ class ConfigException : public LoggerException {
     using LoggerException::LoggerException;
 };
 
-// Error code enumeration for use with std::expected
+// Error code enumeration for use with atom::type::expected
 enum class LoggerErrorCode {
     Success,
     FileOpenError,
@@ -305,7 +305,7 @@ public:
      * @brief Forces log buffer flush to disk.
      * @return std::expected with void or error code
      */
-    [[nodiscard]] std::expected<void, LoggerErrorCode> flush() noexcept;
+    [[nodiscard]] atom::type::expected<void, LoggerErrorCode> flush() noexcept;
 
     /**
      * @brief Sets category filter to only log specific categories

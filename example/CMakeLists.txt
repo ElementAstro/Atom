@@ -3,8 +3,10 @@ cmake_minimum_required(VERSION 3.10)
 # 设置项目名称
 project(AtomExamples)
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
+# Set C++ standard (inherit from top-level if set, otherwise use 23)
+if(NOT DEFINED CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 23)
+endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add compile options

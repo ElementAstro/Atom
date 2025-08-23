@@ -126,9 +126,9 @@ constexpr std::size_t offset_of(MemberType T::* member_ptr) {
  * @brief Type-safe container_of implementation using type::expected for error
  * handling
  */
-template <typename Container, typename T, member_pointer MemberPtr>
+template <typename Container, typename MemberType>
 type::expected<Container*, member_pointer_error> safe_container_of(
-    T* ptr, MemberPtr Container::* member_ptr) noexcept {
+    MemberType* ptr, MemberType Container::* member_ptr) noexcept {
     try {
         if (ptr == nullptr) {
             return type::unexpected(
@@ -226,8 +226,9 @@ auto container_of_range(Container& container, const T* ptr)
     try {
         validate_pointer(ptr, "container_of_range");
 
-        auto it = std::ranges::find(container, *ptr);
-        if (it != std::ranges::end(container)) {
+        // Use std::find with equality; requires operator== for T
+        auto it = std::find(container.begin(), container.end(), *ptr);
+        if (it != container.end()) {
             return &(*it);
         }
         return type::unexpected(

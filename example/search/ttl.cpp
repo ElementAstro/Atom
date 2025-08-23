@@ -34,7 +34,7 @@ struct LargeObject {
 // Print cache statistics helper function
 void print_stats(const TTLCache<std::string, std::string>& cache) {
     std::cout << "Cache size: " << cache.size() << "/" << cache.capacity()
-              << ", Hit rate: " << cache.hitRate() * 100 << "%" << std::endl;
+              << ", Hit rate: " << cache.hit_rate() * 100 << "%" << std::endl;
 }
 
 int main() {

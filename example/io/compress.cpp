@@ -32,17 +32,20 @@ int main() {
     }
 
     // Step 3: Create a ZIP file containing the sample file
-    if (atom::io::createZip(outputFolder, zipFile)) {
-        std::cout << "Successfully created ZIP file: " << zipFile << std::endl;
-    } else {
-        std::cerr << "Failed to create ZIP file: " << zipFile << std::endl;
+    {
+        auto zipResult = atom::io::createZip(outputFolder, zipFile);
+        if (zipResult.success) {
+            std::cout << "Successfully created ZIP file: " << zipFile << std::endl;
+        } else {
+            std::cerr << "Failed to create ZIP file: " << zipFile << std::endl;
+        }
     }
 
     // Step 4: List files in the ZIP file
-    auto filesInZip = atom::io::listFilesInZip(zipFile);
+    auto filesInZip = atom::io::listZipContents(zipFile);
     std::cout << "Files in ZIP archive (" << zipFile << "):" << std::endl;
     for (const auto& file : filesInZip) {
-        std::cout << " - " << file << std::endl;
+        std::cout << " - " << file.name << " (" << file.size << " bytes)" << std::endl;
     }
 
     // Step 5: Check if the sample file exists in the ZIP
@@ -54,11 +57,12 @@ int main() {
     }
 
     // Step 6: Get the size of the file in the ZIP
-    size_t fileSize = atom::io::getZipFileSize(zipFile);
+    auto zipSizeOpt = atom::io::getZipSize(zipFile);
+    size_t fileSize = zipSizeOpt.value_or(0);
     std::cout << "Size of file in ZIP: " << fileSize << " bytes" << std::endl;
 
     // Step 7: Remove the file from the ZIP
-    if (atom::io::removeFileFromZip(zipFile, sampleFile)) {
+    if (atom::io::removeFromZip(zipFile, sampleFile).success) {
         std::cout << "Removed " << sampleFile << " from " << zipFile
                   << std::endl;
     } else {
