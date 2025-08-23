@@ -126,7 +126,7 @@ jobs:
         if [ -n "${{ github.event.inputs.components }}" ]; then
           COMPONENTS="${{ github.event.inputs.components }}"
         fi
-        
+
         # Configure with comprehensive packaging options
         python scripts/build-and-package.py \
           --source . \
@@ -141,7 +141,7 @@ jobs:
       run: |
         # Create component-specific packages
         python scripts/modular-installer.py list --available > available_components.txt
-        
+
         # Create meta-packages
         for meta_package in core networking imaging system; do
           echo "Creating $meta_package meta-package..."
@@ -200,7 +200,7 @@ jobs:
           "packages": []
         }
         EOF
-        
+
         # Add package information
         for package in dist/*; do
           if [ -f "$package" ]; then
@@ -268,7 +268,7 @@ jobs:
       run: |
         # Create Docker images using package manager script
         ./scripts/package-manager.sh create-docker
-        
+
         # Tag and push images if this is a release
         if [ "${{ github.event_name }}" = "push" ]; then
           echo "Pushing Docker images..."
@@ -310,11 +310,11 @@ jobs:
         # Collect all packages
         mkdir -p release_assets
         find artifacts/ -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.whl" \) -exec cp {} release_assets/ \;
-        
+
         # Create checksums
         cd release_assets
         sha256sum * > checksums.sha256
-        
+
         # Create release
         gh release create ${{ github.ref_name }} \
           --title "Release ${{ github.ref_name }}" \

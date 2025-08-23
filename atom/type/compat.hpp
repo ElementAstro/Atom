@@ -23,4 +23,3 @@
 #endif
 
 #endif // ATOM_TYPE_COMPAT_EXPECTED_HPP
-

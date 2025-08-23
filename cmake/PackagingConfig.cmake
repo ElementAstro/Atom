@@ -123,11 +123,11 @@ set(ATOM_COMPONENT_DESC_web "Web server and HTTP utilities")
 function(atom_resolve_dependencies COMPONENT_LIST OUTPUT_VAR)
     set(RESOLVED_COMPONENTS ${COMPONENT_LIST})
     set(CHANGED TRUE)
-    
+
     while(CHANGED)
         set(CHANGED FALSE)
         set(NEW_COMPONENTS ${RESOLVED_COMPONENTS})
-        
+
         foreach(COMPONENT ${RESOLVED_COMPONENTS})
             if(DEFINED ATOM_COMPONENT_DEPS_${COMPONENT})
                 foreach(DEP ${ATOM_COMPONENT_DEPS_${COMPONENT}})
@@ -138,10 +138,10 @@ function(atom_resolve_dependencies COMPONENT_LIST OUTPUT_VAR)
                 endforeach()
             endif()
         endforeach()
-        
+
         set(RESOLVED_COMPONENTS ${NEW_COMPONENTS})
     endwhile()
-    
+
     list(REMOVE_DUPLICATES RESOLVED_COMPONENTS)
     set(${OUTPUT_VAR} ${RESOLVED_COMPONENTS} PARENT_SCOPE)
 endfunction()
@@ -150,13 +150,13 @@ endfunction()
 function(atom_create_component_package COMPONENT_NAME)
     # Resolve dependencies
     atom_resolve_dependencies("${COMPONENT_NAME}" REQUIRED_COMPONENTS)
-    
+
     message(STATUS "Creating package for component: ${COMPONENT_NAME}")
     message(STATUS "Required components: ${REQUIRED_COMPONENTS}")
-    
+
     # Create component-specific install configuration
     set(COMPONENT_INSTALL_DIR "${CMAKE_BINARY_DIR}/packages/${COMPONENT_NAME}")
-    
+
     # Install component and its dependencies
     foreach(COMP ${REQUIRED_COMPONENTS})
         install(TARGETS atom-${COMP}
@@ -166,7 +166,7 @@ function(atom_create_component_package COMPONENT_NAME)
             RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
             COMPONENT ${COMPONENT_NAME}
         )
-        
+
         install(DIRECTORY ${CMAKE_SOURCE_DIR}/atom/${COMP}/
             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/${COMP}
             FILES_MATCHING PATTERN "*.hpp" PATTERN "*.h"
@@ -187,14 +187,14 @@ function(atom_setup_cpack)
     set(CPACK_PACKAGE_VERSION_PATCH ${ATOM_VERSION_PATCH})
     set(CPACK_PACKAGE_CONTACT ${ATOM_PACKAGE_CONTACT})
     set(CPACK_PACKAGE_HOMEPAGE_URL ${ATOM_PACKAGE_URL})
-    
+
     # Resource files
     set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
     set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
-    
+
     # Package file name
     set(CPACK_PACKAGE_FILE_NAME ${ATOM_PACKAGE_BASENAME})
-    
+
     # Platform-specific configuration
     if(WIN32)
         atom_setup_windows_packaging()
@@ -203,21 +203,21 @@ function(atom_setup_cpack)
     else()
         atom_setup_linux_packaging()
     endif()
-    
+
     include(CPack)
 endfunction()
 
 # Platform-specific packaging functions
 function(atom_setup_windows_packaging)
     set(CPACK_GENERATOR "ZIP;NSIS;WIX" PARENT_SCOPE)
-    
+
     # NSIS configuration
     set(CPACK_NSIS_DISPLAY_NAME ${ATOM_PACKAGE_DISPLAY_NAME} PARENT_SCOPE)
     set(CPACK_NSIS_PACKAGE_NAME ${ATOM_PACKAGE_DISPLAY_NAME} PARENT_SCOPE)
     set(CPACK_NSIS_URL_INFO_ABOUT ${ATOM_PACKAGE_URL} PARENT_SCOPE)
     set(CPACK_NSIS_CONTACT ${ATOM_PACKAGE_CONTACT} PARENT_SCOPE)
     set(CPACK_NSIS_MODIFY_PATH ON PARENT_SCOPE)
-    
+
     # WiX configuration
     set(CPACK_WIX_UPGRADE_GUID "12345678-1234-1234-1234-123456789012" PARENT_SCOPE)
     set(CPACK_WIX_PRODUCT_GUID "87654321-4321-4321-4321-210987654321" PARENT_SCOPE)
@@ -225,7 +225,7 @@ endfunction()
 
 function(atom_setup_macos_packaging)
     set(CPACK_GENERATOR "TGZ;DragNDrop" PARENT_SCOPE)
-    
+
     # macOS bundle configuration
     set(CPACK_DMG_VOLUME_NAME ${ATOM_PACKAGE_DISPLAY_NAME} PARENT_SCOPE)
     set(CPACK_DMG_FORMAT "UDZO" PARENT_SCOPE)

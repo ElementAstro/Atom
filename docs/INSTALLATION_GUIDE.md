@@ -191,7 +191,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
    # Download and extract portable version
    Invoke-WebRequest -Uri "https://github.com/ElementAstro/Atom/releases/latest/download/atom-windows-x64-portable.zip" -OutFile "atom-portable.zip"
    Expand-Archive -Path "atom-portable.zip" -DestinationPath "C:\atom"
-   
+
    # Add to PATH
    $env:PATH += ";C:\atom\bin"
    ```
@@ -237,10 +237,10 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
    ```bash
    # Ubuntu/Debian
    sudo apt install libatom-dev
-   
+
    # CentOS/RHEL/Fedora
    sudo dnf install atom-devel
-   
+
    # Arch Linux
    yay -S atom
    ```
@@ -259,7 +259,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
    wget "https://github.com/ElementAstro/Atom/releases/latest/download/atom-linux-x64.tar.gz"
    tar -xzf atom-linux-x64.tar.gz
    cd atom-linux-x64
-   
+
    # Install
    sudo cp -r * /usr/local/
    sudo ldconfig
@@ -344,9 +344,9 @@ vcpkg install atom[full]
 find_package(atom REQUIRED COMPONENTS algorithm async connection)
 
 # Link to specific components
-target_link_libraries(your_target PRIVATE 
-    atom::algorithm 
-    atom::async 
+target_link_libraries(your_target PRIVATE
+    atom::algorithm
+    atom::async
     atom::connection
 )
 

@@ -51,22 +51,22 @@ function(atom_register_component COMPONENT_NAME)
     set(oneValueArgs DESCRIPTION VERSION)
     set(multiValueArgs DEPENDS PROVIDES CONFLICTS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-    
+
     # Validate component name
     if(NOT COMPONENT_NAME MATCHES "^[a-zA-Z][a-zA-Z0-9_-]*$")
         message(FATAL_ERROR "Invalid component name: ${COMPONENT_NAME}")
     endif()
-    
+
     # Register component globally
     get_property(REGISTERED_COMPONENTS GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS)
     if(COMPONENT_NAME IN_LIST REGISTERED_COMPONENTS)
         message(WARNING "Component ${COMPONENT_NAME} is already registered")
         return()
     endif()
-    
+
     list(APPEND REGISTERED_COMPONENTS ${COMPONENT_NAME})
     set_property(GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS ${REGISTERED_COMPONENTS})
-    
+
     # Store component metadata
     set_property(GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_DESCRIPTION "${ARG_DESCRIPTION}")
     set_property(GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_VERSION "${ARG_VERSION}")
@@ -74,7 +74,7 @@ function(atom_register_component COMPONENT_NAME)
     set_property(GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_PROVIDES "${ARG_PROVIDES}")
     set_property(GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_CONFLICTS "${ARG_CONFLICTS}")
     set_property(GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_REQUIRED "${ARG_REQUIRED}")
-    
+
     message(STATUS "Registered component: ${COMPONENT_NAME}")
     if(ARG_DEPENDS)
         message(STATUS "  Dependencies: ${ARG_DEPENDS}")
@@ -85,13 +85,13 @@ endfunction()
 function(atom_resolve_component_dependencies COMPONENT_LIST OUTPUT_VAR)
     set(RESOLVED_COMPONENTS ${COMPONENT_LIST})
     set(PROCESSING_QUEUE ${COMPONENT_LIST})
-    
+
     while(PROCESSING_QUEUE)
         list(POP_FRONT PROCESSING_QUEUE CURRENT_COMPONENT)
-        
+
         # Get dependencies for current component
         get_property(COMPONENT_DEPS GLOBAL PROPERTY ATOM_COMPONENT_${CURRENT_COMPONENT}_DEPENDS)
-        
+
         foreach(DEP ${COMPONENT_DEPS})
             if(NOT DEP IN_LIST RESOLVED_COMPONENTS)
                 list(APPEND RESOLVED_COMPONENTS ${DEP})
@@ -99,13 +99,13 @@ function(atom_resolve_component_dependencies COMPONENT_LIST OUTPUT_VAR)
             endif()
         endforeach()
     endwhile()
-    
+
     # Remove duplicates and sort
     list(REMOVE_DUPLICATES RESOLVED_COMPONENTS)
-    
+
     # Topological sort based on dependencies
     atom_topological_sort("${RESOLVED_COMPONENTS}" SORTED_COMPONENTS)
-    
+
     set(${OUTPUT_VAR} ${SORTED_COMPONENTS} PARENT_SCOPE)
 endfunction()
 
@@ -113,14 +113,14 @@ endfunction()
 function(atom_topological_sort COMPONENT_LIST OUTPUT_VAR)
     set(SORTED_COMPONENTS "")
     set(REMAINING_COMPONENTS ${COMPONENT_LIST})
-    
+
     while(REMAINING_COMPONENTS)
         set(READY_COMPONENTS "")
-        
+
         # Find components with no unresolved dependencies
         foreach(COMPONENT ${REMAINING_COMPONENTS})
             get_property(COMPONENT_DEPS GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_DEPENDS)
-            
+
             set(HAS_UNRESOLVED_DEPS FALSE)
             foreach(DEP ${COMPONENT_DEPS})
                 if(DEP IN_LIST REMAINING_COMPONENTS)
@@ -128,41 +128,41 @@ function(atom_topological_sort COMPONENT_LIST OUTPUT_VAR)
                     break()
                 endif()
             endforeach()
-            
+
             if(NOT HAS_UNRESOLVED_DEPS)
                 list(APPEND READY_COMPONENTS ${COMPONENT})
             endif()
         endforeach()
-        
+
         if(NOT READY_COMPONENTS)
             message(FATAL_ERROR "Circular dependency detected in components: ${REMAINING_COMPONENTS}")
         endif()
-        
+
         # Add ready components to sorted list
         list(APPEND SORTED_COMPONENTS ${READY_COMPONENTS})
-        
+
         # Remove ready components from remaining list
         foreach(READY_COMPONENT ${READY_COMPONENTS})
             list(REMOVE_ITEM REMAINING_COMPONENTS ${READY_COMPONENT})
         endforeach()
     endwhile()
-    
+
     set(${OUTPUT_VAR} ${SORTED_COMPONENTS} PARENT_SCOPE)
 endfunction()
 
 # Function to validate component dependencies
 function(atom_validate_component_dependencies)
     get_property(REGISTERED_COMPONENTS GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS)
-    
+
     foreach(COMPONENT ${REGISTERED_COMPONENTS})
         get_property(COMPONENT_DEPS GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_DEPENDS)
-        
+
         foreach(DEP ${COMPONENT_DEPS})
             if(NOT DEP IN_LIST REGISTERED_COMPONENTS)
                 message(FATAL_ERROR "Component ${COMPONENT} depends on unregistered component: ${DEP}")
             endif()
         endforeach()
-        
+
         # Check for conflicts
         get_property(COMPONENT_CONFLICTS GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_CONFLICTS)
         foreach(CONFLICT ${COMPONENT_CONFLICTS})
@@ -171,7 +171,7 @@ function(atom_validate_component_dependencies)
             endif()
         endforeach()
     endforeach()
-    
+
     message(STATUS "Component dependency validation completed")
 endfunction()
 
@@ -185,7 +185,7 @@ function(atom_install_component COMPONENT_NAME)
     set(oneValueArgs DESTINATION)
     set(multiValueArgs TARGETS HEADERS CMAKE_CONFIGS)
     cmake_parse_arguments(ARG "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-    
+
     # Validate component is registered
     get_property(REGISTERED_COMPONENTS GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS)
     if(NOT COMPONENT_NAME IN_LIST REGISTERED_COMPONENTS)
@@ -196,9 +196,9 @@ function(atom_install_component COMPONENT_NAME)
             message(FATAL_ERROR "Component ${COMPONENT_NAME} is not registered")
         endif()
     endif()
-    
+
     message(STATUS "Installing component: ${COMPONENT_NAME}")
-    
+
     # Install targets
     if(ARG_TARGETS)
         foreach(TARGET ${ARG_TARGETS})
@@ -213,7 +213,7 @@ function(atom_install_component COMPONENT_NAME)
                 )
             endif()
         endforeach()
-        
+
         # Install export targets
         install(EXPORT atom-${COMPONENT_NAME}-targets
             FILE atom-${COMPONENT_NAME}-targets.cmake
@@ -222,7 +222,7 @@ function(atom_install_component COMPONENT_NAME)
             COMPONENT ${COMPONENT_NAME}
         )
     endif()
-    
+
     # Install headers
     if(ARG_HEADERS)
         foreach(HEADER_DIR ${ARG_HEADERS})
@@ -235,7 +235,7 @@ function(atom_install_component COMPONENT_NAME)
             endif()
         endforeach()
     endif()
-    
+
     # Install CMake configuration files
     if(ARG_CMAKE_CONFIGS)
         foreach(CMAKE_CONFIG ${ARG_CMAKE_CONFIGS})
@@ -247,7 +247,7 @@ function(atom_install_component COMPONENT_NAME)
             endif()
         endforeach()
     endif()
-    
+
     # Generate component configuration file
     atom_generate_component_config(${COMPONENT_NAME})
 endfunction()
@@ -257,9 +257,9 @@ function(atom_generate_component_config COMPONENT_NAME)
     get_property(COMPONENT_VERSION GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_VERSION)
     get_property(COMPONENT_DESCRIPTION GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_DESCRIPTION)
     get_property(COMPONENT_DEPENDS GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT_NAME}_DEPENDS)
-    
+
     set(CONFIG_FILE "${CMAKE_BINARY_DIR}/atom-${COMPONENT_NAME}-config.cmake")
-    
+
     file(WRITE ${CONFIG_FILE}
         "# Configuration file for atom-${COMPONENT_NAME}\n"
         "# Generated by CMake\n\n"
@@ -267,7 +267,7 @@ function(atom_generate_component_config COMPONENT_NAME)
         "set(atom-${COMPONENT_NAME}_DESCRIPTION \"${COMPONENT_DESCRIPTION}\")\n"
         "set(atom-${COMPONENT_NAME}_DEPENDS \"${COMPONENT_DEPENDS}\")\n\n"
     )
-    
+
     # Add dependency finding
     if(COMPONENT_DEPENDS)
         file(APPEND ${CONFIG_FILE}
@@ -280,7 +280,7 @@ function(atom_generate_component_config COMPONENT_NAME)
         endforeach()
         file(APPEND ${CONFIG_FILE} "\n")
     endif()
-    
+
     # Include targets file
     file(APPEND ${CONFIG_FILE}
         "# Include targets\n"
@@ -288,7 +288,7 @@ function(atom_generate_component_config COMPONENT_NAME)
         "# Component found\n"
         "set(atom-${COMPONENT_NAME}_FOUND TRUE)\n"
     )
-    
+
     # Install the configuration file
     install(FILES ${CONFIG_FILE}
         DESTINATION ${ATOM_INSTALL_CMAKEDIR}
@@ -299,27 +299,27 @@ endfunction()
 # Function to create component metadata file
 function(atom_create_component_metadata)
     get_property(REGISTERED_COMPONENTS GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS)
-    
+
     file(WRITE ${ATOM_COMPONENT_METADATA_FILE} "{\n")
     file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "  \"components\": {\n")
-    
+
     list(LENGTH REGISTERED_COMPONENTS COMPONENT_COUNT)
     set(CURRENT_INDEX 0)
-    
+
     foreach(COMPONENT ${REGISTERED_COMPONENTS})
         math(EXPR CURRENT_INDEX "${CURRENT_INDEX} + 1")
-        
+
         get_property(COMPONENT_VERSION GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_VERSION)
         get_property(COMPONENT_DESCRIPTION GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_DESCRIPTION)
         get_property(COMPONENT_DEPENDS GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_DEPENDS)
         get_property(COMPONENT_PROVIDES GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_PROVIDES)
         get_property(COMPONENT_CONFLICTS GLOBAL PROPERTY ATOM_COMPONENT_${COMPONENT}_CONFLICTS)
-        
+
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "    \"${COMPONENT}\": {\n")
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "      \"version\": \"${COMPONENT_VERSION}\",\n")
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "      \"description\": \"${COMPONENT_DESCRIPTION}\",\n")
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "      \"depends\": [")
-        
+
         if(COMPONENT_DEPENDS)
             list(LENGTH COMPONENT_DEPENDS DEP_COUNT)
             set(DEP_INDEX 0)
@@ -331,10 +331,10 @@ function(atom_create_component_metadata)
                 endif()
             endforeach()
         endif()
-        
+
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "],\n")
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "      \"provides\": [")
-        
+
         if(COMPONENT_PROVIDES)
             list(LENGTH COMPONENT_PROVIDES PROV_COUNT)
             set(PROV_INDEX 0)
@@ -346,10 +346,10 @@ function(atom_create_component_metadata)
                 endif()
             endforeach()
         endif()
-        
+
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "],\n")
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "      \"conflicts\": [")
-        
+
         if(COMPONENT_CONFLICTS)
             list(LENGTH COMPONENT_CONFLICTS CONF_COUNT)
             set(CONF_INDEX 0)
@@ -361,16 +361,16 @@ function(atom_create_component_metadata)
                 endif()
             endforeach()
         endif()
-        
+
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "]\n")
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "    }")
-        
+
         if(CURRENT_INDEX LESS COMPONENT_COUNT)
             file(APPEND ${ATOM_COMPONENT_METADATA_FILE} ",")
         endif()
         file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "\n")
     endforeach()
-    
+
     file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "  },\n")
     file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "  \"build_info\": {\n")
     file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "    \"cmake_version\": \"${CMAKE_VERSION}\",\n")
@@ -380,7 +380,7 @@ function(atom_create_component_metadata)
     file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "    \"architecture\": \"${CMAKE_SYSTEM_PROCESSOR}\"\n")
     file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "  }\n")
     file(APPEND ${ATOM_COMPONENT_METADATA_FILE} "}\n")
-    
+
     # Install metadata file
     install(FILES ${ATOM_COMPONENT_METADATA_FILE}
         DESTINATION ${ATOM_INSTALL_DATADIR}
@@ -393,25 +393,25 @@ function(atom_setup_modular_installation)
     if(NOT ATOM_INSTALL_MODULAR)
         return()
     endif()
-    
+
     message(STATUS "Setting up modular installation system")
-    
+
     # Validate all component dependencies
     atom_validate_component_dependencies()
-    
+
     # Create component metadata
     atom_create_component_metadata()
-    
+
     # Create main configuration file
     atom_create_main_config()
-    
+
     message(STATUS "Modular installation system configured")
 endfunction()
 
 # Function to create main Atom configuration file
 function(atom_create_main_config)
     set(MAIN_CONFIG_FILE "${CMAKE_BINARY_DIR}/atom-config.cmake")
-    
+
     file(WRITE ${MAIN_CONFIG_FILE}
         "# Main configuration file for Atom library\n"
         "# Generated by CMake\n\n"
@@ -429,7 +429,7 @@ function(atom_create_main_config)
         "endif()\n\n"
         "set(ATOM_FOUND TRUE)\n"
     )
-    
+
     install(FILES ${MAIN_CONFIG_FILE}
         DESTINATION ${ATOM_INSTALL_CMAKEDIR}
         COMPONENT core
