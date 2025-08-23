@@ -23,7 +23,6 @@
 #include <iostream>
 #endif
 
-#include "atom/algorithm/hash.hpp"
 #include "atom/macro.hpp"
 #include "atom/meta/abi.hpp"
 #include "atom/meta/func_traits.hpp"
@@ -410,8 +409,9 @@ protected:
             for (const auto& argType : info_.getArgumentTypes()) {
                 combinedTypes += argType;
             }
-            info_.setHash(
-                std::to_string(algorithm::computeHash(combinedTypes)));
+            // Temporary simple hash implementation to avoid include issues
+            std::hash<std::string> hasher;
+            info_.setHash(std::to_string(hasher(combinedTypes)));
         }
     }
 
@@ -527,6 +527,36 @@ public:
         : Base(std::forward<Func>(func), Base::info_) {}
     explicit ProxyFunction(Func&& func, FunctionInfo& info)
         : Base(std::forward<Func>(func), info) {}
+
+    // Copy constructor
+    ProxyFunction(const ProxyFunction& other)
+        : Base(std::decay_t<Func>(other.func_), this->info_) {
+        this->info_ = other.info_;
+    }
+
+    // Move constructor
+    ProxyFunction(ProxyFunction&& other) noexcept
+        : Base(std::move(other.func_), this->info_) {
+        this->info_ = std::move(other.info_);
+    }
+
+    // Copy assignment
+    ProxyFunction& operator=(const ProxyFunction& other) {
+        if (this != &other) {
+            this->func_ = other.func_;
+            this->info_ = other.info_;
+        }
+        return *this;
+    }
+
+    // Move assignment
+    ProxyFunction& operator=(ProxyFunction&& other) noexcept {
+        if (this != &other) {
+            this->func_ = std::move(other.func_);
+            this->info_ = std::move(other.info_);
+        }
+        return *this;
+    }
 
     void setName(std::string_view name) {
         std::unique_lock lock(this->mutex_);

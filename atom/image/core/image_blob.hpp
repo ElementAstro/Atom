@@ -89,21 +89,25 @@ public:
         : storage_(reinterpret_cast<T*>(&var), sizeof(U)) {}
 
     template <BlobValueType U>
-    Blob(U* ptr, size_t n)
-        : storage_(Mode == BlobMode::FAST
-                       ? std::span<T>(reinterpret_cast<T*>(ptr), n * sizeof(U))
-                       : std::vector<T>(
-                             reinterpret_cast<T*>(ptr),
-                             reinterpret_cast<T*>(ptr) + n * sizeof(U))) {}
+    Blob(U* ptr, size_t n) {
+        if constexpr (Mode == BlobMode::FAST) {
+            storage_ = std::span<T>(reinterpret_cast<T*>(ptr), n * sizeof(U));
+        } else {
+            storage_ = std::vector<T>(
+                reinterpret_cast<T*>(ptr),
+                reinterpret_cast<T*>(ptr) + n * sizeof(U));
+        }
+    }
 
     template <BlobValueType U, size_t N>
-    explicit Blob(std::array<U, N>& arr)
-        : storage_(Mode == BlobMode::FAST
-                       ? std::span<T>(reinterpret_cast<T*>(arr.data()),
-                                      sizeof(U) * N)
-                       : std::vector<T>(reinterpret_cast<T*>(arr.data()),
-                                        reinterpret_cast<T*>(arr.data()) +
-                                            sizeof(U) * N)) {}
+    explicit Blob(std::array<U, N>& arr) {
+        if constexpr (Mode == BlobMode::FAST) {
+            storage_ = std::span<T>(reinterpret_cast<T*>(arr.data()), sizeof(U) * N);
+        } else {
+            storage_ = std::vector<T>(reinterpret_cast<T*>(arr.data()),
+                                     reinterpret_cast<T*>(arr.data()) + sizeof(U) * N);
+        }
+    }
 
 #if __has_include(<opencv2/core.hpp>)
     explicit Blob(const cv::Mat& mat)
@@ -349,8 +353,19 @@ public:
         if (data.size() != sizeof(size_t) + size) {
             THROW_RUNTIME_ERROR("Invalid serialized data size");
         }
-        return Blob(reinterpret_cast<const T*>(data.data() + sizeof(size_t)),
-                    size);
+        // Create a copy to avoid const issues
+        Blob result;
+        if constexpr (Mode == BlobMode::FAST) {
+            // Fast mode can't work with const data, so we need to copy
+            result.storage_ = std::vector<T>(
+                reinterpret_cast<const T*>(data.data() + sizeof(size_t)),
+                reinterpret_cast<const T*>(data.data() + sizeof(size_t)) + size);
+        } else {
+            result.storage_ = std::vector<T>(
+                reinterpret_cast<const T*>(data.data() + sizeof(size_t)),
+                reinterpret_cast<const T*>(data.data() + sizeof(size_t)) + size);
+        }
+        return result;
     }
 
 #if __has_include(<opencv2/core.hpp>)
@@ -437,6 +452,74 @@ public:
     [[nodiscard]] auto getCols() const -> int { return cols_; }
     [[nodiscard]] auto getChannels() const -> int { return channels_; }
     [[nodiscard]] auto getDepth() const -> int { return depth_; }
+
+    // Additional utility methods
+    [[nodiscard]] auto getWidth() const -> int { return cols_; }
+    [[nodiscard]] auto getHeight() const -> int { return rows_; }
+    [[nodiscard]] auto isEmpty() const -> bool { return storage_.empty(); }
+    [[nodiscard]] auto getPixelSize() const -> size_t {
+        return channels_ * (depth_ == 8 ? 1 : depth_ == 16 ? 2 : 4);
+    }
+    [[nodiscard]] auto getImageSize() const -> size_t {
+        return static_cast<size_t>(rows_) * static_cast<size_t>(cols_) * getPixelSize();
+    }
+
+    // Memory alignment for performance
+    void alignMemory(size_t alignment = 64) {
+        if constexpr (Mode == BlobMode::NORMAL) {
+            if (storage_.size() % alignment != 0) {
+                size_t newSize = ((storage_.size() + alignment - 1) / alignment) * alignment;
+                storage_.resize(newSize);
+            }
+        }
+    }
+
+    // Clone method for explicit copying
+    [[nodiscard]] auto clone() const -> Blob {
+        Blob result;
+        result.rows_ = rows_;
+        result.cols_ = cols_;
+        result.channels_ = channels_;
+        result.depth_ = depth_;
+        if constexpr (Mode == BlobMode::NORMAL) {
+            result.storage_ = storage_;
+        } else {
+            // For fast mode, create a normal blob copy
+            result.storage_.assign(storage_.begin(), storage_.end());
+        }
+        return result;
+    }
+
+    // Crop method
+    [[nodiscard]] auto crop(int x, int y, int width, int height) const -> Blob {
+        if (x < 0 || y < 0 || x + width > cols_ || y + height > rows_) {
+            THROW_OUT_OF_RANGE("Crop region out of bounds");
+        }
+
+        Blob result;
+        result.rows_ = height;
+        result.cols_ = width;
+        result.channels_ = channels_;
+        result.depth_ = depth_;
+
+        if constexpr (Mode == BlobMode::NORMAL) {
+            result.storage_.reserve(static_cast<size_t>(width) * static_cast<size_t>(height) *
+                                   static_cast<size_t>(channels_));
+
+            size_t pixelSize = getPixelSize();
+            for (int row = y; row < y + height; ++row) {
+                size_t srcOffset = (static_cast<size_t>(row) * static_cast<size_t>(cols_) +
+                                   static_cast<size_t>(x)) * pixelSize;
+                size_t copySize = static_cast<size_t>(width) * pixelSize;
+
+                result.storage_.insert(result.storage_.end(),
+                                     storage_.begin() + srcOffset,
+                                     storage_.begin() + srcOffset + copySize);
+            }
+        }
+
+        return result;
+    }
 };
 
 using cblob = Blob<const std::byte>;

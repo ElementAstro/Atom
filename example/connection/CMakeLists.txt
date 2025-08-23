@@ -25,7 +25,7 @@ foreach(CPP_FILE ${CPP_FILES})
     # 有条件地添加可执行文件
     if(ATOM_EXAMPLE_CONNECTION_${EXAMPLE_NAME_UPPER})
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-        target_link_libraries(${EXECUTABLE_NAME} atom)
+        target_link_libraries(${EXECUTABLE_NAME} atom-connection)
         
         
         # 设置IDE文件夹分组

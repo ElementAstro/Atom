@@ -3,7 +3,9 @@
 #include <iostream>
 #include <thread>
 
+#ifdef ATOM_USE_ASIO
 #include <asio/io_context.hpp>
+#endif
 
 using namespace atom::async;
 
@@ -23,11 +25,15 @@ bool exampleFilter(const ExampleMessage& message) {
 }
 
 int main() {
+#ifdef ATOM_USE_ASIO
     // Create an Asio io_context
     asio::io_context io_context;
-
-    // Create a MessageQueue instance
+    // Create a MessageQueue instance using Asio
     MessageQueue<ExampleMessage> messageQueue(io_context);
+#else
+    // Create a MessageQueue instance without Asio
+    MessageQueue<ExampleMessage> messageQueue;
+#endif
 
     // Subscribe to messages with a callback, filter, and timeout
     messageQueue.subscribe(exampleCallback, "exampleSubscriber", 1,
@@ -41,11 +47,12 @@ int main() {
     ExampleMessage filteredMessage{"This message contains filter keyword"};
     messageQueue.publish(filteredMessage);
 
+#ifdef ATOM_USE_ASIO
     // Start processing messages in a separate thread
     std::thread processingThread([&io_context]() { io_context.run(); });
-
     // Wait for a short duration to ensure the message is processed
     std::this_thread::sleep_for(std::chrono::seconds(1));
+#endif
 
     // Get the number of messages in the queue
     size_t messageCount = messageQueue.getMessageCount();
@@ -57,18 +64,22 @@ int main() {
     std::cout << "Number of subscribers: " << subscriberCount << std::endl;
 
     // Cancel specific messages that meet a given condition
-    messageQueue.cancelMessages([](const ExampleMessage& msg) {
+    size_t cancelled = messageQueue.cancelMessages([](const ExampleMessage& msg) {
         return msg.content == "Hello, World!";
     });
+    std::cout << "Cancelled messages: " << cancelled << std::endl;
 
     // Unsubscribe from messages
-    messageQueue.unsubscribe(exampleCallback);
+    bool unsubscribed = messageQueue.unsubscribe(exampleCallback);
+    std::cout << "Unsubscribed: " << std::boolalpha << unsubscribed << std::endl;
 
     // Stop processing messages
     messageQueue.stopProcessing();
 
+#ifdef ATOM_USE_ASIO
     // Join the processing thread
     processingThread.join();
+#endif
 
     return 0;
 }

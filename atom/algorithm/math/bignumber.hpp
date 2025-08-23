@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_BIGNUMBER_HPP
-#define ATOM_ALGORITHM_BIGNUMBER_HPP
+#ifndef ATOM_ALGORITHM_MATH_BIGNUMBER_HPP
+#define ATOM_ALGORITHM_MATH_BIGNUMBER_HPP
 
 #include <cctype>
 #include <concepts>
@@ -284,4 +284,4 @@ constexpr auto BigNumber::at(size_t index) const -> uint8_t {
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_BIGNUMBER_HPP
+#endif  // ATOM_ALGORITHM_MATH_BIGNUMBER_HPP

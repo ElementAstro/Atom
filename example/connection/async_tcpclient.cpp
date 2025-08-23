@@ -80,31 +80,33 @@ public:
         if (running_)
             return;
 
-        server_ = std::make_unique<atom::async::connection::SocketHub>(false);
+        atom::async::connection::SocketHubConfig config;
+        config.use_ssl = false;
+        server_ = std::make_unique<atom::async::connection::SocketHub>(config);
 
         // Add message handler
-        server_->addHandler(
-            [this](const std::string& message, size_t client_id) {
+        server_->addMessageHandler(
+            [this](const atom::async::connection::Message& message, size_t client_id) {
                 Logger::log(Logger::INFO, "EchoServer",
                             "Received from client " +
-                                std::to_string(client_id) + ": " + message);
+                                std::to_string(client_id) + ": " + message.asString());
 
                 // Echo the message back
-                std::string response = "Echo: " + message;
+                auto response = atom::async::connection::Message::createText("Echo: " + message.asString());
                 server_->sendMessageToClient(client_id, response);
             });
 
         // Add connect handler
-        server_->addConnectHandler([](size_t client_id) {
+        server_->addConnectHandler([](size_t client_id, const std::string& address) {
             Logger::log(Logger::SUCCESS, "EchoServer",
-                        "Client " + std::to_string(client_id) + " connected");
+                        "Client " + std::to_string(client_id) + " connected from " + address);
         });
 
         // Add disconnect handler
-        server_->addDisconnectHandler([](size_t client_id) {
+        server_->addDisconnectHandler([](size_t client_id, const std::string& address) {
             Logger::log(
                 Logger::INFO, "EchoServer",
-                "Client " + std::to_string(client_id) + " disconnected");
+                "Client " + std::to_string(client_id) + " disconnected from " + address);
         });
 
         // Start the server
@@ -167,7 +169,9 @@ public:
         // Example 1: Basic TcpClient creation
         Logger::log(Logger::INFO, "Example",
                     "Example 1: Creating TcpClient (non-SSL)");
-        atom::async::connection::TcpClient client(false);
+        atom::async::connection::ConnectionConfig config;
+        config.use_ssl = false;
+        atom::async::connection::TcpClient client(config);
 
         // Example 2: Set up callbacks before connecting
         Logger::log(Logger::INFO, "Example", "Example 2: Setting up callbacks");
@@ -245,7 +249,7 @@ public:
         // Example 7: Enable reconnection attempts
         Logger::log(Logger::INFO, "Example",
                     "Example 7: Enabling reconnection");
-        client.enableReconnection(3);
+        client.configureReconnection(3);
         Logger::log(Logger::INFO, "Example",
                     "Reconnection enabled with 3 attempts");
 
@@ -313,7 +317,9 @@ public:
         // Example 11: Create SSL client
         Logger::log(Logger::INFO, "Example",
                     "Example 11: Creating SSL TcpClient");
-        atom::async::connection::TcpClient ssl_client(true);
+        atom::async::connection::ConnectionConfig ssl_config;
+        ssl_config.use_ssl = true;
+        atom::async::connection::TcpClient ssl_client(ssl_config);
         Logger::log(Logger::INFO, "Example",
                     "SSL client created (not connecting in this example)");
 

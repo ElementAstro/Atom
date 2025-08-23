@@ -25,8 +25,9 @@ Description: Crash Report
 #endif
 
 #ifdef _WIN32
-#include <dbghelp.h>
 #include <windows.h>
+#include <dbghelp.h>
+#pragma comment(lib, "dbghelp.lib")
 #endif
 
 #include "atom/error/stacktrace.hpp"
@@ -34,10 +35,10 @@ Description: Crash Report
 #include "atom/sysinfo/disk.hpp"
 #include "atom/sysinfo/memory.hpp"
 #include "atom/sysinfo/os.hpp"
+#include "atom/system/core/platform.hpp"
 #include "atom/utils/time.hpp"
 #include "crash_quotes.hpp"
-#include "env.hpp"
-#include "platform.hpp"
+#include "../info/env.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -109,8 +110,15 @@ void saveCrashLog(std::string_view error_msg) {
 
         std::stringstream sss;
         sss << "==================== Crash Report ====================\n";
-        sss << std::format("Program crashed at: {}\n",
-                           utils::getChinaTimestampString());
+        auto now = std::chrono::system_clock::now();
+        std::time_t nowC = std::chrono::system_clock::to_time_t(now);
+        std::tm localTime;
+#ifdef _WIN32
+        localtime_s(&localTime, &nowC);
+#else
+        localtime_r(&nowC, &localTime);
+#endif
+        sss << "Program crashed at: " << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S") << "\n";
         sss << std::format("Error message: {}\n\n", error_msg);
 
         sss << "==================== Stack Trace ====================\n";
@@ -138,19 +146,6 @@ void saveCrashLog(std::string_view error_msg) {
             }
         } catch (const std::exception& e) {
             spdlog::warn("Failed to load quotes: {}", e.what());
-        }
-
-        auto now = std::chrono::system_clock::now();
-        std::time_t nowC = std::chrono::system_clock::to_time_t(now);
-        std::tm localTime;
-
-#ifdef _WIN32
-        if (localtime_s(&localTime, &nowC) != 0) {
-#else
-        if (localtime_r(&nowC, &localTime) == nullptr) {
-#endif
-            spdlog::error("Failed to get local time for crash report filename");
-            throw std::runtime_error("Failed to get local time");
         }
 
         std::stringstream logFileName;
@@ -216,9 +211,17 @@ void saveCrashLog(std::string_view error_msg) {
             std::ofstream emergencyLog("emergency_crash.log",
                                        std::ios::out | std::ios::app);
             if (emergencyLog.good()) {
-                emergencyLog
-                    << std::format("Emergency crash log - {}: {}\n",
-                                   utils::getChinaTimestampString(), error_msg);
+                auto now = std::chrono::system_clock::now();
+                std::time_t nowC = std::chrono::system_clock::to_time_t(now);
+                std::tm localTime;
+#ifdef _WIN32
+                localtime_s(&localTime, &nowC);
+#else
+                localtime_r(&nowC, &localTime);
+#endif
+                emergencyLog << "Emergency crash log - "
+                            << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S")
+                            << ": " << error_msg << "\n";
                 emergencyLog << std::format("Error saving full crash log: {}\n",
                                             e.what());
                 emergencyLog.close();

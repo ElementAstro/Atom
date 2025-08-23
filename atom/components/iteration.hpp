@@ -25,8 +25,11 @@ and cache-locality optimizations for high-performance component processing.
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <mutex>
 #include <span>
 #include <type_traits>
+#include <typeindex>
+#include <unordered_map>
 #include <vector>
 
 #ifdef __AVX2__
@@ -392,7 +395,8 @@ public:
         size_t stealThreshold = 8;        // Minimum work to steal
     };
 
-    explicit ParallelComponentProcessor(const ParallelConfig& config = {});
+    ParallelComponentProcessor();
+    explicit ParallelComponentProcessor(const ParallelConfig& config);
     ~ParallelComponentProcessor();
 
     /**
@@ -483,6 +487,24 @@ private:
     // Free list for entity ID reuse
     std::vector<size_t> freeEntityIds_;
 };
+
+}  // namespace atom::components
+
+// Hash specialization for std::vector<std::type_index>
+namespace std {
+template <>
+struct hash<std::vector<std::type_index>> {
+    std::size_t operator()(const std::vector<std::type_index>& vec) const {
+        std::size_t seed = vec.size();
+        for (const auto& i : vec) {
+            seed ^= std::hash<std::type_index>{}(i) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+        }
+        return seed;
+    }
+};
+}  // namespace std
+
+namespace atom::components {
 
 /**
  * @brief High-performance component query system

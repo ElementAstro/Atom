@@ -143,7 +143,7 @@ public:
      * @throws ThreadException if the thread cannot be started.
      */
     template <typename Callable, typename... Args>
-        requires ThreadCallable<Callable, Args...>
+        requires (ThreadCallable<Callable, Args...> || StopTokenCallable<Callable, Args...>)
     void start(Callable&& func, Args&&... args) {
         try {
             // Clean up any existing thread

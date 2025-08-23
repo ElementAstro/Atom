@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_SHA1_HPP
-#define ATOM_ALGORITHM_SHA1_HPP
+#ifndef ATOM_ALGORITHM_CRYPTO_SHA1_HPP
+#define ATOM_ALGORITHM_CRYPTO_SHA1_HPP
 
 #include <array>
 #include <concepts>
@@ -265,4 +265,4 @@ template <ByteContainer... Containers>
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_SHA1_HPP
+#endif  // ATOM_ALGORITHM_CRYPTO_SHA1_HPP

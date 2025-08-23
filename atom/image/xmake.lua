@@ -13,23 +13,40 @@ set_license("GPL3")
 
 -- Define source files
 local source_files = {
-    "exif.cpp",
-    "fits_data.cpp",
-    "fits_file.cpp",
-    "fits_header.cpp",
-    "fits_utils.cpp",
-    "hdu.cpp"
+    -- Metadata sources
+    "metadata/exif.cpp",
+
+    -- Format sources
+    "formats/fits_data.cpp",
+    "formats/fits_file.cpp",
+    "formats/fits_header.cpp",
+    "formats/fits_utils.cpp",
+    "formats/hdu.cpp",
+
+    -- Processing sources
+    "processing/image_processor.cpp"
 }
 
 -- Define header files
 local header_files = {
-    "exif.hpp",
-    "fits_data.hpp",
-    "fits_file.hpp",
-    "fits_header.hpp",
-    "fits_utils.hpp",
-    "hdu.hpp",
-    "image_blob.hpp"
+    -- Main header
+    "image.hpp",
+
+    -- Core headers
+    "core/image_blob.hpp",
+
+    -- Metadata headers
+    "metadata/exif.hpp",
+
+    -- Format headers
+    "formats/fits_data.hpp",
+    "formats/fits_file.hpp",
+    "formats/fits_header.hpp",
+    "formats/fits_utils.hpp",
+    "formats/hdu.hpp",
+
+    -- Processing headers
+    "processing/image_processor.hpp"
 }
 
 -- Add required packages

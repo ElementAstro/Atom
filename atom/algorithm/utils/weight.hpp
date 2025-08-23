@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_WEIGHT_HPP
-#define ATOM_ALGORITHM_WEIGHT_HPP
+#ifndef ATOM_ALGORITHM_UTILS_WEIGHT_HPP
+#define ATOM_ALGORITHM_UTILS_WEIGHT_HPP
 
 #include <algorithm>
 #include <cassert>
@@ -1147,4 +1147,4 @@ public:
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_WEIGHT_HPP
+#endif  // ATOM_ALGORITHM_UTILS_WEIGHT_HPP

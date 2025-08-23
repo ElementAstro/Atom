@@ -1253,7 +1253,7 @@ auto whenAll(std::vector<Promise<T>>& promises) {
         }
     };
 
-    auto state = std::make_shared<SharedState>(promises.size(), resultPromise);
+    auto state = std::make_shared<SharedState>(promises.size(), std::move(resultPromise));
 
     // Set callback for each promise
     for (size_t i = 0; i < promises.size(); ++i) {

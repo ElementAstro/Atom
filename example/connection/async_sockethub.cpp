@@ -44,7 +44,7 @@ public:
 
         try {
             asio::ip::tcp::endpoint endpoint(
-                asio::ip::address::from_string("127.0.0.1"), port);
+                asio::ip::make_address("127.0.0.1"), port);
             socket_.connect(endpoint);
             is_connected_ = true;
             Logger::log(name_,
@@ -134,34 +134,36 @@ public:
     void run() {
         // Example 1: Create and start a SocketHub
         Logger::log("Main", "Example 1: Creating and starting SocketHub");
-        atom::async::connection::SocketHub hub(false);  // non-SSL mode
+        atom::async::connection::SocketHubConfig config;
+        config.use_ssl = false;
+        atom::async::connection::SocketHub hub(config);  // non-SSL mode
 
         // Example 2: Register message handler
         Logger::log("Main", "Example 2: Registering message handler");
-        hub.addHandler([this](const std::string& message, size_t client_id) {
+        hub.addMessageHandler([this](const atom::async::connection::Message& message, size_t client_id) {
             Logger::log(
                 "MessageHandler",
-                "Client " + std::to_string(client_id) + " sent: " + message);
+                "Client " + std::to_string(client_id) + " sent: " + message.asString());
 
             // Echo back the message with a prefix
-            std::string response = "Echo from server: " + message;
-            handleServerCommands(message, client_id);
+            std::string response = "Echo from server: " + message.asString();
+            handleServerCommands(message.asString(), client_id);
         });
 
         // Example 3: Register connection handler
         Logger::log("Main", "Example 3: Registering connect handler");
-        hub.addConnectHandler([this](size_t client_id) {
+        hub.addConnectHandler([this](size_t client_id, const std::string& address) {
             Logger::log("ConnectHandler",
-                        "Client " + std::to_string(client_id) + " connected");
+                        "Client " + std::to_string(client_id) + " connected from " + address);
             connected_clients_.push_back(client_id);
         });
 
         // Example 4: Register disconnection handler
         Logger::log("Main", "Example 4: Registering disconnect handler");
-        hub.addDisconnectHandler([this](size_t client_id) {
+        hub.addDisconnectHandler([this](size_t client_id, const std::string& address) {
             Logger::log(
                 "DisconnectHandler",
-                "Client " + std::to_string(client_id) + " disconnected");
+                "Client " + std::to_string(client_id) + " disconnected from " + address);
 
             // Remove from connected clients list
             connected_clients_.erase(
@@ -210,7 +212,8 @@ public:
 
         // Example 8: Broadcast message to all clients
         Logger::log("Main", "Example 8: Broadcasting message to all clients");
-        hub.broadcastMessage("Server broadcast: Hello to all clients!");
+        auto broadcast_msg = atom::async::connection::Message::createText("Server broadcast: Hello to all clients!");
+        hub.broadcastMessage(broadcast_msg);
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -218,9 +221,9 @@ public:
         Logger::log("Main", "Example 9: Sending targeted messages");
         if (!connected_clients_.empty()) {
             for (size_t client_id : connected_clients_) {
-                hub.sendMessageToClient(
-                    client_id,
+                auto private_msg = atom::async::connection::Message::createText(
                     "Private message for client " + std::to_string(client_id));
+                hub.sendMessageToClient(client_id, private_msg);
             }
         }
 
@@ -237,7 +240,8 @@ public:
         // Example 11: Send messages after client disconnect
         Logger::log("Main",
                     "Example 11: Sending messages after client disconnect");
-        hub.broadcastMessage("Broadcast after disconnect");
+        auto disconnect_msg = atom::async::connection::Message::createText("Broadcast after disconnect");
+        hub.broadcastMessage(disconnect_msg);
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
@@ -270,12 +274,14 @@ private:
         // Simple command processor
         if (message == "ping") {
             // Handle ping command
-            server_hub_->sendMessageToClient(client_id, "pong");
+            auto pong_msg = atom::async::connection::Message::createText("pong");
+            server_hub_->sendMessageToClient(client_id, pong_msg);
         } else if (message.find("echo ") == 0) {
             // Echo command
             std::string echo_message =
                 message.substr(5);  // Remove "echo " prefix
-            server_hub_->sendMessageToClient(client_id, echo_message);
+            auto echo_msg = atom::async::connection::Message::createText(echo_message);
+            server_hub_->sendMessageToClient(client_id, echo_msg);
         }
     }
 

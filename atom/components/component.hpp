@@ -1132,7 +1132,8 @@ void Component::def(std::string_view name, Callable&& func,
     static_assert(Traits::arity <= 8,
                   "Too many arguments in function (maximum is 8)");
 
-    // Template impl would be included here in component.template
+    // Include the template implementation
+#include "component.template"
 }
 
 template <typename Ret>

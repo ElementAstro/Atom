@@ -1,5 +1,7 @@
 #include "network_manager.hpp"
 
+#include "../process/command.hpp"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -15,6 +17,15 @@
 #include <ws2tcpip.h>
 #include <netioapi.h>
 // clang-format on
+
+// Helper function to convert wide string to string
+inline std::string wstringToString(const std::wstring& wstr) {
+    if (wstr.empty()) return std::string();
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    std::string str(size - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr, nullptr);
+    return str;
+}
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "iphlpapi.lib")
@@ -393,7 +404,7 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
                  ? L"none"
                  : std::wstring(dnsServers[0].begin(), dnsServers[0].end()));
 
-        if (executeCommandWithStatus(atom::utils::wstringToString(command))
+        if (executeCommandWithStatus(wstringToString(command))
                 .second != 0) {
             THROW_RUNTIME_ERROR("Failed to set DNS servers for adapter: " +
                                 std::string(pCurrAddresses->AdapterName));
@@ -406,7 +417,7 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
                 std::wstring(dnsServers[i].begin(), dnsServers[i].end()) +
                 L" index=" + std::to_wstring(i + 1);
             ATOM_UNUSED_RESULT(executeCommandWithStatus(
-                atom::utils::wstringToString(addCommand)));
+                wstringToString(addCommand)));
         }
     }
 #else
@@ -468,7 +479,7 @@ void NetworkManager::monitorConnectionStatus() {
                     spdlog::info(
                         "Interface: {} | Status: {} | IPs: {} | MAC: {}",
                         iface.getName(), iface.isUp() ? "Up" : "Down",
-                        atom::utils::toString(iface.getAddresses()),
+                        std::to_string(iface.getAddresses().size()),
                         iface.getMac());
                 }
                 spdlog::info("--------------------------------------");

@@ -317,4 +317,17 @@ auto LockFactory::createLock(LockType type)
     }
 }
 
+auto LockFactory::createOptimizedLock()
+    -> std::unique_ptr<void, std::function<void(void *)>> {
+    // For now, return a simple mutex as the optimized lock
+    // In a real implementation, this could choose between different lock types
+    // based on platform capabilities and performance characteristics
+    auto mutex = std::make_unique<std::mutex>();
+    auto deleter = [](void* ptr) {
+        delete static_cast<std::mutex*>(ptr);
+    };
+    return std::unique_ptr<void, std::function<void(void *)>>(
+        mutex.release(), deleter);
+}
+
 }  // namespace atom::async

@@ -1,7 +1,7 @@
 #include <fstream>
 #include <iostream>
 
-#include "atom/io/compress.hpp"
+#include "atom/io/compression/compress.hpp"
 
 // Creates a sample text file to compress
 void createSampleFile(const std::string& fileName) {
@@ -24,7 +24,8 @@ int main() {
     createSampleFile(sampleFile);
 
     // Step 2: Compress the sample file using Gzip
-    if (atom::io::compressFile(sampleFile, outputFolder)) {
+    auto compressResult = atom::io::compressFile(sampleFile, outputFolder);
+    if (compressResult.success) {
         std::cout << "Successfully compressed " << sampleFile << std::endl;
     } else {
         std::cerr << "Failed to compress " << sampleFile << std::endl;

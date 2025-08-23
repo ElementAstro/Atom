@@ -58,6 +58,8 @@ with C++20/23 Features:
 #include <os/log.h>
 #endif
 
+#include "../utils/time/time.hpp"
+
 #include "atom/utils/time.hpp"
 
 // Include high-performance hash map implementation
@@ -745,7 +747,7 @@ private:
                                      std::string_view msg,
                                      const std::source_location& location)
         -> std::string {
-        auto timestamp = utils::getChinaTimestampString();  // Get timestamp
+        auto timestamp = atom::utils::getChinaTimestampString();  // Get timestamp
         auto threadName = getThreadName();
         auto levelStr = logLevelToString(level);
         auto categoryStr = categoryToString(category);

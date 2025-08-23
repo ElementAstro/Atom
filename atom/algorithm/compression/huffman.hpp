@@ -12,8 +12,8 @@ Description: Enhanced implementation of Huffman encoding
 
 **************************************************/
 
-#ifndef ATOM_ALGORITHM_HUFFMAN_HPP
-#define ATOM_ALGORITHM_HUFFMAN_HPP
+#ifndef ATOM_ALGORITHM_COMPRESSION_HUFFMAN_HPP
+#define ATOM_ALGORITHM_COMPRESSION_HUFFMAN_HPP
 
 #include <concepts>
 #include <memory>
@@ -252,4 +252,4 @@ std::vector<unsigned char> decompressParallel(
 
 }  // namespace huffman_optimized
 
-#endif  // ATOM_ALGORITHM_HUFFMAN_HPP
+#endif  // ATOM_ALGORITHM_COMPRESSION_HUFFMAN_HPP

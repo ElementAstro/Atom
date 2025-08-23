@@ -30,8 +30,8 @@ int main() {
     });
 
     // Set the callback for errors
-    client.setOnErrorCallback([](const std::string& error) {
-        std::cerr << "Error: " << error << std::endl;
+    client.setOnErrorCallback([](const std::string& error, int errorCode) {
+        std::cerr << "Error: " << error << " (Code: " << errorCode << ")" << std::endl;
     });
 
     // Start receiving data with a buffer size of 1024 bytes

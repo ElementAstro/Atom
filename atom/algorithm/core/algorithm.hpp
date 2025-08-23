@@ -12,8 +12,8 @@ Description: A collection of algorithms for C++
 
 **************************************************/
 
-#ifndef ATOM_ALGORITHM_ALGORITHM_HPP
-#define ATOM_ALGORITHM_ALGORITHM_HPP
+#ifndef ATOM_ALGORITHM_CORE_ALGORITHM_HPP
+#define ATOM_ALGORITHM_CORE_ALGORITHM_HPP
 
 #include <bitset>
 #include <cmath>
@@ -337,4 +337,4 @@ auto BloomFilter<N, ElementType, HashFunction>::elementCount() const noexcept
 
 }  // namespace atom::algorithm
 
-#endif
+#endif  // ATOM_ALGORITHM_CORE_ALGORITHM_HPP

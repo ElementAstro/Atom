@@ -4,7 +4,7 @@
 #include "atom/connection/sockethub.hpp"
 
 // Function to handle incoming messages
-void messageHandler(std::string message) {
+void messageHandler(std::string_view message) {
     std::cout << "Received message: " << message << std::endl;
 }
 

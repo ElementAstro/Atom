@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_TEA_HPP
-#define ATOM_ALGORITHM_TEA_HPP
+#ifndef ATOM_ALGORITHM_CRYPTO_TEA_HPP
+#define ATOM_ALGORITHM_CRYPTO_TEA_HPP
 
 #include <array>
 #include <concepts>
@@ -396,4 +396,4 @@ auto toByteArray(const Container &data) -> std::vector<u8> {
 
 }  // namespace atom::algorithm
 
-#endif
+#endif  // ATOM_ALGORITHM_CRYPTO_TEA_HPP

@@ -185,10 +185,11 @@ void parallelProcessingExamples() {
     std::cout << "Number of tasks in processing: " << futures.size()
               << std::endl;
 
-    // Collect results
+    // Collect results (flatten chunks)
     std::vector<int> results;
     for (auto& future : futures) {
-        results.push_back(future.wait());
+        auto chunk = future.wait();
+        results.insert(results.end(), chunk.begin(), chunk.end());
     }
 
     std::cout << "Results: ";
@@ -217,7 +218,7 @@ void parallelProcessingExamples() {
 
         std::cout << "whenAll results: ";
         for (size_t i = 0; i < allResults.size(); ++i) {
-            std::cout << allResults[i].get();
+            std::cout << allResults[i];
             if (i < allResults.size() - 1)
                 std::cout << ", ";
         }

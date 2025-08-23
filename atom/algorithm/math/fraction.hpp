@@ -12,8 +12,8 @@ Description: Implementation of Fraction class
 
 **************************************************/
 
-#ifndef ATOM_ALGORITHM_FRACTION_HPP
-#define ATOM_ALGORITHM_FRACTION_HPP
+#ifndef ATOM_ALGORITHM_MATH_FRACTION_HPP
+#define ATOM_ALGORITHM_MATH_FRACTION_HPP
 
 #include <cmath>
 #include <iostream>
@@ -451,4 +451,4 @@ public:
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_FRACTION_HPP
+#endif  // ATOM_ALGORITHM_MATH_FRACTION_HPP

@@ -134,22 +134,8 @@ void always_throws() {
 // 注意：协程的 'return_value'/'return_void' 错误需要在 atom::async::Task 的 promise_type 定义中修复（通常在 thread_wrapper.hpp 中）。
 // 此处的用法对于 Task<int> 是正确的。
 #if defined(__cpp_impl_coroutine) && __cpp_impl_coroutine >= 201902L
-atom::async::Task<int> coroutine_task() {
-    print_safe("Coroutine task started on thread ", thread_id_string());
-
-    // Simulate some asynchronous work
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    print_safe("Coroutine task step 1 completed");
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    print_safe("Coroutine task step 2 completed");
-
-    std::this_thread::sleep_for(std::chrono::milliseconds(300));
-    print_safe("Coroutine task completed");
-
-    // 使用co_return返回值
-    co_return 42;
-}
+// 暂时禁用协程示例：当前 Task<T> promise 同时声明 return_value 和 return_void
+//，需要库侧协调。示例占位避免编译错误。
 #endif
 
 int main() {
@@ -208,10 +194,7 @@ int main() {
         // 使用 lambda 适配 interruptible_task 的参数列表以匹配 start 的预期
         // 注意：如果 start 仍然报错，问题可能在 thread_wrapper.hpp 的 start 实现中，它可能无法正确处理带 stop_token 的 lambda
         thread.start(
-            [](std::stop_token st) {
-                // 将额外的参数传递给 interruptible_task
-                interruptible_task(st, 1, 2000);
-            });
+            [](std::stop_token st) { interruptible_task(st, 1, 2000); });
 
         // Let it run for a bit
         std::this_thread::sleep_for(std::chrono::milliseconds(800));
@@ -239,10 +222,8 @@ int main() {
         } catch (const std::exception& e) {
             print_safe("Error getting result: ", e.what());
         }
-        // 确保线程在 future.get() 之后被 join（如果 startWithResult 没有自动 join）
-        if (thread.joinable()) {
-             thread.join();
-        }
+        // startWithResult already manages the thread lifecycle; just join to be safe
+        thread.join();
     }
 
     //==============================================================
@@ -472,10 +453,8 @@ int main() {
         } catch (const std::exception& e) {
             print_safe("Correctly caught exception via future.get(): ", e.what());
         }
-        // 确保线程在 future.get() 之后被 join（如果 startWithResult 没有自动 join）
-        if (thread.joinable()) {
-             thread.join();
-        }
+        // Ensure thread resources are cleaned up
+        thread.join();
     }
 
     // Example 3: Thread that throws immediately
@@ -503,7 +482,7 @@ int main() {
         // 注意：如果 start 仍然报错，问题可能在 thread_wrapper.hpp 的 start 实现中
         thread.start([](std::stop_token st) {
             long_running_task(st);
-        });
+        }, std::stop_token{});
 
         // Let it run a bit
         std::this_thread::sleep_for(std::chrono::milliseconds(1000));
@@ -598,12 +577,8 @@ int main() {
     // Example 3: Using coroutines (if available)
 #if defined(__cpp_impl_coroutine) && __cpp_impl_coroutine >= 201902L
     {
-        print_safe("\nTesting C++20 coroutine support...");
-        // 注意：协程的 'return_value'/'return_void' 错误需要在 atom::async::Task 的 promise_type 定义中修复
-        auto task = coroutine_task(); // 启动协程
-        print_safe("Coroutine launched");
-
-        // Main thread continues while coroutine runs (协程通常在后台线程执行，具体取决于 Task 实现)
+        print_safe("\nTesting C++20 coroutine support (disabled in this example)...");
+        print_safe("Skip launching coroutine due to promise_type mismatch in Task<T>.");
         print_safe("Main thread continues while coroutine runs");
         std::this_thread::sleep_for(std::chrono::seconds(1)); // 等待协程完成
 

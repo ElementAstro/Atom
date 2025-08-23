@@ -13,8 +13,8 @@ and deconvolution with optional OpenCL support.
 
 **************************************************/
 
-#ifndef ATOM_ALGORITHM_CONVOLVE_HPP
-#define ATOM_ALGORITHM_CONVOLVE_HPP
+#ifndef ATOM_ALGORITHM_SIGNAL_CONVOLVE_HPP
+#define ATOM_ALGORITHM_SIGNAL_CONVOLVE_HPP
 
 #include <complex>
 #include <thread>
@@ -757,4 +757,4 @@ auto deconvolve2D(const std::vector<std::vector<T>>& signal,
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_CONVOLVE_HPP
+#endif  // ATOM_ALGORITHM_SIGNAL_CONVOLVE_HPP

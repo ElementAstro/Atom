@@ -29,6 +29,7 @@ Description: Implementation of murmur3 hash and quick hash
 #include <openssl/hmac.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
+#include <utility>
 
 #ifdef ATOM_USE_BOOST
 #include <boost/exception/all.hpp>
@@ -294,15 +295,15 @@ void MinHash::initializeOpenCL() noexcept {
 #endif
 
 auto MinHash::generateHashFunction() noexcept -> HashFunction {
-    static thread_local utils::Random<std::mt19937_64,
-                                      std::uniform_int_distribution<u64>>
-        rand(1, std::numeric_limits<u64>::max() - 1);
+    // Use standard library random instead of atom::utils::Random to avoid include issues
+    static thread_local std::mt19937_64 gen(std::random_device{}());
+    static thread_local std::uniform_int_distribution<u64> dist(1, std::numeric_limits<u64>::max() - 1);
 
     // Use large prime to improve hash quality
     constexpr usize LARGE_PRIME = 0xFFFFFFFFFFFFFFC5ULL;  // 2^64 - 59 (prime)
 
-    u64 a = rand();
-    u64 b = rand();
+    u64 a = dist(gen);
+    u64 b = dist(gen);
 
     // Generate a closure to implement the hash function - capture by value to
     // improve cache locality

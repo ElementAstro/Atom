@@ -27,6 +27,18 @@ set(LIBS
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
+# Find required packages
+find_package(OpenSSL REQUIRED)
+if(OpenSSL_FOUND)
+    list(APPEND LIBS OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+# Find spdlog
+find_package(spdlog QUIET)
+if(spdlog_FOUND)
+    list(APPEND LIBS spdlog::spdlog)
+endif()
+
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
 set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
@@ -60,3 +72,8 @@ install(TARGETS ${PROJECT_NAME}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
 )
+
+# Register this module to the global target list
+get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
+list(APPEND ATOM_MODULE_TARGETS ${PROJECT_NAME})
+set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

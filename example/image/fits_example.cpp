@@ -1,6 +1,6 @@
 #include <iostream>
 #include <string>
-#include "atom/image/fits_utils.hpp"
+#include "atom/image/formats/fits_utils.hpp"
 
 using namespace atom::image;
 

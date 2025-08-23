@@ -6,6 +6,18 @@
 
 #include "user.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+// Helper function to convert wide string to string
+inline std::string wstringToString(const std::wstring& wstr) {
+    if (wstr.empty()) return std::string();
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    std::string str(size - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr, nullptr);
+    return str;
+}
+#endif
+
 #include <algorithm>
 #include <array>
 #include <cstdlib>
@@ -130,7 +142,7 @@ auto getUserGroups() -> std::vector<std::wstring> {
             std::wstring nameStr(nameBuffer.begin(), nameBuffer.end());
             groups.push_back(nameStr);
             spdlog::debug("Found group: {}",
-                          atom::utils::wstringToString(nameStr));
+                          wstringToString(nameStr));
         }
     }
 

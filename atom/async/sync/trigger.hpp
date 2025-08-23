@@ -186,11 +186,14 @@ public:
 };
 #endif
 
-// 添加针对共享互斥锁的锁类�?template <typename Mutex>
+// 锁类别名，补充模板参数
+
+template <typename Mutex>
 using unique_lock_t = std::unique_lock<Mutex>;
 
 template <typename Mutex>
 using shared_lock_t = std::shared_lock<Mutex>;
+
 }  // namespace internal
 
 /**

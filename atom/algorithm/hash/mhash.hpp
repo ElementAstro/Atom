@@ -12,8 +12,8 @@ Description: Implementation of murmur3 hash and quick hash
 
 **************************************************/
 
-#ifndef ATOM_ALGORITHM_MHASH_HPP
-#define ATOM_ALGORITHM_MHASH_HPP
+#ifndef ATOM_ALGORITHM_HASH_MHASH_HPP
+#define ATOM_ALGORITHM_HASH_MHASH_HPP
 
 #include <array>
 #include <concepts>
@@ -613,4 +613,4 @@ private:
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_MHASH_HPP
+#endif  // ATOM_ALGORITHM_HASH_MHASH_HPP

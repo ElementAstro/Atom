@@ -46,7 +46,7 @@ Description: Enhanced Logger Implementation for Atom with C++20 Features
 #include <android/log.h>
 #endif
 
-#include "atom/utils/time.hpp"
+#include "../utils/time/time.hpp"
 
 namespace atom::log {
 
@@ -325,7 +325,7 @@ public:
         if (!shouldLog(level))
             return;
 
-        auto timestamp = utils::getChinaTimestampString();
+        auto timestamp = atom::utils::getChinaTimestampString();
         auto thread_name = getThreadName();
 
         {

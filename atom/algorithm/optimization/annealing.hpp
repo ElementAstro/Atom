@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_ANNEALING_HPP
-#define ATOM_ALGORITHM_ANNEALING_HPP
+#ifndef ATOM_ALGORITHM_OPTIMIZATION_ANNEALING_HPP
+#define ATOM_ALGORITHM_OPTIMIZATION_ANNEALING_HPP
 
 #include <algorithm>
 #include <atomic>
@@ -634,4 +634,4 @@ inline auto TSP::randomSolution() const -> std::vector<int> {
     return solution;
 }
 
-#endif  // ATOM_ALGORITHM_ANNEALING_HPP
+#endif  // ATOM_ALGORITHM_OPTIMIZATION_ANNEALING_HPP

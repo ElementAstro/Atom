@@ -1,5 +1,7 @@
 #include "crontab.hpp"
 
+#include "../process/command.hpp"
+
 #include <algorithm>
 #include <array>
 #include <chrono>

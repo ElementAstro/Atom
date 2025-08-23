@@ -578,8 +578,10 @@ auto getProcessInfoByName(const std::string &processName)
     }
 
     do {
-        std::string currentProcess =
-            atom::utils::WCharArrayToString(entry.szExeFile);
+        // Convert wide char array to string
+        int size = WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, nullptr, 0, nullptr, nullptr);
+        std::string currentProcess(size - 1, 0);
+        WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, &currentProcess[0], size, nullptr, nullptr);
         if (currentProcess == processName) {
             processes.push_back(getProcessInfo(entry.th32ProcessID));
         }
@@ -739,9 +741,9 @@ auto createProcessAsUser(const std::string &command, const std::string &user,
         }
     } cleanup{tokenHandle, newTokenHandle, processInfo};
 
-    if (LogonUserA(atom::utils::StringToLPSTR(user),
-                   atom::utils::StringToLPSTR(domain),
-                   atom::utils::StringToLPSTR(password),
+    if (LogonUserA(user.c_str(),
+                   domain.c_str(),
+                   password.c_str(),
                    LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
                    &tokenHandle) == 0) {
         spdlog::error("LogonUser failed with error: {}", GetLastError());
@@ -755,8 +757,13 @@ auto createProcessAsUser(const std::string &command, const std::string &user,
         return false;
     }
 
+    // Convert string to wide string for Windows API
+    int size = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+    std::wstring commandW(size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0], size);
+
     if (CreateProcessAsUserW(newTokenHandle, nullptr,
-                             atom::utils::StringToLPWSTR(command), nullptr,
+                             &commandW[0], nullptr,
                              nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
                              &processInfo) == 0) {
         spdlog::error("CreateProcessAsUser failed with error: {}",
@@ -1632,7 +1639,11 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
 
     wchar_t exePath[MAX_PATH];
     if (GetModuleFileNameExW(hProcess, nullptr, exePath, MAX_PATH) != 0) {
-        cmdline.push_back(atom::utils::WCharArrayToString(exePath));
+        // Convert wide char array to string
+        int size = WideCharToMultiByte(CP_UTF8, 0, exePath, -1, nullptr, 0, nullptr, nullptr);
+        std::string pathStr(size - 1, 0);
+        WideCharToMultiByte(CP_UTF8, 0, exePath, -1, &pathStr[0], size, nullptr, nullptr);
+        cmdline.push_back(pathStr);
     }
 
     CloseHandle(hProcess);
@@ -2020,7 +2031,11 @@ auto getProcessPath(int pid) -> std::string {
         return "";
     }
 
-    return atom::utils::WCharArrayToString(path);
+    // Convert wide char array to string
+    int size = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
+    std::string result(size - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, path, -1, &result[0], size, nullptr, nullptr);
+    return result;
 #elif defined(__linux__)
     std::string procPath = "/proc/" + std::to_string(pid) + "/exe";
     char path[PATH_MAX];

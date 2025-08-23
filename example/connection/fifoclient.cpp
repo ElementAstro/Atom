@@ -4,15 +4,21 @@
 
 #include "atom/connection/fifoclient.hpp"
 
-#if __linux
+#ifdef __linux__
 #include <sys/stat.h>
 #endif
 
 // Function to simulate the FIFO server
 void fifoServer(const std::string& fifoPath) {
+#ifdef __linux__
     // Open the FIFO for writing. If it does not exist, create it.
     mkfifo(fifoPath.c_str(),
            0666);  // Create the named pipe if it doesn't exist
+#else
+    // On Windows, named pipes are not supported in the same way
+    // This example will skip FIFO creation on non-Linux platforms
+    std::cout << "FIFO creation skipped on non-Linux platforms" << std::endl;
+#endif
 
     // Simulate a server writing to the FIFO
     atom::connection::FifoClient fifoClient(fifoPath);
@@ -39,7 +45,7 @@ void fifoClient(const std::string& fifoPath) {
     }
 
     // Read from FIFO with a timeout
-    auto data = fifoClient.read(std::chrono::milliseconds(5000));
+    auto data = fifoClient.read(0, std::chrono::milliseconds(5000));
     if (data) {
         std::cout << "Client read: " << *data << std::endl;
     } else {

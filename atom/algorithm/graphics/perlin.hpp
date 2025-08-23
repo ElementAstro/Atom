@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_PERLIN_HPP
-#define ATOM_ALGORITHM_PERLIN_HPP
+#ifndef ATOM_ALGORITHM_GRAPHICS_PERLIN_HPP
+#define ATOM_ALGORITHM_GRAPHICS_PERLIN_HPP
 
 #include <algorithm>
 #include <cmath>
@@ -419,4 +419,4 @@ private:
 };
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_PERLIN_HPP
+#endif  // ATOM_ALGORITHM_GRAPHICS_PERLIN_HPP

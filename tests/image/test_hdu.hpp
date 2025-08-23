@@ -12,9 +12,9 @@
 #include <vector>
 #include <tuple>
 
-#include "hdu.hpp"
-#include "fits_header.hpp"
-#include "fits_data.hpp"
+#include "atom/image/formats/hdu.hpp"
+#include "atom/image/formats/fits_header.hpp"
+#include "atom/image/formats/fits_data.hpp"
 
 namespace fs = std::filesystem;
 
@@ -647,7 +647,4 @@ TEST_F(ImageHDUTest, ApplyMorphology) {
     EXPECT_THROW(hdu->applyMorphology<uint8_t>("dilate", 4), std::invalid_argument); // Kernel size should be odd
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function removed - handled by test_runner.cpp

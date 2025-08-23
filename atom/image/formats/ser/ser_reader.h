@@ -1,6 +1,8 @@
 // ser_reader.h
 #pragma once
 
+#ifdef ATOM_IMAGE_HAS_OPENCV
+
 #include "exception.h"
 #include "ser_format.h"
 
@@ -9,7 +11,9 @@
 #include <fstream>
 #include <memory>
 #include <mutex>
+#ifdef ATOM_IMAGE_HAS_OPENCV
 #include <opencv2/core.hpp>
+#endif
 #include <optional>
 #include <span>
 #include <string>
@@ -104,3 +108,5 @@ private:
 };
 
 }  // namespace serastro
+
+#endif  // ATOM_IMAGE_HAS_OPENCV

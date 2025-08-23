@@ -1,0 +1,131 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Microsoft/vcpkg/master/scripts/vcpkg.schema.json",
+  "name": "atom",
+  "version": "0.1.0",
+  "description": "Foundational library for astronomical software development",
+  "homepage": "https://github.com/ElementAstro/Atom",
+  "documentation": "https://github.com/ElementAstro/Atom#readme",
+  "license": "GPL-3.0",
+  "supports": "!uwp",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    },
+    "openssl",
+    "zlib",
+    "sqlite3",
+    "fmt"
+  ],
+  "default-features": [
+    "core"
+  ],
+  "features": {
+    "core": {
+      "description": "Core Atom library functionality",
+      "dependencies": [
+        "openssl",
+        "zlib",
+        "sqlite3",
+        "fmt"
+      ]
+    },
+    "python": {
+      "description": "Python bindings using pybind11",
+      "dependencies": [
+        "pybind11",
+        {
+          "name": "python3",
+          "host": true
+        }
+      ]
+    },
+    "examples": {
+      "description": "Build example applications"
+    },
+    "tests": {
+      "description": "Build test suite",
+      "dependencies": [
+        "gtest"
+      ]
+    },
+    "docs": {
+      "description": "Generate documentation",
+      "dependencies": [
+        {
+          "name": "doxygen",
+          "host": true
+        }
+      ]
+    },
+    "boost-lockfree": {
+      "description": "Enable Boost lockfree data structures",
+      "dependencies": [
+        {
+          "name": "boost-atomic"
+        },
+        {
+          "name": "boost-thread"
+        }
+      ]
+    },
+    "boost-graph": {
+      "description": "Enable Boost graph library",
+      "dependencies": [
+        {
+          "name": "boost-graph"
+        }
+      ]
+    },
+    "boost-intrusive": {
+      "description": "Enable Boost intrusive containers",
+      "dependencies": [
+        {
+          "name": "boost-intrusive"
+        }
+      ]
+    },
+    "cfitsio": {
+      "description": "Enable CFITSIO support for astronomical data",
+      "dependencies": [
+        "cfitsio"
+      ]
+    },
+    "ssh": {
+      "description": "Enable SSH support for remote connections",
+      "dependencies": [
+        "libssh"
+      ]
+    },
+    "readline": {
+      "description": "Enable readline support for interactive features",
+      "dependencies": [
+        "readline"
+      ]
+    },
+    "all": {
+      "description": "Enable all optional features",
+      "dependencies": [
+        {
+          "name": "atom",
+          "features": [
+            "python",
+            "examples",
+            "tests",
+            "docs",
+            "boost-lockfree",
+            "boost-graph",
+            "boost-intrusive",
+            "cfitsio",
+            "ssh",
+            "readline"
+          ]
+        }
+      ]
+    }
+  }
+}

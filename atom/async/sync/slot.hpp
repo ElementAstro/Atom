@@ -349,8 +349,13 @@ public:
      */
     void addChain(ChainedSignal<Args...>& nextSignal) noexcept {
         std::lock_guard lock(mutex_);
-        // Store as weak_ptr to prevent circular references
-        chains_.push_back(WeakSignalPtr(&nextSignal));
+        // Non-owning wrapper to create a weak_ptr without owning the signal
+        struct NonOwningShared : std::enable_shared_from_this<NonOwningShared> {
+            ChainedSignal<Args...>* ptr;
+        };
+        auto sp = std::shared_ptr<ChainedSignal<Args...>>(
+            &nextSignal, [](ChainedSignal<Args...>*) {});
+        chains_.push_back(sp);
     }
 
     /**

@@ -6,6 +6,9 @@
 
 #include "command.hpp"
 
+#include "atom/error/exception.hpp"
+#include "spdlog/spdlog.h"
+
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -98,7 +101,10 @@ auto executeCommandInternal(
         PROCESS_INFORMATION processInfo{};
         startupInfo.cb = sizeof(startupInfo);
 
-        std::wstring commandW = atom::utils::StringToLPWSTR(command);
+        // Convert string to wide string for Windows API
+        int size = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+        std::wstring commandW(size, 0);
+        MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0], size);
         if (CreateProcessW(nullptr, &commandW[0], nullptr, nullptr, FALSE, 0,
                            nullptr, nullptr, &startupInfo, &processInfo)) {
             WaitForSingleObject(processInfo.hProcess, INFINITE);
@@ -209,7 +215,10 @@ auto executeCommandStream(
         PROCESS_INFORMATION processInfo{};
         startupInfo.cb = sizeof(startupInfo);
 
-        std::wstring commandW = atom::utils::StringToLPWSTR(command);
+        // Convert string to wide string for Windows API
+        int size = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+        std::wstring commandW(size, 0);
+        MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0], size);
         if (CreateProcessW(nullptr, &commandW[0], nullptr, nullptr, FALSE,
                            CREATE_NEW_CONSOLE, nullptr, nullptr, &startupInfo,
                            &processInfo)) {
@@ -422,8 +431,10 @@ void killProcessByName(const std::string &processName, int signal) {
     }
 
     do {
-        std::string currentProcess =
-            atom::utils::WCharArrayToString(entry.szExeFile);
+        // Convert wide char array to string
+        int size = WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, nullptr, 0, nullptr, nullptr);
+        std::string currentProcess(size - 1, 0);
+        WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, &currentProcess[0], size, nullptr, nullptr);
         if (currentProcess == processName) {
             HANDLE hProcess =
                 OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
@@ -486,7 +497,10 @@ auto startProcess(const std::string &command) -> std::pair<int, void *> {
     PROCESS_INFORMATION processInfo{};
     startupInfo.cb = sizeof(startupInfo);
 
-    std::wstring commandW = atom::utils::StringToLPWSTR(command);
+    // Convert string to wide string for Windows API
+    int size = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+    std::wstring commandW(size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0], size);
     if (CreateProcessW(nullptr, const_cast<LPWSTR>(commandW.c_str()), nullptr,
                        nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
                        &processInfo)) {

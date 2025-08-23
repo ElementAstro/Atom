@@ -36,7 +36,7 @@ set_property(TARGET atom_sysinfo_memory PROPERTY CXX_STANDARD_REQUIRED ON)
 # 链接依赖库
 target_link_libraries(atom_sysinfo_memory
     PUBLIC
-        atom_log
+        atom-log
 )
 
 # 平台特定库链接

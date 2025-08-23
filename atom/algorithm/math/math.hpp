@@ -12,8 +12,8 @@ Description: Extra Math Library
 
 **************************************************/
 
-#ifndef ATOM_ALGORITHM_MATH_HPP
-#define ATOM_ALGORITHM_MATH_HPP
+#ifndef ATOM_ALGORITHM_MATH_MATH_HPP
+#define ATOM_ALGORITHM_MATH_MATH_HPP
 
 #include <concepts>
 #include <memory>
@@ -540,4 +540,4 @@ public:
 
 }  // namespace atom::algorithm
 
-#endif
+#endif  // ATOM_ALGORITHM_MATH_MATH_HPP

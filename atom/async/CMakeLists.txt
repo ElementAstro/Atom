@@ -17,6 +17,9 @@ set(SOURCES
 
     # Utility files
     utils/timer.cpp
+
+    # Execution files
+    execution/async_executor.cpp
 )
 
 # Headers

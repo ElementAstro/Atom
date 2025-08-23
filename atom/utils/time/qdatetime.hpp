@@ -2,14 +2,16 @@
 #define ATOM_UTILS_QDATETIME_HPP
 
 #include <chrono>
+#include <concepts>
 #include <ctime>
 #include <optional>
 #include <string>
+#include <type_traits>
 
-#include "atom/utils/qtimezone.hpp"
+#include "qtimezone.hpp"
 
 namespace atom::utils {
-class QTimeZone;
+// Template parameter constraints are handled by SFINAE in the implementations
 
 /**
  * @brief A class representing a point in time with support for various date and
@@ -97,7 +99,7 @@ public:
      * This constructor parses the provided date-time string according to the
      * specified format and initializes the `QDateTime` object.
      */
-    template <StringLike DateTimeStr, StringLike FormatStr>
+    template <typename DateTimeStr, typename FormatStr>
     QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format);
 
     /**
@@ -112,7 +114,7 @@ public:
      * This constructor parses the provided date-time string according to the
      * specified format and time zone, and initializes the `QDateTime` object.
      */
-    template <StringLike DateTimeStr, StringLike FormatStr>
+    template <typename DateTimeStr, typename FormatStr>
     QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format,
               const QTimeZone& timeZone);
 
@@ -145,7 +147,7 @@ public:
      * @return A `QDateTime` object initialized from the provided date-time
      * string and format.
      */
-    template <StringLike DateTimeStr, StringLike FormatStr>
+    template <typename DateTimeStr, typename FormatStr>
     static auto fromString(DateTimeStr&& dateTimeString, FormatStr&& format)
         -> QDateTime;
 
@@ -160,7 +162,7 @@ public:
      * @return A `QDateTime` object initialized from the provided date-time
      * string, format, and time zone.
      */
-    template <StringLike DateTimeStr, StringLike FormatStr>
+    template <typename DateTimeStr, typename FormatStr>
     static auto fromString(DateTimeStr&& dateTimeString, FormatStr&& format,
                            const QTimeZone& timeZone) -> QDateTime;
 
@@ -175,7 +177,7 @@ public:
      * This method converts the `QDateTime` object to a string according to the
      * provided format.
      */
-    template <StringLike FormatStr>
+    template <typename FormatStr>
     [[nodiscard]] auto toString(FormatStr&& format) const -> std::string;
 
     /**
@@ -187,7 +189,7 @@ public:
      * @return A string representation of the `QDateTime` object in the
      * specified format and time zone.
      */
-    template <StringLike FormatStr>
+    template <typename FormatStr>
     [[nodiscard]] auto toString(FormatStr&& format,
                                 const QTimeZone& timeZone) const -> std::string;
 
@@ -451,7 +453,7 @@ private:
 
 namespace atom::utils {
 
-template <StringLike DateTimeStr, StringLike FormatStr>
+template <typename DateTimeStr, typename FormatStr>
 QDateTime::QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format) {
     std::string dtStr{std::forward<DateTimeStr>(dateTimeString)};
     std::string fmtStr{std::forward<FormatStr>(format)};
@@ -467,7 +469,7 @@ QDateTime::QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format) {
     dateTime_ = Clock::from_time_t(std::mktime(&t));
 }
 
-template <StringLike DateTimeStr, StringLike FormatStr>
+template <typename DateTimeStr, typename FormatStr>
 QDateTime::QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format,
                      const QTimeZone& timeZone) {
     std::string dtStr{std::forward<DateTimeStr>(dateTimeString)};
@@ -487,21 +489,21 @@ QDateTime::QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format,
     timeZone_ = timeZone;
 }
 
-template <StringLike DateTimeStr, StringLike FormatStr>
+template <typename DateTimeStr, typename FormatStr>
 auto QDateTime::fromString(DateTimeStr&& dateTimeString, FormatStr&& format)
     -> QDateTime {
     return QDateTime(std::forward<DateTimeStr>(dateTimeString),
                      std::forward<FormatStr>(format));
 }
 
-template <StringLike DateTimeStr, StringLike FormatStr>
+template <typename DateTimeStr, typename FormatStr>
 auto QDateTime::fromString(DateTimeStr&& dateTimeString, FormatStr&& format,
                            const QTimeZone& timeZone) -> QDateTime {
     return QDateTime(std::forward<DateTimeStr>(dateTimeString),
                      std::forward<FormatStr>(format), timeZone);
 }
 
-template <StringLike FormatStr>
+template <typename FormatStr>
 auto QDateTime::toString(FormatStr&& format) const -> std::string {
     if (!dateTime_) {
         return "";
@@ -519,7 +521,7 @@ auto QDateTime::toString(FormatStr&& format) const -> std::string {
     }
 }
 
-template <StringLike FormatStr>
+template <typename FormatStr>
 auto QDateTime::toString(FormatStr&& format, const QTimeZone& timeZone) const
     -> std::string {
     if (!dateTime_) {

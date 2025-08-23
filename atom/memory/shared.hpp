@@ -124,6 +124,31 @@ private:
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
 
 /**
+ * @brief Stream operator for SharedMemoryException::ErrorCode
+ */
+inline std::ostream& operator<<(std::ostream& os, const SharedMemoryException::ErrorCode& code) {
+    switch (code) {
+        case SharedMemoryException::ErrorCode::CREATION_FAILED:
+            return os << "CREATION_FAILED";
+        case SharedMemoryException::ErrorCode::MAPPING_FAILED:
+            return os << "MAPPING_FAILED";
+        case SharedMemoryException::ErrorCode::ACCESS_DENIED:
+            return os << "ACCESS_DENIED";
+        case SharedMemoryException::ErrorCode::TIMEOUT:
+            return os << "TIMEOUT";
+        case SharedMemoryException::ErrorCode::SIZE_ERROR:
+            return os << "SIZE_ERROR";
+        case SharedMemoryException::ErrorCode::ALREADY_EXISTS:
+            return os << "ALREADY_EXISTS";
+        case SharedMemoryException::ErrorCode::NOT_FOUND:
+            return os << "NOT_FOUND";
+        case SharedMemoryException::ErrorCode::UNKNOWN:
+        default:
+            return os << "UNKNOWN";
+    }
+}
+
+/**
  * @brief Header structure stored at the beginning of shared memory
  */
 struct SharedMemoryHeader {

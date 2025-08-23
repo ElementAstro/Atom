@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_MATRIX_HPP
-#define ATOM_ALGORITHM_MATRIX_HPP
+#ifndef ATOM_ALGORITHM_MATH_MATRIX_HPP
+#define ATOM_ALGORITHM_MATH_MATRIX_HPP
 
 #include <algorithm>
 #include <array>
@@ -48,9 +48,6 @@ template <typename T, usize Rows, usize Cols>
 class Matrix {
 private:
     std::array<T, Rows * Cols> data_{};
-    // 移除 mutable 互斥量成员
-    // 改为使用静态互斥量
-    static inline std::mutex mutex_;
 
 public:
     /**
@@ -640,4 +637,4 @@ auto randomMatrix(T min = 0, T max = 1) -> Matrix<T, Rows, Cols> {
 
 }  // namespace atom::algorithm
 
-#endif
+#endif  // ATOM_ALGORITHM_MATH_MATRIX_HPP

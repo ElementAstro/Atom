@@ -410,10 +410,7 @@ void cpp20_features_example() {
         // 移除局部类中的友元函数定义
     };
     
-    // 定义非成员操作符重载
-    std::ostream& operator<<(std::ostream& os, const Person& p) {
-        return os << p.name << "(" << p.age << ")";
-    }
+    // 为演示简化输出逻辑：不定义局部 operator<<，直接在下方按字段输出
 
     std::vector<Person> people = {{"Alice", 25}, {"Bob", 32},  {"Charlie", 18},
                                   {"David", 45}, {"Eve", 22},  {"Frank", 50},
@@ -434,7 +431,15 @@ void cpp20_features_example() {
         // auto adults = atom::async::Parallel::filter_range(
         //     people, [](const Person& p) { return p.age >= 18; });
 
-        print_sample(adults, "成年人");
+        std::cout << "成年人 [共 " << adults.size() << " 个元素]: ";
+        size_t to_display = std::min<size_t>(10, adults.size());
+        for (size_t i = 0; i < to_display; ++i) {
+            std::cout << adults[i].name << "(" << adults[i].age << ") ";
+        }
+        if (adults.size() > to_display) {
+            std::cout << "...";
+        }
+        std::cout << std::endl;
     }
 }
 

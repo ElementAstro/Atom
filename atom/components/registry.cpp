@@ -69,7 +69,9 @@ void Registry::addInitializer(const std::string& name,
         componentInfos_[name] = std::move(info);
     }
 
-    componentInfos_[name].isInitialized = false;
+    // Initialize the component immediately
+    bool initialized = initializers_[name]->initialize();
+    componentInfos_[name].isInitialized = initialized;
 }
 
 void Registry::addDependency(const std::string& name,
@@ -343,9 +345,15 @@ auto Registry::getOrLoadComponent(const std::string& name)
 
     auto [satisfied, missingDeps] = checkDependenciesSatisfied(name);
     if (!satisfied) {
+        // Create a simple string representation of missing dependencies
+        std::string missingDepsStr;
+        for (const auto& dep : missingDeps) {
+            if (!missingDepsStr.empty()) missingDepsStr += ", ";
+            missingDepsStr += dep;
+        }
         spdlog::error(
             "Cannot load component {} due to missing dependencies: {}", name,
-            atom::utils::toString(missingDeps));
+            missingDepsStr);
         THROW_REGISTRY_EXCEPTION(
             "Cannot load component {} due to missing dependencies", name);
     }
@@ -541,9 +549,15 @@ bool Registry::removeComponent(const std::string& name) {
     }
 
     if (!dependents.empty()) {
+        // Create a simple string representation of dependents
+        std::string dependentsStr;
+        for (const auto& dep : dependents) {
+            if (!dependentsStr.empty()) dependentsStr += ", ";
+            dependentsStr += dep;
+        }
         spdlog::error(
             "Cannot remove component {} because it is depended upon by: {}",
-            name, atom::utils::toString(dependents));
+            name, dependentsStr);
         return false;
     }
 
@@ -795,8 +809,13 @@ void Registry::determineInitializationOrder() {
         visit(name);
     }
 
-    spdlog::info("Determined initialization order: {}",
-                 atom::utils::toString(initializationOrder_));
+    // Create a simple string representation of initialization order
+    std::string orderStr;
+    for (const auto& name : initializationOrder_) {
+        if (!orderStr.empty()) orderStr += ", ";
+        orderStr += name;
+    }
+    spdlog::info("Determined initialization order: {}", orderStr);
 }
 
 std::tuple<bool, std::vector<std::string>> Registry::checkDependenciesSatisfied(

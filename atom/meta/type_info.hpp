@@ -146,7 +146,12 @@ public:
         flags.set(IS_AGGREGATE_FLAG, std::is_aggregate_v<T>);
         flags.set(IS_BOUNDED_ARRAY_FLAG, std::is_bounded_array_v<T>);
         flags.set(IS_UNBOUNDED_ARRAY_FLAG, std::is_unbounded_array_v<T>);
-        flags.set(IS_SCOPED_ENUM_FLAG, std::is_scoped_enum_v<T>);
+        // C++20 compatible scoped enum detection
+        if constexpr (std::is_enum_v<T>) {
+            flags.set(IS_SCOPED_ENUM_FLAG, !std::is_convertible_v<T, std::underlying_type_t<T>>);
+        } else {
+            flags.set(IS_SCOPED_ENUM_FLAG, false);
+        }
         flags.set(IS_FINAL_FLAG, std::is_final_v<T>);
         flags.set(IS_ABSTRACT_FLAG, std::is_abstract_v<T>);
         flags.set(IS_POLYMORPHIC_FLAG, std::is_polymorphic_v<T>);

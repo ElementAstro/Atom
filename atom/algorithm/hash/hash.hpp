@@ -14,8 +14,8 @@ Description: A collection of optimized and enhanced hash algorithms
 
 **************************************************/
 
-#ifndef ATOM_ALGORITHM_HASH_HPP
-#define ATOM_ALGORITHM_HASH_HPP
+#ifndef ATOM_ALGORITHM_HASH_HASH_HPP
+#define ATOM_ALGORITHM_HASH_HASH_HPP
 
 #include <any>
 #include <array>
@@ -26,6 +26,7 @@ Description: A collection of optimized and enhanced hash algorithms
 #include <thread>
 #include <tuple>
 #include <typeindex>
+#include <unordered_map>
 #include <variant>
 #include <vector>
 
@@ -444,4 +445,4 @@ constexpr auto operator""_hash(const char* str,
     return atom::algorithm::hash(str);
 }
 
-#endif  // ATOM_ALGORITHM_HASH_HPP
+#endif  // ATOM_ALGORITHM_HASH_HASH_HPP

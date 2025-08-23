@@ -1,39 +1,61 @@
 #include <iostream>
 #include <string>
 #include <coroutine>
-#include "atom/io/asyncio.hpp"  // 假设 asyncio.hpp 是头文件的名称
+#include "atom/io/async/async_io.hpp"
+
+using namespace atom::async::io;
 
 // 定义一个简单的协程函数来演示异步文件操作
-atom::io::FileWriter example_async_operations() {
+Task<AsyncResult<void>> example_async_operations() {
     std::string filename = "example.txt";
     std::string data_to_write = "Hello, World!";
-    std::string read_data;
-    std::size_t read_size = 1024;
+
+    // Create async context
+    auto context = std::make_shared<AsyncContext>();
+    AsyncFileManager fileManager(context);
 
     // 异步写入文件
-    co_await atom::io::async_write(filename, data_to_write);
+    auto writeResult = co_await fileManager.writeFile(filename, std::span<const char>(data_to_write.data(), data_to_write.size()));
+    if (!writeResult.success) {
+        std::cerr << "Failed to write file: " << writeResult.error_message << std::endl;
+        co_return AsyncResult<void>::error_result(writeResult.error_message);
+    }
     std::cout << "Data written to file: " << filename << std::endl;
 
     // 异步读取文件
-    co_await atom::io::async_read(filename, read_data, read_size);
-    std::cout << "Data read from file: " << read_data << std::endl;
-
-    // 异步复制文件
-    std::string copy_filename = "example_copy.txt";
-    co_await atom::io::async_copy(filename, copy_filename);
-    std::cout << "File copied to: " << copy_filename << std::endl;
+    auto readResult = co_await fileManager.readFile(filename);
+    if (!readResult.success) {
+        std::cerr << "Failed to read file: " << readResult.error_message << std::endl;
+        co_return AsyncResult<void>::error_result(readResult.error_message);
+    }
+    std::cout << "Data read from file: " << readResult.value << std::endl;
 
     // 异步删除文件
-    co_await atom::io::async_delete(filename);
+    auto deleteResult = co_await fileManager.deleteFile(filename);
+    if (!deleteResult.success) {
+        std::cerr << "Failed to delete file: " << deleteResult.error_message << std::endl;
+        co_return AsyncResult<void>::error_result(deleteResult.error_message);
+    }
     std::cout << "File deleted: " << filename << std::endl;
 
-    // 异步删除复制的文件
-    co_await atom::io::async_delete(copy_filename);
-    std::cout << "Copied file deleted: " << copy_filename << std::endl;
+    co_return AsyncResult<void>::success_result();
 }
 
 int main() {
-    // 启动协程
-    example_async_operations();
-    return 0;
+    try {
+        // 启动协程并等待完成
+        auto task = example_async_operations();
+        auto result = task.get();
+
+        if (!result.success) {
+            std::cerr << "Async operations failed with error: " << result.error_message << std::endl;
+            return 1;
+        }
+
+        std::cout << "All async operations completed successfully!" << std::endl;
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << "Exception: " << e.what() << std::endl;
+        return 1;
+    }
 }

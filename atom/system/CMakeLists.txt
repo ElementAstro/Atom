@@ -173,6 +173,7 @@ set(LIBS
     ${CMAKE_THREAD_LIBS_INIT}
     atom-sysinfo
     atom-meta
+    atom-utils
     ${LIBUSB_LIBRARIES}
 )
 

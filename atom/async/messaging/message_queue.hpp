@@ -122,65 +122,15 @@ public:
 template <typename T>
 concept MessageType =
     std::copy_constructible<T> && std::move_constructible<T> &&
-    std::is_copy_assignable_v<T> && requires(T a) {
-        {
-            std::hash<std::remove_cvref_t<T>>{}(a)
-        } -> std::convertible_to<std::size_t>;
-    };
+    std::is_copy_assignable_v<T>;
 
 // 前向声明
 template <MessageType T>
 class MessageQueue;
 
-// C++20 协程特�? 为消息队列提供协程接�?template <MessageType T>
-class MessageAwaiter {
-public:
-    bool await_ready() const noexcept { return false; }
-
-    void await_suspend(std::coroutine_handle<> h) {
-        m_handle = h;
-        // 订阅消息，收到后恢复协程
-        m_queue.subscribe(
-            [this](const T& msg) {
-                if (!m_cancelled) {
-                    m_message = msg;
-                    m_handle.resume();
-                }
-            },
-            "coroutine_awaiter", m_priority, m_filter, m_timeout);
-    }
-
-    T await_resume() {
-        m_cancelled = true;
-        if (!m_message) {
-            throw MessageQueueException(
-                "No message received in coroutine awaiter");
-        }
-        return std::move(*m_message);
-    }
-
-    ~MessageAwaiter() { m_cancelled = true; }
-
-private:
-    MessageQueue<T>& m_queue;
-    std::coroutine_handle<> m_handle;
-    std::function<bool(const T&)> m_filter;
-    std::optional<T> m_message;
-    std::atomic<bool> m_cancelled{false};
-    int m_priority{0};
-    std::chrono::milliseconds m_timeout{std::chrono::milliseconds::zero()};
-
-    friend class MessageQueue<T>;
-
-    explicit MessageAwaiter(
-        MessageQueue<T>& queue, std::function<bool(const T&)> filter = nullptr,
-        int priority = 0,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds::zero())
-        : m_queue(queue),
-          m_filter(std::move(filter)),
-          m_priority(priority),
-          m_timeout(timeout) {}
-};
+// Note: A previous non-templated MessageAwaiter referencing 'T' was removed
+// because it was invalid at namespace scope. Use MessageQueue<T>::MessageAwaitable
+// defined below for coroutine support.
 
 /**
  * @brief A message queue that allows subscribers to receive messages of type T.

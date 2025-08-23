@@ -12,6 +12,16 @@
 #include <shlobj.h>
 #include <tlhelp32.h>
 #include <windows.h>
+
+// Helper function to convert string to wide string
+inline std::wstring stringToWString(const std::string& str) {
+    if (str.empty()) return std::wstring();
+    int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
+    std::wstring wstr(size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &wstr[0], size);
+    return wstr;
+}
+
 #elif defined(__APPLE__)
 #include <CoreFoundation/CoreFoundation.h>
 #include <Foundation/Foundation.h>
@@ -60,7 +70,7 @@ auto getAppVersion(const fs::path& app_path) -> std::string {
 
 #ifdef _WIN32
     DWORD handle;
-    auto wappPath = atom::utils::stringToWString(app_path.string());
+    auto wappPath = stringToWString(app_path.string());
     DWORD size = GetFileVersionInfoSizeW(wappPath.c_str(), &handle);
     if (size != 0) {
         LPVOID buffer = malloc(size);
@@ -162,7 +172,7 @@ auto getAppPermissions(const fs::path& app_path) -> std::vector<std::string> {
     PACL dacl = nullptr;
 
     if (GetNamedSecurityInfoW(
-            atom::utils::stringToWString(app_path.string()).c_str(),
+            stringToWString(app_path.string()).c_str(),
             SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &dacl,
             nullptr, &securityDescriptor) == ERROR_SUCCESS) {
         if (dacl != nullptr) {
@@ -323,7 +333,7 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
     std::string regPath =
         R"(SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall)";
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
-                      atom::utils::stringToWString(regPath).c_str(), 0,
+                      stringToWString(regPath).c_str(), 0,
                       KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD index = 0;
         wchar_t subKeyName[256];
@@ -560,10 +570,10 @@ auto launchSoftware(const fs::path& software_path,
     spdlog::info("Launching software at path: {}", software_path.string());
 
 #ifdef _WIN32
-    std::wstring cmd = atom::utils::stringToWString(software_path.string());
+    std::wstring cmd = stringToWString(software_path.string());
 
     for (const auto& arg : args) {
-        cmd += L" " + atom::utils::stringToWString(arg);
+        cmd += L" " + stringToWString(arg);
     }
 
     STARTUPINFOW si;

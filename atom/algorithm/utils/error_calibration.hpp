@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_ERROR_CALIBRATION_HPP
-#define ATOM_ALGORITHM_ERROR_CALIBRATION_HPP
+#ifndef ATOM_ALGORITHM_UTILS_ERROR_CALIBRATION_HPP
+#define ATOM_ALGORITHM_UTILS_ERROR_CALIBRATION_HPP
 
 #include <algorithm>
 #include <cmath>
@@ -825,4 +825,4 @@ AsyncCalibrationTask<T> calibrateAsync(const std::vector<T>& measured,
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_ERROR_CALIBRATION_HPP
+#endif  // ATOM_ALGORITHM_UTILS_ERROR_CALIBRATION_HPP

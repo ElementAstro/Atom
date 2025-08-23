@@ -5,7 +5,7 @@ project(
   LANGUAGES C CXX)
 
 # Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find OpenSSL package
@@ -149,7 +149,11 @@ target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 add_library(${PROJECT_NAME} STATIC)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_object ${LIBS}
                                               ${CMAKE_THREAD_LIBS_INIT})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+target_include_directories(${PROJECT_NAME} PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
 # Add OpenSSL include directories
 target_include_directories(${PROJECT_NAME} PRIVATE ${OPENSSL_INCLUDE_DIR})

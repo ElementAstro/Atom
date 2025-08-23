@@ -4,7 +4,9 @@
 #include <thread>
 #include <utility>
 
+#ifdef ATOM_USE_ASIO
 #include <asio/io_context.hpp>
+#endif
 
 using namespace atom::async;
 
@@ -19,11 +21,15 @@ void exampleHandler(const ExampleMessage& message) {
 }
 
 int main() {
+#ifdef ATOM_USE_ASIO
     // Create an Asio io_context
     asio::io_context io_context;
-
-    // Create a MessageBus instance
+    // Create a MessageBus instance (Asio path)
     auto messageBus = MessageBus::createShared(io_context);
+#else
+    // Create a MessageBus instance (non-Asio path)
+    auto messageBus = MessageBus::createShared();
+#endif
 
     // Subscribe to a message
     auto token = messageBus->subscribe<ExampleMessage>("example.message", exampleHandler);
@@ -32,11 +38,12 @@ int main() {
     ExampleMessage message{"Hello, World!"};
     messageBus->publish("example.message", message);
 
+#ifdef ATOM_USE_ASIO
     // Run the io_context to process asynchronous operations
     std::thread ioThread([&io_context]() { io_context.run(); });
-
     // Wait for a short duration to ensure the message is processed
     std::this_thread::sleep_for(std::chrono::seconds(1));
+#endif
 
     // Unsubscribe from the message
     messageBus->unsubscribe<ExampleMessage>(token);
@@ -44,8 +51,10 @@ int main() {
     // Publish another message to demonstrate unsubscription
     messageBus->publish("example.message", ExampleMessage{"This should not be received"});
 
+#ifdef ATOM_USE_ASIO
     // Wait for a short duration to ensure the message is processed
     std::this_thread::sleep_for(std::chrono::seconds(1));
+#endif
 
     // Clear all subscribers
     messageBus->clearAllSubscribers();
@@ -53,12 +62,13 @@ int main() {
     // Publish a global message
     messageBus->publishGlobal(ExampleMessage{"Global message"});
 
+#ifdef ATOM_USE_ASIO
     // Wait for a short duration to ensure the message is processed
     std::this_thread::sleep_for(std::chrono::seconds(1));
-
     // Stop the io_context and join the thread
     io_context.stop();
     ioThread.join();
+#endif
 
     return 0;
 }

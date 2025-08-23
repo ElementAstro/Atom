@@ -15,6 +15,27 @@ Description: Python like stat for Windows & Linux
 #include "stat.hpp"
 
 #include <sys/stat.h>
+
+#ifdef _WIN32
+#include <windows.h>
+// Helper function to convert string to wide string
+inline std::wstring stringToWString(const std::string& str) {
+    if (str.empty()) return std::wstring();
+    int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
+    std::wstring wstr(size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &wstr[0], size);
+    return wstr;
+}
+
+// Helper function to convert wide string to string
+inline std::string wstringToString(const std::wstring& wstr) {
+    if (wstr.empty()) return std::string();
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    std::string str(size - 1, 0);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr, nullptr);
+    return str;
+}
+#endif
 #include <sys/types.h>
 #include <chrono>
 #include <cstring>
@@ -155,7 +176,7 @@ std::time_t Stat::atime() const {
     if (!statInfo_->accessTime.has_value()) {
 #ifdef _WIN32
         struct _stat64 fileStat;
-        if (_wstat64(atom::utils::stringToWString(path_.string()).c_str(),
+        if (_wstat64(stringToWString(path_.string()).c_str(),
                      &fileStat) != 0) {
             throw std::system_error(
                 std::error_code(errno, std::system_category()),
@@ -207,7 +228,7 @@ std::time_t Stat::ctime() const {
 #ifdef _WIN32
         WIN32_FILE_ATTRIBUTE_DATA attr;
         if (GetFileAttributesExW(
-                atom::utils::stringToWString(path_.string()).c_str(),
+                stringToWString(path_.string()).c_str(),
                 GetFileExInfoStandard, &attr) == 0) {
             throw std::system_error(
                 std::error_code(GetLastError(), std::system_category()),
@@ -249,7 +270,7 @@ int Stat::mode() const {
         // Windows doesn't have a direct equivalent to Unix file mode
         // We'll approximate with a simplified mode
         DWORD attributes = GetFileAttributesW(
-            atom::utils::stringToWString(path_.string()).c_str());
+            stringToWString(path_.string()).c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) {
             throw std::system_error(
                 std::error_code(GetLastError(), std::system_category()),
@@ -347,7 +368,7 @@ std::uintmax_t Stat::hardLinkCount() const {
 #ifdef _WIN32
         // Get the hard link count using FindFirstFileNameW in newer Windows
         HANDLE fileHandle =
-            CreateFileW(atom::utils::stringToWString(path_.string()).c_str(),
+            CreateFileW(stringToWString(path_.string()).c_str(),
                         FILE_READ_ATTRIBUTES,
                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                         NULL, OPEN_EXISTING,
@@ -395,7 +416,7 @@ std::uintmax_t Stat::deviceId() const {
 #ifdef _WIN32
         WCHAR volumePath[MAX_PATH];
         if (!GetVolumePathNameW(
-                atom::utils::stringToWString(path_.string()).c_str(),
+                stringToWString(path_.string()).c_str(),
                 volumePath, MAX_PATH)) {
             throw std::system_error(
                 std::error_code(GetLastError(), std::system_category()),
@@ -434,7 +455,7 @@ std::uintmax_t Stat::inodeNumber() const {
         // Windows doesn't have inodes like Unix systems, but we can use file
         // index
         HANDLE fileHandle =
-            CreateFileW(atom::utils::stringToWString(path_.string()).c_str(),
+            CreateFileW(stringToWString(path_.string()).c_str(),
                         FILE_READ_ATTRIBUTES,
                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                         NULL, OPEN_EXISTING,
@@ -508,7 +529,7 @@ std::string Stat::ownerName() const {
     if (!statInfo_->owner.has_value()) {
 #ifdef _WIN32
         HANDLE fileHandle =
-            CreateFileW(atom::utils::stringToWString(path_.string()).c_str(),
+            CreateFileW(stringToWString(path_.string()).c_str(),
                         READ_CONTROL, FILE_SHARE_READ, NULL, OPEN_EXISTING,
                         FILE_FLAG_BACKUP_SEMANTICS,  // Needed for directories
                         NULL);
@@ -521,7 +542,7 @@ std::string Stat::ownerName() const {
 
         // Get size needed for security descriptor
         DWORD secDescSize = 0;
-        GetFileSecurityW(atom::utils::stringToWString(path_.string()).c_str(),
+        GetFileSecurityW(stringToWString(path_.string()).c_str(),
                          OWNER_SECURITY_INFORMATION, NULL, 0, &secDescSize);
 
         if (secDescSize == 0) {
@@ -534,7 +555,7 @@ std::string Stat::ownerName() const {
         // Allocate buffer for security descriptor
         std::vector<BYTE> secDescBuffer(secDescSize);
         if (!GetFileSecurityW(
-                atom::utils::stringToWString(path_.string()).c_str(),
+                stringToWString(path_.string()).c_str(),
                 OWNER_SECURITY_INFORMATION,
                 reinterpret_cast<PSECURITY_DESCRIPTOR>(&secDescBuffer[0]),
                 secDescSize, &secDescSize)) {
@@ -576,7 +597,7 @@ std::string Stat::ownerName() const {
 
         // Convert to UTF-8
         std::wstring wideUserName(userName);
-        statInfo_->owner = atom::utils::wstringToString(wideUserName);
+        statInfo_->owner = wstringToString(wideUserName);
 #else
         struct stat attr;
         if (stat(path_.c_str(), &attr) != 0) {
@@ -669,7 +690,7 @@ bool Stat::isReadable() const {
 #ifdef _WIN32
         // Check for read access on Windows
         DWORD attributes = GetFileAttributesW(
-            atom::utils::stringToWString(path_.string()).c_str());
+            stringToWString(path_.string()).c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) {
             return false;
         }
@@ -691,7 +712,7 @@ bool Stat::isWritable() const {
 #ifdef _WIN32
         // Check for write access on Windows
         DWORD attributes = GetFileAttributesW(
-            atom::utils::stringToWString(path_.string()).c_str());
+            stringToWString(path_.string()).c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) {
             return false;
         }
@@ -702,7 +723,7 @@ bool Stat::isWritable() const {
 
         // Try to open the file for writing
         HANDLE fileHandle =
-            CreateFileW(atom::utils::stringToWString(path_.string()).c_str(),
+            CreateFileW(stringToWString(path_.string()).c_str(),
                         GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
                         OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
 

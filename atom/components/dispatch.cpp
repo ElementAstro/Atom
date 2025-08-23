@@ -232,7 +232,13 @@ auto CommandDispatcher::computeFunctionHash(const std::vector<std::any>& args)
             atom::meta::DemangleHelper::demangle(arg.type().name()));
     }
 
-    auto hash = atom::utils::toString(atom::algorithm::computeHash(argTypes));
+    // Temporary simple hash implementation to avoid include issues
+    std::hash<std::string> hasher;
+    std::string combined;
+    for (const auto& type : argTypes) {
+        combined += type + ";";
+    }
+    auto hash = std::to_string(hasher(combined));
     spdlog::info("Computed function hash: {}", hash);
     return hash;
 }

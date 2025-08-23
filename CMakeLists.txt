@@ -124,12 +124,37 @@ endif()
 # -----------------------------------------------------------------------------
 message(STATUS "Finding dependency packages...")
 
-# Skip problematic packages for now to get basic build working
-# find_package(Asio REQUIRED)
+# Essential dependencies for the project
+find_package(PkgConfig REQUIRED)
+
+# Try to find Asio (header-only library)
+find_path(ASIO_INCLUDE_DIR asio.hpp PATHS /mingw64/include /usr/include /usr/local/include)
+if(ASIO_INCLUDE_DIR)
+    message(STATUS "Found Asio headers at: ${ASIO_INCLUDE_DIR}")
+    include_directories(${ASIO_INCLUDE_DIR})
+    add_definitions(-DASIO_STANDALONE)
+else()
+    message(WARNING "Asio not found - networking features may be limited")
+endif()
+
 find_package(OpenSSL REQUIRED)
-# find_package(SQLite3 REQUIRED)
-# find_package(fmt REQUIRED)
-# find_package(Readline REQUIRED)
+
+# Try to find SQLite3
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    message(STATUS "Found SQLite3: ${SQLite3_VERSION}")
+else()
+    message(WARNING "SQLite3 not found - database features may be limited")
+endif()
+
+# Try to find fmt
+find_package(fmt QUIET)
+if(fmt_FOUND)
+    message(STATUS "Found fmt: ${fmt_VERSION}")
+else()
+    message(WARNING "fmt not found - formatting features may be limited")
+endif()
+
 find_package(ZLIB REQUIRED)
 
 # Python & pybind11

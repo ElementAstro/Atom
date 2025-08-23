@@ -1,12 +1,33 @@
 @echo off
-REM Build script for Atom project using xmake or CMake
+setlocal enabledelayedexpansion
+
+REM Enhanced Build script for Atom project using xmake or CMake
 REM Author: Max Qian
+REM Enhanced with comprehensive build management, dependency handling, and distribution
+
+REM Script configuration
+set SCRIPT_DIR=%~dp0
+set PROJECT_ROOT=%SCRIPT_DIR%
+set BUILD_DIR=%PROJECT_ROOT%build
+set DIST_DIR=%PROJECT_ROOT%dist
+set LOG_DIR=%PROJECT_ROOT%logs
+
+REM Create timestamp for logging
+for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
+set TIMESTAMP=%dt:~0,8%_%dt:~8,6%
+set LOG_FILE=%LOG_DIR%\build_%TIMESTAMP%.log
+
+REM Ensure log directory exists
+if not exist "%LOG_DIR%" mkdir "%LOG_DIR%"
 
 echo ===============================================
-echo Atom Project Build Script
+echo Atom Project Enhanced Build Script
 echo ===============================================
+echo Build script started at %date% %time%
+echo Project root: %PROJECT_ROOT%
+echo Build log: %LOG_FILE%
 
-REM Parse command-line options
+REM Parse command-line options with enhanced functionality
 set BUILD_TYPE=release
 set BUILD_PYTHON=n
 set BUILD_SHARED=n
@@ -17,12 +38,28 @@ set BUILD_SSH=n
 set BUILD_SYSTEM=cmake
 set CLEAN_BUILD=n
 set SHOW_HELP=n
+set INSTALL_DEPS=n
+set CREATE_PACKAGE=n
+set RUN_TESTS=n
+set GENERATE_DOCS=n
+set PARALLEL_JOBS=
+set INSTALL_PREFIX=
+set VERBOSE=n
+set DRY_RUN=n
 
 :parse_args
 if "%~1"=="" goto end_parse_args
 
 if /i "%~1"=="--debug" (
     set BUILD_TYPE=debug
+    goto next_arg
+)
+if /i "%~1"=="--release" (
+    set BUILD_TYPE=release
+    goto next_arg
+)
+if /i "%~1"=="--relwithdebinfo" (
+    set BUILD_TYPE=relwithdebinfo
     goto next_arg
 )
 if /i "%~1"=="--python" (
@@ -59,6 +96,41 @@ if /i "%~1"=="--cmake" (
 )
 if /i "%~1"=="--clean" (
     set CLEAN_BUILD=y
+    goto next_arg
+)
+if /i "%~1"=="--install-deps" (
+    set INSTALL_DEPS=y
+    goto next_arg
+)
+if /i "%~1"=="--package" (
+    set CREATE_PACKAGE=y
+    goto next_arg
+)
+if /i "%~1"=="--run-tests" (
+    set RUN_TESTS=y
+    set BUILD_TESTS=y
+    goto next_arg
+)
+if /i "%~1"=="--docs" (
+    set GENERATE_DOCS=y
+    goto next_arg
+)
+if /i "%~1"=="--jobs" (
+    set PARALLEL_JOBS=%2
+    shift
+    goto next_arg
+)
+if /i "%~1"=="--prefix" (
+    set INSTALL_PREFIX=%2
+    shift
+    goto next_arg
+)
+if /i "%~1"=="--verbose" (
+    set VERBOSE=y
+    goto next_arg
+)
+if /i "%~1"=="--dry-run" (
+    set DRY_RUN=y
     goto next_arg
 )
 if /i "%~1"=="--help" (

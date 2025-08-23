@@ -3,6 +3,20 @@ cmake_minimum_required(VERSION 3.10)
 # 设置项目名称
 project(AtomExamples)
 
+# Set C++ standard
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+# Add compile options
+if(MSVC)
+    add_compile_options(/W4)
+else()
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+# Include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
+
 # 示例构建选项在 cmake/ExamplesBuildOptions.cmake 中定义
 
 # 有条件地添加子目录
@@ -20,6 +34,10 @@ endif()
 
 if(ATOM_EXAMPLE_BUILD_CONNECTION)
     add_subdirectory(connection)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_CONTAINERS)
+    add_subdirectory(containers)
 endif()
 
 if(ATOM_EXAMPLE_BUILD_ERROR)
@@ -54,8 +72,16 @@ if(ATOM_EXAMPLE_BUILD_SEARCH)
     add_subdirectory(search)
 endif()
 
+if(ATOM_EXAMPLE_BUILD_SECRET)
+    add_subdirectory(secret)
+endif()
+
 if(ATOM_EXAMPLE_BUILD_SERIAL)
     add_subdirectory(serial)
+endif()
+
+if(ATOM_EXAMPLE_BUILD_SYSINFO)
+    add_subdirectory(sysinfo)
 endif()
 
 if(ATOM_EXAMPLE_BUILD_SYSTEM)

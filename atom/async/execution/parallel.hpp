@@ -894,16 +894,21 @@ public:
             numThreads = std::thread::hardware_concurrency();
         }
 
-        // 使用 ranges 将范围转换为向量
-        auto data = std::ranges::to<std::vector>(range);
+        // 将范围转换为向量 (C++20 compatible)
+        std::vector<ValueType> data;
+        if constexpr (std::ranges::sized_range<Range>) {
+            data.reserve(std::ranges::size(range));
+        }
+        std::ranges::copy(range, std::back_inserter(data));
 
         if (data.empty())
             return {};
 
         if (data.size() <= numThreads * 4 || numThreads == 1) {
             // 小范围直接使用 ranges 过滤
-            auto filtered = data | std::views::filter(pred);
-            return std::ranges::to<std::vector>(filtered);
+            std::vector<ValueType> filtered;
+            std::ranges::copy_if(data, std::back_inserter(filtered), pred);
+            return filtered;
         }
 
         // 为每个线程创建结果向量

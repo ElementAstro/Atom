@@ -1022,6 +1022,13 @@ protected:
 };
 
 /**
+ * @brief Forward declaration for makeOptimizedFuture used by makeEnhancedFuture.
+ */
+template <typename F, typename... Args>
+    requires ValidCallable<F, Args...>
+auto makeOptimizedFuture(F&& f, Args&&... args);
+
+/**
  * @brief Helper function to create an EnhancedFuture.
  * @tparam F The type of the function to call.
  * @tparam Args The types of the arguments to pass to the function.
@@ -1049,7 +1056,7 @@ template <std::input_iterator InputIt>
 auto whenAll(InputIt first, InputIt last,
              std::optional<std::chrono::milliseconds> timeout = std::nullopt)
     -> std::future<std::vector<
-        typename std::iterator_traits<InputIt>::value_type::value_type>> {
+        decltype(std::declval<typename std::iterator_traits<InputIt>::value_type>().get())>> {
     using EnhancedFutureType =
         typename std::iterator_traits<InputIt>::value_type;
     using ValueType = decltype(std::declval<EnhancedFutureType>().get());

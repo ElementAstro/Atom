@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_SNOWFLAKE_HPP
-#define ATOM_ALGORITHM_SNOWFLAKE_HPP
+#ifndef ATOM_ALGORITHM_UTILS_SNOWFLAKE_HPP
+#define ATOM_ALGORITHM_UTILS_SNOWFLAKE_HPP
 
 #include <atomic>
 #include <chrono>
@@ -668,4 +668,4 @@ private:
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_SNOWFLAKE_HPP
+#endif  // ATOM_ALGORITHM_UTILS_SNOWFLAKE_HPP

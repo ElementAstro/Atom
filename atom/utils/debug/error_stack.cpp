@@ -13,7 +13,7 @@
 #include <set>
 #include <sstream>
 
-#include "atom/utils/time.hpp"
+#include "../time/time.hpp"
 
 #ifdef ATOM_ERROR_STACK_USE_SERIALIZATION
 #include <boost/archive/binary_iarchive.hpp>

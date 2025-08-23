@@ -1,13 +1,20 @@
-# CMakeLists.txt for Lithium Builtin Test
+# CMakeLists.txt for Atom Test Suite
 # This project is licensed under the terms of the GPL3 license.
 #
-# Project Name: Lithium Test
-# Description:  All tests for Lithium
+# Project Name: Atom Test Suite
+# Description: Comprehensive test suite for Atom framework
 # Author: Max Qian
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
-project(lithium.test C CXX)
+project(atom-test-suite VERSION 1.0.0 LANGUAGES C CXX)
+
+# Find required packages
+find_package(GTest REQUIRED)
+find_package(Threads REQUIRED)
+
+# Include test infrastructure first
+add_subdirectory(tests)
 
 # Conditionally add test subdirectories based on build options
 
@@ -94,6 +101,26 @@ endif()
 # Web tests
 if(ATOM_TEST_BUILD_WEB AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/web/CMakeLists.txt")
   add_subdirectory(web)
+endif()
+
+# Containers tests
+if(ATOM_TEST_BUILD_CONTAINERS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/containers/CMakeLists.txt")
+  add_subdirectory(containers)
+endif()
+
+# Secret tests
+if(ATOM_TEST_BUILD_SECRET AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/secret/CMakeLists.txt")
+  add_subdirectory(secret)
+endif()
+
+# Sysinfo tests
+if(ATOM_TEST_BUILD_SYSINFO AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sysinfo/CMakeLists.txt")
+  add_subdirectory(sysinfo)
+endif()
+
+# Log tests
+if(ATOM_TEST_BUILD_LOG AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/log/CMakeLists.txt")
+  add_subdirectory(log)
 endif()
 
 # Set test targets grouping

@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_BLOWFISH_HPP
-#define ATOM_ALGORITHM_BLOWFISH_HPP
+#ifndef ATOM_ALGORITHM_CRYPTO_BLOWFISH_HPP
+#define ATOM_ALGORITHM_CRYPTO_BLOWFISH_HPP
 
 #include <array>
 #include <span>
@@ -132,4 +132,4 @@ private:
 
 }  // namespace atom::algorithm
 
-#endif  // ATOM_ALGORITHM_BLOWFISH_HPP
+#endif  // ATOM_ALGORITHM_CRYPTO_BLOWFISH_HPP

@@ -1,0 +1,220 @@
+# Atom Test Infrastructure
+
+This directory (`/tests/tests/`) contains the common test infrastructure and utilities for the Atom project test suite. The infrastructure provides standardized testing tools, utilities, and patterns to ensure consistency across all test modules in the `/tests/` directory.
+
+## Overview
+
+The Atom test infrastructure is designed to:
+
+1. **Standardize Testing Patterns**: Provide common base classes and utilities
+2. **Reduce Code Duplication**: Share common testing functionality across modules
+3. **Ensure Consistency**: Maintain consistent testing practices throughout the project
+4. **Simplify Test Creation**: Make it easier to write comprehensive tests
+5. **Support Different Test Types**: Unit tests, integration tests, performance tests, and stress tests
+
+## Components
+
+### Core Infrastructure Files
+
+- **`test_common.hpp`**: Main header containing all common test utilities
+- **`test_infrastructure_validation.cpp`**: Tests to validate the infrastructure itself
+- **`CMakeLists.txt`**: Build configuration for the test infrastructure
+
+### Key Utilities
+
+#### TestDataGenerator
+Provides methods to generate random test data:
+- `generateRandomString(size_t length)`: Generate random strings
+- `generateRandomBytes(size_t count)`: Generate random byte arrays
+- `generateRandomIntegers(size_t count, int min, int max)`: Generate random integers
+
+#### PerformanceTimer
+High-precision timing for performance tests:
+- `start()`: Start timing
+- `stop()`: Stop timing
+- `getElapsedMilliseconds()`: Get elapsed time in milliseconds
+- `getElapsedSeconds()`: Get elapsed time in seconds
+
+#### TestFileManager
+Manages temporary files and directories for tests:
+- `createTestFile(filename, content)`: Create temporary test files
+- `getTestDirectory()`: Get test directory path
+- Automatic cleanup on destruction
+
+#### ThreadTestHelper
+Utilities for concurrent and thread safety testing:
+- `runConcurrentTest(func, thread_count)`: Run function concurrently
+- `sleep(milliseconds)`: Thread sleep utility
+
+#### MemoryTracker
+Memory usage and leak detection utilities:
+- `getCurrentMemoryUsage()`: Get current memory usage
+- `detectMemoryLeaks()`: Detect memory leaks
+
+### Test Macros
+
+#### EXPECT_PERFORMANCE_BETTER_THAN(code, max_time_ms)
+Ensures code executes within specified time limit:
+```cpp
+EXPECT_PERFORMANCE_BETTER_THAN({
+    // Your code here
+}, 100); // Must complete in less than 100ms
+```
+
+#### EXPECT_NO_MEMORY_LEAKS(code)
+Ensures code doesn't leak memory:
+```cpp
+EXPECT_NO_MEMORY_LEAKS({
+    // Your code here
+});
+```
+
+#### EXPECT_THREAD_SAFE(code, thread_count)
+Tests thread safety by running code concurrently:
+```cpp
+EXPECT_THREAD_SAFE({
+    // Your thread-safe code here
+}, 4); // Run with 4 threads
+```
+
+### Base Test Fixture
+
+#### AtomTestBase
+Common base class for all Atom tests:
+- Provides `file_manager_` for file operations
+- Provides `timer_` for performance measurements
+- Handles common setup and teardown
+
+Usage:
+```cpp
+class MyModuleTest : public atom::test::AtomTestBase {
+protected:
+    void SetUp() override {
+        AtomTestBase::SetUp();
+        // Your additional setup
+    }
+    
+    void TearDown() override {
+        // Your additional cleanup
+        AtomTestBase::TearDown();
+    }
+};
+```
+
+## CMake Integration
+
+### Functions
+
+#### add_atom_test(test_name test_sources)
+Creates a standard Atom test:
+```cmake
+add_atom_test(my_module_test test_my_module.cpp)
+```
+
+#### add_atom_performance_test(test_name test_sources)
+Creates a performance test with extended timeout:
+```cmake
+add_atom_performance_test(my_performance_test test_performance.cpp)
+```
+
+#### add_atom_stress_test(test_name test_sources)
+Creates a stress test with very long timeout:
+```cmake
+add_atom_stress_test(my_stress_test test_stress.cpp)
+```
+
+### Targets
+
+- **`run_all_atom_tests`**: Run all standard tests
+- **`run_performance_tests`**: Run only performance tests
+- **`run_stress_tests`**: Run only stress tests
+- **`atom_coverage`**: Generate code coverage report (Debug builds with GCC)
+
+## Usage Guidelines
+
+### Creating New Tests
+
+1. **Include the common header**:
+   ```cpp
+   #include "../tests/test_common.hpp"  // From test subdirectories
+   // or
+   #include "tests/test_common.hpp"     // From tests root directory
+   ```
+
+2. **Inherit from AtomTestBase**:
+   ```cpp
+   class MyTest : public atom::test::AtomTestBase {
+       // Your test implementation
+   };
+   ```
+
+3. **Use provided utilities**:
+   ```cpp
+   TEST_F(MyTest, ExampleTest) {
+       auto test_data = TestDataGenerator::generateRandomString(100);
+       
+       timer_->start();
+       // Your code under test
+       timer_->stop();
+       
+       EXPECT_LT(timer_->getElapsedMilliseconds(), 50);
+   }
+   ```
+
+### Best Practices
+
+1. **Use descriptive test names** that clearly indicate what is being tested
+2. **Group related tests** in appropriate test fixtures
+3. **Include both positive and negative test cases**
+4. **Add performance tests** for performance-critical functionality
+5. **Test error conditions** and edge cases
+6. **Use the provided macros** for common testing patterns
+7. **Clean up resources** properly (base class handles common cleanup)
+
+### Test Categories
+
+Tests are automatically labeled based on their type:
+- `atom_tests`: Standard unit and integration tests
+- `atom_performance_tests`: Performance benchmarks
+- `atom_stress_tests`: Long-running stress tests
+
+## Building and Running Tests
+
+### Build Tests
+```bash
+mkdir build && cd build
+cmake ..
+make
+```
+
+### Run All Tests
+```bash
+make run_all_atom_tests
+```
+
+### Run Specific Test Categories
+```bash
+make run_performance_tests
+make run_stress_tests
+```
+
+### Generate Coverage Report
+```bash
+make atom_coverage
+```
+
+## Configuration
+
+### Constants
+Modify these constants in `test_common.hpp` to adjust test behavior:
+- `DEFAULT_TEST_TIMEOUT_MS`: Default test timeout
+- `PERFORMANCE_TEST_ITERATIONS`: Default performance test iterations
+- `STRESS_TEST_ITERATIONS`: Default stress test iterations
+- `DEFAULT_THREAD_COUNT`: Default thread count for concurrent tests
+
+## Version Information
+
+- **Project**: @PROJECT_NAME@
+- **Version**: @PROJECT_VERSION@
+- **Build Type**: @CMAKE_BUILD_TYPE@
+- **Compiler**: @CMAKE_CXX_COMPILER_ID@

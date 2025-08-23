@@ -1,6 +1,7 @@
 #include "atom/algorithm/weight.hpp"
 
 #include <iostream>
+#include <memory>
 #include <vector>
 
 int main() {
