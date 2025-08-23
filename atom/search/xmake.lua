@@ -46,20 +46,20 @@ target_end()
 target("atom-search")
     -- Set library type based on parent project option
     set_kind(has_config("shared_libs") and "shared" or "static")
-    
+
     -- Add dependencies
     add_deps("atom-search-object")
     add_packages("loguru")
-    
+
     -- Platform-specific settings
     if is_plat("linux") then
         add_syslinks("pthread")
     end
-    
+
     -- Set output directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))

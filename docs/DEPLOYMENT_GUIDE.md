@@ -26,7 +26,7 @@ The Atom library can be deployed in various environments and configurations:
 
 ### Development Environment
 
-**Purpose**: Local development, debugging, testing  
+**Purpose**: Local development, debugging, testing
 **Configuration**: Debug builds, all features enabled
 
 ```bash
@@ -49,7 +49,7 @@ export PYTHONPATH=~/.local/lib/python3.11/site-packages:$PYTHONPATH
 
 ### Staging Environment
 
-**Purpose**: Pre-production testing, integration validation  
+**Purpose**: Pre-production testing, integration validation
 **Configuration**: Release builds, production-like setup
 
 ```bash
@@ -66,7 +66,7 @@ python -c "import atom; print(atom.__version__)"
 
 ### Production Environment
 
-**Purpose**: Live applications, performance-critical systems  
+**Purpose**: Live applications, performance-critical systems
 **Configuration**: Optimized builds, minimal features
 
 ```bash
@@ -87,7 +87,7 @@ sudo cmake --install build
 
 ### System-Wide Installation
 
-**Advantages**: Available to all users, standard locations  
+**Advantages**: Available to all users, standard locations
 **Disadvantages**: Requires admin privileges, potential conflicts
 
 ```bash
@@ -104,7 +104,7 @@ sudo ldconfig
 
 ### User-Local Installation
 
-**Advantages**: No admin privileges, isolated environment  
+**Advantages**: No admin privileges, isolated environment
 **Disadvantages**: Only available to single user
 
 ```bash
@@ -118,7 +118,7 @@ echo 'export CMAKE_PREFIX_PATH=~/.local:$CMAKE_PREFIX_PATH' >> ~/.bashrc
 
 ### Virtual Environment
 
-**Advantages**: Isolated dependencies, version control  
+**Advantages**: Isolated dependencies, version control
 **Disadvantages**: Additional complexity
 
 ```bash
@@ -136,7 +136,7 @@ cmake --install build --prefix $ATOM_ROOT
 
 ### Container Deployment
 
-**Advantages**: Consistent environment, easy scaling  
+**Advantages**: Consistent environment, easy scaling
 **Disadvantages**: Container overhead
 
 ```dockerfile
@@ -163,7 +163,7 @@ ENV LD_LIBRARY_PATH=/opt/atom/lib:$LD_LIBRARY_PATH
 
 ### Package Manager Deployment
 
-**Advantages**: Automatic dependency management  
+**Advantages**: Automatic dependency management
 **Disadvantages**: Limited to supported platforms
 
 ```bash

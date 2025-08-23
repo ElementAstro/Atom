@@ -108,8 +108,8 @@ add_custom_target(run_error_tests
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     if(UNIX AND NOT APPLE)
         add_custom_target(run_tests_valgrind
-            COMMAND valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all 
-                    --track-origins=yes --verbose --log-file=valgrind-out.txt 
+            COMMAND valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all
+                    --track-origins=yes --verbose --log-file=valgrind-out.txt
                     $<TARGET_FILE:${PROJECT_NAME}>
             DEPENDS ${PROJECT_NAME}
             COMMENT "Running tests with Valgrind memory checking"
@@ -121,7 +121,7 @@ endif()
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
     target_compile_options(${PROJECT_NAME} PRIVATE --coverage)
     target_link_options(${PROJECT_NAME} PRIVATE --coverage)
-    
+
     add_custom_target(coverage
         COMMAND lcov --directory . --capture --output-file coverage.info
         COMMAND lcov --remove coverage.info '/usr/*' --output-file coverage.info

@@ -13,7 +13,7 @@ The Atom secret module provides secure storage and cryptographic functionality i
 ## 📁 Examples
 
 ### ✅ **Basic Test**
-**File**: `basic_test.cpp`  
+**File**: `basic_test.cpp`
 **Status**: Fully functional ✅
 
 A simple test that verifies the secret module can be loaded and basic functionality works.
@@ -24,7 +24,7 @@ A simple test that verifies the secret module can be loaded and basic functional
 - Simple success/failure testing
 
 ### 🔧 **Secure Storage Example**
-**File**: `secure_storage_example.cpp`  
+**File**: `secure_storage_example.cpp`
 **Status**: Has runtime issues (dependency/platform specific)
 
 Comprehensive demonstration of secure storage capabilities.
@@ -37,7 +37,7 @@ Comprehensive demonstration of secure storage capabilities.
 - Error handling and recovery
 
 ### 🔧 **Simple Secret Example**
-**File**: `simple_secret_example.cpp`  
+**File**: `simple_secret_example.cpp`
 **Status**: Has runtime issues (dependency/platform specific)
 
 Simplified demonstration focusing on basic secure storage operations.
@@ -221,7 +221,7 @@ enum class SecurityLevel {
    ```bash
    # Linux
    ldd ./build/example/secret/secret_secure_storage_example.exe
-   
+
    # Check for libsecret
    pkg-config --exists libsecret-1 && echo "libsecret available"
    ```

@@ -19,7 +19,7 @@ void declare_math_classes(py::module& m, const std::string& type_suffix) {
             m, class_name.c_str(),
             R"(Wrapper class for special mathematical functions.
 
-This class provides various special mathematical functions like beta, gamma, 
+This class provides various special mathematical functions like beta, gamma,
 digamma, error function, Bessel functions, and Legendre polynomials.
 
 Examples:
@@ -496,7 +496,7 @@ Raises:
         py::class_<LAClass>(m, class_name.c_str(),
                             R"(Wrapper class for linear algebra operations.
 
-This class provides linear algebra operations such as solving linear systems, 
+This class provides linear algebra operations such as solving linear systems,
 computing determinants, matrix multiplication, and transpose.
 
 Examples:
@@ -601,7 +601,7 @@ Returns:
             m, class_name.c_str(),
             R"(Wrapper class for financial mathematics functions.
 
-This class provides financial math functions such as Black-Scholes option pricing, 
+This class provides financial math functions such as Black-Scholes option pricing,
 bond pricing, and implied volatility calculation.
 
 Examples:

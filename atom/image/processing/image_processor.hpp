@@ -95,7 +95,7 @@ public:
      * @param algorithm Resize algorithm ("nearest", "linear", "cubic", "lanczos")
      * @return Resized image blob
      */
-    [[nodiscard]] blob resize(const blob& input, int newWidth, int newHeight, 
+    [[nodiscard]] blob resize(const blob& input, int newWidth, int newHeight,
                              const std::string& algorithm = "cubic") const;
 
     /**
@@ -135,8 +135,8 @@ public:
      * @param kernelSize Size of kernel (e.g., 3 for 3x3)
      * @return Filtered image blob
      */
-    [[nodiscard]] blob applyCustomKernel(const blob& input, 
-                                        const std::vector<float>& kernel, 
+    [[nodiscard]] blob applyCustomKernel(const blob& input,
+                                        const std::vector<float>& kernel,
                                         int kernelSize) const;
 
     /**
@@ -146,8 +146,8 @@ public:
      * @param contrast Contrast adjustment (-100 to 100)
      * @return Adjusted image blob
      */
-    [[nodiscard]] blob adjustBrightnessContrast(const blob& input, 
-                                               double brightness, 
+    [[nodiscard]] blob adjustBrightnessContrast(const blob& input,
+                                               double brightness,
                                                double contrast) const;
 
     /**
@@ -173,7 +173,7 @@ public:
      * @param threshold Threshold values for edge detection
      * @return Edge-detected image blob
      */
-    [[nodiscard]] blob detectEdges(const blob& input, 
+    [[nodiscard]] blob detectEdges(const blob& input,
                                   const std::string& algorithm = "canny",
                                   const std::vector<double>& threshold = {50.0, 150.0}) const;
 
@@ -184,7 +184,7 @@ public:
      * @param strength Denoising strength (0.0 to 1.0)
      * @return Denoised image blob
      */
-    [[nodiscard]] blob denoise(const blob& input, 
+    [[nodiscard]] blob denoise(const blob& input,
                               const std::string& algorithm = "bilateral",
                               double strength = 0.5) const;
 
@@ -212,7 +212,7 @@ public:
      * @return Map of quality metrics
      */
     [[nodiscard]] std::unordered_map<std::string, double> calculateQualityMetrics(
-        const blob& input, 
+        const blob& input,
         const blob* reference = nullptr) const;
 
     /**
@@ -229,17 +229,17 @@ public:
 
 private:
     ProcessingOptions m_options;
-    
+
     // Internal helper methods
     [[nodiscard]] blob applyGaussianBlur(const blob& input, double sigma) const;
     [[nodiscard]] blob applySharpen(const blob& input, double strength) const;
     [[nodiscard]] blob applyMedianFilter(const blob& input, int kernelSize) const;
-    
+
     // Format-specific converters
     [[nodiscard]] blob convertToJPEG(const blob& input) const;
     [[nodiscard]] blob convertToPNG(const blob& input) const;
     [[nodiscard]] blob convertToTIFF(const blob& input) const;
-    
+
     // Validation helpers
     void validateImageDimensions(int width, int height) const;
     void validateKernel(const std::vector<float>& kernel, int kernelSize) const;

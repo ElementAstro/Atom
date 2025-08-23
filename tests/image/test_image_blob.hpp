@@ -50,7 +50,7 @@ TEST_F(BlobTest, DefaultConstructor) {
 TEST_F(BlobTest, ConstructorWithRawData) {
     blob b(test_data.data(), test_data.size());
     EXPECT_EQ(b.size(), test_data.size());
-    
+
     // Check that data was copied correctly
     for (size_t i = 0; i < test_data.size(); ++i) {
         EXPECT_EQ(b[i], test_data[i]);
@@ -111,9 +111,9 @@ TEST_F(BlobTest, ConstConversionConstructor) {
 TEST_F(BlobTest, FastModeBlob) {
     std::vector<std::byte> data(test_data);
     fast_blob fb(data.data(), data.size());
-    
+
     EXPECT_EQ(fb.size(), data.size());
-    
+
     // Modify original data and check that fast_blob reflects the changes
     data[0] = std::byte{255};
     EXPECT_EQ(fb[0], std::byte{255});
@@ -123,19 +123,19 @@ TEST_F(BlobTest, FastModeBlob) {
 TEST_F(BlobTest, Slice) {
     blob b(test_data.data(), test_data.size());
     // Note: Dimensions are handled internally by the blob constructor
-    
+
     // Slice first row
     blob first_row = b.slice(0, 6);
     EXPECT_EQ(first_row.size(), 6);
     EXPECT_EQ(first_row[0], std::byte{10});
     EXPECT_EQ(first_row[5], std::byte{60});
-    
+
     // Slice second row
     blob second_row = b.slice(6, 6);
     EXPECT_EQ(second_row.size(), 6);
     EXPECT_EQ(second_row[0], std::byte{70});
     EXPECT_EQ(second_row[5], std::byte{120});
-    
+
     // Test out of bounds slice
     EXPECT_THROW(b.slice(10, 10), std::out_of_range);
 }
@@ -145,18 +145,18 @@ TEST_F(BlobTest, EqualityOperator) {
     blob b1(test_data.data(), test_data.size());
     blob b2(test_data.data(), test_data.size());
     blob b3(test_data.data(), test_data.size() - 1);  // Different size
-    
+
     EXPECT_EQ(b1, b2);
     EXPECT_NE(b1, b3);
-    
+
     // Modify b2 and check inequality
     b2[0] = std::byte{255};
     EXPECT_NE(b1, b2);
-    
+
     // Set b2 back to equal b1
     b2[0] = b1[0];
     EXPECT_EQ(b1, b2);
-    
+
     // Note: Cannot directly modify private members to test inequality
     // The equality test above is sufficient for basic functionality
 }
@@ -165,7 +165,7 @@ TEST_F(BlobTest, EqualityOperator) {
 TEST_F(BlobTest, Fill) {
     blob b(test_data.data(), test_data.size());
     b.fill(std::byte{42});
-    
+
     for (size_t i = 0; i < b.size(); ++i) {
         EXPECT_EQ(b[i], std::byte{42});
     }
@@ -189,9 +189,9 @@ TEST_F(BlobTest, AppendBlob) {
 TEST_F(BlobTest, AppendRawData) {
     blob b(test_data.data(), 6);  // First 6 bytes
     // Note: Dimensions are handled internally by the blob constructor
-    
+
     b.append(test_data.data() + 6, 6);  // Append second row
-    
+
     EXPECT_EQ(b.size(), 12);
     EXPECT_EQ(b.getRows(), 2);
     EXPECT_EQ(b[6], std::byte{70});
@@ -203,7 +203,7 @@ TEST_F(BlobTest, AllocateAndDeallocate) {
     blob b;
     b.allocate(10);
     EXPECT_EQ(b.size(), 10);
-    
+
     b.deallocate();
     EXPECT_EQ(b.size(), 0);
 }
@@ -212,18 +212,18 @@ TEST_F(BlobTest, AllocateAndDeallocate) {
 TEST_F(BlobTest, XorOperation) {
     blob b1(test_data.data(), test_data.size());
     blob b2(test_data.data(), test_data.size());
-    
+
     // Fill b2 with a constant value
     b2.fill(std::byte{255});
-    
+
     b1.xorWith(b2);
-    
+
     // Check that each byte is now the XOR of the original and 255
     for (size_t i = 0; i < test_data.size(); ++i) {
         auto expected = static_cast<std::byte>(static_cast<unsigned char>(test_data[i]) ^ 255);
         EXPECT_EQ(b1[i], expected);
     }
-    
+
     // Test with different sized blobs
     blob b3(test_data.data(), test_data.size() - 1);
     EXPECT_THROW(b1.xorWith(b3), std::runtime_error);
@@ -234,10 +234,10 @@ TEST_F(BlobTest, CompressionAndDecompression) {
     // Create a blob with repeated values that should compress well
     std::vector<std::byte> compressible_data(100, std::byte{42});
     blob original(compressible_data.data(), compressible_data.size());
-    
+
     blob compressed = original.compress();
     EXPECT_LT(compressed.size(), original.size());
-    
+
     blob decompressed = compressed.decompress();
     EXPECT_EQ(decompressed.size(), original.size());
     EXPECT_EQ(decompressed, original);
@@ -247,17 +247,17 @@ TEST_F(BlobTest, CompressionAndDecompression) {
 TEST_F(BlobTest, SerializationAndDeserialization) {
     blob original(test_data.data(), test_data.size());
     // Note: Dimensions are handled internally by the blob constructor
-    
+
     std::vector<std::byte> serialized = original.serialize();
     blob deserialized = blob::deserialize(serialized);
-    
+
     EXPECT_EQ(deserialized.size(), original.size());
-    
+
     // Check data equality
     for (size_t i = 0; i < original.size(); ++i) {
         EXPECT_EQ(deserialized[i], original[i]);
     }
-    
+
     // Test with invalid data
     std::vector<std::byte> invalid_data(2, std::byte{0});
     EXPECT_THROW(blob::deserialize(invalid_data), std::runtime_error);
@@ -266,14 +266,14 @@ TEST_F(BlobTest, SerializationAndDeserialization) {
 // Test iteration methods
 TEST_F(BlobTest, Iteration) {
     blob b(test_data.data(), test_data.size());
-    
+
     // Test begin/end interface
     size_t i = 0;
     for (auto byte : b) {
         EXPECT_EQ(byte, test_data[i++]);
     }
     EXPECT_EQ(i, test_data.size());
-    
+
     // Test const begin/end interface
     const blob& const_b = b;
     i = 0;
@@ -288,7 +288,7 @@ TEST_F(BlobTest, Iteration) {
 TEST_F(BlobTest, OpenCVIntegration) {
     // Create a test matrix
     cv::Mat mat(2, 2, CV_8UC3);
-    
+
     // Fill with test data
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
@@ -297,21 +297,21 @@ TEST_F(BlobTest, OpenCVIntegration) {
             }
         }
     }
-    
+
     // Create blob from matrix
     blob b(mat);
-    
+
     EXPECT_EQ(b.getRows(), 2);
     EXPECT_EQ(b.getCols(), 2);
     EXPECT_EQ(b.getChannels(), 3);
     EXPECT_EQ(b.size(), 12);
-    
+
     // Convert back to matrix
     cv::Mat reconstructed = b.to_mat();
-    
+
     // Verify matrix equality
     EXPECT_TRUE(cv::countNonZero(mat != reconstructed) == 0);
-    
+
     // Test image operations
     blob resized = b;
     resized.resize(4, 4);
@@ -319,32 +319,32 @@ TEST_F(BlobTest, OpenCVIntegration) {
     EXPECT_EQ(resized.getCols(), 4);
     EXPECT_EQ(resized.getChannels(), 3);
     EXPECT_EQ(resized.size(), 48);
-    
+
     // Test channel splitting and merging
     std::vector<blob> channels = b.split_channels();
     EXPECT_EQ(channels.size(), 3);
     EXPECT_EQ(channels[0].getChannels(), 1);
     EXPECT_EQ(channels[0].size(), 4);
-    
+
     blob merged = blob::merge_channels(channels);
     EXPECT_EQ(merged.getChannels(), 3);
     EXPECT_EQ(merged.size(), 12);
     EXPECT_EQ(merged, b);
-    
+
     // Test filtering
     cv::Mat kernel = (cv::Mat_<float>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
     blob filtered = b;
     filtered.apply_filter(kernel);
-    
+
     // Test rotation and flipping
     blob rotated = b;
     rotated.rotate(90);
     EXPECT_NE(rotated, b);
-    
+
     blob flipped = b;
     flipped.flip(1);  // Horizontal flip
     EXPECT_NE(flipped, b);
-    
+
     // Test color conversion
     if (b.getChannels() == 3) {
         blob gray = b;
@@ -357,7 +357,7 @@ TEST_F(BlobTest, OpenCVIntegration) {
 TEST_F(BlobTest, OpenCVImageIO) {
     // Create a test matrix
     cv::Mat mat(2, 2, CV_8UC3);
-    
+
     // Fill with test data
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
@@ -366,21 +366,21 @@ TEST_F(BlobTest, OpenCVImageIO) {
             }
         }
     }
-    
+
     // Create blob from matrix
     blob b(mat);
-    
+
     // Save to file
     b.save(test_image_path);
-    
+
     // Load from file
     blob loaded = blob::load(test_image_path);
-    
+
     // Size and channels should be the same
     EXPECT_EQ(loaded.getRows(), b.getRows());
     EXPECT_EQ(loaded.getCols(), b.getCols());
     EXPECT_EQ(loaded.getChannels(), b.getChannels());
-    
+
     // Test loading non-existent file
     EXPECT_THROW(blob::load("non_existent_file.png"), std::runtime_error);
 }
@@ -391,7 +391,7 @@ TEST_F(BlobTest, OpenCVImageIO) {
 TEST_F(BlobTest, CImgIntegration) {
     // Create a CImg
     cimg_library::CImg<unsigned char> img(2, 2, 1, 3);
-    
+
     // Fill with test data
     for (int y = 0; y < 2; ++y) {
         for (int x = 0; x < 2; ++x) {
@@ -400,18 +400,18 @@ TEST_F(BlobTest, CImgIntegration) {
             }
         }
     }
-    
+
     // Create blob from CImg
     blob b(img);
-    
+
     EXPECT_EQ(b.getRows(), 2);
     EXPECT_EQ(b.getCols(), 2);
     EXPECT_EQ(b.getChannels(), 3);
     EXPECT_EQ(b.size(), 12);
-    
+
     // Convert back to CImg
     cimg_library::CImg<unsigned char> reconstructed = b.to_cimg();
-    
+
     // Verify image equality
     for (int y = 0; y < 2; ++y) {
         for (int x = 0; x < 2; ++x) {
@@ -420,14 +420,14 @@ TEST_F(BlobTest, CImgIntegration) {
             }
         }
     }
-    
+
     // Test filter application
     cimg_library::CImg<float> kernel(3, 3, 1, 1, 0);
     kernel(1, 1) = 1.0f;  // Identity filter
-    
+
     blob filtered = b;
     filtered.apply_cimg_filter(kernel);
-    
+
     // Should be similar to original after applying identity filter
     EXPECT_EQ(filtered.getRows(), b.getRows());
     EXPECT_EQ(filtered.getCols(), b.getCols());
@@ -472,7 +472,7 @@ TEST_F(BlobTest, StbImageIntegration) {
             0x00, 0x00, 0x00, 0x00          // Important colors
         };
         fwrite(bmp_header, sizeof(bmp_header), 1, f);
-        
+
         // Write test data (BGR order for BMP)
         for (int i = 0; i < test_data.size(); i += 3) {
             unsigned char bgr[3] = {
@@ -485,27 +485,27 @@ TEST_F(BlobTest, StbImageIntegration) {
         fclose(f);
     }
     #endif
-    
+
     // Load with stb_image
     blob b(test_image_path);
-    
+
     // Basic checks
     EXPECT_EQ(b.getCols(), 2);
     EXPECT_EQ(b.getRows(), 2);
     EXPECT_EQ(b.getChannels(), 3);
-    
+
     // Save with different formats
     b.save_as(test_image_path + ".png", "png");
     b.save_as(test_image_path + ".bmp", "bmp");
     b.save_as(test_image_path + ".jpg", "jpg");
     b.save_as(test_image_path + ".tga", "tga");
-    
+
     // Clean up
     std::remove((test_image_path + ".png").c_str());
     std::remove((test_image_path + ".bmp").c_str());
     std::remove((test_image_path + ".jpg").c_str());
     std::remove((test_image_path + ".tga").c_str());
-    
+
     // Test invalid format
     EXPECT_THROW(b.save_as(test_image_path + ".invalid", "invalid"), std::runtime_error);
 }
@@ -516,24 +516,24 @@ TEST_F(BlobTest, FastModeLimitations) {
     // Create a fast blob
     std::vector<std::byte> data(test_data);
     fast_blob fb(data.data(), data.size());
-    
+
     // These operations should throw in FAST mode
     EXPECT_THROW(fb.append(fb), std::runtime_error);
     EXPECT_THROW(fb.append(data.data(), data.size()), std::runtime_error);
     EXPECT_THROW(fb.allocate(20), std::runtime_error);
     EXPECT_THROW(fb.deallocate(), std::runtime_error);
-    
+
     #if __has_include(<CImg.h>)
     // CImg operations should throw in FAST mode
     cimg_library::CImg<float> kernel(3, 3);
     EXPECT_THROW(fb.apply_cimg_filter(kernel), std::runtime_error);
     EXPECT_THROW(fb.to_cimg(), std::runtime_error);
     #endif
-    
+
     #if __has_include(<stb_image.h>)
     // stb_image operations should throw in FAST mode
     EXPECT_THROW(fb.save_as(test_image_path, "png"), std::runtime_error);
-    
+
     // Fast mode constructor from stb_image should throw
     EXPECT_THROW(fast_blob bad_fb(test_image_path), std::runtime_error);
     #endif

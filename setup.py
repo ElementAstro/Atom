@@ -47,13 +47,13 @@ def get_version():
         return version
     except (subprocess.CalledProcessError, FileNotFoundError):
         pass
-    
+
     # Try to read from VERSION file
     version_file = Path(__file__).parent / "VERSION"
     if version_file.exists():
         with open(version_file, "r") as f:
             return f.read().strip()
-    
+
     return PROJECT_VERSION
 
 # Platform-specific configuration
@@ -66,18 +66,18 @@ def get_platform_config():
         'extra_compile_args': [],
         'extra_link_args': []
     }
-    
+
     system = platform.system().lower()
-    
+
     if system == "linux":
         config['libraries'].extend(['ssl', 'crypto', 'z', 'sqlite3', 'pthread'])
         config['extra_compile_args'].extend(['-std=c++20', '-fPIC'])
-        
+
     elif system == "darwin":  # macOS
         config['libraries'].extend(['ssl', 'crypto', 'z', 'sqlite3'])
         config['extra_compile_args'].extend(['-std=c++20', '-stdlib=libc++'])
         config['extra_link_args'].extend(['-stdlib=libc++'])
-        
+
     elif system == "windows":
         config['libraries'].extend(['ws2_32', 'crypt32'])
         config['define_macros'].extend([
@@ -85,30 +85,30 @@ def get_platform_config():
             ('NOMINMAX', None)
         ])
         config['extra_compile_args'].extend(['/std:c++20'])
-    
+
     return config
 
 # Find source files
 def find_source_files():
     source_files = []
     python_dir = Path(__file__).parent / "python"
-    
+
     if python_dir.exists():
         # Find all .cpp files in python directory
         for cpp_file in python_dir.rglob("*.cpp"):
             source_files.append(str(cpp_file))
-    
+
     return source_files
 
 # Create extensions
 def create_extensions():
     platform_config = get_platform_config()
     source_files = find_source_files()
-    
+
     if not source_files:
         print("Warning: No Python binding source files found")
         return []
-    
+
     # Base include directories
     include_dirs = [
         str(Path(__file__).parent / "atom"),
@@ -116,7 +116,7 @@ def create_extensions():
         str(Path(__file__).parent),
     ]
     include_dirs.extend(platform_config['include_dirs'])
-    
+
     # Create extension
     ext = Pybind11Extension(
         "atom._core",
@@ -129,34 +129,34 @@ def create_extensions():
         extra_link_args=platform_config['extra_link_args'],
         cxx_std=20,
     )
-    
+
     return [ext]
 
 # Custom build command
 class CustomBuildExt(build_ext):
     """Custom build extension to handle special requirements"""
-    
+
     def build_extensions(self):
         # Check for required system libraries
         self.check_system_dependencies()
-        
+
         # Build extensions
         super().build_extensions()
-    
+
     def check_system_dependencies(self):
         """Check for required system dependencies"""
         system = platform.system().lower()
-        
+
         if system == "linux":
             # Check for required development packages
             required_packages = [
                 "libssl-dev", "zlib1g-dev", "libsqlite3-dev"
             ]
             print(f"Note: Ensure these packages are installed: {', '.join(required_packages)}")
-            
+
         elif system == "darwin":
             print("Note: Ensure OpenSSL, zlib, and SQLite3 are available via Homebrew")
-            
+
         elif system == "windows":
             print("Note: Ensure vcpkg dependencies are available")
 
@@ -184,11 +184,11 @@ def get_requirements():
         'numpy>=1.20.0',
         'typing-extensions>=4.0.0',
     ]
-    
+
     # Add platform-specific requirements
     if sys.version_info < (3, 8):
         requirements.append('importlib-metadata>=1.0')
-    
+
     return requirements
 
 def get_extras_require():
@@ -219,10 +219,10 @@ def main():
     # Get version
     version = get_version()
     print(f"Building Atom Python bindings version {version}")
-    
+
     # Create extensions
     extensions = create_extensions()
-    
+
     setup(
         name=PROJECT_NAME,
         version=version,

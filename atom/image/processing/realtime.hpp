@@ -4,11 +4,11 @@
 /**
  * @file realtime.hpp
  * @brief Real-time image processing capabilities
- * 
+ *
  * This module provides real-time image processing for video streams,
  * live camera feeds, and interactive applications with low-latency
  * processing pipelines.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -91,18 +91,18 @@ struct RealtimeParams {
     bool useGPU = true;             // Use GPU acceleration
     bool dropFrames = true;         // Drop frames if processing is slow
     double targetFPS = 30.0;        // Target processing FPS
-    
+
     // Quality parameters
     int maxWidth = 1920;            // Maximum frame width
     int maxHeight = 1080;           // Maximum frame height
     bool maintainAspectRatio = true; // Maintain aspect ratio when resizing
     std::string pixelFormat = "RGB"; // Preferred pixel format
-    
+
     // Processing parameters
     ProcessingMode mode = ProcessingMode::PASSTHROUGH;
     std::vector<std::string> filters; // Filters to apply
     std::unordered_map<std::string, double> filterParams; // Filter parameters
-    
+
     // Callback parameters
     bool enablePreview = true;      // Enable preview callbacks
     bool enableAnalysis = false;    // Enable analysis callbacks

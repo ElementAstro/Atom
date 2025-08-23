@@ -91,7 +91,7 @@ PYBIND11_MODULE(ttl, m) {
         m, "StringCache",
         R"(A Time-to-Live (TTL) Cache with string keys and string values.
 
-This class implements a TTL cache with an LRU eviction policy. Items in the cache 
+This class implements a TTL cache with an LRU eviction policy. Items in the cache
 expire after a specified duration and are evicted when the cache exceeds its maximum capacity.
 
 Args:

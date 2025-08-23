@@ -32,5 +32,3 @@ foreach(CPP_FILE ${CPP_FILES})
         set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Algorithm")
     endif()
 endforeach()
-
-

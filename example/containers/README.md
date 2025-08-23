@@ -13,7 +13,7 @@ The Atom containers module provides high-performance, memory-efficient container
 ## 📁 Examples
 
 ### ✅ **High Performance Containers Example**
-**File**: `high_performance_containers_example.cpp`  
+**File**: `high_performance_containers_example.cpp`
 **Status**: Fully functional ✅
 
 This comprehensive example demonstrates:
@@ -136,8 +136,8 @@ using MySmallVector = atom::containers::small_vector<int, 32>;
 
 // Configure flat container growth policy
 using MyFlatMap = atom::containers::flat_map<
-    int, std::string, 
-    std::less<int>, 
+    int, std::string,
+    std::less<int>,
     atom::containers::growth_policy::exponential
 >;
 ```

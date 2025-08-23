@@ -26,7 +26,7 @@ blob ImageProcessor::convertFormat(const blob& input, ImageFormat targetFormat) 
 #ifdef ATOM_IMAGE_HAS_OPENCV
     // Convert blob to cv::Mat for processing
     cv::Mat inputMat = input.to_mat();
-    
+
     switch (targetFormat) {
         case ImageFormat::JPEG:
             return convertToJPEG(input);
@@ -53,14 +53,14 @@ blob ImageProcessor::convertFormat(const blob& input, ImageFormat targetFormat) 
 #endif
 }
 
-blob ImageProcessor::resize(const blob& input, int newWidth, int newHeight, 
+blob ImageProcessor::resize(const blob& input, int newWidth, int newHeight,
                            const std::string& algorithm) const {
     validateImageDimensions(newWidth, newHeight);
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
-    
+
     int interpolation = cv::INTER_CUBIC;
     if (algorithm == "nearest") {
         interpolation = cv::INTER_NEAREST;
@@ -69,7 +69,7 @@ blob ImageProcessor::resize(const blob& input, int newWidth, int newHeight,
     } else if (algorithm == "lanczos") {
         interpolation = cv::INTER_LANCZOS4;
     }
-    
+
     cv::resize(inputMat, outputMat, cv::Size(newWidth, newHeight), 0, 0, interpolation);
     return blob(outputMat);
 #else
@@ -81,23 +81,23 @@ blob ImageProcessor::rotate(const blob& input, double angle, bool expandCanvas) 
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
-    
+
     cv::Point2f center(inputMat.cols / 2.0f, inputMat.rows / 2.0f);
     cv::Mat rotationMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
-    
+
     if (expandCanvas) {
         // Calculate new image size to fit rotated image
         cv::Rect2f bbox = cv::RotatedRect(center, inputMat.size(), angle).boundingRect2f();
-        
+
         // Adjust transformation matrix
         rotationMatrix.at<double>(0, 2) += bbox.width / 2.0 - center.x;
         rotationMatrix.at<double>(1, 2) += bbox.height / 2.0 - center.y;
-        
+
         cv::warpAffine(inputMat, outputMat, rotationMatrix, bbox.size());
     } else {
         cv::warpAffine(inputMat, outputMat, rotationMatrix, inputMat.size());
     }
-    
+
     return blob(outputMat);
 #else
     THROW_RUNTIME_ERROR("Rotate operation requires OpenCV support");
@@ -106,7 +106,7 @@ blob ImageProcessor::rotate(const blob& input, double angle, bool expandCanvas) 
 
 blob ImageProcessor::crop(const blob& input, int x, int y, int width, int height) const {
     validateCropParameters(input, x, y, width, height);
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Rect cropRect(x, y, width, height);
@@ -130,7 +130,7 @@ blob ImageProcessor::applyFilter(const blob& input, FilterType filterType,
             return applySharpen(input, strength);
         }
         case FilterType::MEDIAN: {
-            int kernelSize = parameters.count("kernelSize") ? 
+            int kernelSize = parameters.count("kernelSize") ?
                            static_cast<int>(parameters.at("kernelSize")) : 5;
             return applyMedianFilter(input, kernelSize);
         }
@@ -145,19 +145,19 @@ blob ImageProcessor::applyFilter(const blob& input, FilterType filterType,
 #endif
 }
 
-blob ImageProcessor::applyCustomKernel(const blob& input, 
-                                      const std::vector<float>& kernel, 
+blob ImageProcessor::applyCustomKernel(const blob& input,
+                                      const std::vector<float>& kernel,
                                       int kernelSize) const {
     validateKernel(kernel, kernelSize);
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
-    
+
     // Create kernel matrix
     cv::Mat kernelMat(kernelSize, kernelSize, CV_32F);
     std::memcpy(kernelMat.data, kernel.data(), kernel.size() * sizeof(float));
-    
+
     cv::filter2D(inputMat, outputMat, -1, kernelMat);
     return blob(outputMat);
 #else
@@ -165,17 +165,17 @@ blob ImageProcessor::applyCustomKernel(const blob& input,
 #endif
 }
 
-blob ImageProcessor::adjustBrightnessContrast(const blob& input, 
-                                             double brightness, 
+blob ImageProcessor::adjustBrightnessContrast(const blob& input,
+                                             double brightness,
                                              double contrast) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
-    
+
     // Convert brightness and contrast to OpenCV format
     double alpha = (contrast + 100.0) / 100.0;  // Contrast multiplier
     double beta = brightness;                     // Brightness offset
-    
+
     inputMat.convertTo(outputMat, -1, alpha, beta);
     return blob(outputMat);
 #else
@@ -187,18 +187,18 @@ blob ImageProcessor::adjustGamma(const blob& input, double gamma) const {
     if (gamma <= 0.0) {
         THROW_RUNTIME_ERROR("Gamma value must be positive");
     }
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
-    
+
     // Create lookup table for gamma correction
     cv::Mat lookupTable(1, 256, CV_8U);
     uchar* p = lookupTable.ptr();
     for (int i = 0; i < 256; ++i) {
         p[i] = cv::saturate_cast<uchar>(std::pow(i / 255.0, 1.0 / gamma) * 255.0);
     }
-    
+
     cv::LUT(inputMat, lookupTable, outputMat);
     return blob(outputMat);
 #else
@@ -210,7 +210,7 @@ blob ImageProcessor::enhanceHistogram(const blob& input, bool adaptive) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
-    
+
     if (inputMat.channels() == 1) {
         // Grayscale image
         if (adaptive) {
@@ -224,10 +224,10 @@ blob ImageProcessor::enhanceHistogram(const blob& input, bool adaptive) const {
         // Color image - convert to LAB and equalize L channel
         cv::Mat labImage;
         cv::cvtColor(inputMat, labImage, cv::COLOR_BGR2Lab);
-        
+
         std::vector<cv::Mat> labChannels;
         cv::split(labImage, labChannels);
-        
+
         if (adaptive) {
             cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
             clahe->setClipLimit(2.0);
@@ -235,11 +235,11 @@ blob ImageProcessor::enhanceHistogram(const blob& input, bool adaptive) const {
         } else {
             cv::equalizeHist(labChannels[0], labChannels[0]);
         }
-        
+
         cv::merge(labChannels, labImage);
         cv::cvtColor(labImage, outputMat, cv::COLOR_Lab2BGR);
     }
-    
+
     return blob(outputMat);
 #else
     THROW_RUNTIME_ERROR("Histogram enhancement requires OpenCV support");
@@ -249,35 +249,35 @@ blob ImageProcessor::enhanceHistogram(const blob& input, bool adaptive) const {
 std::vector<blob> ImageProcessor::processBatch(
     const std::vector<blob>& inputs,
     std::function<blob(const blob&)> operation) const {
-    
+
     std::vector<blob> results(inputs.size());
-    
+
     if (m_options.useMultithreading && inputs.size() > 1) {
         // Parallel processing
-        std::transform(std::execution::par_unseq, 
-                      inputs.begin(), inputs.end(), 
+        std::transform(std::execution::par_unseq,
+                      inputs.begin(), inputs.end(),
                       results.begin(), operation);
     } else {
         // Sequential processing
-        std::transform(inputs.begin(), inputs.end(), 
+        std::transform(inputs.begin(), inputs.end(),
                       results.begin(), operation);
     }
-    
+
     return results;
 }
 
 std::unordered_map<std::string, double> ImageProcessor::getStatistics(const blob& input) const {
     std::unordered_map<std::string, double> stats;
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
-    
+
     cv::Scalar mean, stddev;
     cv::meanStdDev(inputMat, mean, stddev);
-    
+
     double minVal, maxVal;
     cv::minMaxLoc(inputMat, &minVal, &maxVal);
-    
+
     stats["mean"] = mean[0];
     stats["stddev"] = stddev[0];
     stats["min"] = minVal;
@@ -285,11 +285,11 @@ std::unordered_map<std::string, double> ImageProcessor::getStatistics(const blob
     stats["width"] = static_cast<double>(inputMat.cols);
     stats["height"] = static_cast<double>(inputMat.rows);
     stats["channels"] = static_cast<double>(inputMat.channels());
-    
+
 #else
     THROW_RUNTIME_ERROR("Statistics calculation requires OpenCV support");
 #endif
-    
+
     return stats;
 }
 
@@ -306,10 +306,10 @@ blob ImageProcessor::applyGaussianBlur(const blob& input, double sigma) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
-    
+
     int kernelSize = static_cast<int>(2 * std::ceil(3 * sigma) + 1);
     if (kernelSize % 2 == 0) kernelSize++;  // Ensure odd kernel size
-    
+
     cv::GaussianBlur(inputMat, outputMat, cv::Size(kernelSize, kernelSize), sigma);
     return blob(outputMat);
 #else
@@ -321,10 +321,10 @@ blob ImageProcessor::applySharpen(const blob& input, double strength) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat blurred, outputMat;
-    
+
     cv::GaussianBlur(inputMat, blurred, cv::Size(0, 0), 1.0);
     cv::addWeighted(inputMat, 1.0 + strength, blurred, -strength, 0, outputMat);
-    
+
     return blob(outputMat);
 #else
     THROW_RUNTIME_ERROR("Sharpen filter requires OpenCV support");
@@ -364,7 +364,7 @@ std::unique_ptr<ImageProcessor> createOptimalProcessor(bool useGPU) {
     options.useMultithreading = true;
     options.enableSIMD = true;
     options.maxMemoryUsage = std::thread::hardware_concurrency() * 256 * 1024 * 1024; // 256MB per thread
-    
+
     return std::make_unique<ImageProcessor>(options);
 }
 

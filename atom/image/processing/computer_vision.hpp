@@ -4,11 +4,11 @@
 /**
  * @file computer_vision.hpp
  * @brief Advanced computer vision operations
- * 
+ *
  * This module provides comprehensive computer vision capabilities including
  * feature detection, object recognition, image analysis, and machine learning
  * based image processing operations.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -93,10 +93,10 @@ struct Keypoint {
     int octave;                     // Octave level
     int classId;                    // Class ID
     std::vector<float> descriptor;  // Feature descriptor
-    
-    Keypoint(double x = 0, double y = 0, double size = 1, double angle = -1, 
+
+    Keypoint(double x = 0, double y = 0, double size = 1, double angle = -1,
              double response = 0, int octave = 0, int classId = -1)
-        : x(x), y(y), size(size), angle(angle), response(response), 
+        : x(x), y(y), size(size), angle(angle), response(response),
           octave(octave), classId(classId) {}
 };
 
@@ -110,7 +110,7 @@ struct Detection {
     double x, y, width, height;     // Bounding box
     std::vector<double> mask;       // Segmentation mask (if available)
     std::vector<Keypoint> keypoints; // Object keypoints (if available)
-    
+
     Detection(int id = -1, const std::string& name = "", double conf = 0.0,
               double x = 0, double y = 0, double w = 0, double h = 0)
         : classId(id), className(name), confidence(conf), x(x), y(y), width(w), height(h) {}
@@ -127,7 +127,7 @@ struct FaceDetection {
     double age;                     // Estimated age
     std::string gender;             // Estimated gender
     std::string emotion;            // Dominant emotion
-    
+
     FaceDetection(double x = 0, double y = 0, double w = 0, double h = 0, double conf = 0.0)
         : x(x), y(y), width(w), height(h), confidence(conf), age(-1) {}
 };
@@ -260,7 +260,7 @@ public:
      * @param preprocessImage Whether to preprocess image for better OCR
      * @return Detected text with bounding boxes and confidence
      */
-    virtual std::vector<std::tuple<std::string, double, double, double, double, double>> 
+    virtual std::vector<std::tuple<std::string, double, double, double, double, double>>
     recognizeText(const blob& input,
                   const std::string& language = "eng",
                   const std::string& ocrEngine = "tesseract",
@@ -358,7 +358,7 @@ protected:
  * @param modelPath Path to model files directory
  * @return Unique pointer to computer vision processor
  */
-std::unique_ptr<ComputerVision> createOptimalComputerVision(bool useGPU = false, 
+std::unique_ptr<ComputerVision> createOptimalComputerVision(bool useGPU = false,
                                                            const std::string& modelPath = "");
 
 } // namespace atom::image

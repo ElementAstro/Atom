@@ -97,7 +97,7 @@ Raises:
     TriggerException: If the event name is empty or the callback is invalid.
 
 Examples:
-    >>> callback_id = trigger.register_callback("data_received", 
+    >>> callback_id = trigger.register_callback("data_received",
     ...                                         lambda data: print(f"Got: {data}"),
     ...                                         CallbackPriority.HIGH)
 )")

@@ -4,11 +4,11 @@
 /**
  * @file filters.hpp
  * @brief Advanced image filtering operations
- * 
+ *
  * This module provides comprehensive image filtering capabilities including
  * convolution filters, morphological operations, frequency domain filters,
  * and advanced denoising algorithms.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -33,25 +33,25 @@ enum class FilterType {
     BOX_BLUR,
     MOTION_BLUR,
     RADIAL_BLUR,
-    
+
     // Sharpening filters
     SHARPEN,
     UNSHARP_MASK,
     HIGH_PASS,
-    
+
     // Edge detection
     SOBEL,
     PREWITT,
     ROBERTS,
     CANNY,
     LAPLACIAN,
-    
+
     // Noise reduction
     MEDIAN,
     BILATERAL,
     NON_LOCAL_MEANS,
     WIENER,
-    
+
     // Morphological operations
     EROSION,
     DILATION,
@@ -60,21 +60,21 @@ enum class FilterType {
     GRADIENT,
     TOP_HAT,
     BLACK_HAT,
-    
+
     // Frequency domain
     LOW_PASS,
     HIGH_PASS_FREQ,
     BAND_PASS,
     BAND_STOP,
     NOTCH,
-    
+
     // Artistic filters
     EMBOSS,
     EDGE_ENHANCE,
     FIND_EDGES,
     SMOOTH,
     SMOOTH_MORE,
-    
+
     // Custom
     CUSTOM_KERNEL
 };
@@ -98,30 +98,30 @@ struct FilterParams {
     double sigma = 1.0;              // Standard deviation for Gaussian filters
     int kernelSize = 3;              // Kernel size (must be odd)
     double strength = 1.0;           // Filter strength/intensity
-    
+
     // Specific parameters
     double threshold1 = 100.0;       // Lower threshold (Canny)
     double threshold2 = 200.0;       // Upper threshold (Canny)
     double angle = 0.0;              // Motion blur angle
     int distance = 5;                // Motion blur distance
-    
+
     // Bilateral filter
     double sigmaColor = 75.0;        // Color sigma
     double sigmaSpace = 75.0;        // Space sigma
-    
+
     // Non-local means
     double h = 10.0;                 // Filter strength
     int templateWindowSize = 7;      // Template patch size
     int searchWindowSize = 21;       // Search window size
-    
+
     // Morphological operations
     StructuringElement structElement = StructuringElement::RECTANGLE;
     std::vector<std::vector<int>> customKernel;
-    
+
     // Frequency domain
     double cutoffFreq = 0.5;         // Cutoff frequency (0-1)
     double bandwidth = 0.1;          // Bandwidth for band filters
-    
+
     // Custom parameters
     std::unordered_map<std::string, double> custom;
 };
@@ -141,7 +141,7 @@ public:
      * @param params Filter parameters
      * @return Filtered image blob
      */
-    virtual blob applyFilter(const blob& input, FilterType filterType, 
+    virtual blob applyFilter(const blob& input, FilterType filterType,
                            const FilterParams& params = {}) const;
 
     /**
@@ -151,7 +151,7 @@ public:
      * @param normalize Whether to normalize the kernel
      * @return Filtered image blob
      */
-    virtual blob applyCustomKernel(const blob& input, 
+    virtual blob applyCustomKernel(const blob& input,
                                  const std::vector<std::vector<double>>& kernel,
                                  bool normalize = true) const;
 

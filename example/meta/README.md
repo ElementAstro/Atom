@@ -14,7 +14,7 @@ The Atom meta module provides powerful metaprogramming and reflection capabiliti
 ## 📁 Examples
 
 ### ✅ **Comprehensive Meta Example**
-**File**: `comprehensive_meta_example.cpp`  
+**File**: `comprehensive_meta_example.cpp`
 **Status**: Fully functional ✅
 
 This comprehensive example demonstrates:
@@ -238,7 +238,7 @@ class Factory {
 public:
     template<typename Derived>
     void registerType() {
-        creators_[TypeInfo::fromType<Derived>().name()] = 
+        creators_[TypeInfo::fromType<Derived>().name()] =
             []() { return std::make_unique<Derived>(); };
     }
 };

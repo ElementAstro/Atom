@@ -120,7 +120,7 @@ The package atom provides CMake targets:
 
 Available modules:
 - atom::algorithm - Algorithm utilities
-- atom::async - Asynchronous programming utilities  
+- atom::async - Asynchronous programming utilities
 - atom::components - Component system
 - atom::connection - Network and IPC connections
 - atom::containers - Container utilities
@@ -148,7 +148,7 @@ if(NOT ATOM_HEADERS)
     message(FATAL_ERROR "No Atom headers found in installation")
 endif()
 
-file(GLOB ATOM_LIBRARIES 
+file(GLOB ATOM_LIBRARIES
     "${CURRENT_PACKAGES_DIR}/lib/libatom*.a"
     "${CURRENT_PACKAGES_DIR}/lib/atom*.lib"
 )

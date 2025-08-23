@@ -53,7 +53,7 @@ jobs:
       run: |
         # Generate compile commands
         cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-        
+
         # Run clang-tidy on source files
         find atom/ -name "*.cpp" | head -20 | xargs -I {} \
           clang-tidy {} -p build/ \
@@ -246,7 +246,7 @@ jobs:
       run: |
         # Generate documentation with warnings
         doxygen Doxyfile 2> doxygen-warnings.txt || true
-        
+
         # Check for undocumented functions
         find atom/ -name "*.hpp" -exec grep -l "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" {} \; | \
           xargs -I {} sh -c 'echo "=== {} ==="; grep -n "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" "{}" | head -5'
@@ -258,7 +258,7 @@ jobs:
           echo "README.md is missing or empty"
           exit 1
         fi
-        
+
         # Check for common documentation files
         for file in CONTRIBUTING.md CHANGELOG.md LICENSE; do
           if [ ! -f "$file" ]; then
@@ -318,18 +318,18 @@ jobs:
         echo "# Code Quality Report" > quality-report.md
         echo "Generated on: $(date)" >> quality-report.md
         echo "" >> quality-report.md
-        
+
         echo "## Static Analysis Results" >> quality-report.md
         if [ -f reports/static-analysis-reports/cppcheck-report.xml ]; then
           echo "- Cppcheck report available" >> quality-report.md
         fi
-        
+
         echo "## Security Analysis" >> quality-report.md
         echo "- CodeQL analysis completed" >> quality-report.md
-        
+
         echo "## Memory Safety" >> quality-report.md
         echo "- AddressSanitizer and Valgrind tests completed" >> quality-report.md
-        
+
         echo "## Documentation Quality" >> quality-report.md
         if [ -f reports/documentation-warnings/doxygen-warnings.txt ]; then
           echo "- Doxygen warnings: $(wc -l < reports/documentation-warnings/doxygen-warnings.txt) lines" >> quality-report.md

@@ -12,11 +12,11 @@ endif()
 # **Windows specific search paths**
 if(WIN32)
     # Native Windows paths
-    list(APPEND CMAKE_PREFIX_PATH 
+    list(APPEND CMAKE_PREFIX_PATH
         "C:/Program Files/readline"
         "C:/readline"
     )
-    
+
     # **MSYS2 environment paths**
     # First, try to get MSYS2 paths from the PATH environment variable
     set(_msys_prefixes_from_env_path "")
@@ -24,7 +24,7 @@ if(WIN32)
         set(_path_list "$ENV{PATH}")
         string(REPLACE ";" "\\;" _path_list "${_path_list}")
         string(REPLACE "\\" "/" _path_list "${_path_list}")
-        
+
         if(WIN32)
             string(REPLACE ";" "\\\\;" _path_list_escaped "${_path_list}")
             string(REPLACE "\\\\;" ";" _path_list_escaped "${_path_list_escaped}")
@@ -33,10 +33,10 @@ if(WIN32)
         else()
             string(REPLACE ":" ";" _path_list_cmake "${_path_list}")
         endif()
-        
+
         foreach(_path_entry IN LISTS _path_list_cmake)
             string(REPLACE "\\" "/" _path_entry "${_path_entry}")
-            
+
             if(_path_entry MATCHES ".*/mingw64/bin$")
                 get_filename_component(_prefix_mingw64 "${_path_entry}" DIRECTORY)
                 list(APPEND _msys_prefixes_from_env_path "${_prefix_mingw64}")
@@ -71,7 +71,7 @@ if(WIN32)
                 endif()
             endif()
         endforeach()
-        
+
         if(_msys_prefixes_from_env_path)
             list(REMOVE_DUPLICATES _msys_prefixes_from_env_path)
             list(APPEND CMAKE_PREFIX_PATH ${_msys_prefixes_from_env_path})
@@ -93,7 +93,7 @@ if(WIN32)
         endif()
     else()
         # Finally, check common MSYS2 installation paths
-        list(APPEND CMAKE_PREFIX_PATH 
+        list(APPEND CMAKE_PREFIX_PATH
             "D:/msys64/mingw64"
             "D:/msys64/mingw32"
             "D:/msys64/usr"
@@ -114,9 +114,9 @@ endif()
 # Find include directory
 find_path(Readline_INCLUDE_DIR
     NAMES readline/readline.h
-    PATHS 
+    PATHS
         ${READLINE_ROOT}/include
-        /usr/include 
+        /usr/include
         /usr/local/include
         /opt/local/include
         /sw/include
@@ -127,30 +127,30 @@ find_path(Readline_INCLUDE_DIR
 if(WIN32)
     find_library(Readline_LIBRARY
         NAMES readline libreadline readline.lib
-        PATHS 
+        PATHS
             ${READLINE_ROOT}/lib
-            /usr/lib 
+            /usr/lib
             /usr/local/lib
             /opt/local/lib
             /sw/lib
     )
-    
+
     # **On Windows/MSYS2, Readline often depends on ncurses or termcap**
     find_library(Readline_NCURSES_LIBRARY
         NAMES ncurses libncurses ncursesw libncursesw pdcurses
-        PATHS 
+        PATHS
             ${READLINE_ROOT}/lib
-            /usr/lib 
+            /usr/lib
             /usr/local/lib
             /opt/local/lib
             /sw/lib
     )
-    
+
     find_library(Readline_TERMCAP_LIBRARY
         NAMES termcap libtermcap
-        PATHS 
+        PATHS
             ${READLINE_ROOT}/lib
-            /usr/lib 
+            /usr/lib
             /usr/local/lib
             /opt/local/lib
             /sw/lib
@@ -158,9 +158,9 @@ if(WIN32)
 else()
     find_library(Readline_LIBRARY
         NAMES readline
-        PATHS 
+        PATHS
             ${READLINE_ROOT}/lib
-            /usr/lib 
+            /usr/lib
             /usr/local/lib
             /opt/local/lib
             /sw/lib
@@ -188,7 +188,7 @@ if(Readline_FOUND)
 endif()
 
 mark_as_advanced(
-    Readline_INCLUDE_DIR 
+    Readline_INCLUDE_DIR
     Readline_LIBRARY
     Readline_NCURSES_LIBRARY
     Readline_TERMCAP_LIBRARY

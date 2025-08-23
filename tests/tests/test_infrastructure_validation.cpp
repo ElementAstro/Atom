@@ -38,7 +38,7 @@ TEST_F(TestDataGeneratorValidation, RandomStringGeneration) {
     // Test random string generation
     auto str1 = TestDataGenerator::generateRandomString(10);
     auto str2 = TestDataGenerator::generateRandomString(10);
-    
+
     EXPECT_EQ(str1.length(), 10);
     EXPECT_EQ(str2.length(), 10);
     EXPECT_NE(str1, str2); // Should be different (very high probability)
@@ -48,7 +48,7 @@ TEST_F(TestDataGeneratorValidation, RandomBytesGeneration) {
     // Test random bytes generation
     auto bytes1 = TestDataGenerator::generateRandomBytes(100);
     auto bytes2 = TestDataGenerator::generateRandomBytes(100);
-    
+
     EXPECT_EQ(bytes1.size(), 100);
     EXPECT_EQ(bytes2.size(), 100);
     EXPECT_NE(bytes1, bytes2); // Should be different (very high probability)
@@ -57,9 +57,9 @@ TEST_F(TestDataGeneratorValidation, RandomBytesGeneration) {
 TEST_F(TestDataGeneratorValidation, RandomIntegersGeneration) {
     // Test random integers generation
     auto ints = TestDataGenerator::generateRandomIntegers(50, 1, 100);
-    
+
     EXPECT_EQ(ints.size(), 50);
-    
+
     // Check range
     for (int value : ints) {
         EXPECT_GE(value, 1);
@@ -89,7 +89,7 @@ TEST_F(PerformanceTimerValidation, BasicTiming) {
     timer_->start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     timer_->stop();
-    
+
     double elapsed = timer_->getElapsedMilliseconds();
     EXPECT_GE(elapsed, 90.0);  // Allow some tolerance
     EXPECT_LE(elapsed, 150.0); // Allow some tolerance
@@ -101,12 +101,12 @@ TEST_F(PerformanceTimerValidation, MultipleMeasurements) {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
     timer_->stop();
     double first_measurement = timer_->getElapsedMilliseconds();
-    
+
     timer_->start();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     timer_->stop();
     double second_measurement = timer_->getElapsedMilliseconds();
-    
+
     EXPECT_GT(second_measurement, first_measurement);
 }
 
@@ -138,9 +138,9 @@ TEST_F(TestFileManagerValidation, FileCreation) {
     // Test file creation
     std::string content = "Test file content";
     std::string filepath = file_manager_->createTestFile("test.txt", content);
-    
+
     EXPECT_TRUE(std::filesystem::exists(filepath));
-    
+
     // Read back content
     std::ifstream file(filepath);
     std::string read_content((std::istreambuf_iterator<char>(file)),
@@ -166,13 +166,13 @@ protected:
 TEST_F(ThreadTestHelperValidation, ConcurrentExecution) {
     // Test concurrent execution
     std::atomic<int> counter{0};
-    
+
     ThreadTestHelper::runConcurrentTest([&counter]() {
         for (int i = 0; i < 100; ++i) {
             counter.fetch_add(1);
         }
     }, 4);
-    
+
     EXPECT_EQ(counter.load(), 400); // 4 threads * 100 increments
 }
 
@@ -210,11 +210,11 @@ TEST_F(TestMacrosValidation, PerformanceMacro) {
 TEST_F(TestMacrosValidation, ThreadSafetyMacro) {
     // Test thread safety macro
     std::atomic<int> safe_counter{0};
-    
+
     EXPECT_THREAD_SAFE({
         safe_counter.fetch_add(1);
     }, 4);
-    
+
     EXPECT_EQ(safe_counter.load(), 4);
 }
 
@@ -252,7 +252,7 @@ TEST_F(AtomTestBaseValidation, TimerIntegration) {
     timer_->start();
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     timer_->stop();
-    
+
     EXPECT_GT(timer_->getElapsedMilliseconds(), 0.0);
 }
 

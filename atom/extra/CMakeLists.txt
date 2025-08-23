@@ -50,19 +50,19 @@ if(ATOM_BUILD_EXTRA_UNIFIED_LIBRARY)
         atom-extra-spdlog
         atom-extra-uv
     )
-    
+
     # Create unified library
     add_library(atom-extra-unified INTERFACE)
-    
+
     # Link all extra components
     foreach(target ${EXTRA_TARGETS})
         if(TARGET ${target})
             target_link_libraries(atom-extra-unified INTERFACE ${target})
         endif()
     endforeach()
-    
+
     # Set properties
     target_compile_features(atom-extra-unified INTERFACE cxx_std_20)
-    
+
     message(STATUS "Created unified extra library: atom-extra-unified")
 endif()

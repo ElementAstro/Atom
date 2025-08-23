@@ -76,7 +76,7 @@ add_custom_target(run_system_tests
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
     target_compile_options(${PROJECT_NAME} PRIVATE --coverage)
     target_link_options(${PROJECT_NAME} PRIVATE --coverage)
-    
+
     add_custom_target(sysinfo_coverage
         COMMAND lcov --directory . --capture --output-file coverage.info
         COMMAND lcov --remove coverage.info '/usr/*' --output-file coverage.info

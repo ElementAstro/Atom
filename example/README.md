@@ -194,12 +194,12 @@ Each example follows these standards:
 /**
  * @file example_name.cpp
  * @brief Brief description of what the example demonstrates
- * 
+ *
  * This example shows how to:
  * - Feature 1
  * - Feature 2
  * - Feature 3
- * 
+ *
  * @author Author Name
  * @date Date
  */

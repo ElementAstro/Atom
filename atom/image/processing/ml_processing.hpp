@@ -4,11 +4,11 @@
 /**
  * @file ml_processing.hpp
  * @brief Machine Learning based image processing
- * 
+ *
  * This module provides ML-based image processing capabilities including
  * super-resolution, denoising, style transfer, image generation,
  * and AI-powered enhancement operations.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -34,44 +34,44 @@ enum class MLModelType {
     VDSR,           // Very Deep Super-Resolution
     EDSR,           // Enhanced Deep Super-Resolution
     WAIFU2X,        // Waifu2x anime upscaler
-    
+
     // Denoising models
     DNCNN,          // Denoising CNN
     FFDNet,         // Fast and Flexible Denoising
     RIDNET,         // Real Image Denoising
     CBDNet,         // Toward Convolutional Blind Denoising
-    
+
     // Style transfer models
     NEURAL_STYLE,   // Neural Style Transfer
     FAST_STYLE,     // Fast Style Transfer
     ADAIN,          // Adaptive Instance Normalization
     PHOTOREALISTIC, // Photorealistic Style Transfer
-    
+
     // Image enhancement models
     DPED,           // DSLR-Quality Photos Enhancement
     WESPE,          // Weakly Supervised Photo Enhancer
     MIRNET,         // Learning Enriched Features
     RETINEX_NET,    // Deep Retinex Decomposition
-    
+
     // Image restoration models
     NAFNET,         // Nonlinear Activation Free Network
     RESTORMER,      // Efficient Transformer for Image Restoration
     SWINIR,         // SwinIR Image Restoration
     UFORMER,        // U-shaped Transformer
-    
+
     // Generative models
     STABLE_DIFFUSION, // Stable Diffusion
     DALLE,          // DALL-E
     MIDJOURNEY,     // Midjourney-style generation
     GAN_PAINT,      // GAN-based inpainting
-    
+
     // Specialized models
     COLORIZATION,   // Image colorization
     INPAINTING,     // Image inpainting
     OUTPAINTING,    // Image outpainting
     BACKGROUND_REMOVAL, // Background removal
     FACE_RESTORATION,   // Face restoration
-    
+
     CUSTOM          // Custom trained model
 };
 
@@ -99,36 +99,36 @@ struct MLParams {
     MLBackend backend = MLBackend::AUTO; // Inference backend
     bool useGPU = true;             // Use GPU acceleration
     int gpuDeviceId = 0;            // GPU device ID
-    
+
     // Processing parameters
     int batchSize = 1;              // Batch size for processing
     int tileSize = 512;             // Tile size for large images
     int overlap = 32;               // Tile overlap
     bool enableTTA = false;         // Test-time augmentation
-    
+
     // Super-resolution parameters
     int scaleFactor = 4;            // Upscaling factor
     bool preserveDetails = true;    // Preserve fine details
-    
+
     // Denoising parameters
     double noiseLevel = 25.0;       // Noise level (0-100)
     bool blindDenoising = true;     // Blind denoising mode
-    
+
     // Style transfer parameters
     double styleStrength = 1.0;     // Style transfer strength
     bool preserveColor = false;     // Preserve original colors
-    
+
     // Enhancement parameters
     double enhancementStrength = 0.8; // Enhancement strength
     bool autoAdjust = true;         // Auto-adjust parameters
-    
+
     // Generation parameters
     std::string prompt;             // Text prompt for generation
     std::string negativePrompt;     // Negative prompt
     int steps = 50;                 // Inference steps
     double guidanceScale = 7.5;     // Guidance scale
     int seed = -1;                  // Random seed (-1 = random)
-    
+
     // Custom parameters
     std::unordered_map<std::string, double> customParams;
 };

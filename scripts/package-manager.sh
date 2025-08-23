@@ -38,7 +38,7 @@ detect_package_manager() {
 # vcpkg management
 setup_vcpkg() {
     log_info "Setting up vcpkg package manager..."
-    
+
     if [[ ! -d "$VCPKG_DIR" ]]; then
         log_info "Cloning vcpkg repository..."
         git clone https://github.com/Microsoft/vcpkg.git "$VCPKG_DIR"
@@ -48,18 +48,18 @@ setup_vcpkg() {
         git pull
         cd "$PROJECT_ROOT"
     fi
-    
+
     # Bootstrap vcpkg
     if [[ "$(detect_os)" == "windows" ]]; then
         "$VCPKG_DIR/bootstrap-vcpkg.bat"
     else
         "$VCPKG_DIR/bootstrap-vcpkg.sh"
     fi
-    
+
     # Install dependencies
     local vcpkg_exe="$VCPKG_DIR/vcpkg"
     [[ "$(detect_os)" == "windows" ]] && vcpkg_exe="$VCPKG_DIR/vcpkg.exe"
-    
+
     log_info "Installing vcpkg dependencies..."
     "$vcpkg_exe" install --triplet x64-linux openssl zlib sqlite3 fmt readline pybind11 boost
 }
@@ -68,9 +68,9 @@ setup_vcpkg() {
 install_system_dependencies() {
     local os=$(detect_os)
     local pkg_mgr=$(detect_package_manager)
-    
+
     log_info "Installing system dependencies for $os using $pkg_mgr"
-    
+
     case "$pkg_mgr" in
         apt)
             sudo apt-get update
@@ -125,35 +125,35 @@ install_system_dependencies() {
 # Python package management
 setup_python_environment() {
     log_info "Setting up Python environment..."
-    
+
     # Create virtual environment if it doesn't exist
     if [[ ! -d "$PROJECT_ROOT/.venv" ]]; then
         python3 -m venv "$PROJECT_ROOT/.venv"
     fi
-    
+
     # Activate virtual environment
     source "$PROJECT_ROOT/.venv/bin/activate"
-    
+
     # Upgrade pip and install build tools
     pip install --upgrade pip setuptools wheel
     pip install pybind11 numpy pytest sphinx
-    
+
     log_info "Python environment ready"
 }
 
 # Package creation functions
 create_deb_package() {
     log_info "Creating Debian package..."
-    
+
     local package_name="libatom-dev"
     local version=$(git describe --tags --always --dirty 2>/dev/null || echo "0.1.0")
     local arch=$(dpkg --print-architecture 2>/dev/null || echo "amd64")
-    
+
     local deb_dir="$PACKAGE_DIR/deb/$package_name-$version"
     mkdir -p "$deb_dir/DEBIAN"
     mkdir -p "$deb_dir/usr/include"
     mkdir -p "$deb_dir/usr/lib"
-    
+
     # Create control file
     cat > "$deb_dir/DEBIAN/control" << EOF
 Package: $package_name
@@ -167,10 +167,10 @@ Description: Atom foundational library for astronomical software
  A comprehensive C++20 library providing core functionality
  for astronomical software development.
 EOF
-    
+
     # Copy files
     cp -r "$PROJECT_ROOT/atom" "$deb_dir/usr/include/"
-    
+
     # Build package
     dpkg-deb --build "$deb_dir"
     log_info "Debian package created: $deb_dir.deb"
@@ -178,10 +178,10 @@ EOF
 
 create_rpm_package() {
     log_info "Creating RPM package..."
-    
+
     local spec_file="$PACKAGE_DIR/rpm/atom.spec"
     mkdir -p "$(dirname "$spec_file")"
-    
+
     cat > "$spec_file" << 'EOF'
 Name:           atom
 Version:        0.1.0
@@ -220,7 +220,7 @@ for astronomical software development.
 * $(date '+%a %b %d %Y') Max Qian <max@example.com> - 0.1.0-1
 - Initial package
 EOF
-    
+
     log_info "RPM spec file created: $spec_file"
 }
 

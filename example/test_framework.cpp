@@ -1,10 +1,10 @@
 /**
  * @file test_framework.cpp
  * @brief Comprehensive testing framework for Atom framework examples
- * 
+ *
  * This framework provides automated testing capabilities for all examples,
  * including build verification, runtime testing, and result validation.
- * 
+ *
  * Features:
  * - Automated example discovery and testing
  * - Build status verification
@@ -12,7 +12,7 @@
  * - Output validation and comparison
  * - Performance benchmarking
  * - Cross-platform compatibility testing
- * 
+ *
  * @author Atom Framework
  * @date 2024-12-19
  */
@@ -82,14 +82,14 @@ struct TestResult {
     std::string output;                  ///< Test output
     std::string error;                   ///< Error message
     int exitCode = 0;                    ///< Exit code
-    
+
     /**
      * @brief Check if test was successful
      */
     bool isSuccess() const {
         return status == TestStatus::PASSED;
     }
-    
+
     /**
      * @brief Get formatted result string
      */
@@ -131,22 +131,22 @@ private:
     std::string buildDir_;
     std::string sourceDir_;
     bool verbose_ = false;
-    
+
 public:
     /**
      * @brief Constructor
      */
-    TestFramework(const std::string& buildDir = "build", 
+    TestFramework(const std::string& buildDir = "build",
                   const std::string& sourceDir = ".")
         : buildDir_(buildDir), sourceDir_(sourceDir) {
         initializeTests();
     }
-    
+
     /**
      * @brief Set verbose output
      */
     void setVerbose(bool verbose) { verbose_ = verbose; }
-    
+
     /**
      * @brief Initialize test configurations
      */
@@ -163,7 +163,7 @@ public:
             {"Flat Map Operations", "Performance Comparisons"},
             false
         });
-        
+
         tests_.push_back({
             "Comprehensive Meta",
             "meta",
@@ -175,7 +175,7 @@ public:
             {"Type Information", "Function Traits", "BoxedValue"},
             false
         });
-        
+
         tests_.push_back({
             "Secret Basic Test",
             "secret",
@@ -187,7 +187,7 @@ public:
             {"Sysinfo headers included successfully"},
             false
         });
-        
+
         tests_.push_back({
             "Sysinfo Header Test",
             "sysinfo",
@@ -199,7 +199,7 @@ public:
             {"Sysinfo headers included successfully"},
             false
         });
-        
+
         // Build-only tests (known to have runtime issues)
         tests_.push_back({
             "MD5 Algorithm (Build Only)",
@@ -212,7 +212,7 @@ public:
             {},
             true    // Build only
         });
-        
+
         tests_.push_back({
             "Secret Secure Storage (Build Only)",
             "secret",
@@ -224,7 +224,7 @@ public:
             {},
             true    // Build only
         });
-        
+
         tests_.push_back({
             "Sysinfo Basic Example (Build Only)",
             "sysinfo",
@@ -237,16 +237,16 @@ public:
             true    // Build only
         });
     }
-    
+
     /**
      * @brief Execute a system command and capture output
      */
-    std::pair<int, std::string> executeCommand(const std::string& command, 
+    std::pair<int, std::string> executeCommand(const std::string& command,
                                                std::chrono::seconds timeout = std::chrono::seconds(30)) {
         if (verbose_) {
             std::cout << "Executing: " << command << std::endl;
         }
-        
+
 #ifdef _WIN32
         // Windows implementation
         HANDLE hChildStdoutRd, hChildStdoutWr;
@@ -254,11 +254,11 @@ public:
         saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
         saAttr.bInheritHandle = TRUE;
         saAttr.lpSecurityDescriptor = NULL;
-        
+
         if (!CreatePipe(&hChildStdoutRd, &hChildStdoutWr, &saAttr, 0)) {
             return {-1, "Failed to create pipe"};
         }
-        
+
         STARTUPINFOA si;
         PROCESS_INFORMATION pi;
         ZeroMemory(&si, sizeof(si));
@@ -267,19 +267,19 @@ public:
         si.hStdError = hChildStdoutWr;
         si.dwFlags |= STARTF_USESTDHANDLES;
         ZeroMemory(&pi, sizeof(pi));
-        
+
         std::string cmdLine = command;
         if (!CreateProcessA(NULL, &cmdLine[0], NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
             CloseHandle(hChildStdoutRd);
             CloseHandle(hChildStdoutWr);
             return {-1, "Failed to create process"};
         }
-        
+
         CloseHandle(hChildStdoutWr);
-        
+
         // Wait for process with timeout
         DWORD waitResult = WaitForSingleObject(pi.hProcess, static_cast<DWORD>(timeout.count() * 1000));
-        
+
         std::string output;
         if (waitResult == WAIT_OBJECT_0) {
             // Process completed, read output
@@ -289,14 +289,14 @@ public:
                 buffer[bytesRead] = '\0';
                 output += buffer;
             }
-            
+
             DWORD exitCode;
             GetExitCodeProcess(pi.hProcess, &exitCode);
-            
+
             CloseHandle(pi.hProcess);
             CloseHandle(pi.hThread);
             CloseHandle(hChildStdoutRd);
-            
+
             return {static_cast<int>(exitCode), output};
         } else {
             // Timeout or error
@@ -312,18 +312,18 @@ public:
         if (!pipe) {
             return {-1, "Failed to execute command"};
         }
-        
+
         std::string output;
         char buffer[4096];
         while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
             output += buffer;
         }
-        
+
         int exitCode = pclose(pipe);
         return {WEXITSTATUS(exitCode), output};
 #endif
     }
-    
+
     /**
      * @brief Test building a specific target
      */
@@ -332,27 +332,27 @@ public:
         result.name = test.name;
         result.module = test.module;
         result.executable = test.executable;
-        
+
         auto start = std::chrono::steady_clock::now();
-        
+
         std::string buildCommand = "cmake --build " + buildDir_ + " --target " + test.target;
         auto [exitCode, output] = executeCommand(buildCommand, std::chrono::seconds(120));
-        
+
         auto end = std::chrono::steady_clock::now();
         result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         result.output = output;
         result.exitCode = exitCode;
-        
+
         if (exitCode == 0) {
             result.status = TestStatus::PASSED;
         } else {
             result.status = TestStatus::BUILD_FAILED;
             result.error = "Build failed with exit code " + std::to_string(exitCode);
         }
-        
+
         return result;
     }
-    
+
     /**
      * @brief Test running an executable
      */
@@ -361,32 +361,32 @@ public:
         result.name = test.name;
         result.module = test.module;
         result.executable = test.executable;
-        
+
         // Check if executable exists
         if (!std::filesystem::exists(test.executable)) {
             result.status = TestStatus::FAILED;
             result.error = "Executable not found: " + test.executable;
             return result;
         }
-        
+
         auto start = std::chrono::steady_clock::now();
-        
+
         std::string runCommand = test.executable;
         for (const auto& arg : test.args) {
             runCommand += " " + arg;
         }
-        
+
         auto [exitCode, output] = executeCommand(runCommand, test.timeout);
-        
+
         auto end = std::chrono::steady_clock::now();
         result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         result.output = output;
         result.exitCode = exitCode;
-        
+
         // Determine test result
         if (exitCode == 0 && test.expectSuccess) {
             result.status = TestStatus::PASSED;
-            
+
             // Check expected output patterns
             for (const auto& pattern : test.expectedOutput) {
                 if (output.find(pattern) == std::string::npos) {
@@ -404,27 +404,27 @@ public:
             result.status = TestStatus::FAILED;
             result.error = "Unexpected success";
         }
-        
+
         return result;
     }
-    
+
     /**
      * @brief Run all tests
      */
     void runAllTests() {
         std::cout << "=== Atom Framework Examples Test Suite ===\n";
         std::cout << "Running " << tests_.size() << " tests...\n\n";
-        
+
         results_.clear();
         results_.reserve(tests_.size());
-        
+
         for (const auto& test : tests_) {
             std::cout << "Testing [" << test.module << "] " << test.name << "... ";
             std::cout.flush();
-            
+
             // First, test building
             TestResult buildResult = testBuild(test);
-            
+
             if (buildResult.status == TestStatus::PASSED) {
                 if (test.buildOnly) {
                     // Build-only test
@@ -442,7 +442,7 @@ public:
                 results_.push_back(buildResult);
                 std::cout << statusToString(buildResult.status) << "\n";
             }
-            
+
             if (verbose_ && !results_.back().output.empty()) {
                 std::cout << "Output:\n" << results_.back().output << "\n";
             }
@@ -452,18 +452,18 @@ public:
             std::cout << "\n";
         }
     }
-    
+
     /**
      * @brief Print test summary
      */
     void printSummary() {
         std::cout << "\n=== Test Summary ===\n";
-        
+
         int passed = 0, failed = 0, buildFailed = 0, runtimeError = 0;
-        
+
         for (const auto& result : results_) {
             std::cout << result.getFormattedResult() << "\n";
-            
+
             switch (result.status) {
                 case TestStatus::PASSED: passed++; break;
                 case TestStatus::FAILED: failed++; break;
@@ -472,20 +472,20 @@ public:
                 default: break;
             }
         }
-        
+
         std::cout << "\nResults:\n";
         std::cout << "  ✅ Passed: " << passed << "\n";
         std::cout << "  ❌ Failed: " << failed << "\n";
         std::cout << "  🔨 Build Failed: " << buildFailed << "\n";
         std::cout << "  💥 Runtime Error: " << runtimeError << "\n";
         std::cout << "  📊 Total: " << results_.size() << "\n";
-        
-        double successRate = results_.empty() ? 0.0 : 
+
+        double successRate = results_.empty() ? 0.0 :
             (static_cast<double>(passed) / results_.size()) * 100.0;
-        std::cout << "  📈 Success Rate: " << std::fixed << std::setprecision(1) 
+        std::cout << "  📈 Success Rate: " << std::fixed << std::setprecision(1)
                   << successRate << "%\n";
     }
-    
+
     /**
      * @brief Get test results
      */
@@ -503,7 +503,7 @@ int main(int argc, char* argv[]) {
     std::string buildDir = "build";
     std::string sourceDir = ".";
     bool verbose = false;
-    
+
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -523,14 +523,14 @@ int main(int argc, char* argv[]) {
             return 0;
         }
     }
-    
+
     try {
         atom::test::TestFramework framework(buildDir, sourceDir);
         framework.setVerbose(verbose);
-        
+
         framework.runAllTests();
         framework.printSummary();
-        
+
         // Return non-zero if any tests failed
         const auto& results = framework.getResults();
         for (const auto& result : results) {
@@ -538,9 +538,9 @@ int main(int argc, char* argv[]) {
                 return 1;
             }
         }
-        
+
         return 0;
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Test framework error: " << e.what() << std::endl;
         return 1;

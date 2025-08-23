@@ -16,7 +16,7 @@ This document summarizes the reorganization of the Atom test structure to proper
 
 ### ✅ **Test Infrastructure Location**
 
-**Moved from**: `example/tests/` 
+**Moved from**: `example/tests/`
 **Moved to**: `tests/tests/`
 
 **Infrastructure Components**:

@@ -430,10 +430,10 @@ __kernel void convolve2D(__global const float* input,
         for (int j = -halfKernelCols; j <= halfKernelCols; ++j) {
             int x = clamp(row + i, 0, inputRows - 1);
             int y = clamp(col + j, 0, inputCols - 1);
-            
+
             int kernelIdx = (i + halfKernelRows) * kernelCols + (j + halfKernelCols);
             int inputIdx = x * inputCols + y;
-            
+
             sum += input[inputIdx] * kernel[kernelIdx];
         }
     }

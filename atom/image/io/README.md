@@ -64,7 +64,7 @@ reader.setChunkSize(1024 * 1024);  // 1MB chunks
 while (reader.hasMoreData()) {
     auto chunk = reader.readChunk();
     processChunk(chunk);
-    
+
     // Update progress
     double progress = reader.getProgress();
     updateProgressBar(progress);

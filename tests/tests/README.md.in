@@ -93,7 +93,7 @@ protected:
         AtomTestBase::SetUp();
         // Your additional setup
     }
-    
+
     void TearDown() override {
         // Your additional cleanup
         AtomTestBase::TearDown();
@@ -152,11 +152,11 @@ add_atom_stress_test(my_stress_test test_stress.cpp)
    ```cpp
    TEST_F(MyTest, ExampleTest) {
        auto test_data = TestDataGenerator::generateRandomString(100);
-       
+
        timer_->start();
        // Your code under test
        timer_->stop();
-       
+
        EXPECT_LT(timer_->getElapsedMilliseconds(), 50);
    }
    ```

@@ -48,7 +48,7 @@ public:
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(0, charset.size() - 1);
-        
+
         std::string result;
         result.reserve(length);
         for (size_t i = 0; i < length; ++i) {
@@ -56,25 +56,25 @@ public:
         }
         return result;
     }
-    
+
     static std::vector<uint8_t> generateRandomBytes(size_t count) {
         std::vector<uint8_t> result(count);
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<uint8_t> dis(0, 255);
-        
+
         for (auto& byte : result) {
             byte = dis(gen);
         }
         return result;
     }
-    
+
     static std::vector<int> generateRandomIntegers(size_t count, int min = 0, int max = 1000) {
         std::vector<int> result(count);
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(min, max);
-        
+
         for (auto& value : result) {
             value = dis(gen);
         }
@@ -91,16 +91,16 @@ public:
     void start() {
         start_time_ = std::chrono::high_resolution_clock::now();
     }
-    
+
     void stop() {
         end_time_ = std::chrono::high_resolution_clock::now();
     }
-    
+
     double getElapsedMilliseconds() const {
         auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time_ - start_time_);
         return duration.count() / 1000.0;
     }
-    
+
     double getElapsedSeconds() const {
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_ - start_time_);
         return duration.count() / 1000.0;
@@ -122,7 +122,7 @@ public:
         // This is a placeholder - implement platform-specific code
         return 0;
     }
-    
+
     static bool detectMemoryLeaks() {
         // Memory leak detection logic
         // This is a placeholder - implement actual leak detection
@@ -136,15 +136,15 @@ public:
 
 class TestFileManager {
 public:
-    TestFileManager(const std::string& test_dir = "test_temp") 
+    TestFileManager(const std::string& test_dir = "test_temp")
         : test_directory_(test_dir) {
         createTestDirectory();
     }
-    
+
     ~TestFileManager() {
         cleanupTestDirectory();
     }
-    
+
     std::string createTestFile(const std::string& filename, const std::string& content = "") {
         std::string filepath = test_directory_ + "/" + filename;
         std::ofstream file(filepath);
@@ -155,11 +155,11 @@ public:
         }
         return filepath;
     }
-    
+
     std::string getTestDirectory() const {
         return test_directory_;
     }
-    
+
     void cleanupTestDirectory() {
         try {
             if (std::filesystem::exists(test_directory_)) {
@@ -178,7 +178,7 @@ private:
             // Handle directory creation failure
         }
     }
-    
+
     std::string test_directory_;
     std::vector<std::string> created_files_;
 };
@@ -193,7 +193,7 @@ public:
     static void runConcurrentTest(Func&& func, size_t thread_count = DEFAULT_THREAD_COUNT) {
         std::vector<std::thread> threads;
         std::vector<std::exception_ptr> exceptions(thread_count);
-        
+
         for (size_t i = 0; i < thread_count; ++i) {
             threads.emplace_back([&func, &exceptions, i]() {
                 try {
@@ -203,11 +203,11 @@ public:
                 }
             });
         }
-        
+
         for (auto& thread : threads) {
             thread.join();
         }
-        
+
         // Check for exceptions
         for (const auto& exception : exceptions) {
             if (exception) {
@@ -215,7 +215,7 @@ public:
             }
         }
     }
-    
+
     static void sleep(size_t milliseconds) {
         std::this_thread::sleep_for(std::chrono::milliseconds(milliseconds));
     }
@@ -265,13 +265,13 @@ protected:
         file_manager_ = std::make_unique<TestFileManager>();
         timer_ = std::make_unique<PerformanceTimer>();
     }
-    
+
     void TearDown() override {
         // Common cleanup for all Atom tests
         file_manager_.reset();
         timer_.reset();
     }
-    
+
     std::unique_ptr<TestFileManager> file_manager_;
     std::unique_ptr<PerformanceTimer> timer_;
 };

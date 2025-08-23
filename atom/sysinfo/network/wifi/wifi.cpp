@@ -102,7 +102,7 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
                 if (ua->Address.lpSockaddr->sa_family == addressFamily) {
                     char ipStr[INET6_ADDRSTRLEN] = {0};
                     void* addr = nullptr;
-                    
+
                     if (addressFamily == AF_INET) {
                         struct sockaddr_in* ipv4 = reinterpret_cast<struct sockaddr_in*>(ua->Address.lpSockaddr);
                         addr = &(ipv4->sin_addr);
@@ -134,7 +134,7 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
         if (ifa->ifa_addr && ifa->ifa_addr->sa_family == addressFamily) {
             char ipStr[INET6_ADDRSTRLEN] = {0};
             void* addr = nullptr;
-            
+
             if (addressFamily == AF_INET) {
                 struct sockaddr_in* ipv4 = reinterpret_cast<struct sockaddr_in*>(ifa->ifa_addr);
                 addr = &(ipv4->sin_addr);
@@ -142,7 +142,7 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
                 struct sockaddr_in6* ipv6 = reinterpret_cast<struct sockaddr_in6*>(ifa->ifa_addr);
                 addr = &(ipv6->sin6_addr);
             }
-            
+
             inet_ntop(addressFamily, addr, ipStr, sizeof(ipStr));
             addresses.emplace_back(ipStr);
             LOG_F(INFO, "Found IP address: {}", ipStr);

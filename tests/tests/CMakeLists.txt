@@ -65,15 +65,15 @@ add_custom_target(validate_test_infrastructure
 # Function to create standardized test targets
 function(add_atom_test test_name test_sources)
     add_executable(${test_name} ${test_sources})
-    
+
     target_link_libraries(${test_name}
         PRIVATE
         atom-test-common
     )
-    
+
     # Add the test to CTest
     add_test(NAME ${test_name} COMMAND ${test_name})
-    
+
     # Set test properties
     set_tests_properties(${test_name} PROPERTIES
         TIMEOUT 300  # 5 minutes timeout
@@ -84,15 +84,15 @@ endfunction()
 # Function to create performance test targets
 function(add_atom_performance_test test_name test_sources)
     add_executable(${test_name} ${test_sources})
-    
+
     target_link_libraries(${test_name}
         PRIVATE
         atom-test-common
     )
-    
+
     # Add the test to CTest with performance label
     add_test(NAME ${test_name} COMMAND ${test_name})
-    
+
     # Set test properties for performance tests
     set_tests_properties(${test_name} PROPERTIES
         TIMEOUT 600  # 10 minutes timeout for performance tests
@@ -103,15 +103,15 @@ endfunction()
 # Function to create stress test targets
 function(add_atom_stress_test test_name test_sources)
     add_executable(${test_name} ${test_sources})
-    
+
     target_link_libraries(${test_name}
         PRIVATE
         atom-test-common
     )
-    
+
     # Add the test to CTest with stress label
     add_test(NAME ${test_name} COMMAND ${test_name})
-    
+
     # Set test properties for stress tests
     set_tests_properties(${test_name} PROPERTIES
         TIMEOUT 1800  # 30 minutes timeout for stress tests

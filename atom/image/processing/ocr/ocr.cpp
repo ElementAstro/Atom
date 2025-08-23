@@ -247,8 +247,8 @@ void SpellChecker::loadDictionary(const std::string& filePath) {
     }
 }
 
-void SpellChecker::addWord(const std::string& word) { 
-    m_dictionary[word]++; 
+void SpellChecker::addWord(const std::string& word) {
+    m_dictionary[word]++;
 }
 
 bool SpellChecker::isCorrect(const std::string& word) {

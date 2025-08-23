@@ -19,31 +19,31 @@ PYBIND11_MODULE(sha1, m) {
         --------------------------------------
 
         This module provides a SHA-1 hash implementation conforming to FIPS PUB 180-4.
-        
+
         The SHA1 class allows incremental updates to compute the hash of large data,
         and supports both raw byte arrays and higher-level containers as input.
-        
+
         Note: While SHA-1 is no longer considered secure for cryptographic purposes,
         it remains useful for non-security applications like data integrity checks.
 
         Example:
             >>> from atom.algorithm import sha1
-            >>> 
+            >>>
             >>> # Create a new SHA1 hash object
             >>> hasher = sha1.SHA1()
-            >>> 
+            >>>
             >>> # Update with data
             >>> hasher.update(b"Hello")
             >>> hasher.update(b", World!")
-            >>> 
+            >>>
             >>> # Get digest as bytes
             >>> digest_bytes = hasher.digest_bytes()
             >>> print(digest_bytes.hex())
-            >>> 
+            >>>
             >>> # Or as a hex string
             >>> digest_str = hasher.digest_string()
             >>> print(digest_str)
-            >>> 
+            >>>
             >>> # One-step hashing convenience function
             >>> hash_value = sha1.compute_hash("Hello, World!")
     )pbdoc";
@@ -72,18 +72,18 @@ It supports incremental updates, allowing the hash of large data to be computed 
 
 Examples:
     >>> from atom.algorithm.sha1 import SHA1
-    >>> 
+    >>>
     >>> # Create a new hash object
     >>> hasher = SHA1()
-    >>> 
+    >>>
     >>> # Update with data incrementally
     >>> hasher.update(b"Hello")
     >>> hasher.update(b", World!")
-    >>> 
+    >>>
     >>> # Get the digest as a hexadecimal string
     >>> digest = hasher.digest_string()
     >>> print(digest)
-    >>> 
+    >>>
     >>> # Reset and start a new hash
     >>> hasher.reset()
     >>> hasher.update(b"New data")

@@ -1,6 +1,6 @@
 @echo off
 REM Atom Framework Examples Test Runner (Windows Batch Version)
-REM 
+REM
 REM This script provides a simple way to test Atom framework examples
 REM on Windows systems.
 REM

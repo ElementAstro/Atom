@@ -15,30 +15,30 @@
 class ImageTestListener : public ::testing::EmptyTestEventListener {
 public:
     void OnTestStart(const ::testing::TestInfo& test_info) override {
-        std::cout << "[ RUN      ] " << test_info.test_case_name() 
+        std::cout << "[ RUN      ] " << test_info.test_case_name()
                   << "." << test_info.name() << std::endl;
     }
-    
+
     void OnTestEnd(const ::testing::TestInfo& test_info) override {
         if (test_info.result()->Passed()) {
-            std::cout << "[       OK ] " << test_info.test_case_name() 
+            std::cout << "[       OK ] " << test_info.test_case_name()
                       << "." << test_info.name() << " ("
                       << test_info.result()->elapsed_time() << " ms)" << std::endl;
         } else {
-            std::cout << "[  FAILED  ] " << test_info.test_case_name() 
+            std::cout << "[  FAILED  ] " << test_info.test_case_name()
                       << "." << test_info.name() << " ("
                       << test_info.result()->elapsed_time() << " ms)" << std::endl;
         }
     }
-    
+
     void OnTestCaseStart(const ::testing::TestCase& test_case) override {
-        std::cout << "[----------] " << test_case.test_to_run_count() 
+        std::cout << "[----------] " << test_case.test_to_run_count()
                   << " tests from " << test_case.name() << std::endl;
     }
-    
+
     void OnTestCaseEnd(const ::testing::TestCase& test_case) override {
-        std::cout << "[----------] " << test_case.test_to_run_count() 
-                  << " tests from " << test_case.name() 
+        std::cout << "[----------] " << test_case.test_to_run_count()
+                  << " tests from " << test_case.name()
                   << " (" << test_case.elapsed_time() << " ms total)" << std::endl;
     }
 };
@@ -48,46 +48,46 @@ int main(int argc, char** argv) {
     std::cout << "===========================================================" << std::endl;
     std::cout << "           Atom Image Processing Module Tests             " << std::endl;
     std::cout << "===========================================================" << std::endl;
-    
+
     // Initialize Google Test
     ::testing::InitGoogleTest(&argc, argv);
-    
+
     // Add custom listener
     ::testing::TestEventListeners& listeners = ::testing::UnitTest::GetInstance()->listeners();
     delete listeners.Release(listeners.default_result_printer());
     listeners.Append(new ImageTestListener);
-    
+
     // Print configuration information
     std::cout << "\nTest Configuration:" << std::endl;
-    
+
     #ifdef ATOM_IMAGE_HAS_OPENCV
     std::cout << "  OpenCV: ENABLED" << std::endl;
     #else
     std::cout << "  OpenCV: DISABLED" << std::endl;
     #endif
-    
+
     #ifdef ATOM_IMAGE_HAS_CFITSIO
     std::cout << "  CFITSIO: ENABLED" << std::endl;
     #else
     std::cout << "  CFITSIO: DISABLED" << std::endl;
     #endif
-    
+
     #ifdef ATOM_IMAGE_HAS_OCR
     std::cout << "  OCR (Tesseract): ENABLED" << std::endl;
     #else
     std::cout << "  OCR (Tesseract): DISABLED" << std::endl;
     #endif
-    
+
     std::cout << "\n===========================================================" << std::endl;
-    
+
     // Run tests
     int result = RUN_ALL_TESTS();
-    
+
     // Print summary
     std::cout << "\n===========================================================" << std::endl;
-    
+
     auto* unit_test = ::testing::UnitTest::GetInstance();
-    
+
     std::cout << "Test Summary:" << std::endl;
     std::cout << "  Total test cases: " << unit_test->total_test_case_count() << std::endl;
     std::cout << "  Total tests: " << unit_test->total_test_count() << std::endl;
@@ -95,15 +95,15 @@ int main(int argc, char** argv) {
     std::cout << "  Failed tests: " << unit_test->failed_test_count() << std::endl;
     std::cout << "  Disabled tests: " << unit_test->disabled_test_count() << std::endl;
     std::cout << "  Total time: " << unit_test->elapsed_time() << " ms" << std::endl;
-    
+
     if (result == 0) {
         std::cout << "\n🎉 ALL TESTS PASSED! 🎉" << std::endl;
     } else {
         std::cout << "\n❌ SOME TESTS FAILED ❌" << std::endl;
     }
-    
+
     std::cout << "===========================================================" << std::endl;
-    
+
     return result;
 }
 
@@ -115,7 +115,7 @@ namespace {
         std::string description;
         std::vector<std::string> dependencies;
     };
-    
+
     std::vector<TestSuiteInfo> getTestSuites() {
         return {
             {
@@ -125,7 +125,7 @@ namespace {
                 {"atom-error"}
             },
             {
-                "ImageProcessorTest", 
+                "ImageProcessorTest",
                 "Tests for the unified image processing pipeline including resize, "
                 "rotation, filtering, and batch processing operations",
                 {"atom-error", "OpenCV (optional)"}
@@ -154,26 +154,26 @@ namespace {
 
 // Utility functions for test setup
 namespace test_utils {
-    
+
     // Check if required dependencies are available
     bool checkDependencies() {
         bool all_good = true;
-        
+
         #ifndef ATOM_IMAGE_HAS_OPENCV
         std::cout << "Warning: OpenCV not available - some tests will be skipped" << std::endl;
         #endif
-        
+
         #ifndef ATOM_IMAGE_HAS_CFITSIO
         std::cout << "Warning: CFITSIO not available - FITS tests will be limited" << std::endl;
         #endif
-        
+
         #ifndef ATOM_IMAGE_HAS_OCR
         std::cout << "Warning: OCR dependencies not available - OCR tests will be skipped" << std::endl;
         #endif
-        
+
         return all_good;
     }
-    
+
     // Create test data directory if needed
     void setupTestEnvironment() {
         std::filesystem::path test_data_dir = "test_data";
@@ -181,7 +181,7 @@ namespace test_utils {
             std::filesystem::create_directory(test_data_dir);
         }
     }
-    
+
     // Clean up test environment
     void cleanupTestEnvironment() {
         std::filesystem::path test_data_dir = "test_data";
@@ -199,7 +199,7 @@ public:
         test_utils::setupTestEnvironment();
         test_utils::checkDependencies();
     }
-    
+
     void TearDown() override {
         std::cout << "Cleaning up test environment..." << std::endl;
         test_utils::cleanupTestEnvironment();
@@ -207,5 +207,5 @@ public:
 };
 
 // Register global test environment
-static ::testing::Environment* const test_env = 
+static ::testing::Environment* const test_env =
     ::testing::AddGlobalTestEnvironment(new ImageTestEnvironment);

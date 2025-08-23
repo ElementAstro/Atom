@@ -91,12 +91,12 @@ protected:
         for (auto& row : test_matrix_) {
             row.resize(test_matrix_size_);
         }
-        
+
         // Fill with test data
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_real_distribution<> dis(0.0, 1.0);
-        
+
         for (size_t i = 0; i < test_matrix_size_; ++i) {
             for (size_t j = 0; j < test_matrix_size_; ++j) {
                 test_matrix_[i][j] = dis(gen);

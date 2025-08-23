@@ -80,15 +80,15 @@ Args:
 
 Examples:
     >>> from atom.algorithm.weight import WeightSelectorFloat, SelectionStrategyFloat
-    >>> 
+    >>>
     >>> # Create a selector with default strategy
     >>> selector = WeightSelectorFloat([1.0, 2.0, 3.0, 4.0])
-    >>> 
+    >>>
     >>> # Select an index based on weights
     >>> selected_index = selector.select()
     >>>
     >>> # Use bottom-heavy distribution (favors lower weights)
-    >>> selector2 = WeightSelectorFloat([1.0, 2.0, 3.0, 4.0], 
+    >>> selector2 = WeightSelectorFloat([1.0, 2.0, 3.0, 4.0],
     >>>                                strategy=SelectionStrategyFloat.BOTTOM_HEAVY)
     >>>
     >>> # Multiple selections without replacement
@@ -192,7 +192,7 @@ Args:
 
 Raises:
     ValueError: If resulting weights are negative
-             
+
 Examples:
     >>> # Double all weights
     >>> selector.apply_function_to_weights(lambda w: w * 2)
@@ -372,15 +372,15 @@ This class provides methods for weighted random sampling with or without replace
 
 Args:
     seed: Optional random seed for reproducible sampling
-        
+
 Examples:
     >>> from atom.algorithm.weight import WeightedRandomSamplerFloat
-    >>> 
+    >>>
     >>> sampler = WeightedRandomSamplerFloat(seed=42)
-    >>> 
+    >>>
     >>> # Sample 3 indices with replacement
     >>> indices1 = sampler.sample([1.0, 2.0, 3.0, 4.0], 3)
-    >>> 
+    >>>
     >>> # Sample 2 unique indices (no replacement)
     >>> indices2 = sampler.sample_unique([1.0, 2.0, 3.0, 4.0], 2)
         )")
@@ -395,7 +395,7 @@ Args:
 
 Returns:
     List of sampled indices
-        
+
 Raises:
     ValueError: If weights is empty
 )")
@@ -410,7 +410,7 @@ Args:
 
 Returns:
     List of sampled indices
-        
+
 Raises:
     ValueError: If n is greater than the number of weights or if weights is empty
 )");
@@ -444,32 +444,32 @@ PYBIND11_MODULE(weight, m) {
         Weighted Random Selection Algorithms
         -----------------------------------
 
-        This module provides flexible weighted random selection algorithms with 
+        This module provides flexible weighted random selection algorithms with
         multiple probability distributions and thread-safe operations.
-        
+
         The module includes:
           - Various selection strategies (uniform, bottom-heavy, top-heavy, etc.)
           - Methods for selecting with and without replacement
           - Thread-safe weight updates and manipulations
           - Utilities for normalizing and transforming weights
           - Detailed statistics and weight information
-          
+
         Example:
             >>> from atom.algorithm import weight
-            >>> 
+            >>>
             >>> # Create a selector with weights
             >>> selector = weight.WeightSelectorFloat([1.0, 2.0, 3.0, 4.0])
-            >>> 
+            >>>
             >>> # Select an index based on weights
             >>> selected_idx = selector.select()
             >>> print(selected_idx)
-            
+
             >>> # Select using a bottom-heavy distribution
             >>> selector2 = weight.WeightSelectorFloat(
-            >>>     [1.0, 2.0, 3.0, 4.0], 
+            >>>     [1.0, 2.0, 3.0, 4.0],
             >>>     strategy=weight.SelectionStrategyFloat.BOTTOM_HEAVY
             >>> )
-            >>> 
+            >>>
             >>> # Select multiple unique indices
             >>> indices = selector.select_unique_multiple(2)
     )pbdoc";
@@ -551,7 +551,7 @@ Returns:
 Examples:
     >>> # Create a selector with integer weights
     >>> int_selector = weight.create_selector([1, 2, 3, 4])
-    >>> 
+    >>>
     >>> # Create a selector with float weights and power law distribution
     >>> float_selector = weight.create_selector(
     >>>     [1.0, 2.0, 3.0, 4.0],

@@ -421,7 +421,7 @@ setup_build_environment
 # Build using the selected system
 if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
     echo "Building with XMake..."
-    
+
     # Configure XMake options
     XMAKE_ARGS=""
     if [[ "$BUILD_TYPE" == "debug" ]]; then XMAKE_ARGS="$XMAKE_ARGS -m debug"; fi
@@ -431,7 +431,7 @@ if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
     if [[ "$BUILD_TESTS" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --tests=y"; fi
     if [[ "$BUILD_CFITSIO" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --cfitsio=y"; fi
     if [[ "$BUILD_SSH" == "y" ]]; then XMAKE_ARGS="$XMAKE_ARGS --ssh=y"; fi
-    
+
     # Run XMake
     echo "Configuring XMake project..."
     xmake f $XMAKE_ARGS
@@ -439,7 +439,7 @@ if [[ "$BUILD_SYSTEM" == "xmake" ]]; then
         echo "Error: XMake configuration failed"
         exit 1
     fi
-    
+
     echo "Building project..."
     xmake
     if [ $? -ne 0 ]; then

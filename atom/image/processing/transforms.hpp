@@ -4,11 +4,11 @@
 /**
  * @file transforms.hpp
  * @brief Advanced image transformation operations
- * 
+ *
  * This module provides comprehensive image transformation capabilities including
  * geometric transformations, perspective corrections, image registration,
  * and advanced warping operations.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -63,7 +63,7 @@ struct Point2D {
  */
 struct Rectangle {
     double x, y, width, height;
-    Rectangle(double x = 0, double y = 0, double w = 0, double h = 0) 
+    Rectangle(double x = 0, double y = 0, double w = 0, double h = 0)
         : x(x), y(y), width(w), height(h) {}
 };
 

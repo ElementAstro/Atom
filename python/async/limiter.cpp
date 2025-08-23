@@ -30,25 +30,25 @@ PYBIND11_MODULE(limiter, m) {
 
         This module provides tools for controlling call rates, including rate limiting,
         debouncing, and throttling functions.
-        
+
         The module includes:
           - RateLimiter for controlling call frequency with configurable limits
           - Debounce for delaying function execution after multiple calls
           - Throttle for limiting function execution to specific intervals
-          
+
         Example:
             >>> from atom.async import limiter
-            >>> 
+            >>>
             >>> # Create a rate limiter
             >>> rate_limiter = limiter.RateLimiter()
-            >>> 
+            >>>
             >>> # Set limit for a specific function (5 calls per second)
             >>> rate_limiter.set_function_limit("my_api_call", 5, 1)
-            >>> 
+            >>>
             >>> # Create a debounced function (waits 500ms after last call)
             >>> debounced_fn = limiter.create_debounce(lambda: print("Debounced!"), 500)
             >>> debounced_fn()  # Will wait 500ms before executing
-            >>> 
+            >>>
             >>> # Create a throttled function (executes at most once every 1000ms)
             >>> throttled_fn = limiter.create_throttle(lambda: print("Throttled!"), 1000)
             >>> throttled_fn()  # Executes immediately
@@ -101,7 +101,7 @@ This class manages rate limiting for different functions based on configurable s
 Examples:
     >>> limiter = RateLimiter()
     >>> limiter.set_function_limit("api_call", 10, 60)  # 10 calls per minute
-    >>> 
+    >>>
     >>> # In an async function:
     >>> async def call_api():
     >>>     await limiter.acquire("api_call")
@@ -184,7 +184,7 @@ Examples:
     >>> debounced = create_debounce(lambda: print("Called!"), 500)
     >>> debounced()  # Will wait 500ms before printing
     >>> debounced()  # Resets the timer
-    >>> 
+    >>>
     >>> # Leading execution (immediate first call)
     >>> debounced2 = create_debounce(lambda: print("Called!"), 500, leading=True)
     >>> debounced2()  # Executes immediately, then waits for subsequent calls
@@ -235,7 +235,7 @@ Examples:
     >>> throttled = create_throttle(lambda: print("Called!"), 1000)
     >>> throttled()  # Executes immediately
     >>> throttled()  # Ignored until 1000ms have passed
-    >>> 
+    >>>
     >>> # Force immediate execution on first call
     >>> throttled2 = create_throttle(lambda: print("Called!"), 1000, leading=True)
     >>> throttled2()  # Executes immediately

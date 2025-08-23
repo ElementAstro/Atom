@@ -13,7 +13,7 @@ The Atom sysinfo module provides comprehensive system information gathering incl
 ## 📁 Examples
 
 ### ✅ **Header Test**
-**File**: `header_test.cpp`  
+**File**: `header_test.cpp`
 **Status**: Fully functional ✅
 
 A simple test that verifies the sysinfo module headers can be included successfully.
@@ -24,7 +24,7 @@ A simple test that verifies the sysinfo module headers can be included successfu
 - Compilation compatibility testing
 
 ### 🔧 **Basic Sysinfo Example**
-**File**: `basic_sysinfo_example.cpp`  
+**File**: `basic_sysinfo_example.cpp`
 **Status**: Has runtime issues (dependency/initialization specific)
 
 Demonstrates basic system information gathering capabilities.
@@ -37,7 +37,7 @@ Demonstrates basic system information gathering capabilities.
 - Basic system health checks
 
 ### 🔧 **System Info Example**
-**File**: `system_info_example.cpp`  
+**File**: `system_info_example.cpp`
 **Status**: Has linking issues (missing function implementations)
 
 Comprehensive demonstration of system information capabilities.
@@ -110,7 +110,7 @@ std::cout << "Total RAM: " << (memInfo.totalPhysicalMemory / (1024*1024*1024)) <
 // Get CPU information
 auto cpuInfo = getCpuInfo();
 std::cout << "CPU: " << cpuInfo.model << std::endl;
-std::cout << "Cores: " << cpuInfo.numPhysicalCores << " physical, " 
+std::cout << "Cores: " << cpuInfo.numPhysicalCores << " physical, "
           << cpuInfo.numLogicalCores << " logical" << std::endl;
 
 // Get current CPU usage

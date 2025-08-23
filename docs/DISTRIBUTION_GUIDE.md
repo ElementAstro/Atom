@@ -27,8 +27,8 @@ The Atom library supports multiple distribution formats and channels to accommod
 
 ### Source Distribution
 
-**Format**: `.tar.gz`, `.zip`  
-**Contents**: Complete source code with build scripts  
+**Format**: `.tar.gz`, `.zip`
+**Contents**: Complete source code with build scripts
 **Use case**: Building from source, development
 
 ```bash
@@ -45,8 +45,8 @@ The Atom library supports multiple distribution formats and channels to accommod
 
 ### Binary Distribution
 
-**Format**: `.tar.gz`, `.zip`  
-**Contents**: Pre-compiled libraries and headers  
+**Format**: `.tar.gz`, `.zip`
+**Contents**: Pre-compiled libraries and headers
 **Use case**: Quick integration, production deployment
 
 **Structure**:
@@ -65,8 +65,8 @@ atom-1.0.0-linux-x64/
 
 ### Python Wheels
 
-**Format**: `.whl`  
-**Contents**: Python bindings and native extensions  
+**Format**: `.whl`
+**Contents**: Python bindings and native extensions
 **Use case**: Python projects, scientific computing
 
 ```bash
@@ -163,7 +163,7 @@ python -c "import atom; print(atom.__version__)"
 
 ### GitHub Releases
 
-**Automatic**: Triggered by git tags  
+**Automatic**: Triggered by git tags
 **Manual**: Using GitHub web interface or API
 
 ```bash
@@ -176,7 +176,7 @@ gh release create v1.0.0 \
 
 ### Python Package Index (PyPI)
 
-**Automatic**: Via GitHub Actions on release  
+**Automatic**: Via GitHub Actions on release
 **Manual**: Using twine
 
 ```bash
@@ -209,11 +209,11 @@ class Atom < Formula
   homepage "https://github.com/ElementAstro/Atom"
   url "https://github.com/ElementAstro/Atom/archive/v1.0.0.tar.gz"
   sha256 "..."
-  
+
   depends_on "cmake"
   depends_on "openssl"
   depends_on "sqlite"
-  
+
   def install
     system "cmake", "-B", "build", *std_cmake_args
     system "cmake", "--build", "build"
@@ -232,7 +232,7 @@ class AtomConan(ConanFile):
     version = "1.0.0"
     settings = "os", "compiler", "build_type", "arch"
     requires = "openssl/1.1.1", "zlib/1.2.11", "sqlite3/3.39.0"
-    
+
     def build(self):
         cmake = CMake(self)
         cmake.configure()

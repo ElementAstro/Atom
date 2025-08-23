@@ -22,22 +22,22 @@ function add_atom_test(name, files)
     target("test_" .. name)
         -- Set target kind to executable
         set_kind("binary")
-        
+
         -- Add group for testing
         set_group("tests")
-        
+
         -- Add source files
         add_files(files)
-        
+
         -- Add dependencies
         add_deps("atom")
-        
+
         -- Add packages
         add_packages("gtest", "loguru")
-        
+
         -- Output directory
         set_targetdir("$(buildir)/tests")
-        
+
         -- Set test target attributes
         on_run(function(target)
             os.execv(target:targetfile())
@@ -56,7 +56,7 @@ end
 target("test")
     set_kind("phony")
     set_group("tests")
-    
+
     on_run(function(target)
         -- Run all test targets
         local test_targets = target.project.targets

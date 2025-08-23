@@ -54,7 +54,7 @@ jobs:
         cd vcpkg-test
         git checkout ${{ steps.vcpkg-commit.outputs.commit }}
         ./bootstrap-vcpkg.sh
-        
+
         # Test installing our dependencies
         ./vcpkg install --triplet x64-linux openssl zlib sqlite3 fmt || {
           echo "Failed to install dependencies with new baseline"
@@ -69,14 +69,14 @@ jobs:
         title: 'Update vcpkg baseline'
         body: |
           This PR updates the vcpkg baseline to the latest commit.
-          
+
           **Changes:**
           - Updated `builtin-baseline` in `vcpkg.json` to `${{ steps.vcpkg-commit.outputs.commit }}`
-          
+
           **Testing:**
           - [x] Verified that core dependencies can be installed with the new baseline
           - [x] Automated tests will run on this PR
-          
+
           This is an automated update created by the dependency update workflow.
         branch: update/vcpkg-baseline
         delete-branch: true
@@ -101,7 +101,7 @@ jobs:
     - name: Update submodules
       run: |
         git submodule update --remote --merge
-        
+
         # Check if there are any changes
         if git diff --quiet --exit-code; then
           echo "No submodule updates available"
@@ -116,7 +116,7 @@ jobs:
       run: |
         echo "## Submodule Updates" > submodule_changes.md
         echo "" >> submodule_changes.md
-        
+
         git submodule foreach --quiet 'echo "### $name"'
         git submodule foreach --quiet 'git log --oneline HEAD@{1}..HEAD || echo "No changes"'
 
@@ -168,26 +168,26 @@ jobs:
       run: |
         # Install current requirements
         pip install -r requirements.txt
-        
+
         # Generate updated requirements
         pip list --outdated --format=json > outdated.json
-        
+
         # Update requirements.txt with latest versions
         python -c "
         import json
         import re
-        
+
         with open('outdated.json') as f:
             outdated = json.load(f)
-        
+
         with open('requirements.txt') as f:
             requirements = f.read()
-        
+
         for pkg in outdated:
             pattern = rf'^{pkg[\"name\"]}==.*$'
             replacement = f'{pkg[\"name\"]}=={pkg[\"latest_version\"]}'
             requirements = re.sub(pattern, replacement, requirements, flags=re.MULTILINE)
-        
+
         with open('requirements.txt', 'w') as f:
             f.write(requirements)
         "
@@ -208,14 +208,14 @@ jobs:
         title: 'Update Python dependencies'
         body: |
           This PR updates Python dependencies to their latest versions.
-          
+
           **Changes:**
           - Updated versions in `requirements.txt`
-          
+
           **Testing:**
           - [x] Verified that updated dependencies can be installed
           - [x] Basic import test passed
-          
+
           This is an automated update created by the dependency update workflow.
         branch: update/python-deps
         delete-branch: true
@@ -245,7 +245,7 @@ jobs:
       run: |
         # Check vcpkg dependencies for known vulnerabilities
         echo "Checking vcpkg dependencies for vulnerabilities..."
-        
+
         # Extract dependency list from vcpkg.json
         jq -r '.dependencies[]' vcpkg.json | while read dep; do
           echo "Checking $dep..."
@@ -269,7 +269,7 @@ jobs:
         echo "# Dependency License Report" > license-report.md
         echo "Generated on: $(date)" >> license-report.md
         echo "" >> license-report.md
-        
+
         echo "## vcpkg Dependencies" >> license-report.md
         jq -r '.dependencies[]' vcpkg.json | while read dep; do
           echo "- $dep: License information would be checked here" >> license-report.md
@@ -297,30 +297,30 @@ jobs:
           const title = `Dependency Update Summary - ${new Date().toISOString().split('T')[0]}`;
           const body = `
           # Weekly Dependency Update Summary
-          
+
           This issue summarizes the automated dependency update process.
-          
+
           ## Update Status
-          
+
           - **vcpkg baseline**: ${{ needs.update-vcpkg.result }}
           - **Git submodules**: ${{ needs.update-submodules.result }}
           - **Python dependencies**: ${{ needs.update-python-deps.result }}
           - **Security check**: ${{ needs.security-check.result }}
           - **License check**: ${{ needs.license-check.result }}
-          
+
           ## Actions Taken
-          
+
           Check the [Actions tab](${context.payload.repository.html_url}/actions) for detailed logs.
-          
+
           ## Next Steps
-          
+
           - Review any created pull requests
           - Address any security vulnerabilities found
           - Update documentation if needed
-          
+
           This issue was created automatically by the dependency update workflow.
           `;
-          
+
           github.rest.issues.create({
             owner: context.repo.owner,
             repo: context.repo.repo,

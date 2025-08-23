@@ -49,10 +49,10 @@ blob ImageFilter::applyFilter(const blob& input, FilterType filterType, const Fi
             auto kernelX = getPredefinedKernel(FilterType::SOBEL, 3);
             auto kernelY = kernelX; // Transpose for Y direction
             std::reverse(kernelY.begin(), kernelY.end());
-            
+
             auto edgesX = convolve(inputData, kernelX, width, height, channels);
             auto edgesY = convolve(inputData, kernelY, width, height, channels);
-            
+
             // Combine X and Y gradients
             outputData.resize(edgesX.size());
             for (size_t i = 0; i < edgesX.size(); ++i) {
@@ -92,7 +92,7 @@ blob ImageFilter::applyFilter(const blob& input, FilterType filterType, const Fi
     return result;
 }
 
-blob ImageFilter::applyCustomKernel(const blob& input, 
+blob ImageFilter::applyCustomKernel(const blob& input,
                                    const std::vector<std::vector<double>>& kernel,
                                    bool normalize) const {
     if (input.isEmpty() || kernel.empty()) {
@@ -146,7 +146,7 @@ blob ImageFilter::applySeparableFilter(const blob& input,
     for (double val : kernelY) {
         vKernel.push_back({val});
     }
-    
+
     return applyCustomKernel(intermediate, vKernel, false);
 }
 
@@ -197,7 +197,7 @@ std::vector<std::vector<double>> ImageFilter::getPredefinedKernel(FilterType fil
 
 std::vector<std::vector<double>> ImageFilter::createGaussianKernel(int size, double sigma) {
     if (size % 2 == 0) size++; // Ensure odd size
-    
+
     std::vector<std::vector<double>> kernel(size, std::vector<double>(size));
     double sum = 0.0;
     int center = size / 2;
@@ -225,24 +225,24 @@ std::vector<std::vector<double>> ImageFilter::createGaussianKernel(int size, dou
 
 std::vector<std::vector<double>> ImageFilter::createMotionBlurKernel(int size, double angle, int distance) {
     std::vector<std::vector<double>> kernel(size, std::vector<double>(size, 0.0));
-    
+
     double radians = angle * M_PI / 180.0;
     double dx = std::cos(radians);
     double dy = std::sin(radians);
-    
+
     int center = size / 2;
     int count = 0;
-    
+
     for (int i = 0; i <= distance; ++i) {
         int x = center + static_cast<int>(i * dx);
         int y = center + static_cast<int>(i * dy);
-        
+
         if (x >= 0 && x < size && y >= 0 && y < size) {
             kernel[y][x] = 1.0;
             count++;
         }
     }
-    
+
     // Normalize
     if (count > 0) {
         for (auto& row : kernel) {
@@ -251,7 +251,7 @@ std::vector<std::vector<double>> ImageFilter::createMotionBlurKernel(int size, d
             }
         }
     }
-    
+
     return kernel;
 }
 
@@ -267,22 +267,22 @@ std::vector<std::byte> ImageFilter::convolve(const std::vector<std::byte>& input
         for (int x = 0; x < width; ++x) {
             for (int c = 0; c < channels; ++c) {
                 double sum = 0.0;
-                
+
                 for (int ky = 0; ky < kernelSize; ++ky) {
                     for (int kx = 0; kx < kernelSize; ++kx) {
                         int px = x + kx - kernelCenter;
                         int py = y + ky - kernelCenter;
-                        
+
                         // Handle boundaries by clamping
                         px = std::clamp(px, 0, width - 1);
                         py = std::clamp(py, 0, height - 1);
-                        
+
                         int inputIdx = (py * width + px) * channels + c;
                         double pixelValue = static_cast<double>(static_cast<uint8_t>(input[inputIdx]));
                         sum += pixelValue * kernel[ky][kx];
                     }
                 }
-                
+
                 int outputIdx = (y * width + x) * channels + c;
                 output[outputIdx] = static_cast<std::byte>(std::clamp(sum, 0.0, 255.0));
             }
@@ -302,20 +302,20 @@ std::vector<std::byte> ImageFilter::medianFilter(const std::vector<std::byte>& i
         for (int x = 0; x < width; ++x) {
             for (int c = 0; c < channels; ++c) {
                 std::vector<uint8_t> neighborhood;
-                
+
                 for (int ky = -kernelCenter; ky <= kernelCenter; ++ky) {
                     for (int kx = -kernelCenter; kx <= kernelCenter; ++kx) {
                         int px = std::clamp(x + kx, 0, width - 1);
                         int py = std::clamp(y + ky, 0, height - 1);
-                        
+
                         int inputIdx = (py * width + px) * channels + c;
                         neighborhood.push_back(static_cast<uint8_t>(input[inputIdx]));
                     }
                 }
-                
+
                 std::sort(neighborhood.begin(), neighborhood.end());
                 uint8_t median = neighborhood[neighborhood.size() / 2];
-                
+
                 int outputIdx = (y * width + x) * channels + c;
                 output[outputIdx] = static_cast<std::byte>(median);
             }

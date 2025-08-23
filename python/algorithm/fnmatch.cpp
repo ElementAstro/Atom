@@ -13,24 +13,24 @@ PYBIND11_MODULE(fnmatch, m) {
 
         This module provides pattern matching functionality similar to Python's fnmatch,
         but with additional features and optimizations:
-        
+
           - Case-insensitive matching
           - Path-aware matching
           - SIMD-accelerated matching (when available)
           - Support for multiple patterns
           - Parallel processing options
-          
+
         Example:
             >>> from atom.algorithm import fnmatch
-            >>> 
+            >>>
             >>> # Simple pattern matching
             >>> fnmatch.fnmatch("example.txt", "*.txt")
             True
-            
+
             >>> # Case-insensitive matching
             >>> fnmatch.fnmatch("Example.TXT", "*.txt", fnmatch.CASEFOLD)
             True
-            
+
             >>> # Filter a list of filenames
             >>> names = ["file1.txt", "file2.jpg", "file3.txt", "file4.png"]
             >>> fnmatch.filter(names, "*.txt")
@@ -61,16 +61,16 @@ PYBIND11_MODULE(fnmatch, m) {
           py::arg("pattern"), py::arg("string"), py::arg("flags") = 0,
           R"pbdoc(
         Matches a string against a specified pattern.
-        
+
         Args:
             pattern: The pattern to match against
             string: The string to match
             flags: Optional flags to modify matching behavior (default: 0)
                    Can be NOESCAPE, PATHNAME, PERIOD, CASEFOLD or combined with bitwise OR
-            
+
         Returns:
             bool: True if the string matches the pattern, False otherwise
-            
+
         Raises:
             FnmatchException: If there is an error in the pattern
     )pbdoc");
@@ -81,12 +81,12 @@ PYBIND11_MODULE(fnmatch, m) {
           py::arg("pattern"), py::arg("string"), py::arg("flags") = 0,
           R"pbdoc(
         Matches a string against a specified pattern without throwing exceptions.
-        
+
         Args:
             pattern: The pattern to match against
             string: The string to match
             flags: Optional flags to modify matching behavior (default: 0)
-            
+
         Returns:
             Expected object containing bool result or FnmatchError
     )pbdoc");
@@ -106,12 +106,12 @@ PYBIND11_MODULE(fnmatch, m) {
         py::arg("names"), py::arg("pattern"), py::arg("flags") = 0,
         R"pbdoc(
         Check if any string in the list matches the pattern.
-        
+
         Args:
             names: List of strings to filter
             pattern: Pattern to filter with
             flags: Optional flags to modify filtering behavior (default: 0)
-            
+
         Returns:
             bool: True if any element matches the pattern
     )pbdoc");
@@ -147,13 +147,13 @@ PYBIND11_MODULE(fnmatch, m) {
         py::arg("use_parallel") = true,
         R"pbdoc(
         Filter a list of strings with multiple patterns.
-        
+
         Args:
             names: List of strings to filter
             patterns: List of patterns to filter with
             flags: Optional flags to modify filtering behavior (default: 0)
             use_parallel: Whether to use parallel execution (default: True)
-            
+
         Returns:
             list: Strings from names that match any pattern in patterns
     )pbdoc");
@@ -163,11 +163,11 @@ PYBIND11_MODULE(fnmatch, m) {
           py::arg("pattern"), py::arg("flags") = 0,
           R"pbdoc(
         Translate a pattern into a regular expression string.
-        
+
         Args:
             pattern: The pattern to translate
             flags: Optional flags to modify translation behavior (default: 0)
-            
+
         Returns:
             Expected object containing regex string or FnmatchError
     )pbdoc");

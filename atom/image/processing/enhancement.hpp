@@ -4,11 +4,11 @@
 /**
  * @file enhancement.hpp
  * @brief Advanced image enhancement operations
- * 
+ *
  * This module provides comprehensive image enhancement capabilities including
  * histogram operations, color corrections, contrast enhancement, and
  * advanced tone mapping algorithms.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -81,7 +81,7 @@ struct EnhancementParams {
     // Histogram parameters
     double clipLimit = 2.0;          // CLAHE clip limit
     int tileGridSize = 8;            // CLAHE tile grid size
-    
+
     // Tone mapping parameters
     double gamma = 2.2;              // Gamma value
     double exposure = 0.0;           // Exposure adjustment
@@ -89,20 +89,20 @@ struct EnhancementParams {
     double intensity = 1.0;          // Intensity multiplier
     double lightAdaptation = 1.0;    // Light adaptation
     double colorAdaptation = 0.0;    // Color adaptation
-    
+
     // Color correction parameters
     double temperature = 6500.0;     // Color temperature (K)
     double tint = 0.0;               // Tint adjustment
     std::array<double, 3> whitePoint = {1.0, 1.0, 1.0}; // White point
     std::array<double, 3> blackPoint = {0.0, 0.0, 0.0}; // Black point
-    
+
     // Contrast and brightness
     double contrast = 1.0;           // Contrast multiplier
     double brightness = 0.0;         // Brightness offset
     double highlights = 0.0;         // Highlights adjustment
     double shadows = 0.0;            // Shadows adjustment
     double midtones = 0.0;           // Midtones adjustment
-    
+
     // Advanced parameters
     double vibrance = 0.0;           // Vibrance adjustment
     double clarity = 0.0;            // Clarity/structure enhancement

@@ -15,7 +15,7 @@ set_license("GPL3")
 -- Object Library
 target("atom-system-object")
     set_kind("object")
-    
+
     -- Add source files from new structure
     add_files("core/*.cpp")
     add_files("process/*.cpp")
@@ -45,21 +45,21 @@ target("atom-system-object")
     add_headerfiles("signals/*.hpp")
     add_headerfiles("debug/*.hpp")
     add_headerfiles("scheduling/*.hpp")
-    
+
     -- Add dependencies
     add_packages("loguru")
-    
+
     -- Add include directories
     add_includedirs(".", {public = true})
     add_includedirs("..", {public = true})
-    
+
     -- Platform-specific settings
     if is_plat("linux") then
         add_syslinks("pthread")
     elseif is_plat("windows") then
         add_syslinks("pdh", "wlanapi")
     end
-    
+
     -- Set C++ standard
     set_languages("c++20")
 target_end()
@@ -68,22 +68,22 @@ target_end()
 target("atom-system")
     -- Set library type based on parent project option
     set_kind(has_config("shared_libs") and "shared" or "static")
-    
+
     -- Add dependencies
     add_deps("atom-system-object")
     add_packages("loguru")
-    
+
     -- Platform-specific settings
     if is_plat("linux") then
         add_syslinks("pthread")
     elseif is_plat("windows") then
         add_syslinks("pdh", "wlanapi")
     end
-    
+
     -- Set output directories
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Install configuration
     on_install(function (target)
         os.cp(target:targetfile(), path.join(target:installdir(), "lib"))

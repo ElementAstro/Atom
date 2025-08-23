@@ -77,19 +77,19 @@ task("install")
     on_run(function()
         import("core.project.project")
         import("core.platform.platform")
-        
+
         -- Set install prefix
         local prefix = option.get("prefix") or "/usr/local"
-        
+
         -- Build the project
         os.exec("xmake build")
-        
+
         -- Install the project
         os.exec("xmake install -o " .. prefix)
-        
+
         cprint("${bright green}Atom has been installed to " .. prefix)
     end)
-    
+
     set_menu {
         usage = "xmake install",
         description = "Install Atom libraries and headers"

@@ -20,10 +20,10 @@ yield values, similar to Python generators.
 
 Examples:
     >>> from atom.async import generator
-    >>> 
+    >>>
     >>> # Create a generator from a range
     >>> g = generator.range_int(0, 5)
-    >>> 
+    >>>
     >>> # Iterate through the generator
     >>> for value in g:
     >>>     print(value)
@@ -61,14 +61,14 @@ yields values and can also receive values from the caller.
 
 Examples:
     >>> from atom.async import generator
-    >>> 
+    >>>
     >>> # Create a two-way generator
     >>> g = generator.create_echo_generator_int()
-    >>> 
+    >>>
     >>> # Send values and get responses
     >>> value = g.next(42)  # Send 42, get 42 back
     >>> print(value)
-    >>> 
+    >>>
     >>> # Check if generator is done
     >>> print(g.done())
 )")
@@ -103,10 +103,10 @@ This generator yields values to the caller but doesn't receive input.
 
 Examples:
     >>> from atom.async import generator
-    >>> 
+    >>>
     >>> # Create a one-way generator
     >>> g = generator.create_counter_generator_int(10)
-    >>> 
+    >>>
     >>> # Get values
     >>> for i in range(5):
     >>>     value = g.next()
@@ -169,26 +169,26 @@ PYBIND11_MODULE(generator, m) {
         This module provides Python bindings for C++20 coroutine-based generators,
         allowing for efficient, lazy evaluation of sequences and bi-directional
         communication with coroutines.
-        
+
         The module includes:
           - Standard generators that yield values in a sequence
           - Two-way generators that can both yield and receive values
           - Utility functions to create generators from ranges, sequences, etc.
           - Support for infinite generators with safe iteration
-          
+
         Example:
             >>> from atom.async import generator
-            >>> 
+            >>>
             >>> # Create a range generator
             >>> g = generator.range_int(0, 5)
-            >>> 
+            >>>
             >>> # Iterate through all values
             >>> for i in g:
             >>>     print(i)  # Prints 0, 1, 2, 3, 4
-            >>> 
+            >>>
             >>> # Create an infinite generator (use with caution!)
             >>> inf_gen = generator.infinite_range_int(1, 2)
-            >>> 
+            >>>
             >>> # Take only the first few values from infinite generator
             >>> for i, value in enumerate(inf_gen):
             >>>     print(value)
@@ -270,7 +270,7 @@ Returns:
 Examples:
     >>> g = range_int(0, 5)
     >>> list(g)  # [0, 1, 2, 3, 4]
-    
+
     >>> g = range_int(0, 10, 2)
     >>> list(g)  # [0, 2, 4, 6, 8]
 )");

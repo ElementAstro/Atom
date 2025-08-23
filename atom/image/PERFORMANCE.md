@@ -168,7 +168,7 @@ for (int i = 0; i < 1000; ++i) {
 auto end = std::chrono::high_resolution_clock::now();
 auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-std::cout << "Average resize time: " << (duration.count() / 1000.0) 
+std::cout << "Average resize time: " << (duration.count() / 1000.0)
           << " μs" << std::endl;
 ```
 
@@ -215,18 +215,18 @@ options.useAccelerate = true;  // Use Apple's Accelerate framework
 // Process large images in chunks
 void processLargeImage(const std::string& filename) {
     blob image = blob::load(filename);
-    
+
     const int tileSize = 512;
     const int overlap = 32;
-    
+
     for (int y = 0; y < image.getHeight(); y += tileSize - overlap) {
         for (int x = 0; x < image.getWidth(); x += tileSize - overlap) {
             int w = std::min(tileSize, image.getWidth() - x);
             int h = std::min(tileSize, image.getHeight() - y);
-            
+
             auto tile = image.crop(x, y, w, h);
             auto processed = processor.applyFilter(tile, FilterType::SHARPEN);
-            
+
             // Merge back into result...
         }
     }

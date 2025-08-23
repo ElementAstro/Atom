@@ -213,10 +213,10 @@ cmake -B build-debug \
    ```bash
    # Update version
    ./scripts/version-manager.sh set 1.2.0
-   
+
    # Generate changelog
    ./scripts/version-manager.sh changelog
-   
+
    # Commit changes
    git add -A
    git commit -m "Release version 1.2.0"

@@ -412,7 +412,7 @@ TEST_F(ScriptingAPITest, ScriptSyntaxError) {
     }
 
     std::string invalidScript = R"(
-        local x = 
+        local x =
         return x
     )";
 

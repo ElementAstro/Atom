@@ -4,11 +4,11 @@
 /**
  * @file gpu_acceleration.hpp
  * @brief GPU-accelerated image processing
- * 
+ *
  * This module provides GPU acceleration for image processing operations
  * using CUDA, OpenCL, and other GPU computing frameworks for high-performance
  * parallel processing.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0

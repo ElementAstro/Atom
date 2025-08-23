@@ -11,30 +11,30 @@ PYBIND11_MODULE(async_executor, m) {
         Advanced Async Task Executor
         ---------------------------
 
-        This module provides a high-performance asynchronous task executor with 
+        This module provides a high-performance asynchronous task executor with
         thread pooling, priority-based scheduling, and multiple execution strategies.
-        
+
         The module includes:
           - Thread pool with dynamic resizing
           - Priority-based task scheduling (LOW, NORMAL, HIGH, CRITICAL)
           - Various execution strategies (IMMEDIATE, DEFERRED, SCHEDULED)
           - Task cancellation support
           - Wait for completion functionality
-          
+
         Example:
             >>> from atom.async.async_executor import AsyncExecutor, ExecutionStrategy, TaskPriority
-            >>> 
+            >>>
             >>> # Create an executor with 4 threads
             >>> executor = AsyncExecutor(4)
-            >>> 
+            >>>
             >>> # Schedule a task for immediate execution with normal priority
             >>> future = executor.schedule(
-            >>>     ExecutionStrategy.IMMEDIATE, 
+            >>>     ExecutionStrategy.IMMEDIATE,
             >>>     TaskPriority.NORMAL,
-            >>>     lambda x: x * 2, 
+            >>>     lambda x: x * 2,
             >>>     10
             >>> )
-            >>> 
+            >>>
             >>> # Get the result when ready
             >>> result = future.result()
             >>> print(result)  # Outputs: 20
@@ -110,12 +110,12 @@ Args:
 
 Examples:
     >>> executor = AsyncExecutor(4)  # Create an executor with 4 threads
-    >>> 
+    >>>
     >>> # Schedule an immediate task
     >>> future = executor.schedule(
-    >>>     ExecutionStrategy.IMMEDIATE, 
+    >>>     ExecutionStrategy.IMMEDIATE,
     >>>     TaskPriority.NORMAL,
-    >>>     lambda x: x * 2, 
+    >>>     lambda x: x * 2,
     >>>     10
     >>> )
     >>>

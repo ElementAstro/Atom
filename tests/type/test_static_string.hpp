@@ -656,7 +656,7 @@ TEST_F(StaticStringTest, ConstexprUsage) {
     // Verify the constexpr values at runtime
     verifyStringEquals(constexpr_str, "Hello");
     verifyStringEquals(str, "Hello");
-    
+
     // Additional runtime checks can go here
     EXPECT_EQ(constexpr_str.size(), 5);
     EXPECT_EQ(str.size(), 5);

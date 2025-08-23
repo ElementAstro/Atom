@@ -58,7 +58,7 @@ pattern "%Y-%m-%d %H:%M:%S".
 
 Returns:
     str: The current timestamp formatted as "%Y-%m-%d %H:%M:%S"
-    
+
 Raises:
     TimeConvertException: If time conversion fails
 
@@ -81,7 +81,7 @@ Args:
 
 Returns:
     str: The corresponding time in China Standard Time, formatted as "%Y-%m-%d %H:%M:%S"
-    
+
 Raises:
     TimeConvertException: If the input format is invalid or conversion fails
 
@@ -100,7 +100,7 @@ formatted as a string with the pattern "%Y-%m-%d %H:%M:%S".
 
 Returns:
     str: The current China Standard Time formatted as "%Y-%m-%d %H:%M:%S"
-    
+
 Raises:
     TimeConvertException: If time conversion fails
 
@@ -123,7 +123,7 @@ Args:
 
 Returns:
     str: The string representation of the timestamp
-    
+
 Raises:
     TimeConvertException: If the timestamp is invalid or conversion fails
 
@@ -152,7 +152,7 @@ Args:
 
 Returns:
     str: The formatted time string based on the tm structure and format
-    
+
 Raises:
     TimeConvertException: If formatting fails
 
@@ -172,7 +172,7 @@ pattern "%Y-%m-%d %H:%M:%S".
 
 Returns:
     str: The current UTC time formatted as "%Y-%m-%d %H:%M:%S"
-    
+
 Raises:
     TimeConvertException: If time conversion fails
 
@@ -193,7 +193,7 @@ Args:
     timestamp: The timestamp to be converted, in seconds since the Unix epoch
 
 Returns:
-    Optional[tm]: The corresponding tm structure representing the timestamp, 
+    Optional[tm]: The corresponding tm structure representing the timestamp,
                   or None if conversion fails
 
 Examples:
@@ -231,7 +231,7 @@ Args:
 
 Returns:
     int: Elapsed time in milliseconds
-    
+
 Raises:
     TypeError: If the input is not a valid time point
 
@@ -319,7 +319,7 @@ Args:
 
 Returns:
     tm: The parsed time as a tm structure
-    
+
 Raises:
     ValueError: If parsing fails
 
@@ -369,7 +369,7 @@ Args:
 
 Returns:
     float: The difference in seconds (time2 - time1)
-    
+
 Raises:
     ValueError: If parsing or conversion fails
 

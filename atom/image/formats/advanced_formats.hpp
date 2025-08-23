@@ -4,11 +4,11 @@
 /**
  * @file advanced_formats.hpp
  * @brief Advanced image format support
- * 
+ *
  * This module provides support for advanced and specialized image formats
  * including RAW camera formats, medical imaging formats, scientific formats,
  * and modern web formats.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -37,61 +37,61 @@ enum class AdvancedFormat {
     PEF,            // Pentax RAW
     SRW,            // Samsung RAW
     X3F,            // Sigma RAW
-    
+
     // Medical imaging formats
     DICOM,          // Digital Imaging and Communications in Medicine
     NIFTI,          // Neuroimaging Informatics Technology Initiative
     ANALYZE,        // Analyze format
     MINC,           // Medical Image NetCDF
     NRRD,           // Nearly Raw Raster Data
-    
+
     // Scientific formats
     HDF5,           // Hierarchical Data Format 5
     NETCDF,         // Network Common Data Form
     GRIB,           // Gridded Binary
     MATLAB,         // MATLAB format
-    
+
     // Modern web formats
     WEBP,           // WebP format
     AVIF,           // AV1 Image File Format
     HEIF,           // High Efficiency Image Format
     JPEG_XL,        // JPEG XL
-    
+
     // Vector formats
     SVG,            // Scalable Vector Graphics
     PDF,            // Portable Document Format
     EPS,            // Encapsulated PostScript
-    
+
     // Archive formats
     ICO,            // Windows Icon
     ICNS,           // macOS Icon
     CUR,            // Windows Cursor
-    
+
     // Specialized formats
     OPENEXR,        // OpenEXR HDR format
     RADIANCE,       // Radiance HDR format
     PFM,            // Portable Float Map
     XCF,            // GIMP native format
     PSD,            // Photoshop Document
-    
+
     // Animation formats
     GIF,            // Graphics Interchange Format
     APNG,           // Animated PNG
     WEBP_ANIM,      // Animated WebP
-    
+
     // Microscopy formats
     LSM,            // Zeiss LSM
     CZI,            // Zeiss CZI
     LIF,            // Leica LIF
     ND2,            // Nikon ND2
     OIB,            // Olympus OIB
-    
+
     // Satellite/GIS formats
     GEOTIFF,        // GeoTIFF
     NITF,           // National Imagery Transmission Format
     MrSID,          // Multi-resolution Seamless Image Database
     ECW,            // Enhanced Compression Wavelet
-    
+
     UNKNOWN         // Unknown format
 };
 
@@ -292,7 +292,7 @@ public:
      * @param zIndex Z-stack index
      * @return Loaded image blob with metadata
      */
-    virtual std::pair<blob, std::unordered_map<std::string, std::string>> 
+    virtual std::pair<blob, std::unordered_map<std::string, std::string>>
     loadMicroscopy(const std::string& filename,
                    int seriesIndex = 0,
                    int channelIndex = 0,
@@ -391,7 +391,7 @@ protected:
      * @param format Target format
      * @return Parsed parameters
      */
-    virtual std::unordered_map<std::string, std::string> 
+    virtual std::unordered_map<std::string, std::string>
     parseFormatParams(const std::unordered_map<std::string, std::string>& params,
                       AdvancedFormat format) const;
 };

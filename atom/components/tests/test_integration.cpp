@@ -426,7 +426,7 @@ TEST_F(IntegrationTest, ScriptingComponentIntegration) {
             local processedCount = getComponentVar("DataProcessor", "processedCount")
             local maxItems = getComponentVar("Configuration", "maxItems")
             local mode = getComponentVar("Configuration", "mode")
-            
+
             return {
                 processed = processedCount,
                 max = maxItems,

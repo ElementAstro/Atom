@@ -1,7 +1,7 @@
 # TestsBuildOptions.cmake
 #
 # This file contains all options for controlling the build of Atom tests
-# 
+#
 # Author: Max Qian
 # License: GPL3
 

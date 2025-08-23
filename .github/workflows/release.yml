@@ -115,7 +115,7 @@ jobs:
       run: |
         mkdir -p dist
         cd install
-        
+
         if [ "${{ matrix.os }}" = "windows-latest" ]; then
           7z a ../dist/${{ matrix.artifact_name }}-${{ steps.version.outputs.version }}.zip .
         else
@@ -197,7 +197,7 @@ jobs:
       run: |
         VERSION=${GITHUB_REF#refs/tags/v}
         echo "version=$VERSION" >> $GITHUB_OUTPUT
-        
+
         # Extract changelog for this version
         if [ -f CHANGELOG.md ]; then
           awk "/^## \[$VERSION\]/{flag=1; next} /^## \[/{flag=0} flag" CHANGELOG.md > release_notes.md
@@ -214,7 +214,7 @@ jobs:
       run: |
         mkdir -p release_assets
         find artifacts/ -name "*.tar.gz" -o -name "*.zip" -o -name "*.whl" | xargs -I {} cp {} release_assets/
-        
+
         # Create checksums
         cd release_assets
         sha256sum * > checksums.txt
@@ -298,7 +298,7 @@ jobs:
     - name: Create vcpkg port files
       run: |
         mkdir -p vcpkg-port/ports/atom
-        
+
         # Create portfile.cmake
         cat > vcpkg-port/ports/atom/portfile.cmake << 'EOF'
         vcpkg_from_github(

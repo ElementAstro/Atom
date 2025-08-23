@@ -218,11 +218,11 @@ blob ImageTransform::applyTransformation(const blob& input,
     for (int y = 0; y < outHeight; ++y) {
         for (int x = 0; x < outWidth; ++x) {
             Point2D inputCoord = mapFunction(Point2D(x, y));
-            
+
             auto pixelValues = interpolatePixel(inputData, inputCoord.x, inputCoord.y,
                                               inputWidth, inputHeight, channels,
                                               method, borderMode);
-            
+
             for (int c = 0; c < channels; ++c) {
                 int outputIdx = (y * outWidth + x) * channels + c;
                 outputData[outputIdx] = static_cast<std::byte>(pixelValues[c]);
@@ -261,7 +261,7 @@ std::vector<uint8_t> ImageTransform::interpolatePixel(const std::vector<std::byt
             int iy = static_cast<int>(std::round(y));
             ix = std::clamp(ix, 0, width - 1);
             iy = std::clamp(iy, 0, height - 1);
-            
+
             for (int c = 0; c < channels; ++c) {
                 int idx = (iy * width + ix) * channels + c;
                 result[c] = static_cast<uint8_t>(input[idx]);
@@ -273,32 +273,32 @@ std::vector<uint8_t> ImageTransform::interpolatePixel(const std::vector<std::byt
             int y0 = static_cast<int>(std::floor(y));
             int x1 = x0 + 1;
             int y1 = y0 + 1;
-            
+
             double fx = x - x0;
             double fy = y - y0;
-            
+
             x0 = std::clamp(x0, 0, width - 1);
             x1 = std::clamp(x1, 0, width - 1);
             y0 = std::clamp(y0, 0, height - 1);
             y1 = std::clamp(y1, 0, height - 1);
-            
+
             for (int c = 0; c < channels; ++c) {
                 double v00 = static_cast<double>(static_cast<uint8_t>(input[(y0 * width + x0) * channels + c]));
                 double v01 = static_cast<double>(static_cast<uint8_t>(input[(y0 * width + x1) * channels + c]));
                 double v10 = static_cast<double>(static_cast<uint8_t>(input[(y1 * width + x0) * channels + c]));
                 double v11 = static_cast<double>(static_cast<uint8_t>(input[(y1 * width + x1) * channels + c]));
-                
+
                 double v0 = v00 * (1 - fx) + v01 * fx;
                 double v1 = v10 * (1 - fx) + v11 * fx;
                 double value = v0 * (1 - fy) + v1 * fy;
-                
+
                 result[c] = static_cast<uint8_t>(std::clamp(value, 0.0, 255.0));
             }
             break;
         }
         default:
             // Fall back to nearest neighbor
-            return interpolatePixel(input, x, y, width, height, channels, 
+            return interpolatePixel(input, x, y, width, height, channels,
                                   InterpolationMethod::NEAREST, borderMode);
     }
 
@@ -318,7 +318,7 @@ TransformMatrix ImageTransform::createRotationMatrix(double angle, const Point2D
     double radians = angle * M_PI / 180.0;
     double cosA = std::cos(radians);
     double sinA = std::sin(radians);
-    
+
     return {{{{cosA, -sinA, center.x * (1 - cosA) + center.y * sinA}},
              {{sinA, cosA, center.y * (1 - cosA) - center.x * sinA}},
              {{0, 0, 1}}}};
@@ -334,12 +334,12 @@ Point2D ImageTransform::transformPoint(const Point2D& point, const TransformMatr
     double x = matrix[0][0] * point.x + matrix[0][1] * point.y + matrix[0][2];
     double y = matrix[1][0] * point.x + matrix[1][1] * point.y + matrix[1][2];
     double w = matrix[2][0] * point.x + matrix[2][1] * point.y + matrix[2][2];
-    
+
     if (w != 0) {
         x /= w;
         y /= w;
     }
-    
+
     return Point2D(x, y);
 }
 

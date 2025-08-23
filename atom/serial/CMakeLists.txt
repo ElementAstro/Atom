@@ -65,7 +65,7 @@ target_include_directories(${LIB_NAME} PUBLIC
 
 # Set platform-specific dependencies
 if(WIN32)
-    target_link_libraries(${LIB_NAME} 
+    target_link_libraries(${LIB_NAME}
         PUBLIC
         atom-error
         atom-log
@@ -75,7 +75,7 @@ if(WIN32)
 elseif(APPLE)
     find_library(IOKIT_FRAMEWORK IOKit REQUIRED)
     find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
-    target_link_libraries(${LIB_NAME} 
+    target_link_libraries(${LIB_NAME}
         PUBLIC
         atom-error
         atom-log
@@ -86,13 +86,13 @@ else() # Linux/Unix
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(UDEV REQUIRED libudev)
     pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
-    
+
     target_include_directories(${LIB_NAME} PUBLIC
         ${UDEV_INCLUDE_DIRS}
         ${LIBUSB_INCLUDE_DIRS}
     )
-    
-    target_link_libraries(${LIB_NAME} 
+
+    target_link_libraries(${LIB_NAME}
         PUBLIC
         atom-error
         atom-log

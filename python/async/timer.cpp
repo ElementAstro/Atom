@@ -76,7 +76,7 @@ Returns:
         m, "Timer",
         R"(Represents a timer for scheduling and executing tasks.
 
-This class provides methods to schedule one-time or recurring tasks with 
+This class provides methods to schedule one-time or recurring tasks with
 precise timing control and priority settings.
 
 Examples:

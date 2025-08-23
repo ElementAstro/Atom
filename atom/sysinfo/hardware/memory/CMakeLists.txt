@@ -61,7 +61,7 @@ install(TARGETS atom_sysinfo_memory
     RUNTIME DESTINATION bin
 )
 
-install(FILES 
+install(FILES
         memory.hpp
         common.hpp
         $<$<PLATFORM_ID:Windows>:windows.hpp>

@@ -89,23 +89,23 @@ endif()
 enable_testing()
 
 # Add test cases
-add_test(NAME ImageBlobTests 
+add_test(NAME ImageBlobTests
          COMMAND atom-image-tests --gtest_filter="BlobTest.*")
 
-add_test(NAME ImageProcessorTests 
+add_test(NAME ImageProcessorTests
          COMMAND atom-image-tests --gtest_filter="ImageProcessorTest.*")
 
-add_test(NAME HDUTests 
+add_test(NAME HDUTests
          COMMAND atom-image-tests --gtest_filter="ImageHDUTest.*")
 
-add_test(NAME OCRTests 
+add_test(NAME OCRTests
          COMMAND atom-image-tests --gtest_filter="OCRTest.*")
 
-add_test(NAME SERTests 
+add_test(NAME SERTests
          COMMAND atom-image-tests --gtest_filter="SERTest.*")
 
 # Add comprehensive test that runs all tests
-add_test(NAME AllImageTests 
+add_test(NAME AllImageTests
          COMMAND atom-image-tests)
 
 # Set test properties
@@ -140,7 +140,7 @@ set_tests_properties(AllImageTests PROPERTIES
 )
 
 # Performance tests (disabled by default)
-add_test(NAME PerformanceTests 
+add_test(NAME PerformanceTests
          COMMAND atom-image-tests --gtest_filter="*Performance*")
 
 set_tests_properties(PerformanceTests PROPERTIES
@@ -153,15 +153,15 @@ set_tests_properties(PerformanceTests PROPERTIES
 find_program(VALGRIND_PROGRAM valgrind)
 if(VALGRIND_PROGRAM)
     add_test(NAME MemoryTests
-             COMMAND ${VALGRIND_PROGRAM} 
-                     --tool=memcheck 
-                     --leak-check=full 
-                     --show-leak-kinds=all 
-                     --track-origins=yes 
+             COMMAND ${VALGRIND_PROGRAM}
+                     --tool=memcheck
+                     --leak-check=full
+                     --show-leak-kinds=all
+                     --track-origins=yes
                      --error-exitcode=1
                      $<TARGET_FILE:atom-image-tests>
                      --gtest_filter="BlobTest.*:ImageProcessorTest.BasicOperations")
-    
+
     set_tests_properties(MemoryTests PROPERTIES
         LABELS "memory;valgrind"
         TIMEOUT 600
@@ -173,11 +173,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     find_program(GCOV_PROGRAM gcov)
     find_program(LCOV_PROGRAM lcov)
     find_program(GENHTML_PROGRAM genhtml)
-    
+
     if(GCOV_PROGRAM AND LCOV_PROGRAM AND GENHTML_PROGRAM)
         target_compile_options(atom-image-tests PRIVATE --coverage)
         target_link_options(atom-image-tests PRIVATE --coverage)
-        
+
         add_custom_target(coverage
             COMMAND ${LCOV_PROGRAM} --directory . --capture --output-file coverage.info
             COMMAND ${LCOV_PROGRAM} --remove coverage.info '/usr/*' --output-file coverage.info
@@ -186,7 +186,7 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug")
             WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
             COMMENT "Generating code coverage report"
         )
-        
+
         add_dependencies(coverage atom-image-tests)
     endif()
 endif()
@@ -197,7 +197,7 @@ if(ATOM_IMAGE_INSTALL_TESTS)
         RUNTIME DESTINATION bin/tests
         COMPONENT tests
     )
-    
+
     # Install test data files if any
     if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/test_data)
         install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/test_data

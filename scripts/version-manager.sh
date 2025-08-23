@@ -49,12 +49,12 @@ validate_version() {
 increment_version() {
     local current_version=$1
     local increment_type=$2
-    
+
     IFS='.' read -ra VERSION_PARTS <<< "$current_version"
     local major=${VERSION_PARTS[0]}
     local minor=${VERSION_PARTS[1]}
     local patch=${VERSION_PARTS[2]}
-    
+
     case "$increment_type" in
         major)
             major=$((major + 1))
@@ -73,37 +73,37 @@ increment_version() {
             return 1
             ;;
     esac
-    
+
     echo "$major.$minor.$patch"
 }
 
 # Update version in project files
 update_version_files() {
     local new_version=$1
-    
+
     log_info "Updating version to $new_version in project files..."
-    
+
     # Update VERSION file
     echo "$new_version" > "$VERSION_FILE"
-    
+
     # Update CMakeLists.txt
     if [[ -f "$PROJECT_ROOT/CMakeLists.txt" ]]; then
         sed -i.bak "s/VERSION [0-9]\+\.[0-9]\+\.[0-9]\+/VERSION $new_version/" "$PROJECT_ROOT/CMakeLists.txt"
         rm -f "$PROJECT_ROOT/CMakeLists.txt.bak"
     fi
-    
+
     # Update xmake.lua
     if [[ -f "$PROJECT_ROOT/xmake.lua" ]]; then
         sed -i.bak "s/set_version(\"[0-9]\+\.[0-9]\+\.[0-9]\+\")/set_version(\"$new_version\")/" "$PROJECT_ROOT/xmake.lua"
         rm -f "$PROJECT_ROOT/xmake.lua.bak"
     fi
-    
+
     # Update vcpkg.json
     if [[ -f "$PROJECT_ROOT/vcpkg.json" ]]; then
         sed -i.bak "s/\"version\": \"[0-9]\+\.[0-9]\+\.[0-9]\+\"/\"version\": \"$new_version\"/" "$PROJECT_ROOT/vcpkg.json"
         rm -f "$PROJECT_ROOT/vcpkg.json.bak"
     fi
-    
+
     log_info "Version files updated successfully"
 }
 
@@ -111,9 +111,9 @@ update_version_files() {
 generate_changelog() {
     local version=$1
     local previous_tag=$(git tag --list | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+' | sort -V | tail -n2 | head -n1)
-    
+
     log_info "Generating changelog for version $version..."
-    
+
     # Create changelog header if file doesn't exist
     if [[ ! -f "$CHANGELOG_FILE" ]]; then
         cat > "$CHANGELOG_FILE" << 'EOF'
@@ -126,17 +126,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 EOF
     fi
-    
+
     # Generate changelog entry
     local temp_changelog=$(mktemp)
     local date=$(date '+%Y-%m-%d')
-    
+
     echo "## [$version] - $date" > "$temp_changelog"
     echo "" >> "$temp_changelog"
-    
+
     if [[ -n "$previous_tag" ]]; then
         log_info "Generating changelog from $previous_tag to HEAD"
-        
+
         # Get commits since last tag
         git log --pretty=format:"- %s" "$previous_tag..HEAD" >> "$temp_changelog" 2>/dev/null || {
             echo "- Initial release" >> "$temp_changelog"
@@ -144,19 +144,19 @@ EOF
     else
         echo "- Initial release" >> "$temp_changelog"
     fi
-    
+
     echo "" >> "$temp_changelog"
     echo "" >> "$temp_changelog"
-    
+
     # Insert new changelog entry at the top
     local temp_full_changelog=$(mktemp)
     head -n 6 "$CHANGELOG_FILE" > "$temp_full_changelog"
     cat "$temp_changelog" >> "$temp_full_changelog"
     tail -n +7 "$CHANGELOG_FILE" >> "$temp_full_changelog"
-    
+
     mv "$temp_full_changelog" "$CHANGELOG_FILE"
     rm -f "$temp_changelog"
-    
+
     log_info "Changelog updated successfully"
 }
 
@@ -164,18 +164,18 @@ EOF
 create_git_tag() {
     local version=$1
     local tag_name="v$version"
-    
+
     log_info "Creating git tag: $tag_name"
-    
+
     # Check if tag already exists
     if git tag --list | grep -q "^$tag_name$"; then
         log_error "Tag $tag_name already exists"
         return 1
     fi
-    
+
     # Create annotated tag
     git tag -a "$tag_name" -m "Release version $version"
-    
+
     log_info "Git tag $tag_name created successfully"
     log_info "To push the tag, run: git push origin $tag_name"
 }
@@ -185,34 +185,34 @@ create_release() {
     local increment_type=$1
     local current_version=$(get_current_version)
     local new_version=$(increment_version "$current_version" "$increment_type")
-    
+
     log_info "Creating release: $current_version -> $new_version"
-    
+
     # Validate git repository
     if ! git rev-parse --git-dir > /dev/null 2>&1; then
         log_error "Not in a git repository"
         return 1
     fi
-    
+
     # Check for uncommitted changes
     if ! git diff-index --quiet HEAD --; then
         log_error "There are uncommitted changes. Please commit or stash them first."
         return 1
     fi
-    
+
     # Update version files
     update_version_files "$new_version"
-    
+
     # Generate changelog
     generate_changelog "$new_version"
-    
+
     # Commit changes
     git add "$VERSION_FILE" "$CHANGELOG_FILE" CMakeLists.txt xmake.lua vcpkg.json 2>/dev/null || true
     git commit -m "Release version $new_version"
-    
+
     # Create tag
     create_git_tag "$new_version"
-    
+
     log_info "Release $new_version created successfully!"
     log_info "Next steps:"
     log_info "  1. Review the changes: git show HEAD"

@@ -1,14 +1,14 @@
 /**
  * @file comprehensive_meta_example.cpp
  * @brief Comprehensive example demonstrating the Atom Meta module's metaprogramming capabilities
- * 
+ *
  * This example shows how to:
  * - Use type traits and template metaprogramming
  * - Work with reflection and introspection
  * - Handle function traits and signatures
  * - Use type conversion and casting utilities
  * - Demonstrate advanced metaprogramming patterns
- * 
+ *
  * @author Max Qian
  * @date 2024-12-19
  */
@@ -30,15 +30,15 @@ using namespace atom::meta;
 class Person {
 public:
     Person(const std::string& name, int age) : name_(name), age_(age) {}
-    
+
     std::string getName() const { return name_; }
     int getAge() const { return age_; }
     void setAge(int age) { age_ = age; }
-    
+
     void introduce() const {
         std::cout << "Hello, I'm " << name_ << " and I'm " << age_ << " years old.\n";
     }
-    
+
 private:
     std::string name_;
     int age_;
@@ -48,9 +48,9 @@ class Employee : public Person {
 public:
     Employee(const std::string& name, int age, const std::string& department)
         : Person(name, age), department_(department) {}
-    
+
     std::string getDepartment() const { return department_; }
-    
+
 private:
     std::string department_;
 };
@@ -307,14 +307,14 @@ void templateMetaprogrammingExample() {
 int main() {
     std::cout << "=== Atom Meta Module Comprehensive Example ===\n";
     std::cout << "Demonstrating metaprogramming and reflection capabilities...\n";
-    
+
     try {
         // Run all examples
         typeInfoExample();
         functionTraitsExample();
         boxedValueExample();
         templateMetaprogrammingExample();
-        
+
         std::cout << "\n=== All Examples Completed Successfully ===\n";
         std::cout << "The meta module provides:\n";
         std::cout << "  ✓ Type information and introspection\n";
@@ -324,11 +324,11 @@ int main() {
         std::cout << "  ✓ Compile-time computations\n";
         std::cout << "  ✓ Type list operations\n";
         std::cout << "  ✓ SFINAE and template specialization\n";
-        
+
     } catch (const std::exception& e) {
         std::cerr << "Unhandled exception: " << e.what() << "\n";
         return 1;
     }
-    
+
     return 0;
 }

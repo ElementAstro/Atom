@@ -25,32 +25,32 @@ PYBIND11_MODULE(snowflake, m) {
         -----------------------
 
         This module provides a distributed ID generator based on Twitter's Snowflake algorithm.
-        
+
         The Snowflake algorithm generates 64-bit unique IDs that are:
           - Time-based (roughly sortable by generation time)
           - Distributed (different workers/datacenter IDs produce different ranges)
           - High-performance (can generate thousands of IDs per second per node)
-          
+
         The generated IDs are composed of:
           - Timestamp (milliseconds since a custom epoch)
           - Datacenter ID (5 bits)
           - Worker ID (5 bits)
           - Sequence number (12 bits, for multiple IDs in the same millisecond)
-          
+
         Example:
             >>> from atom.algorithm import snowflake
-            >>> 
+            >>>
             >>> # Create a generator with worker_id=1, datacenter_id=2
             >>> generator = snowflake.SnowflakeGenerator(1, 2)
-            >>> 
+            >>>
             >>> # Generate a single ID
             >>> id = generator.next_id()
             >>> print(id)
-            
+
             >>> # Generate multiple IDs at once
             >>> ids = generator.next_ids(5)  # Generate 5 IDs
             >>> print(ids)
-            
+
             >>> # Extract timestamp from an ID
             >>> timestamp = generator.extract_timestamp(id)
             >>> print(timestamp)

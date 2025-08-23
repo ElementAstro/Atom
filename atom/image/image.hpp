@@ -4,10 +4,10 @@
 /**
  * @file image.hpp
  * @brief Comprehensive image processing library for the Atom framework
- * 
+ *
  * This header provides a unified interface to all image processing functionality
  * including format support, processing operations, and metadata handling.
- * 
+ *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
@@ -74,13 +74,13 @@ struct Features {
     #else
     static constexpr bool HAS_OPENCV = false;
     #endif
-    
+
     #ifdef ATOM_IMAGE_HAS_CFITSIO
     static constexpr bool HAS_CFITSIO = true;
     #else
     static constexpr bool HAS_CFITSIO = false;
     #endif
-    
+
     #ifdef ATOM_IMAGE_HAS_OCR
     static constexpr bool HAS_OCR = true;
     #else
