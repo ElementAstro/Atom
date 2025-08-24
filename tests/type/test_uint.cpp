@@ -6,6 +6,7 @@
 #include <type_traits>
 
 #include "atom/type/uint.hpp"
+#include "atom/error/exception.hpp"
 
 namespace {
 
@@ -44,9 +45,9 @@ TEST_F(UintLiteralsTest, Uint8Valid) {
 // Test range errors for uint8_t
 TEST_F(UintLiteralsTest, Uint8RangeError) {
     // Values exceeding uint8_t range should throw
-    EXPECT_THROW(256_u8, std::out_of_range);
-    EXPECT_THROW(1000_u8, std::out_of_range);
-    EXPECT_THROW(0xFFF_u8, std::out_of_range);
+    EXPECT_THROW(256_u8, atom::error::OutOfRange);
+    EXPECT_THROW(1000_u8, atom::error::OutOfRange);
+    EXPECT_THROW(0xFFF_u8, atom::error::OutOfRange);
 }
 
 // Test valid conversions for uint16_t
@@ -77,9 +78,9 @@ TEST_F(UintLiteralsTest, Uint16Valid) {
 // Test range errors for uint16_t
 TEST_F(UintLiteralsTest, Uint16RangeError) {
     // Values exceeding uint16_t range should throw
-    EXPECT_THROW(65536_u16, std::out_of_range);
-    EXPECT_THROW(100000_u16, std::out_of_range);
-    EXPECT_THROW(0x10000_u16, std::out_of_range);
+    EXPECT_THROW(65536_u16, atom::error::OutOfRange);
+    EXPECT_THROW(100000_u16, atom::error::OutOfRange);
+    EXPECT_THROW(0x10000_u16, atom::error::OutOfRange);
 }
 
 // Test valid conversions for uint32_t
@@ -107,8 +108,8 @@ TEST_F(UintLiteralsTest, Uint32Valid) {
 // Test range errors for uint32_t
 TEST_F(UintLiteralsTest, Uint32RangeError) {
     // Values exceeding uint32_t range should throw
-    EXPECT_THROW(4294967296_u32, std::out_of_range);
-    EXPECT_THROW(0x100000000_u32, std::out_of_range);
+    EXPECT_THROW(4294967296_u32, atom::error::OutOfRange);
+    EXPECT_THROW(0x100000000_u32, atom::error::OutOfRange);
 }
 
 // Test valid conversions for uint64_t
@@ -209,17 +210,17 @@ TEST_F(UintLiteralsTest, MaximumValueEdgeCases) {
     // Test values at and near the maximum
     auto max_u8 = 255_u8;
     EXPECT_EQ(max_u8, 255);
-    EXPECT_THROW(256_u8, std::out_of_range);
+    EXPECT_THROW(256_u8, atom::error::OutOfRange);
     EXPECT_NO_THROW(254_u8);
 
     auto max_u16 = 65535_u16;
     EXPECT_EQ(max_u16, 65535);
-    EXPECT_THROW(65536_u16, std::out_of_range);
+    EXPECT_THROW(65536_u16, atom::error::OutOfRange);
     EXPECT_NO_THROW(65534_u16);
 
     auto max_u32 = 4294967295_u32;
     EXPECT_EQ(max_u32, 4294967295U);
-    EXPECT_THROW(4294967296_u32, std::out_of_range);
+    EXPECT_THROW(4294967296_u32, atom::error::OutOfRange);
     EXPECT_NO_THROW(4294967294_u32);
 
     auto max_u64 = 18446744073709551615_u64;

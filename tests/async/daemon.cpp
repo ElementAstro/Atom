@@ -44,10 +44,18 @@ TEST(DaemonGuardTest, SignalHandlerTest) {
     atom::async::signalHandler(signum);
 }
 
-TEST(DaemonGuardTest, WritePidFileTest) { atom::async::writePidFile(); }
+TEST(DaemonGuardTest, WritePidFileTest) {
+    std::filesystem::path testPidFile = "test_write.pid";
+    atom::async::writePidFile(testPidFile);
+    // Clean up the test file
+    if (std::filesystem::exists(testPidFile)) {
+        std::filesystem::remove(testPidFile);
+    }
+}
 
 TEST(DaemonGuardTest, CheckPidFileTest) {
     bool expected = false;
-    bool actual = atom::async::checkPidFile();
+    std::filesystem::path testPidFile = "test_nonexistent.pid";
+    bool actual = atom::async::checkPidFile(testPidFile);
     EXPECT_EQ(expected, actual);
 }

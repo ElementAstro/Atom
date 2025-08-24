@@ -354,6 +354,9 @@ auto bytesToHex<SHA1::DIGEST_SIZE>(
     return result;
 }
 
+// Explicit template instantiation for test usage
+template auto bytesToHex<5>(const std::array<u8, 5>& bytes) noexcept -> std::string;
+
 template <ByteContainer... Containers>
 auto computeHashesInParallel(const Containers&... containers)
     -> std::vector<std::array<u8, SHA1::DIGEST_SIZE>> {

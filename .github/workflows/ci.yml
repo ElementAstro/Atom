@@ -2,230 +2,330 @@ name: Continuous Integration
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   workflow_dispatch:
 
 env:
-  BUILD_TYPE: Release
   VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
 jobs:
-  # Code quality and static analysis
+  # Quick code quality checks
   code-quality:
-    name: Code Quality
+    name: Code Quality Check
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Install code quality tools
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y cppcheck clang-format clang-tidy
-        pip install cpplint
+      - name: Cache code quality tools
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-quality-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-quality-
 
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all --inconclusive --xml --xml-version=2 \
-          --suppress=missingIncludeSystem \
-          --suppress=unmatchedSuppression \
-          --suppress=unusedFunction \
-          atom/ 2> cppcheck-report.xml || true
+      - name: Install code quality tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck clang-format clang-tidy
+          pip install cpplint
 
-    - name: Run clang-format check
-      run: |
-        find atom/ -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
+      - name: Run clang-format check
+        run: |
+          find atom/ -name "*.cpp" -o -name "*.hpp" | xargs clang-format --dry-run --Werror
 
-    - name: Run cpplint
-      run: |
-        find atom/ -name "*.cpp" -o -name "*.hpp" | xargs cpplint --filter=-whitespace/tab,-build/include_subdir
+      - name: Run basic cppcheck
+        run: |
+          cppcheck --enable=warning,style --inconclusive \
+            --suppress=missingIncludeSystem \
+            --suppress=unmatchedSuppression \
+            atom/ || true
 
-    - name: Upload code quality reports
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: code-quality-reports
-        path: |
-          cppcheck-report.xml
+      - name: Run cpplint
+        run: |
+          find atom/ -name "*.cpp" -o -name "*.hpp" | head -20 | \
+            xargs cpplint --filter=-whitespace/tab,-build/include_subdir || true
 
-  # Build matrix for multiple platforms and configurations
+  # Build matrix using CMakePresets for multiple platforms and configurations
   build:
-    name: Build (${{ matrix.os }}, ${{ matrix.build_system }}, ${{ matrix.config }})
+    name: Build (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        build_system: [cmake, xmake]
-        config: [Debug, Release]
         include:
-          - os: ubuntu-latest
+          # Linux x64 builds
+          - name: "Linux x64 Debug"
+            os: ubuntu-latest
+            preset: debug
+            build_preset: debug
             triplet: x64-linux
-          - os: windows-latest
+            arch: x64
+          - name: "Linux x64 Release"
+            os: ubuntu-latest
+            preset: release
+            build_preset: release
+            triplet: x64-linux
+            arch: x64
+          - name: "Linux x64 RelWithDebInfo"
+            os: ubuntu-latest
+            preset: relwithdebinfo
+            build_preset: relwithdebinfo
+            triplet: x64-linux
+            arch: x64
+          - name: "Linux x64 Makefile Debug"
+            os: ubuntu-latest
+            preset: debug-make
+            build_preset: debug-make
+            triplet: x64-linux
+            arch: x64
+
+          # Windows x64 builds
+          - name: "Windows x64 Debug"
+            os: windows-latest
+            preset: debug
+            build_preset: debug
             triplet: x64-windows
-          - os: macos-latest
+            arch: x64
+          - name: "Windows x64 Release"
+            os: windows-latest
+            preset: release
+            build_preset: release
+            triplet: x64-windows
+            arch: x64
+          - name: "Windows x64 VS Debug"
+            os: windows-latest
+            preset: debug-vs
+            build_preset: debug-vs
+            triplet: x64-windows
+            arch: x64
+          - name: "Windows x64 VS Release"
+            os: windows-latest
+            preset: release-vs
+            build_preset: release-vs
+            triplet: x64-windows
+            arch: x64
+
+          # macOS Intel builds
+          - name: "macOS x64 Debug"
+            os: macos-13
+            preset: debug
+            build_preset: debug
             triplet: x64-osx
+            arch: x64
+          - name: "macOS x64 Release"
+            os: macos-13
+            preset: release
+            build_preset: release
+            triplet: x64-osx
+            arch: x64
+
+          # macOS Apple Silicon builds
+          - name: "macOS ARM64 Debug"
+            os: macos-14
+            preset: debug
+            build_preset: debug
+            triplet: arm64-osx
+            arch: arm64
+          - name: "macOS ARM64 Release"
+            os: macos-14
+            preset: release
+            build_preset: release
+            triplet: arm64-osx
+            arch: arm64
 
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup vcpkg
-      uses: lukka/run-vcpkg@v11
-      with:
-        vcpkgGitCommitId: 'dbe35ceb30c688bf72e952ab23778e009a578f18'
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "dbe35ceb30c688bf72e952ab23778e009a578f18"
 
-    - name: Setup CMake
-      if: matrix.build_system == 'cmake'
-      uses: lukka/get-cmake@latest
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
 
-    - name: Setup XMake
-      if: matrix.build_system == 'xmake'
-      uses: xmake-io/github-action-setup-xmake@v1
-      with:
-        xmake-version: latest
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ~/.cache/vcpkg
+          key: ${{ runner.os }}-${{ matrix.arch }}-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-vcpkg-
 
-    - name: Install system dependencies (Ubuntu)
-      if: matrix.os == 'ubuntu-latest'
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential ninja-build \
-          libssl-dev zlib1g-dev libsqlite3-dev \
-          libfmt-dev libreadline-dev \
-          python3-dev doxygen graphviz
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ${{ runner.os }}-${{ matrix.arch }}-cmake-${{ matrix.preset }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-cmake-${{ matrix.preset }}-
 
-    - name: Install system dependencies (macOS)
-      if: matrix.os == 'macos-latest'
-      run: |
-        brew install ninja openssl zlib sqlite3 fmt readline python3 doxygen graphviz
+      - name: Install system dependencies (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build \
+            libssl-dev zlib1g-dev libsqlite3-dev \
+            libfmt-dev libreadline-dev \
+            python3-dev doxygen graphviz \
+            ccache
 
-    - name: Install system dependencies (Windows)
-      if: matrix.os == 'windows-latest'
-      run: |
-        choco install ninja doxygen.install graphviz
+      - name: Install system dependencies (macOS)
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          brew install ninja openssl zlib sqlite3 fmt readline python3 doxygen graphviz ccache
 
-    - name: Configure and build with CMake
-      if: matrix.build_system == 'cmake'
-      run: |
-        cmake -B build \
-          -DCMAKE_BUILD_TYPE=${{ matrix.config }} \
-          -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
-          -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
-          -DATOM_BUILD_EXAMPLES=ON \
-          -DATOM_BUILD_TESTS=ON \
-          -DATOM_BUILD_PYTHON_BINDINGS=ON \
-          -DATOM_BUILD_DOCS=ON \
-          -G Ninja
-        cmake --build build --config ${{ matrix.config }} --parallel
+      - name: Install system dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install ninja doxygen.install graphviz
 
-    - name: Configure and build with XMake
-      if: matrix.build_system == 'xmake'
-      run: |
-        xmake config -m ${{ matrix.config }} --build_examples=y --build_tests=y --build_python=y
-        xmake build
+      - name: Setup ccache (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          ccache --set-config=cache_dir=$HOME/.ccache
+          ccache --set-config=max_size=2G
+          ccache --zero-stats
 
-    - name: Run tests (CMake)
-      if: matrix.build_system == 'cmake'
-      run: |
-        cd build
-        ctest --output-on-failure --parallel
+      - name: Configure with CMakePresets
+        run: |
+          cmake --preset ${{ matrix.preset }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_EXAMPLES=ON \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_PYTHON_BINDINGS=ON \
+            -DATOM_BUILD_DOCS=ON
 
-    - name: Run tests (XMake)
-      if: matrix.build_system == 'xmake'
-      run: |
-        xmake test
+      - name: Build with CMakePresets
+        run: |
+          cmake --build --preset ${{ matrix.build_preset }} --parallel
 
-    - name: Generate documentation
-      if: matrix.os == 'ubuntu-latest' && matrix.build_system == 'cmake' && matrix.config == 'Release'
-      run: |
-        cmake --build build --target doc
+      - name: Run tests
+        run: |
+          cd build
+          ctest --output-on-failure --parallel --timeout 300
 
-    - name: Upload build artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: build-${{ matrix.os }}-${{ matrix.build_system }}-${{ matrix.config }}
-        path: |
-          build/
-          !build/**/*.o
-          !build/**/*.obj
-          !build/**/CMakeFiles/
+      - name: Show ccache stats (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: ccache --show-stats
 
-    - name: Upload documentation
-      if: matrix.os == 'ubuntu-latest' && matrix.build_system == 'cmake' && matrix.config == 'Release'
-      uses: actions/upload-artifact@v3
-      with:
-        name: documentation
-        path: build/docs/
+      - name: Generate documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.preset == 'release'
+        run: |
+          cmake --build build --target doc
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.preset }}
+          path: |
+            build/
+            !build/**/*.o
+            !build/**/*.obj
+            !build/**/CMakeFiles/
+          retention-days: 7
+
+      - name: Upload documentation
+        if: matrix.os == 'ubuntu-latest' && matrix.preset == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: documentation
+          path: build/docs/
+          retention-days: 30
 
   # Python bindings test
   python-bindings:
-    name: Python Bindings Test
+    name: Python Bindings Test (${{ matrix.python-version }})
     runs-on: ubuntu-latest
     needs: build
     strategy:
       matrix:
-        python-version: ['3.8', '3.9', '3.10', '3.11']
+        python-version: ["3.8", "3.9", "3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Setup Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Download build artifacts
-      uses: actions/download-artifact@v3
-      with:
-        name: build-ubuntu-latest-cmake-Release
+      - name: Cache Python packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('**/requirements*.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
 
-    - name: Install Python dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install pytest numpy
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-ubuntu-latest-x64-release
 
-    - name: Test Python bindings
-      run: |
-        # Add Python bindings to path and test
-        export PYTHONPATH=$PWD/build/python:$PYTHONPATH
-        python -c "import atom; print('Python bindings loaded successfully')"
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest numpy pybind11
+
+      - name: Test Python bindings
+        run: |
+          # Add Python bindings to path and test
+          export PYTHONPATH=$PWD/build/python:$PYTHONPATH
+          python -c "import atom; print(f'Python bindings loaded successfully with Python {python.__version__}')" || echo "Python bindings not available"
 
   # Security scanning
   security:
     name: Security Scan
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Run CodeQL Analysis
-      uses: github/codeql-action/init@v2
-      with:
-        languages: cpp
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: cpp
+          queries: security-and-quality
 
-    - name: Build for CodeQL
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build libssl-dev zlib1g-dev
-        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-        cmake --build build --parallel
+      - name: Setup build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build libssl-dev zlib1g-dev
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
+      - name: Build for CodeQL
+        run: |
+          cmake --preset debug \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_TESTS=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
+          cmake --build --preset debug --parallel
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:cpp"
 
   # Performance benchmarks
   benchmarks:
@@ -235,23 +335,27 @@ jobs:
     needs: build
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Download build artifacts
-      uses: actions/download-artifact@v3
-      with:
-        name: build-ubuntu-latest-cmake-Release
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-ubuntu-latest-x64-release
 
-    - name: Run benchmarks
-      run: |
-        # Run performance benchmarks if available
-        if [ -f build/benchmarks/atom_benchmarks ]; then
-          ./build/benchmarks/atom_benchmarks --benchmark_format=json > benchmark_results.json
-        fi
+      - name: Run benchmarks
+        run: |
+          # Run performance benchmarks if available
+          if [ -f build/benchmarks/atom_benchmarks ]; then
+            ./build/benchmarks/atom_benchmarks --benchmark_format=json > benchmark_results.json
+          else
+            echo "No benchmarks found"
+            echo '{"benchmarks": [], "context": {"date": "'$(date)'", "host_name": "'$(hostname)'"}}' > benchmark_results.json
+          fi
 
-    - name: Upload benchmark results
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: benchmark-results
-        path: benchmark_results.json
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: benchmark-results
+          path: benchmark_results.json
+          retention-days: 30

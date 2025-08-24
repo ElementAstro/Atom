@@ -12,7 +12,7 @@
 #include <thread>
 #include <vector>
 
-#include "uuid.hpp"
+#include "atom/utils/uuid.hpp"
 
 using namespace atom::utils;
 using ::testing::HasSubstr;

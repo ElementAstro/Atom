@@ -14,7 +14,7 @@ protected:
     std::shared_ptr<MessageQueue<int>> messageQueue;
 
     void SetUp() override {
-        messageQueue = std::make_shared<MessageQueue<int>>(io_context);
+        messageQueue = std::make_shared<MessageQueue<int>>(1024);
     }
 };
 

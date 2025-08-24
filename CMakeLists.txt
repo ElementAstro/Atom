@@ -53,6 +53,7 @@ option(ATOM_USE_BOOST_CONTAINER "Enable Boost container library" OFF)
 option(ATOM_USE_BOOST_GRAPH "Enable Boost graph library" OFF)
 option(ATOM_USE_BOOST_INTRUSIVE "Enable Boost intrusive containers" OFF)
 option(ATOM_USE_PYBIND11 "Enable pybind11 support" ${ATOM_BUILD_PYTHON_BINDINGS})
+option(ATOM_USE_SSH "Enable SSH support" OFF)
 option(ATOM_BUILD_ALL "Build all Atom modules" ON)
 
 # Module build options
@@ -167,6 +168,20 @@ else()
 endif()
 
 find_package(ZLIB REQUIRED)
+
+# SSH support
+if(ATOM_USE_SSH)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(LIBSSH REQUIRED libssh)
+    if(LIBSSH_FOUND)
+        message(STATUS "Found LibSSH: ${LIBSSH_VERSION}")
+        add_definitions(-DENABLE_SSH -DENABLE_LIBSSH)
+        include_directories(${LIBSSH_INCLUDE_DIRS})
+        link_directories(${LIBSSH_LIBRARY_DIRS})
+    else()
+        message(FATAL_ERROR "LibSSH not found but ATOM_USE_SSH is enabled")
+    endif()
+endif()
 
 # Python & pybind11
 if(ATOM_BUILD_PYTHON_BINDINGS)

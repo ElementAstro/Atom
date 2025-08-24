@@ -74,6 +74,49 @@ struct MemoryPoolStats {
         0};                              ///< Deallocation operation count
     std::atomic<size_t> chunk_count{0};  ///< Number of memory chunks
 
+    // Default constructor
+    MemoryPoolStats() = default;
+
+    // Copy constructor
+    MemoryPoolStats(const MemoryPoolStats& other) noexcept
+        : total_allocated(other.total_allocated.load()),
+          total_available(other.total_available.load()),
+          allocation_count(other.allocation_count.load()),
+          deallocation_count(other.deallocation_count.load()),
+          chunk_count(other.chunk_count.load()) {}
+
+    // Move constructor
+    MemoryPoolStats(MemoryPoolStats&& other) noexcept
+        : total_allocated(other.total_allocated.load()),
+          total_available(other.total_available.load()),
+          allocation_count(other.allocation_count.load()),
+          deallocation_count(other.deallocation_count.load()),
+          chunk_count(other.chunk_count.load()) {}
+
+    // Copy assignment operator
+    MemoryPoolStats& operator=(const MemoryPoolStats& other) noexcept {
+        if (this != &other) {
+            total_allocated = other.total_allocated.load();
+            total_available = other.total_available.load();
+            allocation_count = other.allocation_count.load();
+            deallocation_count = other.deallocation_count.load();
+            chunk_count = other.chunk_count.load();
+        }
+        return *this;
+    }
+
+    // Move assignment operator
+    MemoryPoolStats& operator=(MemoryPoolStats&& other) noexcept {
+        if (this != &other) {
+            total_allocated = other.total_allocated.load();
+            total_available = other.total_available.load();
+            allocation_count = other.allocation_count.load();
+            deallocation_count = other.deallocation_count.load();
+            chunk_count = other.chunk_count.load();
+        }
+        return *this;
+    }
+
     void reset() noexcept {
         total_allocated = 0;
         total_available = 0;
@@ -90,6 +133,9 @@ struct MemoryTag {
     std::string name;
     std::string file;
     int line;
+
+    // Default constructor
+    MemoryTag() : name(""), file(""), line(0) {}
 
     MemoryTag(std::string tag_name, std::string file_name, int line_num)
         : name(std::move(tag_name)),

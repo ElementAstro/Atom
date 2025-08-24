@@ -100,7 +100,7 @@ TEST(ThreadSafeQueueTest, ExtractIf) {
     queue.put(4);
     queue.put(5);
 
-    auto extracted = queue.extractIf([](int x) { return x % 2 == 0; });
+    auto extracted = queue.extractIf([](const int& x) { return x % 2 == 0; });
 
     EXPECT_EQ(extracted.size(), 2);
     EXPECT_TRUE(std::all_of(extracted.begin(), extracted.end(),

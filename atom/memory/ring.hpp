@@ -70,6 +70,32 @@ public:
     }
 
     /**
+     * @brief Push an item to the buffer (move version).
+     *
+     * @param item The item to push.
+     * @return true if the item was successfully pushed, false if the buffer was
+     * full.
+     * @throw std::runtime_error if pushing fails due to internal reasons.
+     */
+    auto push(T&& item) -> bool {
+        std::lock_guard lock(mutex_);
+#ifdef ATOM_USE_BOOST
+        if (buffer_.full()) {
+            return false;
+        }
+        buffer_.push_back(std::move(item));
+#else
+        if (full()) {
+            return false;
+        }
+        buffer_[head_] = std::move(item);
+        head_ = (head_ + 1) % max_size_;
+        ++count_;
+#endif
+        return true;
+    }
+
+    /**
      * @brief Push an item to the buffer, overwriting the oldest item if full.
      *
      * @param item The item to push.
@@ -101,14 +127,14 @@ public:
         if (buffer_.empty()) {
             return std::nullopt;
         }
-        T item = buffer_.front();
+        T item = std::move(buffer_.front());
         buffer_.pop_front();
         return item;
 #else
         if (empty()) {
             return std::nullopt;
         }
-        T item = buffer_[tail_];
+        T item = std::move(buffer_[tail_]);
         tail_ = (tail_ + 1) % max_size_;
         --count_;
         return item;

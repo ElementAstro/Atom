@@ -3,7 +3,12 @@
 #include <cstring>  // Needed for memset
 #include <filesystem>
 #include <fstream>  // Needed for getMemoryUsage on Linux
+
+#if __has_include(<nlohmann/json.hpp>)
 #include <nlohmann/json.hpp>
+#else
+#include "atom/type/json.hpp"
+#endif
 
 #ifdef _WIN32
 // clang-format off

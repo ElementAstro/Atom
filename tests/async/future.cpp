@@ -111,22 +111,28 @@ TEST(MakeEnhancedFutureTest, CreateEnhancedFuture) {
 }
 
 TEST(WhenAllTest, RangeOfFutures) {
-    std::vector<std::future<int>> futures;
+    std::vector<atom::async::EnhancedFuture<int>> futures;
     for (int i = 0; i < 5; ++i) {
-        futures.push_back(std::async(std::launch::async, [i]() { return i; }));
+        auto stdFuture = std::async(std::launch::async, [i]() { return i; });
+        auto sharedFuture = stdFuture.share();
+        futures.emplace_back(std::move(sharedFuture));
     }
 
     auto resultFuture = whenAll(futures.begin(), futures.end());
     auto results = resultFuture.get();
     for (int i = 0; i < 5; ++i) {
-        EXPECT_EQ(results[i].get(), i);
+        EXPECT_EQ(results[i], i);
     }
 }
 
 TEST(WhenAllTest, VariadicFutures) {
-    auto future1 = std::async(std::launch::async, []() { return 1; });
-    auto future2 = std::async(std::launch::async, []() { return 2; });
-    auto future3 = std::async(std::launch::async, []() { return 3; });
+    auto stdFuture1 = std::async(std::launch::async, []() { return 1; });
+    auto stdFuture2 = std::async(std::launch::async, []() { return 2; });
+    auto stdFuture3 = std::async(std::launch::async, []() { return 3; });
+
+    auto future1 = atom::async::EnhancedFuture<int>(stdFuture1.share());
+    auto future2 = atom::async::EnhancedFuture<int>(stdFuture2.share());
+    auto future3 = atom::async::EnhancedFuture<int>(stdFuture3.share());
 
     auto resultFuture =
         whenAll(std::move(future1), std::move(future2), std::move(future3));

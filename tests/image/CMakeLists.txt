@@ -9,6 +9,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find required packages
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
+find_package(TBB QUIET)
+find_package(ZLIB REQUIRED)
 
 # Find optional packages (same as main image module)
 find_package(OpenCV QUIET)
@@ -58,6 +60,14 @@ target_link_libraries(atom-image-tests
         GTest::Main
         Threads::Threads
 )
+
+# Add TBB if available
+if(TBB_FOUND)
+    target_link_libraries(atom-image-tests PRIVATE TBB::tbb)
+endif()
+
+# Add ZLIB (required for FITS compression)
+target_link_libraries(atom-image-tests PRIVATE ZLIB::ZLIB)
 
 # Add conditional compilation flags based on available dependencies
 if(OpenCV_FOUND)

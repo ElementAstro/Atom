@@ -25,7 +25,16 @@ foreach(CPP_FILE ${CPP_FILES})
     # 有条件地添加可执行文件
     if(ATOM_EXAMPLE_CONNECTION_${EXAMPLE_NAME_UPPER})
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-        target_link_libraries(${EXECUTABLE_NAME} atom-connection)
+
+        # 基础依赖
+        target_link_libraries(${EXECUTABLE_NAME} atom-connection atom-error)
+
+        # SSH示例需要额外的依赖
+        if(EXAMPLE_NAME STREQUAL "sshserver" OR EXAMPLE_NAME STREQUAL "sshclient")
+            if(ATOM_USE_SSH)
+                target_link_libraries(${EXECUTABLE_NAME} ${LIBSSH_LIBRARIES})
+            endif()
+        endif()
 
 
         # 设置IDE文件夹分组

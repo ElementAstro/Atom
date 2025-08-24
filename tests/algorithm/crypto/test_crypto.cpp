@@ -274,7 +274,4 @@ TEST_F(CryptoSecurityTest, KeySensitivity) {
 
 } // namespace atom::algorithm::crypto::test
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function removed - using gtest_main

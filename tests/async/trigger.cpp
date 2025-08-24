@@ -26,10 +26,10 @@ TEST_F(TriggerTest, UnregisterCallback) {
 
     // Register a callback
     std::function<void(int)> callback = [](int param) {};
-    trigger.registerCallback("event1", callback);
+    auto callbackId = trigger.registerCallback("event1", callback);
 
     // Unregister the callback
-    trigger.unregisterCallback("event1", callback);
+    trigger.unregisterCallback("event1", callbackId);
 
     // Verify that the callback is unregistered
     // ASSERT_... statements here

@@ -5,6 +5,7 @@
 #include <concepts>
 #include <coroutine>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <future>
 #include <memory>
@@ -353,6 +354,105 @@ public:
 private:
     std::unique_ptr<AsyncFile> file_impl_;
 };
+
+// Template method implementations for AsyncFile
+template <PathString T>
+std::string AsyncFile::toString(T&& path) {
+    if constexpr (std::convertible_to<T, std::string_view>) {
+        return std::string(std::forward<T>(path));
+    } else if constexpr (std::convertible_to<T, std::filesystem::path>) {
+        return std::filesystem::path(std::forward<T>(path)).string();
+    } else {
+        return std::string(std::forward<T>(path));
+    }
+}
+
+template <typename F>
+void AsyncFile::executeAsync(F&& operation) {
+    if (context_ && context_->is_cancelled()) {
+        return;
+    }
+
+#ifdef ATOM_USE_ASIO
+    io_context_.post(std::forward<F>(operation));
+#else
+    if (thread_pool_) {
+        thread_pool_->submit(std::forward<F>(operation));
+    } else {
+        // Fallback to immediate execution
+        operation();
+    }
+#endif
+}
+
+template <PathString T>
+void AsyncFile::asyncRead(T&& filename,
+                         std::function<void(AsyncResult<std::string>)> callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)), callback = std::move(callback)]() {
+        try {
+            std::ifstream file(filename, std::ios::binary);
+            if (!file) {
+                callback(AsyncResult<std::string>::error_result("Failed to open file: " + filename));
+                return;
+            }
+
+            file.seekg(0, std::ios::end);
+            auto size = file.tellg();
+            file.seekg(0, std::ios::beg);
+
+            std::string content(size, '\0');
+            if (!file.read(content.data(), size)) {
+                callback(AsyncResult<std::string>::error_result("Failed to read file: " + filename));
+                return;
+            }
+
+            callback(AsyncResult<std::string>::success_result(std::move(content)));
+        } catch (const std::exception& e) {
+            callback(AsyncResult<std::string>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncWrite(T&& filename, std::span<const char> content,
+                          std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)),
+                  content = std::string(content.begin(), content.end()),
+                  callback = std::move(callback)]() {
+        try {
+            std::ofstream file(filename, std::ios::binary);
+            if (!file) {
+                callback(AsyncResult<void>::error_result("Failed to open file for writing: " + filename));
+                return;
+            }
+
+            if (!file.write(content.data(), content.size())) {
+                callback(AsyncResult<void>::error_result("Failed to write to file: " + filename));
+                return;
+            }
+
+            callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncDelete(T&& filename,
+                           std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)), callback = std::move(callback)]() {
+        try {
+            if (std::filesystem::remove(filename)) {
+                callback(AsyncResult<void>::success_result());
+            } else {
+                callback(AsyncResult<void>::error_result("Failed to delete file: " + filename));
+            }
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
 
 /**
  * @brief High-performance coroutine Task implementation with cancellation

@@ -216,12 +216,9 @@ ATOM_INLINE auto expandTilde(fs::path path) -> fs::path {
     String home;
 
 #ifdef _WIN32
-    size_t len = 0;
-    char *homeCStr = nullptr;
-    _dupenv_s(&homeCStr, &len, homeVariable);
+    const char *homeCStr = getenv(homeVariable);
     if (homeCStr) {
         home = homeCStr;
-        free(homeCStr);
     }
 #else
     const char *homeCStr = getenv(homeVariable);

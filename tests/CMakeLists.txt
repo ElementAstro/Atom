@@ -108,16 +108,6 @@ if(ATOM_TEST_BUILD_CONTAINERS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/containers
   add_subdirectory(containers)
 endif()
 
-# Secret tests
-if(ATOM_TEST_BUILD_SECRET AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/secret/CMakeLists.txt")
-  add_subdirectory(secret)
-endif()
-
-# Sysinfo tests
-if(ATOM_TEST_BUILD_SYSINFO AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sysinfo/CMakeLists.txt")
-  add_subdirectory(sysinfo)
-endif()
-
 # Log tests
 if(ATOM_TEST_BUILD_LOG AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/log/CMakeLists.txt")
   add_subdirectory(log)

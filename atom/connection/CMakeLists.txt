@@ -21,6 +21,7 @@ set(SOURCES
     fifoserver.cpp
     sockethub.cpp
     tcpclient.cpp
+    ttybase.cpp
     udpclient.cpp
     udpserver.cpp
 )
@@ -37,11 +38,12 @@ set(HEADERS
     fifoserver.hpp
     sockethub.hpp
     tcpclient.hpp
+    ttybase.hpp
     udpclient.hpp
     udpserver.hpp
 )
 
-if (ENABLE_LIBSSH)
+if (ATOM_USE_SSH)
     list(APPEND SOURCES
         sshclient.cpp
         sshserver.cpp
@@ -63,10 +65,8 @@ if (WIN32)
     list(APPEND LIBS ws2_32 mswsock)
 endif()
 
-if (ENABLE_SSH)
-    find_package(LibSSH REQUIRED)
+if (ATOM_USE_SSH)
     list(APPEND LIBS ${LIBSSH_LIBRARIES})
-    link_directories(${LIBSSH_LIBRARY_DIRS})
 endif()
 
 # Build Object Library

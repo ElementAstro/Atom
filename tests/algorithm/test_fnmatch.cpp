@@ -203,13 +203,13 @@ TEST_F(FnmatchTest, TranslateComplexPatterns) {
 TEST_F(FnmatchTest, TranslateInvalidPatterns) {
     auto result = translate("[abc");
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), FnmatchError::UnmatchedBracket);
+    EXPECT_EQ(result.error().error(), FnmatchError::UnmatchedBracket);
     result = translate("file\\");
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), FnmatchError::EscapeAtEnd);
+    EXPECT_EQ(result.error().error(), FnmatchError::EscapeAtEnd);
     result = translate("[");
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), FnmatchError::UnmatchedBracket);
+    EXPECT_EQ(result.error().error(), FnmatchError::UnmatchedBracket);
 }
 
 TEST_F(FnmatchTest, ErrorHandlingInFnmatch) {
@@ -235,10 +235,10 @@ TEST_F(FnmatchTest, ErrorHandlingInFnmatch) {
 TEST_F(FnmatchTest, ErrorHandlingInNothrow) {
     auto result = fnmatch_nothrow("[abc", "abc");
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), FnmatchError::UnmatchedBracket);
+    EXPECT_EQ(result.error().error(), FnmatchError::UnmatchedBracket);
     result = fnmatch_nothrow("abc\\", "abc");
     ASSERT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), FnmatchError::EscapeAtEnd);
+    EXPECT_EQ(result.error().error(), FnmatchError::EscapeAtEnd);
     result = fnmatch_nothrow("abc", "abc");
     ASSERT_TRUE(result.has_value());
     EXPECT_TRUE(result.value());

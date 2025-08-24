@@ -5,6 +5,7 @@ project(atom_memory.test)
 find_package(GTest QUIET)
 
 file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
+list(REMOVE_ITEM TEST_SOURCES ${PROJECT_SOURCE_DIR}/test_memory_main.cpp)
 
 add_executable(${PROJECT_NAME} ${TEST_SOURCES})
 

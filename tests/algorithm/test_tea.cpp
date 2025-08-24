@@ -15,7 +15,7 @@ using namespace atom::algorithm;
 using namespace std::chrono_literals;
 
 // Helper function to generate random data
-std::vector<uint8_t> generateRandomBytes(size_t size) {
+inline std::vector<uint8_t> generateRandomBytes(size_t size) {
     std::vector<uint8_t> data(size);
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -483,7 +483,4 @@ TEST_F(TEATest, RandomData) {
 }
 
 // Main function to run all tests
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function removed - using gtest_main

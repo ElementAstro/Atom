@@ -62,7 +62,7 @@ TEST(SignalTest, ChainedSignal) {
 }
 
 TEST(SignalTest, TemplateSignal) {
-    TemplateSignal<int, std::string> templateSignal;
+    Signal<int, std::string> templateSignal;
     std::string output = captureOutput([&]() {
         templateSignal.connect([](int x, const std::string& s) {
             std::cout << "Template Signal: " << x << ", " << s << '\n';
@@ -83,13 +83,13 @@ TEST(SignalTest, ThreadSafeSignal) {
 }
 
 TEST(SignalTest, BroadcastSignal) {
-    BroadcastSignal<int> broadcastSignal1, broadcastSignal2;
+    ChainedSignal<int> broadcastSignal1;
     std::string output = captureOutput([&]() {
         broadcastSignal1.connect(
             [](int x) { std::cout << "Broadcast Signal 1: " << x << '\n'; });
-        broadcastSignal2.connect(
-            [](int x) { std::cout << "Broadcast Signal 2: " << x << '\n'; });
-        broadcastSignal1.addChain(broadcastSignal2);
+        auto signal2Ptr = std::make_shared<ChainedSignal<int>>();
+        signal2Ptr->connect([](int x) { std::cout << "Broadcast Signal 2: " << x << '\n'; });
+        broadcastSignal1.addChain(signal2Ptr);
         broadcastSignal1.emit(84);
     });
     EXPECT_EQ(output, "Broadcast Signal 1: 84\nBroadcast Signal 2: 84\n");
@@ -111,20 +111,21 @@ TEST(SignalTest, LimitedSignal) {
 }
 
 TEST(SignalTest, DynamicSignal) {
-    DynamicSignal<int> dynamicSignal;
+    ScopedSignal<int> dynamicSignal;
     auto slot = std::make_shared<std::function<void(int)>>(
         [](int x) { std::cout << "Dynamic Signal: " << x << '\n'; });
 
     std::string output1 = captureOutput([&]() {
-        dynamicSignal.connect(*slot);
+        dynamicSignal.connect(slot);
         dynamicSignal.emit(500);
     });
     EXPECT_EQ(output1, "Dynamic Signal: 500\n");
 
-    dynamicSignal.disconnect(*slot);
+    // ScopedSignal automatically disconnects when slot goes out of scope
+    slot.reset(); // Manually reset to simulate scope exit
 
     std::string output2 = captureOutput([&]() {
-        dynamicSignal.emit(600);  // 不会被调用
+        dynamicSignal.emit(600);  // Should not be called
     });
     EXPECT_EQ(output2, "");
 }

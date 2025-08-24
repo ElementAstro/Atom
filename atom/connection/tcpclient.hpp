@@ -123,7 +123,7 @@ struct Task<void>::promise_type {
 template <typename T>
 concept CallbackInvocable =
     std::invocable<T> || std::invocable<T, const std::vector<char>&> ||
-    std::invocable<T, const std::string&>;
+    std::invocable<T, const std::string&> || std::invocable<T, const std::system_error&>;
 
 /**
  * @class TcpClient

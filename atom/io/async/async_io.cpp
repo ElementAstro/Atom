@@ -38,29 +38,7 @@ bool AsyncFile::validatePath(std::string_view path) noexcept {
     }
 }
 
-template <PathString T>
-std::string AsyncFile::toString(T&& path) {
-    if constexpr (std::convertible_to<T, std::string_view>) {
-        return std::string(std::forward<T>(path));
-    } else if constexpr (std::convertible_to<T, std::filesystem::path>) {
-        return std::filesystem::path(std::forward<T>(path)).string();
-    } else {
-        return std::string(std::forward<T>(path));
-    }
-}
 
-template <typename F>
-void AsyncFile::executeAsync(F&& operation) {
-    if (context_ && context_->is_cancelled()) {
-        return;
-    }
-
-#ifdef ATOM_USE_ASIO
-    io_context_.post(std::forward<F>(operation));
-#else
-    thread_pool_->execute(std::forward<F>(operation));
-#endif
-}
 
 #ifndef ATOM_USE_ASIO
 template <typename F>

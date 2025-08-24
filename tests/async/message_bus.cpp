@@ -13,7 +13,7 @@ protected:
     asio::io_context io_context;
     std::shared_ptr<MessageBus> messageBus;
 
-    void SetUp() override { messageBus = MessageBus::createShared(io_context); }
+    void SetUp() override { messageBus = MessageBus::createShared(); }
 };
 
 TEST_F(MessageBusTest, CreateShared) { ASSERT_NE(messageBus, nullptr); }

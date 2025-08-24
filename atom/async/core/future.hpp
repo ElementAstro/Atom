@@ -1182,7 +1182,7 @@ auto whenAll(Futures&&... futures) -> std::future<
             // Check validity before calling get()
             std::apply(
                 [](auto&... fs) {
-                    if (((!fs.isReady() && !fs.isCancelled() && !fs.valid()) ||
+                    if (((!fs.isReady() && !fs.isCancelled()) ||
                          ...)) {
                         // For EnhancedFuture, check isReady() or isCancelled()
                         // A more generic check: if it's not done and not going

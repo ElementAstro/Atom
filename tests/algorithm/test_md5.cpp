@@ -13,7 +13,7 @@ using namespace atom::algorithm;
 using namespace std::chrono_literals;
 
 // Helper function to generate random data
-std::vector<std::byte> generateRandomBytes(size_t size) {
+inline std::vector<std::byte> generateRandomBytes(size_t size) {
     std::vector<std::byte> data(size);
     std::random_device rd;
     std::mt19937 gen(rd());

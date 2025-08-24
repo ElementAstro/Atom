@@ -27,10 +27,26 @@ set(HEADERS
     test.hpp
 )
 
+# Find nlohmann/json
+find_package(nlohmann_json QUIET)
+if(NOT nlohmann_json_FOUND)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(NLOHMANN_JSON QUIET nlohmann_json)
+    endif()
+endif()
+
 set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
 )
+
+# Add nlohmann/json if found
+if(nlohmann_json_FOUND)
+    list(APPEND LIBS nlohmann_json::nlohmann_json)
+elseif(NLOHMANN_JSON_FOUND)
+    list(APPEND LIBS ${NLOHMANN_JSON_LIBRARIES})
+endif()
 
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
@@ -38,10 +54,20 @@ set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
 
+# Add nlohmann/json include directories if found via pkg-config
+if(NLOHMANN_JSON_FOUND AND NOT nlohmann_json_FOUND)
+    target_include_directories(${PROJECT_NAME}_object PRIVATE ${NLOHMANN_JSON_INCLUDE_DIRS})
+endif()
+
 # Build Static Library
 add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC .)
+
+# Add nlohmann/json include directories if found via pkg-config
+if(NLOHMANN_JSON_FOUND AND NOT nlohmann_json_FOUND)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${NLOHMANN_JSON_INCLUDE_DIRS})
+endif()
 
 # Platform-specific libraries
 if(WIN32)

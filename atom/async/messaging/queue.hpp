@@ -227,9 +227,9 @@ private:
 template <typename T>
 concept Movable = std::move_constructible<T> && std::assignable_from<T&, T>;
 
-template <typename T, typename U>
-concept ExtractableWith = requires(T t, U u) {
-    { u(t) } -> std::convertible_to<bool>;
+template <typename UnaryPredicate, typename T>
+concept ExtractableWith = requires(UnaryPredicate pred, T t) {
+    { pred(t) } -> std::convertible_to<bool>;
 };
 
 // Main thread-safe queue implementation with high-performance locks

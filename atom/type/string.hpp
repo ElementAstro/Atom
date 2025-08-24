@@ -16,7 +16,6 @@ Description: A super enhanced string class.
 #define ATOM_TYPE_STRING_HPP
 
 #include <algorithm>
-#include <execution>
 #include <format>
 #include <functional>
 #include <iostream>
@@ -247,8 +246,11 @@ public:
      */
     [[nodiscard]] auto find(const String& str, size_t pos = 0) const noexcept
         -> size_t {
-        if (pos >= m_data_.length() || str.empty()) {
+        if (pos > m_data_.length()) {
             return NPOS;
+        }
+        if (str.empty()) {
+            return pos;  // Empty string is found at the starting position
         }
         return m_data_.find(str.m_data_, pos);
     }
@@ -390,8 +392,9 @@ public:
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_upper_copy(m_data_);
 #else
-            std::transform(std::execution::par_unseq, m_data_.begin(),
-                           m_data_.end(), std::back_inserter(result.m_data_),
+            result.m_data_.resize(m_data_.size());
+            // Use sequential execution to avoid TBB dependency issues
+            std::transform(m_data_.begin(), m_data_.end(), result.m_data_.begin(),
                            [](unsigned char c) { return std::toupper(c); });
 #endif
             return result;
@@ -413,8 +416,9 @@ public:
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_lower_copy(m_data_);
 #else
-            std::transform(std::execution::par_unseq, m_data_.begin(),
-                           m_data_.end(), std::back_inserter(result.m_data_),
+            result.m_data_.resize(m_data_.size());
+            // Use sequential execution to avoid TBB dependency issues
+            std::transform(m_data_.begin(), m_data_.end(), result.m_data_.begin(),
                            [](unsigned char c) { return std::tolower(c); });
 #endif
             return result;

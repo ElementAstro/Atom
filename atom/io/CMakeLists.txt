@@ -77,12 +77,15 @@ endif()
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
 set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS} atom-async)
 
 # Build Static Library
 add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
+target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS} atom-async)
 target_include_directories(${PROJECT_NAME} PUBLIC .)
+
+# Register as Atom module
+set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     VERSION ${PROJECT_VERSION}

@@ -1,3 +1,5 @@
+#include <gtest/gtest.h>
+
 #include "test_cache.hpp"
 #include "test_lru.hpp"
 #include "test_search.hpp"

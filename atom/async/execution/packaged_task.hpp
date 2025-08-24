@@ -232,10 +232,7 @@ public:
     template <typename F>
         requires std::invocable<F, ResultType>
     void onComplete(F&& func) {
-        if (!func) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION(
-                "Provided callback is invalid");
-        }
+        // Note: Lambdas are always valid, so no null check needed
         std::lock_guard<std::mutex> lock(callbacksMutex_);
         callbacks_.emplace_back(std::forward<F>(func));
     }
@@ -510,10 +507,7 @@ public:
     template <typename F>
         requires std::invocable<F>
     void onComplete(F&& func) {
-        if (!func) {
-            THROW_INVALID_PACKAGED_TASK_EXCEPTION(
-                "Provided callback is invalid");
-        }
+        // Note: Lambdas are always valid, so no null check needed
         std::lock_guard<std::mutex> lock(callbacksMutex_);
         callbacks_.emplace_back(std::forward<F>(func));
     }

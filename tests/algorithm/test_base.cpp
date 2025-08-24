@@ -12,7 +12,7 @@
 using namespace atom::algorithm;
 using namespace testing;
 
-std::vector<uint8_t> generateRandomBytes(size_t size) {
+inline std::vector<uint8_t> generateRandomBytes(size_t size) {
     std::vector<uint8_t> data(size);
     std::random_device rd;
     std::mt19937 gen(rd());

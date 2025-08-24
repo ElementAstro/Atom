@@ -2,12 +2,15 @@ name: Code Quality
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
   schedule:
-    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM
+    - cron: "0 2 * * 1" # Weekly on Monday at 2 AM
   workflow_dispatch:
+
+env:
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
 jobs:
   # Static analysis with multiple tools
@@ -15,173 +18,194 @@ jobs:
     name: Static Analysis
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Setup dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          cppcheck clang-tidy clang-format \
-          iwyu include-what-you-use \
-          valgrind lcov
+      - name: Cache analysis tools
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~/.cache/apt
+          key: ${{ runner.os }}-analysis-tools-${{ hashFiles('.github/workflows/code-quality.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-analysis-tools-
 
-    - name: Setup Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cppcheck clang-tidy clang-format \
+            iwyu include-what-you-use \
+            valgrind lcov cmake ninja-build
 
-    - name: Install Python tools
-      run: |
-        pip install cpplint lizard complexity-report
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
 
-    - name: Run cppcheck
-      run: |
-        cppcheck --enable=all \
-          --inconclusive \
-          --xml \
-          --xml-version=2 \
-          --suppress=missingIncludeSystem \
-          --suppress=unmatchedSuppression \
-          --suppress=unusedFunction \
-          --suppress=noExplicitConstructor \
-          --project=compile_commands.json \
-          atom/ 2> cppcheck-report.xml || true
+      - name: Install Python tools
+        run: |
+          pip install cpplint lizard complexity-report
 
-    - name: Run clang-tidy
-      run: |
-        # Generate compile commands
-        cmake -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+      - name: Run cppcheck
+        run: |
+          cppcheck --enable=all \
+            --inconclusive \
+            --xml \
+            --xml-version=2 \
+            --suppress=missingIncludeSystem \
+            --suppress=unmatchedSuppression \
+            --suppress=unusedFunction \
+            --suppress=noExplicitConstructor \
+            --project=compile_commands.json \
+            atom/ 2> cppcheck-report.xml || true
 
-        # Run clang-tidy on source files
-        find atom/ -name "*.cpp" | head -20 | xargs -I {} \
-          clang-tidy {} -p build/ \
-          --checks='-*,readability-*,performance-*,modernize-*,bugprone-*' \
-          --format-style=file > clang-tidy-report.txt 2>&1 || true
+      - name: Run clang-tidy
+        run: |
+          # Generate compile commands using CMakePresets
+          cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
-    - name: Run cpplint
-      run: |
-        find atom/ -name "*.cpp" -o -name "*.hpp" | \
-          xargs cpplint \
-          --filter=-whitespace/tab,-build/include_subdir,-legal/copyright \
-          --counting=detailed \
-          --output=vs7 > cpplint-report.txt 2>&1 || true
+          # Run clang-tidy on source files
+          find atom/ -name "*.cpp" | head -20 | xargs -I {} \
+            clang-tidy {} -p build/ \
+            --checks='-*,readability-*,performance-*,modernize-*,bugprone-*,clang-analyzer-*' \
+            --format-style=file > clang-tidy-report.txt 2>&1 || true
 
-    - name: Check code formatting
-      run: |
-        find atom/ -name "*.cpp" -o -name "*.hpp" | \
-          xargs clang-format --dry-run --Werror --style=file || \
-          (echo "Code formatting issues found. Run 'clang-format -i' on the files." && exit 1)
+      - name: Run cpplint
+        run: |
+          find atom/ -name "*.cpp" -o -name "*.hpp" | \
+            xargs cpplint \
+            --filter=-whitespace/tab,-build/include_subdir,-legal/copyright \
+            --counting=detailed \
+            --output=vs7 > cpplint-report.txt 2>&1 || true
 
-    - name: Run complexity analysis
-      run: |
-        lizard atom/ -l cpp -w -o lizard-report.html || true
+      - name: Check code formatting
+        run: |
+          find atom/ -name "*.cpp" -o -name "*.hpp" | \
+            xargs clang-format --dry-run --Werror --style=file || \
+            (echo "Code formatting issues found. Run 'clang-format -i' on the files." && exit 1)
 
-    - name: Include What You Use (IWYU)
-      run: |
-        # Run IWYU on a subset of files to avoid overwhelming output
-        find atom/ -name "*.cpp" | head -10 | xargs -I {} \
-          include-what-you-use -I atom/ {} > iwyu-report.txt 2>&1 || true
+      - name: Run complexity analysis
+        run: |
+          lizard atom/ -l cpp -w -o lizard-report.html || true
 
-    - name: Upload analysis reports
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: static-analysis-reports
-        path: |
-          cppcheck-report.xml
-          clang-tidy-report.txt
-          cpplint-report.txt
-          lizard-report.html
-          iwyu-report.txt
+      - name: Include What You Use (IWYU)
+        run: |
+          # Run IWYU on a subset of files to avoid overwhelming output
+          find atom/ -name "*.cpp" | head -10 | xargs -I {} \
+            include-what-you-use -I atom/ {} > iwyu-report.txt 2>&1 || true
+
+      - name: Upload analysis reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: static-analysis-reports
+          path: |
+            cppcheck-report.xml
+            clang-tidy-report.txt
+            cpplint-report.txt
+            lizard-report.html
+            iwyu-report.txt
+          retention-days: 30
 
   # Security analysis
   security-analysis:
     name: Security Analysis
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-      with:
-        fetch-depth: 0
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-    - name: Initialize CodeQL
-      uses: github/codeql-action/init@v2
-      with:
-        languages: cpp
-        queries: security-and-quality
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: cpp
+          queries: security-and-quality
 
-    - name: Setup build environment
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential cmake ninja-build
+      - name: Setup build environment
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build
 
-    - name: Build for analysis
-      run: |
-        cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
-        cmake --build build --parallel
+      - name: Build for analysis
+        run: |
+          cmake --preset debug \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_TESTS=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
+          cmake --build --preset debug --parallel
 
-    - name: Perform CodeQL Analysis
-      uses: github/codeql-action/analyze@v2
-      with:
-        category: "/language:cpp"
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:cpp"
 
-    - name: Run Semgrep
-      uses: returntocorp/semgrep-action@v1
-      with:
-        config: >-
-          p/security-audit
-          p/secrets
-          p/cpp
+      - name: Run Semgrep
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: >-
+            p/security-audit
+            p/secrets
+            p/cpp
 
   # Memory safety analysis
   memory-safety:
     name: Memory Safety Analysis
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential cmake ninja-build \
-          valgrind clang \
-          libssl-dev zlib1g-dev
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            valgrind clang \
+            libssl-dev zlib1g-dev
 
-    - name: Build with AddressSanitizer
-      run: |
-        cmake -B build-asan \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
-          -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
-          -DATOM_BUILD_TESTS=ON \
-          -G Ninja
-        cmake --build build-asan --parallel
+      - name: Build with AddressSanitizer
+        run: |
+          cmake --preset debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+            -DCMAKE_C_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
+          cmake --build --preset debug --parallel
 
-    - name: Build with MemorySanitizer
-      run: |
-        export CC=clang
-        export CXX=clang++
-        cmake -B build-msan \
-          -DCMAKE_BUILD_TYPE=Debug \
-          -DCMAKE_CXX_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -g" \
-          -DCMAKE_C_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -g" \
-          -DATOM_BUILD_TESTS=ON \
-          -G Ninja
-        cmake --build build-msan --parallel
+      - name: Build with MemorySanitizer
+        run: |
+          export CC=clang
+          export CXX=clang++
+          cmake --preset debug \
+            -DCMAKE_CXX_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -g" \
+            -DCMAKE_C_FLAGS="-fsanitize=memory -fno-omit-frame-pointer -g" \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
+          cmake --build --preset debug --parallel
 
-    - name: Run tests with AddressSanitizer
-      run: |
-        cd build-asan
-        ctest --output-on-failure || true
+      - name: Run tests with AddressSanitizer
+        run: |
+          cd build
+          ctest --output-on-failure --timeout 300 || true
 
-    - name: Run tests with Valgrind
-      run: |
-        cmake -B build-valgrind -DCMAKE_BUILD_TYPE=Debug -DATOM_BUILD_TESTS=ON
-        cmake --build build-valgrind --parallel
-        cd build-valgrind
-        ctest --output-on-failure -T memcheck || true
+      - name: Run tests with Valgrind
+        run: |
+          cmake --preset debug \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
+          cmake --build --preset debug --parallel
+          cd build
+          ctest --output-on-failure -T memcheck --timeout 600 || true
 
   # Performance analysis
   performance-analysis:
@@ -189,154 +213,169 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y \
-          build-essential cmake ninja-build \
-          google-perftools libgoogle-perftools-dev \
-          perf-tools-unstable
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential cmake ninja-build \
+            google-perftools libgoogle-perftools-dev \
+            perf-tools-unstable
 
-    - name: Build with profiling
-      run: |
-        cmake -B build-profile \
-          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-          -DCMAKE_CXX_FLAGS="-pg -fprofile-arcs -ftest-coverage" \
-          -DATOM_BUILD_TESTS=ON \
-          -G Ninja
-        cmake --build build-profile --parallel
+      - name: Build with profiling
+        run: |
+          cmake --preset relwithdebinfo \
+            -DCMAKE_CXX_FLAGS="-pg -fprofile-arcs -ftest-coverage" \
+            -DCMAKE_C_FLAGS="-pg -fprofile-arcs -ftest-coverage" \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
+          cmake --build --preset relwithdebinfo --parallel
 
-    - name: Run performance tests
-      run: |
-        cd build-profile
-        # Run benchmarks if available
-        if find . -name "*benchmark*" -executable; then
-          find . -name "*benchmark*" -executable -exec {} \;
-        fi
+      - name: Run performance tests
+        run: |
+          cd build
+          # Run benchmarks if available
+          if find . -name "*benchmark*" -executable; then
+            find . -name "*benchmark*" -executable -exec {} \;
+          else
+            echo "No benchmarks found"
+          fi
 
-    - name: Generate coverage report
-      run: |
-        cd build-profile
-        lcov --capture --directory . --output-file coverage.info
-        lcov --remove coverage.info '/usr/*' --output-file coverage.info
-        lcov --list coverage.info
+      - name: Generate coverage report
+        run: |
+          cd build
+          lcov --capture --directory . --output-file coverage.info
+          lcov --remove coverage.info '/usr/*' --output-file coverage.info
+          lcov --list coverage.info
 
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        file: build-profile/coverage.info
-        flags: unittests
-        name: codecov-umbrella
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          file: build/coverage.info
+          flags: unittests
+          name: codecov-umbrella
+          token: ${{ secrets.CODECOV_TOKEN }}
 
   # Documentation quality
   documentation-quality:
     name: Documentation Quality
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Setup dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y doxygen graphviz
+      - name: Setup dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y doxygen graphviz
 
-    - name: Check documentation completeness
-      run: |
-        # Generate documentation with warnings
-        doxygen Doxyfile 2> doxygen-warnings.txt || true
+      - name: Check documentation completeness
+        run: |
+          # Generate documentation with warnings
+          doxygen Doxyfile 2> doxygen-warnings.txt || true
 
-        # Check for undocumented functions
-        find atom/ -name "*.hpp" -exec grep -l "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" {} \; | \
-          xargs -I {} sh -c 'echo "=== {} ==="; grep -n "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" "{}" | head -5'
+          # Check for undocumented functions
+          find atom/ -name "*.hpp" -exec grep -l "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" {} \; | \
+            xargs -I {} sh -c 'echo "=== {} ==="; grep -n "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" "{}" | head -5'
 
-    - name: Check README and documentation files
-      run: |
-        # Check if README exists and has content
-        if [ ! -f README.md ] || [ ! -s README.md ]; then
-          echo "README.md is missing or empty"
-          exit 1
-        fi
-
-        # Check for common documentation files
-        for file in CONTRIBUTING.md CHANGELOG.md LICENSE; do
-          if [ ! -f "$file" ]; then
-            echo "Warning: $file is missing"
+      - name: Check README and documentation files
+        run: |
+          # Check if README exists and has content
+          if [ ! -f README.md ] || [ ! -s README.md ]; then
+            echo "README.md is missing or empty"
+            exit 1
           fi
-        done
 
-    - name: Upload documentation warnings
-      uses: actions/upload-artifact@v3
-      if: always()
-      with:
-        name: documentation-warnings
-        path: doxygen-warnings.txt
+          # Check for common documentation files
+          for file in CONTRIBUTING.md CHANGELOG.md LICENSE; do
+            if [ ! -f "$file" ]; then
+              echo "Warning: $file is missing"
+            fi
+          done
+
+      - name: Upload documentation warnings
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: documentation-warnings
+          path: doxygen-warnings.txt
+          retention-days: 30
 
   # Dependency analysis
   dependency-analysis:
     name: Dependency Analysis
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Analyze dependencies
-      run: |
-        # Check for circular dependencies
-        find atom/ -name "*.hpp" -exec grep -l "#include" {} \; | \
-          xargs -I {} sh -c 'echo "=== {} ==="; grep "#include.*atom/" "{}"' > dependency-analysis.txt
+      - name: Analyze dependencies
+        run: |
+          # Check for circular dependencies
+          find atom/ -name "*.hpp" -exec grep -l "#include" {} \; | \
+            xargs -I {} sh -c 'echo "=== {} ==="; grep "#include.*atom/" "{}"' > dependency-analysis.txt
 
-    - name: Check for unused includes
-      run: |
-        # This is a simplified check - in practice, you'd use include-what-you-use
-        find atom/ -name "*.cpp" -exec grep -H "#include" {} \; > includes.txt
+      - name: Check for unused includes
+        run: |
+          # This is a simplified check - in practice, you'd use include-what-you-use
+          find atom/ -name "*.cpp" -exec grep -H "#include" {} \; > includes.txt
 
-    - name: Upload dependency analysis
-      uses: actions/upload-artifact@v3
-      with:
-        name: dependency-analysis
-        path: |
-          dependency-analysis.txt
-          includes.txt
+      - name: Upload dependency analysis
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-analysis
+          path: |
+            dependency-analysis.txt
+            includes.txt
+          retention-days: 30
 
   # Generate quality report
   quality-report:
     name: Generate Quality Report
     runs-on: ubuntu-latest
-    needs: [static-analysis, security-analysis, memory-safety, documentation-quality, dependency-analysis]
+    needs:
+      [
+        static-analysis,
+        security-analysis,
+        memory-safety,
+        documentation-quality,
+        dependency-analysis,
+      ]
     if: always()
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Download all analysis reports
-      uses: actions/download-artifact@v3
-      with:
-        path: reports/
+      - name: Download all analysis reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports/
 
-    - name: Generate quality summary
-      run: |
-        echo "# Code Quality Report" > quality-report.md
-        echo "Generated on: $(date)" >> quality-report.md
-        echo "" >> quality-report.md
+      - name: Generate quality summary
+        run: |
+          echo "# Code Quality Report" > quality-report.md
+          echo "Generated on: $(date)" >> quality-report.md
+          echo "" >> quality-report.md
 
-        echo "## Static Analysis Results" >> quality-report.md
-        if [ -f reports/static-analysis-reports/cppcheck-report.xml ]; then
-          echo "- Cppcheck report available" >> quality-report.md
-        fi
+          echo "## Static Analysis Results" >> quality-report.md
+          if [ -f reports/static-analysis-reports/cppcheck-report.xml ]; then
+            echo "- Cppcheck report available" >> quality-report.md
+          fi
 
-        echo "## Security Analysis" >> quality-report.md
-        echo "- CodeQL analysis completed" >> quality-report.md
+          echo "## Security Analysis" >> quality-report.md
+          echo "- CodeQL analysis completed" >> quality-report.md
 
-        echo "## Memory Safety" >> quality-report.md
-        echo "- AddressSanitizer and Valgrind tests completed" >> quality-report.md
+          echo "## Memory Safety" >> quality-report.md
+          echo "- AddressSanitizer and Valgrind tests completed" >> quality-report.md
 
-        echo "## Documentation Quality" >> quality-report.md
-        if [ -f reports/documentation-warnings/doxygen-warnings.txt ]; then
-          echo "- Doxygen warnings: $(wc -l < reports/documentation-warnings/doxygen-warnings.txt) lines" >> quality-report.md
-        fi
+          echo "## Documentation Quality" >> quality-report.md
+          if [ -f reports/documentation-warnings/doxygen-warnings.txt ]; then
+            echo "- Doxygen warnings: $(wc -l < reports/documentation-warnings/doxygen-warnings.txt) lines" >> quality-report.md
+          fi
 
-    - name: Upload quality report
-      uses: actions/upload-artifact@v3
-      with:
-        name: quality-report
-        path: quality-report.md
+      - name: Upload quality report
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-report
+          path: quality-report.md
+          retention-days: 30

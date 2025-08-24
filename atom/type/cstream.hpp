@@ -126,7 +126,10 @@ public:
     template <typename T, typename UnaryFunction>
     auto transform(UnaryFunction transform_f) const -> cstream<T> {
         T dest;
-        dest.reserve(container_ref_.size());
+        // Only call reserve() if the container supports it (e.g., vector, string)
+        if constexpr (requires { dest.reserve(container_ref_.size()); }) {
+            dest.reserve(container_ref_.size());
+        }
         std::transform(container_ref_.begin(), container_ref_.end(),
                        std::back_inserter(dest), transform_f);
         return cstream<T>(std::move(dest));
@@ -156,9 +159,16 @@ public:
      */
     template <typename ValueType>
     auto erase(const ValueType& v) -> cstream<C>& {
-        auto new_end =
-            std::remove(container_ref_.begin(), container_ref_.end(), v);
-        container_ref_.erase(new_end, container_ref_.end());
+        // For associative containers (map, set), use different approach
+        if constexpr (requires { container_ref_.erase(v); }) {
+            // For associative containers, erase by key/value directly
+            container_ref_.erase(v);
+        } else {
+            // For sequence containers, use remove-erase idiom
+            auto new_end =
+                std::remove(container_ref_.begin(), container_ref_.end(), v);
+            container_ref_.erase(new_end, container_ref_.end());
+        }
         return *this;
     }
 

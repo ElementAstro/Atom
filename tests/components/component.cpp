@@ -148,8 +148,8 @@ TEST_F(ComponentTest, GetCommandArgAndReturnType) {
     component->def("testCommand5", [](int a) { return a; });
     auto args = component->getCommandArgAndReturnType("testCommand5");
     EXPECT_EQ(args.size(), 1);
-    // Assuming the first element contains the return type
-    EXPECT_EQ(args[0], "int");
+    // Check the return type
+    EXPECT_EQ(args[0].returnType, "int");
 }
 
 // Test getAllCommands

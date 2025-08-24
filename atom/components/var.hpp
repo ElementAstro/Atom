@@ -272,7 +272,7 @@ void VariableManager::addVariable(const std::string& name, T C::* memberPointer,
     }
 
     auto trackable = std::make_shared<Trackable<T>>(instance.*memberPointer);
-    trackable->onChange([memberPointer, &instance](const T& value) {
+    trackable->setOnChangeCallback([memberPointer, &instance](const T& value) {
         instance.*memberPointer = value;
     });
 

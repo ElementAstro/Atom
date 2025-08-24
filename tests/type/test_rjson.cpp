@@ -9,6 +9,7 @@
 
 
 #include "atom/type/rjson.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::type;
 
@@ -103,7 +104,7 @@ TEST_F(JsonValueTest, AsStringMethod) {
     EXPECT_EQ(value.asString(), "test");
 
     // Should throw when used on wrong type
-    EXPECT_THROW(JsonValue(42.0).asString(), std::bad_variant_access);
+    EXPECT_THROW(JsonValue(42.0).asString(), atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsNumberMethod) {
@@ -112,7 +113,7 @@ TEST_F(JsonValueTest, AsNumberMethod) {
 
     // Should throw when used on wrong type
     EXPECT_THROW(JsonValue(std::string("test")).asNumber(),
-                 std::bad_variant_access);
+                 atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsBoolMethod) {
@@ -120,7 +121,7 @@ TEST_F(JsonValueTest, AsBoolMethod) {
     EXPECT_TRUE(value.asBool());
 
     // Should throw when used on wrong type
-    EXPECT_THROW(JsonValue(42.0).asBool(), std::bad_variant_access);
+    EXPECT_THROW(JsonValue(42.0).asBool(), atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsObjectMethod) {
@@ -133,7 +134,7 @@ TEST_F(JsonValueTest, AsObjectMethod) {
     EXPECT_EQ(result.at("key").asString(), "value");
 
     // Should throw when used on wrong type
-    EXPECT_THROW(JsonValue(42.0).asObject(), std::bad_variant_access);
+    EXPECT_THROW(JsonValue(42.0).asObject(), atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsArrayMethod) {
@@ -148,7 +149,7 @@ TEST_F(JsonValueTest, AsArrayMethod) {
     EXPECT_DOUBLE_EQ(result[1].asNumber(), 2.0);
 
     // Should throw when used on wrong type
-    EXPECT_THROW(JsonValue(42.0).asArray(), std::bad_variant_access);
+    EXPECT_THROW(JsonValue(42.0).asArray(), atom::error::InvalidArgument);
 }
 
 // Operator[] Tests
@@ -166,7 +167,7 @@ TEST_F(JsonValueTest, StringIndexOperator) {
     EXPECT_THROW(value["nonexistent"], std::out_of_range);
 
     // Should throw when used on wrong type
-    EXPECT_THROW(JsonValue(42.0)["key"], std::bad_variant_access);
+    EXPECT_THROW(JsonValue(42.0)["key"], atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, NumericIndexOperator) {
@@ -185,7 +186,7 @@ TEST_F(JsonValueTest, NumericIndexOperator) {
     EXPECT_THROW(value[3], std::out_of_range);
 
     // Should throw when used on wrong type
-    EXPECT_THROW(JsonValue(42.0)[0], std::bad_variant_access);
+    EXPECT_THROW(JsonValue(42.0)[0], atom::error::InvalidArgument);
 }
 
 // ToString Tests
@@ -432,20 +433,20 @@ TEST_F(JsonParserTest, ParseWithWhitespace) {
 
 TEST_F(JsonParserTest, ParseInvalidJson) {
     // Missing closing quotation mark
-    EXPECT_THROW(JsonParser::parse("\"Hello"), std::runtime_error);
+    EXPECT_THROW(JsonParser::parse("\"Hello"), atom::error::InvalidArgument);
 
     // Invalid number format
-    EXPECT_THROW(JsonParser::parse("42."), std::runtime_error);
+    EXPECT_THROW(JsonParser::parse("42."), atom::error::InvalidArgument);
 
     // Invalid object format (missing value)
-    EXPECT_THROW(JsonParser::parse("{\"key\": }"), std::runtime_error);
+    EXPECT_THROW(JsonParser::parse("{\"key\": }"), atom::error::InvalidArgument);
 
     // Invalid object format (missing comma)
     EXPECT_THROW(JsonParser::parse("{\"key1\": 42 \"key2\": 43}"),
-                 std::runtime_error);
+                 atom::error::InvalidArgument);
 
     // Invalid array format (missing comma)
-    EXPECT_THROW(JsonParser::parse("[1 2 3]"), std::runtime_error);
+    EXPECT_THROW(JsonParser::parse("[1 2 3]"), atom::error::InvalidArgument);
 }
 
 // Round-trip Tests

@@ -12,7 +12,7 @@
 using namespace atom::algorithm;
 
 // Helper functions
-std::vector<std::byte> generateRandomBytes(size_t count) {
+inline std::vector<std::byte> generateRandomBytes(size_t count) {
     std::vector<std::byte> result(count);
     std::random_device rd;
     std::mt19937 gen(rd());
@@ -487,9 +487,4 @@ TEST_F(BlowfishTest, ParallelEncryption) {
     EXPECT_EQ(large_data, copy);
 }
 
-int main(int argc, char** argv) {
-    // Initialize Google Test
-    ::testing::InitGoogleTest(&argc, argv);
-    spdlog::set_level(spdlog::level::off);
-    return RUN_ALL_TESTS();
-}
+// Main function removed - using gtest_main

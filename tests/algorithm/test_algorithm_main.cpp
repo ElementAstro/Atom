@@ -337,7 +337,4 @@ TEST_F(AlgorithmIntegrationTest, AlgorithmComparison) {
 
 } // namespace atom::algorithm::test
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function removed - using gtest_main

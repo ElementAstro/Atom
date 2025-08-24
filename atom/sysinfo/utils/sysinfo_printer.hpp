@@ -16,13 +16,13 @@
 #include <string>
 #include <vector>
 
-#include "battery.hpp"
-#include "bios.hpp"
-#include "cpu.hpp"
-#include "disk.hpp"
-#include "locale.hpp"
-#include "memory.hpp"
-#include "os.hpp"
+#include "../hardware/battery.hpp"
+#include "../hardware/bios.hpp"
+#include "../hardware/cpu.hpp"
+#include "../storage/disk.hpp"
+#include "../info/locale.hpp"
+#include "../hardware/memory.hpp"
+#include "../info/os.hpp"
 #include "wm.hpp"
 
 namespace atom::system {

@@ -143,11 +143,11 @@ TEST_F(LockFreeHashTableTest, InsertAndFind) {
 
     auto value = table.find(1);
     ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(value.value(), "one");
+    EXPECT_EQ(value.value().get(), "one");
 
     value = table.find(2);
     ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(value.value(), "two");
+    EXPECT_EQ(value.value().get(), "two");
 
     value = table.find(3);
     EXPECT_FALSE(value.has_value());
@@ -163,7 +163,7 @@ TEST_F(LockFreeHashTableTest, Erase) {
 
     value = table.find(2);
     ASSERT_TRUE(value.has_value());
-    EXPECT_EQ(value.value(), "two");
+    EXPECT_EQ(value.value().get(), "two");
 
     table.erase(2);
     value = table.find(2);
@@ -221,7 +221,7 @@ TEST_F(LockFreeHashTableTest, ConcurrentInsertAndFind) {
         for (int j = 0; j < numIterations; ++j) {
             auto value = table.find(j + i * 1000);
             ASSERT_TRUE(value.has_value());
-            EXPECT_EQ(value.value(), "value" + std::to_string(j + i * 1000));
+            EXPECT_EQ(value.value().get(), "value" + std::to_string(j + i * 1000));
         }
     }
 }
@@ -293,19 +293,19 @@ TEST_F(ThreadSafeVectorTest, AtMethod) {
     vec.pushBack(2);
     vec.pushBack(3);
 
-    auto value = vec.at(0);
+    auto value = vec.try_at(0);
     ASSERT_TRUE(value.has_value());
     EXPECT_EQ(value.value(), 1);
 
-    value = vec.at(1);
+    value = vec.try_at(1);
     ASSERT_TRUE(value.has_value());
     EXPECT_EQ(value.value(), 2);
 
-    value = vec.at(2);
+    value = vec.try_at(2);
     ASSERT_TRUE(value.has_value());
     EXPECT_EQ(value.value(), 3);
 
-    value = vec.at(3);
+    value = vec.try_at(3);
     EXPECT_FALSE(value.has_value());
 }
 

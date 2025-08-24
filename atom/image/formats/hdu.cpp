@@ -1380,6 +1380,42 @@ double ImageHDU::computeCompressionRatio() const noexcept {
     return static_cast<double>(originalSize) / compressedSize;
 }
 
+bool ImageHDU::isDataValid() const {
+    // Check if basic image parameters are valid
+    if (width <= 0 || height <= 0 || channels <= 0) {
+        return false;
+    }
+
+    // Check if data is allocated
+    if (!data) {
+        return false;
+    }
+
+    // Check if header contains required keywords
+    try {
+        std::string bitpixStr = header.getKeywordValue("BITPIX");
+        if (bitpixStr.empty()) {
+            return false;
+        }
+
+        int bitpix = std::stoi(bitpixStr);
+        if (bitpix != 8 && bitpix != 16 && bitpix != 32 && bitpix != 64 &&
+            bitpix != -32 && bitpix != -64) {
+            return false;
+        }
+    } catch (...) {
+        return false;
+    }
+
+    // Validate data consistency
+    try {
+        data->validateData();
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
 template <FitsNumeric T>
 void ImageHDU::detectEdges(const std::string& method, int channel) {
     if (!data) {
@@ -1923,3 +1959,22 @@ void ImageHDU::applyMorphology(const std::string& operation, int kernelSize,
         throw HDUException("Data type mismatch in applyMorphology");
     }
 }
+
+// Explicit template instantiations for implemented methods only
+template std::vector<double> ImageHDU::computeHistogram<unsigned char>(int, int) const;
+template std::vector<double> ImageHDU::computeHistogram<short>(int, int) const;
+template std::vector<double> ImageHDU::computeHistogram<int>(int, int) const;
+template std::vector<double> ImageHDU::computeHistogram<float>(int, int) const;
+template std::vector<double> ImageHDU::computeHistogram<double>(int, int) const;
+
+template void ImageHDU::equalizeHistogram<unsigned char>(int);
+template void ImageHDU::equalizeHistogram<short>(int);
+template void ImageHDU::equalizeHistogram<int>(int);
+template void ImageHDU::equalizeHistogram<float>(int);
+template void ImageHDU::equalizeHistogram<double>(int);
+
+template void ImageHDU::applyMorphology<unsigned char>(const std::string&, int, int);
+template void ImageHDU::applyMorphology<short>(const std::string&, int, int);
+template void ImageHDU::applyMorphology<int>(const std::string&, int, int);
+template void ImageHDU::applyMorphology<float>(const std::string&, int, int);
+template void ImageHDU::applyMorphology<double>(const std::string&, int, int);

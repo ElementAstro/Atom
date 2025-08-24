@@ -297,6 +297,25 @@ public:
     }
 
     /**
+     * @brief Get the thread-local value for the current thread (const version)
+     *
+     * @return Const reference to the thread-local value
+     * @throws ThreadLocalException If the value has not been set for this thread
+     */
+    auto get() const -> const T& {
+        auto tid = std::this_thread::get_id();
+        std::shared_lock lock(mutex_);
+
+        auto it = values_.find(tid);
+        if (it == values_.end() || !it->second.has_value()) {
+            throw ThreadLocalException(ThreadLocalError::ValueNotFound,
+                                       "Thread-local value not set for this thread");
+        }
+
+        return it->second.value();
+    }
+
+    /**
      * @brief Tries to get the value for the current thread
      *
      * Unlike get(), this method does not throw an exception but returns an

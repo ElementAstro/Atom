@@ -45,8 +45,8 @@ TEST_F(FifoClientTest, ReadFromFifo) {
     std::string message = "Hello, FIFO!";
     server_->sendMessage(message);
 
-    auto future = std::async(std::launch::async, [&]() {
-        return client_->read(std::chrono::seconds(5));
+    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
+        return client_->read(0, std::chrono::milliseconds(5000));
     });
 
     auto status = future.wait_for(std::chrono::seconds(6));
@@ -63,8 +63,8 @@ TEST_F(FifoClientTest, WriteAndReadWithTimeout) {
     std::string message = "Hello, FIFO!";
     ASSERT_TRUE(client_->write(message, std::chrono::seconds(1)));
 
-    auto future = std::async(std::launch::async, [&]() {
-        return client_->read(std::chrono::seconds(1));
+    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
+        return client_->read(0, std::chrono::milliseconds(1000));
     });
 
     auto status = future.wait_for(std::chrono::seconds(2));
@@ -78,8 +78,8 @@ TEST_F(FifoClientTest, WriteAndReadWithTimeout) {
 TEST_F(FifoClientTest, ReadTimeout) {
     ASSERT_TRUE(client_->isOpen());
 
-    auto future = std::async(std::launch::async, [&]() {
-        return client_->read(std::chrono::seconds(1));
+    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
+        return client_->read(0, std::chrono::milliseconds(1000));
     });
 
     auto status = future.wait_for(std::chrono::seconds(2));
