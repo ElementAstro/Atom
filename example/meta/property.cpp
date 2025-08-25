@@ -72,7 +72,8 @@ public:
 
 // Function to print a property's value
 template <typename T>
-void printProperty(const std::string& name, const atom::meta::Property<T>& prop) {
+void printProperty(const std::string& name,
+                   const atom::meta::Property<T>& prop) {
     try {
         std::cout << name << " = " << static_cast<T>(prop) << std::endl;
     } catch (const std::exception& e) {
@@ -95,7 +96,8 @@ int main() {
 
     // Property with custom getter
     int backingValue = 100;
-    atom::meta::Property<int> getterProperty([&backingValue]() { return backingValue; });
+    atom::meta::Property<int> getterProperty(
+        [&backingValue]() { return backingValue; });
     std::cout << "getterProperty = " << static_cast<int>(getterProperty)
               << std::endl;
 

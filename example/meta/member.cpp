@@ -5,7 +5,9 @@
 
 // Sample structures for demonstration
 struct Point {
-    bool operator==(const Point& other) const { return x == other.x && y == other.y; }
+    bool operator==(const Point& other) const {
+        return x == other.x && y == other.y;
+    }
     int x;
     int y;
 };
@@ -186,13 +188,14 @@ int main() {
                   << "\n";
     } else {
         // 修复：直接使用error()而不是调用what()
-        std::cout << "Safe container_of failed: " << result.error().error().what() << "\n";
+        std::cout << "Safe container_of failed: "
+                  << result.error().error().what() << "\n";
     }
 
     // Example with null pointer
     Point* nullPtr = nullptr;
-    auto nullResult =
-        atom::meta::safe_container_of<Rectangle, Point>(nullPtr, &Rectangle::topLeft);
+    auto nullResult = atom::meta::safe_container_of<Rectangle, Point>(
+        nullPtr, &Rectangle::topLeft);
     if (!nullResult) {
         // 修复：直接使用error()而不是调用what()
         std::cout << "Expected error with null pointer: "
@@ -253,8 +256,7 @@ int main() {
         const Point* constPosPtr = &constDerived.position;
 
         [[maybe_unused]] const Base* constRecoveredBase =
-            atom::meta::container_of<Derived>(constPosPtr,
-                                                    &Derived::position);
+            atom::meta::container_of<Derived>(constPosPtr, &Derived::position);
         std::cout << "Const recovered base object accessed\n";
     } catch (const atom::meta::member_pointer_error& e) {
         std::cout << "Error: " << e.what() << "\n";
@@ -275,7 +277,8 @@ int main() {
                   << foundPoint->y << ")\n";
     } else {
         // 修复：直接使用error()而不是调用what()
-        std::cout << "Point not found: " << rangeResult.error().error().what() << "\n";
+        std::cout << "Point not found: " << rangeResult.error().error().what()
+                  << "\n";
     }
 
     // Point not in the container

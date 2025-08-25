@@ -18,11 +18,12 @@ foreach(CPP_FILE ${CPP_FILES})
     # 构造可执行文件名称（子目录名_文件名）
     set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
 
-    # 跳过暂时不稳定的示例以解锁整体构建
-    if(EXAMPLE_NAME STREQUAL "short_alloc")
-        message(STATUS "Skipping memory example: ${EXAMPLE_NAME}")
-        continue()
-    endif()
+    # Skip temporarily unstable examples to unlock overall build
+    # Note: short_alloc example has been fixed and is now enabled
+    # if(EXAMPLE_NAME STREQUAL "short_alloc")
+    #     message(STATUS "Skipping memory example: ${EXAMPLE_NAME}")
+    #     continue()
+    # endif()
 
     # 配置选项，允许单独控制每个示例的构建
     string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)

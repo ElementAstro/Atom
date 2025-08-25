@@ -6,7 +6,6 @@
 using namespace atom::utils;
 
 int main() {
-
     // Example string and wide string
     std::string exampleStr = "Hello, World!";
     std::wstring exampleWStr = L"Hello, World!";
@@ -62,7 +61,6 @@ int main() {
     LPWSTR lpwstrFromStrView = CharToLPWSTR(strView);
     std::wcout << L"String_view to LPWSTR: " << lpwstrFromStrView << std::endl;
     LocalFree(lpwstrFromStrView);  // Free the allocated memory
-
 
     return 0;
 }

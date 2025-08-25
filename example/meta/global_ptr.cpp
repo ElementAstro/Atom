@@ -216,10 +216,12 @@ void demonstrateWeakPointerHandling() {
 
     // Store a weak pointer directly
     std::weak_ptr<Database> another_weak = weak_db;
-    // Store a copy in a local variable (manager doesn't store weak ptrs directly)
+    // Store a copy in a local variable (manager doesn't store weak ptrs
+    // directly)
     auto shared_from_weak = another_weak.lock();
 
-    (void)GlobalSharedPtrManager::getInstance(); // keep reference for consistency
+    (void)GlobalSharedPtrManager::getInstance();  // keep reference for
+                                                  // consistency
 
     if (shared_from_weak) {
         shared_from_weak->query("SELECT COUNT(*) FROM orders");
@@ -340,7 +342,8 @@ void demonstrateMacroUsage() {
     // Try again after object is created
     try {
         std::weak_ptr<Database> dbPtr;
-        GET_OR_CREATE_WEAK_PTR(dbPtr, Database, Constants::DATABASE, "sqlite://memory");
+        GET_OR_CREATE_WEAK_PTR(dbPtr, Database, Constants::DATABASE,
+                               "sqlite://memory");
         auto db = dbPtr.lock();
         if (db) {
             db->query("SELECT version()");
@@ -492,8 +495,10 @@ void demonstrateAutomaticCleanup() {
         // Create some weak references
         if (i % 3 == 0) {
             std::weak_ptr<std::string> weak = GetWeakPtr<std::string>(key);
-            // Manager does not store weak pointers separately; keep local weak and demonstrate lock()
-            auto locked = weak.lock(); (void)locked;
+            // Manager does not store weak pointers separately; keep local weak
+            // and demonstrate lock()
+            auto locked = weak.lock();
+            (void)locked;
         }
     }
 

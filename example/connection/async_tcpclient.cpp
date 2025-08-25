@@ -1,12 +1,18 @@
 #include "atom/connection/async_tcpclient.hpp"
 #include "atom/connection/async_sockethub.hpp"
 
+#include <algorithm>
+#include <atomic>
 #include <chrono>
+#include <condition_variable>
 #include <ctime>
 #include <functional>
+#include <future>
 #include <iomanip>
 #include <iostream>
 #include <mutex>
+#include <queue>
+#include <random>
 #include <sstream>
 #include <string>
 #include <thread>
@@ -66,6 +72,115 @@ private:
 
 std::mutex Logger::mutex_;
 
+// Enhanced statistics tracking for async operations
+class AsyncStats {
+public:
+    std::atomic<size_t> total_operations{0};
+    std::atomic<size_t> successful_operations{0};
+    std::atomic<size_t> failed_operations{0};
+    std::atomic<size_t> bytes_transferred{0};
+    std::atomic<size_t> connection_attempts{0};
+    std::atomic<size_t> reconnection_attempts{0};
+    std::chrono::steady_clock::time_point start_time;
+
+    AsyncStats() : start_time(std::chrono::steady_clock::now()) {}
+
+    void print_summary() const {
+        auto duration = std::chrono::steady_clock::now() - start_time;
+        auto seconds =
+            std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+
+        Logger::log(Logger::INFO, "AsyncStats",
+                    "=== Async Operation Statistics ===");
+        Logger::log(Logger::INFO, "AsyncStats",
+                    "Runtime: " + std::to_string(seconds) + " seconds");
+        Logger::log(
+            Logger::INFO, "AsyncStats",
+            "Total operations: " + std::to_string(total_operations.load()));
+        Logger::log(
+            Logger::INFO, "AsyncStats",
+            "Successful: " + std::to_string(successful_operations.load()));
+        Logger::log(Logger::INFO, "AsyncStats",
+                    "Failed: " + std::to_string(failed_operations.load()));
+        Logger::log(
+            Logger::INFO, "AsyncStats",
+            "Bytes transferred: " + std::to_string(bytes_transferred.load()));
+        Logger::log(Logger::INFO, "AsyncStats",
+                    "Connection attempts: " +
+                        std::to_string(connection_attempts.load()));
+        Logger::log(Logger::INFO, "AsyncStats",
+                    "Reconnection attempts: " +
+                        std::to_string(reconnection_attempts.load()));
+
+        if (seconds > 0) {
+            Logger::log(Logger::INFO, "AsyncStats",
+                        "Operations/sec: " +
+                            std::to_string(total_operations.load() / seconds));
+            Logger::log(Logger::INFO, "AsyncStats",
+                        "Bytes/sec: " +
+                            std::to_string(bytes_transferred.load() / seconds));
+        }
+
+        double success_rate = total_operations.load() > 0
+                                  ? (double(successful_operations.load()) /
+                                     total_operations.load()) *
+                                        100.0
+                                  : 0.0;
+        Logger::log(Logger::INFO, "AsyncStats",
+                    "Success rate: " + std::to_string(success_rate) + "%");
+    }
+};
+
+// Message queue for async message processing
+class AsyncMessageQueue {
+private:
+    std::queue<std::string> messages_;
+    std::mutex queue_mutex_;
+    std::condition_variable cv_;
+    std::atomic<bool> stop_processing_{false};
+
+public:
+    void push(const std::string& message) {
+        std::lock_guard<std::mutex> lock(queue_mutex_);
+        messages_.push(message);
+        cv_.notify_one();
+    }
+
+    bool pop(std::string& message, std::chrono::milliseconds timeout =
+                                       std::chrono::milliseconds(1000)) {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+
+        if (cv_.wait_for(lock, timeout, [this] {
+                return !messages_.empty() || stop_processing_;
+            })) {
+            if (!messages_.empty()) {
+                message = messages_.front();
+                messages_.pop();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    void stop() {
+        stop_processing_ = true;
+        cv_.notify_all();
+    }
+
+    size_t size() const {
+        std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(queue_mutex_));
+        return messages_.size();
+    }
+
+    bool empty() const {
+        std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(queue_mutex_));
+        return messages_.empty();
+    }
+};
+
+// Global statistics instance
+AsyncStats globalAsyncStats;
+
 // Echo server for testing the TCP client
 class EchoServer {
 public:
@@ -86,28 +201,34 @@ public:
 
         // Add message handler
         server_->addMessageHandler(
-            [this](const atom::async::connection::Message& message, size_t client_id) {
+            [this](const atom::async::connection::Message& message,
+                   size_t client_id) {
                 Logger::log(Logger::INFO, "EchoServer",
                             "Received from client " +
-                                std::to_string(client_id) + ": " + message.asString());
+                                std::to_string(client_id) + ": " +
+                                message.asString());
 
                 // Echo the message back
-                auto response = atom::async::connection::Message::createText("Echo: " + message.asString());
+                auto response = atom::async::connection::Message::createText(
+                    "Echo: " + message.asString());
                 server_->sendMessageToClient(client_id, response);
             });
 
         // Add connect handler
-        server_->addConnectHandler([](size_t client_id, const std::string& address) {
-            Logger::log(Logger::SUCCESS, "EchoServer",
-                        "Client " + std::to_string(client_id) + " connected from " + address);
-        });
+        server_->addConnectHandler(
+            [](size_t client_id, const std::string& address) {
+                Logger::log(Logger::SUCCESS, "EchoServer",
+                            "Client " + std::to_string(client_id) +
+                                " connected from " + address);
+            });
 
         // Add disconnect handler
-        server_->addDisconnectHandler([](size_t client_id, const std::string& address) {
-            Logger::log(
-                Logger::INFO, "EchoServer",
-                "Client " + std::to_string(client_id) + " disconnected from " + address);
-        });
+        server_->addDisconnectHandler(
+            [](size_t client_id, const std::string& address) {
+                Logger::log(Logger::INFO, "EchoServer",
+                            "Client " + std::to_string(client_id) +
+                                " disconnected from " + address);
+            });
 
         // Start the server
         server_->start(port_);
@@ -148,8 +269,12 @@ std::string bytesToString(const std::vector<char>& data) {
     return std::string(data.begin(), data.end());
 }
 
-// Main example class demonstrating TcpClient features
+// Enhanced example class demonstrating advanced async TcpClient features
 class TcpClientExample {
+private:
+    AsyncMessageQueue message_queue_;
+    std::atomic<bool> running_{true};
+
 public:
     void run() {
         // Start the echo server for testing
@@ -354,14 +479,264 @@ public:
                         "Failed to reconnect: " + client.getErrorMessage());
         }
 
+        // Example 14: Advanced async patterns
+        Logger::log(Logger::INFO, "Example",
+                    "Example 14: Advanced async patterns");
+        advancedAsyncPatterns(client);
+
+        // Example 15: Concurrent connections
+        Logger::log(Logger::INFO, "Example",
+                    "Example 15: Concurrent connections");
+        concurrentConnectionsExample();
+
+        // Example 16: Message queue processing
+        Logger::log(Logger::INFO, "Example",
+                    "Example 16: Message queue processing");
+        messageQueueExample(client);
+
         // Stop the echo server
         Logger::log(Logger::INFO, "Example", "Stopping Echo Server...");
         server.stop();
 
+        // Print comprehensive statistics
+        globalAsyncStats.print_summary();
+
         // Summary
         Logger::log(Logger::SUCCESS, "Example",
-                    "TcpClient example completed successfully");
+                    "Enhanced TcpClient example completed successfully");
         printEventSummary();
+    }
+
+    // Example 14: Advanced async patterns with futures and promises
+    void advancedAsyncPatterns(atom::async::connection::TcpClient& client) {
+        Logger::log(Logger::INFO, "AdvancedAsync",
+                    "Testing advanced async patterns");
+
+        try {
+            // Pattern 1: Future-based async operations
+            Logger::log(Logger::INFO, "AdvancedAsync",
+                        "Pattern 1: Future-based operations");
+
+            std::vector<std::future<bool>> futures;
+            std::vector<std::string> messages = {
+                "Future_Message_1", "Future_Message_2", "Future_Message_3"};
+
+            for (const auto& msg : messages) {
+                auto future = std::async(std::launch::async, [&client, msg]() {
+                    globalAsyncStats.total_operations++;
+                    bool success = client.send(stringToBytes(msg));
+                    if (success) {
+                        globalAsyncStats.successful_operations++;
+                        globalAsyncStats.bytes_transferred += msg.length();
+                    } else {
+                        globalAsyncStats.failed_operations++;
+                    }
+                    return success;
+                });
+                futures.push_back(std::move(future));
+            }
+
+            // Wait for all futures to complete
+            for (auto& future : futures) {
+                try {
+                    bool result = future.get();
+                    std::string status = result ? "succeeded" : "failed";
+                    Logger::log(result ? Logger::SUCCESS : Logger::ERROR,
+                                "AdvancedAsync", "Future operation " + status);
+                } catch (const std::exception& e) {
+                    Logger::log(Logger::ERROR, "AdvancedAsync",
+                                "Future exception: " + std::string(e.what()));
+                }
+            }
+
+            // Pattern 2: Promise-based operations
+            Logger::log(Logger::INFO, "AdvancedAsync",
+                        "Pattern 2: Promise-based operations");
+
+            std::promise<std::string> response_promise;
+            auto response_future = response_promise.get_future();
+
+            // Set up a temporary callback to capture response
+            auto original_callback = [this](const std::vector<char>& data) {
+                std::string message = bytesToString(data);
+                Logger::log(Logger::INFO, "Client",
+                            "Received data: " + message);
+                received_data_.push_back(message);
+            };
+
+            client.setOnDataReceivedCallback(
+                [&response_promise,
+                 original_callback](const std::vector<char>& data) {
+                    std::string message = bytesToString(data);
+                    original_callback(data);
+
+                    // Fulfill promise with first response
+                    static std::once_flag flag;
+                    std::call_once(flag, [&response_promise, message]() {
+                        response_promise.set_value(message);
+                    });
+                });
+
+            // Send message and wait for response
+            client.send(stringToBytes("Promise_Test_Message"));
+
+            auto status = response_future.wait_for(std::chrono::seconds(3));
+            if (status == std::future_status::ready) {
+                std::string response = response_future.get();
+                Logger::log(Logger::SUCCESS, "AdvancedAsync",
+                            "Promise fulfilled with response: " + response);
+            } else {
+                Logger::log(Logger::WARNING, "AdvancedAsync",
+                            "Promise timeout - no response received");
+            }
+
+        } catch (const std::exception& e) {
+            Logger::log(Logger::ERROR, "AdvancedAsync",
+                        "Exception in advanced async patterns: " +
+                            std::string(e.what()));
+        }
+    }
+
+    // Example 15: Concurrent connections demonstration
+    void concurrentConnectionsExample() {
+        Logger::log(Logger::INFO, "Concurrent",
+                    "Testing concurrent connections");
+
+        const int num_connections = 3;
+        std::vector<std::thread> connection_threads;
+        std::atomic<int> successful_connections{0};
+        std::atomic<int> failed_connections{0};
+
+        for (int i = 0; i < num_connections; ++i) {
+            connection_threads.emplace_back([i, &successful_connections,
+                                             &failed_connections]() {
+                try {
+                    Logger::log(
+                        Logger::INFO, "Concurrent",
+                        "Starting connection thread " + std::to_string(i + 1));
+
+                    atom::async::connection::ConnectionConfig config;
+                    config.use_ssl = false;
+                    config.connect_timeout = std::chrono::milliseconds(3000);
+
+                    atom::async::connection::TcpClient client(config);
+                    globalAsyncStats.connection_attempts++;
+
+                    if (client.connect("localhost", 8888,
+                                       std::chrono::milliseconds(3000))) {
+                        successful_connections++;
+                        Logger::log(Logger::SUCCESS, "Concurrent",
+                                    "Thread " + std::to_string(i + 1) +
+                                        " connected successfully");
+
+                        // Send some messages
+                        for (int j = 0; j < 3; ++j) {
+                            std::string msg = "Thread_" +
+                                              std::to_string(i + 1) + "_Msg_" +
+                                              std::to_string(j + 1);
+                            if (client.send(stringToBytes(msg))) {
+                                globalAsyncStats.successful_operations++;
+                                globalAsyncStats.bytes_transferred +=
+                                    msg.length();
+                            }
+                            std::this_thread::sleep_for(
+                                std::chrono::milliseconds(100));
+                        }
+
+                        client.disconnect();
+                    } else {
+                        failed_connections++;
+                        globalAsyncStats.failed_operations++;
+                        Logger::log(Logger::ERROR, "Concurrent",
+                                    "Thread " + std::to_string(i + 1) +
+                                        " failed to connect");
+                    }
+                } catch (const std::exception& e) {
+                    failed_connections++;
+                    Logger::log(Logger::ERROR, "Concurrent",
+                                "Thread " + std::to_string(i + 1) +
+                                    " exception: " + std::string(e.what()));
+                }
+            });
+        }
+
+        // Wait for all threads to complete
+        for (auto& thread : connection_threads) {
+            thread.join();
+        }
+
+        Logger::log(
+            Logger::INFO, "Concurrent",
+            "Concurrent test completed. Successful: " +
+                std::to_string(successful_connections.load()) +
+                ", Failed: " + std::to_string(failed_connections.load()));
+    }
+
+    // Example 16: Message queue processing
+    void messageQueueExample(atom::async::connection::TcpClient& client) {
+        Logger::log(Logger::INFO, "MessageQueue",
+                    "Testing message queue processing");
+
+        try {
+            // Start message processor thread
+            std::thread processor_thread([this, &client]() {
+                Logger::log(Logger::INFO, "MessageQueue",
+                            "Message processor started");
+
+                while (running_) {
+                    std::string message;
+                    if (message_queue_.pop(message,
+                                           std::chrono::milliseconds(500))) {
+                        Logger::log(Logger::INFO, "MessageQueue",
+                                    "Processing queued message: " + message);
+
+                        if (client.send(stringToBytes(message))) {
+                            globalAsyncStats.successful_operations++;
+                            globalAsyncStats.bytes_transferred +=
+                                message.length();
+                        } else {
+                            globalAsyncStats.failed_operations++;
+                        }
+
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(100));
+                    }
+                }
+
+                Logger::log(Logger::INFO, "MessageQueue",
+                            "Message processor stopped");
+            });
+
+            // Queue some messages
+            std::vector<std::string> queue_messages = {
+                "Queued_Message_1", "Queued_Message_2", "Queued_Message_3",
+                "Queued_Message_4", "Queued_Message_5"};
+
+            for (const auto& msg : queue_messages) {
+                message_queue_.push(msg);
+                Logger::log(Logger::INFO, "MessageQueue",
+                            "Queued message: " + msg);
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            }
+
+            // Let the processor work for a while
+            std::this_thread::sleep_for(std::chrono::seconds(3));
+
+            // Stop processing
+            running_ = false;
+            message_queue_.stop();
+            processor_thread.join();
+
+            Logger::log(
+                Logger::SUCCESS, "MessageQueue",
+                "Message queue processing completed. Remaining messages: " +
+                    std::to_string(message_queue_.size()));
+
+        } catch (const std::exception& e) {
+            Logger::log(Logger::ERROR, "MessageQueue",
+                        "Exception in message queue processing: " +
+                            std::string(e.what()));
+        }
     }
 
 private:
@@ -396,13 +771,34 @@ private:
 int main() {
     try {
         Logger::log(Logger::INFO, "Main",
-                    "Starting TcpClient example application");
+                    "Starting Enhanced Async TcpClient Example Application");
+        Logger::log(Logger::INFO, "Main", "");
+        Logger::log(Logger::INFO, "Main", "Features demonstrated:");
+        Logger::log(Logger::INFO, "Main",
+                    "- Basic async TCP client operations");
+        Logger::log(Logger::INFO, "Main",
+                    "- SSL/TLS configuration (non-SSL in this example)");
+        Logger::log(Logger::INFO, "Main",
+                    "- Heartbeat and reconnection mechanisms");
+        Logger::log(Logger::INFO, "Main", "- Callback-based event handling");
+        Logger::log(Logger::INFO, "Main", "- Future-based async operations");
+        Logger::log(Logger::INFO, "Main", "- Promise-based response handling");
+        Logger::log(Logger::INFO, "Main", "- Concurrent connection management");
+        Logger::log(Logger::INFO, "Main", "- Message queue processing");
+        Logger::log(Logger::INFO, "Main", "- Comprehensive error handling");
+        Logger::log(Logger::INFO, "Main", "- Performance statistics tracking");
+        Logger::log(Logger::INFO, "Main", "");
+
         TcpClientExample example;
         example.run();
+
+        Logger::log(Logger::SUCCESS, "Main",
+                    "All async examples completed successfully");
         return 0;
     } catch (const std::exception& e) {
         Logger::log(Logger::ERROR, "Main",
                     std::string("Fatal error: ") + e.what());
+        globalAsyncStats.print_summary();
         return 1;
     }
 }

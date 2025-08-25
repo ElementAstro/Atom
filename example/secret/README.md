@@ -5,6 +5,7 @@ This directory contains examples demonstrating the secure storage and cryptograp
 ## 🚀 Overview
 
 The Atom secret module provides secure storage and cryptographic functionality including:
+
 - **Secure Storage**: Platform-specific encrypted storage for sensitive data
 - **Key-Value Storage**: Encrypted key-value pairs with automatic encryption/decryption
 - **Cross-Platform**: Unified API across Windows, Linux, and macOS
@@ -13,23 +14,27 @@ The Atom secret module provides secure storage and cryptographic functionality i
 ## 📁 Examples
 
 ### ✅ **Basic Test**
+
 **File**: `basic_test.cpp`
 **Status**: Fully functional ✅
 
 A simple test that verifies the secret module can be loaded and basic functionality works.
 
 #### **Features Demonstrated**
+
 - Module initialization and loading
 - Basic API availability verification
 - Simple success/failure testing
 
 ### 🔧 **Secure Storage Example**
+
 **File**: `secure_storage_example.cpp`
 **Status**: Has runtime issues (dependency/platform specific)
 
 Comprehensive demonstration of secure storage capabilities.
 
 #### **Features Demonstrated**
+
 - Encrypted key-value storage
 - Platform-specific encryption backends
 - Secure data persistence
@@ -37,12 +42,14 @@ Comprehensive demonstration of secure storage capabilities.
 - Error handling and recovery
 
 ### 🔧 **Simple Secret Example**
+
 **File**: `simple_secret_example.cpp`
 **Status**: Has runtime issues (dependency/platform specific)
 
 Simplified demonstration focusing on basic secure storage operations.
 
 #### **Features Demonstrated**
+
 - Basic secret storage and retrieval
 - Simple encryption/decryption
 - Minimal API usage patterns
@@ -50,6 +57,7 @@ Simplified demonstration focusing on basic secure storage operations.
 ## 🛠️ Building and Running
 
 ### Build the Examples
+
 ```bash
 # Configure CMake with examples enabled
 cmake -B build -S . -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -61,6 +69,7 @@ cmake --build build --target secret_simple_secret_example
 ```
 
 ### Run the Examples
+
 ```bash
 # Run the working basic test
 ./build/example/secret/secret_basic_test.exe
@@ -73,6 +82,7 @@ cmake --build build --target secret_simple_secret_example
 ## 🎯 Key Features (Intended)
 
 ### **1. Secure Storage Interface**
+
 ```cpp
 // Store encrypted data
 SecureStorage storage;
@@ -86,6 +96,7 @@ if (value) {
 ```
 
 ### **2. Platform-Specific Encryption**
+
 ```cpp
 // Automatically uses platform-appropriate encryption:
 // - Windows: DPAPI (Data Protection API)
@@ -94,6 +105,7 @@ if (value) {
 ```
 
 ### **3. Key-Value Operations**
+
 ```cpp
 // Store multiple secrets
 storage.store("database_password", "super_secret_db_pass");
@@ -107,6 +119,7 @@ for (const auto& key : keys) {
 ```
 
 ### **4. Secure Memory Handling**
+
 ```cpp
 // Automatic secure memory cleanup
 SecureString password = getPasswordFromUser();
@@ -116,18 +129,21 @@ SecureString password = getPasswordFromUser();
 ## 📊 Security Features
 
 ### **Encryption Methods**
+
 - **Windows**: DPAPI with user-specific encryption
 - **macOS**: Keychain Services with system integration
 - **Linux**: libsecret with GNOME Keyring or KDE Wallet
 - **Fallback**: AES encryption with platform-specific key derivation
 
 ### **Key Management**
+
 - Automatic key generation and rotation
 - Platform-specific key storage
 - Hardware security module integration (where available)
 - Secure key derivation functions
 
 ### **Memory Protection**
+
 - Secure memory allocation for sensitive data
 - Automatic memory zeroing on deallocation
 - Protection against memory dumps
@@ -136,6 +152,7 @@ SecureString password = getPasswordFromUser();
 ## 🔧 Configuration Options
 
 ### **Storage Backends**
+
 ```cpp
 // Configure storage backend
 SecureStorageConfig config;
@@ -147,6 +164,7 @@ SecureStorage storage(config);
 ```
 
 ### **Security Levels**
+
 ```cpp
 // Different security levels available
 enum class SecurityLevel {
@@ -160,11 +178,13 @@ enum class SecurityLevel {
 ## 🚨 Current Status and Known Issues
 
 ### **Working Components**
+
 - ✅ **Module Loading**: Basic module initialization works
 - ✅ **API Structure**: Core API is properly defined
 - ✅ **Build System**: Examples build successfully
 
 ### **Known Issues**
+
 - ❌ **Runtime Dependencies**: Missing platform-specific dependencies
 - ❌ **Initialization**: Module initialization may fail on some platforms
 - ❌ **Backend Selection**: Automatic backend selection needs work
@@ -172,15 +192,18 @@ enum class SecurityLevel {
 ### **Platform-Specific Issues**
 
 #### **Windows**
+
 - DPAPI integration may require additional Windows SDK components
 - User context requirements for encryption/decryption
 
 #### **Linux**
+
 - libsecret dependency may not be available
 - D-Bus requirements for keyring integration
 - Fallback encryption implementation needed
 
 #### **macOS**
+
 - Keychain Services integration requires proper entitlements
 - Code signing requirements for keychain access
 
@@ -189,23 +212,29 @@ enum class SecurityLevel {
 ### **Common Issues**
 
 1. **Module Loading Failures**
+
    ```
    Error: Failed to initialize secure storage backend
    ```
+
    - **Solution**: Check platform-specific dependencies
    - **Workaround**: Use basic test to verify module loading
 
 2. **Permission Denied**
+
    ```
    Error: Access denied to secure storage
    ```
+
    - **Solution**: Run with appropriate user permissions
    - **Check**: User keyring/keychain access rights
 
 3. **Missing Dependencies**
+
    ```
    Error: Backend not available
    ```
+
    - **Linux**: Install libsecret-1-dev
    - **Windows**: Ensure DPAPI is available
    - **macOS**: Check Keychain Services access
@@ -213,11 +242,13 @@ enum class SecurityLevel {
 ### **Debugging Steps**
 
 1. **Verify Module Loading**
+
    ```bash
    ./build/example/secret/secret_basic_test.exe
    ```
 
 2. **Check Dependencies**
+
    ```bash
    # Linux
    ldd ./build/example/secret/secret_secure_storage_example.exe
@@ -227,6 +258,7 @@ enum class SecurityLevel {
    ```
 
 3. **Platform-Specific Checks**
+
    ```bash
    # Windows: Check DPAPI availability
    # macOS: Check Keychain access
@@ -236,18 +268,21 @@ enum class SecurityLevel {
 ## 📚 Security Best Practices
 
 ### **Data Handling**
+
 - Never store secrets in plain text
 - Use secure memory for temporary secret storage
 - Implement proper key rotation policies
 - Audit secret access and usage
 
 ### **Application Integration**
+
 - Initialize secure storage early in application lifecycle
 - Handle encryption/decryption errors gracefully
 - Implement fallback mechanisms for unavailable backends
 - Use appropriate security levels for different data types
 
 ### **Development Guidelines**
+
 - Test on all target platforms
 - Verify backend availability before use
 - Implement comprehensive error handling
@@ -256,12 +291,14 @@ enum class SecurityLevel {
 ## 🎯 Future Improvements
 
 ### **Planned Features**
+
 - Hardware security module (HSM) integration
 - Multi-factor authentication support
 - Secret sharing and distribution
 - Audit logging and compliance features
 
 ### **Platform Enhancements**
+
 - Better fallback mechanisms
 - Improved error reporting
 - Enhanced platform detection

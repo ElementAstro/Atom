@@ -1,6 +1,7 @@
 /**
  * @file high_performance_containers_example.cpp
- * @brief Comprehensive example demonstrating the Atom Containers module's high-performance container capabilities
+ * @brief Comprehensive example demonstrating the Atom Containers module's
+ * high-performance container capabilities
  *
  * This example shows how to:
  * - Use high-performance containers (flat_map, flat_set, small_vector, etc.)
@@ -13,21 +14,21 @@
  * @date 2024-12-19
  */
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <chrono>
-#include <thread>
-#include <random>
 #include <algorithm>
-#include <queue>
+#include <chrono>
+#include <iostream>
 #include <mutex>
+#include <queue>
+#include <random>
+#include <string>
+#include <thread>
+#include <vector>
 
 // Atom Containers module headers
-#include "atom/containers/high_performance.hpp"
 #include "atom/containers/boost_containers.hpp"
-#include "atom/containers/lockfree.hpp"
+#include "atom/containers/high_performance.hpp"
 #include "atom/containers/intrusive.hpp"
+#include "atom/containers/lockfree.hpp"
 
 using namespace atom::containers;
 
@@ -74,9 +75,11 @@ void flatContainersExample() {
             }
         }
         auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        auto duration =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-        std::cout << "\nFlat map lookup performance: " << duration.count() << " microseconds for 10,000 lookups\n";
+        std::cout << "\nFlat map lookup performance: " << duration.count()
+                  << " microseconds for 10,000 lookups\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in flat containers example: " << e.what() << "\n";
@@ -98,7 +101,8 @@ void smallVectorExample() {
             small_vec.push_back(i * i);
         }
 
-        std::cout << "Small vector contents (first 8 on stack, rest on heap):\n";
+        std::cout
+            << "Small vector contents (first 8 on stack, rest on heap):\n";
         for (size_t i = 0; i < small_vec.size(); ++i) {
             std::cout << "  [" << i << "] = " << small_vec[i] << "\n";
         }
@@ -106,7 +110,8 @@ void smallVectorExample() {
         // Static vector - fixed capacity, all on stack
         hp::static_vector<std::string, 5> static_vec;
 
-        std::cout << "\nDemonstrating static_vector (fixed capacity container)...\n";
+        std::cout
+            << "\nDemonstrating static_vector (fixed capacity container)...\n";
 
 #ifdef ATOM_HAS_BOOST_CONTAINER
         // With Boost, static_vector has push_back
@@ -122,7 +127,8 @@ void smallVectorExample() {
             std::cout << "  [" << i << "] = " << static_vec[i] << "\n";
         }
 
-        std::cout << "Static vector capacity: " << static_vec.capacity() << "\n";
+        std::cout << "Static vector capacity: " << static_vec.capacity()
+                  << "\n";
         std::cout << "Static vector size: " << static_vec.size() << "\n";
 #else
         // Fallback to std::array - initialize directly
@@ -134,7 +140,8 @@ void smallVectorExample() {
             std::cout << "  [" << i << "] = " << static_vec[i] << "\n";
         }
 
-        std::cout << "Static vector capacity: " << static_vec.size() << " (std::array)\n";
+        std::cout << "Static vector capacity: " << static_vec.size()
+                  << " (std::array)\n";
         std::cout << "Static vector size: " << static_vec.size() << "\n";
 #endif
 
@@ -189,7 +196,8 @@ void lockFreeContainersExample() {
         producer.join();
         consumer.join();
 
-        std::cout << "Successfully processed " << consumed.size() << " items through lock-free queue\n";
+        std::cout << "Successfully processed " << consumed.size()
+                  << " items through lock-free queue\n";
 
         // Single-producer single-consumer queue (more efficient)
         hp::lockfree::spsc_queue<std::string, 64> spsc_queue;
@@ -293,7 +301,8 @@ void lockFreeContainersExample() {
 #endif
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in lock-free containers example: " << e.what() << "\n";
+        std::cerr << "Error in lock-free containers example: " << e.what()
+                  << "\n";
     }
 }
 
@@ -316,7 +325,8 @@ void performanceComparisonExample() {
             test_data.push_back(dis(gen));
         }
 
-        std::cout << "Comparing insertion performance for " << num_operations << " elements...\n";
+        std::cout << "Comparing insertion performance for " << num_operations
+                  << " elements...\n";
 
         // Test standard vector
         auto start = std::chrono::high_resolution_clock::now();
@@ -326,7 +336,8 @@ void performanceComparisonExample() {
             std_vec.push_back(val);
         }
         auto end = std::chrono::high_resolution_clock::now();
-        auto std_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        auto std_duration =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
         // Test small vector
         start = std::chrono::high_resolution_clock::now();
@@ -335,22 +346,28 @@ void performanceComparisonExample() {
             small_vec.push_back(val);
         }
         end = std::chrono::high_resolution_clock::now();
-        auto small_duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        auto small_duration =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
         std::cout << "Results:\n";
-        std::cout << "  std::vector: " << std_duration.count() << " microseconds\n";
-        std::cout << "  small_vector: " << small_duration.count() << " microseconds\n";
+        std::cout << "  std::vector: " << std_duration.count()
+                  << " microseconds\n";
+        std::cout << "  small_vector: " << small_duration.count()
+                  << " microseconds\n";
 
         if (small_duration < std_duration) {
-            std::cout << "  small_vector is " << (double)std_duration.count() / small_duration.count()
+            std::cout << "  small_vector is "
+                      << (double)std_duration.count() / small_duration.count()
                       << "x faster\n";
         } else {
-            std::cout << "  std::vector is " << (double)small_duration.count() / std_duration.count()
+            std::cout << "  std::vector is "
+                      << (double)small_duration.count() / std_duration.count()
                       << "x faster\n";
         }
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in performance comparison example: " << e.what() << "\n";
+        std::cerr << "Error in performance comparison example: " << e.what()
+                  << "\n";
     }
 }
 
@@ -370,11 +387,15 @@ int main() {
 
         std::cout << "\n=== All Examples Completed Successfully ===\n";
         std::cout << "The containers module provides:\n";
-        std::cout << "  ✓ High-performance flat containers (flat_map, flat_set)\n";
-        std::cout << "  ✓ Memory-optimized vectors (small_vector, static_vector)\n";
+        std::cout
+            << "  ✓ High-performance flat containers (flat_map, flat_set)\n";
+        std::cout
+            << "  ✓ Memory-optimized vectors (small_vector, static_vector)\n";
         std::cout << "  ✓ Lock-free containers for concurrent programming\n";
-        std::cout << "  ✓ Intrusive containers for zero-allocation data structures\n";
-        std::cout << "  ✓ Boost container integration with standard library fallbacks\n";
+        std::cout
+            << "  ✓ Intrusive containers for zero-allocation data structures\n";
+        std::cout << "  ✓ Boost container integration with standard library "
+                     "fallbacks\n";
         std::cout << "  ✓ Performance optimizations for cache locality\n";
         std::cout << "  ✓ Thread-safe concurrent data structures\n";
 

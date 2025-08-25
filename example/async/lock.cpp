@@ -323,7 +323,8 @@ void compare_lock_types() {
             threads.emplace_back([&lock, &counter, iterations]() {
                 using LockType = std::decay_t<decltype(lock)>;
                 for (int j = 0; j < iterations; ++j) {
-                    if constexpr (std::is_same_v<LockType, atom::async::TicketSpinlock>) {
+                    if constexpr (std::is_same_v<LockType,
+                                                 atom::async::TicketSpinlock>) {
                         auto ticket = lock.lock();
                         counter.value++;
                         lock.unlock(ticket);

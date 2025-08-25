@@ -113,6 +113,7 @@ std::vector<SensorReading> collectSensorData(int count, int start_id = 0) {
 class LogEntry {
 public:
     LogEntry() = default;
+
 public:
     enum class Level { DEBUG, INFO, WARNING, ERROR, CRITICAL };
 

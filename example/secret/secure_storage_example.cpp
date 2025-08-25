@@ -1,11 +1,13 @@
 /**
  * @file secure_storage_example.cpp
- * @brief Comprehensive example demonstrating the Atom Secret module's secure storage capabilities
+ * @brief Comprehensive example demonstrating the Atom Secret module's secure
+ * storage capabilities
  *
  * This example shows how to:
  * - Create platform-specific secure storage instances
  * - Store and retrieve encrypted data securely
- * - Handle different platforms (Windows Credential Manager, macOS Keychain, Linux Secret Service)
+ * - Handle different platforms (Windows Credential Manager, macOS Keychain,
+ * Linux Secret Service)
  * - Manage password entries with metadata
  * - Use encryption options and settings
  *
@@ -13,17 +15,17 @@
  * @date 2024-12-19
  */
 
+#include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
-#include <vector>
-#include <chrono>
 #include <thread>
+#include <vector>
 
 // Atom Secret module headers
-#include "atom/secret/storage.hpp"
-#include "atom/secret/password_entry.hpp"
 #include "atom/secret/common.hpp"
+#include "atom/secret/password_entry.hpp"
+#include "atom/secret/storage.hpp"
 
 using namespace atom::secret;
 
@@ -102,7 +104,8 @@ void basicSecureStorageExample() {
         std::cout << "✓ Test data removed\n";
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in basic secure storage example: " << e.what() << "\n";
+        std::cerr << "Error in basic secure storage example: " << e.what()
+                  << "\n";
     }
 }
 
@@ -147,7 +150,8 @@ void passwordEntryExample() {
         std::cout << "\n";
 
         // In a real application, you would serialize the PasswordEntry
-        // and store it securely. For this example, we'll just store the password.
+        // and store it securely. For this example, we'll just store the
+        // password.
         std::string entryKey = "password_entry_" + entry.title;
         bool stored = storage->store(entryKey, entry.password);
 
@@ -184,11 +188,14 @@ void encryptionOptionsExample() {
     // Create encryption options with different settings
     EncryptionOptions options;
     options.useHardwareAcceleration = true;
-    options.keyIterations = 150000;  // Higher iteration count for better security
+    options.keyIterations =
+        150000;  // Higher iteration count for better security
     options.encryptionMethod = EncryptionOptions::Method::AES_GCM;
 
     std::cout << "Encryption Options:\n";
-    std::cout << "  Hardware Acceleration: " << (options.useHardwareAcceleration ? "Enabled" : "Disabled") << "\n";
+    std::cout << "  Hardware Acceleration: "
+              << (options.useHardwareAcceleration ? "Enabled" : "Disabled")
+              << "\n";
     std::cout << "  Key Iterations: " << options.keyIterations << "\n";
     std::cout << "  Encryption Method: ";
 
@@ -216,12 +223,18 @@ void encryptionOptionsExample() {
     settings.encryptionOptions = options;
 
     std::cout << "\nPassword Manager Settings:\n";
-    std::cout << "  Auto-lock timeout: " << settings.autoLockTimeoutSeconds << " seconds\n";
-    std::cout << "  Password expiry: " << settings.passwordExpiryDays << " days\n";
-    std::cout << "  Minimum password length: " << settings.minPasswordLength << "\n";
-    std::cout << "  Require special chars: " << (settings.requireSpecialChars ? "Yes" : "No") << "\n";
-    std::cout << "  Require numbers: " << (settings.requireNumbers ? "Yes" : "No") << "\n";
-    std::cout << "  Require mixed case: " << (settings.requireMixedCase ? "Yes" : "No") << "\n";
+    std::cout << "  Auto-lock timeout: " << settings.autoLockTimeoutSeconds
+              << " seconds\n";
+    std::cout << "  Password expiry: " << settings.passwordExpiryDays
+              << " days\n";
+    std::cout << "  Minimum password length: " << settings.minPasswordLength
+              << "\n";
+    std::cout << "  Require special chars: "
+              << (settings.requireSpecialChars ? "Yes" : "No") << "\n";
+    std::cout << "  Require numbers: "
+              << (settings.requireNumbers ? "Yes" : "No") << "\n";
+    std::cout << "  Require mixed case: "
+              << (settings.requireMixedCase ? "Yes" : "No") << "\n";
 }
 
 /**
@@ -241,27 +254,34 @@ void errorHandlingExample() {
         // Test storing with empty key
         std::cout << "Testing empty key storage...\n";
         bool result = storage->store("", "some_data");
-        std::cout << "Empty key storage result: " << (result ? "Success" : "Failed (expected)") << "\n";
+        std::cout << "Empty key storage result: "
+                  << (result ? "Success" : "Failed (expected)") << "\n";
 
         // Test retrieving non-existent key
         std::cout << "\nTesting non-existent key retrieval...\n";
         std::string nonExistent = storage->retrieve("non_existent_key_12345");
-        std::cout << "Non-existent key retrieval: " << (nonExistent.empty() ? "Empty (expected)" : "Got data") << "\n";
+        std::cout << "Non-existent key retrieval: "
+                  << (nonExistent.empty() ? "Empty (expected)" : "Got data")
+                  << "\n";
 
         // Test removing non-existent key
         std::cout << "\nTesting non-existent key removal...\n";
         bool removeResult = storage->remove("non_existent_key_12345");
-        std::cout << "Non-existent key removal: " << (removeResult ? "Success" : "Failed") << "\n";
+        std::cout << "Non-existent key removal: "
+                  << (removeResult ? "Success" : "Failed") << "\n";
 
         // Test with very long key
         std::cout << "\nTesting very long key...\n";
         std::string longKey(1000, 'a');  // 1000 character key
         bool longKeyResult = storage->store(longKey, "test_data");
-        std::cout << "Long key storage: " << (longKeyResult ? "Success" : "Failed") << "\n";
+        std::cout << "Long key storage: "
+                  << (longKeyResult ? "Success" : "Failed") << "\n";
 
         if (longKeyResult) {
             std::string retrieved = storage->retrieve(longKey);
-            std::cout << "Long key retrieval: " << (retrieved == "test_data" ? "Success" : "Failed") << "\n";
+            std::cout << "Long key retrieval: "
+                      << (retrieved == "test_data" ? "Success" : "Failed")
+                      << "\n";
             storage->remove(longKey);
         }
 

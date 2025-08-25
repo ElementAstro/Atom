@@ -84,9 +84,12 @@ void basicUsageExample() {
 
     // 使用execute方法执行任务
     log("提交3个任务");
-    auto future1 = executor.execute([](){ return basicTask(1, 500); }, AsyncExecutor::Priority::Normal);
-    auto future2 = executor.execute([](){ return basicTask(2, 300); }, AsyncExecutor::Priority::High);
-    auto future3 = executor.execute([](){ return basicTask(3, 100); }, AsyncExecutor::Priority::Low);
+    auto future1 = executor.execute([]() { return basicTask(1, 500); },
+                                    AsyncExecutor::Priority::Normal);
+    auto future2 = executor.execute([]() { return basicTask(2, 300); },
+                                    AsyncExecutor::Priority::High);
+    auto future3 = executor.execute([]() { return basicTask(3, 100); },
+                                    AsyncExecutor::Priority::Low);
 
     // 获取结果
     log("等待结果");
@@ -117,32 +120,40 @@ void priorityTasksExample() {
     std::vector<std::future<int>> futures;
 
     // 低优先级
-    futures.push_back(executor.execute([]() {
-        log("执行低优先级任务");
-        std::this_thread::sleep_for(100ms);
-        return 1;
-    }, AsyncExecutor::Priority::Low));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行低优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 1;
+        },
+        AsyncExecutor::Priority::Low));
 
     // 普通优先级
-    futures.push_back(executor.execute([]() {
-        log("执行普通优先级任务");
-        std::this_thread::sleep_for(100ms);
-        return 2;
-    }, AsyncExecutor::Priority::Normal));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行普通优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 2;
+        },
+        AsyncExecutor::Priority::Normal));
 
     // 高优先级
-    futures.push_back(executor.execute([]() {
-        log("执行高优先级任务");
-        std::this_thread::sleep_for(100ms);
-        return 3;
-    }, AsyncExecutor::Priority::High));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行高优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 3;
+        },
+        AsyncExecutor::Priority::High));
 
     // 关键优先级
-    futures.push_back(executor.execute([]() {
-        log("执行关键优先级任务");
-        std::this_thread::sleep_for(100ms);
-        return 4;
-    }, AsyncExecutor::Priority::Critical));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行关键优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 4;
+        },
+        AsyncExecutor::Priority::Critical));
 
     // 等待所有任务完成
     log("等待所有优先级任务完成");
@@ -164,23 +175,29 @@ void deferredTasksExample() {
     // 执行任务
     log("提交3个任务");
 
-    auto future1 = executor.execute([]() {
-        log("执行任务 #1");
-        std::this_thread::sleep_for(100ms);
-        return std::string("任务1结果");
-    }, AsyncExecutor::Priority::Normal);
+    auto future1 = executor.execute(
+        []() {
+            log("执行任务 #1");
+            std::this_thread::sleep_for(100ms);
+            return std::string("任务1结果");
+        },
+        AsyncExecutor::Priority::Normal);
 
-    auto future2 = executor.execute([]() {
-        log("执行任务 #2");
-        std::this_thread::sleep_for(150ms);
-        return std::string("任务2结果");
-    }, AsyncExecutor::Priority::High);
+    auto future2 = executor.execute(
+        []() {
+            log("执行任务 #2");
+            std::this_thread::sleep_for(150ms);
+            return std::string("任务2结果");
+        },
+        AsyncExecutor::Priority::High);
 
-    auto future3 = executor.execute([]() {
-        log("执行任务 #3");
-        std::this_thread::sleep_for(50ms);
-        return std::string("任务3结果");
-    }, AsyncExecutor::Priority::Low);
+    auto future3 = executor.execute(
+        []() {
+            log("执行任务 #3");
+            std::this_thread::sleep_for(50ms);
+            return std::string("任务3结果");
+        },
+        AsyncExecutor::Priority::Low);
 
     // 获取结果
     log("等待任务结果");
@@ -205,22 +222,28 @@ void scheduledTasksExample() {
     log("安排3个定时任务");
 
     // 1秒后执行
-    auto future1 = timer.setTimeout([]() {
-        log("执行定时任务 #1 (1秒后)");
-        return std::string("定时任务1结果");
-    }, 1000);
+    auto future1 = timer.setTimeout(
+        []() {
+            log("执行定时任务 #1 (1秒后)");
+            return std::string("定时任务1结果");
+        },
+        1000);
 
     // 2秒后执行
-    auto future2 = timer.setTimeout([]() {
-        log("执行定时任务 #2 (2秒后)");
-        return std::string("定时任务2结果");
-    }, 2000);
+    auto future2 = timer.setTimeout(
+        []() {
+            log("执行定时任务 #2 (2秒后)");
+            return std::string("定时任务2结果");
+        },
+        2000);
 
     // 使用setTimeout模拟 scheduleAfter(3s)
-    auto future3 = timer.setTimeout([]() {
-        log("执行定时任务 #3 (3秒后)");
-        return std::string("定时任务3结果");
-    }, 3000);
+    auto future3 = timer.setTimeout(
+        []() {
+            log("执行定时任务 #3 (3秒后)");
+            return std::string("定时任务3结果");
+        },
+        3000);
 
     log("已安排所有定时任务");
 
@@ -248,7 +271,7 @@ void errorHandlingExample() {
     log("提交会抛出异常的任务");
     auto errorFuture = executor.execute([]() {
         errorTask();
-        return 0; // never reached
+        return 0;  // never reached
     });
 
     // 使用try-catch处理异常
@@ -301,13 +324,14 @@ void resizeExample() {
     std::vector<std::future<int>> futures;
 
     for (int i = 0; i < 6; i++) {
-        futures.push_back(
-            executor.execute([i]() {
+        futures.push_back(executor.execute(
+            [i]() {
                 log("开始执行任务 " + std::to_string(i));
                 std::this_thread::sleep_for(500ms);
                 log("完成任务 " + std::to_string(i));
-                return i; // 返回一个值以获得 future
-            }, AsyncExecutor::Priority::Normal));
+                return i;  // 返回一个值以获得 future
+            },
+            AsyncExecutor::Priority::Normal));
     }
 
     // 等待所有任务完成
@@ -317,11 +341,13 @@ void resizeExample() {
     log("所有任务已完成");
 
     // 提交一个简单任务确认执行器可继续使用
-    auto future = executor.execute([]() {
-        log("在所有任务完成后执行一个确认任务");
-        std::this_thread::sleep_for(100ms);
-        return std::string("完成");
-    }, AsyncExecutor::Priority::Normal);
+    auto future = executor.execute(
+        []() {
+            log("在所有任务完成后执行一个确认任务");
+            std::this_thread::sleep_for(100ms);
+            return std::string("完成");
+        },
+        AsyncExecutor::Priority::Normal);
 
     log("结果: " + future.get());
 }
@@ -333,10 +359,12 @@ void edgeCasesExample() {
     // 使用计时器验证长延迟任务安排
     atom::async::Timer timer;
     log("安排一个10年后执行的任务 (不等待)");
-    auto futureFarAway = timer.setTimeout([]() {
-        log("10年后的任务执行了");
-        return true;
-    }, static_cast<unsigned int>(24 * 365 * 10ULL * 60ULL * 60ULL * 1000ULL));
+    auto futureFarAway = timer.setTimeout(
+        []() {
+            log("10年后的任务执行了");
+            return true;
+        },
+        static_cast<unsigned int>(24 * 365 * 10ULL * 60ULL * 60ULL * 1000ULL));
 
     log("远期任务已安排 (但不会在本示例中等待)");
 
@@ -351,7 +379,8 @@ void edgeCasesExample() {
             return i;
         }));
     }
-    for (auto& f : quick) f.wait();
+    for (auto& f : quick)
+        f.wait();
 
     log("所有任务已完成");
 }
@@ -366,68 +395,74 @@ void complexTasksExample() {
 
     // 第1阶段：生成数据
     log("阶段1: 生成数据 (立即执行)");
-    auto dataFuture = executor.execute([]() {
-        log("生成随机数据");
-        std::vector<int> data;
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(1, 100);
+    auto dataFuture = executor.execute(
+        []() {
+            log("生成随机数据");
+            std::vector<int> data;
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(1, 100);
 
-        for (int i = 0; i < 10; i++) {
-            data.push_back(dis(gen));
-        }
+            for (int i = 0; i < 10; i++) {
+                data.push_back(dis(gen));
+            }
 
-        std::stringstream ss;
-        ss << "生成的数据: ";
-        for (int val : data) {
-            ss << val << " ";
-        }
-        log(ss.str());
+            std::stringstream ss;
+            ss << "生成的数据: ";
+            for (int val : data) {
+                ss << val << " ";
+            }
+            log(ss.str());
 
-        return data;
-    }, AsyncExecutor::Priority::Normal);
+            return data;
+        },
+        AsyncExecutor::Priority::Normal);
 
     // 第2阶段：处理数据（在另一个任务中串联）
     log("阶段2: 数据处理");
-    auto processingFuture = executor.execute([&dataFuture]() {
-        auto data = dataFuture.get();
-        log("处理数据");
+    auto processingFuture = executor.execute(
+        [&dataFuture]() {
+            auto data = dataFuture.get();
+            log("处理数据");
 
-        std::vector<int> processed;
-        for (int val : data) {
-            processed.push_back(val * val);
-        }
+            std::vector<int> processed;
+            for (int val : data) {
+                processed.push_back(val * val);
+            }
 
-        std::stringstream ss;
-        ss << "处理后的数据: ";
-        for (int val : processed) {
-            ss << val << " ";
-        }
-        log(ss.str());
+            std::stringstream ss;
+            ss << "处理后的数据: ";
+            for (int val : processed) {
+                ss << val << " ";
+            }
+            log(ss.str());
 
-        return processed;
-    }, AsyncExecutor::Priority::High);
+            return processed;
+        },
+        AsyncExecutor::Priority::High);
 
     // 第3阶段：结果整合（用Timer延迟1秒）
     log("阶段3: 结果整合 (定时执行，1秒后)");
     atom::async::Timer timer;
-    auto resultFuture = timer.setTimeout([&processingFuture]() {
-        auto processed = processingFuture.get();
-        log("整合最终结果");
+    auto resultFuture = timer.setTimeout(
+        [&processingFuture]() {
+            auto processed = processingFuture.get();
+            log("整合最终结果");
 
-        int sum = 0;
-        int product = 1;
-        for (int val : processed) {
-            sum += val;
-            product *= val;
-        }
+            int sum = 0;
+            int product = 1;
+            for (int val : processed) {
+                sum += val;
+                product *= val;
+            }
 
-        std::stringstream ss;
-        ss << "最终结果 - 总和: " << sum << ", 乘积: " << product;
-        log(ss.str());
+            std::stringstream ss;
+            ss << "最终结果 - 总和: " << sum << ", 乘积: " << product;
+            log(ss.str());
 
-        return std::make_pair(sum, product);
-    }, 1000);
+            return std::make_pair(sum, product);
+        },
+        1000);
 
     // 获取最终结果
     log("等待整个流程完成");

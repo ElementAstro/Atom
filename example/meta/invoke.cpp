@@ -245,13 +245,15 @@ void demo_error_handling() {
         };
 
         auto result1 = safeCall(divide, 10, 2);
-        std::cout << "  safeCall(divide, 10, 2) has value: " << result1.has_value() << "\n";
+        std::cout << "  safeCall(divide, 10, 2) has value: "
+                  << result1.has_value() << "\n";
         if (result1) {
             std::cout << "  Value: " << result1.value() << "\n";
         }
 
         auto result2 = safeCall(divide, 10, 0);
-        std::cout << "  safeCall(divide, 10, 0) has value: " << result2.has_value() << "\n";
+        std::cout << "  safeCall(divide, 10, 0) has value: "
+                  << result2.has_value() << "\n";
     }
 
     // Example 2: safeCallResult - returns Result<T>
@@ -297,10 +299,13 @@ void demo_error_handling() {
         }
 
         auto diag2 = safeTryWithDiagnostics(divide, "divide", 10, 0);
-        if (std::holds_alternative<std::pair<std::exception_ptr, FunctionCallInfo>>(diag2)) {
+        if (std::holds_alternative<
+                std::pair<std::exception_ptr, FunctionCallInfo>>(diag2)) {
             try {
                 std::rethrow_exception(
-                    std::get<std::pair<std::exception_ptr, FunctionCallInfo>>(diag2).first);
+                    std::get<std::pair<std::exception_ptr, FunctionCallInfo>>(
+                        diag2)
+                        .first);
             } catch (const std::exception& e) {
                 std::cout << "  safeTryWithDiagnostics(divide, 10, 0) caught: "
                           << e.what() << "\n";
@@ -348,17 +353,16 @@ void demo_error_handling() {
         };
 
         double result1 = safeTryOrDefault(divide, -1.0, 10, 2);
-        std::cout << "  safeTryOrDefault(divide, -1.0, 10, 2) = "
-                  << result1 << "\n";
+        std::cout << "  safeTryOrDefault(divide, -1.0, 10, 2) = " << result1
+                  << "\n";
 
         double result2 = safeTryOrDefault(divide, -1.0, 10, 0);
-        std::cout << "  safeTryOrDefault(divide, -1.0, 10, 0) = "
-                  << result2 << " (default value)\n";
+        std::cout << "  safeTryOrDefault(divide, -1.0, 10, 0) = " << result2
+                  << " (default value)\n";
     }
 
     // Example 6: safeTryWithDiagnostics - custom exception inspection
-    std::cout
-        << "\n2.6 safeTryWithDiagnostics - custom exception inspection\n";
+    std::cout << "\n2.6 safeTryWithDiagnostics - custom exception inspection\n";
     {
         auto divide = [](int a, int b) -> double {
             if (b == 0) {
@@ -386,7 +390,8 @@ void demo_error_handling() {
         }
 
         auto diag2b = safeTryWithDiagnostics(divide, "divide", 10, 0);
-        if (std::holds_alternative<std::pair<std::exception_ptr, FunctionCallInfo>>(diag2b)) {
+        if (std::holds_alternative<
+                std::pair<std::exception_ptr, FunctionCallInfo>>(diag2b)) {
             std::cout << "  Result after handler: exception captured\n";
         }
     }
@@ -503,11 +508,8 @@ void demo_parallel_async() {
 
         // Create a batch of argument tuples
         std::vector<std::tuple<int>> args = {
-            {10},
-            {5},
-            {2},
-            {0},
-            {1}  // Includes a value that will cause exception
+            {10}, {5}, {2}, {0}, {1}
+            // Includes a value that will cause exception
         };
 
         std::cout << "  Starting parallel batch with potential exception...\n";

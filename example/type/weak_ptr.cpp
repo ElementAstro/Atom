@@ -1,15 +1,15 @@
 #include "../atom/type/weak_ptr.hpp"
-#include <iostream>
-#include <string>
-#include <memory>
-#include <thread>
-#include <vector>
-#include <chrono>
-#include <functional>
 #include <atomic>
 #include <cassert>
+#include <chrono>
+#include <functional>
 #include <iomanip>
+#include <iostream>
+#include <memory>
 #include <sstream>
+#include <string>
+#include <thread>
+#include <vector>
 
 using namespace atom::type;
 using namespace std::chrono_literals;
@@ -23,11 +23,13 @@ private:
 
 public:
     TestObject(int id, std::string name) : id_(id), name_(std::move(name)) {
-        std::cout << "TestObject #" << id_ << " (" << name_ << ") constructed" << std::endl;
+        std::cout << "TestObject #" << id_ << " (" << name_ << ") constructed"
+                  << std::endl;
     }
 
     ~TestObject() {
-        std::cout << "TestObject #" << id_ << " (" << name_ << ") destroyed" << std::endl;
+        std::cout << "TestObject #" << id_ << " (" << name_ << ") destroyed"
+                  << std::endl;
     }
 
     int getId() const {
@@ -45,13 +47,12 @@ public:
         name_ = name;
     }
 
-    int getAccessCount() const {
-        return access_count_.load();
-    }
+    int getAccessCount() const { return access_count_.load(); }
 
     void performOperation() const {
         access_count_++;
-        std::cout << "Operation performed on TestObject #" << id_ << " (" << name_ << ")" << std::endl;
+        std::cout << "Operation performed on TestObject #" << id_ << " ("
+                  << name_ << ")" << std::endl;
     }
 };
 
@@ -63,20 +64,18 @@ private:
 public:
     DerivedObject(int id, std::string name, double extra_data)
         : TestObject(id, std::move(name)), extra_data_(extra_data) {
-        std::cout << "DerivedObject with extra_data=" << extra_data_ << " constructed" << std::endl;
+        std::cout << "DerivedObject with extra_data=" << extra_data_
+                  << " constructed" << std::endl;
     }
 
     ~DerivedObject() {
-        std::cout << "DerivedObject with extra_data=" << extra_data_ << " destroyed" << std::endl;
+        std::cout << "DerivedObject with extra_data=" << extra_data_
+                  << " destroyed" << std::endl;
     }
 
-    double getExtraData() const {
-        return extra_data_;
-    }
+    double getExtraData() const { return extra_data_; }
 
-    void setExtraData(double value) {
-        extra_data_ = value;
-    }
+    void setExtraData(double value) { extra_data_ = value; }
 };
 
 // Helper function to print headers
@@ -101,7 +100,8 @@ void basicUsageExample() {
     EnhancedWeakPtr<TestObject> weak(shared);
 
     // Check if the weak pointer is expired
-    std::cout << "Is weak pointer expired? " << (weak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Is weak pointer expired? " << (weak.expired() ? "Yes" : "No")
+              << std::endl;
 
     // Get the use count
     std::cout << "Use count: " << weak.useCount() << std::endl;
@@ -110,7 +110,8 @@ void basicUsageExample() {
     // Lock the weak pointer to get a shared_ptr
     if (auto locked = weak.lock()) {
         std::cout << "Successfully locked weak pointer" << std::endl;
-        std::cout << "Object data: " << locked->getId() << ", " << locked->getName() << std::endl;
+        std::cout << "Object data: " << locked->getId() << ", "
+                  << locked->getName() << std::endl;
     } else {
         std::cout << "Failed to lock weak pointer" << std::endl;
     }
@@ -121,13 +122,16 @@ void basicUsageExample() {
     shared.reset();
 
     // Check if the weak pointer is now expired
-    std::cout << "Is weak pointer expired? " << (weak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Is weak pointer expired? " << (weak.expired() ? "Yes" : "No")
+              << std::endl;
 
     // Try to lock an expired weak pointer
     if (auto locked = weak.lock()) {
-        std::cout << "Successfully locked weak pointer (shouldn't happen)" << std::endl;
+        std::cout << "Successfully locked weak pointer (shouldn't happen)"
+                  << std::endl;
     } else {
-        std::cout << "Failed to lock expired weak pointer (expected)" << std::endl;
+        std::cout << "Failed to lock expired weak pointer (expected)"
+                  << std::endl;
     }
 
     printSubSection("Manual Reset");
@@ -140,8 +144,10 @@ void basicUsageExample() {
     resetWeak.reset();
 
     // Verify it's expired even though the shared_ptr is still valid
-    std::cout << "Is weak pointer expired after reset? " << (resetWeak.expired() ? "Yes" : "No") << std::endl;
-    std::cout << "Original shared_ptr use count: " << shared.use_count() << std::endl;
+    std::cout << "Is weak pointer expired after reset? "
+              << (resetWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Original shared_ptr use count: " << shared.use_count()
+              << std::endl;
 
     printSubSection("Getting Lock Attempts");
     EnhancedWeakPtr<TestObject> lockCounter(shared);
@@ -151,7 +157,8 @@ void basicUsageExample() {
         auto locked = lockCounter.lock();
     }
 
-    std::cout << "Number of lock attempts: " << lockCounter.getLockAttempts() << std::endl;
+    std::cout << "Number of lock attempts: " << lockCounter.getLockAttempts()
+              << std::endl;
 }
 
 // Example 2: Advanced Locking Techniques
@@ -179,40 +186,42 @@ void advancedLockingExample() {
 
     // Use withLock with a void return type
     bool success = weak.withLock([](TestObject& obj) {
-        std::cout << "Performing void operation on object: " << obj.getName() << std::endl;
+        std::cout << "Performing void operation on object: " << obj.getName()
+                  << std::endl;
         obj.setName("Updated Name");
     });
 
-    std::cout << "Void operation success: " << (success ? "Yes" : "No") << std::endl;
+    std::cout << "Void operation success: " << (success ? "Yes" : "No")
+              << std::endl;
 
     // Verify the name was updated
-    std::string name = weak.withLock([](TestObject& obj) { return obj.getName(); }).value_or("Unknown");
+    std::string name =
+        weak.withLock([](TestObject& obj) { return obj.getName(); })
+            .value_or("Unknown");
     std::cout << "Updated name: " << name << std::endl;
 
     printSubSection("tryLockOrElse Method");
     // Use tryLockOrElse to handle both success and failure cases
     auto nameOrDefault = weak.tryLockOrElse(
         // Success case
-        [](TestObject& obj) {
-            return "Object name: " + obj.getName();
-        },
+        [](TestObject& obj) { return "Object name: " + obj.getName(); },
         // Failure case
-        []() {
-            return "Object not available";
-        }
-    );
+        []() { return "Object not available"; });
 
     std::cout << "tryLockOrElse result: " << nameOrDefault << std::endl;
 
     printSubSection("Periodic Lock Attempts");
     // Use tryLockPeriodic to attempt locking periodically
-    std::cout << "Attempting periodic locks (should succeed immediately)..." << std::endl;
+    std::cout << "Attempting periodic locks (should succeed immediately)..."
+              << std::endl;
     auto periodicLock = weak.tryLockPeriodic(100ms, 5);
 
     if (periodicLock) {
-        std::cout << "Successfully obtained lock periodically for: " << periodicLock->getName() << std::endl;
+        std::cout << "Successfully obtained lock periodically for: "
+                  << periodicLock->getName() << std::endl;
     } else {
-        std::cout << "Failed to obtain lock after periodic attempts" << std::endl;
+        std::cout << "Failed to obtain lock after periodic attempts"
+                  << std::endl;
     }
 
     // Make the object expire
@@ -225,7 +234,8 @@ void advancedLockingExample() {
     if (failedLock) {
         std::cout << "Unexpectedly obtained lock" << std::endl;
     } else {
-        std::cout << "Failed to obtain lock after 3 attempts (expected)" << std::endl;
+        std::cout << "Failed to obtain lock after 3 attempts (expected)"
+                  << std::endl;
     }
 }
 
@@ -251,7 +261,8 @@ void asynchronousOperationsExample() {
     // Get the result of the async lock
     auto asyncLocked = future.get();
     if (asyncLocked) {
-        std::cout << "Async lock successful for object: " << asyncLocked->getName() << std::endl;
+        std::cout << "Async lock successful for object: "
+                  << asyncLocked->getName() << std::endl;
     } else {
         std::cout << "Async lock failed" << std::endl;
     }
@@ -269,11 +280,16 @@ void asynchronousOperationsExample() {
 
     // Wait for the object with timeout
     bool waitResult = weak.waitFor(500ms);
-    std::cout << "waitFor result: " << (waitResult ? "Object available" : "Timeout or object expired") << std::endl;
+    std::cout << "waitFor result: "
+              << (waitResult ? "Object available" : "Timeout or object expired")
+              << std::endl;
 
     // Wait until the condition is true
     bool predResult = weak.waitUntil([&]() { return condition.load(); });
-    std::cout << "waitUntil result: " << (predResult ? "Condition met and object available" : "Object expired") << std::endl;
+    std::cout << "waitUntil result: "
+              << (predResult ? "Condition met and object available"
+                             : "Object expired")
+              << std::endl;
 
     // Cleanup
     if (conditionThread.joinable()) {
@@ -302,7 +318,8 @@ void asynchronousOperationsExample() {
         waitingThread.join();
     }
 
-    std::cout << "Was thread notified? " << (notified.load() ? "Yes" : "No") << std::endl;
+    std::cout << "Was thread notified? " << (notified.load() ? "Yes" : "No")
+              << std::endl;
 }
 
 // Example 4: Type Casting and Special Operations
@@ -310,7 +327,8 @@ void typeCastingExample() {
     printSection("Type Casting and Special Operations");
 
     // Create a shared_ptr to a DerivedObject
-    auto derivedShared = std::make_shared<DerivedObject>(5, "Derived Test", 3.14159);
+    auto derivedShared =
+        std::make_shared<DerivedObject>(5, "Derived Test", 3.14159);
 
     // Create an EnhancedWeakPtr to the base type
     EnhancedWeakPtr<TestObject> baseWeak(derivedShared);
@@ -322,13 +340,16 @@ void typeCastingExample() {
     // Test if the cast worked
     auto result = derivedWeak.withLock([](DerivedObject& obj) {
         std::cout << "Successfully cast to derived type" << std::endl;
-        std::cout << "Base properties - ID: " << obj.getId() << ", Name: " << obj.getName() << std::endl;
-        std::cout << "Derived property - Extra data: " << obj.getExtraData() << std::endl;
+        std::cout << "Base properties - ID: " << obj.getId()
+                  << ", Name: " << obj.getName() << std::endl;
+        std::cout << "Derived property - Extra data: " << obj.getExtraData()
+                  << std::endl;
         return obj.getExtraData();
     });
 
     if (result) {
-        std::cout << "Cast and lock succeeded, extra data value: " << *result << std::endl;
+        std::cout << "Cast and lock succeeded, extra data value: " << *result
+                  << std::endl;
     } else {
         std::cout << "Cast or lock failed" << std::endl;
     }
@@ -336,21 +357,26 @@ void typeCastingExample() {
     printSubSection("Weak Pointer to Shared Pointer");
     // Get the underlying weak_ptr
     std::weak_ptr<TestObject> stdWeakPtr = baseWeak.getWeakPtr();
-    std::cout << "Standard weak_ptr use count: " << stdWeakPtr.use_count() << std::endl;
+    std::cout << "Standard weak_ptr use count: " << stdWeakPtr.use_count()
+              << std::endl;
 
     // Create a shared_ptr from the weak_ptr
     auto createdShared = baseWeak.createShared();
     if (createdShared) {
-        std::cout << "Successfully created shared_ptr from weak_ptr" << std::endl;
-        std::cout << "Created shared_ptr use count: " << createdShared.use_count() << std::endl;
+        std::cout << "Successfully created shared_ptr from weak_ptr"
+                  << std::endl;
+        std::cout << "Created shared_ptr use count: "
+                  << createdShared.use_count() << std::endl;
     } else {
-        std::cout << "Failed to create shared_ptr (object expired)" << std::endl;
+        std::cout << "Failed to create shared_ptr (object expired)"
+                  << std::endl;
     }
 
     printSubSection("Total Instances Tracking");
     // Get the total number of EnhancedWeakPtr instances
     size_t beforeCount = EnhancedWeakPtr<TestObject>::getTotalInstances();
-    std::cout << "Total EnhancedWeakPtr instances before: " << beforeCount << std::endl;
+    std::cout << "Total EnhancedWeakPtr instances before: " << beforeCount
+              << std::endl;
 
     // Create more instances
     {
@@ -358,12 +384,14 @@ void typeCastingExample() {
         EnhancedWeakPtr<TestObject> temp2(derivedShared);
 
         size_t duringCount = EnhancedWeakPtr<TestObject>::getTotalInstances();
-        std::cout << "Total EnhancedWeakPtr instances during: " << duringCount << std::endl;
+        std::cout << "Total EnhancedWeakPtr instances during: " << duringCount
+                  << std::endl;
         assert(duringCount > beforeCount);
     }
 
     size_t afterCount = EnhancedWeakPtr<TestObject>::getTotalInstances();
-    std::cout << "Total EnhancedWeakPtr instances after: " << afterCount << std::endl;
+    std::cout << "Total EnhancedWeakPtr instances after: " << afterCount
+              << std::endl;
     assert(afterCount == beforeCount);
 
     printSubSection("Equality Comparison");
@@ -376,8 +404,10 @@ void typeCastingExample() {
     EnhancedWeakPtr<TestObject> weak3(differentShared);
 
     // Compare weak pointers
-    std::cout << "weak1 == weak2: " << (weak1 == weak2 ? "true" : "false") << std::endl;
-    std::cout << "weak1 == weak3: " << (weak1 == weak3 ? "true" : "false") << std::endl;
+    std::cout << "weak1 == weak2: " << (weak1 == weak2 ? "true" : "false")
+              << std::endl;
+    std::cout << "weak1 == weak3: " << (weak1 == weak3 ? "true" : "false")
+              << std::endl;
 }
 
 // Example 5: Void Specialization
@@ -393,7 +423,8 @@ void voidSpecializationExample() {
 
     printSubSection("Basic Operations with void Type");
     // Check if the weak pointer is expired
-    std::cout << "Is void weak pointer expired? " << (voidWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Is void weak pointer expired? "
+              << (voidWeak.expired() ? "Yes" : "No") << std::endl;
 
     // Get the use count
     std::cout << "Use count: " << voidWeak.useCount() << std::endl;
@@ -411,15 +442,16 @@ void voidSpecializationExample() {
         std::cout << "Performing void operation on void pointer" << std::endl;
     });
 
-    std::cout << "Void operation success: " << (success ? "Yes" : "No") << std::endl;
+    std::cout << "Void operation success: " << (success ? "Yes" : "No")
+              << std::endl;
 
     // Use withLock with non-void return type
-    auto result = voidWeak.withLock([]() {
-        return std::string("Data from void pointer operation");
-    });
+    auto result = voidWeak.withLock(
+        []() { return std::string("Data from void pointer operation"); });
 
     if (result) {
-        std::cout << "withLock on void pointer returned: " << *result << std::endl;
+        std::cout << "withLock on void pointer returned: " << *result
+                  << std::endl;
     } else {
         std::cout << "withLock on void pointer failed" << std::endl;
     }
@@ -428,14 +460,9 @@ void voidSpecializationExample() {
     // Use tryLockOrElse with void pointer
     auto resultOrDefault = voidWeak.tryLockOrElse(
         // Success case
-        []() {
-            return "Successfully accessed void pointer";
-        },
+        []() { return "Successfully accessed void pointer"; },
         // Failure case
-        []() {
-            return "Failed to access void pointer";
-        }
-    );
+        []() { return "Failed to access void pointer"; });
 
     std::cout << "tryLockOrElse result: " << resultOrDefault << std::endl;
 
@@ -444,12 +471,12 @@ void voidSpecializationExample() {
     auto castBack = voidWeak.cast<TestObject>();
 
     // Use withLock on the cast pointer
-    auto name = castBack.withLock([](TestObject& obj) {
-        return obj.getName();
-    });
+    auto name =
+        castBack.withLock([](TestObject& obj) { return obj.getName(); });
 
     if (name) {
-        std::cout << "Successfully cast back from void to TestObject: " << *name << std::endl;
+        std::cout << "Successfully cast back from void to TestObject: " << *name
+                  << std::endl;
     } else {
         std::cout << "Failed to cast back from void to TestObject" << std::endl;
     }
@@ -458,8 +485,10 @@ void voidSpecializationExample() {
     original.reset();
 
     // Verify both weak pointers are now expired
-    std::cout << "Original weak ptr expired: " << (voidWeak.expired() ? "Yes" : "No") << std::endl;
-    std::cout << "Cast weak ptr expired: " << (castBack.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Original weak ptr expired: "
+              << (voidWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Cast weak ptr expired: "
+              << (castBack.expired() ? "Yes" : "No") << std::endl;
 }
 
 // Example 6: Group Operations
@@ -476,13 +505,15 @@ void groupOperationsExample() {
     printSubSection("Creating Weak Pointer Group");
     // Create a group of weak pointers
     auto weakPtrGroup = createWeakPtrGroup(sharedPtrs);
-    std::cout << "Created weak pointer group with " << weakPtrGroup.size() << " elements" << std::endl;
+    std::cout << "Created weak pointer group with " << weakPtrGroup.size()
+              << " elements" << std::endl;
 
     printSubSection("Batch Operations");
     // Perform a batch operation on the group
     std::cout << "Performing batch operation on the group..." << std::endl;
     batchOperation(weakPtrGroup, [](TestObject& obj) {
-        std::cout << "Batch operation on object #" << obj.getId() << " - " << obj.getName() << std::endl;
+        std::cout << "Batch operation on object #" << obj.getId() << " - "
+                  << obj.getName() << std::endl;
         obj.performOperation();
     });
 
@@ -492,7 +523,8 @@ void groupOperationsExample() {
         weakPtrGroup[i].withLock([i](TestObject& obj) {
             std::cout << "Element " << i << " - ID: " << obj.getId()
                       << ", Name: " << obj.getName()
-                      << ", Access count: " << obj.getAccessCount() << std::endl;
+                      << ", Access count: " << obj.getAccessCount()
+                      << std::endl;
         });
     }
 
@@ -511,7 +543,8 @@ void groupOperationsExample() {
         });
 
         if (!accessed) {
-            std::cout << "Element " << i << " - Failed to access (expired)" << std::endl;
+            std::cout << "Element " << i << " - Failed to access (expired)"
+                      << std::endl;
         }
     }
 
@@ -562,7 +595,8 @@ void multiThreadingExample() {
                 weak.withLock([i, &localCount](TestObject& obj) {
                     localCount++;
                     std::cout << "Thread " << i << " accessing object #"
-                              << obj.getId() << ", local count: " << localCount << std::endl;
+                              << obj.getId() << ", local count: " << localCount
+                              << std::endl;
 
                     // Simulate some work
                     std::this_thread::sleep_for(50ms);
@@ -574,7 +608,9 @@ void multiThreadingExample() {
 
             // Update the total count
             totalOperations.fetch_add(localCount);
-            std::cout << "Thread " << i << " finished, local operations: " << localCount << std::endl;
+            std::cout << "Thread " << i
+                      << " finished, local operations: " << localCount
+                      << std::endl;
         });
     }
 
@@ -583,7 +619,8 @@ void multiThreadingExample() {
 
     printSubSection("Object Expiration During Thread Execution");
     // Reset the shared pointer while threads are running
-    std::cout << "Resetting shared pointer while threads are accessing it..." << std::endl;
+    std::cout << "Resetting shared pointer while threads are accessing it..."
+              << std::endl;
     shared.reset();
 
     // Let the threads continue for a bit after expiration
@@ -600,8 +637,10 @@ void multiThreadingExample() {
         }
     }
 
-    std::cout << "All threads completed. Total operations: " << totalOperations.load() << std::endl;
-    std::cout << "Lock attempts recorded: " << weak.getLockAttempts() << std::endl;
+    std::cout << "All threads completed. Total operations: "
+              << totalOperations.load() << std::endl;
+    std::cout << "Lock attempts recorded: " << weak.getLockAttempts()
+              << std::endl;
 
     printSubSection("Coordination with Condition Variables");
     // Create a new shared pointer
@@ -610,22 +649,27 @@ void multiThreadingExample() {
 
     // Create a waiter thread
     std::thread waiterThread([&cvWeak]() {
-        std::cout << "Waiter thread waiting for object to become available..." << std::endl;
+        std::cout << "Waiter thread waiting for object to become available..."
+                  << std::endl;
         bool success = cvWeak.waitFor(2s);
-        std::cout << "Waiter thread done. Object available: " << (success ? "Yes" : "No") << std::endl;
+        std::cout << "Waiter thread done. Object available: "
+                  << (success ? "Yes" : "No") << std::endl;
     });
 
     // Create a notifier thread
     std::thread notifierThread([&cvWeak]() {
-        std::cout << "Notifier thread sleeping before notification..." << std::endl;
+        std::cout << "Notifier thread sleeping before notification..."
+                  << std::endl;
         std::this_thread::sleep_for(500ms);
         std::cout << "Notifier thread sending notification..." << std::endl;
         cvWeak.notifyAll();
     });
 
     // Wait for threads to complete
-    if (waiterThread.joinable()) waiterThread.join();
-    if (notifierThread.joinable()) notifierThread.join();
+    if (waiterThread.joinable())
+        waiterThread.join();
+    if (notifierThread.joinable())
+        notifierThread.join();
 }
 
 // Example 8: Error Handling and Edge Cases
@@ -635,20 +679,24 @@ void errorHandlingExample() {
     printSubSection("Construction and Assignment");
     // Default construction
     EnhancedWeakPtr<TestObject> defaultWeak;
-    std::cout << "Default constructed weak ptr expired: " << (defaultWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Default constructed weak ptr expired: "
+              << (defaultWeak.expired() ? "Yes" : "No") << std::endl;
 
     // Construction from nullptr or empty shared_ptr
     std::shared_ptr<TestObject> nullShared;
     EnhancedWeakPtr<TestObject> nullWeak(nullShared);
-    std::cout << "Null constructed weak ptr expired: " << (nullWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Null constructed weak ptr expired: "
+              << (nullWeak.expired() ? "Yes" : "No") << std::endl;
 
     // Copy construction
     EnhancedWeakPtr<TestObject> copyWeak = nullWeak;
-    std::cout << "Copy constructed weak ptr expired: " << (copyWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Copy constructed weak ptr expired: "
+              << (copyWeak.expired() ? "Yes" : "No") << std::endl;
 
     // Move construction
     EnhancedWeakPtr<TestObject> moveWeak = std::move(copyWeak);
-    std::cout << "Move constructed weak ptr expired: " << (moveWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Move constructed weak ptr expired: "
+              << (moveWeak.expired() ? "Yes" : "No") << std::endl;
 
     printSubSection("Edge Cases in Locking");
     // Create temporary object then let it expire
@@ -656,19 +704,25 @@ void errorHandlingExample() {
     {
         auto tempShared = std::make_shared<TestObject>(300, "Temporary");
         tempWeak = EnhancedWeakPtr<TestObject>(tempShared);
-        std::cout << "Temporary weak ptr expired (inside scope): " << (tempWeak.expired() ? "Yes" : "No") << std::endl;
+        std::cout << "Temporary weak ptr expired (inside scope): "
+                  << (tempWeak.expired() ? "Yes" : "No") << std::endl;
     }
-    std::cout << "Temporary weak ptr expired (outside scope): " << (tempWeak.expired() ? "Yes" : "No") << std::endl;
+    std::cout << "Temporary weak ptr expired (outside scope): "
+              << (tempWeak.expired() ? "Yes" : "No") << std::endl;
 
     // Try to lock expired pointer
     auto locked = tempWeak.lock();
-    std::cout << "Lock result on expired pointer: " << (locked ? "Succeeded (unexpected)" : "Failed (expected)") << std::endl;
+    std::cout << "Lock result on expired pointer: "
+              << (locked ? "Succeeded (unexpected)" : "Failed (expected)")
+              << std::endl;
 
     // Try to use withLock on expired pointer
     bool success = tempWeak.withLock([](TestObject& obj) {
         std::cout << "This should not print" << std::endl;
     });
-    std::cout << "withLock on expired pointer: " << (success ? "Succeeded (unexpected)" : "Failed (expected)") << std::endl;
+    std::cout << "withLock on expired pointer: "
+              << (success ? "Succeeded (unexpected)" : "Failed (expected)")
+              << std::endl;
 
     printSubSection("Validation in Boost Mode");
 #ifdef ATOM_USE_BOOST
@@ -695,7 +749,8 @@ void errorHandlingExample() {
         std::cout << "Expected exception caught: " << e.what() << std::endl;
     }
 #else
-    std::cout << "Boost is not enabled, validation functionality not available" << std::endl;
+    std::cout << "Boost is not enabled, validation functionality not available"
+              << std::endl;
 #endif
 
     printSubSection("Race Conditions and Thread Safety");
@@ -712,27 +767,31 @@ void errorHandlingExample() {
     std::atomic<bool> hasReset{false};
 
     for (int i = 0; i < 10; ++i) {
-        racingThreads.emplace_back([&contestedWeak, &successfulAccesses, &failedAccesses, &hasReset, i]() {
+        racingThreads.emplace_back([&contestedWeak, &successfulAccesses,
+                                    &failedAccesses, &hasReset, i]() {
             // Random delay to increase chance of race conditions
             std::this_thread::sleep_for(std::chrono::milliseconds(rand() % 50));
 
             // Thread 5 will reset the pointer
             if (i == 5 && !hasReset.load()) {
                 hasReset.store(true);
-                std::cout << "Thread " << i << " resetting weak pointer" << std::endl;
+                std::cout << "Thread " << i << " resetting weak pointer"
+                          << std::endl;
                 contestedWeak.reset();
             }
 
             // All threads try to access
             bool success = contestedWeak.withLock([i](TestObject& obj) {
-                std::cout << "Thread " << i << " successfully accessed object #" << obj.getId() << std::endl;
+                std::cout << "Thread " << i << " successfully accessed object #"
+                          << obj.getId() << std::endl;
             });
 
             if (success) {
                 successfulAccesses++;
             } else {
                 failedAccesses++;
-                std::cout << "Thread " << i << " failed to access object" << std::endl;
+                std::cout << "Thread " << i << " failed to access object"
+                          << std::endl;
             }
         });
     }
@@ -745,7 +804,8 @@ void errorHandlingExample() {
     }
 
     std::cout << "Race condition test completed." << std::endl;
-    std::cout << "Successful accesses: " << successfulAccesses.load() << std::endl;
+    std::cout << "Successful accesses: " << successfulAccesses.load()
+              << std::endl;
     std::cout << "Failed accesses: " << failedAccesses.load() << std::endl;
 }
 

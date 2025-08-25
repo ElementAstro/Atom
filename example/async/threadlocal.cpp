@@ -41,8 +41,6 @@ struct Counter {
     }
 };
 
-
-
 // 用于测试的复杂对象类型
 class Resource : public ::NonCopyable {
 public:
@@ -146,8 +144,9 @@ int main() {
         // 创建一个带初始化函数的ThreadLocal实例
         atom::async::ThreadLocal<Counter> threadLocalCounter(
             atom::async::EnhancedThreadLocal<Counter>::InitializerFn([]() {
-                return Counter(0, "线程" + std::to_string(std::hash<std::thread::id>{}(
-                                             std::this_thread::get_id())));
+                return Counter(
+                    0, "线程" + std::to_string(std::hash<std::thread::id>{}(
+                                    std::this_thread::get_id())));
             }));
 
         // 检查当前线程的值
@@ -201,7 +200,9 @@ int main() {
         // 创建一个可能抛出异常的初始化函数的ThreadLocal实例
         atom::async::ThreadLocal<int> throwingThreadLocal(
             atom::async::EnhancedThreadLocal<int>::InitializerFn([]() -> int {
-                if (std::hash<std::thread::id>{}(std::this_thread::get_id()) % 2 == 0) {
+                if (std::hash<std::thread::id>{}(std::this_thread::get_id()) %
+                        2 ==
+                    0) {
                     throw std::runtime_error("初始化失败 - 线程ID哈希为偶数");
                 }
                 return 42;
@@ -238,9 +239,8 @@ int main() {
     {
         // 创建一个Counter的ThreadLocal实例
         atom::async::ThreadLocal<Counter> counterTL(
-            atom::async::EnhancedThreadLocal<Counter>::InitializerFn([]() {
-                return Counter(0, "操作符测试");
-            }));
+            atom::async::EnhancedThreadLocal<Counter>::InitializerFn(
+                []() { return Counter(0, "操作符测试"); }));
 
         // 使用箭头运算符
         counterTL->increment();
@@ -279,7 +279,8 @@ int main() {
         // 为可移动但不可复制的类型创建ThreadLocal
         // 使用默认构造函数的方式
         atom::async::ThreadLocal<Resource> resourceTL(
-            atom::async::EnhancedThreadLocal<Resource>::InitializerFn([]() { return Resource(100); }));
+            atom::async::EnhancedThreadLocal<Resource>::InitializerFn(
+                []() { return Resource(100); }));
 
         LOG("主线程的Resource: " + resourceTL->toString());
 
@@ -380,8 +381,8 @@ int main() {
 
         // 创建线程本地数据库连接池（使用指针，避免默认可构造约束）
         atom::async::ThreadLocal<std::unique_ptr<DBConnection>> dbConnectionTL(
-            atom::async::EnhancedThreadLocal<std::unique_ptr<DBConnection>>::InitializerFn(
-                [&conn_id_counter]() {
+            atom::async::EnhancedThreadLocal<std::unique_ptr<DBConnection>>::
+                InitializerFn([&conn_id_counter]() {
                     return std::make_unique<DBConnection>(conn_id_counter);
                 }));
 
@@ -439,9 +440,8 @@ int main() {
 
         // 线程本地计数器
         atom::async::ThreadLocal<Counter> threadLocalCounter(
-            atom::async::EnhancedThreadLocal<Counter>::InitializerFn([]() {
-                return Counter();
-            }));
+            atom::async::EnhancedThreadLocal<Counter>::InitializerFn(
+                []() { return Counter(); }));
 
         // 比较性能
         auto testSharedCounter = [&]() {

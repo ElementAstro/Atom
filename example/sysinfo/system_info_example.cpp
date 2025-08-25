@@ -1,6 +1,7 @@
 /**
  * @file system_info_example.cpp
- * @brief Comprehensive example demonstrating the Atom Sysinfo module's system information gathering capabilities
+ * @brief Comprehensive example demonstrating the Atom Sysinfo module's system
+ * information gathering capabilities
  *
  * This example shows how to:
  * - Gather operating system information
@@ -15,21 +16,21 @@
  * @date 2024-12-19
  */
 
-#include <iostream>
-#include <iomanip>
-#include <string>
-#include <vector>
 #include <chrono>
+#include <iomanip>
+#include <iostream>
+#include <string>
 #include <thread>
+#include <vector>
 
 // Atom Sysinfo module headers
-#include "atom/sysinfo/os.hpp"
-#include "atom/sysinfo/cpu.hpp"
-#include "atom/sysinfo/memory.hpp"
-#include "atom/sysinfo/disk.hpp"
-#include "atom/sysinfo/wifi.hpp"
 #include "atom/sysinfo/bios.hpp"
+#include "atom/sysinfo/cpu.hpp"
+#include "atom/sysinfo/disk.hpp"
+#include "atom/sysinfo/memory.hpp"
+#include "atom/sysinfo/os.hpp"
 #include "atom/sysinfo/sysinfo_printer.hpp"
+#include "atom/sysinfo/wifi.hpp"
 
 using namespace atom::system;
 
@@ -50,7 +51,8 @@ void operatingSystemInfoExample() {
         std::cout << "Computer Name: " << osInfo.computerName << "\n";
         std::cout << "Time Zone: " << osInfo.timeZone << "\n";
         std::cout << "Character Set: " << osInfo.charSet << "\n";
-        std::cout << "Is Server Edition: " << (osInfo.isServer ? "Yes" : "No") << "\n";
+        std::cout << "Is Server Edition: " << (osInfo.isServer ? "Yes" : "No")
+                  << "\n";
         std::cout << "Compiler: " << osInfo.compiler << "\n";
 
         // Get system uptime
@@ -69,7 +71,8 @@ void operatingSystemInfoExample() {
         // Display installed updates (if available)
         if (!osInfo.installedUpdates.empty()) {
             std::cout << "\nRecent Updates:\n";
-            for (size_t i = 0; i < std::min(osInfo.installedUpdates.size(), size_t(5)); ++i) {
+            for (size_t i = 0;
+                 i < std::min(osInfo.installedUpdates.size(), size_t(5)); ++i) {
                 std::cout << "  - " << osInfo.installedUpdates[i] << "\n";
             }
         }
@@ -92,7 +95,8 @@ void cpuInformationExample() {
         std::cout << "CPU Model: " << cpuInfo.model << "\n";
         std::cout << "CPU Identifier: " << cpuInfo.identifier << "\n";
         std::cout << "Vendor: " << cpuVendorToString(cpuInfo.vendor) << "\n";
-        std::cout << "Architecture: " << cpuArchitectureToString(cpuInfo.architecture) << "\n";
+        std::cout << "Architecture: "
+                  << cpuArchitectureToString(cpuInfo.architecture) << "\n";
         std::cout << "Physical Cores: " << cpuInfo.numPhysicalCores << "\n";
         std::cout << "Logical Cores: " << cpuInfo.numLogicalCores << "\n";
         std::cout << "Base Frequency: " << cpuInfo.baseFrequency << " GHz\n";
@@ -101,21 +105,25 @@ void cpuInformationExample() {
         // Get current CPU metrics
         std::cout << "\nCurrent CPU Metrics:\n";
         std::cout << "CPU Usage: " << getCurrentCpuUsage() << "%\n";
-        std::cout << "CPU Temperature: " << getCurrentCpuTemperature() << "°C\n";
-        std::cout << "Current Frequency: " << getProcessorFrequency() << " GHz\n";
+        std::cout << "CPU Temperature: " << getCurrentCpuTemperature()
+                  << "°C\n";
+        std::cout << "Current Frequency: " << getProcessorFrequency()
+                  << " GHz\n";
 
         // Get CPU cache information
         auto cacheInfo = getCacheSizes();
         std::cout << "\nCPU Cache Information:\n";
         std::cout << "L1 Data Cache: " << (cacheInfo.l1d / 1024) << " KB\n";
-        std::cout << "L1 Instruction Cache: " << (cacheInfo.l1i / 1024) << " KB\n";
+        std::cout << "L1 Instruction Cache: " << (cacheInfo.l1i / 1024)
+                  << " KB\n";
         std::cout << "L2 Cache: " << (cacheInfo.l2 / 1024) << " KB\n";
         std::cout << "L3 Cache: " << (cacheInfo.l3 / (1024 * 1024)) << " MB\n";
 
         // Get load average (Unix-like systems)
         auto loadAvg = getCpuLoadAverage();
         std::cout << "\nLoad Average:\n";
-        std::cout << "1 minute: " << std::fixed << std::setprecision(2) << loadAvg.oneMinute << "\n";
+        std::cout << "1 minute: " << std::fixed << std::setprecision(2)
+                  << loadAvg.oneMinute << "\n";
         std::cout << "5 minutes: " << loadAvg.fiveMinutes << "\n";
         std::cout << "15 minutes: " << loadAvg.fifteenMinutes << "\n";
 
@@ -140,14 +148,27 @@ void memoryInformationExample() {
         // Get memory information
         auto memInfo = getDetailedMemoryStats();
 
-        std::cout << "Total Physical Memory: " << (memInfo.totalPhysicalMemory / (1024 * 1024 * 1024)) << " GB\n";
-        std::cout << "Available Physical Memory: " << (memInfo.availablePhysicalMemory / (1024 * 1024 * 1024)) << " GB\n";
-        std::cout << "Used Physical Memory: " << ((memInfo.totalPhysicalMemory - memInfo.availablePhysicalMemory) / (1024 * 1024 * 1024)) << " GB\n";
+        std::cout << "Total Physical Memory: "
+                  << (memInfo.totalPhysicalMemory / (1024 * 1024 * 1024))
+                  << " GB\n";
+        std::cout << "Available Physical Memory: "
+                  << (memInfo.availablePhysicalMemory / (1024 * 1024 * 1024))
+                  << " GB\n";
+        std::cout << "Used Physical Memory: "
+                  << ((memInfo.totalPhysicalMemory -
+                       memInfo.availablePhysicalMemory) /
+                      (1024 * 1024 * 1024))
+                  << " GB\n";
 
-        std::cout << "Memory Usage: " << std::fixed << std::setprecision(1) << memInfo.memoryLoadPercentage << "%\n";
+        std::cout << "Memory Usage: " << std::fixed << std::setprecision(1)
+                  << memInfo.memoryLoadPercentage << "%\n";
 
-        std::cout << "Total Virtual Memory: " << (memInfo.virtualMemoryMax / (1024 * 1024 * 1024)) << " GB\n";
-        std::cout << "Used Virtual Memory: " << (memInfo.virtualMemoryUsed / (1024 * 1024 * 1024)) << " GB\n";
+        std::cout << "Total Virtual Memory: "
+                  << (memInfo.virtualMemoryMax / (1024 * 1024 * 1024))
+                  << " GB\n";
+        std::cout << "Used Virtual Memory: "
+                  << (memInfo.virtualMemoryUsed / (1024 * 1024 * 1024))
+                  << " GB\n";
 
         // Get memory performance metrics (if available)
         auto memPerf = getMemoryPerformance();
@@ -196,11 +217,18 @@ void diskInformationExample() {
             std::cout << "  Device Path: " << disk.devicePath << "\n";
             std::cout << "  Model: " << disk.model << "\n";
             std::cout << "  File System: " << disk.fsType << "\n";
-            std::cout << "  Total Space: " << (disk.totalSpace / (1024 * 1024 * 1024)) << " GB\n";
-            std::cout << "  Free Space: " << (disk.freeSpace / (1024 * 1024 * 1024)) << " GB\n";
-            std::cout << "  Used Space: " << ((disk.totalSpace - disk.freeSpace) / (1024 * 1024 * 1024)) << " GB\n";
-            std::cout << "  Usage: " << std::fixed << std::setprecision(1) << disk.usagePercent << "%\n";
-            std::cout << "  Removable: " << (disk.isRemovable ? "Yes" : "No") << "\n";
+            std::cout << "  Total Space: "
+                      << (disk.totalSpace / (1024 * 1024 * 1024)) << " GB\n";
+            std::cout << "  Free Space: "
+                      << (disk.freeSpace / (1024 * 1024 * 1024)) << " GB\n";
+            std::cout << "  Used Space: "
+                      << ((disk.totalSpace - disk.freeSpace) /
+                          (1024 * 1024 * 1024))
+                      << " GB\n";
+            std::cout << "  Usage: " << std::fixed << std::setprecision(1)
+                      << disk.usagePercent << "%\n";
+            std::cout << "  Removable: " << (disk.isRemovable ? "Yes" : "No")
+                      << "\n";
 
             // Warn about high disk usage
             if (disk.usagePercent > 90.0) {
@@ -247,7 +275,8 @@ void networkInformationExample() {
         auto availableNetworks = scanAvailableNetworks();
         if (!availableNetworks.empty()) {
             std::cout << "Available Networks:\n";
-            for (size_t i = 0; i < std::min(availableNetworks.size(), size_t(10)); ++i) {
+            for (size_t i = 0;
+                 i < std::min(availableNetworks.size(), size_t(10)); ++i) {
                 std::cout << "  - " << availableNetworks[i] << "\n";
             }
         }

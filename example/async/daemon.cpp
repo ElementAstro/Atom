@@ -1,11 +1,11 @@
-#include <iostream>
-#include <vector>
-#include <thread>
-#include <chrono>
 #include <signal.h>
-#include <functional>
-#include <stdexcept>
+#include <chrono>
 #include <cstdlib>
+#include <functional>
+#include <iostream>
+#include <stdexcept>
+#include <thread>
+#include <vector>
 
 #include "atom/async/daemon.hpp"
 
@@ -18,7 +18,8 @@ int simpleTask(int argc, char** argv) {
     std::cout << "参数数量: " << argc << std::endl;
 
     for (int i = 0; i < argc; ++i) {
-        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr") << std::endl;
+        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr")
+                  << std::endl;
     }
 
     // 模拟工作
@@ -36,7 +37,8 @@ int main() {
 
     // Simulate command line arguments
     const char* args[] = {"daemon_example", "--test", "value"};
-    char* argv[] = {const_cast<char*>(args[0]), const_cast<char*>(args[1]), const_cast<char*>(args[2])};
+    char* argv[] = {const_cast<char*>(args[0]), const_cast<char*>(args[1]),
+                    const_cast<char*>(args[2])};
     int argc = 3;
 
     // Execute the simple task

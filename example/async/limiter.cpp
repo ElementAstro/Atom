@@ -269,10 +269,12 @@ int main() {
         int call_count = 0;
         auto debounced_function = [&call_count]() {
             call_count++;
-            LOG("Debounced 函数被调用! 当前计数: " + std::to_string(call_count));
+            LOG("Debounced 函数被调用! 当前计数: " +
+                std::to_string(call_count));
         };
 
-        LOG("演示占位：此仓库当前未提供 Debounce 适配器类型。这里直接调用函数模拟效果。");
+        LOG("演示占位：此仓库当前未提供 Debounce "
+            "适配器类型。这里直接调用函数模拟效果。");
         for (int i = 0; i < 5; ++i) {
             debounced_function();
         }
@@ -286,7 +288,8 @@ int main() {
     //==============================================================
     LOG("7. Debounce 不同参数组合 (占位示例)");
     {
-        LOG("7.1 前缘触发(leading=true)的去抖动: 本仓库未提供 Debounce，跳过。");
+        LOG("7.1 前缘触发(leading=true)的去抖动: 本仓库未提供 "
+            "Debounce，跳过。");
         LOG("7.2 带有最大等待时间的去抖动: 本仓库未提供 Debounce，跳过。");
     }
 
@@ -313,7 +316,8 @@ int main() {
             call_count++;
             LOG("直接调用函数计数: " + std::to_string(call_count));
         };
-        for (int i = 0; i < 10; ++i) fn();
+        for (int i = 0; i < 10; ++i)
+            fn();
     }
 
     std::cout << std::endl;

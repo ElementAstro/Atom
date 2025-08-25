@@ -184,11 +184,11 @@ int main() {
     constexpr size_t ContainerArenaSize = 32 * 1024;
     atom::memory::Arena<ContainerArenaSize> containerArena;
 
-    // Create vector using ShortAlloc - 修复括号初始化语法
+    // Create vector using ShortAlloc
     std::cout << "Creating vector with ShortAlloc..." << std::endl;
     using IntVectorAlloc = atom::memory::ShortAlloc<int, ContainerArenaSize>;
     std::vector<int, IntVectorAlloc> shortVector{
-        IntVectorAlloc(containerArena)};
+        IntVectorAlloc{containerArena}};
 
     // Add elements to vector
     std::cout << "Adding elements to vector..." << std::endl;
@@ -201,11 +201,11 @@ int main() {
     std::cout << "Arena used after vector allocation: " << containerArena.used()
               << " bytes" << std::endl;
 
-    // Create a string using ShortAlloc - 修复括号初始化语法
+    // Create a string using ShortAlloc
     std::cout << "\nCreating string with ShortAlloc..." << std::endl;
     using CharAlloc = atom::memory::ShortAlloc<char, ContainerArenaSize>;
     std::basic_string<char, std::char_traits<char>, CharAlloc> shortString{
-        CharAlloc(containerArena)};
+        CharAlloc{containerArena}};
 
     // Set string value
     shortString =
@@ -215,12 +215,12 @@ int main() {
     std::cout << "Arena used after string allocation: " << containerArena.used()
               << " bytes" << std::endl;
 
-    // Create a map using ShortAlloc - 修复括号初始化语法
+    // Create a map using ShortAlloc
     std::cout << "\nCreating map with ShortAlloc..." << std::endl;
     using MapAlloc = atom::memory::ShortAlloc<std::pair<const int, std::string>,
                                               ContainerArenaSize>;
     std::map<int, std::string, std::less<int>, MapAlloc> shortMap{
-        MapAlloc(containerArena)};
+        MapAlloc{containerArena}};
 
     // Add elements to map
     std::cout << "Adding elements to map..." << std::endl;
@@ -742,11 +742,11 @@ int main() {
 
     std::cout << "  Time taken: " << stdTime << " ms" << std::endl;
 
-    // Test vector with short allocator - 修复括号初始化语法
+    // Test vector with short allocator
     std::cout << "\nShortAlloc allocator:" << std::endl;
     double shortTime = measureTime([&]() {
         std::vector<TestObject, PerfObjectAlloc> shortVector{
-            PerfObjectAlloc(perfArena)};
+            PerfObjectAlloc{perfArena}};
         shortVector.reserve(numElements);
 
         for (int i = 0; i < numElements; ++i) {
@@ -825,22 +825,22 @@ int main() {
     using MapPairAlloc =
         atom::memory::ShortAlloc<std::pair<const ShortString, LargeObject>,
                                  AdvancedArenaSize>;
-    // String with custom allocator - 修复括号初始化语法
+    // String with custom allocator
     std::cout << "Creating strings with ShortAlloc..." << std::endl;
 
-    ShortString str1{StringAlloc(advancedArena)};
+    ShortString str1{StringAlloc{advancedArena}};
     str1 = "This is a string with a custom allocator";
 
-    ShortString str2{StringAlloc(advancedArena)};
+    ShortString str2{StringAlloc{advancedArena}};
     str2 = "This is another string with the same arena";
 
     std::cout << "String 1: " << str1 << std::endl;
     std::cout << "String 2: " << str2 << std::endl;
 
-    // Vector of large objects - 修复括号初始化语法
+    // Vector of large objects
     std::cout << "\nCreating vector of large objects..." << std::endl;
     std::vector<LargeObject, VectorAlloc> largeVector{
-        VectorAlloc(advancedArena)};
+        VectorAlloc{advancedArena}};
 
     for (int i = 0; i < 10; ++i) {
         largeVector.emplace_back(i);
@@ -850,23 +850,23 @@ int main() {
     std::cout << "First element data size: " << largeVector[0].getData().size()
               << " bytes" << std::endl;
 
-    // Map with custom strings and large objects - 修复括号初始化语法
+    // Map with custom strings and large objects
     std::cout << "\nCreating map with custom strings and large objects..."
               << std::endl;
 
     std::map<ShortString, LargeObject, std::less<ShortString>, MapPairAlloc>
-        complexMap{MapPairAlloc(advancedArena)};
+        complexMap{MapPairAlloc{advancedArena}};
 
-    complexMap[ShortString("key1", StringAlloc(advancedArena))] =
+    complexMap[ShortString{"key1", StringAlloc{advancedArena}}] =
         LargeObject(1);
-    complexMap[ShortString("key2", StringAlloc(advancedArena))] =
+    complexMap[ShortString{"key2", StringAlloc{advancedArena}}] =
         LargeObject(2);
-    complexMap[ShortString("key3", StringAlloc(advancedArena))] =
+    complexMap[ShortString{"key3", StringAlloc{advancedArena}}] =
         LargeObject(3);
 
     std::cout << "Map size: " << complexMap.size() << std::endl;
 
-    // Create a nested data structure - 修复括号初始化语法
+    // Create a nested data structure
     std::cout << "\nCreating nested data structure..." << std::endl;
 
     using NestedVectorAlloc = atom::memory::ShortAlloc<
@@ -876,12 +876,12 @@ int main() {
     std::vector<
         std::vector<int, atom::memory::ShortAlloc<int, AdvancedArenaSize>>,
         NestedVectorAlloc>
-        nestedVector{NestedVectorAlloc(advancedArena)};
+        nestedVector{NestedVectorAlloc{advancedArena}};
 
     for (int i = 0; i < 5; ++i) {
         std::vector<int, atom::memory::ShortAlloc<int, AdvancedArenaSize>>
-            innerVec{atom::memory::ShortAlloc<int, AdvancedArenaSize>(
-                advancedArena)};
+            innerVec{atom::memory::ShortAlloc<int, AdvancedArenaSize>{
+                advancedArena}};
 
         for (int j = 0; j < 5; ++j) {
             innerVec.push_back(i * 10 + j);

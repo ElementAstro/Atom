@@ -16,8 +16,8 @@ the Atom component registry system.
 
 #include <iostream>
 #include <string>
-#include "atom/components/registry.hpp"
 #include "atom/components/component.hpp"
+#include "atom/components/registry.hpp"
 
 using namespace atom::components;
 
@@ -53,7 +53,8 @@ int main() {
         auto retrieved2 = registry.getComponent("comp2");
 
         if (retrieved1 && retrieved2) {
-            std::cout << "   - Successfully retrieved both components" << std::endl;
+            std::cout << "   - Successfully retrieved both components"
+                      << std::endl;
 
             // Access component variables
             auto counter1 = retrieved1->getVariable<int>("counter");
@@ -62,17 +63,27 @@ int main() {
             auto message2 = retrieved2->getVariable<std::string>("message");
 
             if (counter1 && message1 && counter2 && message2) {
-                std::cout << "   - Component 1 counter: " << counter1->get() << std::endl;
-                std::cout << "   - Component 1 message: " << message1->get() << std::endl;
-                std::cout << "   - Component 2 counter: " << counter2->get() << std::endl;
-                std::cout << "   - Component 2 message: " << message2->get() << std::endl;
+                std::cout << "   - Component 1 counter: " << counter1->get()
+                          << std::endl;
+                std::cout << "   - Component 1 message: " << message1->get()
+                          << std::endl;
+                std::cout << "   - Component 2 counter: " << counter2->get()
+                          << std::endl;
+                std::cout << "   - Component 2 message: " << message2->get()
+                          << std::endl;
 
                 // Modify component variables
                 retrieved1->setValue("counter", counter1->get() + 10);
-                retrieved1->setValue("message", std::string("Modified message for comp1"));
+                retrieved1->setValue("message",
+                                     std::string("Modified message for comp1"));
 
-                std::cout << "   - Component 1 updated counter: " << retrieved1->getVariable<int>("counter")->get() << std::endl;
-                std::cout << "   - Component 1 updated message: " << retrieved1->getVariable<std::string>("message")->get() << std::endl;
+                std::cout << "   - Component 1 updated counter: "
+                          << retrieved1->getVariable<int>("counter")->get()
+                          << std::endl;
+                std::cout
+                    << "   - Component 1 updated message: "
+                    << retrieved1->getVariable<std::string>("message")->get()
+                    << std::endl;
             }
         }
 
@@ -93,9 +104,12 @@ int main() {
         // Try to retrieve removed component
         try {
             auto removedComponent = registry.getComponent("comp2");
-            std::cout << "   - Unexpectedly found component 'comp2'" << std::endl;
+            std::cout << "   - Unexpectedly found component 'comp2'"
+                      << std::endl;
         } catch (const Registry::RegistryException& e) {
-            std::cout << "   - Component 'comp2' is no longer available (as expected): " << e.what() << std::endl;
+            std::cout << "   - Component 'comp2' is no longer available (as "
+                         "expected): "
+                      << e.what() << std::endl;
         }
 
         // Show remaining components
@@ -106,10 +120,13 @@ int main() {
         }
         std::cout << std::endl;
 
-        std::cout << "\n=== Component Registry Example Completed Successfully! ===" << std::endl;
+        std::cout
+            << "\n=== Component Registry Example Completed Successfully! ==="
+            << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in component registry example: " << e.what() << std::endl;
+        std::cerr << "Error in component registry example: " << e.what()
+                  << std::endl;
         return 1;
     }
 

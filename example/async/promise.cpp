@@ -1,3 +1,26 @@
+/**
+ * @file promise.cpp
+ * @brief Comprehensive demonstration of atom::async::Promise functionality
+ *
+ * @details This example demonstrates:
+ * - Basic Promise creation and value setting
+ * - Promise callbacks and completion handling
+ * - Promise cancellation with stop tokens
+ * - Coroutine integration and awaitable patterns
+ * - Error handling and exception propagation
+ * - Advanced Promise utilities and helper functions
+ * - Platform-specific async execution optimizations
+ *
+ * @level Intermediate to Advanced
+ * @prerequisites Basic understanding of futures/promises, C++20 concepts
+ * @related_examples future.cpp, async_worker_basic.cpp, coroutine_patterns.cpp
+ *
+ * @note Requires C++20 for coroutine support
+ *
+ * @author Atom Async Examples
+ * @date 2024
+ */
+
 #include "atom/async/promise.hpp"
 
 #include <cassert>
@@ -7,125 +30,353 @@
 #include <mutex>
 #include <sstream>
 #include <stdexcept>
+#include <stop_token>
 #include <string>
 #include <thread>
 #include <vector>
 
-// Print mutex
+// ============================================================================
+// UTILITY FUNCTIONS AND HELPERS
+// ============================================================================
+
+// Print mutex for thread-safe output
 std::mutex print_mutex;
 
-// Thread-safe print function
+// Thread-safe print function with timestamp
 template <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(print_mutex);
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  now.time_since_epoch()) %
+              1000;
+
+    std::cout << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S")
+              << "." << std::setfill('0') << std::setw(3) << ms.count() << "] ";
     (std::cout << ... << args) << std::endl;
 }
 
-// Print section divider
+// Print section divider with enhanced formatting
 void print_section(const std::string& title) {
     std::lock_guard<std::mutex> lock(print_mutex);
-    std::cout << "\n========== " << title << " ==========\n" << std::endl;
+    std::cout << "\n" << std::string(80, '=') << "\n";
+    std::cout << "  " << title << "\n";
+    std::cout << std::string(80, '=') << "\n" << std::endl;
 }
 
-// Helper function to get thread ID
+// Helper function to get thread ID as string
 std::string get_thread_id() {
     std::stringstream ss;
     ss << std::this_thread::get_id();
     return ss.str();
 }
 
-// 1. Basic usage examples
+// Performance timer for measuring operations
+class PerformanceTimer {
+public:
+    void start(const std::string& operation) {
+        current_operation_ = operation;
+        start_time_ = std::chrono::high_resolution_clock::now();
+        print_safe("⏱️  Starting: ", operation);
+    }
+
+    void stop() {
+        auto end_time = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                            end_time - start_time_)
+                            .count();
+
+        print_safe("⏱️  Completed: ", current_operation_, " in ", duration,
+                   " μs");
+    }
+
+private:
+    std::string current_operation_;
+    std::chrono::high_resolution_clock::time_point start_time_;
+};
+
+// Validation helper
+template <typename T>
+void validate_result(const T& result, const T& expected,
+                     const std::string& test_name) {
+    if (result == expected) {
+        print_safe("✅ ", test_name, " PASSED");
+    } else {
+        print_safe("❌ ", test_name, " FAILED: expected ", expected, ", got ",
+                   result);
+    }
+}
+
+// ============================================================================
+// SECTION 1: BASIC PROMISE USAGE
+// ============================================================================
+/**
+ * @section basic_usage Basic Promise Usage
+ *
+ * This section demonstrates fundamental Promise operations including:
+ * - Creating promises and getting futures
+ * - Setting values and retrieving results
+ * - Thread-safe value passing between threads
+ * - Basic error handling patterns
+ *
+ * Key concepts:
+ * - Promise<T>: Allows setting a value of type T asynchronously
+ * - EnhancedFuture<T>: Provides enhanced future functionality
+ * - Thread safety: Promises are thread-safe for value setting
+ *
+ * @see future.cpp for complementary future operations
+ */
 void basic_usage_examples() {
-    print_section("Basic Promise Usage Examples");
+    print_section("SECTION 1: Basic Promise Usage Examples");
 
-    // Example 1: Create and use a Promise returning an integer
-    print_safe("Example 1: Create and use a Promise returning an integer");
+    // Example 1.1: Basic integer promise
+    print_safe("Example 1.1: Basic integer promise");
+    {
+        PerformanceTimer timer;
+        timer.start("Basic integer promise");
 
-    atom::async::Promise<int> promise1;
-    auto future1 = promise1.getEnhancedFuture();
+        atom::async::Promise<int> promise;
+        auto future = promise.getEnhancedFuture();
 
-    // Execute in a new thread and set value
-    std::thread t1([&promise1]() {
-        print_safe("Thread [", get_thread_id(), "] working on task...");
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        print_safe("Thread [", get_thread_id(), "] setting value 42");
-        promise1.setValue(42);
-    });
+        // Execute in a separate thread
+        std::thread worker([&promise]() {
+            print_safe("🔧 Worker thread [", get_thread_id(),
+                       "] processing...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            promise.setValue(42);
+            print_safe("🔧 Worker thread set value to 42");
+        });
 
-    // Wait and get result
-    print_safe("Main thread [", get_thread_id(), "] waiting for result...");
-    int result1 = future1.get();
-    print_safe("Result: ", result1);
+        // Wait for result in main thread
+        print_safe("🏠 Main thread [", get_thread_id(),
+                   "] waiting for result...");
+        int result = future.get();
+        print_safe("🏠 Main thread received result: ", result);
 
-    t1.join();
+        validate_result(result, 42, "Basic integer promise");
+        worker.join();
+        timer.stop();
+    }
 
-    // Example 2: Create a Promise with string value
-    print_safe("\nExample 2: Create a Promise with string value");
+    // Example 1.2: String promise with enhanced error handling
+    print_safe("\nExample 1.2: String promise with enhanced error handling");
+    {
+        PerformanceTimer timer;
+        timer.start("String promise");
 
-    atom::async::Promise<std::string> promise2;
-    auto future2 = promise2.getEnhancedFuture();
+        atom::async::Promise<std::string> promise;
+        auto future = promise.getEnhancedFuture();
 
-    std::thread t2([&promise2]() {
-        print_safe("Thread [", get_thread_id(),
-                   "] calculating string result...");
-        std::this_thread::sleep_for(std::chrono::milliseconds(150));
-        promise2.setValue("Hello from worker thread!");
-    });
+        std::thread worker([&promise]() {
+            print_safe("🔧 Worker thread processing string task...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(150));
+            promise.setValue("Hello from async world!");
+            print_safe("🔧 Worker thread completed string task");
+        });
 
-    print_safe("Main thread waiting for string result...");
-    std::string result2 = future2.get();
-    print_safe("String result: ", result2);
+        print_safe("🏠 Main thread waiting for string result...");
+        std::string result = future.get();
+        print_safe("🏠 String result: '", result, "'");
 
-    t2.join();
+        validate_result(result, std::string("Hello from async world!"),
+                        "String promise");
+        worker.join();
+        timer.stop();
+    }
 
-    // Example 3: Create a void Promise
-    print_safe("\nExample 3: Create a void Promise");
+    // Example 1.3: Void promise for completion signaling
+    print_safe("\nExample 1.3: Void promise for completion signaling");
+    {
+        PerformanceTimer timer;
+        timer.start("Void promise");
 
-    atom::async::Promise<void> promise3;
-    auto future3 = promise3.getEnhancedFuture();
+        atom::async::Promise<void> promise;
+        auto future = promise.getEnhancedFuture();
 
-    std::thread t3([&promise3]() {
-        print_safe("Thread [", get_thread_id(), "] executing void task...");
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        print_safe("Thread [", get_thread_id(), "] task completed");
-        promise3.setValue();  // No parameter needed
-    });
+        std::thread worker([&promise]() {
+            print_safe("🔧 Worker thread executing void task...");
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+            promise.setValue();  // Signal completion
+            print_safe("🔧 Worker thread signaled completion");
+        });
 
-    print_safe("Main thread waiting for void task to complete...");
-    future3.wait();  // Wait for completion
-    print_safe("Void task completed");
+        print_safe("🏠 Main thread waiting for task completion...");
+        future.wait();  // Wait for completion signal
+        print_safe("🏠 Task completed successfully");
 
-    t3.join();
+        worker.join();
+        timer.stop();
+    }
 
-    // Example 4: Create a ready Promise using makeReadyPromise
-    print_safe("\nExample 4: Create a ready Promise");
+    // Example 1.4: Ready promise using utility functions
+    print_safe("\nExample 1.4: Ready promise using utility functions");
+    {
+        PerformanceTimer timer;
+        timer.start("Ready promise");
 
-    auto readyPromise = atom::async::makeReadyPromise(100);
-    auto readyFuture = readyPromise.getEnhancedFuture();
+        // Create a promise that's already resolved
+        auto readyPromise = atom::async::makeReadyPromise(100);
+        auto readyFuture = readyPromise.getEnhancedFuture();
 
-    // Ready Promise can get result immediately
-    print_safe("Ready Promise created, checking if future is ready...");
+        print_safe("📦 Ready promise created with value 100");
+        int result = readyFuture.get();  // Should return immediately
+        print_safe("📦 Ready promise result: ", result);
 
-    // Fix: EnhancedFuture doesn't support wait_for, use alternate check
-    bool is_ready = true;  // Assume ready since it's a readyPromise
-    print_safe("Is future ready: ", is_ready ? "Yes" : "No");
+        validate_result(result, 100, "Ready promise");
+        timer.stop();
+    }
 
-    int readyResult = readyFuture.get();
-    print_safe("Ready Promise result: ", readyResult);
+    // Example 1.5: Promise from function using utility
+    print_safe("\nExample 1.5: Promise from function using utility");
+    {
+        PerformanceTimer timer;
+        timer.start("Promise from function");
 
-    // Example 5: Create async function using makePromiseFromFunction
-    print_safe("\nExample 5: Create Promise from function");
+        // Create promise that executes a function asynchronously
+        auto functionPromise =
+            atom::async::makePromiseFromFunction([]() -> int {
+                print_safe("🔧 Function executing in background thread...");
+                std::this_thread::sleep_for(std::chrono::milliseconds(150));
+                return 200;
+            });
 
-    auto functionPromise = atom::async::makePromiseFromFunction([]() -> int {
-        print_safe("Thread [", get_thread_id(), "] executing function...");
-        std::this_thread::sleep_for(std::chrono::milliseconds(150));
-        return 200;
-    });
+        auto funcFuture = functionPromise.getEnhancedFuture();
+        print_safe("🏠 Waiting for function result...");
+        int result = funcFuture.get();
+        print_safe("🏠 Function result: ", result);
 
-    auto funcFuture = functionPromise.getEnhancedFuture();
-    print_safe("Waiting for function result...");
-    int funcResult = funcFuture.get();
-    print_safe("Function result: ", funcResult);
+        validate_result(result, 200, "Promise from function");
+        timer.stop();
+    }
+}
+
+// ============================================================================
+// SECTION 2: PROMISE CALLBACKS AND COMPLETION HANDLING
+// ============================================================================
+/**
+ * @section callbacks Promise Callbacks and Completion Handling
+ *
+ * This section demonstrates advanced Promise callback features:
+ * - Setting completion callbacks
+ * - Chaining multiple callbacks
+ * - Error handling in callbacks
+ * - Callback execution order and thread safety
+ *
+ * Key concepts:
+ * - onComplete(): Register callbacks for promise completion
+ * - Callback thread safety: Callbacks execute in the completing thread
+ * - Exception handling: Callback exceptions don't affect promise state
+ *
+ * @see async_executor.cpp for callback execution strategies
+ */
+void callback_examples() {
+    print_section("SECTION 2: Promise Callbacks and Completion Handling");
+
+    // Example 2.1: Basic completion callback
+    print_safe("Example 2.1: Basic completion callback");
+    {
+        PerformanceTimer timer;
+        timer.start("Basic callback");
+
+        atom::async::Promise<int> promise;
+        auto future = promise.getEnhancedFuture();
+
+        // Register completion callback
+        promise.onComplete([](int value) {
+            print_safe("🔔 Callback received value: ", value);
+            print_safe("🔔 Callback executing in thread: ", get_thread_id());
+        });
+
+        std::thread worker([&promise]() {
+            print_safe("🔧 Worker setting value 42...");
+            promise.setValue(42);
+        });
+
+        int result = future.get();
+        print_safe("🏠 Main thread got result: ", result);
+
+        worker.join();
+        timer.stop();
+    }
+}
+
+// ============================================================================
+// SECTION 2: PROMISE CALLBACKS AND COMPLETION HANDLING
+// ============================================================================
+/**
+ * @section callbacks Promise Callbacks and Completion Handling
+ *
+ * This section demonstrates advanced Promise callback features:
+ * - Setting completion callbacks
+ * - Chaining multiple callbacks
+ * - Error handling in callbacks
+ * - Callback execution order and thread safety
+ *
+ * Key concepts:
+ * - onComplete(): Register callbacks for promise completion
+ * - Callback thread safety: Callbacks execute in the completing thread
+ * - Exception handling: Callback exceptions don't affect promise state
+ *
+ * @see async_executor.cpp for callback execution strategies
+ */
+void promise_cancellation_examples() {
+    print_section("SECTION 2: Promise Cancellation and Stop Tokens");
+
+    // Example 2.1: Basic promise cancellation
+    print_safe("Example 2.1: Basic promise cancellation");
+    {
+        PerformanceTimer timer;
+        timer.start("Promise cancellation");
+
+        atom::async::Promise<int> promise;
+        auto future = promise.getEnhancedFuture();
+
+        // Cancel the promise before setting value
+        bool cancelled = promise.cancel();
+        print_safe("🚫 Promise cancelled: ", cancelled ? "Yes" : "No");
+
+        // Try to set value on cancelled promise (should throw)
+        try {
+            promise.setValue(42);
+            print_safe("❌ ERROR: setValue should have thrown!");
+        } catch (const std::exception& e) {
+            print_safe("✅ Expected exception: ", e.what());
+        }
+
+        timer.stop();
+    }
+
+    // Example 2.2: Cancellation with stop tokens
+    print_safe("\nExample 2.2: Cancellation with stop tokens");
+    {
+        PerformanceTimer timer;
+        timer.start("Stop token cancellation");
+
+        std::stop_source stopSource;
+        atom::async::Promise<int> promise;
+        auto future = promise.getEnhancedFuture();
+
+        // Set up cancellation with stop token
+        promise.setCancellable(stopSource.get_token());
+
+        std::thread worker([&promise, &stopSource]() {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            print_safe("🔧 Worker requesting stop...");
+            stopSource.request_stop();
+
+            // Try to set value after stop requested
+            try {
+                promise.setValue(42);
+                print_safe("❌ setValue succeeded unexpectedly");
+            } catch (const std::exception& e) {
+                print_safe("✅ Stop token prevented setValue: ", e.what());
+            }
+        });
+
+        worker.join();
+        timer.stop();
+    }
 }
 
 // 2. Different parameter combination examples
@@ -712,6 +963,7 @@ int main() {
         std::cout << "====== Promise Usage Examples ======" << std::endl;
 
         basic_usage_examples();
+        promise_cancellation_examples();
         parameter_combination_examples();
         edge_cases_examples();
         error_handling_examples();

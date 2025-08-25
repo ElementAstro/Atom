@@ -8,7 +8,6 @@
 #include <vector>
 #include "atom/log/mmap_logger.hpp"
 
-
 using namespace atom::log;
 namespace fs = std::filesystem;
 

@@ -5,12 +5,14 @@ This guide provides comprehensive instructions for building and running Atom fra
 ## 🚀 Quick Start
 
 ### Prerequisites
+
 - **CMake 3.20+**
 - **C++20 compatible compiler**
   - GCC 10+ / Clang 12+ / MSVC 2019+
 - **Git** (for cloning dependencies)
 
 ### Basic Build Process
+
 ```bash
 # 1. Configure with examples enabled
 cmake -B build -S . -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -27,6 +29,7 @@ cmake --build build
 ### CMake Configuration Options
 
 #### **Example Build Control**
+
 ```bash
 # Build all examples
 -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -42,6 +45,7 @@ cmake --build build
 ```
 
 #### **Build Type Configuration**
+
 ```bash
 # Debug build (default)
 -DCMAKE_BUILD_TYPE=Debug
@@ -54,6 +58,7 @@ cmake --build build
 ```
 
 #### **Compiler-Specific Options**
+
 ```bash
 # GCC/Clang
 -DCMAKE_CXX_COMPILER=g++
@@ -67,6 +72,7 @@ cmake --build build
 ### Platform-Specific Configuration
 
 #### **Windows (MinGW/MSYS2)**
+
 ```bash
 # Configure for MinGW
 cmake -B build -S . -G "MinGW Makefiles" -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -79,6 +85,7 @@ cmake --build build
 ```
 
 #### **Windows (Visual Studio)**
+
 ```bash
 # Configure for Visual Studio
 cmake -B build -S . -G "Visual Studio 16 2019" -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -91,6 +98,7 @@ cmake --build build --config Release
 ```
 
 #### **Linux**
+
 ```bash
 # Configure
 cmake -B build -S . -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -103,6 +111,7 @@ cmake --build build -j$(nproc)
 ```
 
 #### **macOS**
+
 ```bash
 # Configure
 cmake -B build -S . -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -117,6 +126,7 @@ cmake --build build -j$(sysctl -n hw.ncpu)
 ## 🎯 Building Specific Examples
 
 ### Individual Module Building
+
 ```bash
 # Build only containers examples
 cmake -B build -S . -DATOM_EXAMPLE_BUILD_CONTAINERS=ON
@@ -128,6 +138,7 @@ cmake --build build
 ```
 
 ### Individual Target Building
+
 ```bash
 # List available targets
 cmake --build build --target help | grep example
@@ -139,6 +150,7 @@ cmake --build build --target secret_basic_test
 ```
 
 ### Parallel Building
+
 ```bash
 # Use all available cores
 cmake --build build -j
@@ -153,6 +165,7 @@ cmake --build build --parallel 4
 ## 📊 Example Status and Build Requirements
 
 ### ✅ **Fully Working Examples**
+
 These examples build and run successfully:
 
 ```bash
@@ -174,6 +187,7 @@ cmake --build build --target sysinfo_header_test
 ```
 
 ### 🔧 **Examples with Known Issues**
+
 These examples build but may have runtime issues:
 
 ```bash
@@ -195,33 +209,43 @@ cmake --build build --target sysinfo_basic_sysinfo_example
 ### Common Build Problems
 
 #### **1. CMake Configuration Errors**
+
 ```
 Error: CMake 3.20 or higher is required
 ```
+
 **Solution**: Update CMake to version 3.20 or higher
 
 #### **2. Compiler Compatibility**
+
 ```
 Error: C++20 features not supported
 ```
+
 **Solution**: Use a C++20 compatible compiler:
+
 - GCC 10+, Clang 12+, MSVC 2019+
 
 #### **3. Missing Dependencies**
+
 ```
 Error: Could not find required package
 ```
+
 **Solution**: Install missing dependencies or disable optional features
 
 #### **4. Linking Errors**
+
 ```
 Error: undefined reference to 'symbol'
 ```
+
 **Solution**: Check module dependencies and linking configuration
 
 ### Platform-Specific Issues
 
 #### **Windows Issues**
+
 ```bash
 # Path length issues
 git config --system core.longpaths true
@@ -234,6 +258,7 @@ cmake -B build -S . -G "Visual Studio 16 2019" -A x64
 ```
 
 #### **Linux Issues**
+
 ```bash
 # Missing development packages
 sudo apt-get install build-essential cmake git
@@ -243,6 +268,7 @@ export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 ```
 
 #### **macOS Issues**
+
 ```bash
 # Xcode command line tools
 xcode-select --install
@@ -256,6 +282,7 @@ brew install cmake git
 ### Custom Build Configurations
 
 #### **Development Build**
+
 ```bash
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Debug \
@@ -264,6 +291,7 @@ cmake -B build -S . \
 ```
 
 #### **Performance Testing Build**
+
 ```bash
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
@@ -272,6 +300,7 @@ cmake -B build -S . \
 ```
 
 #### **Minimal Build**
+
 ```bash
 cmake -B build -S . \
   -DATOM_EXAMPLE_BUILD_CONTAINERS=ON \
@@ -283,6 +312,7 @@ cmake -B build -S . \
 ### Dependency Management
 
 #### **Optional Dependencies**
+
 ```bash
 # Boost (for enhanced container features)
 -DBOOST_ROOT=/path/to/boost
@@ -295,7 +325,9 @@ cmake -B build -S . \
 ```
 
 #### **Dependency Fallbacks**
+
 The build system automatically handles missing optional dependencies:
+
 - Boost containers → Standard library containers
 - OpenSSL → Built-in implementations
 - Platform-specific libraries → Generic implementations
@@ -303,6 +335,7 @@ The build system automatically handles missing optional dependencies:
 ## 📈 Build Performance Optimization
 
 ### Compilation Speed
+
 ```bash
 # Use ccache (if available)
 -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -316,6 +349,7 @@ ninja -C build
 ```
 
 ### Build Size Optimization
+
 ```bash
 # Strip debug symbols in release
 -DCMAKE_CXX_FLAGS_RELEASE="-O3 -DNDEBUG -s"
@@ -327,6 +361,7 @@ ninja -C build
 ## 🧪 Testing and Validation
 
 ### Build Verification
+
 ```bash
 # Build all examples
 cmake --build build
@@ -339,6 +374,7 @@ cmake --build build
 ```
 
 ### Automated Testing
+
 ```bash
 # Future: CTest integration
 ctest --test-dir build --output-on-failure
@@ -347,11 +383,13 @@ ctest --test-dir build --output-on-failure
 ## 📚 Additional Resources
 
 ### Build System Documentation
-- **CMake Documentation**: https://cmake.org/documentation/
+
+- **CMake Documentation**: <https://cmake.org/documentation/>
 - **Atom Framework Build System**: See main project CMakeLists.txt
 - **Module-Specific Build**: Check individual module CMakeLists.txt files
 
 ### Platform-Specific Guides
+
 - **Windows Development**: Visual Studio and MinGW setup guides
 - **Linux Development**: Package manager and dependency installation
 - **macOS Development**: Xcode and Homebrew setup

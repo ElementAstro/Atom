@@ -17,26 +17,26 @@
  * @date 2024-12-19
  */
 
-#include <iostream>
-#include <string>
-#include <vector>
-#include <map>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <sstream>
-#include <regex>
-#include <thread>
 #include <future>
 #include <iomanip>
+#include <iostream>
+#include <map>
+#include <regex>
+#include <sstream>
+#include <string>
+#include <thread>
+#include <vector>
 
 #ifdef _WIN32
-    #include <windows.h>
-    #include <process.h>
+#include <process.h>
+#include <windows.h>
 #else
-    #include <unistd.h>
-    #include <sys/wait.h>
-    #include <signal.h>
+#include <signal.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #endif
 
 namespace atom::test {
@@ -45,13 +45,13 @@ namespace atom::test {
  * @brief Test result status enumeration
  */
 enum class TestStatus {
-    NOT_RUN,        ///< Test has not been executed
-    PASSED,         ///< Test passed successfully
-    FAILED,         ///< Test failed
-    SKIPPED,        ///< Test was skipped
-    TIMEOUT,        ///< Test timed out
-    BUILD_FAILED,   ///< Build failed
-    RUNTIME_ERROR   ///< Runtime error occurred
+    NOT_RUN,       ///< Test has not been executed
+    PASSED,        ///< Test passed successfully
+    FAILED,        ///< Test failed
+    SKIPPED,       ///< Test was skipped
+    TIMEOUT,       ///< Test timed out
+    BUILD_FAILED,  ///< Build failed
+    RUNTIME_ERROR  ///< Runtime error occurred
 };
 
 /**
@@ -59,14 +59,22 @@ enum class TestStatus {
  */
 std::string statusToString(TestStatus status) {
     switch (status) {
-        case TestStatus::NOT_RUN: return "NOT_RUN";
-        case TestStatus::PASSED: return "✅ PASSED";
-        case TestStatus::FAILED: return "❌ FAILED";
-        case TestStatus::SKIPPED: return "⏭️ SKIPPED";
-        case TestStatus::TIMEOUT: return "⏰ TIMEOUT";
-        case TestStatus::BUILD_FAILED: return "🔨 BUILD_FAILED";
-        case TestStatus::RUNTIME_ERROR: return "💥 RUNTIME_ERROR";
-        default: return "UNKNOWN";
+        case TestStatus::NOT_RUN:
+            return "NOT_RUN";
+        case TestStatus::PASSED:
+            return "✅ PASSED";
+        case TestStatus::FAILED:
+            return "❌ FAILED";
+        case TestStatus::SKIPPED:
+            return "⏭️ SKIPPED";
+        case TestStatus::TIMEOUT:
+            return "⏰ TIMEOUT";
+        case TestStatus::BUILD_FAILED:
+            return "🔨 BUILD_FAILED";
+        case TestStatus::RUNTIME_ERROR:
+            return "💥 RUNTIME_ERROR";
+        default:
+            return "UNKNOWN";
     }
 }
 
@@ -74,21 +82,19 @@ std::string statusToString(TestStatus status) {
  * @brief Test result structure
  */
 struct TestResult {
-    std::string name;                    ///< Test name
-    std::string module;                  ///< Module name
-    std::string executable;              ///< Executable path
+    std::string name;                         ///< Test name
+    std::string module;                       ///< Module name
+    std::string executable;                   ///< Executable path
     TestStatus status = TestStatus::NOT_RUN;  ///< Test status
     std::chrono::milliseconds duration{0};    ///< Execution duration
-    std::string output;                  ///< Test output
-    std::string error;                   ///< Error message
-    int exitCode = 0;                    ///< Exit code
+    std::string output;                       ///< Test output
+    std::string error;                        ///< Error message
+    int exitCode = 0;                         ///< Exit code
 
     /**
      * @brief Check if test was successful
      */
-    bool isSuccess() const {
-        return status == TestStatus::PASSED;
-    }
+    bool isSuccess() const { return status == TestStatus::PASSED; }
 
     /**
      * @brief Get formatted result string
@@ -110,15 +116,15 @@ struct TestResult {
  * @brief Example test configuration
  */
 struct ExampleTest {
-    std::string name;                    ///< Test name
-    std::string module;                  ///< Module name
-    std::string target;                  ///< CMake target name
-    std::string executable;              ///< Executable path
-    std::vector<std::string> args;       ///< Command line arguments
-    std::chrono::seconds timeout{30};   ///< Execution timeout
-    bool expectSuccess = true;           ///< Whether test should succeed
+    std::string name;                         ///< Test name
+    std::string module;                       ///< Module name
+    std::string target;                       ///< CMake target name
+    std::string executable;                   ///< Executable path
+    std::vector<std::string> args;            ///< Command line arguments
+    std::chrono::seconds timeout{30};         ///< Execution timeout
+    bool expectSuccess = true;                ///< Whether test should succeed
     std::vector<std::string> expectedOutput;  ///< Expected output patterns
-    bool buildOnly = false;              ///< Only test building, not execution
+    bool buildOnly = false;  ///< Only test building, not execution
 };
 
 /**
@@ -152,53 +158,49 @@ public:
      */
     void initializeTests() {
         // Working examples (known to work)
-        tests_.push_back({
-            "High Performance Containers",
-            "containers",
-            "containers_high_performance_containers_example",
-            buildDir_ + "/example/containers/containers_high_performance_containers_example.exe",
-            {},
-            std::chrono::seconds(30),
-            true,
-            {"Flat Map Operations", "Performance Comparisons"},
-            false
-        });
+        tests_.push_back(
+            {"High Performance Containers",
+             "containers",
+             "containers_high_performance_containers_example",
+             buildDir_ + "/example/containers/"
+                         "containers_high_performance_containers_example.exe",
+             {},
+             std::chrono::seconds(30),
+             true,
+             {"Flat Map Operations", "Performance Comparisons"},
+             false});
 
-        tests_.push_back({
-            "Comprehensive Meta",
-            "meta",
-            "meta_comprehensive_meta_example",
-            buildDir_ + "/example/meta/meta_comprehensive_meta_example.exe",
-            {},
-            std::chrono::seconds(30),
-            true,
-            {"Type Information", "Function Traits", "BoxedValue"},
-            false
-        });
+        tests_.push_back(
+            {"Comprehensive Meta",
+             "meta",
+             "meta_comprehensive_meta_example",
+             buildDir_ + "/example/meta/meta_comprehensive_meta_example.exe",
+             {},
+             std::chrono::seconds(30),
+             true,
+             {"Type Information", "Function Traits", "BoxedValue"},
+             false});
 
-        tests_.push_back({
-            "Secret Basic Test",
-            "secret",
-            "secret_basic_test",
-            buildDir_ + "/example/secret/secret_basic_test.exe",
-            {},
-            std::chrono::seconds(10),
-            true,
-            {"Sysinfo headers included successfully"},
-            false
-        });
+        tests_.push_back({"Secret Basic Test",
+                          "secret",
+                          "secret_basic_test",
+                          buildDir_ + "/example/secret/secret_basic_test.exe",
+                          {},
+                          std::chrono::seconds(10),
+                          true,
+                          {"Sysinfo headers included successfully"},
+                          false});
 
-        tests_.push_back({
-            "Sysinfo Header Test",
-            "sysinfo",
-            "sysinfo_header_test",
-            buildDir_ + "/example/sysinfo/sysinfo_header_test.exe",
-            {},
-            std::chrono::seconds(10),
-            true,
-            {"Sysinfo headers included successfully"},
-            false
-        });
+        tests_.push_back(
+            {"Sysinfo Header Test",
+             "sysinfo",
+             "sysinfo_header_test",
+             buildDir_ + "/example/sysinfo/sysinfo_header_test.exe",
+             {},
+             std::chrono::seconds(10),
+             true,
+             {"Sysinfo headers included successfully"},
+             false});
 
         // Build-only tests (known to have runtime issues)
         tests_.push_back({
@@ -210,7 +212,7 @@ public:
             std::chrono::seconds(10),
             false,  // Expect failure
             {},
-            true    // Build only
+            true  // Build only
         });
 
         tests_.push_back({
@@ -222,7 +224,7 @@ public:
             std::chrono::seconds(10),
             false,  // Expect failure
             {},
-            true    // Build only
+            true  // Build only
         });
 
         tests_.push_back({
@@ -234,15 +236,16 @@ public:
             std::chrono::seconds(10),
             false,  // Expect failure
             {},
-            true    // Build only
+            true  // Build only
         });
     }
 
     /**
      * @brief Execute a system command and capture output
      */
-    std::pair<int, std::string> executeCommand(const std::string& command,
-                                               std::chrono::seconds timeout = std::chrono::seconds(30)) {
+    std::pair<int, std::string> executeCommand(
+        const std::string& command,
+        std::chrono::seconds timeout = std::chrono::seconds(30)) {
         if (verbose_) {
             std::cout << "Executing: " << command << std::endl;
         }
@@ -269,7 +272,8 @@ public:
         ZeroMemory(&pi, sizeof(pi));
 
         std::string cmdLine = command;
-        if (!CreateProcessA(NULL, &cmdLine[0], NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi)) {
+        if (!CreateProcessA(NULL, &cmdLine[0], NULL, NULL, TRUE, 0, NULL, NULL,
+                            &si, &pi)) {
             CloseHandle(hChildStdoutRd);
             CloseHandle(hChildStdoutWr);
             return {-1, "Failed to create process"};
@@ -278,14 +282,17 @@ public:
         CloseHandle(hChildStdoutWr);
 
         // Wait for process with timeout
-        DWORD waitResult = WaitForSingleObject(pi.hProcess, static_cast<DWORD>(timeout.count() * 1000));
+        DWORD waitResult = WaitForSingleObject(
+            pi.hProcess, static_cast<DWORD>(timeout.count() * 1000));
 
         std::string output;
         if (waitResult == WAIT_OBJECT_0) {
             // Process completed, read output
             DWORD bytesRead;
             char buffer[4096];
-            while (ReadFile(hChildStdoutRd, buffer, sizeof(buffer) - 1, &bytesRead, NULL) && bytesRead > 0) {
+            while (ReadFile(hChildStdoutRd, buffer, sizeof(buffer) - 1,
+                            &bytesRead, NULL) &&
+                   bytesRead > 0) {
                 buffer[bytesRead] = '\0';
                 output += buffer;
             }
@@ -335,11 +342,14 @@ public:
 
         auto start = std::chrono::steady_clock::now();
 
-        std::string buildCommand = "cmake --build " + buildDir_ + " --target " + test.target;
-        auto [exitCode, output] = executeCommand(buildCommand, std::chrono::seconds(120));
+        std::string buildCommand =
+            "cmake --build " + buildDir_ + " --target " + test.target;
+        auto [exitCode, output] =
+            executeCommand(buildCommand, std::chrono::seconds(120));
 
         auto end = std::chrono::steady_clock::now();
-        result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        result.duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         result.output = output;
         result.exitCode = exitCode;
 
@@ -347,7 +357,8 @@ public:
             result.status = TestStatus::PASSED;
         } else {
             result.status = TestStatus::BUILD_FAILED;
-            result.error = "Build failed with exit code " + std::to_string(exitCode);
+            result.error =
+                "Build failed with exit code " + std::to_string(exitCode);
         }
 
         return result;
@@ -379,7 +390,8 @@ public:
         auto [exitCode, output] = executeCommand(runCommand, test.timeout);
 
         auto end = std::chrono::steady_clock::now();
-        result.duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        result.duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         result.output = output;
         result.exitCode = exitCode;
 
@@ -391,7 +403,8 @@ public:
             for (const auto& pattern : test.expectedOutput) {
                 if (output.find(pattern) == std::string::npos) {
                     result.status = TestStatus::FAILED;
-                    result.error = "Expected output pattern not found: " + pattern;
+                    result.error =
+                        "Expected output pattern not found: " + pattern;
                     break;
                 }
             }
@@ -399,7 +412,8 @@ public:
             result.status = TestStatus::PASSED;  // Expected failure
         } else if (exitCode != 0) {
             result.status = TestStatus::RUNTIME_ERROR;
-            result.error = "Runtime error with exit code " + std::to_string(exitCode);
+            result.error =
+                "Runtime error with exit code " + std::to_string(exitCode);
         } else {
             result.status = TestStatus::FAILED;
             result.error = "Unexpected success";
@@ -419,7 +433,8 @@ public:
         results_.reserve(tests_.size());
 
         for (const auto& test : tests_) {
-            std::cout << "Testing [" << test.module << "] " << test.name << "... ";
+            std::cout << "Testing [" << test.module << "] " << test.name
+                      << "... ";
             std::cout.flush();
 
             // First, test building
@@ -465,11 +480,20 @@ public:
             std::cout << result.getFormattedResult() << "\n";
 
             switch (result.status) {
-                case TestStatus::PASSED: passed++; break;
-                case TestStatus::FAILED: failed++; break;
-                case TestStatus::BUILD_FAILED: buildFailed++; break;
-                case TestStatus::RUNTIME_ERROR: runtimeError++; break;
-                default: break;
+                case TestStatus::PASSED:
+                    passed++;
+                    break;
+                case TestStatus::FAILED:
+                    failed++;
+                    break;
+                case TestStatus::BUILD_FAILED:
+                    buildFailed++;
+                    break;
+                case TestStatus::RUNTIME_ERROR:
+                    runtimeError++;
+                    break;
+                default:
+                    break;
             }
         }
 
@@ -480,8 +504,10 @@ public:
         std::cout << "  💥 Runtime Error: " << runtimeError << "\n";
         std::cout << "  📊 Total: " << results_.size() << "\n";
 
-        double successRate = results_.empty() ? 0.0 :
-            (static_cast<double>(passed) / results_.size()) * 100.0;
+        double successRate =
+            results_.empty()
+                ? 0.0
+                : (static_cast<double>(passed) / results_.size()) * 100.0;
         std::cout << "  📈 Success Rate: " << std::fixed << std::setprecision(1)
                   << successRate << "%\n";
     }
@@ -489,12 +515,10 @@ public:
     /**
      * @brief Get test results
      */
-    const std::vector<TestResult>& getResults() const {
-        return results_;
-    }
+    const std::vector<TestResult>& getResults() const { return results_; }
 };
 
-} // namespace atom::test
+}  // namespace atom::test
 
 /**
  * @brief Main function for test framework
@@ -517,8 +541,10 @@ int main(int argc, char* argv[]) {
             std::cout << "Usage: " << argv[0] << " [options]\n";
             std::cout << "Options:\n";
             std::cout << "  --verbose, -v          Enable verbose output\n";
-            std::cout << "  --build-dir <dir>      Set build directory (default: build)\n";
-            std::cout << "  --source-dir <dir>     Set source directory (default: .)\n";
+            std::cout << "  --build-dir <dir>      Set build directory "
+                         "(default: build)\n";
+            std::cout << "  --source-dir <dir>     Set source directory "
+                         "(default: .)\n";
             std::cout << "  --help, -h             Show this help message\n";
             return 0;
         }

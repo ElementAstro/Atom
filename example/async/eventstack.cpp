@@ -270,12 +270,14 @@ void demonstrateSerializationDeserialization() {
     stack1.pushEvent(Event(3, "EventC"));
 
     // 序列化功能需要满足Serializable概念，此示例已跳过
-    std::cout << "序列化功能需要满足Serializable概念，此示例已跳过" << std::endl;
+    std::cout << "序列化功能需要满足Serializable概念，此示例已跳过"
+              << std::endl;
 
-    // Note: Serialization requires the Event class to satisfy the Serializable concept
-    // which requires std::to_string(Event) to be available during concept evaluation.
-    // This is a complex template metaprogramming issue that would require significant
-    // changes to either the concept definition or the Event class implementation.
+    // Note: Serialization requires the Event class to satisfy the Serializable
+    // concept which requires std::to_string(Event) to be available during
+    // concept evaluation. This is a complex template metaprogramming issue that
+    // would require significant changes to either the concept definition or the
+    // Event class implementation.
 }
 
 // 演示错误处理

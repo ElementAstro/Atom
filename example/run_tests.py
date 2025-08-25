@@ -32,6 +32,7 @@ import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+
 class TestRunner:
     """Test runner for Atom framework examples"""
 
@@ -50,7 +51,7 @@ class TestRunner:
             print(f"[TestRunner] {message}")
 
     def run_command(self, command: List[str], cwd: Optional[Path] = None,
-                   timeout: int = 300) -> Tuple[int, str, str]:
+                    timeout: int = 300) -> Tuple[int, str, str]:
         """Run a command and return exit code, stdout, stderr"""
         if cwd is None:
             cwd = self.source_dir
@@ -179,7 +180,8 @@ endif()
 
             exit_code, stdout, stderr = self.run_command(command)
             if exit_code != 0:
-                self.log(f"Test framework configuration failed: {stderr}", force=True)
+                self.log(
+                    f"Test framework configuration failed: {stderr}", force=True)
                 return False
 
             # Build
@@ -265,14 +267,17 @@ endif()
 
             if executable:
                 self.log(f"Testing {module}/{target}...")
-                exit_code, stdout, stderr = self.run_command([str(executable)], timeout=30)
+                exit_code, stdout, stderr = self.run_command(
+                    [str(executable)], timeout=30)
 
                 if exit_code == 0:
                     results.append(f"✅ [{module}] {target}: PASSED")
                 else:
-                    results.append(f"❌ [{module}] {target}: FAILED (exit {exit_code})")
+                    results.append(
+                        f"❌ [{module}] {target}: FAILED (exit {exit_code})")
             else:
-                results.append(f"⏭️ [{module}] {target}: SKIPPED (executable not found)")
+                results.append(
+                    f"⏭️ [{module}] {target}: SKIPPED (executable not found)")
 
         # Generate summary
         passed = len([r for r in results if "PASSED" in r])
@@ -308,7 +313,7 @@ Summary:
             self.log(f"Failed to generate report: {e}", force=True)
 
     def run_full_test_suite(self, clean_first: bool = False, build_first: bool = False,
-                           report_file: Optional[str] = None) -> int:
+                            report_file: Optional[str] = None) -> int:
         """Run the complete test suite"""
         self.log("Starting full test suite...", force=True)
 
@@ -339,6 +344,7 @@ Summary:
 
         return exit_code
 
+
 def main():
     """Main function"""
     parser = argparse.ArgumentParser(
@@ -348,17 +354,17 @@ def main():
     )
 
     parser.add_argument("--build-dir", default="build",
-                       help="Build directory (default: build)")
+                        help="Build directory (default: build)")
     parser.add_argument("--source-dir", default=".",
-                       help="Source directory (default: .)")
+                        help="Source directory (default: .)")
     parser.add_argument("--verbose", "-v", action="store_true",
-                       help="Enable verbose output")
+                        help="Enable verbose output")
     parser.add_argument("--build-first", action="store_true",
-                       help="Build examples before testing")
+                        help="Build examples before testing")
     parser.add_argument("--clean-first", action="store_true",
-                       help="Clean build before testing")
+                        help="Clean build before testing")
     parser.add_argument("--report", metavar="FILE",
-                       help="Generate test report to file")
+                        help="Generate test report to file")
 
     args = parser.parse_args()
 
@@ -380,6 +386,7 @@ def main():
     except Exception as e:
         print(f"Test runner error: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

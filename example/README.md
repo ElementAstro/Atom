@@ -7,6 +7,7 @@ This directory contains comprehensive examples demonstrating the capabilities of
 ### Building Examples
 
 To build all examples:
+
 ```bash
 # Configure with examples enabled
 cmake -B build -S . -DATOM_EXAMPLE_BUILD_ALL=ON
@@ -21,6 +22,7 @@ cmake --build build --target <example_target>
 ### Running Examples
 
 After building, examples are located in `build/example/<module>/`:
+
 ```bash
 # Run a specific example
 ./build/example/<module>/<example_name>.exe
@@ -32,6 +34,7 @@ After building, examples are located in `build/example/<module>/`:
 ## 📁 Module Examples
 
 ### ✅ **Containers Module** (`example/containers/`)
+
 **Status**: Fully functional ✅
 
 - **`high_performance_containers_example.cpp`**: Comprehensive demonstration of high-performance containers
@@ -42,12 +45,14 @@ After building, examples are located in `build/example/<module>/`:
   - Boost container integration with fallbacks
 
 **Build & Run**:
+
 ```bash
 cmake --build build --target containers_high_performance_containers_example
 ./build/example/containers/containers_high_performance_containers_example.exe
 ```
 
 ### ✅ **Meta Module** (`example/meta/`)
+
 **Status**: Fully functional ✅
 
 - **`comprehensive_meta_example.cpp`**: Complete metaprogramming and reflection demonstration
@@ -58,12 +63,14 @@ cmake --build build --target containers_high_performance_containers_example
   - Standard library type traits integration
 
 **Build & Run**:
+
 ```bash
 cmake --build build --target meta_comprehensive_meta_example
 ./build/example/meta/meta_comprehensive_meta_example.exe
 ```
 
 ### 🔧 **Secret Module** (`example/secret/`)
+
 **Status**: Basic test working ✅, comprehensive examples have runtime issues
 
 - **`basic_test.cpp`**: Basic module loading and functionality test ✅
@@ -71,6 +78,7 @@ cmake --build build --target meta_comprehensive_meta_example
 - **`simple_secret_example.cpp`**: Simplified secure storage example (has runtime issues)
 
 **Build & Run**:
+
 ```bash
 # Working basic test
 cmake --build build --target secret_basic_test
@@ -78,6 +86,7 @@ cmake --build build --target secret_basic_test
 ```
 
 ### 🔧 **Sysinfo Module** (`example/sysinfo/`)
+
 **Status**: Header test working ✅, runtime examples have dependency issues
 
 - **`header_test.cpp`**: Basic header inclusion test ✅
@@ -85,6 +94,7 @@ cmake --build build --target secret_basic_test
 - **`system_info_example.cpp`**: Comprehensive system information demo (has linking issues)
 
 **Build & Run**:
+
 ```bash
 # Working header test
 cmake --build build --target sysinfo_header_test
@@ -92,6 +102,7 @@ cmake --build build --target sysinfo_header_test
 ```
 
 ### 📚 **Algorithm Module** (`example/algorithm/`)
+
 **Status**: Many examples available, some enhanced
 
 - **Hash algorithms**: MD5, SHA1, general hashing
@@ -101,6 +112,7 @@ cmake --build build --target sysinfo_header_test
 - **Utilities**: Base64 encoding, pattern matching
 
 **Build & Run**:
+
 ```bash
 # Example: Enhanced MD5 demonstration
 cmake --build build --target algorithm_md5
@@ -108,6 +120,7 @@ cmake --build build --target algorithm_md5
 ```
 
 ### ⚡ **Async Module** (`example/async/`)
+
 **Status**: Comprehensive examples available
 
 - **Concurrency**: Thread pools, executors, futures, promises
@@ -117,6 +130,7 @@ cmake --build build --target algorithm_md5
 - **Utilities**: Thread wrappers, parallel algorithms
 
 **Build & Run**:
+
 ```bash
 # Example: Timer functionality
 cmake --build build --target async_timer
@@ -124,6 +138,7 @@ cmake --build build --target async_timer
 ```
 
 ### 🌐 **Web Module** (`example/web/`)
+
 **Status**: HTTP and networking examples
 
 - **HTTP**: Client/server implementations, parsing
@@ -132,6 +147,7 @@ cmake --build build --target async_timer
 - **CURL integration**: HTTP requests and responses
 
 ### 🔍 **Search Module** (`example/search/`)
+
 **Status**: Caching and database examples
 
 - **Caching**: LRU cache, TTL cache, general caching strategies
@@ -139,6 +155,7 @@ cmake --build build --target async_timer
 - **Core**: Search engine components
 
 ### 💾 **Memory Module** (`example/memory/`)
+
 **Status**: Memory management examples
 
 - **Memory pools**: Custom allocators, object pools
@@ -164,6 +181,7 @@ The examples are integrated into the main CMake build system:
 ### Dependencies
 
 Examples automatically handle dependencies:
+
 - **Required dependencies**: Automatically linked
 - **Optional dependencies**: Graceful fallbacks when missing
 - **Platform-specific**: Conditional compilation for different platforms
@@ -171,16 +189,19 @@ Examples automatically handle dependencies:
 ## 🎯 Example Categories
 
 ### **Beginner Examples**
+
 - Basic functionality demonstrations
 - Simple API usage
 - Getting started guides
 
 ### **Intermediate Examples**
+
 - Feature combinations
 - Real-world use cases
 - Performance considerations
 
 ### **Advanced Examples**
+
 - Complex integrations
 - Performance optimization
 - Edge cases and error handling
@@ -190,6 +211,7 @@ Examples automatically handle dependencies:
 Each example follows these standards:
 
 ### **File Structure**
+
 ```cpp
 /**
  * @file example_name.cpp
@@ -217,6 +239,7 @@ int main() {
 ```
 
 ### **Documentation Requirements**
+
 - **Header comments**: File purpose and feature list
 - **Function documentation**: What each function demonstrates
 - **Inline comments**: Explain complex operations
@@ -224,6 +247,7 @@ int main() {
 - **Output formatting**: Clear, readable output
 
 ### **Code Quality**
+
 - **Modern C++**: Use C++20 features appropriately
 - **Best practices**: Follow Atom framework conventions
 - **Error handling**: Graceful failure modes

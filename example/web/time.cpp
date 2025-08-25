@@ -7,13 +7,13 @@
  */
 
 #include "atom/web/time.hpp"
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 #include <chrono>
 #include <ctime>
 #include <iostream>
 #include <string>
 #include <vector>
-#include <spdlog/spdlog.h>
+#include "atom/log/loguru.hpp"
 
 // For prettier time output
 std::string formatTime(std::time_t time) {
@@ -42,18 +42,22 @@ int main(int argc, char** argv) {
         // Example 2: Get system time with higher precision
         auto timePoint = timeManager.getSystemTimePoint();
         auto timeT = std::chrono::system_clock::to_time_t(timePoint);
-        spdlog::info("Current system time (high precision): {}", formatTime(timeT));
+        spdlog::info("Current system time (high precision): {}",
+                     formatTime(timeT));
 
         // Check for admin/root privileges
         bool hasAdminPrivileges = timeManager.hasAdminPrivileges();
-        spdlog::info("Administrator/root privileges check: {}", hasAdminPrivileges ? "Yes" : "No");
-        std::cout << "Has administrator/root privileges: " << (hasAdminPrivileges ? "Yes" : "No") << std::endl;
+        spdlog::info("Administrator/root privileges check: {}",
+                     hasAdminPrivileges ? "Yes" : "No");
+        std::cout << "Has administrator/root privileges: "
+                  << (hasAdminPrivileges ? "Yes" : "No") << std::endl;
 
         // If we have admin privileges, we can try to set the system time
         if (hasAdminPrivileges) {
             // Example 4: Set system time
             spdlog::info("Setting system time to 2025-01-01 12:00:00...");
-            std::error_code ec = timeManager.setSystemTime(2025, 1, 1, 12, 0, 0);
+            std::error_code ec =
+                timeManager.setSystemTime(2025, 1, 1, 12, 0, 0);
 
             if (ec) {
                 spdlog::error("Failed to set system time: {}", ec.message());
@@ -87,11 +91,16 @@ int main(int argc, char** argv) {
             } else {
                 spdlog::info("Time synced from RTC successfully");
                 currentTime = timeManager.getSystemTime();
-                spdlog::info("System time after RTC sync: {}", formatTime(currentTime));
+                spdlog::info("System time after RTC sync: {}",
+                             formatTime(currentTime));
             }
         } else {
-            spdlog::warn("Administrator/root privileges required for setting time and timezone");
-            std::cout << "Administrator/root privileges required for setting time and timezone" << std::endl;
+            spdlog::warn(
+                "Administrator/root privileges required for setting time and "
+                "timezone");
+            std::cout << "Administrator/root privileges required for setting "
+                         "time and timezone"
+                      << std::endl;
         }
 
         // Example 7: Get time from NTP server (doesn't require admin
@@ -99,18 +108,21 @@ int main(int argc, char** argv) {
         spdlog::info("Getting time from NTP server...");
         std::vector<std::string> ntpServers = {
             "pool.ntp.org", "time.google.com", "time.windows.com",
-            "time.apple.com", "time-a-g.nist.gov"
-        };
+            "time.apple.com", "time-a-g.nist.gov"};
 
         bool ntpSuccess = false;
         for (const auto& server : ntpServers) {
             spdlog::info("Attempting to get time from NTP server: {}", server);
-            auto ntpTime = timeManager.getNtpTime(server, std::chrono::seconds(2));
+            auto ntpTime =
+                timeManager.getNtpTime(server, std::chrono::seconds(2));
             if (ntpTime) {
-                spdlog::info("NTP time from {}: {}", server, formatTime(*ntpTime));
+                spdlog::info("NTP time from {}: {}", server,
+                             formatTime(*ntpTime));
                 std::time_t systemTime = timeManager.getSystemTime();
                 double diffSeconds = std::difftime(systemTime, *ntpTime);
-                spdlog::info("System time differs from NTP time by {:.2f} seconds", diffSeconds);
+                spdlog::info(
+                    "System time differs from NTP time by {:.2f} seconds",
+                    diffSeconds);
                 ntpSuccess = true;
                 break;
             } else {
@@ -128,14 +140,19 @@ int main(int argc, char** argv) {
             auto startTime = std::chrono::high_resolution_clock::now();
             auto ntpTime1 = timeManager.getNtpTime("pool.ntp.org");
             auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+            auto duration =
+                std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                      startTime)
+                    .count();
             spdlog::info("Time from NTP: {}", formatTime(*ntpTime1));
             spdlog::info("First NTP request took {} ms", duration);
 
             startTime = std::chrono::high_resolution_clock::now();
             auto ntpTime2 = timeManager.getNtpTime("pool.ntp.org");
             endTime = std::chrono::high_resolution_clock::now();
-            duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+            duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+                           endTime - startTime)
+                           .count();
             spdlog::info("Time from NTP cache: {}", formatTime(*ntpTime2));
             spdlog::info("Second (cached) NTP request took {} ms", duration);
         }
@@ -143,19 +160,28 @@ int main(int argc, char** argv) {
         // Example 9: Testing error handling with invalid parameters
         spdlog::info("Testing error handling with invalid parameters");
         std::error_code ec = timeManager.setSystemTime(2025, 2, 30, 12, 0, 0);
-        spdlog::info("Setting invalid date (Feb 30): {}", ec ? "Failed as expected: " + ec.message() : "Unexpectedly succeeded");
+        spdlog::info("Setting invalid date (Feb 30): {}",
+                     ec ? "Failed as expected: " + ec.message()
+                        : "Unexpectedly succeeded");
 
         ec = timeManager.setSystemTime(2025, 1, 1, 25, 0, 0);
-        spdlog::info("Setting invalid time (hour 25): {}", ec ? "Failed as expected: " + ec.message() : "Unexpectedly succeeded");
+        spdlog::info("Setting invalid time (hour 25): {}",
+                     ec ? "Failed as expected: " + ec.message()
+                        : "Unexpectedly succeeded");
 
         ec = timeManager.setSystemTimezone("NonExistentTimeZone");
-        spdlog::info("Setting invalid timezone: {}", ec ? "Failed as expected: " + ec.message() : "Unexpectedly succeeded");
+        spdlog::info("Setting invalid timezone: {}",
+                     ec ? "Failed as expected: " + ec.message()
+                        : "Unexpectedly succeeded");
 
-        auto ntpTime = timeManager.getNtpTime("this-does-not-exist.example.com");
-        spdlog::info("Using invalid NTP server: {}", ntpTime ? "Unexpectedly succeeded" : "Failed as expected");
+        auto ntpTime =
+            timeManager.getNtpTime("this-does-not-exist.example.com");
+        spdlog::info("Using invalid NTP server: {}",
+                     ntpTime ? "Unexpectedly succeeded" : "Failed as expected");
 
         spdlog::info("TimeManager example completed successfully");
-        std::cout << "\nTimeManager example completed successfully" << std::endl;
+        std::cout << "\nTimeManager example completed successfully"
+                  << std::endl;
 
     } catch (const std::exception& e) {
         spdlog::error("Exception caught: {}", e.what());

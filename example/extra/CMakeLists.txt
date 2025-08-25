@@ -1,34 +1,73 @@
-﻿# 示例目录: extra
+﻿# Examples directory: extra
 cmake_minimum_required(VERSION 3.10)
 
-# 获取子目录名称（用于可执行文件前缀）
+# Get subdirectory name (for executable prefix)
 get_filename_component(SUBDIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 
-# 可选: 添加特定于extra示例的选项
+# Optional: Add extra example-specific options
 option(ATOM_EXAMPLE_EXTRA_BUILD_ALL "Build all extra examples" ON)
 
-# 获取所有CPP文件
+# Function to create examples from a directory
+function(create_examples_from_directory DIR_NAME)
+    # Get all CPP files in the directory
+    file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/${DIR_NAME}/*.cpp)
+
+    foreach(CPP_FILE ${CPP_FILES})
+        # Get filename without extension
+        get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
+
+        # Construct executable name (subdir_dirname_filename)
+        set(EXECUTABLE_NAME ${SUBDIR_NAME}_${DIR_NAME}_${EXAMPLE_NAME})
+
+        # Configuration option to control each example build individually
+        string(TOUPPER ${DIR_NAME}_${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
+        option(ATOM_EXAMPLE_EXTRA_${EXAMPLE_NAME_UPPER} "Build extra example: ${DIR_NAME}/${EXAMPLE_NAME}" ${ATOM_EXAMPLE_EXTRA_BUILD_ALL})
+
+        # Conditionally add executable
+        if(ATOM_EXAMPLE_EXTRA_${EXAMPLE_NAME_UPPER})
+            add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
+            target_link_libraries(${EXECUTABLE_NAME} atom)
+
+            # Set IDE folder grouping
+            set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Extra/${DIR_NAME}")
+        endif()
+    endforeach()
+endfunction()
+
+# Get all CPP files in root directory
 file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
-# 为每个CPP文件创建可执行文件
+# Create executables for root directory files
 foreach(CPP_FILE ${CPP_FILES})
-    # 获取不带扩展名的文件名
+    # Get filename without extension
     get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
 
-    # 构造可执行文件名称（子目录名_文件名）
+    # Construct executable name (subdir_filename)
     set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
 
-    # 配置选项，允许单独控制每个示例的构建
+    # Configuration option to control each example build individually
     string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
     option(ATOM_EXAMPLE_EXTRA_${EXAMPLE_NAME_UPPER} "Build extra example: ${EXAMPLE_NAME}" ${ATOM_EXAMPLE_EXTRA_BUILD_ALL})
 
-    # 有条件地添加可执行文件
+    # Conditionally add executable
     if(ATOM_EXAMPLE_EXTRA_${EXAMPLE_NAME_UPPER})
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
         target_link_libraries(${EXECUTABLE_NAME} atom)
 
-
-        # 设置IDE文件夹分组
+        # Set IDE folder grouping
         set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Extra")
     endif()
 endforeach()
+
+# Create examples for each subdirectory
+create_examples_from_directory("asio")
+create_examples_from_directory("beast")
+create_examples_from_directory("boost")
+create_examples_from_directory("curl")
+create_examples_from_directory("dotenv")
+create_examples_from_directory("iconv")
+create_examples_from_directory("inicpp")
+create_examples_from_directory("injection")
+create_examples_from_directory("pugixml")
+create_examples_from_directory("spdlog")
+create_examples_from_directory("uv")

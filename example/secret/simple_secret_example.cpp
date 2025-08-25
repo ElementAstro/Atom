@@ -12,8 +12,8 @@
  */
 
 #include <iostream>
-#include <string>
 #include <memory>
+#include <string>
 
 // Atom Secret module headers
 #include "atom/secret/storage.hpp"
@@ -123,8 +123,6 @@ void secureStorageExample() {
         std::cerr << "Error in secure storage example: " << e.what() << "\n";
     }
 }
-
-
 
 /**
  * @brief Main function demonstrating secure storage capabilities

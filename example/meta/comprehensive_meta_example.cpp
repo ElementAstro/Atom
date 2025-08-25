@@ -1,6 +1,7 @@
 /**
  * @file comprehensive_meta_example.cpp
- * @brief Comprehensive example demonstrating the Atom Meta module's metaprogramming capabilities
+ * @brief Comprehensive example demonstrating the Atom Meta module's
+ * metaprogramming capabilities
  *
  * This example shows how to:
  * - Use type traits and template metaprogramming
@@ -13,16 +14,16 @@
  * @date 2024-12-19
  */
 
+#include <functional>
 #include <iostream>
 #include <string>
-#include <vector>
-#include <functional>
 #include <type_traits>
+#include <vector>
 
 // Atom Meta module headers
-#include "atom/meta/type_info.hpp"
-#include "atom/meta/func_traits.hpp"
 #include "atom/meta/any.hpp"
+#include "atom/meta/func_traits.hpp"
+#include "atom/meta/type_info.hpp"
 
 using namespace atom::meta;
 
@@ -36,7 +37,8 @@ public:
     void setAge(int age) { age_ = age; }
 
     void introduce() const {
-        std::cout << "Hello, I'm " << name_ << " and I'm " << age_ << " years old.\n";
+        std::cout << "Hello, I'm " << name_ << " and I'm " << age_
+                  << " years old.\n";
     }
 
 private:
@@ -58,10 +60,12 @@ private:
 // Example functions for function traits demonstration
 int add(int a, int b) { return a + b; }
 double multiply(double x, double y) { return x * y; }
-std::string concatenate(const std::string& a, const std::string& b) { return a + b; }
+std::string concatenate(const std::string& a, const std::string& b) {
+    return a + b;
+}
 
 // Helper template function for SFINAE demonstration
-template<typename T>
+template <typename T>
 constexpr bool canProcess() {
     if constexpr (std::is_arithmetic_v<T>) {
         return true;
@@ -84,23 +88,30 @@ void typeInfoExample() {
         auto stringInfo = TypeInfo::fromType<std::string>();
         auto vectorInfo = TypeInfo::fromType<std::vector<int>>();
 
-        std::cout << "int: " << intInfo.name() << " (bare: " << intInfo.bareName() << ")\n";
-        std::cout << "double: " << doubleInfo.name() << " (bare: " << doubleInfo.bareName() << ")\n";
-        std::cout << "std::string: " << stringInfo.name() << " (bare: " << stringInfo.bareName() << ")\n";
-        std::cout << "std::vector<int>: " << vectorInfo.name() << " (bare: " << vectorInfo.bareName() << ")\n";
+        std::cout << "int: " << intInfo.name()
+                  << " (bare: " << intInfo.bareName() << ")\n";
+        std::cout << "double: " << doubleInfo.name()
+                  << " (bare: " << doubleInfo.bareName() << ")\n";
+        std::cout << "std::string: " << stringInfo.name()
+                  << " (bare: " << stringInfo.bareName() << ")\n";
+        std::cout << "std::vector<int>: " << vectorInfo.name()
+                  << " (bare: " << vectorInfo.bareName() << ")\n";
 
         // Custom class type information
         std::cout << "\nType information for custom classes:\n";
         auto personInfo = TypeInfo::fromType<Person>();
         auto employeeInfo = TypeInfo::fromType<Employee>();
 
-        std::cout << "Person: " << personInfo.name() << " (bare: " << personInfo.bareName() << ")\n";
-        std::cout << "Employee: " << employeeInfo.name() << " (bare: " << employeeInfo.bareName() << ")\n";
+        std::cout << "Person: " << personInfo.name()
+                  << " (bare: " << personInfo.bareName() << ")\n";
+        std::cout << "Employee: " << employeeInfo.name()
+                  << " (bare: " << employeeInfo.bareName() << ")\n";
 
         // Type properties using TypeInfo
         std::cout << "\nType properties:\n";
         std::cout << "int is arithmetic: " << intInfo.isArithmetic() << "\n";
-        std::cout << "std::string is arithmetic: " << stringInfo.isArithmetic() << "\n";
+        std::cout << "std::string is arithmetic: " << stringInfo.isArithmetic()
+                  << "\n";
         std::cout << "Person is class: " << personInfo.isClass() << "\n";
         std::cout << "int is const: " << intInfo.isConst() << "\n";
         std::cout << "int is pointer: " << intInfo.isPointer() << "\n";
@@ -146,7 +157,8 @@ void functionTraitsExample() {
 
         using MultiplyTraits = FunctionTraits<decltype(multiply)>;
         std::cout << "\nmultiply function:\n";
-        auto multiplyReturnInfo = TypeInfo::fromType<MultiplyTraits::return_type>();
+        auto multiplyReturnInfo =
+            TypeInfo::fromType<MultiplyTraits::return_type>();
         std::cout << "  Return type: " << multiplyReturnInfo.name() << "\n";
         std::cout << "  Argument count: " << MultiplyTraits::arity << "\n";
 
@@ -164,15 +176,18 @@ void functionTraitsExample() {
         // Analyze member functions
         using MemberFuncTraits = FunctionTraits<decltype(&Person::getName)>;
         std::cout << "\nPerson::getName member function:\n";
-        auto memberReturnInfo = TypeInfo::fromType<MemberFuncTraits::return_type>();
+        auto memberReturnInfo =
+            TypeInfo::fromType<MemberFuncTraits::return_type>();
         std::cout << "  Return type: " << memberReturnInfo.name() << "\n";
         std::cout << "  Argument count: " << MemberFuncTraits::arity << "\n";
-        std::cout << "  Is member function: " << MemberFuncTraits::is_member_function << "\n";
+        std::cout << "  Is member function: "
+                  << MemberFuncTraits::is_member_function << "\n";
 
         // Check function properties
         std::cout << "\nFunction properties:\n";
         std::cout << "add is noexcept: " << AddTraits::is_noexcept << "\n";
-        std::cout << "Member function is const: " << MemberFuncTraits::is_const_member_function << "\n";
+        std::cout << "Member function is const: "
+                  << MemberFuncTraits::is_const_member_function << "\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in function traits example: " << e.what() << "\n";
@@ -195,15 +210,21 @@ void boxedValueExample() {
         BoxedValue personBox(Person("Alice", 30));
 
         std::cout << "int BoxedValue: " << intBox.getTypeInfo().name() << "\n";
-        std::cout << "double BoxedValue: " << doubleBox.getTypeInfo().name() << "\n";
-        std::cout << "string BoxedValue: " << stringBox.getTypeInfo().name() << "\n";
-        std::cout << "Person BoxedValue: " << personBox.getTypeInfo().name() << "\n";
+        std::cout << "double BoxedValue: " << doubleBox.getTypeInfo().name()
+                  << "\n";
+        std::cout << "string BoxedValue: " << stringBox.getTypeInfo().name()
+                  << "\n";
+        std::cout << "Person BoxedValue: " << personBox.getTypeInfo().name()
+                  << "\n";
 
         // Type checking
         std::cout << "\nType checking:\n";
-        std::cout << "intBox can cast to int: " << intBox.canCast<int>() << "\n";
-        std::cout << "stringBox can cast to string: " << stringBox.canCast<std::string>() << "\n";
-        std::cout << "intBox can cast to string: " << intBox.canCast<std::string>() << "\n";
+        std::cout << "intBox can cast to int: " << intBox.canCast<int>()
+                  << "\n";
+        std::cout << "stringBox can cast to string: "
+                  << stringBox.canCast<std::string>() << "\n";
+        std::cout << "intBox can cast to string: "
+                  << intBox.canCast<std::string>() << "\n";
 
         // Value extraction using tryCast
         std::cout << "\nValue extraction using tryCast:\n";
@@ -220,7 +241,8 @@ void boxedValueExample() {
         }
 
         if (auto personValue = personBox.tryCast<Person>()) {
-            std::cout << "Extracted person name: " << personValue->getName() << "\n";
+            std::cout << "Extracted person name: " << personValue->getName()
+                      << "\n";
         } else {
             std::cout << "Failed to extract person value\n";
         }
@@ -254,16 +276,23 @@ void templateMetaprogrammingExample() {
         // Type traits from standard library
         std::cout << "Standard library type traits:\n";
 
-        std::cout << "std::is_integral<int>: " << std::is_integral_v<int> << "\n";
-        std::cout << "std::is_floating_point<double>: " << std::is_floating_point_v<double> << "\n";
-        std::cout << "std::is_class<Person>: " << std::is_class_v<Person> << "\n";
-        std::cout << "std::is_polymorphic<Person>: " << std::is_polymorphic_v<Person> << "\n";
+        std::cout << "std::is_integral<int>: "
+                  << std::is_integral_v<int> << "\n";
+        std::cout << "std::is_floating_point<double>: "
+                  << std::is_floating_point_v<double> << "\n";
+        std::cout << "std::is_class<Person>: "
+                  << std::is_class_v<Person> << "\n";
+        std::cout << "std::is_polymorphic<Person>: "
+                  << std::is_polymorphic_v<Person> << "\n";
 
         // Type relationships
         std::cout << "\nType relationships:\n";
-        std::cout << "std::is_base_of<Person, Employee>: " << std::is_base_of_v<Person, Employee> << "\n";
-        std::cout << "std::is_same<int, int>: " << std::is_same_v<int, int> << "\n";
-        std::cout << "std::is_same<int, double>: " << std::is_same_v<int, double> << "\n";
+        std::cout << "std::is_base_of<Person, Employee>: "
+                  << std::is_base_of_v<Person, Employee> << "\n";
+        std::cout << "std::is_same<int, int>: "
+                  << std::is_same_v<int, int> << "\n";
+        std::cout << "std::is_same<int, double>: "
+                  << std::is_same_v<int, double> << "\n";
 
         // Type modifications
         std::cout << "\nType modifications:\n";
@@ -287,17 +316,21 @@ void templateMetaprogrammingExample() {
         auto cond1Info = TypeInfo::fromType<ConditionalType1>();
         auto cond2Info = TypeInfo::fromType<ConditionalType2>();
 
-        std::cout << "std::conditional_t<true, int, double>: " << cond1Info.name() << "\n";
-        std::cout << "std::conditional_t<false, int, double>: " << cond2Info.name() << "\n";
+        std::cout << "std::conditional_t<true, int, double>: "
+                  << cond1Info.name() << "\n";
+        std::cout << "std::conditional_t<false, int, double>: "
+                  << cond2Info.name() << "\n";
 
         // SFINAE example with enable_if
         std::cout << "\nSFINAE demonstration:\n";
         std::cout << "Can process int: " << canProcess<int>() << "\n";
         std::cout << "Can process double: " << canProcess<double>() << "\n";
-        std::cout << "Can process std::string: " << canProcess<std::string>() << "\n";
+        std::cout << "Can process std::string: " << canProcess<std::string>()
+                  << "\n";
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in template metaprogramming example: " << e.what() << "\n";
+        std::cerr << "Error in template metaprogramming example: " << e.what()
+                  << "\n";
     }
 }
 
@@ -306,7 +339,8 @@ void templateMetaprogrammingExample() {
  */
 int main() {
     std::cout << "=== Atom Meta Module Comprehensive Example ===\n";
-    std::cout << "Demonstrating metaprogramming and reflection capabilities...\n";
+    std::cout
+        << "Demonstrating metaprogramming and reflection capabilities...\n";
 
     try {
         // Run all examples
