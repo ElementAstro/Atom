@@ -275,9 +275,9 @@ int main() {
 
         std::cout << "Querying posts with user information:" << std::endl;
         auto posts_result = db.executeQueryWithResults(R"(
-            SELECT p.id, p.title, p.content, u.username 
-            FROM posts p 
-            JOIN users u ON p.user_id = u.id 
+            SELECT p.id, p.title, p.content, u.username
+            FROM posts p
+            JOIN users u ON p.user_id = u.id
             ORDER BY p.created_at DESC
         )");
         printResults(posts_result);
@@ -292,8 +292,8 @@ int main() {
         // Full-text search
         std::cout << "Performing full-text search for 'machine':" << std::endl;
         auto search_result = db.executeQueryWithResults(R"(
-            SELECT document_id, content, tags 
-            FROM search_index 
+            SELECT document_id, content, tags
+            FROM search_index
             WHERE MATCH(content, tags) AGAINST('machine' IN NATURAL LANGUAGE MODE)
         )");
         printResults(search_result);

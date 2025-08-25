@@ -145,7 +145,7 @@ Control which examples are built using CMake options:
 ```bash
 # Build specific categories
 -DATOM_EXAMPLE_IMAGE_CORE=ON          # Core examples
--DATOM_EXAMPLE_IMAGE_IO=ON            # I/O examples  
+-DATOM_EXAMPLE_IMAGE_IO=ON            # I/O examples
 -DATOM_EXAMPLE_IMAGE_PROCESSING=ON    # Processing examples
 -DATOM_EXAMPLE_IMAGE_FORMATS=ON       # Format examples
 -DATOM_EXAMPLE_IMAGE_METADATA=ON      # Metadata examples

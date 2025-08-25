@@ -295,7 +295,7 @@ set_position(5.0, 10.0, 15.0)
 print("Position set successfully")
 "Position update completed"
     )", "position_test");
-    
+
     if (result1.success) {
         std::cout << "Position script result: " << result1.output << std::endl;
     }
@@ -385,11 +385,11 @@ class GameEntity:
     def __init__(self, name, health=100):
         self.name = name
         self.health = health
-    
+
     def take_damage(self, damage):
         self.health = max(0, self.health - damage)
         return self.health
-    
+
     def __str__(self):
         return f"{self.name} (Health: {self.health})"
 #Create and use entity
@@ -408,7 +408,7 @@ class GameEntity:
 try:
     result = 10 / 2
     print(f"Division result: {result}")
-    
+
     # This will raise an exception
     bad_result = 10 / 0
 except ZeroDivisionError as e:

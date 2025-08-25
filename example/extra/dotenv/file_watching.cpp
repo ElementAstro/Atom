@@ -343,7 +343,7 @@ TIMESTAMP=0
 BASE_URL=https://api.example.com
 API_VERSION=v1
 FULL_URL=${BASE_URL}/${API_VERSION}
-WHITESPACE_VAR=  trimmed value  
+WHITESPACE_VAR=  trimmed value
 )");
 
             Dotenv dotenv(options);
@@ -368,7 +368,7 @@ BASE_URL=https://prod-api.example.com
 API_VERSION=v2
 FULL_URL=${BASE_URL}/${API_VERSION}
 BACKUP_URL=${BASE_URL}/backup
-WHITESPACE_VAR=  another trimmed value  
+WHITESPACE_VAR=  another trimmed value
 )");
 
             std::this_thread::sleep_for(2s);

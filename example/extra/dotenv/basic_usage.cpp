@@ -314,7 +314,7 @@ BASE_URL=https://api.example.com
 API_VERSION=v1
 FULL_API_URL=${BASE_URL}/${API_VERSION}
 EMPTY_VAR=
-WHITESPACE_VAR=  trimmed value  
+WHITESPACE_VAR=  trimmed value
 )");
 
             auto result = dotenv.load("test_expansion.env");

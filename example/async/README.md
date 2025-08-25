@@ -144,7 +144,7 @@ Each example follows a consistent structure:
 /**
  * @file example_name.cpp
  * @brief Brief description of what this example demonstrates
- * 
+ *
  * @details Detailed explanation of concepts covered
  * @level Beginner|Intermediate|Advanced|Expert
  * @prerequisites List of required knowledge
