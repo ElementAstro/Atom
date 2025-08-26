@@ -45,18 +45,18 @@ protected:
     void TearDown() override {
         // Common cleanup for all async tests
         threadManager_.joinAll();
-        
+
         // Check for resource leaks
         if (resourceTracker_) {
             resourceTracker_->expectNoLeaks();
         }
-        
+
         // Log test duration
         auto duration = std::chrono::steady_clock::now() - setupStartTime_;
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
         if (ms.count() > 1000) { // Log if test takes more than 1 second
             std::cout << "[SLOW TEST] " << ::testing::UnitTest::GetInstance()
-                         ->current_test_info()->name() 
+                         ->current_test_info()->name()
                       << " took " << ms.count() << "ms" << std::endl;
         }
     }
@@ -80,14 +80,14 @@ protected:
     }
 
     template<typename Duration>
-    void expectTimingRange(const Duration& actual, 
-                          const Duration& min_duration, 
+    void expectTimingRange(const Duration& actual,
+                          const Duration& min_duration,
                           const Duration& max_duration) {
-        EXPECT_GE(actual, min_duration) 
-            << "Duration " << actual.count() << " is less than minimum " 
+        EXPECT_GE(actual, min_duration)
+            << "Duration " << actual.count() << " is less than minimum "
             << min_duration.count();
-        EXPECT_LE(actual, max_duration) 
-            << "Duration " << actual.count() << " is greater than maximum " 
+        EXPECT_LE(actual, max_duration)
+            << "Duration " << actual.count() << " is greater than maximum "
             << max_duration.count();
     }
 
@@ -108,7 +108,7 @@ class ThreadingTestFixture : public AsyncTestBase {
 protected:
     void SetUp() override {
         AsyncTestBase::SetUp();
-        
+
         // Threading-specific setup
         maxThreads_ = std::thread::hardware_concurrency();
         if (maxThreads_ == 0) maxThreads_ = 4; // Fallback
@@ -148,7 +148,7 @@ class SynchronizationTestFixture : public ThreadingTestFixture {
 protected:
     void SetUp() override {
         ThreadingTestFixture::SetUp();
-        
+
         // Synchronization-specific setup
         defaultTimeout_ = std::chrono::milliseconds(1000);
     }
@@ -161,25 +161,25 @@ protected:
     void testBasicSynchronization(SyncPrimitive& sync, Func&& func) {
         std::atomic<int> counter{0};
         std::atomic<bool> ready{false};
-        
+
         const size_t numThreads = 10;
         const size_t incrementsPerThread = 100;
-        
+
         for (size_t i = 0; i < numThreads; ++i) {
             addTestThread([&sync, &counter, &ready, incrementsPerThread, func = std::forward<Func>(func)]() {
                 while (!ready.load()) {
                     std::this_thread::yield();
                 }
-                
+
                 for (size_t j = 0; j < incrementsPerThread; ++j) {
                     func(sync, counter);
                 }
             });
         }
-        
+
         ready.store(true);
         joinAllThreads();
-        
+
         EXPECT_EQ(counter.load(), numThreads * incrementsPerThread);
     }
 
@@ -198,7 +198,7 @@ class TimerTestFixture : public AsyncTestBase {
 protected:
     void SetUp() override {
         AsyncTestBase::SetUp();
-        
+
         // Timer-specific setup
         defaultTimerDelay_ = std::chrono::milliseconds(50);
         timerTolerance_ = std::chrono::milliseconds(20);
@@ -234,7 +234,7 @@ class AsyncExecutionTestFixture : public ThreadingTestFixture {
 protected:
     void SetUp() override {
         ThreadingTestFixture::SetUp();
-        
+
         // Async execution specific setup
         defaultExecutionTimeout_ = std::chrono::seconds(5);
     }
@@ -246,7 +246,7 @@ protected:
     template<typename Future>
     auto waitForFuture(Future& future) -> decltype(future.get()) {
         auto status = future.wait_for(defaultExecutionTimeout_);
-        EXPECT_EQ(status, std::future_status::ready) 
+        EXPECT_EQ(status, std::future_status::ready)
             << "Future did not complete within timeout";
         return future.get();
     }
@@ -272,7 +272,7 @@ class MessagePassingTestFixture : public ThreadingTestFixture {
 protected:
     void SetUp() override {
         ThreadingTestFixture::SetUp();
-        
+
         // Message passing specific setup
         messageTimeout_ = std::chrono::milliseconds(500);
     }
@@ -282,12 +282,12 @@ protected:
     }
 
     template<typename MessageQueue, typename Message>
-    void testProducerConsumerPattern(MessageQueue& queue, 
+    void testProducerConsumerPattern(MessageQueue& queue,
                                    const std::vector<Message>& messages) {
         std::vector<Message> receivedMessages;
         std::mutex receivedMutex;
         std::atomic<bool> producerDone{false};
-        
+
         // Consumer thread
         addTestThread([&queue, &receivedMessages, &receivedMutex, &producerDone, this]() {
             while (!producerDone.load() || !queue.empty()) {
@@ -298,7 +298,7 @@ protected:
                 }
             }
         });
-        
+
         // Producer thread
         addTestThread([&queue, &messages, &producerDone]() {
             for (const auto& msg : messages) {
@@ -307,11 +307,11 @@ protected:
             }
             producerDone.store(true);
         });
-        
+
         joinAllThreads();
-        
+
         EXPECT_EQ(receivedMessages.size(), messages.size());
-        
+
         // Verify all messages were received (order may vary)
         std::sort(receivedMessages.begin(), receivedMessages.end());
         auto sortedOriginal = messages;
@@ -334,7 +334,7 @@ class PerformanceTestFixture : public AsyncTestBase {
 protected:
     void SetUp() override {
         AsyncTestBase::SetUp();
-        
+
         // Performance test specific setup
         performanceTimer_ = std::make_unique<TimingHelper>();
     }
@@ -356,8 +356,8 @@ protected:
 
     void expectPerformanceWithin(TimingHelper::Duration maxDuration) {
         auto actual = getPerformanceTime();
-        EXPECT_LE(actual, maxDuration) 
-            << "Performance test took " << actual.count() 
+        EXPECT_LE(actual, maxDuration)
+            << "Performance test took " << actual.count()
             << " microseconds, expected at most " << maxDuration.count();
     }
 

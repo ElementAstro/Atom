@@ -87,26 +87,26 @@ if (Test-Path $testExecutable) {
 # Generate coverage report if requested
 if ($Coverage -and $testResult -eq 0) {
     Write-Host "Generating coverage report..." -ForegroundColor Yellow
-    
+
     # Check if coverage tools are available
     $gcovAvailable = Get-Command gcov -ErrorAction SilentlyContinue
     $lcovAvailable = Get-Command lcov -ErrorAction SilentlyContinue
-    
+
     if ($gcovAvailable -and $lcovAvailable) {
         # Generate coverage data
         & gcov build/CMakeFiles/atom_iocomponent.test.dir/*.gcno
-        
+
         # Create coverage report
         & lcov --capture --directory . --output-file coverage.info
         & lcov --remove coverage.info '/usr/*' --output-file coverage.info
         & lcov --remove coverage.info '*/gtest/*' --output-file coverage.info
-        
+
         # Generate HTML report
         if (Get-Command genhtml -ErrorAction SilentlyContinue) {
             & genhtml coverage.info --output-directory coverage_html
             Write-Host "Coverage report generated in coverage_html/" -ForegroundColor Green
         }
-        
+
         # Display coverage summary
         & lcov --list coverage.info
     } else {

@@ -79,11 +79,11 @@ TEST_F(ThreadWrapperTest, StartWithStopToken) {
     });
 
     EXPECT_TRUE(thread.running());
-    
+
     // Request stop and wait
     thread.requestStop();
     thread.join();
-    
+
     EXPECT_TRUE(stopRequested);
     EXPECT_FALSE(thread.running());
 }
@@ -102,13 +102,13 @@ TEST_F(ThreadWrapperTest, ExceptionHandling) {
 TEST_F(ThreadWrapperTest, ThreadNaming) {
     Thread thread;
     const std::string threadName = "TestThread";
-    
+
     thread.setThreadName(threadName);
     EXPECT_EQ(thread.getThreadName(), threadName);
-    
+
     std::atomic<bool> executed{false};
     thread.start([&executed] { executed = true; });
-    
+
     thread.join();
     EXPECT_TRUE(executed);
 }
@@ -124,10 +124,10 @@ TEST_F(ThreadWrapperTest, ThreadTimeout) {
 
     // Set a short timeout
     bool joinedInTime = thread.joinFor(50ms);
-    
+
     EXPECT_FALSE(joinedInTime); // Should timeout
     EXPECT_TRUE(thread.running());
-    
+
     // Wait for actual completion
     thread.join();
     EXPECT_TRUE(timedOut);
@@ -135,31 +135,31 @@ TEST_F(ThreadWrapperTest, ThreadTimeout) {
 
 TEST_F(ThreadWrapperTest, ThreadPriority) {
     Thread thread;
-    
+
     // Test setting different priorities
     thread.setPriority(Thread::Priority::LOW);
     EXPECT_EQ(thread.getPriority(), Thread::Priority::LOW);
-    
+
     thread.setPriority(Thread::Priority::HIGH);
     EXPECT_EQ(thread.getPriority(), Thread::Priority::HIGH);
-    
+
     std::atomic<bool> executed{false};
     thread.start([&executed] { executed = true; });
-    
+
     thread.join();
     EXPECT_TRUE(executed);
 }
 
 TEST_F(ThreadWrapperTest, CPUAffinity) {
     Thread thread;
-    
+
     // Test setting CPU affinity
     thread.setPreferredCPU(0);
     EXPECT_EQ(thread.getPreferredCPU(), 0);
-    
+
     std::atomic<bool> executed{false};
     thread.start([&executed] { executed = true; });
-    
+
     thread.join();
     EXPECT_TRUE(executed);
 }
@@ -188,7 +188,7 @@ TEST_F(ThreadWrapperTest, ThreadId) {
     });
 
     thread.join();
-    
+
     EXPECT_NE(threadId.load(), std::thread::id{});
     EXPECT_EQ(thread.getId(), threadId.load());
 }
@@ -204,7 +204,7 @@ TEST_F(ThreadWrapperTest, Detach) {
 
     thread.detach();
     EXPECT_FALSE(thread.running()); // After detach, running() should return false
-    
+
     // Wait for execution to complete
     std::this_thread::sleep_for(100ms);
     EXPECT_TRUE(executed);
@@ -218,7 +218,7 @@ TEST_F(ThreadWrapperTest, StopTokenWithTimeout) {
 
     thread.start([&completed](std::stop_token token) {
         auto start = std::chrono::steady_clock::now();
-        while (!token.stop_requested() && 
+        while (!token.stop_requested() &&
                std::chrono::steady_clock::now() - start < 200ms) {
             std::this_thread::sleep_for(10ms);
         }
@@ -228,7 +228,7 @@ TEST_F(ThreadWrapperTest, StopTokenWithTimeout) {
     std::this_thread::sleep_for(50ms);
     thread.requestStop();
     thread.join();
-    
+
     EXPECT_TRUE(completed);
 }
 

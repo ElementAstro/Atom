@@ -72,12 +72,12 @@ protected:
 // Test basic generator functionality
 TEST_F(GeneratorTest, BasicGeneratorFunctionality) {
     auto gen = simpleIntGenerator(1, 5);
-    
+
     std::vector<int> values;
     for (const auto& value : gen) {
         values.push_back(value);
     }
-    
+
     std::vector<int> expected = {1, 2, 3, 4, 5};
     EXPECT_EQ(values, expected);
 }
@@ -85,19 +85,19 @@ TEST_F(GeneratorTest, BasicGeneratorFunctionality) {
 // Test generator iterator interface
 TEST_F(GeneratorTest, GeneratorIteratorInterface) {
     auto gen = simpleIntGenerator(10, 12);
-    
+
     auto it = gen.begin();
     EXPECT_NE(it, gen.end());
     EXPECT_EQ(*it, 10);
-    
+
     ++it;
     EXPECT_NE(it, gen.end());
     EXPECT_EQ(*it, 11);
-    
+
     ++it;
     EXPECT_NE(it, gen.end());
     EXPECT_EQ(*it, 12);
-    
+
     ++it;
     EXPECT_EQ(it, gen.end());
 }
@@ -105,10 +105,10 @@ TEST_F(GeneratorTest, GeneratorIteratorInterface) {
 // Test empty generator
 TEST_F(GeneratorTest, EmptyGenerator) {
     auto gen = simpleIntGenerator(1, 0); // Empty range
-    
+
     auto it = gen.begin();
     EXPECT_EQ(it, gen.end());
-    
+
     std::vector<int> values;
     for (const auto& value : gen) {
         values.push_back(value);
@@ -119,12 +119,12 @@ TEST_F(GeneratorTest, EmptyGenerator) {
 // Test string generator
 TEST_F(GeneratorTest, StringGenerator) {
     auto gen = stringGenerator();
-    
+
     std::vector<std::string> values;
     for (const auto& value : gen) {
         values.push_back(value);
     }
-    
+
     std::vector<std::string> expected = {"hello", "world", "test"};
     EXPECT_EQ(values, expected);
 }
@@ -132,14 +132,14 @@ TEST_F(GeneratorTest, StringGenerator) {
 // Test generator with STL algorithms
 TEST_F(GeneratorTest, GeneratorWithSTLAlgorithms) {
     auto gen = simpleIntGenerator(1, 10);
-    
+
     std::vector<int> values;
     std::copy(gen.begin(), gen.end(), std::back_inserter(values));
-    
+
     EXPECT_EQ(values.size(), 10);
     EXPECT_EQ(values.front(), 1);
     EXPECT_EQ(values.back(), 10);
-    
+
     int sum = std::accumulate(values.begin(), values.end(), 0);
     EXPECT_EQ(sum, 55); // Sum of 1 to 10
 }
@@ -147,12 +147,12 @@ TEST_F(GeneratorTest, GeneratorWithSTLAlgorithms) {
 // Test range utility function
 TEST_F(GeneratorTest, RangeUtilityFunction) {
     auto gen = range(0, 5);
-    
+
     std::vector<int> values;
     for (const auto& value : gen) {
         values.push_back(value);
     }
-    
+
     std::vector<int> expected = {0, 1, 2, 3, 4};
     EXPECT_EQ(values, expected);
 }
@@ -160,12 +160,12 @@ TEST_F(GeneratorTest, RangeUtilityFunction) {
 // Test range with step
 TEST_F(GeneratorTest, RangeWithStep) {
     auto gen = range(0, 10, 2);
-    
+
     std::vector<int> values;
     for (const auto& value : gen) {
         values.push_back(value);
     }
-    
+
     std::vector<int> expected = {0, 2, 4, 6, 8};
     EXPECT_EQ(values, expected);
 }
@@ -173,12 +173,12 @@ TEST_F(GeneratorTest, RangeWithStep) {
 // Test range with negative step
 TEST_F(GeneratorTest, RangeWithNegativeStep) {
     auto gen = range(10, 0, -2);
-    
+
     std::vector<int> values;
     for (const auto& value : gen) {
         values.push_back(value);
     }
-    
+
     std::vector<int> expected = {10, 8, 6, 4, 2};
     EXPECT_EQ(values, expected);
 }
@@ -191,15 +191,15 @@ TEST_F(GeneratorTest, RangeWithZeroStep) {
 // Test TwoWayGenerator basic functionality
 TEST_F(GeneratorTest, TwoWayGeneratorBasicFunctionality) {
     auto gen = echoGenerator();
-    
+
     // First call should return 0 (initial value * 2)
     int result1 = gen.next(5);
     EXPECT_EQ(result1, 0); // 0 * 2
-    
+
     // Second call should return 10 (5 * 2)
     int result2 = gen.next(7);
     EXPECT_EQ(result2, 10); // 5 * 2
-    
+
     // Third call should return 14 (7 * 2)
     int result3 = gen.next(3);
     EXPECT_EQ(result3, 14); // 7 * 2
@@ -208,17 +208,17 @@ TEST_F(GeneratorTest, TwoWayGeneratorBasicFunctionality) {
 // Test TwoWayGenerator with void receive type
 TEST_F(GeneratorTest, TwoWayGeneratorVoidReceive) {
     auto gen = messageGenerator();
-    
+
     EXPECT_FALSE(gen.done());
-    
+
     std::string msg1 = gen.next();
     EXPECT_EQ(msg1, "first");
     EXPECT_FALSE(gen.done());
-    
+
     std::string msg2 = gen.next();
     EXPECT_EQ(msg2, "second");
     EXPECT_FALSE(gen.done());
-    
+
     std::string msg3 = gen.next();
     EXPECT_EQ(msg3, "third");
     EXPECT_TRUE(gen.done());
@@ -227,12 +227,12 @@ TEST_F(GeneratorTest, TwoWayGeneratorVoidReceive) {
 // Test TwoWayGenerator done state
 TEST_F(GeneratorTest, TwoWayGeneratorDoneState) {
     auto gen = messageGenerator();
-    
+
     // Consume all values
     while (!gen.done()) {
         gen.next();
     }
-    
+
     EXPECT_TRUE(gen.done());
     EXPECT_THROW(gen.next(), std::logic_error);
 }
@@ -245,14 +245,14 @@ TEST_F(GeneratorTest, GeneratorExceptionHandling) {
         throw std::runtime_error("Generator exception");
         co_yield 3; // Should not be reached
     };
-    
+
     auto gen = throwingGenerator();
     auto it = gen.begin();
-    
+
     EXPECT_EQ(*it, 1);
     ++it;
     EXPECT_EQ(*it, 2);
-    
+
     // Next increment should throw
     EXPECT_THROW(++it, std::runtime_error);
 }
@@ -264,9 +264,9 @@ TEST_F(GeneratorTest, TwoWayGeneratorExceptionHandling) {
         throw std::runtime_error("TwoWay generator exception");
         co_yield 2; // Should not be reached
     };
-    
+
     auto gen = throwingTwoWayGenerator();
-    
+
     EXPECT_EQ(gen.next(), 1);
     EXPECT_THROW(gen.next(), std::runtime_error);
 }
@@ -275,12 +275,12 @@ TEST_F(GeneratorTest, TwoWayGeneratorExceptionHandling) {
 TEST_F(GeneratorTest, GeneratorMoveSemantics) {
     auto gen1 = simpleIntGenerator(1, 3);
     auto gen2 = std::move(gen1);
-    
+
     std::vector<int> values;
     for (const auto& value : gen2) {
         values.push_back(value);
     }
-    
+
     std::vector<int> expected = {1, 2, 3};
     EXPECT_EQ(values, expected);
 }
@@ -292,14 +292,14 @@ TEST_F(GeneratorTest, GeneratorWithComplexTypes) {
         co_yield std::make_pair(2, "two");
         co_yield std::make_pair(3, "three");
     };
-    
+
     auto gen = complexGenerator();
     std::vector<std::pair<int, std::string>> values;
-    
+
     for (const auto& value : gen) {
         values.push_back(value);
     }
-    
+
     EXPECT_EQ(values.size(), 3);
     EXPECT_EQ(values[0].first, 1);
     EXPECT_EQ(values[0].second, "one");

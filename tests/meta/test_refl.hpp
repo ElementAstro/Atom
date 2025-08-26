@@ -31,19 +31,19 @@ struct DerivedStruct : public BaseStruct {
 // Test TStr template string system
 TEST_F(ReflTest, TStrBasics) {
     using namespace atom::meta;
-    
+
     // Test TStr creation and basic operations
     constexpr auto str1 = TStr<'h', 'e', 'l', 'l', 'o'>{};
     constexpr auto str2 = TStr<'w', 'o', 'r', 'l', 'd'>{};
-    
+
     // Test size
     static_assert(str1.size() == 5);
     static_assert(str2.size() == 5);
-    
+
     // Test string conversion
     EXPECT_EQ(str1.str(), "hello");
     EXPECT_EQ(str2.str(), "world");
-    
+
     // Test c_str
     EXPECT_STREQ(str1.c_str(), "hello");
     EXPECT_STREQ(str2.c_str(), "world");
@@ -52,30 +52,30 @@ TEST_F(ReflTest, TStrBasics) {
 // Test TStr concatenation
 TEST_F(ReflTest, TStrConcatenation) {
     using namespace atom::meta;
-    
+
     constexpr auto hello = TStr<'h', 'e', 'l', 'l', 'o'>{};
     constexpr auto space = TStr<' '>{};
     constexpr auto world = TStr<'w', 'o', 'r', 'l', 'd'>{};
-    
+
     // Test concatenation
     constexpr auto combined = hello + space + world;
     static_assert(combined.size() == 11);
-    
+
     EXPECT_EQ(combined.str(), "hello world");
 }
 
 // Test TStr comparison
 TEST_F(ReflTest, TStrComparison) {
     using namespace atom::meta;
-    
+
     constexpr auto str1 = TStr<'t', 'e', 's', 't'>{};
     constexpr auto str2 = TStr<'t', 'e', 's', 't'>{};
     constexpr auto str3 = TStr<'o', 't', 'h', 'e', 'r'>{};
-    
+
     // Test equality
     static_assert(str1 == str2);
     static_assert(!(str1 == str3));
-    
+
     // Test inequality
     static_assert(!(str1 != str2));
     static_assert(str1 != str3);
@@ -84,11 +84,11 @@ TEST_F(ReflTest, TStrComparison) {
 // Test TStr platform-specific implementations
 TEST_F(ReflTest, TStrPlatformSpecific) {
     using namespace atom::meta;
-    
+
     // Test that TStr works with different character types
     constexpr auto ascii_str = TStr<'A', 'S', 'C', 'I', 'I'>{};
     EXPECT_EQ(ascii_str.str(), "ASCII");
-    
+
     // Test empty string
     constexpr auto empty_str = TStr<>{};
     static_assert(empty_str.size() == 0);
@@ -98,13 +98,13 @@ TEST_F(ReflTest, TStrPlatformSpecific) {
 // Test ElemList template operations
 TEST_F(ReflTest, ElemListOperations) {
     using namespace atom::meta;
-    
+
     // Test basic ElemList operations
     using TestList = ElemList<int, double, std::string>;
-    
+
     // Test size
     static_assert(TestList::size() == 3);
-    
+
     // Test type access (if available)
     static_assert(std::is_same_v<TestList::template at<0>, int>);
     static_assert(std::is_same_v<TestList::template at<1>, double>);
@@ -114,14 +114,14 @@ TEST_F(ReflTest, ElemListOperations) {
 // Test ElemList Find operation
 TEST_F(ReflTest, ElemListFind) {
     using namespace atom::meta;
-    
+
     using TestList = ElemList<int, double, std::string, int>;
-    
+
     // Test Find operation
     static_assert(TestList::template Find<int>() == 0);  // First occurrence
     static_assert(TestList::template Find<double>() == 1);
     static_assert(TestList::template Find<std::string>() == 2);
-    
+
     // Test Contains operation
     static_assert(TestList::template Contains<int>());
     static_assert(TestList::template Contains<double>());
@@ -132,10 +132,10 @@ TEST_F(ReflTest, ElemListFind) {
 // Test ElemList Push operations
 TEST_F(ReflTest, ElemListPush) {
     using namespace atom::meta;
-    
+
     using OriginalList = ElemList<int, double>;
     using PushedList = OriginalList::template Push<std::string>;
-    
+
     // Test that Push adds element to the end
     static_assert(PushedList::size() == 3);
     static_assert(std::is_same_v<PushedList::template at<0>, int>);
@@ -146,10 +146,10 @@ TEST_F(ReflTest, ElemListPush) {
 // Test ElemList Insert operations
 TEST_F(ReflTest, ElemListInsert) {
     using namespace atom::meta;
-    
+
     using OriginalList = ElemList<int, std::string>;
     using InsertedList = OriginalList::template Insert<1, double>;
-    
+
     // Test that Insert adds element at specified position
     static_assert(InsertedList::size() == 3);
     static_assert(std::is_same_v<InsertedList::template at<0>, int>);
@@ -160,24 +160,24 @@ TEST_F(ReflTest, ElemListInsert) {
 // Test FieldList operations
 TEST_F(ReflTest, FieldListOperations) {
     using namespace atom::meta;
-    
+
     // Create field list for TestStruct
     using TestFieldList = FieldList<
         Field<TStr<'v', 'a', 'l', 'u', 'e'>, int>,
         Field<TStr<'n', 'a', 'm', 'e'>, std::string>,
         Field<TStr<'d', 'a', 't', 'a'>, double>
     >;
-    
+
     // Test field list size
     static_assert(TestFieldList::size() == 3);
-    
+
     // Test field access
     using FirstField = TestFieldList::template at<0>;
     static_assert(std::is_same_v<typename FirstField::Type, int>);
-    
+
     using SecondField = TestFieldList::template at<1>;
     static_assert(std::is_same_v<typename SecondField::Type, std::string>);
-    
+
     using ThirdField = TestFieldList::template at<2>;
     static_assert(std::is_same_v<typename ThirdField::Type, double>);
 }
@@ -185,20 +185,20 @@ TEST_F(ReflTest, FieldListOperations) {
 // Test AttrList operations
 TEST_F(ReflTest, AttrListOperations) {
     using namespace atom::meta;
-    
+
     // Create attribute list
     using TestAttrList = AttrList<
         Attr<TStr<'s', 'e', 'r', 'i', 'a', 'l', 'i', 'z', 'a', 'b', 'l', 'e'>, bool>,
         Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>
     >;
-    
+
     // Test attribute list size
     static_assert(TestAttrList::size() == 2);
-    
+
     // Test attribute access
     using FirstAttr = TestAttrList::template at<0>;
     static_assert(std::is_same_v<typename FirstAttr::Type, bool>);
-    
+
     using SecondAttr = TestAttrList::template at<1>;
     static_assert(std::is_same_v<typename SecondAttr::Type, int>);
 }
@@ -206,13 +206,13 @@ TEST_F(ReflTest, AttrListOperations) {
 // Test BaseList operations for inheritance
 TEST_F(ReflTest, BaseListOperations) {
     using namespace atom::meta;
-    
+
     // Create base list for inheritance hierarchy
     using TestBaseList = BaseList<BaseStruct>;
-    
+
     // Test base list size
     static_assert(TestBaseList::size() == 1);
-    
+
     // Test base access
     using FirstBase = TestBaseList::template at<0>;
     static_assert(std::is_same_v<FirstBase, BaseStruct>);
@@ -221,7 +221,7 @@ TEST_F(ReflTest, BaseListOperations) {
 // Test TypeInfo and TypeInfoBase
 TEST_F(ReflTest, TypeInfoSystem) {
     using namespace atom::meta;
-    
+
     // Test TypeInfo creation
     using TestTypeInfo = TypeInfo<
         TStr<'T', 'e', 's', 't', 'S', 't', 'r', 'u', 'c', 't'>,
@@ -232,12 +232,12 @@ TEST_F(ReflTest, TypeInfoSystem) {
         AttrList<>,
         BaseList<>
     >;
-    
+
     // Test TypeInfo properties
     static_assert(TestTypeInfo::fields.size() == 2);
     static_assert(TestTypeInfo::attrs.size() == 0);
     static_assert(TestTypeInfo::bases.size() == 0);
-    
+
     // Test name access
     EXPECT_EQ(TestTypeInfo::name.str(), "TestStruct");
 }
@@ -245,7 +245,7 @@ TEST_F(ReflTest, TypeInfoSystem) {
 // Test DFS traversal for inheritance
 TEST_F(ReflTest, DFSTraversal) {
     using namespace atom::meta;
-    
+
     // Create type info with inheritance
     using DerivedTypeInfo = TypeInfo<
         TStr<'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
@@ -253,10 +253,10 @@ TEST_F(ReflTest, DFSTraversal) {
         AttrList<>,
         BaseList<BaseStruct>
     >;
-    
+
     // Test that DFS traversal works (implementation-specific)
     static_assert(DerivedTypeInfo::bases.size() == 1);
-    
+
     using BaseType = DerivedTypeInfo::bases::template at<0>;
     static_assert(std::is_same_v<BaseType, BaseStruct>);
 }
@@ -264,19 +264,19 @@ TEST_F(ReflTest, DFSTraversal) {
 // Test compile-time string manipulation
 TEST_F(ReflTest, CompileTimeStringManipulation) {
     using namespace atom::meta;
-    
+
     // Test string creation from literals
     constexpr auto test_str = TStr<'t', 'e', 's', 't'>{};
-    
+
     // Test string operations
     EXPECT_EQ(test_str.size(), 4);
     EXPECT_EQ(test_str.str(), "test");
     EXPECT_STREQ(test_str.c_str(), "test");
-    
+
     // Test string comparison
     constexpr auto same_str = TStr<'t', 'e', 's', 't'>{};
     constexpr auto diff_str = TStr<'o', 't', 'h', 'e', 'r'>{};
-    
+
     static_assert(test_str == same_str);
     static_assert(test_str != diff_str);
 }
@@ -284,11 +284,11 @@ TEST_F(ReflTest, CompileTimeStringManipulation) {
 // Test template metaprogramming utilities
 TEST_F(ReflTest, TemplateMetaprogrammingUtilities) {
     using namespace atom::meta;
-    
+
     // Test SFINAE techniques (if available)
     static_assert(std::is_same_v<int, int>);
     static_assert(!std::is_same_v<int, double>);
-    
+
     // Test type trait utilities
     static_assert(std::is_integral_v<int>);
     static_assert(std::is_floating_point_v<double>);

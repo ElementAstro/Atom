@@ -23,10 +23,10 @@ protected:
 struct TestStruct {
     int value;
     std::string name;
-    
+
     TestStruct() : value(0), name("default") {}
     TestStruct(int v, const std::string& n) : value(v), name(n) {}
-    
+
     bool operator==(const TestStruct& other) const {
         return value == other.value && name == other.name;
     }
@@ -36,10 +36,10 @@ class TestClass {
 public:
     TestClass() : data_(42) {}
     explicit TestClass(int data) : data_(data) {}
-    
+
     int getData() const { return data_; }
     void setData(int data) { data_ = data; }
-    
+
 private:
     int data_;
 };
@@ -51,19 +51,19 @@ TEST_F(BoxedValueTest, BasicConstruction) {
     EXPECT_TRUE(voidValue.isVoid());
     EXPECT_TRUE(voidValue.isUndef());
     EXPECT_FALSE(voidValue.isNull());
-    
+
     // Integer construction
     atom::meta::BoxedValue intValue(42);
     EXPECT_FALSE(intValue.isVoid());
     EXPECT_FALSE(intValue.isUndef());
     EXPECT_FALSE(intValue.isNull());
     EXPECT_TRUE(intValue.isType<int>());
-    
+
     // String construction
     atom::meta::BoxedValue stringValue(std::string("test"));
     EXPECT_TRUE(stringValue.isType<std::string>());
     EXPECT_FALSE(stringValue.isType<int>());
-    
+
     // Double construction
     atom::meta::BoxedValue doubleValue(3.14);
     EXPECT_TRUE(doubleValue.isType<double>());
@@ -72,23 +72,23 @@ TEST_F(BoxedValueTest, BasicConstruction) {
 // Test copy and move semantics
 TEST_F(BoxedValueTest, CopyMoveSemantics) {
     atom::meta::BoxedValue original(42);
-    
+
     // Copy constructor
     atom::meta::BoxedValue copied(original);
     EXPECT_TRUE(copied.isType<int>());
     EXPECT_EQ(copied.cast<int>(), 42);
-    
+
     // Move constructor
     atom::meta::BoxedValue moved(std::move(original));
     EXPECT_TRUE(moved.isType<int>());
     EXPECT_EQ(moved.cast<int>(), 42);
-    
+
     // Copy assignment
     atom::meta::BoxedValue copyAssigned;
     copyAssigned = copied;
     EXPECT_TRUE(copyAssigned.isType<int>());
     EXPECT_EQ(copyAssigned.cast<int>(), 42);
-    
+
     // Move assignment
     atom::meta::BoxedValue moveAssigned;
     moveAssigned = std::move(copied);
@@ -99,19 +99,19 @@ TEST_F(BoxedValueTest, CopyMoveSemantics) {
 // Test type casting functionality
 TEST_F(BoxedValueTest, TypeCasting) {
     atom::meta::BoxedValue intValue(42);
-    
+
     // Successful cast
     EXPECT_EQ(intValue.cast<int>(), 42);
-    
+
     // Try cast with correct type
     auto tryResult = intValue.tryCast<int>();
     ASSERT_TRUE(tryResult.has_value());
     EXPECT_EQ(tryResult.value(), 42);
-    
+
     // Try cast with incorrect type
     auto tryResultWrong = intValue.tryCast<std::string>();
     EXPECT_FALSE(tryResultWrong.has_value());
-    
+
     // Cast should throw for wrong type
     EXPECT_THROW(intValue.cast<std::string>(), std::bad_any_cast);
 }
@@ -120,7 +120,7 @@ TEST_F(BoxedValueTest, TypeCasting) {
 TEST_F(BoxedValueTest, ConstValues) {
     const int constInt = 100;
     atom::meta::BoxedValue constValue(constInt);
-    
+
     EXPECT_TRUE(constValue.isReadonly());
     EXPECT_TRUE(constValue.isType<int>());
     EXPECT_EQ(constValue.cast<int>(), 100);
@@ -130,10 +130,10 @@ TEST_F(BoxedValueTest, ConstValues) {
 TEST_F(BoxedValueTest, ReferenceHandling) {
     int original = 42;
     atom::meta::BoxedValue refValue(std::ref(original));
-    
+
     EXPECT_TRUE(refValue.isRef());
     EXPECT_TRUE(refValue.isType<int>());
-    
+
     // Modify original and check if reference reflects the change
     original = 100;
     // Note: This behavior depends on implementation details
@@ -142,21 +142,21 @@ TEST_F(BoxedValueTest, ReferenceHandling) {
 // Test attribute system
 TEST_F(BoxedValueTest, AttributeSystem) {
     atom::meta::BoxedValue value(42);
-    
+
     // Set attributes
     value.setAttr("description", atom::meta::BoxedValue(std::string("test integer")));
     value.setAttr("category", atom::meta::BoxedValue(std::string("number")));
-    
+
     // Check if attributes exist
     EXPECT_TRUE(value.hasAttr("description"));
     EXPECT_TRUE(value.hasAttr("category"));
     EXPECT_FALSE(value.hasAttr("nonexistent"));
-    
+
     // Get attributes
     auto descAttr = value.getAttr("description");
     EXPECT_TRUE(descAttr.isType<std::string>());
     EXPECT_EQ(descAttr.cast<std::string>(), "test integer");
-    
+
     // Get non-existent attribute should return void
     auto nonExistentAttr = value.getAttr("nonexistent");
     EXPECT_TRUE(nonExistentAttr.isVoid());
@@ -166,9 +166,9 @@ TEST_F(BoxedValueTest, AttributeSystem) {
 TEST_F(BoxedValueTest, ComplexTypes) {
     TestStruct testStruct(42, "test");
     atom::meta::BoxedValue structValue(testStruct);
-    
+
     EXPECT_TRUE(structValue.isType<TestStruct>());
-    
+
     auto retrievedStruct = structValue.cast<TestStruct>();
     EXPECT_EQ(retrievedStruct.value, 42);
     EXPECT_EQ(retrievedStruct.name, "test");
@@ -178,9 +178,9 @@ TEST_F(BoxedValueTest, ComplexTypes) {
 TEST_F(BoxedValueTest, ContainerTypes) {
     std::vector<int> vec = {1, 2, 3, 4, 5};
     atom::meta::BoxedValue vecValue(vec);
-    
+
     EXPECT_TRUE(vecValue.isType<std::vector<int>>());
-    
+
     auto retrievedVec = vecValue.cast<std::vector<int>>();
     EXPECT_EQ(retrievedVec.size(), 5);
     EXPECT_EQ(retrievedVec[0], 1);
@@ -191,9 +191,9 @@ TEST_F(BoxedValueTest, ContainerTypes) {
 TEST_F(BoxedValueTest, SmartPointers) {
     auto sharedPtr = std::make_shared<TestClass>(100);
     atom::meta::BoxedValue ptrValue(sharedPtr);
-    
+
     EXPECT_TRUE(ptrValue.isType<std::shared_ptr<TestClass>>());
-    
+
     auto retrievedPtr = ptrValue.cast<std::shared_ptr<TestClass>>();
     EXPECT_EQ(retrievedPtr->getData(), 100);
 }
@@ -202,9 +202,9 @@ TEST_F(BoxedValueTest, SmartPointers) {
 TEST_F(BoxedValueTest, SwapFunctionality) {
     atom::meta::BoxedValue value1(42);
     atom::meta::BoxedValue value2(std::string("test"));
-    
+
     value1.swap(value2);
-    
+
     EXPECT_TRUE(value1.isType<std::string>());
     EXPECT_TRUE(value2.isType<int>());
     EXPECT_EQ(value1.cast<std::string>(), "test");
@@ -217,7 +217,7 @@ TEST_F(BoxedValueTest, DebugString) {
     std::string debugStr = intValue.debugString();
     EXPECT_FALSE(debugStr.empty());
     EXPECT_TRUE(debugStr.find("42") != std::string::npos);
-    
+
     atom::meta::BoxedValue stringValue(std::string("test"));
     std::string stringDebugStr = stringValue.debugString();
     EXPECT_FALSE(stringDebugStr.empty());

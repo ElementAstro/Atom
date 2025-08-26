@@ -71,18 +71,18 @@ protected:
 // Test basic debounce functionality
 TEST_F(LodashTest, DebounceBasicFunctionality) {
     auto debounced = Debounce([this]() { incrementCounter(); }, 100ms);
-    
+
     // Call multiple times quickly
     debounced();
     debounced();
     debounced();
-    
+
     // Should not have been called yet
     EXPECT_EQ(callCount.load(), 0);
-    
+
     // Wait for debounce delay
     std::this_thread::sleep_for(150ms);
-    
+
     // Should have been called once
     EXPECT_EQ(callCount.load(), 1);
 }
@@ -90,14 +90,14 @@ TEST_F(LodashTest, DebounceBasicFunctionality) {
 // Test debounce with arguments
 TEST_F(LodashTest, DebounceWithArguments) {
     auto debounced = Debounce([this](int value) { setLastValue(value); }, 100ms);
-    
+
     debounced(10);
     debounced(20);
     debounced(30);
-    
+
     // Wait for debounce delay
     std::this_thread::sleep_for(150ms);
-    
+
     // Should have been called once with the last value
     EXPECT_EQ(callCount.load(), 1);
     EXPECT_EQ(lastCallValue.load(), 30);
@@ -106,21 +106,21 @@ TEST_F(LodashTest, DebounceWithArguments) {
 // Test debounce leading edge
 TEST_F(LodashTest, DebounceLeadingEdge) {
     auto debounced = Debounce([this]() { incrementCounter(); }, 100ms, true);
-    
+
     // First call should execute immediately
     debounced();
     EXPECT_EQ(callCount.load(), 1);
-    
+
     // Subsequent calls should be debounced
     debounced();
     debounced();
-    
+
     // Should still be 1
     EXPECT_EQ(callCount.load(), 1);
-    
+
     // Wait for debounce delay
     std::this_thread::sleep_for(150ms);
-    
+
     // Should still be 1 (no trailing call)
     EXPECT_EQ(callCount.load(), 1);
 }
@@ -128,13 +128,13 @@ TEST_F(LodashTest, DebounceLeadingEdge) {
 // Test debounce with maxWait
 TEST_F(LodashTest, DebounceWithMaxWait) {
     auto debounced = Debounce([this]() { incrementCounter(); }, 200ms, false, 100ms);
-    
+
     // Call repeatedly to trigger maxWait
     for (int i = 0; i < 10; ++i) {
         debounced();
         std::this_thread::sleep_for(50ms);
     }
-    
+
     // Should have been called due to maxWait
     EXPECT_GT(callCount.load(), 0);
 }
@@ -142,13 +142,13 @@ TEST_F(LodashTest, DebounceWithMaxWait) {
 // Test debounce flush
 TEST_F(LodashTest, DebounceFlush) {
     auto debounced = Debounce([this]() { incrementCounter(); }, 200ms);
-    
+
     debounced();
     debounced();
-    
+
     // Should not have been called yet
     EXPECT_EQ(callCount.load(), 0);
-    
+
     // Flush should execute immediately
     debounced.flush();
     EXPECT_EQ(callCount.load(), 1);
@@ -157,16 +157,16 @@ TEST_F(LodashTest, DebounceFlush) {
 // Test debounce reset
 TEST_F(LodashTest, DebounceReset) {
     auto debounced = Debounce([this]() { incrementCounter(); }, 100ms);
-    
+
     debounced();
     debounced();
-    
+
     // Reset should cancel pending calls
     debounced.reset();
-    
+
     // Wait longer than debounce delay
     std::this_thread::sleep_for(150ms);
-    
+
     // Should not have been called
     EXPECT_EQ(callCount.load(), 0);
 }
@@ -174,19 +174,19 @@ TEST_F(LodashTest, DebounceReset) {
 // Test debounce call count
 TEST_F(LodashTest, DebounceCallCount) {
     auto debounced = Debounce([this]() { incrementCounter(); }, 50ms);
-    
+
     EXPECT_EQ(debounced.callCount(), 0);
-    
+
     debounced();
     std::this_thread::sleep_for(100ms);
-    
+
     EXPECT_EQ(debounced.callCount(), 1);
     EXPECT_EQ(callCount.load(), 1);
-    
+
     debounced();
     debounced();
     std::this_thread::sleep_for(100ms);
-    
+
     EXPECT_EQ(debounced.callCount(), 2);
     EXPECT_EQ(callCount.load(), 2);
 }
@@ -198,19 +198,19 @@ TEST_F(LodashTest, DebounceCallCount) {
 // Test basic throttle functionality
 TEST_F(LodashTest, ThrottleBasicFunctionality) {
     auto throttled = Throttle([this]() { incrementCounter(); }, 100ms);
-    
+
     // First call should execute immediately (leading edge)
     throttled();
     EXPECT_EQ(callCount.load(), 1);
-    
+
     // Subsequent calls should be throttled
     throttled();
     throttled();
     EXPECT_EQ(callCount.load(), 1);
-    
+
     // Wait for throttle interval
     std::this_thread::sleep_for(150ms);
-    
+
     // Next call should execute
     throttled();
     EXPECT_EQ(callCount.load(), 2);
@@ -219,17 +219,17 @@ TEST_F(LodashTest, ThrottleBasicFunctionality) {
 // Test throttle with arguments
 TEST_F(LodashTest, ThrottleWithArguments) {
     auto throttled = Throttle([this](int value) { setLastValue(value); }, 100ms);
-    
+
     throttled(10);
     EXPECT_EQ(callCount.load(), 1);
     EXPECT_EQ(lastCallValue.load(), 10);
-    
+
     throttled(20);
     throttled(30);
     EXPECT_EQ(callCount.load(), 1); // Still throttled
-    
+
     std::this_thread::sleep_for(150ms);
-    
+
     throttled(40);
     EXPECT_EQ(callCount.load(), 2);
     EXPECT_EQ(lastCallValue.load(), 40);
@@ -238,14 +238,14 @@ TEST_F(LodashTest, ThrottleWithArguments) {
 // Test throttle without leading edge
 TEST_F(LodashTest, ThrottleNoLeading) {
     auto throttled = Throttle([this]() { incrementCounter(); }, 100ms, false);
-    
+
     // First call should not execute immediately
     throttled();
     EXPECT_EQ(callCount.load(), 0);
-    
+
     // Wait for throttle interval
     std::this_thread::sleep_for(150ms);
-    
+
     // Should execute now
     throttled();
     EXPECT_EQ(callCount.load(), 1);
@@ -254,19 +254,19 @@ TEST_F(LodashTest, ThrottleNoLeading) {
 // Test throttle with trailing edge
 TEST_F(LodashTest, ThrottleWithTrailing) {
     auto throttled = Throttle([this]() { incrementCounter(); }, 100ms, true, true);
-    
+
     // First call executes immediately
     throttled();
     EXPECT_EQ(callCount.load(), 1);
-    
+
     // Multiple calls during throttle period
     throttled();
     throttled();
     throttled();
-    
+
     // Wait for trailing call
     std::this_thread::sleep_for(150ms);
-    
+
     // Should have trailing call
     EXPECT_EQ(callCount.load(), 2);
 }
@@ -274,18 +274,18 @@ TEST_F(LodashTest, ThrottleWithTrailing) {
 // Test throttle cancel
 TEST_F(LodashTest, ThrottleCancel) {
     auto throttled = Throttle([this]() { incrementCounter(); }, 100ms, true, true);
-    
+
     throttled();
     EXPECT_EQ(callCount.load(), 1);
-    
+
     throttled();
     throttled();
-    
+
     // Cancel should prevent trailing call
     throttled.cancel();
-    
+
     std::this_thread::sleep_for(150ms);
-    
+
     // Should not have trailing call
     EXPECT_EQ(callCount.load(), 1);
 }
@@ -293,10 +293,10 @@ TEST_F(LodashTest, ThrottleCancel) {
 // Test throttle reset
 TEST_F(LodashTest, ThrottleReset) {
     auto throttled = Throttle([this]() { incrementCounter(); }, 100ms);
-    
+
     throttled();
     EXPECT_EQ(callCount.load(), 1);
-    
+
     // Reset should allow immediate call
     throttled.reset();
     throttled();
@@ -306,15 +306,15 @@ TEST_F(LodashTest, ThrottleReset) {
 // Test throttle call count
 TEST_F(LodashTest, ThrottleCallCount) {
     auto throttled = Throttle([this]() { incrementCounter(); }, 50ms);
-    
+
     EXPECT_EQ(throttled.callCount(), 0);
-    
+
     throttled();
     EXPECT_EQ(throttled.callCount(), 1);
     EXPECT_EQ(callCount.load(), 1);
-    
+
     std::this_thread::sleep_for(100ms);
-    
+
     throttled();
     EXPECT_EQ(throttled.callCount(), 2);
     EXPECT_EQ(callCount.load(), 2);

@@ -25,7 +25,7 @@ class SerializationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         component_ = std::make_shared<TestSerializationComponent>("SerializationTestComponent");
-        
+
         // Set up default options
         options_.format = SerializationFormat::JSON;
         options_.includeMetadata = true;
@@ -47,7 +47,7 @@ protected:
     void SetUp() override {
         serializer_ = std::make_unique<JsonSerializer>();
         component_ = std::make_shared<TestSerializationComponent>("JsonTestComponent");
-        
+
         options_.format = SerializationFormat::JSON;
         options_.includeMetadata = true;
         options_.includeVariables = true;
@@ -65,7 +65,7 @@ protected:
     void SetUp() override {
         serializer_ = std::make_unique<BinarySerializer>();
         component_ = std::make_shared<TestSerializationComponent>("BinaryTestComponent");
-        
+
         options_.format = SerializationFormat::Binary;
         options_.includeMetadata = true;
         options_.includeVariables = true;
@@ -120,7 +120,7 @@ TEST(SerializationResultTest, SuccessfulResult) {
     result.data = {0x01, 0x02, 0x03, 0x04};
     result.originalSize = 100;
     result.compressedSize = 80;
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_EQ(result.data.size(), 4);
     EXPECT_EQ(result.originalSize, 100);
@@ -144,7 +144,7 @@ TEST(DeserializationResultTest, SuccessfulResult) {
     result.success = true;
     result.component = std::make_shared<Component>("TestComponent");
     result.version = 1;
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_NE(result.component, nullptr);
     EXPECT_EQ(result.version, 1);
@@ -166,12 +166,12 @@ TEST_F(JsonSerializerTest, GetFormatName) {
 
 TEST_F(JsonSerializerTest, SerializeComponent) {
     auto result = serializer_->serialize(*component_, options_);
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_FALSE(result.data.empty());
     EXPECT_TRUE(result.errorMessage.empty());
     EXPECT_GT(result.originalSize, 0);
-    
+
     // Verify it's valid JSON by checking for basic JSON structure
     std::string jsonStr(result.data.begin(), result.data.end());
     EXPECT_NE(jsonStr.find("{"), std::string::npos);
@@ -181,10 +181,10 @@ TEST_F(JsonSerializerTest, SerializeComponent) {
 TEST_F(JsonSerializerTest, SerializeWithPrettyPrint) {
     options_.prettyPrint = true;
     auto result = serializer_->serialize(*component_, options_);
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_FALSE(result.data.empty());
-    
+
     std::string jsonStr(result.data.begin(), result.data.end());
     // Pretty printed JSON should contain newlines and indentation
     EXPECT_NE(jsonStr.find("\n"), std::string::npos);
@@ -193,7 +193,7 @@ TEST_F(JsonSerializerTest, SerializeWithPrettyPrint) {
 TEST_F(JsonSerializerTest, SerializeWithoutVariables) {
     options_.includeVariables = false;
     auto result = serializer_->serialize(*component_, options_);
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_FALSE(result.data.empty());
 }
@@ -201,7 +201,7 @@ TEST_F(JsonSerializerTest, SerializeWithoutVariables) {
 TEST_F(JsonSerializerTest, SerializeWithoutMetadata) {
     options_.includeMetadata = false;
     auto result = serializer_->serialize(*component_, options_);
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_FALSE(result.data.empty());
 }
@@ -210,14 +210,14 @@ TEST_F(JsonSerializerTest, DeserializeComponent) {
     // First serialize a component
     auto serializeResult = serializer_->serialize(*component_, options_);
     ASSERT_TRUE(serializeResult.success);
-    
+
     // Then deserialize it
     auto deserializeResult = serializer_->deserialize(serializeResult.data, options_);
-    
+
     EXPECT_TRUE(deserializeResult.success);
     EXPECT_NE(deserializeResult.component, nullptr);
     EXPECT_TRUE(deserializeResult.errorMessage.empty());
-    
+
     if (deserializeResult.component) {
         EXPECT_EQ(deserializeResult.component->getName(), "JsonTestComponent");
     }
@@ -225,9 +225,9 @@ TEST_F(JsonSerializerTest, DeserializeComponent) {
 
 TEST_F(JsonSerializerTest, DeserializeInvalidData) {
     std::vector<uint8_t> invalidData = {'i', 'n', 'v', 'a', 'l', 'i', 'd'};
-    
+
     auto result = serializer_->deserialize(invalidData, options_);
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.component, nullptr);
     EXPECT_FALSE(result.errorMessage.empty());
@@ -237,15 +237,15 @@ TEST_F(JsonSerializerTest, RoundTripSerialization) {
     // Serialize
     auto serializeResult = serializer_->serialize(*component_, options_);
     ASSERT_TRUE(serializeResult.success);
-    
+
     // Deserialize
     auto deserializeResult = serializer_->deserialize(serializeResult.data, options_);
     ASSERT_TRUE(deserializeResult.success);
     ASSERT_NE(deserializeResult.component, nullptr);
-    
+
     // Verify component properties are preserved
     EXPECT_EQ(deserializeResult.component->getName(), component_->getName());
-    
+
     // Verify variables are preserved (if included)
     if (options_.includeVariables) {
         EXPECT_TRUE(deserializeResult.component->hasVariable("intValue"));
@@ -269,12 +269,12 @@ TEST_F(BinarySerializerTest, GetFormatName) {
 
 TEST_F(BinarySerializerTest, SerializeComponent) {
     auto result = serializer_->serialize(*component_, options_);
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_FALSE(result.data.empty());
     EXPECT_TRUE(result.errorMessage.empty());
     EXPECT_GT(result.originalSize, 0);
-    
+
     // Verify binary header magic number
     if (result.data.size() >= 4) {
         uint32_t magic = *reinterpret_cast<const uint32_t*>(result.data.data());
@@ -285,10 +285,10 @@ TEST_F(BinarySerializerTest, SerializeComponent) {
 TEST_F(BinarySerializerTest, SerializeWithCompression) {
     options_.enableCompression = true;
     auto result = serializer_->serialize(*component_, options_);
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_FALSE(result.data.empty());
-    
+
     // With compression, compressed size should be reported
     if (result.success && options_.enableCompression) {
         EXPECT_GT(result.compressedSize, 0);
@@ -300,10 +300,10 @@ TEST_F(BinarySerializerTest, DeserializeComponent) {
     // First serialize a component
     auto serializeResult = serializer_->serialize(*component_, options_);
     ASSERT_TRUE(serializeResult.success);
-    
+
     // Then deserialize it
     auto deserializeResult = serializer_->deserialize(serializeResult.data, options_);
-    
+
     EXPECT_TRUE(deserializeResult.success);
     EXPECT_NE(deserializeResult.component, nullptr);
     EXPECT_TRUE(deserializeResult.errorMessage.empty());
@@ -311,9 +311,9 @@ TEST_F(BinarySerializerTest, DeserializeComponent) {
 
 TEST_F(BinarySerializerTest, DeserializeInvalidData) {
     std::vector<uint8_t> invalidData = {0x00, 0x01, 0x02, 0x03}; // Invalid magic
-    
+
     auto result = serializer_->deserialize(invalidData, options_);
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_EQ(result.component, nullptr);
     EXPECT_FALSE(result.errorMessage.empty());
@@ -332,16 +332,16 @@ TEST_F(SerializationManagerTest, Singleton) {
 TEST_F(SerializationManagerTest, RegisterSerializer) {
     auto customSerializer = std::make_unique<JsonSerializer>();
     manager_->registerSerializer(SerializationFormat::Custom, std::move(customSerializer));
-    
+
     EXPECT_TRUE(manager_->hasSerializer(SerializationFormat::Custom));
 }
 
 TEST_F(SerializationManagerTest, SerializeWithManager) {
     SerializationOptions options;
     options.format = SerializationFormat::JSON;
-    
+
     auto result = manager_->serialize(*component_, options);
-    
+
     EXPECT_TRUE(result.success);
     EXPECT_FALSE(result.data.empty());
 }
@@ -349,14 +349,14 @@ TEST_F(SerializationManagerTest, SerializeWithManager) {
 TEST_F(SerializationManagerTest, DeserializeWithManager) {
     SerializationOptions options;
     options.format = SerializationFormat::JSON;
-    
+
     // First serialize
     auto serializeResult = manager_->serialize(*component_, options);
     ASSERT_TRUE(serializeResult.success);
-    
+
     // Then deserialize
     auto deserializeResult = manager_->deserialize(serializeResult.data, options);
-    
+
     EXPECT_TRUE(deserializeResult.success);
     EXPECT_NE(deserializeResult.component, nullptr);
 }
@@ -364,9 +364,9 @@ TEST_F(SerializationManagerTest, DeserializeWithManager) {
 TEST_F(SerializationManagerTest, UnsupportedFormat) {
     SerializationOptions options;
     options.format = static_cast<SerializationFormat>(99); // Invalid format
-    
+
     auto result = manager_->serialize(*component_, options);
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_FALSE(result.errorMessage.empty());
 }
@@ -380,9 +380,9 @@ TEST(SerializationErrorTest, EmptyComponent) {
     Component emptyComponent("");
     SerializationOptions options;
     options.format = SerializationFormat::JSON;
-    
+
     auto result = serializer.serialize(emptyComponent, options);
-    
+
     // Should handle empty component gracefully
     EXPECT_TRUE(result.success || !result.errorMessage.empty());
 }
@@ -391,7 +391,7 @@ TEST(SerializationErrorTest, NullPointerHandling) {
     // Test that the system handles null pointers gracefully
     DeserializationResult result;
     result.component = nullptr;
-    
+
     EXPECT_EQ(result.component, nullptr);
     EXPECT_FALSE(result.success);
 }

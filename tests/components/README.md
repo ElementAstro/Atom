@@ -95,11 +95,11 @@ protected:
     void SetUp() override {
         // Test setup
     }
-    
+
     void TearDown() override {
         // Test cleanup
     }
-    
+
     // Test helper methods and data
 };
 

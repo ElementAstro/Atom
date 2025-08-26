@@ -51,33 +51,33 @@ protected:
         LockType lock;
         std::atomic<int> counter{0};
         std::atomic<bool> ready{false};
-        
+
         std::vector<std::thread> threads;
         const int numThreads = 10;
         const int incrementsPerThread = 100;
-        
+
         for (int i = 0; i < numThreads; ++i) {
             threads.emplace_back([&lock, &counter, &ready, incrementsPerThread]() {
                 while (!ready.load()) {
                     std::this_thread::yield();
                 }
-                
+
                 for (int j = 0; j < incrementsPerThread; ++j) {
                     std::lock_guard<LockType> guard(lock);
                     ++counter;
                 }
             });
         }
-        
+
         ready.store(true);
-        
+
         for (auto& thread : threads) {
             thread.join();
         }
-        
+
         EXPECT_EQ(counter.load(), numThreads * incrementsPerThread);
     }
-    
+
     // Helper function to test tryLock functionality
     template<typename LockType>
     void testTryLockFunctionality() {
@@ -154,31 +154,31 @@ TEST_F(LockTest, CountingSemaphoreBasicFunctionality) {
     CountingSemaphore<5> semaphore(3); // Allow 3 concurrent accesses
     std::atomic<int> activeCount{0};
     std::atomic<int> maxActiveCount{0};
-    
+
     std::vector<std::thread> threads;
     const int numThreads = 10;
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&semaphore, &activeCount, &maxActiveCount]() {
             semaphore.acquire();
-            
+
             int current = activeCount.fetch_add(1) + 1;
             int expected = maxActiveCount.load();
             while (current > expected && !maxActiveCount.compare_exchange_weak(expected, current)) {
                 expected = maxActiveCount.load();
             }
-            
+
             std::this_thread::sleep_for(10ms);
-            
+
             activeCount.fetch_sub(1);
             semaphore.release();
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     // Should never have more than 3 active at once
     EXPECT_LE(maxActiveCount.load(), 3);
 }
@@ -187,10 +187,10 @@ TEST_F(LockTest, CountingSemaphoreBasicFunctionality) {
 TEST_F(LockTest, LockFactoryCreation) {
     auto spinlock = LockFactory::createLock(LockFactory::LockType::SPINLOCK);
     EXPECT_NE(spinlock, nullptr);
-    
+
     auto ticketSpinlock = LockFactory::createLock(LockFactory::LockType::TICKET_SPINLOCK);
     EXPECT_NE(ticketSpinlock, nullptr);
-    
+
     auto adaptiveSpinlock = LockFactory::createLock(LockFactory::LockType::ADAPTIVE_SPINLOCK);
     EXPECT_NE(adaptiveSpinlock, nullptr);
 }
@@ -199,14 +199,14 @@ TEST_F(LockTest, LockFactoryCreation) {
 TEST_F(LockTest, LockPerformanceComparison) {
     const int numOperations = 10000;
     std::atomic<int> counter{0};
-    
+
     // Test Spinlock performance
     {
         Spinlock lock;
         counter.store(0);
-        
+
         auto start = std::chrono::high_resolution_clock::now();
-        
+
         std::vector<std::thread> threads;
         for (int i = 0; i < 4; ++i) {
             threads.emplace_back([&lock, &counter, numOperations]() {
@@ -216,14 +216,14 @@ TEST_F(LockTest, LockPerformanceComparison) {
                 }
             });
         }
-        
+
         for (auto& thread : threads) {
             thread.join();
         }
-        
+
         auto end = std::chrono::high_resolution_clock::now();
         auto spinlockTime = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-        
+
         EXPECT_EQ(counter.load(), 4 * numOperations);
         EXPECT_GT(spinlockTime.count(), 0); // Just ensure it took some time
     }

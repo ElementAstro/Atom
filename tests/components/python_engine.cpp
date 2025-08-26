@@ -16,7 +16,7 @@ protected:
         config.memoryLimit = 1024 * 1024; // 1MB
         config.executionTimeout = std::chrono::seconds(10);
         config.enableDebug = true;
-        
+
         engine_ = std::make_unique<PythonEngine>();
         bool initResult = engine_->initialize(config);
         ASSERT_TRUE(initResult) << "Failed to initialize Python engine";
@@ -41,11 +41,11 @@ TEST_F(PythonEngineTest, GetLanguage) {
 
 TEST_F(PythonEngineTest, ExecuteSimplePythonScript) {
     std::string script = "result = 2 + 3";
-    
+
     auto result = engine_->executeScript(script);
-    
+
     EXPECT_TRUE(result.success);
-    
+
     // Get the result variable
     auto resultValue = engine_->getGlobal("result");
     if (resultValue.has_value()) {
@@ -58,13 +58,13 @@ TEST_F(PythonEngineTest, ExecutePythonFunction) {
 def add(a, b):
     return a + b
 )";
-    
+
     auto defineResult = engine_->executeScript(script);
     ASSERT_TRUE(defineResult.success);
-    
+
     std::vector<ScriptValue> args = {ScriptValue(10), ScriptValue(20)};
     auto callResult = engine_->callFunction("add", args);
-    
+
     EXPECT_TRUE(callResult.success);
     if (callResult.success) {
         EXPECT_EQ(callResult.returnValue.get<int64_t>(), 30);
@@ -75,10 +75,10 @@ TEST_F(PythonEngineTest, PythonListHandling) {
     std::string script = R"(
 result = [1, 2, 3, 4, 5]
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto listValue = engine_->getGlobal("result");
     if (listValue.has_value()) {
         // Should return an array
@@ -91,10 +91,10 @@ TEST_F(PythonEngineTest, PythonDictHandling) {
     std::string script = R"(
 result = {'x': 10, 'y': 20, 'z': 30}
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto dictValue = engine_->getGlobal("result");
     if (dictValue.has_value()) {
         // Should return a dictionary/object
@@ -107,10 +107,10 @@ TEST_F(PythonEngineTest, PythonStringOperations) {
     std::string script = R"(
 result = "Hello, " + "World!"
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto stringValue = engine_->getGlobal("result");
     if (stringValue.has_value()) {
         EXPECT_EQ(stringValue->get<std::string>(), "Hello, World!");
@@ -122,10 +122,10 @@ TEST_F(PythonEngineTest, PythonMathOperations) {
 import math
 result = math.sqrt(16) + math.pi
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto mathValue = engine_->getGlobal("result");
     if (mathValue.has_value()) {
         double expected = 4.0 + 3.14159265359; // Approximate pi
@@ -137,17 +137,17 @@ TEST_F(PythonEngineTest, PythonGlobalVariables) {
     // Set a global variable
     ScriptValue value(42);
     engine_->setGlobal("test_global", value);
-    
+
     // Use it in a script
     std::string script = "result = test_global * 2";
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto resultValue = engine_->getGlobal("result");
     if (resultValue.has_value()) {
         EXPECT_EQ(resultValue->get<int64_t>(), 84);
     }
-    
+
     // Get the global variable back
     auto globalValue = engine_->getGlobal("test_global");
     EXPECT_TRUE(globalValue.has_value());
@@ -158,9 +158,9 @@ TEST_F(PythonEngineTest, PythonGlobalVariables) {
 
 TEST_F(PythonEngineTest, PythonErrorHandling) {
     std::string invalidScript = "this is not valid python syntax !!!";
-    
+
     auto result = engine_->executeScript(invalidScript);
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_FALSE(result.errorMessage.empty());
 }
@@ -174,9 +174,9 @@ def divide(a, b):
 
 result = divide(10, 0)
 )";
-    
+
     auto result = engine_->executeScript(script);
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_FALSE(result.errorMessage.empty());
     EXPECT_NE(result.errorMessage.find("Division by zero"), std::string::npos);
@@ -185,7 +185,7 @@ result = divide(10, 0)
 TEST_F(PythonEngineTest, PythonFileExecution) {
     // Test file execution (should fail for nonexistent file)
     auto result = engine_->executeFile("nonexistent_file.py");
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_FALSE(result.errorMessage.empty());
 }
@@ -195,20 +195,20 @@ TEST_F(PythonEngineTest, PythonClassDefinition) {
 class TestClass:
     def __init__(self, value):
         self.value = value
-    
+
     def get_value(self):
         return self.value
-    
+
     def set_value(self, value):
         self.value = value
 
 obj = TestClass(42)
 result = obj.get_value()
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto resultValue = engine_->getGlobal("result");
     if (resultValue.has_value()) {
         EXPECT_EQ(resultValue->get<int64_t>(), 42);
@@ -219,15 +219,15 @@ TEST_F(PythonEngineTest, PythonListComprehension) {
     std::string script = R"(
 result = [x * x for x in range(5)]
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto listValue = engine_->getGlobal("result");
     if (listValue.has_value()) {
         using ArrayType = std::vector<ScriptValue>;
         EXPECT_TRUE(listValue->holds<ArrayType>());
-        
+
         const auto& array = listValue->get<ArrayType>();
         EXPECT_EQ(array.size(), 5);
         // Should contain [0, 1, 4, 9, 16]
@@ -251,9 +251,9 @@ result = []
 for i in range(1000):
     result.append(f"string_{i}")
 )";
-    
+
     auto result = engine_->executeScript(script);
-    
+
     // Should either succeed or fail gracefully due to memory limits
     EXPECT_TRUE(result.success || !result.errorMessage.empty());
 }
@@ -268,10 +268,10 @@ def factorial(n):
 
 result = factorial(10)
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto factorialValue = engine_->getGlobal("result");
     if (factorialValue.has_value()) {
         EXPECT_EQ(factorialValue->get<int64_t>(), 3628800); // 10!
@@ -291,10 +291,10 @@ def create_counter():
 counter = create_counter()
 result = counter() + counter() + counter()
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto closureValue = engine_->getGlobal("result");
     if (closureValue.has_value()) {
         EXPECT_EQ(closureValue->get<int64_t>(), 6); // 1 + 2 + 3
@@ -312,15 +312,15 @@ def fibonacci():
 fib = fibonacci()
 result = [next(fib) for _ in range(5)]
 )";
-    
+
     auto result = engine_->executeScript(script);
     ASSERT_TRUE(result.success);
-    
+
     auto fibValue = engine_->getGlobal("result");
     if (fibValue.has_value()) {
         using ArrayType = std::vector<ScriptValue>;
         EXPECT_TRUE(fibValue->holds<ArrayType>());
-        
+
         const auto& array = fibValue->get<ArrayType>();
         EXPECT_EQ(array.size(), 5);
         // Should contain [0, 1, 1, 2, 3]
@@ -340,9 +340,9 @@ result = [next(fib) for _ in range(5)]
 
 TEST_F(PythonEngineTest, PythonSyntaxError) {
     std::string script = "def incomplete(";
-    
+
     auto result = engine_->executeScript(script);
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_FALSE(result.errorMessage.empty());
 }
@@ -352,9 +352,9 @@ TEST_F(PythonEngineTest, PythonAttributeError) {
 obj = None
 result = obj.field
 )";
-    
+
     auto result = engine_->executeScript(script);
-    
+
     EXPECT_FALSE(result.success);
     EXPECT_FALSE(result.errorMessage.empty());
 }
@@ -368,9 +368,9 @@ while True:
         break
 result = count
 )";
-    
+
     auto result = engine_->executeScript(script);
-    
+
     // Should either complete or timeout
     EXPECT_TRUE(result.success || !result.errorMessage.empty());
 }

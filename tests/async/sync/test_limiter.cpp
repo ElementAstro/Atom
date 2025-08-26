@@ -49,17 +49,17 @@ protected:
 TEST_F(RateLimiterTest, BasicRateLimiting) {
     RateLimiter limiter;
     limiter.setFunctionLimit("test_function", 5, 1s);
-    
+
     auto start = std::chrono::steady_clock::now();
-    
+
     // Should allow first 5 requests immediately
     for (int i = 0; i < 5; ++i) {
         EXPECT_TRUE(limiter.tryAcquire("test_function"));
     }
-    
+
     // 6th request should be blocked
     EXPECT_FALSE(limiter.tryAcquire("test_function"));
-    
+
     auto elapsed = std::chrono::steady_clock::now() - start;
     EXPECT_LT(elapsed, 100ms); // Should be very fast for first 5
 }
@@ -67,22 +67,22 @@ TEST_F(RateLimiterTest, BasicRateLimiting) {
 TEST_F(RateLimiterTest, WaitForAvailability) {
     RateLimiter limiter;
     limiter.setFunctionLimit("test_function", 2, 1s);
-    
+
     // Use up the limit
     EXPECT_TRUE(limiter.tryAcquire("test_function"));
     EXPECT_TRUE(limiter.tryAcquire("test_function"));
     EXPECT_FALSE(limiter.tryAcquire("test_function"));
-    
+
     auto start = std::chrono::steady_clock::now();
-    
+
     // This should wait until the time window resets
     std::future<bool> future = std::async(std::launch::async, [&limiter]() {
         return limiter.waitForAvailability("test_function", 2s);
     });
-    
+
     bool result = future.get();
     auto elapsed = std::chrono::steady_clock::now() - start;
-    
+
     EXPECT_TRUE(result);
     EXPECT_GE(elapsed, 900ms); // Should wait close to 1 second
     EXPECT_LT(elapsed, 1200ms); // But not too much longer
@@ -92,13 +92,13 @@ TEST_F(RateLimiterTest, MultipleFunction) {
     RateLimiter limiter;
     limiter.setFunctionLimit("function1", 3, 1s);
     limiter.setFunctionLimit("function2", 5, 1s);
-    
+
     // Test function1 limit
     for (int i = 0; i < 3; ++i) {
         EXPECT_TRUE(limiter.tryAcquire("function1"));
     }
     EXPECT_FALSE(limiter.tryAcquire("function1"));
-    
+
     // Test function2 limit (should be independent)
     for (int i = 0; i < 5; ++i) {
         EXPECT_TRUE(limiter.tryAcquire("function2"));
@@ -109,13 +109,13 @@ TEST_F(RateLimiterTest, MultipleFunction) {
 TEST_F(RateLimiterTest, ConcurrentAccess) {
     RateLimiter limiter;
     limiter.setFunctionLimit("concurrent_test", 10, 1s);
-    
+
     std::atomic<int> successCount{0};
     std::atomic<int> failureCount{0};
-    
+
     std::vector<std::thread> threads;
     const int numThreads = 20;
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&limiter, &successCount, &failureCount]() {
             if (limiter.tryAcquire("concurrent_test")) {
@@ -125,11 +125,11 @@ TEST_F(RateLimiterTest, ConcurrentAccess) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(successCount.load(), 10); // Should allow exactly 10
     EXPECT_EQ(failureCount.load(), 10); // Should reject exactly 10
 }
@@ -137,15 +137,15 @@ TEST_F(RateLimiterTest, ConcurrentAccess) {
 TEST_F(RateLimiterTest, TimeWindowReset) {
     RateLimiter limiter;
     limiter.setFunctionLimit("reset_test", 2, 500ms);
-    
+
     // Use up the limit
     EXPECT_TRUE(limiter.tryAcquire("reset_test"));
     EXPECT_TRUE(limiter.tryAcquire("reset_test"));
     EXPECT_FALSE(limiter.tryAcquire("reset_test"));
-    
+
     // Wait for time window to reset
     std::this_thread::sleep_for(600ms);
-    
+
     // Should be able to acquire again
     EXPECT_TRUE(limiter.tryAcquire("reset_test"));
     EXPECT_TRUE(limiter.tryAcquire("reset_test"));
@@ -155,12 +155,12 @@ TEST_F(RateLimiterTest, TimeWindowReset) {
 TEST_F(RateLimiterTest, GetCurrentUsage) {
     RateLimiter limiter;
     limiter.setFunctionLimit("usage_test", 5, 1s);
-    
+
     EXPECT_EQ(limiter.getCurrentUsage("usage_test"), 0);
-    
+
     limiter.tryAcquire("usage_test");
     EXPECT_EQ(limiter.getCurrentUsage("usage_test"), 1);
-    
+
     limiter.tryAcquire("usage_test");
     limiter.tryAcquire("usage_test");
     EXPECT_EQ(limiter.getCurrentUsage("usage_test"), 3);
@@ -169,12 +169,12 @@ TEST_F(RateLimiterTest, GetCurrentUsage) {
 TEST_F(RateLimiterTest, GetRemainingRequests) {
     RateLimiter limiter;
     limiter.setFunctionLimit("remaining_test", 5, 1s);
-    
+
     EXPECT_EQ(limiter.getRemainingRequests("remaining_test"), 5);
-    
+
     limiter.tryAcquire("remaining_test");
     EXPECT_EQ(limiter.getRemainingRequests("remaining_test"), 4);
-    
+
     limiter.tryAcquire("remaining_test");
     limiter.tryAcquire("remaining_test");
     EXPECT_EQ(limiter.getRemainingRequests("remaining_test"), 2);
@@ -183,15 +183,15 @@ TEST_F(RateLimiterTest, GetRemainingRequests) {
 TEST_F(RateLimiterTest, ResetFunction) {
     RateLimiter limiter;
     limiter.setFunctionLimit("reset_function_test", 2, 1s);
-    
+
     // Use up the limit
     EXPECT_TRUE(limiter.tryAcquire("reset_function_test"));
     EXPECT_TRUE(limiter.tryAcquire("reset_function_test"));
     EXPECT_FALSE(limiter.tryAcquire("reset_function_test"));
-    
+
     // Reset the function
     limiter.resetFunction("reset_function_test");
-    
+
     // Should be able to acquire again immediately
     EXPECT_TRUE(limiter.tryAcquire("reset_function_test"));
     EXPECT_TRUE(limiter.tryAcquire("reset_function_test"));
@@ -201,11 +201,11 @@ TEST_F(RateLimiterTest, ResetFunction) {
 TEST_F(RateLimiterTest, RemoveFunction) {
     RateLimiter limiter;
     limiter.setFunctionLimit("remove_test", 2, 1s);
-    
+
     EXPECT_TRUE(limiter.tryAcquire("remove_test"));
-    
+
     limiter.removeFunction("remove_test");
-    
+
     // After removal, function should not be limited
     EXPECT_EQ(limiter.getCurrentUsage("remove_test"), 0);
     EXPECT_EQ(limiter.getRemainingRequests("remove_test"), 0);
@@ -213,21 +213,21 @@ TEST_F(RateLimiterTest, RemoveFunction) {
 
 TEST_F(RateLimiterTest, EdgeCaseZeroLimit) {
     RateLimiter limiter;
-    
+
     // Setting zero limit should throw
     EXPECT_THROW(limiter.setFunctionLimit("zero_test", 0, 1s), std::invalid_argument);
 }
 
 TEST_F(RateLimiterTest, EdgeCaseZeroTimeWindow) {
     RateLimiter limiter;
-    
+
     // Setting zero time window should throw
     EXPECT_THROW(limiter.setFunctionLimit("zero_time_test", 5, 0s), std::invalid_argument);
 }
 
 TEST_F(RateLimiterTest, NonExistentFunction) {
     RateLimiter limiter;
-    
+
     // Trying to acquire from non-existent function should return false
     EXPECT_FALSE(limiter.tryAcquire("non_existent"));
     EXPECT_EQ(limiter.getCurrentUsage("non_existent"), 0);
@@ -236,26 +236,26 @@ TEST_F(RateLimiterTest, NonExistentFunction) {
 
 TEST_F(RateLimiterTest, BulkFunctionLimits) {
     RateLimiter limiter;
-    
+
     std::vector<std::pair<std::string_view, RateLimiter::Settings>> settings = {
         {"func1", {3, 1s}},
         {"func2", {5, 2s}},
         {"func3", {10, 500ms}}
     };
-    
+
     limiter.setFunctionLimits(settings);
-    
+
     // Test each function's limit
     for (int i = 0; i < 3; ++i) {
         EXPECT_TRUE(limiter.tryAcquire("func1"));
     }
     EXPECT_FALSE(limiter.tryAcquire("func1"));
-    
+
     for (int i = 0; i < 5; ++i) {
         EXPECT_TRUE(limiter.tryAcquire("func2"));
     }
     EXPECT_FALSE(limiter.tryAcquire("func2"));
-    
+
     for (int i = 0; i < 10; ++i) {
         EXPECT_TRUE(limiter.tryAcquire("func3"));
     }
@@ -265,14 +265,14 @@ TEST_F(RateLimiterTest, BulkFunctionLimits) {
 TEST_F(RateLimiterTest, HighConcurrencyStressTest) {
     RateLimiter limiter;
     limiter.setFunctionLimit("stress_test", 100, 1s);
-    
+
     std::atomic<int> totalSuccesses{0};
     std::atomic<int> totalFailures{0};
-    
+
     std::vector<std::thread> threads;
     const int numThreads = 50;
     const int attemptsPerThread = 10;
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&limiter, &totalSuccesses, &totalFailures, attemptsPerThread]() {
             for (int j = 0; j < attemptsPerThread; ++j) {
@@ -285,11 +285,11 @@ TEST_F(RateLimiterTest, HighConcurrencyStressTest) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(totalSuccesses.load() + totalFailures.load(), numThreads * attemptsPerThread);
     EXPECT_LE(totalSuccesses.load(), 100); // Should not exceed the limit
     EXPECT_GE(totalSuccesses.load(), 90);  // Should be close to the limit

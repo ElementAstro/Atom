@@ -172,37 +172,37 @@ public:
         setupMemoryTracking();
         setupPerformanceCounters();
     }
-    
+
     void TearDown() override {
         // Global test cleanup
         cleanupPerformanceCounters();
         cleanupMemoryTracking();
         cleanupLogging();
     }
-    
+
 private:
     void setupLogging() {
         // Configure logging for tests
         // Implementation depends on logging framework
     }
-    
+
     void cleanupLogging() {
         // Cleanup logging resources
     }
-    
+
     void setupMemoryTracking() {
         // Setup memory leak detection
         // Implementation depends on memory tracking tools
     }
-    
+
     void cleanupMemoryTracking() {
         // Report memory leaks if any
     }
-    
+
     void setupPerformanceCounters() {
         // Initialize performance monitoring
     }
-    
+
     void cleanupPerformanceCounters() {
         // Report performance statistics
     }
@@ -222,9 +222,9 @@ bool runWithTimeout(Func&& func, std::chrono::milliseconds timeout) {
         func();
         completed = true;
     });
-    
+
     std::this_thread::sleep_for(timeout);
-    
+
     if (completed) {
         worker.join();
         return true;
@@ -238,29 +238,29 @@ bool runWithTimeout(Func&& func, std::chrono::milliseconds timeout) {
 class RandomDataGenerator {
 public:
     RandomDataGenerator() : rng_(std::random_device{}()) {}
-    
+
     int randomInt(int min = 0, int max = 100) {
         std::uniform_int_distribution<int> dist(min, max);
         return dist(rng_);
     }
-    
+
     double randomDouble(double min = 0.0, double max = 1.0) {
         std::uniform_real_distribution<double> dist(min, max);
         return dist(rng_);
     }
-    
+
     std::string randomString(size_t length = 10) {
         const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         std::string result;
         result.reserve(length);
-        
+
         std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
         for (size_t i = 0; i < length; ++i) {
             result += chars[dist(rng_)];
         }
         return result;
     }
-    
+
 private:
     std::mt19937 rng_;
 };

@@ -38,7 +38,7 @@ class AsyncExecutorTest : public atom::async::test::AsyncTestBase {
 protected:
     void SetUp() override {
         AsyncTestBase::SetUp();
-        
+
         // Create a test configuration
         config.minThreads = 2;
         config.maxThreads = 4;
@@ -52,13 +52,13 @@ protected:
     }
 
     AsyncExecutor::Configuration config;
-    
+
     // Helper functions for testing
     int simpleTask(int value, int delay_ms = 10) {
         std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         return value * 2;
     }
-    
+
     void voidTask(std::atomic<int>& counter, int delay_ms = 10) {
         std::this_thread::sleep_for(std::chrono::milliseconds(delay_ms));
         counter.fetch_add(1);
@@ -68,12 +68,12 @@ protected:
 // Test basic executor construction and lifecycle
 TEST_F(AsyncExecutorTest, BasicLifecycle) {
     AsyncExecutor executor(config);
-    
+
     EXPECT_FALSE(executor.isRunning());
-    
+
     executor.start();
     EXPECT_TRUE(executor.isRunning());
-    
+
     executor.stop();
     EXPECT_FALSE(executor.isRunning());
 }
@@ -81,14 +81,14 @@ TEST_F(AsyncExecutorTest, BasicLifecycle) {
 // Test executor with default configuration
 TEST_F(AsyncExecutorTest, DefaultConfiguration) {
     AsyncExecutor executor;
-    
+
     executor.start();
     EXPECT_TRUE(executor.isRunning());
-    
+
     // Should be able to execute tasks
     auto future = executor.execute([]() { return 42; });
     EXPECT_EQ(future.get(), 42);
-    
+
     executor.stop();
 }
 
@@ -96,19 +96,19 @@ TEST_F(AsyncExecutorTest, DefaultConfiguration) {
 TEST_F(AsyncExecutorTest, BasicTaskExecution) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     // Test task with return value
     auto future = executor.execute([this]() { return simpleTask(5); });
     EXPECT_EQ(future.get(), 10);
-    
+
     // Test void task
     std::atomic<int> counter{0};
     executor.execute([this, &counter]() { voidTask(counter); });
-    
+
     // Wait a bit for task completion
     std::this_thread::sleep_for(50ms);
     EXPECT_EQ(counter.load(), 1);
-    
+
     executor.stop();
 }
 
@@ -117,48 +117,48 @@ TEST_F(AsyncExecutorTest, TaskPriorities) {
     // Use single thread to ensure priority ordering
     config.minThreads = 1;
     config.maxThreads = 1;
-    
+
     AsyncExecutor executor(config);
     executor.start();
-    
+
     std::vector<int> executionOrder;
     std::mutex orderMutex;
-    
+
     // Submit tasks in reverse priority order
     auto lowFuture = executor.execute([&executionOrder, &orderMutex]() {
         std::lock_guard<std::mutex> lock(orderMutex);
         executionOrder.push_back(1);
         return 1;
     }, AsyncExecutor::Priority::Low);
-    
+
     auto normalFuture = executor.execute([&executionOrder, &orderMutex]() {
         std::lock_guard<std::mutex> lock(orderMutex);
         executionOrder.push_back(2);
         return 2;
     }, AsyncExecutor::Priority::Normal);
-    
+
     auto highFuture = executor.execute([&executionOrder, &orderMutex]() {
         std::lock_guard<std::mutex> lock(orderMutex);
         executionOrder.push_back(3);
         return 3;
     }, AsyncExecutor::Priority::High);
-    
+
     auto criticalFuture = executor.execute([&executionOrder, &orderMutex]() {
         std::lock_guard<std::mutex> lock(orderMutex);
         executionOrder.push_back(4);
         return 4;
     }, AsyncExecutor::Priority::Critical);
-    
+
     // Wait for all tasks to complete
     lowFuture.get();
     normalFuture.get();
     highFuture.get();
     criticalFuture.get();
-    
+
     // Higher priority tasks should generally execute first
     // Note: This is probabilistic due to timing
     EXPECT_EQ(executionOrder.size(), 4);
-    
+
     executor.stop();
 }
 
@@ -166,32 +166,32 @@ TEST_F(AsyncExecutorTest, TaskPriorities) {
 TEST_F(AsyncExecutorTest, ConcurrentTaskExecution) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     const int numTasks = 20;
     std::vector<std::future<int>> futures;
-    
+
     // Submit multiple tasks
     for (int i = 0; i < numTasks; ++i) {
-        futures.push_back(executor.execute([this, i]() { 
-            return simpleTask(i, 10); 
+        futures.push_back(executor.execute([this, i]() {
+            return simpleTask(i, 10);
         }));
     }
-    
+
     // Collect results
     std::vector<int> results;
     for (auto& future : futures) {
         results.push_back(future.get());
     }
-    
+
     // Verify all tasks completed
     EXPECT_EQ(results.size(), numTasks);
-    
+
     // Verify results are correct (order may vary)
     std::sort(results.begin(), results.end());
     for (int i = 0; i < numTasks; ++i) {
         EXPECT_EQ(results[i], i * 2);
     }
-    
+
     executor.stop();
 }
 
@@ -199,35 +199,35 @@ TEST_F(AsyncExecutorTest, ConcurrentTaskExecution) {
 TEST_F(AsyncExecutorTest, ExecutorStatistics) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     auto stats = executor.getStatistics();
     EXPECT_EQ(stats.pendingTasks, 0);
     EXPECT_EQ(stats.completedTasks, 0);
     EXPECT_GT(stats.activeThreads, 0);
-    
+
     // Execute some tasks
     std::vector<std::future<int>> futures;
     for (int i = 0; i < 10; ++i) {
-        futures.push_back(executor.execute([this, i]() { 
-            return simpleTask(i, 20); 
+        futures.push_back(executor.execute([this, i]() {
+            return simpleTask(i, 20);
         }));
     }
-    
+
     // Check pending tasks
     auto statsWithPending = executor.getStatistics();
     EXPECT_GT(statsWithPending.pendingTasks, 0);
-    
+
     // Wait for completion
     for (auto& future : futures) {
         future.get();
     }
-    
+
     // Check completed tasks
     std::this_thread::sleep_for(50ms);
     auto finalStats = executor.getStatistics();
     EXPECT_EQ(finalStats.pendingTasks, 0);
     EXPECT_EQ(finalStats.completedTasks, 10);
-    
+
     executor.stop();
 }
 
@@ -235,41 +235,41 @@ TEST_F(AsyncExecutorTest, ExecutorStatistics) {
 TEST_F(AsyncExecutorTest, ExceptionHandling) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     // Task that throws exception
     auto future = executor.execute([]() -> int {
         throw std::runtime_error("Test exception");
     });
-    
+
     // Should propagate exception through future
     EXPECT_THROW(future.get(), std::runtime_error);
-    
+
     // Executor should still be functional
     auto normalFuture = executor.execute([]() { return 42; });
     EXPECT_EQ(normalFuture.get(), 42);
-    
+
     executor.stop();
 }
 
 // Test executor with work stealing disabled
 TEST_F(AsyncExecutorTest, WithoutWorkStealing) {
     config.useWorkStealing = false;
-    
+
     AsyncExecutor executor(config);
     executor.start();
-    
+
     // Should still work without work stealing
     std::vector<std::future<int>> futures;
     for (int i = 0; i < 10; ++i) {
-        futures.push_back(executor.execute([this, i]() { 
-            return simpleTask(i); 
+        futures.push_back(executor.execute([this, i]() {
+            return simpleTask(i);
         }));
     }
-    
+
     for (int i = 0; i < 10; ++i) {
         EXPECT_EQ(futures[i].get(), i * 2);
     }
-    
+
     executor.stop();
 }
 
@@ -277,9 +277,9 @@ TEST_F(AsyncExecutorTest, WithoutWorkStealing) {
 TEST_F(AsyncExecutorTest, ShutdownWithPendingTasks) {
     AsyncExecutor executor(config);
     executor.start();
-    
+
     std::atomic<int> completedTasks{0};
-    
+
     // Submit long-running tasks
     for (int i = 0; i < 5; ++i) {
         executor.execute([&completedTasks]() {
@@ -287,10 +287,10 @@ TEST_F(AsyncExecutorTest, ShutdownWithPendingTasks) {
             completedTasks.fetch_add(1);
         });
     }
-    
+
     // Stop immediately
     executor.stop();
-    
+
     // Some tasks may not complete
     EXPECT_LE(completedTasks.load(), 5);
 }

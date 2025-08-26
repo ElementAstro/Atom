@@ -48,9 +48,9 @@ protected:
 
 TEST_F(SafeTypeTest, BasicSafeTypeOperations) {
     SafeType<int> safeInt(42);
-    
+
     EXPECT_EQ(safeInt.get(), 42);
-    
+
     safeInt.set(100);
     EXPECT_EQ(safeInt.get(), 100);
 }
@@ -60,19 +60,19 @@ TEST_F(SafeTypeTest, ConcurrentReadWrite) {
     std::atomic<bool> ready{false};
     std::atomic<int> readCount{0};
     std::atomic<int> writeCount{0};
-    
+
     std::vector<std::thread> threads;
     const int numReaders = 5;
     const int numWriters = 3;
     const int operationsPerThread = 100;
-    
+
     // Reader threads
     for (int i = 0; i < numReaders; ++i) {
         threads.emplace_back([&safeInt, &ready, &readCount, operationsPerThread]() {
             while (!ready.load()) {
                 std::this_thread::yield();
             }
-            
+
             for (int j = 0; j < operationsPerThread; ++j) {
                 int value = safeInt.get();
                 EXPECT_GE(value, 0); // Should always be non-negative
@@ -81,14 +81,14 @@ TEST_F(SafeTypeTest, ConcurrentReadWrite) {
             }
         });
     }
-    
+
     // Writer threads
     for (int i = 0; i < numWriters; ++i) {
         threads.emplace_back([&safeInt, &ready, &writeCount, operationsPerThread, i]() {
             while (!ready.load()) {
                 std::this_thread::yield();
             }
-            
+
             for (int j = 0; j < operationsPerThread; ++j) {
                 safeInt.set((i + 1) * 1000 + j);
                 writeCount.fetch_add(1);
@@ -96,13 +96,13 @@ TEST_F(SafeTypeTest, ConcurrentReadWrite) {
             }
         });
     }
-    
+
     ready.store(true);
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(readCount.load(), numReaders * operationsPerThread);
     EXPECT_EQ(writeCount.load(), numWriters * operationsPerThread);
 }
@@ -111,20 +111,20 @@ TEST_F(SafeTypeTest, SafeTypeWithComplexType) {
     struct TestStruct {
         int value;
         std::string name;
-        
+
         TestStruct(int v = 0, const std::string& n = "") : value(v), name(n) {}
-        
+
         bool operator==(const TestStruct& other) const {
             return value == other.value && name == other.name;
         }
     };
-    
+
     SafeType<TestStruct> safeStruct(TestStruct(42, "test"));
-    
+
     TestStruct retrieved = safeStruct.get();
     EXPECT_EQ(retrieved.value, 42);
     EXPECT_EQ(retrieved.name, "test");
-    
+
     safeStruct.set(TestStruct(100, "updated"));
     retrieved = safeStruct.get();
     EXPECT_EQ(retrieved.value, 100);
@@ -133,19 +133,19 @@ TEST_F(SafeTypeTest, SafeTypeWithComplexType) {
 
 TEST_F(SafeTypeTest, SafeTypeModify) {
     SafeType<int> safeInt(10);
-    
+
     safeInt.modify([](int& value) {
         value *= 2;
     });
-    
+
     EXPECT_EQ(safeInt.get(), 20);
-    
+
     // Test modify with return value
     int result = safeInt.modify([](int& value) -> int {
         value += 5;
         return value;
     });
-    
+
     EXPECT_EQ(result, 25);
     EXPECT_EQ(safeInt.get(), 25);
 }
@@ -153,11 +153,11 @@ TEST_F(SafeTypeTest, SafeTypeModify) {
 TEST_F(SafeTypeTest, ConcurrentModify) {
     SafeType<int> safeInt(0);
     std::atomic<int> completedOperations{0};
-    
+
     std::vector<std::thread> threads;
     const int numThreads = 10;
     const int incrementsPerThread = 100;
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&safeInt, &completedOperations, incrementsPerThread]() {
             for (int j = 0; j < incrementsPerThread; ++j) {
@@ -168,11 +168,11 @@ TEST_F(SafeTypeTest, ConcurrentModify) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(safeInt.get(), numThreads * incrementsPerThread);
     EXPECT_EQ(completedOperations.load(), numThreads * incrementsPerThread);
 }
@@ -180,21 +180,21 @@ TEST_F(SafeTypeTest, ConcurrentModify) {
 TEST_F(SafeTypeTest, SafeTypeSwap) {
     SafeType<int> safeInt1(10);
     SafeType<int> safeInt2(20);
-    
+
     safeInt1.swap(safeInt2);
-    
+
     EXPECT_EQ(safeInt1.get(), 20);
     EXPECT_EQ(safeInt2.get(), 10);
 }
 
 TEST_F(SafeTypeTest, SafeTypeCompareAndSwap) {
     SafeType<int> safeInt(10);
-    
+
     // Successful compare and swap
     bool success = safeInt.compareAndSwap(10, 20);
     EXPECT_TRUE(success);
     EXPECT_EQ(safeInt.get(), 20);
-    
+
     // Failed compare and swap
     success = safeInt.compareAndSwap(10, 30);
     EXPECT_FALSE(success);
@@ -203,11 +203,11 @@ TEST_F(SafeTypeTest, SafeTypeCompareAndSwap) {
 
 TEST_F(SafeTypeTest, SafeTypeWithSharedPtr) {
     SafeType<std::shared_ptr<int>> safePtr(std::make_shared<int>(42));
-    
+
     auto ptr = safePtr.get();
     EXPECT_NE(ptr, nullptr);
     EXPECT_EQ(*ptr, 42);
-    
+
     safePtr.set(std::make_shared<int>(100));
     ptr = safePtr.get();
     EXPECT_EQ(*ptr, 100);
@@ -216,15 +216,15 @@ TEST_F(SafeTypeTest, SafeTypeWithSharedPtr) {
 TEST_F(SafeTypeTest, SafeTypeExceptionSafety) {
     struct ThrowingType {
         int value;
-        
+
         ThrowingType(int v) : value(v) {}
-        
+
         ThrowingType(const ThrowingType& other) : value(other.value) {
             if (value == 999) {
                 throw std::runtime_error("Copy constructor exception");
             }
         }
-        
+
         ThrowingType& operator=(const ThrowingType& other) {
             if (other.value == 888) {
                 throw std::runtime_error("Assignment operator exception");
@@ -233,13 +233,13 @@ TEST_F(SafeTypeTest, SafeTypeExceptionSafety) {
             return *this;
         }
     };
-    
+
     SafeType<ThrowingType> safeType(ThrowingType(10));
-    
+
     // Test exception in copy constructor
     EXPECT_THROW(safeType.set(ThrowingType(999)), std::runtime_error);
     EXPECT_EQ(safeType.get().value, 10); // Should remain unchanged
-    
+
     // Test exception in assignment
     EXPECT_THROW(safeType.set(ThrowingType(888)), std::runtime_error);
     EXPECT_EQ(safeType.get().value, 10); // Should remain unchanged
@@ -248,41 +248,41 @@ TEST_F(SafeTypeTest, SafeTypeExceptionSafety) {
 TEST_F(SafeTypeTest, SafeTypePerformance) {
     SafeType<int> safeInt(0);
     const int numOperations = 10000;
-    
+
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     for (int i = 0; i < numOperations; ++i) {
         safeInt.set(i);
         int value = safeInt.get();
         EXPECT_EQ(value, i);
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
-    
+
     // Performance should be reasonable (this is just a sanity check)
     EXPECT_LT(duration.count(), 100000); // Less than 100ms for 10k operations
 }
 
 TEST_F(SafeTypeTest, SafeTypeWithVector) {
     SafeType<std::vector<int>> safeVector;
-    
+
     safeVector.modify([](std::vector<int>& vec) {
         vec.push_back(1);
         vec.push_back(2);
         vec.push_back(3);
     });
-    
+
     auto vec = safeVector.get();
     EXPECT_EQ(vec.size(), 3);
     EXPECT_EQ(vec[0], 1);
     EXPECT_EQ(vec[1], 2);
     EXPECT_EQ(vec[2], 3);
-    
+
     // Concurrent modifications
     std::vector<std::thread> threads;
     const int numThreads = 5;
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&safeVector, i]() {
             for (int j = 0; j < 10; ++j) {
@@ -292,28 +292,28 @@ TEST_F(SafeTypeTest, SafeTypeWithVector) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     vec = safeVector.get();
     EXPECT_EQ(vec.size(), 3 + numThreads * 10); // Original 3 + added elements
 }
 
 TEST_F(SafeTypeTest, SafeTypeReadOnlyAccess) {
     SafeType<std::string> safeString("Hello, World!");
-    
+
     // Test read-only access
     safeString.read([](const std::string& str) {
         EXPECT_EQ(str, "Hello, World!");
         EXPECT_EQ(str.length(), 13);
     });
-    
+
     // Multiple concurrent readers should work fine
     std::vector<std::thread> threads;
     std::atomic<int> readCount{0};
-    
+
     for (int i = 0; i < 10; ++i) {
         threads.emplace_back([&safeString, &readCount]() {
             safeString.read([&readCount](const std::string& str) {
@@ -322,11 +322,11 @@ TEST_F(SafeTypeTest, SafeTypeReadOnlyAccess) {
             });
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(readCount.load(), 10);
 }
 

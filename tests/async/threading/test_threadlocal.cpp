@@ -50,14 +50,14 @@ protected:
 
 TEST_F(ThreadLocalTest, BasicInitialization) {
     ThreadLocal<int> tl([]() { return 42; });
-    
+
     EXPECT_EQ(tl.get(), 42);
     EXPECT_TRUE(tl.hasValue());
 }
 
 TEST_F(ThreadLocalTest, SetAndGet) {
     ThreadLocal<int> tl;
-    
+
     tl.set(100);
     EXPECT_EQ(tl.get(), 100);
     EXPECT_TRUE(tl.hasValue());
@@ -69,22 +69,22 @@ TEST_F(ThreadLocalTest, DifferentValuesInDifferentThreads) {
     std::atomic<bool> thread2Ready{false};
     std::atomic<int> thread1Value{0};
     std::atomic<int> thread2Value{0};
-    
+
     std::thread t1([&tl, &thread1Ready, &thread1Value]() {
         tl.set(10);
         thread1Value = tl.get();
         thread1Ready = true;
     });
-    
+
     std::thread t2([&tl, &thread2Ready, &thread2Value]() {
         tl.set(20);
         thread2Value = tl.get();
         thread2Ready = true;
     });
-    
+
     t1.join();
     t2.join();
-    
+
     EXPECT_TRUE(thread1Ready);
     EXPECT_TRUE(thread2Ready);
     EXPECT_EQ(thread1Value.load(), 10);
@@ -93,37 +93,37 @@ TEST_F(ThreadLocalTest, DifferentValuesInDifferentThreads) {
 
 TEST_F(ThreadLocalTest, InitializerFunction) {
     std::atomic<int> initCount{0};
-    
+
     ThreadLocal<int> tl([&initCount]() {
         return initCount.fetch_add(1) + 1;
     });
-    
+
     std::vector<std::thread> threads;
     std::vector<std::atomic<int>> values(5);
-    
+
     for (int i = 0; i < 5; ++i) {
         threads.emplace_back([&tl, &values, i]() {
             values[i] = tl.get();
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     // Each thread should get a unique initialized value
     std::set<int> uniqueValues;
     for (int i = 0; i < 5; ++i) {
         uniqueValues.insert(values[i].load());
     }
-    
+
     EXPECT_EQ(uniqueValues.size(), 5);
     EXPECT_EQ(initCount.load(), 5);
 }
 
 TEST_F(ThreadLocalTest, CleanupFunction) {
     std::atomic<int> cleanupCount{0};
-    
+
     {
         ThreadLocal<std::unique_ptr<int>> tl(
             []() { return std::make_unique<int>(42); },
@@ -133,9 +133,9 @@ TEST_F(ThreadLocalTest, CleanupFunction) {
                 }
             }
         );
-        
+
         std::vector<std::thread> threads;
-        
+
         for (int i = 0; i < 3; ++i) {
             threads.emplace_back([&tl]() {
                 auto& ptr = tl.get();
@@ -143,12 +143,12 @@ TEST_F(ThreadLocalTest, CleanupFunction) {
                 EXPECT_EQ(*ptr, 42);
             });
         }
-        
+
         for (auto& thread : threads) {
             thread.join();
         }
     } // ThreadLocal destructor should trigger cleanup
-    
+
     // Give some time for cleanup to complete
     std::this_thread::sleep_for(10ms);
     EXPECT_EQ(cleanupCount.load(), 3);
@@ -156,38 +156,38 @@ TEST_F(ThreadLocalTest, CleanupFunction) {
 
 TEST_F(ThreadLocalTest, Reset) {
     ThreadLocal<int> tl([]() { return 10; });
-    
+
     EXPECT_EQ(tl.get(), 10);
-    
+
     tl.reset(20);
     EXPECT_EQ(tl.get(), 20);
-    
+
     tl.reset(); // Reset to default
     EXPECT_EQ(tl.get(), 0); // Default constructed int
 }
 
 TEST_F(ThreadLocalTest, Clear) {
     ThreadLocal<int> tl;
-    
+
     tl.set(42);
     EXPECT_TRUE(tl.hasValue());
     EXPECT_EQ(tl.get(), 42);
-    
+
     tl.clear();
     EXPECT_FALSE(tl.hasValue());
 }
 
 TEST_F(ThreadLocalTest, GetActiveThreadCount) {
     ThreadLocal<int> tl;
-    
+
     EXPECT_EQ(tl.getActiveThreadCount(), 0);
-    
+
     tl.set(42);
     EXPECT_EQ(tl.getActiveThreadCount(), 1);
-    
+
     std::vector<std::thread> threads;
     std::atomic<int> readyCount{0};
-    
+
     for (int i = 0; i < 5; ++i) {
         threads.emplace_back([&tl, &readyCount]() {
             tl.set(100);
@@ -195,14 +195,14 @@ TEST_F(ThreadLocalTest, GetActiveThreadCount) {
             std::this_thread::sleep_for(50ms);
         });
     }
-    
+
     // Wait for all threads to set their values
     while (readyCount.load() < 5) {
         std::this_thread::sleep_for(1ms);
     }
-    
+
     EXPECT_EQ(tl.getActiveThreadCount(), 6); // 5 threads + main thread
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
@@ -210,17 +210,17 @@ TEST_F(ThreadLocalTest, GetActiveThreadCount) {
 
 TEST_F(ThreadLocalTest, ConditionalInitializer) {
     ThreadLocal<int> tl;
-    
+
     tl.setConditionalInitializer([](std::thread::id tid) {
         // Only initialize for specific thread pattern
         std::hash<std::thread::id> hasher;
         return hasher(tid) % 2 == 0 ? std::optional<int>(100) : std::nullopt;
     });
-    
+
     std::vector<std::thread> threads;
     std::vector<std::atomic<bool>> hasValue(10);
     std::vector<std::atomic<int>> values(10);
-    
+
     for (int i = 0; i < 10; ++i) {
         threads.emplace_back([&tl, &hasValue, &values, i]() {
             try {
@@ -232,15 +232,15 @@ TEST_F(ThreadLocalTest, ConditionalInitializer) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     // Some threads should have values, others should not
     int withValues = 0;
     int withoutValues = 0;
-    
+
     for (int i = 0; i < 10; ++i) {
         if (hasValue[i].load()) {
             withValues++;
@@ -249,35 +249,35 @@ TEST_F(ThreadLocalTest, ConditionalInitializer) {
             withoutValues++;
         }
     }
-    
+
     EXPECT_GT(withValues, 0);
     EXPECT_GT(withoutValues, 0);
 }
 
 TEST_F(ThreadLocalTest, ThreadIdBasedInitializer) {
     ThreadLocal<std::string> tl;
-    
+
     tl.setThreadIdInitializer([](std::thread::id tid) {
         std::ostringstream oss;
         oss << "Thread-" << tid;
         return oss.str();
     });
-    
+
     std::vector<std::thread> threads;
     std::vector<std::atomic<bool>> initialized(5);
     std::vector<std::string> threadValues(5);
-    
+
     for (int i = 0; i < 5; ++i) {
         threads.emplace_back([&tl, &initialized, &threadValues, i]() {
             threadValues[i] = tl.get();
             initialized[i] = true;
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     for (int i = 0; i < 5; ++i) {
         EXPECT_TRUE(initialized[i].load());
         EXPECT_TRUE(threadValues[i].find("Thread-") == 0);
@@ -288,7 +288,7 @@ TEST_F(ThreadLocalTest, ExceptionInInitializer) {
     ThreadLocal<int> tl([]() -> int {
         throw std::runtime_error("Initialization failed");
     });
-    
+
     EXPECT_THROW(tl.get(), std::runtime_error);
     EXPECT_FALSE(tl.hasValue());
 }
@@ -296,11 +296,11 @@ TEST_F(ThreadLocalTest, ExceptionInInitializer) {
 TEST_F(ThreadLocalTest, ConcurrentAccess) {
     ThreadLocal<int> tl([]() { return 0; });
     std::atomic<int> successCount{0};
-    
+
     std::vector<std::thread> threads;
     const int numThreads = 20;
     const int operationsPerThread = 100;
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&tl, &successCount, operationsPerThread, i]() {
             try {
@@ -315,11 +315,11 @@ TEST_F(ThreadLocalTest, ConcurrentAccess) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(successCount.load(), numThreads);
 }
 

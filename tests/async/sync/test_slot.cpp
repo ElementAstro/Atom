@@ -48,17 +48,17 @@ protected:
 
 TEST_F(SlotTest, BasicSlotOperations) {
     Slot<int> slot;
-    
+
     EXPECT_FALSE(slot.hasValue());
     EXPECT_FALSE(slot.tryGet().has_value());
-    
+
     slot.put(42);
     EXPECT_TRUE(slot.hasValue());
-    
+
     auto value = slot.tryGet();
     EXPECT_TRUE(value.has_value());
     EXPECT_EQ(value.value(), 42);
-    
+
     // After getting, slot should be empty
     EXPECT_FALSE(slot.hasValue());
 }
@@ -66,41 +66,41 @@ TEST_F(SlotTest, BasicSlotOperations) {
 TEST_F(SlotTest, BlockingGet) {
     Slot<int> slot;
     std::atomic<bool> valueSet{false};
-    
+
     std::thread producer([&slot, &valueSet]() {
         std::this_thread::sleep_for(100ms);
         slot.put(123);
         valueSet = true;
     });
-    
+
     auto start = std::chrono::steady_clock::now();
     int value = slot.get(); // Should block until value is available
     auto elapsed = std::chrono::steady_clock::now() - start;
-    
+
     EXPECT_EQ(value, 123);
     EXPECT_TRUE(valueSet);
     EXPECT_GE(elapsed, 90ms); // Should have waited
     EXPECT_LT(elapsed, 200ms); // But not too long
-    
+
     producer.join();
 }
 
 TEST_F(SlotTest, GetWithTimeout) {
     Slot<int> slot;
-    
+
     // Test timeout when no value is available
     auto start = std::chrono::steady_clock::now();
     auto result = slot.getWithTimeout(100ms);
     auto elapsed = std::chrono::steady_clock::now() - start;
-    
+
     EXPECT_FALSE(result.has_value());
     EXPECT_GE(elapsed, 90ms);
     EXPECT_LT(elapsed, 150ms);
-    
+
     // Test successful get within timeout
     slot.put(456);
     result = slot.getWithTimeout(100ms);
-    
+
     EXPECT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 456);
 }
@@ -110,10 +110,10 @@ TEST_F(SlotTest, MultipleProducersOneConsumer) {
     std::atomic<int> producerCount{0};
     std::vector<int> consumedValues;
     std::mutex consumedMutex;
-    
+
     std::vector<std::thread> producers;
     const int numProducers = 5;
-    
+
     // Start producers
     for (int i = 0; i < numProducers; ++i) {
         producers.emplace_back([&slot, &producerCount, i]() {
@@ -122,7 +122,7 @@ TEST_F(SlotTest, MultipleProducersOneConsumer) {
             producerCount.fetch_add(1);
         });
     }
-    
+
     // Consumer thread
     std::thread consumer([&slot, &consumedValues, &consumedMutex, numProducers]() {
         for (int i = 0; i < numProducers; ++i) {
@@ -131,15 +131,15 @@ TEST_F(SlotTest, MultipleProducersOneConsumer) {
             consumedValues.push_back(value);
         }
     });
-    
+
     for (auto& producer : producers) {
         producer.join();
     }
     consumer.join();
-    
+
     EXPECT_EQ(producerCount.load(), numProducers);
     EXPECT_EQ(consumedValues.size(), numProducers);
-    
+
     // All values should be present (order may vary)
     std::sort(consumedValues.begin(), consumedValues.end());
     for (int i = 0; i < numProducers; ++i) {
@@ -151,7 +151,7 @@ TEST_F(SlotTest, OneProducerMultipleConsumers) {
     Slot<int> slot;
     std::atomic<int> consumerCount{0};
     std::vector<int> consumedValues(3);
-    
+
     // Start consumers
     std::vector<std::thread> consumers;
     for (int i = 0; i < 3; ++i) {
@@ -160,10 +160,10 @@ TEST_F(SlotTest, OneProducerMultipleConsumers) {
             consumerCount.fetch_add(1);
         });
     }
-    
+
     // Give consumers time to start waiting
     std::this_thread::sleep_for(50ms);
-    
+
     // Producer puts values
     std::thread producer([&slot]() {
         slot.put(100);
@@ -172,14 +172,14 @@ TEST_F(SlotTest, OneProducerMultipleConsumers) {
         std::this_thread::sleep_for(10ms);
         slot.put(300);
     });
-    
+
     producer.join();
     for (auto& consumer : consumers) {
         consumer.join();
     }
-    
+
     EXPECT_EQ(consumerCount.load(), 3);
-    
+
     // Each consumer should get exactly one value
     std::sort(consumedValues.begin(), consumedValues.end());
     EXPECT_EQ(consumedValues[0], 100);
@@ -192,16 +192,16 @@ TEST_F(SlotTest, SlotWithComplexType) {
         int id;
         std::string name;
         std::vector<int> values;
-        
-        TestData(int i, const std::string& n, std::vector<int> v) 
+
+        TestData(int i, const std::string& n, std::vector<int> v)
             : id(i), name(n), values(std::move(v)) {}
     };
-    
+
     Slot<TestData> slot;
-    
+
     TestData testData(42, "test", {1, 2, 3, 4, 5});
     slot.put(std::move(testData));
-    
+
     TestData retrieved = slot.get();
     EXPECT_EQ(retrieved.id, 42);
     EXPECT_EQ(retrieved.name, "test");
@@ -212,10 +212,10 @@ TEST_F(SlotTest, SlotWithComplexType) {
 
 TEST_F(SlotTest, SlotClear) {
     Slot<int> slot;
-    
+
     slot.put(42);
     EXPECT_TRUE(slot.hasValue());
-    
+
     slot.clear();
     EXPECT_FALSE(slot.hasValue());
     EXPECT_FALSE(slot.tryGet().has_value());
@@ -223,15 +223,15 @@ TEST_F(SlotTest, SlotClear) {
 
 TEST_F(SlotTest, SlotCapacity) {
     Slot<int> slot(3); // Capacity of 3
-    
+
     // Should be able to put up to capacity
     EXPECT_TRUE(slot.tryPut(1));
     EXPECT_TRUE(slot.tryPut(2));
     EXPECT_TRUE(slot.tryPut(3));
-    
+
     // Fourth put should fail
     EXPECT_FALSE(slot.tryPut(4));
-    
+
     // After getting one, should be able to put another
     auto value = slot.tryGet();
     EXPECT_TRUE(value.has_value());
@@ -240,44 +240,44 @@ TEST_F(SlotTest, SlotCapacity) {
 
 TEST_F(SlotTest, SlotSize) {
     Slot<int> slot(5);
-    
+
     EXPECT_EQ(slot.size(), 0);
     EXPECT_TRUE(slot.empty());
-    
+
     slot.put(1);
     EXPECT_EQ(slot.size(), 1);
     EXPECT_FALSE(slot.empty());
-    
+
     slot.put(2);
     slot.put(3);
     EXPECT_EQ(slot.size(), 3);
-    
+
     slot.tryGet();
     EXPECT_EQ(slot.size(), 2);
 }
 
 TEST_F(SlotTest, SlotWaitForEmpty) {
     Slot<int> slot(2);
-    
+
     slot.put(1);
     slot.put(2);
-    
+
     std::atomic<bool> isEmpty{false};
-    
+
     std::thread waiter([&slot, &isEmpty]() {
         slot.waitForEmpty();
         isEmpty = true;
     });
-    
+
     // Give waiter time to start waiting
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(isEmpty);
-    
+
     // Remove one item - should still be waiting
     slot.tryGet();
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(isEmpty);
-    
+
     // Remove last item - should now be empty
     slot.tryGet();
     waiter.join();
@@ -286,21 +286,21 @@ TEST_F(SlotTest, SlotWaitForEmpty) {
 
 TEST_F(SlotTest, SlotWaitForSpace) {
     Slot<int> slot(2);
-    
+
     slot.put(1);
     slot.put(2);
-    
+
     std::atomic<bool> hasSpace{false};
-    
+
     std::thread waiter([&slot, &hasSpace]() {
         slot.waitForSpace();
         hasSpace = true;
     });
-    
+
     // Give waiter time to start waiting
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(hasSpace);
-    
+
     // Remove one item - should now have space
     slot.tryGet();
     waiter.join();
@@ -352,14 +352,14 @@ TEST_F(SlotTest, HighConcurrencyStressTest) {
     Slot<int> slot(100);
     std::atomic<int> totalProduced{0};
     std::atomic<int> totalConsumed{0};
-    
+
     const int numProducers = 10;
     const int numConsumers = 5;
     const int itemsPerProducer = 50;
-    
+
     std::vector<std::thread> producers;
     std::vector<std::thread> consumers;
-    
+
     // Start producers
     for (int i = 0; i < numProducers; ++i) {
         producers.emplace_back([&slot, &totalProduced, itemsPerProducer, i]() {
@@ -370,7 +370,7 @@ TEST_F(SlotTest, HighConcurrencyStressTest) {
             }
         });
     }
-    
+
     // Start consumers
     for (int i = 0; i < numConsumers; ++i) {
         consumers.emplace_back([&slot, &totalConsumed, numProducers, itemsPerProducer]() {
@@ -383,15 +383,15 @@ TEST_F(SlotTest, HighConcurrencyStressTest) {
             }
         });
     }
-    
+
     for (auto& producer : producers) {
         producer.join();
     }
-    
+
     for (auto& consumer : consumers) {
         consumer.join();
     }
-    
+
     EXPECT_EQ(totalProduced.load(), numProducers * itemsPerProducer);
     EXPECT_EQ(totalConsumed.load(), numProducers * itemsPerProducer);
 }

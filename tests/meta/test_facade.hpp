@@ -56,24 +56,24 @@ public:
 // Test constraint system
 TEST_F(FacadeTest, ConstraintSystem) {
     using namespace atom::meta;
-    
+
     // Test constraint_level enum
     static_assert(static_cast<int>(constraint_level::none) == 0);
     static_assert(static_cast<int>(constraint_level::nothrow) == 1);
     static_assert(static_cast<int>(constraint_level::trivial) == 2);
-    
+
     // Test thread_safety enum
     static_assert(static_cast<int>(thread_safety::none) == 0);
     static_assert(static_cast<int>(thread_safety::shared) == 1);
     static_assert(static_cast<int>(thread_safety::unique) == 2);
-    
+
     // Test proxiable_constraints structure
     proxiable_constraints constraints;
     constraints.copyability = constraint_level::nothrow;
     constraints.relocatability = constraint_level::trivial;
     constraints.destructibility = constraint_level::nothrow;
     constraints.thread_safety = thread_safety::shared;
-    
+
     EXPECT_EQ(constraints.copyability, constraint_level::nothrow);
     EXPECT_EQ(constraints.relocatability, constraint_level::trivial);
     EXPECT_EQ(constraints.destructibility, constraint_level::nothrow);
@@ -83,22 +83,22 @@ TEST_F(FacadeTest, ConstraintSystem) {
 // Test constraint merging
 TEST_F(FacadeTest, ConstraintMerging) {
     using namespace atom::meta;
-    
+
     proxiable_constraints c1;
     c1.copyability = constraint_level::nothrow;
     c1.relocatability = constraint_level::trivial;
     c1.destructibility = constraint_level::none;
     c1.thread_safety = thread_safety::shared;
-    
+
     proxiable_constraints c2;
     c2.copyability = constraint_level::trivial;
     c2.relocatability = constraint_level::none;
     c2.destructibility = constraint_level::nothrow;
     c2.thread_safety = thread_safety::unique;
-    
+
     // Test constraint merging (should take the more restrictive constraint)
     auto merged = merge_constraints(c1, c2);
-    
+
     EXPECT_EQ(merged.copyability, constraint_level::trivial);  // More restrictive
     EXPECT_EQ(merged.relocatability, constraint_level::trivial);  // More restrictive
     EXPECT_EQ(merged.destructibility, constraint_level::nothrow);  // More restrictive
@@ -108,13 +108,13 @@ TEST_F(FacadeTest, ConstraintMerging) {
 // Test facade concepts
 TEST_F(FacadeTest, FacadeConcepts) {
     using namespace atom::meta;
-    
+
     // Test dispatcher concept
     static_assert(dispatcher<TestInterface>);
-    
+
     // Test reflector concept (if available)
     // static_assert(reflector<SomeReflectorType>);
-    
+
     // Test facade concept
     // static_assert(facade<SomeFacadeType>);
 }
@@ -122,17 +122,17 @@ TEST_F(FacadeTest, FacadeConcepts) {
 // Test proxy construction and basic operations
 TEST_F(FacadeTest, ProxyBasicOperations) {
     using namespace atom::meta;
-    
+
     // Create a proxy with TestInterface facade
     proxy<TestInterface> testProxy;
-    
+
     // Test default construction (should be empty)
     EXPECT_FALSE(testProxy.has_value());
-    
+
     // Test construction with implementation
     TestImplementation impl(42, "test");
     proxy<TestInterface> proxyWithImpl(impl);
-    
+
     EXPECT_TRUE(proxyWithImpl.has_value());
     EXPECT_EQ(proxyWithImpl->getValue(), 42);
     EXPECT_EQ(proxyWithImpl->getName(), "test");
@@ -141,34 +141,34 @@ TEST_F(FacadeTest, ProxyBasicOperations) {
 // Test proxy copy and move semantics
 TEST_F(FacadeTest, ProxyCopyMoveSemantics) {
     using namespace atom::meta;
-    
+
     TestImplementation impl(42, "original");
     proxy<TestInterface> original(impl);
-    
+
     // Test copy constructor
     proxy<TestInterface> copied(original);
     EXPECT_TRUE(copied.has_value());
     EXPECT_EQ(copied->getValue(), 42);
     EXPECT_EQ(copied->getName(), "original");
-    
+
     // Modify original to ensure independence
     original->setValue(100);
     EXPECT_EQ(original->getValue(), 100);
     EXPECT_EQ(copied->getValue(), 42);  // Should remain unchanged
-    
+
     // Test move constructor
     proxy<TestInterface> moved(std::move(original));
     EXPECT_TRUE(moved.has_value());
     EXPECT_EQ(moved->getValue(), 100);
-    
+
     // Test copy assignment
     AnotherImplementation anotherImpl(200, "another");
     proxy<TestInterface> another(anotherImpl);
-    
+
     copied = another;
     EXPECT_EQ(copied->getValue(), 200);
     EXPECT_EQ(copied->getName(), "another");
-    
+
     // Test move assignment
     proxy<TestInterface> moveAssigned;
     moveAssigned = std::move(moved);
@@ -179,20 +179,20 @@ TEST_F(FacadeTest, ProxyCopyMoveSemantics) {
 // Test proxy reset and assignment
 TEST_F(FacadeTest, ProxyResetAssignment) {
     using namespace atom::meta;
-    
+
     TestImplementation impl(42, "test");
     proxy<TestInterface> testProxy(impl);
-    
+
     EXPECT_TRUE(testProxy.has_value());
-    
+
     // Test reset
     testProxy.reset();
     EXPECT_FALSE(testProxy.has_value());
-    
+
     // Test assignment of new implementation
     AnotherImplementation newImpl(100, "new");
     testProxy = newImpl;
-    
+
     EXPECT_TRUE(testProxy.has_value());
     EXPECT_EQ(testProxy->getValue(), 100);
     EXPECT_EQ(testProxy->getName(), "new");
@@ -201,24 +201,24 @@ TEST_F(FacadeTest, ProxyResetAssignment) {
 // Test proxy with different implementations
 TEST_F(FacadeTest, ProxyPolymorphism) {
     using namespace atom::meta;
-    
+
     std::vector<proxy<TestInterface>> proxies;
-    
+
     // Add different implementations
     proxies.emplace_back(TestImplementation(1, "first"));
     proxies.emplace_back(AnotherImplementation(2, "second"));
     proxies.emplace_back(TestImplementation(3, "third"));
-    
+
     // Test polymorphic behavior
     EXPECT_EQ(proxies[0]->getValue(), 1);
     EXPECT_EQ(proxies[0]->getName(), "first");
-    
+
     EXPECT_EQ(proxies[1]->getValue(), 2);
     EXPECT_EQ(proxies[1]->getName(), "second");
-    
+
     EXPECT_EQ(proxies[2]->getValue(), 3);
     EXPECT_EQ(proxies[2]->getName(), "third");
-    
+
     // Test modification through proxy
     proxies[0]->setValue(10);
     EXPECT_EQ(proxies[0]->getValue(), 10);
@@ -227,19 +227,19 @@ TEST_F(FacadeTest, ProxyPolymorphism) {
 // Test proxy swap functionality
 TEST_F(FacadeTest, ProxySwap) {
     using namespace atom::meta;
-    
+
     TestImplementation impl1(42, "first");
     AnotherImplementation impl2(100, "second");
-    
+
     proxy<TestInterface> proxy1(impl1);
     proxy<TestInterface> proxy2(impl2);
-    
+
     // Test swap
     proxy1.swap(proxy2);
-    
+
     EXPECT_EQ(proxy1->getValue(), 100);
     EXPECT_EQ(proxy1->getName(), "second");
-    
+
     EXPECT_EQ(proxy2->getValue(), 42);
     EXPECT_EQ(proxy2->getName(), "first");
 }
@@ -247,15 +247,15 @@ TEST_F(FacadeTest, ProxySwap) {
 // Test proxy comparison operations
 TEST_F(FacadeTest, ProxyComparison) {
     using namespace atom::meta;
-    
+
     TestImplementation impl(42, "test");
     proxy<TestInterface> proxy1(impl);
     proxy<TestInterface> proxy2(impl);
     proxy<TestInterface> emptyProxy;
-    
+
     // Test equality comparison (if available)
     // Note: Actual comparison behavior depends on implementation
-    
+
     // Test has_value comparisons
     EXPECT_TRUE(proxy1.has_value());
     EXPECT_TRUE(proxy2.has_value());
@@ -265,15 +265,15 @@ TEST_F(FacadeTest, ProxyComparison) {
 // Test proxy with smart pointers
 TEST_F(FacadeTest, ProxyWithSmartPointers) {
     using namespace atom::meta;
-    
+
     auto sharedImpl = std::make_shared<TestImplementation>(42, "shared");
     auto uniqueImpl = std::make_unique<AnotherImplementation>(100, "unique");
-    
+
     // Test with shared_ptr
     proxy<TestInterface> sharedProxy(*sharedImpl);
     EXPECT_TRUE(sharedProxy.has_value());
     EXPECT_EQ(sharedProxy->getValue(), 42);
-    
+
     // Test with unique_ptr (move semantics)
     proxy<TestInterface> uniqueProxy(*uniqueImpl);
     EXPECT_TRUE(uniqueProxy.has_value());
@@ -283,12 +283,12 @@ TEST_F(FacadeTest, ProxyWithSmartPointers) {
 // Test proxy error handling
 TEST_F(FacadeTest, ProxyErrorHandling) {
     using namespace atom::meta;
-    
+
     proxy<TestInterface> emptyProxy;
-    
+
     // Test accessing empty proxy (should throw or handle gracefully)
     EXPECT_FALSE(emptyProxy.has_value());
-    
+
     // Accessing empty proxy should throw or return nullptr
     // Exact behavior depends on implementation
     EXPECT_THROW(emptyProxy->getValue(), std::exception);

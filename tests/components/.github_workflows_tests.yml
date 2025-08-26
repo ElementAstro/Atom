@@ -24,7 +24,7 @@ jobs:
   basic-tests:
     name: Basic Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-    
+
     strategy:
       fail-fast: false
       matrix:
@@ -134,7 +134,7 @@ jobs:
       working-directory: tests/components
       run: |
         ./build/atom_iocomponent.test
-        
+
     - name: Generate coverage report
       working-directory: tests/components
       run: |
@@ -153,7 +153,7 @@ jobs:
       working-directory: tests/components
       run: |
         genhtml coverage.info --output-directory coverage-html
-        
+
     - name: Upload coverage HTML
       uses: actions/upload-artifact@v3
       with:

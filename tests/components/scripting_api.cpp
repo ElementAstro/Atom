@@ -21,13 +21,13 @@ protected:
         intValue_ = ScriptValue(42);
         doubleValue_ = ScriptValue(3.14159);
         stringValue_ = ScriptValue("Hello World");
-        
+
         // Create array value
         std::vector<ScriptValue> arrayData = {
             ScriptValue(1), ScriptValue(2), ScriptValue(3)
         };
         arrayValue_ = ScriptValue(arrayData);
-        
+
         // Create object value
         std::unordered_map<std::string, ScriptValue> objectData = {
             {"key1", ScriptValue("value1")},
@@ -52,7 +52,7 @@ protected:
     void SetUp() override {
         api_ = &ComponentScriptingAPI::instance();
         component_ = std::make_shared<Component>("ScriptingTestComponent");
-        
+
         // Initialize the API
         api_->initialize();
     }
@@ -166,7 +166,7 @@ TEST_F(ScriptValueTest, StringConstruction) {
 
 TEST_F(ScriptValueTest, ArrayConstruction) {
     EXPECT_TRUE(std::holds_alternative<std::vector<ScriptValue>>(arrayValue_.value));
-    
+
     const auto& array = std::get<std::vector<ScriptValue>>(arrayValue_.value);
     EXPECT_EQ(array.size(), 3);
     EXPECT_EQ(std::get<int64_t>(array[0].value), 1);

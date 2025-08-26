@@ -38,10 +38,10 @@ class DaemonTest : public atom::async::test::AsyncTestBase {
 protected:
     void SetUp() override {
         AsyncTestBase::SetUp();
-        
+
         // Clean up any existing test PID files
         cleanupTestFiles();
-        
+
         // Reset global daemon state
         g_is_daemon.store(false);
         g_daemon_restart_interval = 10;
@@ -51,10 +51,10 @@ protected:
     void TearDown() override {
         // Clean up test files
         cleanupTestFiles();
-        
+
         // Reset global state
         g_is_daemon.store(false);
-        
+
         AsyncTestBase::TearDown();
     }
 
@@ -73,14 +73,14 @@ private:
 // Test ProcessId basic functionality
 TEST_F(DaemonTest, ProcessIdBasicFunctionality) {
     ProcessId pid;
-    
+
     // Default constructed ProcessId should be invalid
     EXPECT_FALSE(pid.valid());
-    
+
     // Get current process ID
     ProcessId currentPid = ProcessId::current();
     EXPECT_TRUE(currentPid.valid());
-    
+
     // Test reset
     currentPid.reset();
     EXPECT_FALSE(currentPid.valid());
@@ -90,10 +90,10 @@ TEST_F(DaemonTest, ProcessIdBasicFunctionality) {
 TEST_F(DaemonTest, ProcessIdOperations) {
     ProcessId pid1 = ProcessId::current();
     ProcessId pid2 = ProcessId::current();
-    
+
     EXPECT_TRUE(pid1.valid());
     EXPECT_TRUE(pid2.valid());
-    
+
     // Both should represent the same process
 #ifdef _WIN32
     EXPECT_EQ(GetProcessId(pid1.id), GetProcessId(pid2.id));
@@ -108,7 +108,7 @@ TEST_F(DaemonTest, DaemonExceptionFunctionality) {
     EXPECT_THROW({
         throw DaemonException("Test daemon exception");
     }, DaemonException);
-    
+
     // Test exception with source location
     try {
         throw DaemonException("Test with location");
@@ -140,7 +140,7 @@ TEST_F(DaemonTest, PidFileOperations) {
 // Test PID file with invalid path
 TEST_F(DaemonTest, PidFileInvalidPath) {
     const std::filesystem::path invalidPath = "/invalid/path/that/does/not/exist/test.pid";
-    
+
     // Should throw exception for invalid path
     EXPECT_THROW(writePidFile(invalidPath), DaemonException);
 }
@@ -159,15 +159,15 @@ TEST_F(DaemonTest, PidFileNonExistent) {
 // Test DaemonGuard basic functionality
 TEST_F(DaemonTest, DaemonGuardBasicFunctionality) {
     DaemonGuard daemon;
-    
+
     // Test toString
     std::string daemonStr = daemon.toString();
     EXPECT_FALSE(daemonStr.empty());
-    
+
     // Test initial state
     EXPECT_EQ(daemon.getRestartCount(), 0);
     EXPECT_FALSE(daemon.isRunning());
-    
+
     // Test PID file path operations
     daemon.setPidFilePath("test-daemon-custom");
     auto pidPath = daemon.getPidFilePath();

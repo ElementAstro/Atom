@@ -48,12 +48,12 @@ protected:
 
 TEST_F(TriggerTest, BasicTriggerOperations) {
     Trigger trigger;
-    
+
     EXPECT_FALSE(trigger.isTriggered());
-    
+
     trigger.trigger();
     EXPECT_TRUE(trigger.isTriggered());
-    
+
     trigger.reset();
     EXPECT_FALSE(trigger.isTriggered());
 }
@@ -61,83 +61,83 @@ TEST_F(TriggerTest, BasicTriggerOperations) {
 TEST_F(TriggerTest, WaitForTrigger) {
     Trigger trigger;
     std::atomic<bool> triggerSet{false};
-    
+
     std::thread waiter([&trigger, &triggerSet]() {
         trigger.wait();
         triggerSet = true;
     });
-    
+
     // Give waiter time to start waiting
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(triggerSet);
-    
+
     trigger.trigger();
     waiter.join();
-    
+
     EXPECT_TRUE(triggerSet);
     EXPECT_TRUE(trigger.isTriggered());
 }
 
 TEST_F(TriggerTest, WaitWithTimeout) {
     Trigger trigger;
-    
+
     // Test timeout when trigger is not set
     auto start = std::chrono::steady_clock::now();
     bool result = trigger.waitFor(100ms);
     auto elapsed = std::chrono::steady_clock::now() - start;
-    
+
     EXPECT_FALSE(result);
     EXPECT_GE(elapsed, 90ms);
     EXPECT_LT(elapsed, 150ms);
-    
+
     // Test successful wait within timeout
     trigger.trigger();
     result = trigger.waitFor(100ms);
-    
+
     EXPECT_TRUE(result);
 }
 
 TEST_F(TriggerTest, MultipleWaiters) {
     Trigger trigger;
     std::atomic<int> waiterCount{0};
-    
+
     std::vector<std::thread> waiters;
     const int numWaiters = 5;
-    
+
     for (int i = 0; i < numWaiters; ++i) {
         waiters.emplace_back([&trigger, &waiterCount]() {
             trigger.wait();
             waiterCount.fetch_add(1);
         });
     }
-    
+
     // Give waiters time to start waiting
     std::this_thread::sleep_for(50ms);
     EXPECT_EQ(waiterCount.load(), 0);
-    
+
     // Trigger should wake up all waiters
     trigger.trigger();
-    
+
     for (auto& waiter : waiters) {
         waiter.join();
     }
-    
+
     EXPECT_EQ(waiterCount.load(), numWaiters);
 }
 
 TEST_F(TriggerTest, AutoResetTrigger) {
     AutoResetTrigger trigger;
-    
+
     EXPECT_FALSE(trigger.isTriggered());
-    
+
     trigger.trigger();
     EXPECT_TRUE(trigger.isTriggered());
-    
+
     // First wait should succeed and auto-reset
     bool result = trigger.waitFor(10ms);
     EXPECT_TRUE(result);
     EXPECT_FALSE(trigger.isTriggered()); // Should be auto-reset
-    
+
     // Second wait should timeout
     result = trigger.waitFor(50ms);
     EXPECT_FALSE(result);
@@ -147,10 +147,10 @@ TEST_F(TriggerTest, AutoResetWithMultipleWaiters) {
     AutoResetTrigger trigger;
     std::atomic<int> successCount{0};
     std::atomic<int> timeoutCount{0};
-    
+
     std::vector<std::thread> waiters;
     const int numWaiters = 5;
-    
+
     for (int i = 0; i < numWaiters; ++i) {
         waiters.emplace_back([&trigger, &successCount, &timeoutCount]() {
             if (trigger.waitFor(200ms)) {
@@ -160,17 +160,17 @@ TEST_F(TriggerTest, AutoResetWithMultipleWaiters) {
             }
         });
     }
-    
+
     // Give waiters time to start waiting
     std::this_thread::sleep_for(50ms);
-    
+
     // Trigger once - should only wake up one waiter
     trigger.trigger();
-    
+
     for (auto& waiter : waiters) {
         waiter.join();
     }
-    
+
     EXPECT_EQ(successCount.load(), 1); // Only one should succeed
     EXPECT_EQ(timeoutCount.load(), numWaiters - 1); // Others should timeout
 }
@@ -178,19 +178,19 @@ TEST_F(TriggerTest, AutoResetWithMultipleWaiters) {
 TEST_F(TriggerTest, CountdownTrigger) {
     const int countdownValue = 3;
     CountdownTrigger trigger(countdownValue);
-    
+
     EXPECT_FALSE(trigger.isTriggered());
     EXPECT_EQ(trigger.getCount(), countdownValue);
-    
+
     // First two countdowns should not trigger
     trigger.countdown();
     EXPECT_FALSE(trigger.isTriggered());
     EXPECT_EQ(trigger.getCount(), countdownValue - 1);
-    
+
     trigger.countdown();
     EXPECT_FALSE(trigger.isTriggered());
     EXPECT_EQ(trigger.getCount(), countdownValue - 2);
-    
+
     // Third countdown should trigger
     trigger.countdown();
     EXPECT_TRUE(trigger.isTriggered());
@@ -200,26 +200,26 @@ TEST_F(TriggerTest, CountdownTrigger) {
 TEST_F(TriggerTest, CountdownTriggerWithWaiters) {
     CountdownTrigger trigger(3);
     std::atomic<bool> triggered{false};
-    
+
     std::thread waiter([&trigger, &triggered]() {
         trigger.wait();
         triggered = true;
     });
-    
+
     // Give waiter time to start waiting
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(triggered);
-    
+
     // Countdown twice - should not trigger yet
     trigger.countdown();
     trigger.countdown();
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(triggered);
-    
+
     // Final countdown should trigger
     trigger.countdown();
     waiter.join();
-    
+
     EXPECT_TRUE(triggered);
 }
 
@@ -227,27 +227,27 @@ TEST_F(TriggerTest, ConcurrentCountdown) {
     const int numThreads = 10;
     CountdownTrigger trigger(numThreads);
     std::atomic<int> completedThreads{0};
-    
+
     std::vector<std::thread> threads;
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&trigger, &completedThreads]() {
             // Simulate some work
             std::this_thread::sleep_for(std::chrono::milliseconds(10 + rand() % 50));
-            
+
             trigger.countdown();
             completedThreads.fetch_add(1);
         });
     }
-    
+
     // Wait for trigger to be set
     trigger.wait();
-    
+
     // All threads should have completed
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(completedThreads.load(), numThreads);
     EXPECT_TRUE(trigger.isTriggered());
     EXPECT_EQ(trigger.getCount(), 0);
@@ -255,58 +255,58 @@ TEST_F(TriggerTest, ConcurrentCountdown) {
 
 TEST_F(TriggerTest, TriggerWithPredicate) {
     PredicateTrigger<int> trigger([](int value) { return value > 100; });
-    
+
     EXPECT_FALSE(trigger.isTriggered());
-    
+
     // Values <= 100 should not trigger
     trigger.update(50);
     EXPECT_FALSE(trigger.isTriggered());
-    
+
     trigger.update(100);
     EXPECT_FALSE(trigger.isTriggered());
-    
+
     // Value > 100 should trigger
     trigger.update(150);
     EXPECT_TRUE(trigger.isTriggered());
 }
 
 TEST_F(TriggerTest, PredicateTriggerWithWaiter) {
-    PredicateTrigger<std::string> trigger([](const std::string& s) { 
-        return s.length() >= 10; 
+    PredicateTrigger<std::string> trigger([](const std::string& s) {
+        return s.length() >= 10;
     });
-    
+
     std::atomic<bool> triggered{false};
-    
+
     std::thread waiter([&trigger, &triggered]() {
         trigger.wait();
         triggered = true;
     });
-    
+
     // Give waiter time to start waiting
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(triggered);
-    
+
     // Short strings should not trigger
     trigger.update("short");
     std::this_thread::sleep_for(50ms);
     EXPECT_FALSE(triggered);
-    
+
     // Long string should trigger
     trigger.update("this is a long string");
     waiter.join();
-    
+
     EXPECT_TRUE(triggered);
 }
 
 TEST_F(TriggerTest, TimedTrigger) {
     TimedTrigger trigger(100ms);
-    
+
     EXPECT_FALSE(trigger.isTriggered());
-    
+
     auto start = std::chrono::steady_clock::now();
     trigger.wait();
     auto elapsed = std::chrono::steady_clock::now() - start;
-    
+
     EXPECT_TRUE(trigger.isTriggered());
     EXPECT_GE(elapsed, 90ms);
     EXPECT_LT(elapsed, 150ms);
@@ -315,7 +315,7 @@ TEST_F(TriggerTest, TimedTrigger) {
 TEST_F(TriggerTest, RepeatingTimedTrigger) {
     RepeatingTimedTrigger trigger(50ms);
     std::atomic<int> triggerCount{0};
-    
+
     std::thread counter([&trigger, &triggerCount]() {
         for (int i = 0; i < 5; ++i) {
             trigger.wait();
@@ -323,9 +323,9 @@ TEST_F(TriggerTest, RepeatingTimedTrigger) {
             trigger.reset(); // Reset for next iteration
         }
     });
-    
+
     counter.join();
-    
+
     EXPECT_EQ(triggerCount.load(), 5);
 }
 
@@ -333,35 +333,35 @@ TEST_F(TriggerTest, TriggerChain) {
     Trigger trigger1;
     Trigger trigger2;
     Trigger trigger3;
-    
+
     // Chain triggers: trigger1 -> trigger2 -> trigger3
     std::thread chain([&trigger1, &trigger2, &trigger3]() {
         trigger1.wait();
         trigger2.trigger();
-        
+
         trigger2.wait();
         trigger3.trigger();
     });
-    
+
     std::atomic<bool> finalTriggered{false};
     std::thread finalWaiter([&trigger3, &finalTriggered]() {
         trigger3.wait();
         finalTriggered = true;
     });
-    
+
     // Start the chain
     trigger1.trigger();
-    
+
     chain.join();
     finalWaiter.join();
-    
+
     EXPECT_TRUE(finalTriggered);
 }
 
 TEST_F(TriggerTest, TriggerExceptionSafety) {
     struct ThrowingPredicate {
         bool shouldThrow = false;
-        
+
         bool operator()(int value) {
             if (shouldThrow && value == 999) {
                 throw std::runtime_error("Predicate exception");
@@ -369,19 +369,19 @@ TEST_F(TriggerTest, TriggerExceptionSafety) {
             return value > 100;
         }
     };
-    
+
     ThrowingPredicate predicate;
     PredicateTrigger<int> trigger(predicate);
-    
+
     // Normal operation
     trigger.update(50);
     EXPECT_FALSE(trigger.isTriggered());
-    
+
     trigger.update(150);
     EXPECT_TRUE(trigger.isTriggered());
-    
+
     trigger.reset();
-    
+
     // Exception in predicate
     predicate.shouldThrow = true;
     EXPECT_THROW(trigger.update(999), std::runtime_error);
@@ -392,12 +392,12 @@ TEST_F(TriggerTest, HighConcurrencyStressTest) {
     const int numTriggers = 100;
     std::vector<std::unique_ptr<Trigger>> triggers;
     std::atomic<int> completedWaiters{0};
-    
+
     // Create triggers
     for (int i = 0; i < numTriggers; ++i) {
         triggers.push_back(std::make_unique<Trigger>());
     }
-    
+
     // Create waiters
     std::vector<std::thread> waiters;
     for (int i = 0; i < numTriggers; ++i) {
@@ -406,19 +406,19 @@ TEST_F(TriggerTest, HighConcurrencyStressTest) {
             completedWaiters.fetch_add(1);
         });
     }
-    
+
     // Give waiters time to start
     std::this_thread::sleep_for(100ms);
-    
+
     // Trigger all
     for (auto& trigger : triggers) {
         trigger->trigger();
     }
-    
+
     for (auto& waiter : waiters) {
         waiter.join();
     }
-    
+
     EXPECT_EQ(completedWaiters.load(), numTriggers);
 }
 
