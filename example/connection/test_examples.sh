@@ -68,9 +68,9 @@ run_with_timeout() {
     local timeout=$1
     shift
     local cmd="$@"
-    
+
     log_verbose "Running command with timeout ${timeout}s: $cmd"
-    
+
     if command_exists timeout; then
         timeout "$timeout" $cmd
     else
@@ -92,9 +92,9 @@ record_test() {
     local test_name=$1
     local success=$2
     local message=$3
-    
+
     TOTAL_TESTS=$((TOTAL_TESTS + 1))
-    
+
     if [ "$success" = true ]; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
         log_success "PASS $test_name: $message"
@@ -107,13 +107,13 @@ record_test() {
 # Function to setup build environment
 setup_build_environment() {
     log_info "Setting up build environment..."
-    
+
     # Create build directory
     mkdir -p "$BUILD_DIR"
-    
+
     # Run CMake configuration
     log_verbose "Running CMake configuration..."
-    
+
     if ! cmake \
         -DATOM_EXAMPLE_CONNECTION_BUILD_ALL=ON \
         -DATOM_EXAMPLE_CONNECTION_VERBOSE=ON \
@@ -123,7 +123,7 @@ setup_build_environment() {
         log_error "CMake configuration failed"
         return 1
     fi
-    
+
     log_success "Build environment configured successfully"
     return 0
 }
@@ -131,7 +131,7 @@ setup_build_environment() {
 # Function to build examples
 build_examples() {
     local specific_example=$1
-    
+
     if [ -n "$specific_example" ]; then
         log_info "Building example: $specific_example..."
         local target="connection_$specific_example"
@@ -139,7 +139,7 @@ build_examples() {
         log_info "Building all connection examples..."
         local target="connection_examples_all"
     fi
-    
+
     if ! cmake --build "$BUILD_DIR" --target "$target" --parallel; then
         local error_msg="Build failed for $target"
         log_error "$error_msg"
@@ -148,7 +148,7 @@ build_examples() {
         fi
         return 1
     fi
-    
+
     local success_msg="Build successful for $target"
     log_success "$success_msg"
     if [ -n "$specific_example" ]; then
@@ -161,23 +161,23 @@ build_examples() {
 test_example_execution() {
     local example_name=$1
     local executable="$BUILD_DIR/connection_$example_name"
-    
+
     # Add .exe extension on Windows
     if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
         executable="${executable}.exe"
     fi
-    
+
     log_info "Testing execution of $example_name..."
-    
+
     # Check if executable exists
     if [ ! -f "$executable" ]; then
         record_test "run_$example_name" false "Executable not found: $executable"
         return 1
     fi
-    
+
     # Make executable if needed
     chmod +x "$executable" 2>/dev/null || true
-    
+
     # Determine test strategy based on example type
     case "$example_name" in
         *server|sockethub|async_sockethub)
@@ -215,22 +215,22 @@ test_server_example() {
     local name=$1
     local executable=$2
     local start_time=$(date +%s)
-    
+
     log_verbose "Testing server example: $name"
-    
+
     # Start server in background
     "$executable" &
     local pid=$!
-    
+
     # Let it run for a few seconds
     sleep 3
-    
+
     # Check if process is still running
     if kill -0 "$pid" 2>/dev/null; then
         # Server is running, terminate it gracefully
         kill -TERM "$pid" 2>/dev/null || kill -KILL "$pid" 2>/dev/null
         wait "$pid" 2>/dev/null || true
-        
+
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
         record_test "run_$name" true "Server ran successfully for ${duration}s"
@@ -247,9 +247,9 @@ test_client_example() {
     local name=$1
     local executable=$2
     local start_time=$(date +%s)
-    
+
     log_verbose "Testing client example: $name"
-    
+
     # Run client with timeout
     if run_with_timeout $TIMEOUT "$executable" >/dev/null 2>&1; then
         local end_time=$(date +%s)
@@ -259,7 +259,7 @@ test_client_example() {
         local exit_code=$?
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
-        
+
         # Client examples may fail if no server is running, which is expected
         if [ $exit_code -eq 124 ]; then
             record_test "run_$name" true "Timed out (expected for client without server)"
@@ -274,9 +274,9 @@ test_standalone_example() {
     local name=$1
     local executable=$2
     local start_time=$(date +%s)
-    
+
     log_verbose "Testing standalone example: $name"
-    
+
     if run_with_timeout $TIMEOUT "$executable" >/dev/null 2>&1; then
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
@@ -285,7 +285,7 @@ test_standalone_example() {
         local exit_code=$?
         local end_time=$(date +%s)
         local duration=$((end_time - start_time))
-        
+
         if [ $exit_code -eq 124 ]; then
             record_test "run_$name" true "Timed out (may be expected for some examples)"
         else
@@ -300,10 +300,10 @@ print_summary() {
     log_info "$(printf '=%.0s' {1..60})"
     log_info "$(printf '%s' "${BOLD}TEST SUMMARY${NC}")"
     log_info "$(printf '=%.0s' {1..60})"
-    
+
     echo
     log_info "Total: $TOTAL_TESTS, Passed: ${GREEN}$PASSED_TESTS${NC}, Failed: ${RED}$FAILED_TESTS${NC}"
-    
+
     if [ $FAILED_TESTS -eq 0 ]; then
         log_success "All tests passed! 🎉"
         return 0
@@ -365,29 +365,29 @@ done
 # Main execution
 main() {
     log_info "${BOLD}${MAGENTA}Starting Atom Connection Examples Test Suite${NC}"
-    
+
     # Check prerequisites
     if ! command_exists cmake; then
         log_error "CMake is required but not found"
         exit 1
     fi
-    
+
     # Setup build environment
     if ! setup_build_environment; then
         exit 1
     fi
-    
+
     # Build examples
     if ! build_examples "$SPECIFIC_EXAMPLE"; then
         exit 1
     fi
-    
+
     if [ "$BUILD_ONLY" = true ]; then
         log_warning "Build-only mode: skipping execution tests"
         print_summary
         exit $?
     fi
-    
+
     # Test execution
     if [ -n "$SPECIFIC_EXAMPLE" ]; then
         test_example_execution "$SPECIFIC_EXAMPLE"
@@ -399,7 +399,7 @@ main() {
             test_example_execution "$example"
         done
     fi
-    
+
     print_summary
     exit $?
 }

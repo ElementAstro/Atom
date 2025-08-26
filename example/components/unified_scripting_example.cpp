@@ -364,13 +364,13 @@ void demonstrateLanguageSpecificFeatures(UnifiedScriptingManager& manager) {
             name = "Lua Hero",
             stats = {strength = 10, agility = 8, intelligence = 12}
         }
-        
+
         -- Calculate total stats
         local total = 0
         for stat, value in pairs(character_data.stats) do
             total = total + value
         end
-        
+
         return "Total stats: " .. total
     )",
                                              "lua_tables");

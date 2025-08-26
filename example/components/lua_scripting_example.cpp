@@ -259,7 +259,7 @@ void demonstrateLuaComponentBinding() {
         component_move(10, 20)
         return "Movement completed"
     )", "move_test");
-    
+
     if (result1.success) {
         std::cout << "Move script result: " << result1.output << std::endl;
     }
@@ -271,18 +271,18 @@ void demonstrateLuaComponentBinding() {
     auto result2 = luaEngine->executeScript(R"(
         print("Initial status:")
         print(component_status())
-        
+
         print("Taking 30 damage...")
         local health = component_damage(30)
         print("Health after damage: " .. health)
-        
+
         print("Healing 15 points...")
         health = component_heal(15)
         print("Health after healing: " .. health)
-        
+
         print("Final status:")
         print(component_status())
-        
+
         return "Combat simulation completed"
     )",
                                             "combat_test");
