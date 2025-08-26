@@ -688,3 +688,158 @@ TEST_F(RingBufferTest, EmptyIterator) {
     }
     EXPECT_EQ(count, 1);
 }
+
+// Additional edge case tests for RingBuffer
+TEST_F(RingBufferTest, IteratorInvalidation) {
+    RingBuffer<int> buffer(5);
+    buffer.push(1);
+    buffer.push(2);
+    buffer.push(3);
+
+    auto it = buffer.begin();
+    EXPECT_EQ(*it, 1);
+
+    // Modify buffer while iterator exists
+    buffer.push(4);
+    buffer.pop();  // Remove first element
+
+    // Iterator behavior after modification is implementation-defined
+    // We just ensure no crash occurs
+    auto new_it = buffer.begin();
+    EXPECT_NE(new_it, buffer.end());
+}
+
+TEST_F(RingBufferTest, ViewAfterModification) {
+    RingBuffer<int> buffer(3);
+    buffer.push(1);
+    buffer.push(2);
+
+    auto view1 = buffer.view();
+    EXPECT_EQ(view1.size(), 2);
+    EXPECT_EQ(view1[0], 1);
+    EXPECT_EQ(view1[1], 2);
+
+    // Modify buffer
+    buffer.push(3);
+    buffer.pop();
+
+    // Get new view
+    auto view2 = buffer.view();
+    EXPECT_EQ(view2.size(), 2);
+    EXPECT_EQ(view2[0], 2);
+    EXPECT_EQ(view2[1], 3);
+}
+
+TEST_F(RingBufferTest, ContainsAfterWrapAround) {
+    RingBuffer<int> buffer(3);
+    buffer.push(1);
+    buffer.push(2);
+    buffer.push(3);
+
+    EXPECT_TRUE(buffer.contains(1));
+    EXPECT_TRUE(buffer.contains(2));
+    EXPECT_TRUE(buffer.contains(3));
+
+    // Cause wrap-around
+    buffer.pushOverwrite(4);
+    buffer.pushOverwrite(5);
+
+    EXPECT_FALSE(buffer.contains(1));
+    EXPECT_FALSE(buffer.contains(2));
+    EXPECT_TRUE(buffer.contains(3));
+    EXPECT_TRUE(buffer.contains(4));
+    EXPECT_TRUE(buffer.contains(5));
+}
+
+TEST_F(RingBufferTest, AtEdgeCases) {
+    RingBuffer<int> buffer(3);
+
+    // Test at() on empty buffer
+    EXPECT_EQ(buffer.at(0), std::nullopt);
+    EXPECT_EQ(buffer.at(1), std::nullopt);
+
+    buffer.push(1);
+    buffer.push(2);
+
+    // Test valid indices
+    EXPECT_EQ(buffer.at(0), 1);
+    EXPECT_EQ(buffer.at(1), 2);
+
+    // Test invalid indices
+    EXPECT_EQ(buffer.at(2), std::nullopt);
+    EXPECT_EQ(buffer.at(100), std::nullopt);
+}
+
+TEST_F(RingBufferTest, ForEachExceptionSafety) {
+    RingBuffer<int> buffer(3);
+    buffer.push(1);
+    buffer.push(2);
+    buffer.push(3);
+
+    // Test forEach with exception
+    EXPECT_THROW(
+        buffer.forEach([](int& value) {
+            if (value == 2) {
+                throw std::runtime_error("test exception");
+            }
+            value *= 2;
+        }),
+        std::runtime_error
+    );
+
+    // Buffer should still be functional
+    EXPECT_EQ(buffer.size(), 3);
+    EXPECT_EQ(*buffer.front(), 2);  // First element was modified
+    EXPECT_EQ(*buffer.at(1), 2);    // Second element unchanged due to exception
+}
+
+TEST_F(RingBufferTest, RemoveIfExceptionSafety) {
+    RingBuffer<int> buffer(5);
+    buffer.push(1);
+    buffer.push(2);
+    buffer.push(3);
+    buffer.push(4);
+
+    // Test removeIf with exception
+    EXPECT_THROW(
+        buffer.removeIf([](const int& value) -> bool {
+            if (value == 3) {
+                throw std::runtime_error("test exception");
+            }
+            return value % 2 == 0;
+        }),
+        std::runtime_error
+    );
+
+    // Buffer should still be functional
+    EXPECT_GT(buffer.size(), 0);
+    auto view = buffer.view();
+    EXPECT_GT(view.size(), 0);
+}
+
+TEST_F(RingBufferTest, RotateExtremeValues) {
+    RingBuffer<int> buffer(5);
+    buffer.push(1);
+    buffer.push(2);
+    buffer.push(3);
+
+    // Rotate by buffer size (should be equivalent to no rotation)
+    buffer.rotate(5);
+    auto view1 = buffer.view();
+    EXPECT_EQ(view1[0], 1);
+    EXPECT_EQ(view1[1], 2);
+    EXPECT_EQ(view1[2], 3);
+
+    // Rotate by multiple of buffer size
+    buffer.rotate(10);
+    auto view2 = buffer.view();
+    EXPECT_EQ(view2[0], 1);
+    EXPECT_EQ(view2[1], 2);
+    EXPECT_EQ(view2[2], 3);
+
+    // Rotate by negative value (if supported)
+    // This test depends on implementation
+    buffer.rotate(-1);
+    auto view3 = buffer.view();
+    EXPECT_EQ(view3.size(), 3);
+}

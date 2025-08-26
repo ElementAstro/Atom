@@ -6,6 +6,8 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <thread>
+#include <atomic>
 #include <spdlog/spdlog.h>
 #include "atom/algorithm/md5.hpp"
 
@@ -369,3 +371,181 @@ TEST_F(MD5Test, RepeatedStaticUsage) {
     // Different input should give different hash
     EXPECT_NE(hash1_1, hash2);
 }
+
+// Test SIMD optimization paths
+TEST_F(MD5Test, SIMDOptimizationPaths) {
+    // Test with data sizes that would trigger SIMD optimizations
+    std::vector<size_t> test_sizes = {64, 128, 256, 512, 1024, 2048, 4096};
+
+    for (size_t size : test_sizes) {
+        std::vector<std::byte> data = generateRandomBytes(size);
+
+        // Hash the data
+        std::string hash = MD5::encryptBinary(data);
+
+        // Verify hash format
+        EXPECT_EQ(hash.length(), 32);
+        for (char c : hash) {
+            bool isHex = (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f');
+            EXPECT_TRUE(isHex) << "Invalid hex character in hash: " << c;
+        }
+
+        // Hash should be deterministic
+        std::string hash2 = MD5::encryptBinary(data);
+        EXPECT_EQ(hash, hash2);
+    }
+}
+
+// Test concurrent thread safety
+TEST_F(MD5Test, ConcurrentThreadSafety) {
+    const int num_threads = 4;
+    const int hashes_per_thread = 100;
+
+    std::vector<std::thread> threads;
+    std::vector<std::vector<std::string>> results(num_threads);
+
+    // Prepare test data
+    std::vector<std::string> test_inputs;
+    for (int i = 0; i < hashes_per_thread; ++i) {
+        test_inputs.push_back("test_input_" + std::to_string(i));
+    }
+
+    // Launch threads that compute hashes
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([&, i]() {
+            for (int j = 0; j < hashes_per_thread; ++j) {
+                std::string hash = MD5::encrypt(test_inputs[j]);
+                results[i].push_back(hash);
+            }
+        });
+    }
+
+    // Wait for all threads to complete
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // All threads should produce identical results
+    for (int i = 1; i < num_threads; ++i) {
+        EXPECT_EQ(results[0], results[i]);
+    }
+}
+
+// Test with various binary patterns
+TEST_F(MD5Test, BinaryPatterns) {
+    // Test with all zeros
+    std::vector<std::byte> zeros(1024, std::byte{0});
+    std::string hash_zeros = MD5::encryptBinary(zeros);
+    EXPECT_EQ(hash_zeros.length(), 32);
+
+    // Test with all ones
+    std::vector<std::byte> ones(1024, std::byte{0xFF});
+    std::string hash_ones = MD5::encryptBinary(ones);
+    EXPECT_EQ(hash_ones.length(), 32);
+
+    // Test with alternating pattern
+    std::vector<std::byte> alternating(1024);
+    for (size_t i = 0; i < alternating.size(); ++i) {
+        alternating[i] = (i % 2 == 0) ? std::byte{0xAA} : std::byte{0x55};
+    }
+    std::string hash_alt = MD5::encryptBinary(alternating);
+    EXPECT_EQ(hash_alt.length(), 32);
+
+    // All hashes should be different
+    EXPECT_NE(hash_zeros, hash_ones);
+    EXPECT_NE(hash_zeros, hash_alt);
+    EXPECT_NE(hash_ones, hash_alt);
+}
+
+// Test memory-mapped file simulation
+TEST_F(MD5Test, LargeDataStreaming) {
+    // Simulate processing very large data in chunks
+    const size_t chunk_size = 8192;  // 8KB chunks
+    const size_t total_chunks = 128; // Total 1MB
+
+    // Generate consistent test data
+    std::vector<std::byte> full_data;
+    full_data.reserve(chunk_size * total_chunks);
+
+    for (size_t chunk = 0; chunk < total_chunks; ++chunk) {
+        for (size_t i = 0; i < chunk_size; ++i) {
+            full_data.push_back(std::byte{static_cast<unsigned char>((chunk + i) % 256)});
+        }
+    }
+
+    // Hash the full data at once
+    std::string full_hash = MD5::encryptBinary(full_data);
+
+    // Hash in chunks (simulating streaming)
+    // Note: MD5 class doesn't expose incremental API, so we test consistency
+    std::vector<std::string> chunk_hashes;
+    for (size_t chunk = 0; chunk < total_chunks; ++chunk) {
+        size_t start = chunk * chunk_size;
+        std::vector<std::byte> chunk_data(full_data.begin() + start,
+                                         full_data.begin() + start + chunk_size);
+        chunk_hashes.push_back(MD5::encryptBinary(chunk_data));
+    }
+
+    // Verify that full hash is consistent
+    std::string full_hash2 = MD5::encryptBinary(full_data);
+    EXPECT_EQ(full_hash, full_hash2);
+
+    // Each chunk should produce a valid hash
+    for (const auto& chunk_hash : chunk_hashes) {
+        EXPECT_EQ(chunk_hash.length(), 32);
+    }
+}
+
+// Test error conditions and edge cases
+TEST_F(MD5Test, ErrorConditionsAndEdgeCases) {
+    // Test with maximum size data that fits in memory
+    try {
+        // Create moderately large data (10MB)
+        const size_t large_size = 10 * 1024 * 1024;
+        std::vector<std::byte> large_data(large_size, std::byte{0x42});
+
+        std::string hash = MD5::encryptBinary(large_data);
+        EXPECT_EQ(hash.length(), 32);
+
+        // Hash should be deterministic
+        std::string hash2 = MD5::encryptBinary(large_data);
+        EXPECT_EQ(hash, hash2);
+
+    } catch (const std::bad_alloc&) {
+        // If we can't allocate 10MB, skip this test
+        GTEST_SKIP() << "Insufficient memory for large data test";
+    }
+}
+
+// Test verification with edge cases
+TEST_F(MD5Test, VerificationEdgeCases) {
+    // Test verification with empty string
+    EXPECT_TRUE(MD5::verify("", "d41d8cd98f00b204e9800998ecf8427e"));
+
+    // Test verification with single character
+    EXPECT_TRUE(MD5::verify("a", "0cc175b9c0f1b6a831c399e269772661"));
+
+    // Test verification with case sensitivity
+    std::string input = "Test";
+    std::string correct_hash = MD5::encrypt(input);
+    std::string wrong_case_hash = correct_hash;
+    if (wrong_case_hash[0] >= 'a' && wrong_case_hash[0] <= 'f') {
+        wrong_case_hash[0] = wrong_case_hash[0] - 'a' + 'A'; // Convert to uppercase
+    } else if (wrong_case_hash[0] >= 'A' && wrong_case_hash[0] <= 'F') {
+        wrong_case_hash[0] = wrong_case_hash[0] - 'A' + 'a'; // Convert to lowercase
+    }
+
+    EXPECT_TRUE(MD5::verify(input, correct_hash));
+    EXPECT_FALSE(MD5::verify(input, wrong_case_hash));
+
+    // Test with invalid hash length
+    EXPECT_FALSE(MD5::verify(input, "short"));
+    EXPECT_FALSE(MD5::verify(input, "this_hash_is_way_too_long_to_be_valid"));
+
+    // Test with invalid hex characters
+    std::string invalid_hash = correct_hash;
+    invalid_hash[0] = 'g'; // Invalid hex character
+    EXPECT_FALSE(MD5::verify(input, invalid_hash));
+}
+
+} // namespace atom::algorithm::test

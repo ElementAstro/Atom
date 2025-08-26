@@ -597,3 +597,272 @@ TEST_F(ObjectPoolTest, PerformanceComparison) {
     // Pool should generally be faster after warmup, but we don't assert this
     // as performance can vary by platform
 }
+
+// Additional edge case tests for ObjectPool
+TEST_F(ObjectPoolTest, ValidatorEdgeCases) {
+    // Test with validator that always returns false
+    ObjectPool<TestObject>::PoolConfig config;
+    config.validator = [](const TestObject&) { return false; };
+
+    ObjectPool<TestObject> pool(5, 0, nullptr, config);
+    pool.prefill(3);
+
+    // All objects should be considered invalid and recreated
+    auto obj = pool.acquire();
+    EXPECT_NE(obj, nullptr);
+    EXPECT_EQ(obj->value, 0);  // Should be newly created
+
+    // Pool should have fewer available objects due to validation failures
+    EXPECT_LE(pool.available(), 5);
+}
+
+TEST_F(ObjectPoolTest, TimeoutEdgeCases) {
+    ObjectPool<TestObject> pool(1);
+    auto obj = pool.acquire();  // Acquire the only object
+
+    // Test with zero timeout
+    auto result1 = pool.tryAcquireFor(std::chrono::milliseconds(0));
+    EXPECT_FALSE(result1.has_value());
+
+    // Test with very short timeout
+    auto result2 = pool.tryAcquireFor(std::chrono::microseconds(1));
+    EXPECT_FALSE(result2.has_value());
+
+    // Release and test immediate acquisition
+    obj.reset();
+    auto result3 = pool.tryAcquireFor(std::chrono::milliseconds(0));
+    EXPECT_TRUE(result3.has_value());
+}
+
+TEST_F(ObjectPoolTest, StatisticsEdgeCases) {
+    ObjectPool<TestObject> pool(10);
+
+    // Test statistics with no operations
+    auto stats1 = pool.getStats();
+    EXPECT_EQ(stats1.hits, 0);
+    EXPECT_EQ(stats1.misses, 0);
+    EXPECT_EQ(stats1.timeout_count, 0);
+
+    // Test statistics overflow protection (if implemented)
+    // This would require many operations to test properly
+    for (int i = 0; i < 1000; ++i) {
+        auto obj = pool.acquire();
+        obj.reset();
+    }
+
+    auto stats2 = pool.getStats();
+    EXPECT_EQ(stats2.hits, 1000);
+    EXPECT_EQ(stats2.misses, 0);
+}
+
+TEST_F(ObjectPoolTest, ResizeEdgeCases) {
+    ObjectPool<TestObject> pool(10);
+    pool.prefill(5);
+
+    // Resize to zero
+    pool.resize(0);
+    EXPECT_EQ(pool.available(), 0);
+    EXPECT_EQ(pool.size(), 0);
+
+    // Try to acquire from empty pool
+    EXPECT_THROW([[maybe_unused]] auto temp = pool.acquire(), std::runtime_error);
+
+    // Resize back to positive size
+    pool.resize(5);
+    EXPECT_EQ(pool.available(), 5);
+
+    auto obj = pool.acquire();
+    EXPECT_NE(obj, nullptr);
+}
+
+TEST_F(ObjectPoolTest, ApplyToAllEdgeCases) {
+    ObjectPool<TestObject> pool(10);
+
+    // Apply to empty pool
+    int count = 0;
+    pool.applyToAll([&count](TestObject&) { count++; });
+    EXPECT_EQ(count, 0);
+
+    // Apply with exception in lambda
+    pool.prefill(3);
+    EXPECT_THROW(
+        pool.applyToAll([](TestObject&) { throw std::runtime_error("test"); }),
+        std::runtime_error
+    );
+
+    // Pool should still be functional after exception
+    auto obj = pool.acquire();
+    EXPECT_NE(obj, nullptr);
+}
+
+TEST_F(ObjectPoolTest, AcquireBatchEdgeCases) {
+    ObjectPool<TestObject> pool(5);
+
+    // Acquire batch larger than pool size
+    EXPECT_THROW([[maybe_unused]] auto temp1 = pool.acquireBatch(10), std::runtime_error);
+
+    // Acquire maximum batch size
+    auto objects = pool.acquireBatch(5);
+    EXPECT_EQ(objects.size(), 5);
+    EXPECT_EQ(pool.available(), 0);
+
+    // Try to acquire more when pool is empty
+    EXPECT_THROW([[maybe_unused]] auto temp2 = pool.acquireBatch(1), std::runtime_error);
+
+    // Release all and try again
+    objects.clear();
+    auto objects2 = pool.acquireBatch(3);
+    EXPECT_EQ(objects2.size(), 3);
+    EXPECT_EQ(pool.available(), 2);
+}
+
+// Advanced thread safety tests for ObjectPool
+TEST_F(ObjectPoolTest, ConcurrentAcquireRelease) {
+    ObjectPool<TestObject> pool(20);
+    constexpr int numThreads = 6;
+    constexpr int operationsPerThread = 200;
+    std::vector<std::thread> threads;
+    std::atomic<int> totalAcquisitions{0};
+    std::atomic<int> totalReleases{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&pool, &totalAcquisitions, &totalReleases, operationsPerThread, i]() {
+            std::vector<std::shared_ptr<TestObject>> localObjects;
+
+            for (int j = 0; j < operationsPerThread; ++j) {
+                if (j % 3 == 0) {
+                    // Acquire object
+                    try {
+                        auto obj = pool.acquire();
+                        if (obj) {
+                            obj->value = i * 1000 + j;
+                            localObjects.push_back(obj);
+                            totalAcquisitions++;
+                        }
+                    } catch (const std::runtime_error&) {
+                        // Pool might be full, continue
+                    }
+                } else if (!localObjects.empty() && j % 3 == 1) {
+                    // Release object
+                    localObjects.pop_back();
+                    totalReleases++;
+                }
+
+                // Small delay to increase thread interleaving
+                if (j % 50 == 0) {
+                    std::this_thread::sleep_for(std::chrono::microseconds(1));
+                }
+            }
+
+            // Release remaining objects
+            totalReleases += localObjects.size();
+            localObjects.clear();
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Verify final state
+    EXPECT_EQ(totalAcquisitions.load(), totalReleases.load());
+    EXPECT_EQ(pool.inUseCount(), 0);
+}
+
+TEST_F(ObjectPoolTest, ConcurrentBatchOperations) {
+    ObjectPool<TestObject> pool(50);
+    constexpr int numThreads = 4;
+    std::vector<std::thread> threads;
+    std::atomic<int> successfulBatches{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&pool, &successfulBatches, i]() {
+            for (int j = 0; j < 20; ++j) {
+                try {
+                    size_t batchSize = 3 + (j % 5);  // Batch sizes 3-7
+                    auto objects = pool.acquireBatch(batchSize);
+
+                    if (objects.size() == batchSize) {
+                        successfulBatches++;
+
+                        // Modify objects
+                        for (size_t k = 0; k < objects.size(); ++k) {
+                            objects[k]->value = i * 10000 + j * 100 + k;
+                        }
+
+                        // Hold objects for a short time
+                        std::this_thread::sleep_for(std::chrono::microseconds(10));
+
+                        // Objects are automatically released when vector goes out of scope
+                    }
+                } catch (const std::runtime_error&) {
+                    // Pool might not have enough objects, continue
+                }
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(successfulBatches.load(), 0);
+    EXPECT_EQ(pool.inUseCount(), 0);
+}
+
+TEST_F(ObjectPoolTest, ConcurrentResizeOperations) {
+    ObjectPool<TestObject> pool(10);
+    std::vector<std::thread> threads;
+    std::atomic<bool> stopFlag{false};
+
+    // Thread that continuously acquires and releases objects
+    threads.emplace_back([&pool, &stopFlag]() {
+        std::vector<std::shared_ptr<TestObject>> objects;
+        while (!stopFlag.load()) {
+            try {
+                auto obj = pool.acquire();
+                if (obj) {
+                    objects.push_back(obj);
+                }
+
+                if (objects.size() > 5) {
+                    objects.erase(objects.begin(), objects.begin() + 3);
+                }
+            } catch (const std::runtime_error&) {
+                // Pool might be resizing, continue
+            }
+
+            std::this_thread::sleep_for(std::chrono::microseconds(100));
+        }
+        objects.clear();
+    });
+
+    // Thread that continuously resizes the pool
+    threads.emplace_back([&pool, &stopFlag]() {
+        std::vector<size_t> sizes = {5, 15, 8, 20, 12};
+        size_t sizeIndex = 0;
+
+        while (!stopFlag.load()) {
+            try {
+                pool.resize(sizes[sizeIndex]);
+                sizeIndex = (sizeIndex + 1) % sizes.size();
+            } catch (const std::runtime_error&) {
+                // Resize might fail if too many objects in use
+            }
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    });
+
+    // Let threads run for a short time
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    stopFlag = true;
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Pool should be in a consistent state
+    EXPECT_GE(pool.available(), 0);
+    EXPECT_GE(pool.size(), 0);
+}

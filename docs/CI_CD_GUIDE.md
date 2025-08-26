@@ -30,6 +30,7 @@ The Atom library uses GitHub Actions for CI/CD with the following key features:
 **Triggers**: Push to main/develop, Pull requests, Manual dispatch
 
 **Jobs**:
+
 - **Code Quality**: Static analysis, formatting checks, linting
 - **Build Matrix**: Multi-platform builds with different configurations
 - **Python Bindings**: Test Python bindings across Python versions
@@ -37,6 +38,7 @@ The Atom library uses GitHub Actions for CI/CD with the following key features:
 - **Performance Benchmarks**: Automated performance testing
 
 **Configuration Example**:
+
 ```yaml
 strategy:
   matrix:
@@ -50,6 +52,7 @@ strategy:
 **Triggers**: Git tags (v*), Manual dispatch
 
 **Jobs**:
+
 - **Build Release**: Create optimized builds for all platforms
 - **Python Wheels**: Build Python wheels using cibuildwheel
 - **Documentation**: Generate and deploy documentation
@@ -57,6 +60,7 @@ strategy:
 - **Package Distribution**: Deploy to PyPI, create vcpkg port
 
 **Artifacts Created**:
+
 - Binary packages (tar.gz, zip)
 - Python wheels (.whl)
 - Documentation (HTML)
@@ -68,6 +72,7 @@ strategy:
 **Triggers**: Push, Pull requests, Weekly schedule, Manual dispatch
 
 **Analysis Tools**:
+
 - **Static Analysis**: cppcheck, clang-tidy, cpplint
 - **Security**: CodeQL, Semgrep
 - **Memory Safety**: AddressSanitizer, MemorySanitizer, Valgrind
@@ -79,6 +84,7 @@ strategy:
 **Triggers**: Weekly schedule, Manual dispatch
 
 **Update Types**:
+
 - **vcpkg Baseline**: Update to latest vcpkg commit
 - **Git Submodules**: Update submodule references
 - **Python Dependencies**: Update Python package versions
@@ -196,11 +202,13 @@ cmake -B build-debug \
 ### Automated Release
 
 1. **Version Bump**: Use version management script
+
    ```bash
    ./scripts/version-manager.sh release minor
    ```
 
 2. **Push Tag**: The release workflow triggers automatically
+
    ```bash
    git push origin v1.2.0
    ```
@@ -210,6 +218,7 @@ cmake -B build-debug \
 ### Manual Release
 
 1. **Prepare Release**:
+
    ```bash
    # Update version
    ./scripts/version-manager.sh set 1.2.0
@@ -224,6 +233,7 @@ cmake -B build-debug \
    ```
 
 2. **Trigger Workflow**:
+
    ```bash
    git push origin main
    git push origin v1.2.0
@@ -243,6 +253,7 @@ cmake -B build-debug \
 ### Workflow Status
 
 Monitor workflow status through:
+
 - GitHub Actions tab
 - Status badges in README
 - Email notifications (configure in GitHub settings)
@@ -252,6 +263,7 @@ Monitor workflow status through:
 Common failure scenarios and solutions:
 
 #### Build Failures
+
 ```bash
 # Check build logs
 # Fix compilation errors
@@ -259,6 +271,7 @@ Common failure scenarios and solutions:
 ```
 
 #### Test Failures
+
 ```bash
 # Review test output
 # Fix failing tests
@@ -266,6 +279,7 @@ Common failure scenarios and solutions:
 ```
 
 #### Dependency Issues
+
 ```bash
 # Update vcpkg baseline
 # Resolve version conflicts
@@ -275,6 +289,7 @@ Common failure scenarios and solutions:
 ### Performance Monitoring
 
 Track build performance:
+
 - Build times across platforms
 - Test execution times
 - Package sizes
@@ -283,6 +298,7 @@ Track build performance:
 ### Security Monitoring
 
 Regular security practices:
+
 - CodeQL analysis results
 - Dependency vulnerability scans
 - Secret scanning
@@ -291,18 +307,21 @@ Regular security practices:
 ### Maintenance Tasks
 
 #### Weekly
+
 - Review dependency update PRs
 - Check security scan results
 - Monitor build performance
 - Update documentation
 
 #### Monthly
+
 - Review and update CI configuration
 - Analyze build metrics
 - Update development tools
 - Security audit
 
 #### Quarterly
+
 - Major dependency updates
 - CI/CD system improvements
 - Performance optimization
@@ -311,24 +330,28 @@ Regular security practices:
 ## Best Practices
 
 ### Workflow Design
+
 - Keep workflows focused and modular
 - Use matrix builds for comprehensive testing
 - Implement proper caching strategies
 - Handle failures gracefully
 
 ### Security
+
 - Use minimal required permissions
 - Store secrets securely
 - Regularly update actions
 - Monitor for vulnerabilities
 
 ### Performance
+
 - Optimize build times with caching
 - Use parallel builds
 - Minimize artifact sizes
 - Monitor resource usage
 
 ### Maintenance
+
 - Keep workflows up to date
 - Document configuration changes
 - Monitor for deprecated features
@@ -339,16 +362,19 @@ Regular security practices:
 ### Common Issues
 
 #### Workflow Not Triggering
+
 - Check trigger conditions
 - Verify branch protection rules
 - Check repository permissions
 
 #### Build Timeouts
+
 - Increase timeout values
 - Optimize build process
 - Use better caching
 
 #### Artifact Upload Failures
+
 - Check artifact sizes
 - Verify paths exist
 - Check permissions
@@ -361,6 +387,7 @@ Regular security practices:
 - Contact maintainers
 
 For more information, see:
+
 - [Build Guide](BUILD_GUIDE.md)
 - [Distribution Guide](DISTRIBUTION_GUIDE.md)
 - [GitHub Actions Documentation](https://docs.github.com/en/actions)

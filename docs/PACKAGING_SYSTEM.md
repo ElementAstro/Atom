@@ -141,6 +141,7 @@ vcpkg install atom[all]
 ```
 
 **Features available:**
+
 - `core`, `algorithm`, `async`, `components`, `connection`, `containers`
 - `image`, `io`, `memory`, `meta`, `search`, `secret`, `serial`
 - `sysinfo`, `system`, `web`
@@ -170,6 +171,7 @@ conan install . --build=missing
 ### System Package Managers
 
 #### Ubuntu/Debian
+
 ```bash
 # Add repository
 curl -fsSL https://packages.elementastro.org/gpg | sudo apt-key add -
@@ -184,6 +186,7 @@ sudo apt install libatom-core-dev libatom-imaging-dev
 ```
 
 #### macOS (Homebrew)
+
 ```bash
 # Install
 brew install atom
@@ -193,6 +196,7 @@ brew install atom --with-python --with-imaging
 ```
 
 #### Windows (Chocolatey)
+
 ```powershell
 # Install
 choco install atom
@@ -420,6 +424,7 @@ python scripts/build-and-package.py \
 ### Adding New Components
 
 1. **Register Component**:
+
    ```cmake
    atom_register_component(newcomponent
        DESCRIPTION "New component description"
@@ -434,6 +439,7 @@ python scripts/build-and-package.py \
    - Add to modular installer mapping
 
 3. **Test Integration**:
+
    ```bash
    python scripts/build-and-package.py --components newcomponent
    python scripts/validate-package.py dist/atom-newcomponent-*.tar.gz

@@ -173,6 +173,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
 ### Windows
 
 #### Prerequisites
+
 - Windows 10 or later (x64)
 - Visual Studio 2019 or later (for building from source)
 - CMake 3.21 or later
@@ -180,6 +181,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
 #### Installation Options
 
 1. **MSI Installer (Recommended)**
+
    ```powershell
    # Download and run the MSI installer
    Invoke-WebRequest -Uri "https://github.com/ElementAstro/Atom/releases/latest/download/atom-windows-x64.msi" -OutFile "atom-installer.msi"
@@ -187,6 +189,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
    ```
 
 2. **Portable ZIP**
+
    ```powershell
    # Download and extract portable version
    Invoke-WebRequest -Uri "https://github.com/ElementAstro/Atom/releases/latest/download/atom-windows-x64-portable.zip" -OutFile "atom-portable.zip"
@@ -199,17 +202,20 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
 ### macOS
 
 #### Prerequisites
+
 - macOS 10.15 (Catalina) or later
 - Xcode Command Line Tools
 
 #### Installation Options
 
 1. **Homebrew (Recommended)**
+
    ```bash
    brew install atom
    ```
 
 2. **DMG Installer**
+
    ```bash
    # Download and mount DMG
    curl -L -o atom-installer.dmg "https://github.com/ElementAstro/Atom/releases/latest/download/atom-macos-x64.dmg"
@@ -218,6 +224,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
    ```
 
 3. **PKG Installer**
+
    ```bash
    # Download and install PKG
    curl -L -o atom-installer.pkg "https://github.com/ElementAstro/Atom/releases/latest/download/atom-macos-x64.pkg"
@@ -227,6 +234,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
 ### Linux
 
 #### Prerequisites
+
 - GCC 9+ or Clang 10+
 - CMake 3.21+
 - Standard development tools
@@ -234,6 +242,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
 #### Installation Options
 
 1. **Package Manager (Recommended)**
+
    ```bash
    # Ubuntu/Debian
    sudo apt install libatom-dev
@@ -246,6 +255,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
    ```
 
 2. **AppImage (Universal)**
+
    ```bash
    # Download and run AppImage
    wget "https://github.com/ElementAstro/Atom/releases/latest/download/atom-linux-x64.AppImage"
@@ -254,6 +264,7 @@ Download pre-built packages from [GitHub Releases](https://github.com/ElementAst
    ```
 
 3. **Tarball**
+
    ```bash
    # Download and extract
    wget "https://github.com/ElementAstro/Atom/releases/latest/download/atom-linux-x64.tar.gz"
@@ -409,11 +420,13 @@ atom-portable/
 ### Prerequisites
 
 #### All Platforms
+
 - CMake 3.21 or later
 - C++20 compatible compiler
 - Git
 
 #### Platform-Specific
+
 - **Windows**: Visual Studio 2019+ or MinGW-w64
 - **macOS**: Xcode Command Line Tools
 - **Linux**: GCC 9+ or Clang 10+
@@ -474,11 +487,13 @@ cmake --install build
 #### 1. CMake Configuration Fails
 
 **Problem**: CMake cannot find dependencies
+
 ```
 CMake Error: Could not find OpenSSL
 ```
 
 **Solution**:
+
 ```bash
 # Install dependencies first
 ./scripts/package-manager.sh install-deps
@@ -492,11 +507,13 @@ cmake -B build -S . \
 #### 2. Build Fails with C++20 Errors
 
 **Problem**: Compiler doesn't support C++20
+
 ```
 error: 'std::format' is not a member of 'std'
 ```
 
 **Solution**:
+
 ```bash
 # Update compiler
 # Ubuntu
@@ -513,11 +530,13 @@ xcode-select --install
 #### 3. Python Bindings Import Error
 
 **Problem**: Cannot import atom module
+
 ```python
 ImportError: No module named 'atom'
 ```
 
 **Solution**:
+
 ```bash
 # Ensure Python bindings were built
 cmake -B build -S . -DATOM_BUILD_PYTHON_BINDINGS=ON
@@ -533,11 +552,13 @@ export PYTHONPATH=$PWD/build:$PYTHONPATH
 #### 4. Missing System Libraries
 
 **Problem**: Runtime library not found
+
 ```
 error while loading shared libraries: libatom.so.1: cannot open shared object file
 ```
 
 **Solution**:
+
 ```bash
 # Update library cache
 sudo ldconfig
@@ -552,11 +573,13 @@ source tools/setup-env.sh
 #### 5. vcpkg Integration Issues
 
 **Problem**: vcpkg packages not found
+
 ```
 CMake Error: Could not find package configuration file
 ```
 
 **Solution**:
+
 ```bash
 # Ensure vcpkg toolchain is used
 cmake -B build -S . \
@@ -571,7 +594,7 @@ cmake -B build -S . \
 1. **Check Documentation**: [https://elementastro.github.io/Atom/](https://elementastro.github.io/Atom/)
 2. **GitHub Issues**: [https://github.com/ElementAstro/Atom/issues](https://github.com/ElementAstro/Atom/issues)
 3. **Discussions**: [https://github.com/ElementAstro/Atom/discussions](https://github.com/ElementAstro/Atom/discussions)
-4. **Email Support**: max@example.com
+4. **Email Support**: <max@example.com>
 
 ### Diagnostic Information
 
@@ -602,6 +625,7 @@ After installation:
 4. **Contribute**: See `CONTRIBUTING.md` for contribution guidelines
 
 For more detailed information, see:
+
 - [API Documentation](API_REFERENCE.md)
 - [Examples Guide](EXAMPLES_GUIDE.md)
 - [Development Guide](DEVELOPMENT_GUIDE.md)

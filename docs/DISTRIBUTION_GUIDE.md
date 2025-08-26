@@ -37,6 +37,7 @@ The Atom library supports multiple distribution formats and channels to accommod
 ```
 
 **Contents**:
+
 - Source code (`atom/`, `python/`, `example/`)
 - Build configuration (`CMakeLists.txt`, `xmake.lua`)
 - Documentation (`README.md`, `docs/`)
@@ -50,6 +51,7 @@ The Atom library supports multiple distribution formats and channels to accommod
 **Use case**: Quick integration, production deployment
 
 **Structure**:
+
 ```
 atom-1.0.0-linux-x64/
 ├── include/
@@ -77,6 +79,7 @@ pip install atom-1.0.0-cp311-cp311-linux_x86_64.whl
 ### System Packages
 
 #### Debian/Ubuntu (.deb)
+
 ```bash
 # Install
 sudo dpkg -i libatom-dev_1.0.0-1_amd64.deb
@@ -84,6 +87,7 @@ sudo apt-get install -f
 ```
 
 #### Red Hat/CentOS (.rpm)
+
 ```bash
 # Build RPM
 rpmbuild -ba atom.spec
@@ -93,6 +97,7 @@ sudo rpm -i atom-1.0.0-1.x86_64.rpm
 ```
 
 #### Arch Linux (PKGBUILD)
+
 ```bash
 # Build and install
 makepkg -si
@@ -116,12 +121,14 @@ Use the distribution script for comprehensive package creation:
 ### Manual Creation
 
 #### Source Package
+
 ```bash
 # Create source archive
 git archive --format=tar.gz --prefix=atom-1.0.0/ HEAD > atom-1.0.0-source.tar.gz
 ```
 
 #### Binary Package
+
 ```bash
 # Build and install to temporary directory
 cmake -B build -DCMAKE_INSTALL_PREFIX=/tmp/atom-install
@@ -133,6 +140,7 @@ tar -czf atom-1.0.0-linux-x64.tar.gz -C /tmp atom-install
 ```
 
 #### Python Wheel
+
 ```bash
 # Build wheel
 python -m build --wheel
@@ -190,6 +198,7 @@ python -m twine upload --repository testpypi dist/*.whl
 ### vcpkg Registry
 
 **Process**:
+
 1. Create port files (`ports/atom/`)
 2. Submit PR to vcpkg registry
 3. Automatic integration after approval
@@ -202,6 +211,7 @@ vcpkg install atom --overlay-ports=./ports
 ### Package Managers
 
 #### Homebrew (macOS)
+
 ```ruby
 # Formula template
 class Atom < Formula
@@ -223,6 +233,7 @@ end
 ```
 
 #### Conan
+
 ```python
 # conanfile.py
 from conans import ConanFile, CMake
@@ -242,6 +253,7 @@ class AtomConan(ConanFile):
 ### Container Registries
 
 #### Docker Hub
+
 ```dockerfile
 # Dockerfile
 FROM ubuntu:22.04
@@ -317,6 +329,7 @@ pip install -e .
 ### Semantic Versioning
 
 The project follows [Semantic Versioning](https://semver.org/):
+
 - **MAJOR**: Incompatible API changes
 - **MINOR**: Backward-compatible functionality
 - **PATCH**: Backward-compatible bug fixes
@@ -337,6 +350,7 @@ The project follows [Semantic Versioning](https://semver.org/):
 ### Version Synchronization
 
 Versions are synchronized across:
+
 - `CMakeLists.txt`
 - `xmake.lua`
 - `vcpkg.json`
@@ -369,12 +383,14 @@ docker run --rm -v $PWD:/src centos:8 /src/build.sh --test
 ### Distribution Optimization
 
 #### Size Optimization
+
 - Strip debug symbols from release builds
 - Use static linking where appropriate
 - Compress archives with maximum compression
 - Remove unnecessary files
 
 #### Performance Optimization
+
 - Enable link-time optimization (LTO)
 - Use profile-guided optimization (PGO)
 - Optimize for target architecture
@@ -418,16 +434,19 @@ licensee detect
 ### Common Issues
 
 #### Package Size Too Large
+
 - Enable compression
 - Remove debug symbols
 - Exclude unnecessary files
 
 #### Missing Dependencies
+
 - Update dependency lists
 - Test on clean systems
 - Document system requirements
 
 #### Installation Failures
+
 - Check file permissions
 - Verify checksums
 - Test installation scripts
@@ -440,6 +459,7 @@ licensee detect
 - Contact maintainers
 
 For more information, see:
+
 - [Build Guide](BUILD_GUIDE.md)
 - [CI/CD Guide](CI_CD_GUIDE.md)
 - [Development Guide](DEVELOPMENT_GUIDE.md)

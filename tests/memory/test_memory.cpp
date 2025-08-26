@@ -442,3 +442,410 @@ TEST_F(MemoryPoolTest, MemoryLeakCheck) {
     // No way to directly verify cleanup after destruction, but we can
     // at least verify the test ran without memory errors
 }
+
+// Additional edge case tests
+TEST_F(MemoryPoolTest, PMRInterfaceEdgeCases) {
+    MemoryPool<std::byte, 4096> pool;
+    std::pmr::memory_resource* mr = &pool;
+
+    // Test with zero size allocation
+    void* ptr1 = mr->allocate(0, alignof(std::max_align_t));
+    EXPECT_NE(ptr1, nullptr);  // Should still return valid pointer
+    mr->deallocate(ptr1, 0, alignof(std::max_align_t));
+
+    // Test with very large alignment
+    void* ptr2 = mr->allocate(64, 64);
+    EXPECT_NE(ptr2, nullptr);
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(ptr2) % 64, 0);
+    mr->deallocate(ptr2, 64, 64);
+
+    // Test equality comparison
+    MemoryPool<std::byte, 4096> pool2;
+    std::pmr::memory_resource* mr2 = &pool2;
+
+    EXPECT_TRUE(mr->is_equal(*mr));   // Same resource
+    EXPECT_FALSE(mr->is_equal(*mr2)); // Different resource
+}
+
+TEST_F(MemoryPoolTest, BlockSizeStrategyEdgeCases) {
+    // Test with strategy that returns very small size
+    class MinimalSizeStrategy : public BlockSizeStrategy {
+    public:
+        [[nodiscard]] size_t calculate(size_t requested_size) const noexcept override {
+            return std::max(requested_size, static_cast<size_t>(64));
+        }
+    };
+
+    MemoryPool<int> pool(std::make_unique<MinimalSizeStrategy>());
+
+    // Should still work with minimal strategy
+    int* ptr = pool.allocate(10);
+    EXPECT_NE(ptr, nullptr);
+    pool.deallocate(ptr, 10);
+
+    // Test with strategy that returns very large size
+    class LargeSizeStrategy : public BlockSizeStrategy {
+    public:
+        [[nodiscard]] size_t calculate(size_t) const noexcept override {
+            return 1024 * 1024;  // 1MB
+        }
+    };
+
+    MemoryPool<int> large_pool(std::make_unique<LargeSizeStrategy>());
+    int* large_ptr = large_pool.allocate(10);
+    EXPECT_NE(large_ptr, nullptr);
+    large_pool.deallocate(large_ptr, 10);
+}
+
+TEST_F(MemoryPoolTest, TaggedAllocationEdgeCases) {
+    MemoryPool<int> pool;
+
+    // Test with empty tag information
+    int* ptr1 = pool.allocateTagged(5, "", "", 0);
+    EXPECT_NE(ptr1, nullptr);
+
+    auto tag1 = pool.findTag(ptr1);
+    ASSERT_TRUE(tag1.has_value());
+    EXPECT_EQ(tag1->name, "");
+    EXPECT_EQ(tag1->file, "");
+    EXPECT_EQ(tag1->line, 0);
+
+    // Test with very long tag information
+    std::string long_name(1000, 'A');
+    std::string long_file(1000, 'B');
+    int* ptr2 = pool.allocateTagged(5, long_name, long_file, 999999);
+    EXPECT_NE(ptr2, nullptr);
+
+    auto tag2 = pool.findTag(ptr2);
+    ASSERT_TRUE(tag2.has_value());
+    EXPECT_EQ(tag2->name, long_name);
+    EXPECT_EQ(tag2->file, long_file);
+    EXPECT_EQ(tag2->line, 999999);
+
+    pool.deallocate(ptr1, 5);
+    pool.deallocate(ptr2, 5);
+}
+
+TEST_F(MemoryPoolTest, FragmentationEdgeCases) {
+    MemoryPool<int> pool;
+
+    // Test fragmentation with single allocation
+    int* ptr = pool.allocate(10);
+    double ratio1 = pool.getFragmentationRatio();
+    EXPECT_DOUBLE_EQ(ratio1, 0.0);  // No fragmentation with single allocation
+
+    pool.deallocate(ptr, 10);
+    double ratio2 = pool.getFragmentationRatio();
+    EXPECT_GE(ratio2, 0.0);
+    EXPECT_LE(ratio2, 1.0);
+
+    // Test with empty pool
+    pool.reset();
+    double ratio3 = pool.getFragmentationRatio();
+    EXPECT_DOUBLE_EQ(ratio3, 0.0);  // No fragmentation in empty pool
+}
+
+TEST_F(MemoryPoolTest, ReserveEdgeCases) {
+    MemoryPool<int> pool;
+
+    // Reserve zero space
+    pool.reserve(0);
+    EXPECT_EQ(pool.getTotalAvailable(), 0);
+
+    // Reserve space smaller than current available
+    int* ptr = pool.allocate(10);
+    size_t available_before = pool.getTotalAvailable();
+    pool.reserve(5);  // Smaller than what we need
+    size_t available_after = pool.getTotalAvailable();
+    EXPECT_EQ(available_before, available_after);  // Should not change
+
+    pool.deallocate(ptr, 10);
+}
+
+TEST_F(MemoryPoolTest, CompactEdgeCases) {
+    MemoryPool<int> pool;
+
+    // Compact empty pool
+    size_t compacted1 = pool.compact();
+    EXPECT_EQ(compacted1, 0);
+
+    // Compact pool with single allocation
+    int* ptr = pool.allocate(10);
+    size_t compacted2 = pool.compact();
+    EXPECT_EQ(compacted2, 0);  // Nothing to compact
+
+    pool.deallocate(ptr, 10);
+
+    // Compact pool with single free block
+    size_t compacted3 = pool.compact();
+    EXPECT_EQ(compacted3, 0);  // Single block, nothing to merge
+}
+
+// Error condition and exception tests
+TEST_F(MemoryPoolTest, AllocationFailureScenarios) {
+    MemoryPool<int> pool;
+
+    // Test allocation that exceeds maximum block size
+    EXPECT_THROW([[maybe_unused]] auto temp1 = pool.allocate(10000), atom::memory::MemoryPoolException);
+
+    // Pool should remain functional after exception
+    int* ptr = pool.allocate(10);
+    EXPECT_NE(ptr, nullptr);
+    pool.deallocate(ptr, 10);
+}
+
+TEST_F(MemoryPoolTest, PMRAllocationFailures) {
+    MemoryPool<std::byte, 1024> pool;
+    std::pmr::memory_resource* mr = &pool;
+
+    // Test allocation that exceeds pool capacity
+    EXPECT_THROW([[maybe_unused]] auto temp2 = mr->allocate(2000, alignof(std::max_align_t)),
+                 atom::memory::MemoryPoolException);
+
+    // Test with invalid alignment (very large)
+    EXPECT_THROW([[maybe_unused]] auto temp3 = mr->allocate(100, 4096),
+                 atom::memory::MemoryPoolException);
+
+    // Pool should remain functional
+    void* ptr = mr->allocate(100, alignof(std::max_align_t));
+    EXPECT_NE(ptr, nullptr);
+    mr->deallocate(ptr, 100, alignof(std::max_align_t));
+}
+
+TEST_F(MemoryPoolTest, TaggedAllocationFailures) {
+    MemoryPool<int> pool;
+
+    // Test tagged allocation that exceeds block size
+    EXPECT_THROW([[maybe_unused]] auto temp4 = pool.allocateTagged(10000, "test", "file.cpp", 42),
+                 atom::memory::MemoryPoolException);
+
+    // Pool should remain functional
+    int* ptr = pool.allocateTagged(10, "test", "file.cpp", 42);
+    EXPECT_NE(ptr, nullptr);
+    pool.deallocate(ptr, 10);
+}
+
+TEST_F(MemoryPoolTest, InvalidDeallocations) {
+    MemoryPool<int> pool;
+
+    // Deallocate null pointer (should not crash)
+    pool.deallocate(nullptr, 10);
+
+    // Deallocate with zero size (should not crash)
+    int* ptr = pool.allocate(10);
+    pool.deallocate(ptr, 0);  // This might be undefined behavior
+    pool.deallocate(ptr, 10); // Proper deallocation
+}
+
+TEST_F(MemoryPoolTest, BlockSizeStrategyExceptions) {
+    // Test with strategy that might throw (though it shouldn't)
+    class ThrowingStrategy : public BlockSizeStrategy {
+    public:
+        [[nodiscard]] size_t calculate(size_t requested_size) const noexcept override {
+            // Even though marked noexcept, test robustness
+            return requested_size * 2;
+        }
+    };
+
+    MemoryPool<int> pool(std::make_unique<ThrowingStrategy>());
+
+    // Should work normally
+    int* ptr = pool.allocate(10);
+    EXPECT_NE(ptr, nullptr);
+    pool.deallocate(ptr, 10);
+}
+
+TEST_F(MemoryPoolTest, ConcurrentExceptionSafety) {
+    MemoryPool<int> pool;
+    std::vector<std::thread> threads;
+    std::atomic<int> exception_count{0};
+
+    // Create threads that might cause exceptions
+    for (int i = 0; i < 5; ++i) {
+        threads.emplace_back([&pool, &exception_count]() {
+            for (int j = 0; j < 100; ++j) {
+                try {
+                    // Mix of valid and invalid allocations
+                    if (j % 10 == 0) {
+                        // This should throw
+                        int* ptr = pool.allocate(10000);
+                        pool.deallocate(ptr, 10000);
+                    } else {
+                        // This should succeed
+                        int* ptr = pool.allocate(10);
+                        pool.deallocate(ptr, 10);
+                    }
+                } catch (const atom::memory::MemoryPoolException&) {
+                    exception_count++;
+                }
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Should have caught some exceptions
+    EXPECT_GT(exception_count.load(), 0);
+
+    // Pool should still be functional
+    int* ptr = pool.allocate(10);
+    EXPECT_NE(ptr, nullptr);
+    pool.deallocate(ptr, 10);
+}
+
+// Advanced thread safety and concurrency tests
+TEST_F(MemoryPoolTest, ConcurrentAllocationDeallocation) {
+    MemoryPool<int> pool;
+    constexpr int numThreads = 8;
+    constexpr int operationsPerThread = 500;
+    std::vector<std::thread> threads;
+    std::atomic<int> totalAllocations{0};
+    std::atomic<int> totalDeallocations{0};
+
+    // Create threads that continuously allocate and deallocate
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&pool, &totalAllocations, &totalDeallocations, operationsPerThread]() {
+            std::vector<int*> localPtrs;
+            localPtrs.reserve(operationsPerThread / 2);
+
+            for (int j = 0; j < operationsPerThread; ++j) {
+                if (j % 2 == 0) {
+                    // Allocate
+                    int* ptr = pool.allocate(10);
+                    if (ptr) {
+                        localPtrs.push_back(ptr);
+                        totalAllocations++;
+                    }
+                } else if (!localPtrs.empty()) {
+                    // Deallocate
+                    int* ptr = localPtrs.back();
+                    localPtrs.pop_back();
+                    pool.deallocate(ptr, 10);
+                    totalDeallocations++;
+                }
+            }
+
+            // Clean up remaining allocations
+            for (int* ptr : localPtrs) {
+                pool.deallocate(ptr, 10);
+                totalDeallocations++;
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Verify all allocations were deallocated
+    EXPECT_EQ(totalAllocations.load(), totalDeallocations.load());
+    EXPECT_EQ(pool.getTotalAllocated(), 0);
+}
+
+TEST_F(MemoryPoolTest, ConcurrentTaggedOperations) {
+    MemoryPool<int> pool;
+    constexpr int numThreads = 4;
+    constexpr int operationsPerThread = 100;
+    std::vector<std::thread> threads;
+    std::atomic<int> taggedAllocations{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&pool, &taggedAllocations, operationsPerThread, i]() {
+            std::vector<int*> localPtrs;
+
+            for (int j = 0; j < operationsPerThread; ++j) {
+                std::string tag = "Thread_" + std::to_string(i) + "_Alloc_" + std::to_string(j);
+                std::string file = "test_file_" + std::to_string(i) + ".cpp";
+
+                int* ptr = pool.allocateTagged(5, tag, file, j);
+                if (ptr) {
+                    localPtrs.push_back(ptr);
+                    taggedAllocations++;
+
+                    // Verify tag information
+                    auto tagInfo = pool.findTag(ptr);
+                    EXPECT_TRUE(tagInfo.has_value());
+                    if (tagInfo) {
+                        EXPECT_EQ(tagInfo->name, tag);
+                        EXPECT_EQ(tagInfo->file, file);
+                        EXPECT_EQ(tagInfo->line, j);
+                    }
+                }
+            }
+
+            // Clean up
+            for (int* ptr : localPtrs) {
+                pool.deallocate(ptr, 5);
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(taggedAllocations.load(), numThreads * operationsPerThread);
+    EXPECT_EQ(pool.getTotalAllocated(), 0);
+}
+
+TEST_F(MemoryPoolTest, ConcurrentCompaction) {
+    MemoryPool<int> pool;
+    constexpr int numThreads = 4;
+    std::vector<std::thread> threads;
+    std::atomic<bool> stopFlag{false};
+
+    // Thread that continuously allocates and deallocates to create fragmentation
+    threads.emplace_back([&pool, &stopFlag]() {
+        std::vector<int*> ptrs;
+        while (!stopFlag.load()) {
+            // Allocate several blocks
+            for (int i = 0; i < 10; ++i) {
+                int* ptr = pool.allocate(10);
+                if (ptr) {
+                    ptrs.push_back(ptr);
+                }
+            }
+
+            // Deallocate every other block to create fragmentation
+            for (size_t i = 0; i < ptrs.size(); i += 2) {
+                pool.deallocate(ptrs[i], 10);
+                ptrs[i] = nullptr;
+            }
+
+            // Clean up remaining blocks
+            for (int* ptr : ptrs) {
+                if (ptr) {
+                    pool.deallocate(ptr, 10);
+                }
+            }
+            ptrs.clear();
+
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    });
+
+    // Threads that continuously compact the pool
+    for (int i = 0; i < numThreads - 1; ++i) {
+        threads.emplace_back([&pool, &stopFlag]() {
+            while (!stopFlag.load()) {
+                pool.compact();
+                std::this_thread::sleep_for(std::chrono::milliseconds(5));
+            }
+        });
+    }
+
+    // Let threads run for a short time
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    stopFlag = true;
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Pool should be in a consistent state
+    int* ptr = pool.allocate(10);
+    EXPECT_NE(ptr, nullptr);
+    pool.deallocate(ptr, 10);
+}

@@ -283,11 +283,13 @@ cd build-debug && ctest
 The enhanced build scripts support many options:
 
 ### Build Types
+
 - `--debug`: Debug build with symbols
 - `--release`: Optimized release build (default)
 - `--relwithdebinfo`: Release with debug info
 
 ### Features
+
 - `--python`: Enable Python bindings
 - `--shared`: Build shared libraries
 - `--examples`: Build examples
@@ -295,6 +297,7 @@ The enhanced build scripts support many options:
 - `--docs`: Generate documentation
 
 ### Build Management
+
 - `--clean`: Clean build directory
 - `--install-deps`: Install system dependencies
 - `--package`: Create distribution packages
@@ -322,6 +325,7 @@ The enhanced build scripts support many options:
 ### Common Issues
 
 #### Missing Dependencies
+
 ```bash
 # Error: Could not find OpenSSL
 sudo apt-get install libssl-dev  # Ubuntu/Debian
@@ -330,6 +334,7 @@ brew install openssl             # macOS
 ```
 
 #### CMake Version Too Old
+
 ```bash
 # Install newer CMake
 pip install cmake --upgrade
@@ -338,6 +343,7 @@ sudo snap install cmake --classic
 ```
 
 #### C++20 Support Issues
+
 ```bash
 # Ensure modern compiler
 gcc --version  # Should be 9+
@@ -349,6 +355,7 @@ export CXX=g++-10
 ```
 
 #### Python Binding Issues
+
 ```bash
 # Install pybind11
 pip install pybind11
@@ -360,6 +367,7 @@ export PYTHONPATH=$PWD/build/python:$PYTHONPATH
 ### Build Performance
 
 #### Parallel Building
+
 ```bash
 # Use all CPU cores
 cmake --build build --parallel $(nproc)
@@ -369,6 +377,7 @@ cmake --build build --parallel 4
 ```
 
 #### Ninja Generator
+
 ```bash
 # Use Ninja for faster builds
 cmake -B build -G Ninja
@@ -376,6 +385,7 @@ ninja -C build
 ```
 
 #### ccache
+
 ```bash
 # Install ccache for faster rebuilds
 sudo apt-get install ccache
@@ -391,6 +401,7 @@ export CXX="ccache g++"
 - **Build Logs**: Check `logs/build_*.log` files
 
 For more detailed information, see:
+
 - [CI/CD Guide](CI_CD_GUIDE.md)
 - [Distribution Guide](DISTRIBUTION_GUIDE.md)
 - [Development Guide](DEVELOPMENT_GUIDE.md)

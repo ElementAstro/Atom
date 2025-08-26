@@ -41,6 +41,7 @@ pip install -e .
 ```
 
 **Environment Variables**:
+
 ```bash
 export CMAKE_PREFIX_PATH=~/.local:$CMAKE_PREFIX_PATH
 export LD_LIBRARY_PATH=~/.local/lib:$LD_LIBRARY_PATH
@@ -186,6 +187,7 @@ brew install atom                 # macOS
 ### Build Configuration
 
 **CMake Presets** (`CMakePresets.json`):
+
 ```json
 {
   "version": 3,
@@ -206,6 +208,7 @@ brew install atom                 # macOS
 ```
 
 **Environment Configuration**:
+
 ```bash
 # Production environment
 export ATOM_LOG_LEVEL=WARNING
@@ -217,6 +220,7 @@ export ATOM_CACHE_PATH=/var/cache/atom
 ### Runtime Configuration
 
 **Configuration Files**:
+
 ```yaml
 # /etc/atom/config.yaml
 logging:
@@ -233,6 +237,7 @@ network:
 ```
 
 **Environment Variables**:
+
 ```bash
 # Application settings
 ATOM_CONFIG_FILE=/etc/atom/config.yaml
@@ -444,6 +449,7 @@ spec:
 ### Common Issues
 
 #### Library Not Found
+
 ```bash
 # Check library path
 echo $LD_LIBRARY_PATH
@@ -455,6 +461,7 @@ sudo ldconfig
 ```
 
 #### Version Conflicts
+
 ```bash
 # Check installed versions
 atom-info --version
@@ -466,6 +473,7 @@ sudo rm -rf /usr/local/include/atom
 ```
 
 #### Permission Errors
+
 ```bash
 # Fix permissions
 sudo chown -R $USER:$USER ~/.local
@@ -473,6 +481,7 @@ sudo chmod -R 755 /opt/atom
 ```
 
 #### Performance Issues
+
 ```bash
 # Check resource usage
 htop
@@ -517,30 +526,35 @@ grep -i warning /var/log/atom/atom.log
 ## Best Practices
 
 ### Deployment
+
 - Use configuration management tools
 - Implement blue-green deployments
 - Test in staging before production
 - Monitor deployment metrics
 
 ### Security
+
 - Regular security updates
 - Principle of least privilege
 - Encrypt sensitive data
 - Regular security audits
 
 ### Performance
+
 - Monitor resource usage
 - Optimize for target hardware
 - Use appropriate build flags
 - Profile critical paths
 
 ### Maintenance
+
 - Regular backups
 - Automated monitoring
 - Update procedures
 - Disaster recovery plans
 
 For more information, see:
+
 - [Build Guide](BUILD_GUIDE.md)
 - [CI/CD Guide](CI_CD_GUIDE.md)
 - [Distribution Guide](DISTRIBUTION_GUIDE.md)

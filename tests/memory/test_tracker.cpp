@@ -544,3 +544,149 @@ TEST_F(MemoryTrackerTest, LargeAllocations) {
         SUCCEED() << "Skipping large allocation test on 32-bit platform";
     }
 }
+
+// Error condition and exception tests for MemoryTracker
+TEST_F(MemoryTrackerTest, InvalidConfigurationHandling) {
+    // Test with invalid configuration values
+    MemoryTrackerConfig config;
+    config.maxStackFrames = 0;  // Invalid value
+    config.minAllocationSize = SIZE_MAX;  // Very large value
+
+    // Should handle gracefully without crashing
+    MemoryTracker::instance().initialize(config);
+
+    void* ptr = allocateAndRegister(100);
+    MemoryTracker::instance().registerDeallocation(ptr);
+    free(ptr);
+}
+
+TEST_F(MemoryTrackerTest, StackTraceFailureHandling) {
+    // Configure to track stack traces
+    MemoryTrackerConfig config;
+    config.trackStackTrace = true;
+    config.maxStackFrames = 100;  // Large number that might cause issues
+
+    MemoryTracker::instance().initialize(config);
+
+    // Should handle stack trace collection failures gracefully
+    void* ptr = allocateAndRegister(100);
+    EXPECT_NE(ptr, nullptr);
+
+    // Can't directly test internal state, just verify no crash occurs
+    MemoryTracker::instance().registerDeallocation(ptr);
+    free(ptr);
+}
+
+TEST_F(MemoryTrackerTest, ErrorCallbackExceptions) {
+    std::string lastError;
+    bool callbackThrew = false;
+
+    // Configure with error callback that throws
+    MemoryTrackerConfig config;
+    config.errorCallback = [&](const std::string& error) {
+        lastError = error;
+        callbackThrew = true;
+        throw std::runtime_error("Callback exception");
+    };
+
+    MemoryTracker::instance().initialize(config);
+
+    // Trigger an error condition (double free)
+    void* ptr = allocateAndRegister(100);
+    MemoryTracker::instance().registerDeallocation(ptr);
+
+    // This should trigger the error callback
+    MemoryTracker::instance().registerDeallocation(ptr);  // Double free
+
+    // Tracker should handle callback exceptions gracefully
+    EXPECT_TRUE(callbackThrew);
+    EXPECT_FALSE(lastError.empty());
+
+    free(ptr);
+}
+
+TEST_F(MemoryTrackerTest, ConcurrentErrorHandling) {
+    constexpr int numThreads = 5;
+    std::atomic<int> errorCount{0};
+
+    // Configure with error callback
+    MemoryTrackerConfig config;
+    config.errorCallback = [&errorCount](const std::string&) {
+        errorCount++;
+    };
+
+    MemoryTracker::instance().initialize(config);
+
+    std::vector<std::thread> threads;
+
+    // Create threads that will cause errors
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&]() {
+            for (int j = 0; j < 10; ++j) {
+                void* ptr = allocateAndRegister(100);
+
+                // Cause double free error
+                MemoryTracker::instance().registerDeallocation(ptr);
+                MemoryTracker::instance().registerDeallocation(ptr);  // Error
+
+                free(ptr);
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    // Should have detected errors
+    EXPECT_GT(errorCount.load(), 0);
+}
+
+TEST_F(MemoryTrackerTest, MemoryExhaustionHandling) {
+    // Test behavior when system memory is low
+    // This is difficult to test reliably, so we simulate it
+
+    MemoryTrackerConfig config;
+    config.trackStackTrace = true;
+    config.maxStackFrames = 1000;  // Large number
+
+    MemoryTracker::instance().initialize(config);
+
+    // Try to allocate many large blocks
+    std::vector<void*> ptrs;
+    for (int i = 0; i < 100; ++i) {
+        try {
+            void* ptr = allocateAndRegister(1024 * 1024);  // 1MB each
+            if (ptr) {
+                ptrs.push_back(ptr);
+            }
+        } catch (...) {
+            // Handle allocation failures gracefully
+            break;
+        }
+    }
+
+    // Clean up
+    for (void* ptr : ptrs) {
+        MemoryTracker::instance().registerDeallocation(ptr);
+        free(ptr);
+    }
+}
+
+TEST_F(MemoryTrackerTest, InvalidPointerHandling) {
+    // Test with various invalid pointers
+    void* invalid_ptrs[] = {
+        nullptr,
+        (void*)0x1,
+        (void*)0xDEADBEEF,
+        (void*)SIZE_MAX
+    };
+
+    for (void* ptr : invalid_ptrs) {
+        // Should handle invalid pointers gracefully
+        // Can't test getAllocationInfo since it's not public
+
+        // Deallocation of invalid pointer should trigger error callback
+        MemoryTracker::instance().registerDeallocation(ptr);
+    }
+}
