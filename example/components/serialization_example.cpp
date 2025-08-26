@@ -382,42 +382,15 @@ void demonstrateCustomSerialization() {
     serializer.registerCustomSerializer(
         "CUSTOM", [](const Component& component) -> std::vector<uint8_t> {
             std::string customData = "CUSTOM_FORMAT|";
-            customData += component.getName() + "|";
-            customData += std::to_string(component.getVariableCount()) + "|";
+            customData += std::string(component.getName()) + "|";
+            customData += std::to_string(component.getVariableManager().getVariableCount()) + "|";
             customData += "END";
 
             return std::vector<uint8_t>(customData.begin(), customData.end());
         });
 
-    // Register custom deserializer
-    serializer.registerCustomDeserializer(
-        "CUSTOM",
-        [](const std::vector<uint8_t>& data) -> std::shared_ptr<Component> {
-            std::string customData(data.begin(), data.end());
-
-            // Parse custom format
-            if (customData.find("CUSTOM_FORMAT|") == 0) {
-                size_t pos1 = customData.find('|', 14);
-                size_t pos2 = customData.find('|', pos1 + 1);
-
-                if (pos1 != std::string::npos && pos2 != std::string::npos) {
-                    std::string name = customData.substr(14, pos1 - 14);
-                    std::string countStr =
-                        customData.substr(pos1 + 1, pos2 - pos1 - 1);
-
-                    auto component = std::make_shared<SerializableComponent>(
-                        name + "_Custom");
-                    component->addVariable<std::string>("custom_loaded",
-                                                        "true");
-                    component->addVariable<int>("original_var_count",
-                                                std::stoi(countStr));
-
-                    return component;
-                }
-            }
-
-            return nullptr;
-        });
+    // Note: Custom deserializer registration is not available in the current API
+    // The SerializationManager uses the registered serializers for both serialization and deserialization
 
     // Test custom serialization
     auto& registry = Registry::instance();
@@ -474,10 +447,11 @@ void demonstratePerformanceAnalysis() {
 
         // Add some data to make serialization more realistic
         for (int j = 0; j < 10; ++j) {
-            comp->executeCommand("addAchievement",
-                                 {"achievement_" + std::to_string(j)});
-            comp->executeCommand("addInventoryItem",
-                                 {std::to_string(1000 + j)});
+            std::vector<std::any> achievementArgs = {std::string("achievement_" + std::to_string(j))};
+            comp->runCommand("addAchievement", achievementArgs);
+
+            std::vector<std::any> itemArgs = {1000 + j};
+            comp->runCommand("addInventoryItem", itemArgs);
         }
 
         components.push_back(comp);

@@ -354,7 +354,9 @@ void threadpool_messagequeue_integration() {
         timer.start("ThreadPool-MessageQueue integration");
 
         // Create thread pool and message queue
-        auto threadPool = std::make_shared<ThreadPool>(4);
+        ThreadPool::Options options;
+        options.initialThreadCount = 4;
+        auto threadPool = std::make_shared<ThreadPool>(options);
         MessageQueue<DataRequest> requestQueue;
         MessageQueue<ProcessingResult> resultQueue;
 

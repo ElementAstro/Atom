@@ -109,7 +109,7 @@ if(filesystem_TARGETS)
 endif()
 
 if(integration_TARGETS)
-    add_custom_target(io_integration_examples DEPENDS ${integration_TARGETS})
+    add_custom_target(io_integration_examples_group DEPENDS ${integration_TARGETS})
 endif()
 
 # Create master target for all I/O examples

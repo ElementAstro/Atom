@@ -28,6 +28,12 @@
 
 using namespace atom::algorithm;
 
+// Template function for policy-based algorithm design
+template <typename Container, typename Predicate>
+auto count_if_policy(const Container& container, Predicate pred) {
+    return std::count_if(container.begin(), container.end(), pred);
+}
+
 /**
  * @brief Helper function to print section headers
  */
@@ -303,11 +309,6 @@ void demonstrateAlgorithmCustomization() {
 
     // Demonstrate algorithm policies
     std::cout << "\nPolicy-based algorithm design:\n";
-
-    template <typename Container, typename Predicate>
-    auto count_if_policy(const Container& container, Predicate pred) {
-        return std::count_if(container.begin(), container.end(), pred);
-    }
 
     std::vector<int> numbers = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
