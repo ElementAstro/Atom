@@ -53,7 +53,7 @@ Description: System Information Module - Common WiFi Definitions
 #include <SystemConfiguration/CaptiveNetwork.h>
 #endif
 
-#include "atom/log/loguru.hpp"
+#include <spdlog/spdlog.h>
 
 // Define common types for cross-platform use
 #if defined(_WIN32) || defined(__USE_W32_SOCKETS)

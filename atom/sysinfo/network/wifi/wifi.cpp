@@ -13,6 +13,7 @@ Description: System Information Module - Wifi Information
 **************************************************/
 
 #include "wifi.hpp"
+#include <spdlog/spdlog.h>
 #include "common.hpp"
 
 #ifdef _WIN32
@@ -32,7 +33,7 @@ auto isConnectedToInternet() -> bool {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::isConnectedToInternet_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error( "Unsupported operating system");
     return false;
 #endif
 }
@@ -41,7 +42,7 @@ auto getCurrentWifi() -> std::string {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getCurrentWifi_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error( "Unsupported operating system");
     return {};
 #endif
 }
@@ -50,10 +51,10 @@ auto getCurrentWiredNetwork() -> std::string {
 #if defined(_WIN32) || defined(__linux__)
     return impl::getCurrentWiredNetwork_impl();
 #elif defined(__APPLE__)
-    LOG_F(WARNING, "Getting current wired network is not supported on macOS");
+    spdlog::warn( "Getting current wired network is not supported on macOS");
     return {};
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error( "Unsupported operating system");
     return {};
 #endif
 }
@@ -62,10 +63,10 @@ auto isHotspotConnected() -> bool {
 #if defined(_WIN32) || defined(__linux__)
     return impl::isHotspotConnected_impl();
 #elif defined(__APPLE__)
-    LOG_F(WARNING, "Checking if connected to a hotspot is not supported on macOS");
+    spdlog::warn( "Checking if connected to a hotspot is not supported on macOS");
     return false;
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error( "Unsupported operating system");
     return false;
 #endif
 }
@@ -74,7 +75,7 @@ auto getHostIPs() -> std::vector<std::string> {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getHostIPs_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error( "Unsupported operating system");
     return {};
 #endif
 }
@@ -82,7 +83,7 @@ auto getHostIPs() -> std::vector<std::string> {
 // Implementation of the template function for IP addresses
 template <typename AddressType>
 auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
-    LOG_F(INFO, "Getting IP addresses for address family: {}", addressFamily);
+    spdlog::info( "Getting IP addresses for address family: {}", addressFamily);
     std::vector<std::string> addresses;
 
 #ifdef _WIN32
@@ -113,7 +114,7 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
 
                     inet_ntop(addressFamily, addr, ipStr, sizeof(ipStr));
                     addresses.emplace_back(ipStr);
-                    LOG_F(INFO, "Found IP address: {}", ipStr);
+                    spdlog::info( "Found IP address: {}", ipStr);
                 }
             }
         }
@@ -122,7 +123,7 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
     struct ifaddrs* ifAddrList = nullptr;
 
     if (getifaddrs(&ifAddrList) == -1) {
-        LOG_F(ERROR, "getifaddrs failed");
+        spdlog::error( "getifaddrs failed");
         return addresses;
     }
 
@@ -145,7 +146,7 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
 
             inet_ntop(addressFamily, addr, ipStr, sizeof(ipStr));
             addresses.emplace_back(ipStr);
-            LOG_F(INFO, "Found IP address: {}", ipStr);
+            spdlog::info( "Found IP address: {}", ipStr);
         }
     }
 #endif
@@ -154,12 +155,12 @@ auto getIPAddresses(int addressFamily) -> std::vector<std::string> {
 }
 
 auto getIPv4Addresses() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting IPv4 addresses");
+    spdlog::info( "Getting IPv4 addresses");
     return getIPAddresses<sockaddr_in>(AF_INET);
 }
 
 auto getIPv6Addresses() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting IPv6 addresses");
+    spdlog::info( "Getting IPv6 addresses");
     return getIPAddresses<sockaddr_in6>(AF_INET6);
 }
 
@@ -167,7 +168,7 @@ auto getInterfaceNames() -> std::vector<std::string> {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getInterfaceNames_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error( "Unsupported operating system");
     return {};
 #endif
 }
@@ -176,44 +177,44 @@ auto getNetworkStats() -> NetworkStats {
 #if defined(_WIN32) || defined(__linux__) || defined(__APPLE__)
     return impl::getNetworkStats_impl();
 #else
-    LOG_F(ERROR, "Unsupported operating system");
+    spdlog::error( "Unsupported operating system");
     return {};
 #endif
 }
 
 // Placeholder implementations for functions declared in header but not implemented in original file
 auto getNetworkHistory(std::chrono::minutes duration) -> std::vector<NetworkStats> {
-    LOG_F(INFO, "Getting network history for duration: {} minutes", duration.count());
+    spdlog::info( "Getting network history for duration: {} minutes", duration.count());
     // Placeholder implementation
     return {};
 }
 
 auto scanAvailableNetworks() -> std::vector<std::string> {
-    LOG_F(INFO, "Scanning available networks");
+    spdlog::info( "Scanning available networks");
     // Placeholder implementation
     return {};
 }
 
 auto getNetworkSecurity() -> std::string {
-    LOG_F(INFO, "Getting network security information");
+    spdlog::info( "Getting network security information");
     // Placeholder implementation
     return {};
 }
 
 auto measureBandwidth() -> std::pair<double, double> {
-    LOG_F(INFO, "Measuring bandwidth");
+    spdlog::info( "Measuring bandwidth");
     // Placeholder implementation
     return {0.0, 0.0};
 }
 
 auto analyzeNetworkQuality() -> std::string {
-    LOG_F(INFO, "Analyzing network quality");
+    spdlog::info( "Analyzing network quality");
     // Placeholder implementation
     return {};
 }
 
 auto getConnectedDevices() -> std::vector<std::string> {
-    LOG_F(INFO, "Getting connected devices");
+    spdlog::info( "Getting connected devices");
     // Placeholder implementation
     return {};
 }

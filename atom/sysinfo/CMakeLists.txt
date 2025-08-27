@@ -116,7 +116,7 @@ set(COMPAT_HEADERS
 )
 
 set(LIBS
-    loguru
+
     atom_sysinfo_memory
     atom_sysinfo_wifi
     ${CMAKE_THREAD_LIBS_INIT}

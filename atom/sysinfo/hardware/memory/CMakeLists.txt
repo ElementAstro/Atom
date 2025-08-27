@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-# 设置内存模块源文件
+# 设置内存模块源文�?
 set(MEMORY_SOURCES
     memory.cpp
     common.cpp
@@ -33,21 +33,21 @@ target_include_directories(atom_sysinfo_memory
 set_property(TARGET atom_sysinfo_memory PROPERTY CXX_STANDARD 20)
 set_property(TARGET atom_sysinfo_memory PROPERTY CXX_STANDARD_REQUIRED ON)
 
-# 链接依赖库
+# 链接依赖�?
 target_link_libraries(atom_sysinfo_memory
     PUBLIC
-        atom-log
+
 )
 
-# 平台特定库链接
+# 平台特定库链�?
 if(WIN32)
     target_link_libraries(atom_sysinfo_memory PRIVATE psapi pdh iphlpapi)
 elseif(UNIX AND NOT APPLE)
-    # Linux特定库
+    # Linux特定�?
     find_package(Threads REQUIRED)
     target_link_libraries(atom_sysinfo_memory PRIVATE ${CMAKE_THREAD_LIBS_INIT})
 elseif(APPLE)
-    # macOS特定库
+    # macOS特定�?
     target_link_libraries(atom_sysinfo_memory PRIVATE "-framework CoreFoundation" "-framework IOKit")
 endif()
 

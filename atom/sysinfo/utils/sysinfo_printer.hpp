@@ -23,7 +23,7 @@
 #include "../info/locale.hpp"
 #include "../hardware/memory.hpp"
 #include "../info/os.hpp"
-#include "wm.hpp"
+// #include "wm.hpp" // Not available
 
 namespace atom::system {
 
@@ -99,7 +99,7 @@ public:
      * @param info The system information structure to format
      * @return A formatted string containing system details
      */
-    static auto formatSystemInfo(const SystemInfo& info) -> std::string;
+    // static auto formatSystemInfo(const SystemInfo& info) -> std::string; // SystemInfo not available
 
     /**
      * @brief Generate a comprehensive report of all system components

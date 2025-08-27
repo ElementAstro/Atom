@@ -186,20 +186,21 @@ auto SystemInfoPrinter::formatOsInfo(const OperatingSystemInfo& info)
 //     return ss.str();
 // }
 
-auto SystemInfoPrinter::formatSystemInfo(const SystemInfo& info)
-    -> std::string {
-    std::stringstream ss;
-    ss << "=== System Desktop/WM Information ===\n\n";
-    ss << createTableHeader("Desktop/WM Information");
-    ss << createTableRow("Desktop Environment", info.desktopEnvironment);
-    ss << createTableRow("Window Manager", info.windowManager);
-    ss << createTableRow("WM Theme", info.wmTheme);
-    ss << createTableRow("Icons", info.icons);
-    ss << createTableRow("Font", info.font);
-    ss << createTableRow("Cursor", info.cursor);
-    ss << createTableFooter();
-    return ss.str();
-}
+// SystemInfo not available - commented out
+// auto SystemInfoPrinter::formatSystemInfo(const SystemInfo& info)
+//     -> std::string {
+//     std::stringstream ss;
+//     ss << "=== System Desktop/WM Information ===\n\n";
+//     ss << createTableHeader("Desktop/WM Information");
+//     ss << createTableRow("Desktop Environment", info.desktopEnvironment);
+//     ss << createTableRow("Window Manager", info.windowManager);
+//     ss << createTableRow("WM Theme", info.wmTheme);
+//     ss << createTableRow("Icons", info.icons);
+//     ss << createTableRow("Font", info.font);
+//     ss << createTableRow("Cursor", info.cursor);
+//     ss << createTableFooter();
+//     return ss.str();
+// }
 
 // Generate comprehensive reports
 auto SystemInfoPrinter::generateFullReport() -> std::string {

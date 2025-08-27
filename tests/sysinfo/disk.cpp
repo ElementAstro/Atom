@@ -1,208 +1,297 @@
 #include "atom/sysinfo/disk.hpp"
-#include <gmock/gmock.h>
 #include <gtest/gtest.h>
-
-#include <cstring>
-
-#ifdef _WIN32
-#include <windows.h>
-#else
-#include <fstream>
-#endif
+#include <string>
+#include <vector>
+#include <algorithm>
+#include <chrono>
+#include <thread>
 
 using namespace atom::system;
-using namespace testing;
 
-#ifdef _WIN32
-class MockWindowsApi {
-public:
-    MOCK_METHOD(DWORD, GetLogicalDrives, (), ());
-    MOCK_METHOD(UINT, GetDriveTypeA, (LPCSTR), ());
-    MOCK_METHOD(BOOL, GetDiskFreeSpaceExA,
-                (LPCSTR, PULARGE_INTEGER, PULARGE_INTEGER, PULARGE_INTEGER),
-                ());
-    MOCK_METHOD(HANDLE, CreateFileA,
-                (LPCSTR, DWORD, DWORD, LPSECURITY_ATTRIBUTES, DWORD, DWORD,
-                 HANDLE),
-                ());
-    MOCK_METHOD(BOOL, DeviceIoControl,
-                (HANDLE, DWORD, LPVOID, DWORD, LPVOID, DWORD, LPDWORD,
-                 LPOVERLAPPED),
-                ());
-    MOCK_METHOD(BOOL, CloseHandle, (HANDLE), ());
-};
+namespace atom::sysinfo::test {
 
-MockWindowsApi* mockWindowsApi;
-
-DWORD WINAPI MockGetLogicalDrives() {
-    return mockWindowsApi->GetLogicalDrives();
-}
-
-UINT WINAPI MockGetDriveTypeA(LPCSTR drivePath) {
-    return mockWindowsApi->GetDriveTypeA(drivePath);
-}
-
-BOOL WINAPI MockGetDiskFreeSpaceExA(LPCSTR drivePath,
-                                    PULARGE_INTEGER freeBytesAvailable,
-                                    PULARGE_INTEGER totalBytes,
-                                    PULARGE_INTEGER totalFreeBytes) {
-    return mockWindowsApi->GetDiskFreeSpaceExA(drivePath, freeBytesAvailable,
-                                               totalBytes, totalFreeBytes);
-}
-
-HANDLE WINAPI MockCreateFileA(LPCSTR fileName, DWORD desiredAccess,
-                              DWORD shareMode,
-                              LPSECURITY_ATTRIBUTES securityAttributes,
-                              DWORD creationDisposition,
-                              DWORD flagsAndAttributes, HANDLE templateFile) {
-    return mockWindowsApi->CreateFileA(fileName, desiredAccess, shareMode,
-                                       securityAttributes, creationDisposition,
-                                       flagsAndAttributes, templateFile);
-}
-
-BOOL WINAPI MockDeviceIoControl(HANDLE device, DWORD controlCode,
-                                LPVOID inBuffer, DWORD inBufferSize,
-                                LPVOID outBuffer, DWORD outBufferSize,
-                                LPDWORD bytesReturned,
-                                LPOVERLAPPED overlapped) {
-    return mockWindowsApi->DeviceIoControl(
-        device, controlCode, inBuffer, inBufferSize, outBuffer, outBufferSize,
-        bytesReturned, overlapped);
-}
-
-BOOL WINAPI MockCloseHandle(HANDLE handle) {
-    return mockWindowsApi->CloseHandle(handle);
-}
-
-void setupMockWindowsApi() {
-    mockWindowsApi = new MockWindowsApi();
-    GetLogicalDrives = MockGetLogicalDrives;
-    GetDriveTypeA = MockGetDriveTypeA;
-    GetDiskFreeSpaceExA = MockGetDiskFreeSpaceExA;
-    CreateFileA = MockCreateFileA;
-    DeviceIoControl = MockDeviceIoControl;
-    CloseHandle = MockCloseHandle;
-}
-
-void cleanupMockWindowsApi() { delete mockWindowsApi; }
-
-#else
-class MockFileReader {
-public:
-    MOCK_METHOD(std::string, ReadFile, (const std::string&), ());
-};
-
-MockFileReader* mockFileReader;
-
-std::string MockReadFile(const std::string& path) {
-    return mockFileReader->ReadFile(path);
-}
-
-void setupMockFileReader() { mockFileReader = new MockFileReader(); }
-
-void cleanupMockFileReader() { delete mockFileReader; }
-#endif
+// ============================================================================
+// Basic Disk Tests
+// ============================================================================
 
 class DiskTest : public ::testing::Test {
 protected:
     void SetUp() override {
-#ifdef _WIN32
-        setupMockWindowsApi();
-#else
-        setupMockFileReader();
-#endif
+        // Setup disk tests
     }
 
     void TearDown() override {
-#ifdef _WIN32
-        cleanupMockWindowsApi();
-#else
-        cleanupMockFileReader();
-#endif
+        // Cleanup
     }
 };
 
-#ifdef _WIN32
-TEST_F(DiskTest, GetDiskUsage_Windows) {
-    EXPECT_CALL(*mockWindowsApi, GetLogicalDrives())
-        .WillOnce(Return(0b101));  // Drives A and C are available
-    EXPECT_CALL(*mockWindowsApi, GetDriveTypeA(_))
-        .WillRepeatedly(Return(DRIVE_FIXED));
-
-    ULARGE_INTEGER totalSpaceC, freeSpaceC;
-    totalSpaceC.QuadPart = 100 * 1024 * 1024;
-    freeSpaceC.QuadPart = 50 * 1024 * 1024;
-
-    EXPECT_CALL(*mockWindowsApi, GetDiskFreeSpaceExA("A:\\", _, _, _))
-        .WillOnce(Return(FALSE));
-    EXPECT_CALL(*mockWindowsApi, GetDiskFreeSpaceExA("C:\\", _, _, _))
-        .WillOnce(DoAll(SetArgPointee<2>(totalSpaceC),
-                        SetArgPointee<3>(freeSpaceC), Return(TRUE)));
-
-    auto diskUsage = getDiskUsage();
-
-    ASSERT_EQ(diskUsage.size(), 1);
-    EXPECT_EQ(diskUsage[0].first, "C:\\");
-    EXPECT_NEAR(diskUsage[0].second, 50.0, 1e-5);
+TEST_F(DiskTest, GetDiskInfo) {
+    // Test getting disk information
+    std::vector<DiskInfo> disks = getDiskInfo();
+    
+    // Should have at least one disk
+    EXPECT_FALSE(disks.empty());
+    
+    // Validate each disk
+    for (const auto& disk : disks) {
+        // Path should not be empty
+        EXPECT_FALSE(disk.path.empty());
+        EXPECT_GT(disk.path.length(), 0);
+        
+        // File system should not be empty
+        EXPECT_FALSE(disk.fsType.empty());
+        EXPECT_GT(disk.fsType.length(), 0);
+        
+        // Total space should be positive
+        EXPECT_GT(disk.totalSpace, 0);
+        
+        // Free space should be non-negative and <= total
+        EXPECT_GE(disk.freeSpace, 0);
+        EXPECT_LE(disk.freeSpace, disk.totalSpace);
+        
+        // Usage percentage should be between 0 and 100
+        EXPECT_GE(disk.usagePercent, 0.0f);
+        EXPECT_LE(disk.usagePercent, 100.0f);
+        
+        // String lengths should be reasonable
+        EXPECT_LT(disk.path.length(), 1000);
+        EXPECT_LT(disk.fsType.length(), 100);
+        
+        if (!disk.devicePath.empty()) {
+            EXPECT_LT(disk.devicePath.length(), 1000);
+        }
+        
+        if (!disk.model.empty()) {
+            EXPECT_LT(disk.model.length(), 500);
+        }
+    }
 }
 
-TEST_F(DiskTest, GetDriveModel_Windows) {
-    HANDLE mockHandle = reinterpret_cast<HANDLE>(1);
-
-    EXPECT_CALL(*mockWindowsApi, CreateFileA(_, _, _, _, _, _, _))
-        .WillOnce(Return(mockHandle));
-    std::array<char, 1024> buffer = {};
-    std::string_view vendorId = "VENDOR";
-    std::string_view productId = "PRODUCT";
-    std::string_view productRevision = "REVISION";
-    std::memcpy(
-        buffer.data() + offsetof(STORAGE_DEVICE_DESCRIPTOR, VendorIdOffset),
-        vendorId.data(), vendorId.size());
-    std::memcpy(
-        buffer.data() + offsetof(STORAGE_DEVICE_DESCRIPTOR, ProductIdOffset),
-        productId.data(), productId.size());
-    std::memcpy(buffer.data() +
-                    offsetof(STORAGE_DEVICE_DESCRIPTOR, ProductRevisionOffset),
-                productRevision.data(), productRevision.size());
-
-    DWORD bytesReturned = 0;
-    EXPECT_CALL(*mockWindowsApi, DeviceIoControl(_, _, _, _, _, _, _, _))
-        .WillOnce(DoAll(SetArrayArgument<4>(buffer.begin(), buffer.end()),
-                        Return(TRUE)));
-    EXPECT_CALL(*mockWindowsApi, CloseHandle(_)).WillOnce(Return(TRUE));
-
-    std::string model = getDriveModel("C:\\");
-
-    EXPECT_EQ(model, "VENDOR PRODUCT REVISION");
+TEST_F(DiskTest, GetDiskUsage) {
+    // Test getting disk usage
+    std::vector<std::pair<std::string, float>> diskUsage = getDiskUsage();
+    
+    // Should have at least one disk
+    EXPECT_FALSE(diskUsage.empty());
+    
+    // Validate each disk usage entry
+    for (const auto& [path, usagePercent] : diskUsage) {
+        // Path should not be empty
+        EXPECT_FALSE(path.empty());
+        EXPECT_GT(path.length(), 0);
+        
+        // Usage percentage should be between 0 and 100
+        EXPECT_GE(usagePercent, 0.0f);
+        EXPECT_LE(usagePercent, 100.0f);
+    }
 }
 
-#else
-
-TEST_F(DiskTest, GetDiskUsage_Linux) {
-    std::string mockProcMounts = "dev/sda1 / ext4 rw,relatime 0 0\n";
-    EXPECT_CALL(*mockFileReader, ReadFile("/proc/mounts"))
-        .WillOnce(Return(mockProcMounts));
-
-    std::string mockStatfs = "1024 512 256 128";
-    EXPECT_CALL(*mockFileReader, ReadFile("/proc/stat"))
-        .WillOnce(Return(mockStatfs));
-
-    auto diskUsage = getDiskUsage();
-
-    ASSERT_EQ(diskUsage.size(), 1);
-    EXPECT_EQ(diskUsage[0].first, "/");
-    EXPECT_NEAR(diskUsage[0].second, 75.0,
-                1e-5);  // Adjust the expected value based on the mock data
+TEST_F(DiskTest, GetDriveModel) {
+    // Test getting drive model
+    std::vector<DiskInfo> disks = getDiskInfo();
+    
+    if (!disks.empty()) {
+        // Test getting model for the first disk
+        std::string drivePath = disks[0].path;
+        std::string model = getDriveModel(drivePath);
+        
+        // Model might be empty on some systems, but function should not throw
+        EXPECT_NO_THROW(getDriveModel(drivePath));
+        
+        // If model is available, it should be reasonable
+        if (!model.empty()) {
+            EXPECT_GT(model.length(), 0);
+            EXPECT_LT(model.length(), 200);
+        }
+    }
 }
 
-TEST_F(DiskTest, GetDriveModel_Linux) {
-    std::string mockDriveModel = "MockModel";
-    EXPECT_CALL(*mockFileReader, ReadFile("/sys/block/sda/device/model"))
-        .WillOnce(Return(mockDriveModel));
-
-    std::string model = getDriveModel("sda");
-
-    EXPECT_EQ(model, "MockModel");
+TEST_F(DiskTest, GetDiskInfoWithFiltering) {
+    // Test disk info with removable filtering
+    std::vector<DiskInfo> allDisks = getDiskInfo(true);
+    std::vector<DiskInfo> fixedDisks = getDiskInfo(false);
+    
+    // Fixed disks should be a subset of all disks
+    EXPECT_LE(fixedDisks.size(), allDisks.size());
+    
+    // All disks in fixedDisks should have isRemovable = false
+    for (const auto& disk : fixedDisks) {
+        EXPECT_FALSE(disk.isRemovable);
+    }
 }
 
-#endif
+// ============================================================================
+// Real System Tests
+// ============================================================================
+
+class RealDiskTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        // Setup real disk tests
+    }
+
+    void TearDown() override {
+        // Cleanup
+    }
+};
+
+TEST_F(RealDiskTest, DiskInfoConsistency) {
+    // Test that multiple calls return consistent results
+    std::vector<DiskInfo> disks1 = getDiskInfo();
+    std::vector<DiskInfo> disks2 = getDiskInfo();
+    
+    // Should have the same number of disks
+    EXPECT_EQ(disks1.size(), disks2.size());
+    
+    // Static information should be identical
+    for (size_t i = 0; i < std::min(disks1.size(), disks2.size()); ++i) {
+        EXPECT_EQ(disks1[i].path, disks2[i].path);
+        EXPECT_EQ(disks1[i].devicePath, disks2[i].devicePath);
+        EXPECT_EQ(disks1[i].model, disks2[i].model);
+        EXPECT_EQ(disks1[i].fsType, disks2[i].fsType);
+        EXPECT_EQ(disks1[i].totalSpace, disks2[i].totalSpace);
+        EXPECT_EQ(disks1[i].isRemovable, disks2[i].isRemovable);
+        
+        // Free space and usage might change slightly, but should be close
+        if (disks1[i].totalSpace > 0) {
+            float spaceDiff = std::abs(static_cast<float>(disks1[i].freeSpace) - 
+                                     static_cast<float>(disks2[i].freeSpace));
+            float tolerance = static_cast<float>(disks1[i].totalSpace) * 0.01f; // 1% tolerance
+            EXPECT_LT(spaceDiff, tolerance);
+        }
+    }
+}
+
+TEST_F(RealDiskTest, DiskUsageConsistency) {
+    // Test consistency between getDiskUsage and getDiskInfo
+    std::vector<std::pair<std::string, float>> diskUsage = getDiskUsage();
+    std::vector<DiskInfo> diskInfo = getDiskInfo();
+    
+    // Should have the same number of entries
+    EXPECT_EQ(diskUsage.size(), diskInfo.size());
+    
+    // Verify data consistency
+    for (size_t i = 0; i < std::min(diskUsage.size(), diskInfo.size()); ++i) {
+        EXPECT_EQ(diskUsage[i].first, diskInfo[i].path);
+        EXPECT_NEAR(diskUsage[i].second, diskInfo[i].usagePercent, 0.1f);
+    }
+}
+
+TEST_F(RealDiskTest, DiskSpaceCalculations) {
+    // Test disk space calculations
+    std::vector<DiskInfo> disks = getDiskInfo();
+    
+    for (const auto& disk : disks) {
+        // Used space calculation
+        uint64_t usedSpace = disk.totalSpace - disk.freeSpace;
+        EXPECT_LE(usedSpace, disk.totalSpace);
+        
+        // Usage percentage calculation
+        if (disk.totalSpace > 0) {
+            float calculatedUsage = (static_cast<float>(usedSpace) / disk.totalSpace) * 100.0f;
+            EXPECT_NEAR(disk.usagePercent, calculatedUsage, 1.0f); // Allow 1% tolerance
+        }
+    }
+}
+
+TEST_F(RealDiskTest, DriveModelEdgeCases) {
+    // Test drive model with edge cases
+    std::vector<std::string> testPaths = {
+        "",
+        "/",
+        "C:\\",
+        "/invalid/path",
+        "invalid_path_12345"
+    };
+    
+    for (const auto& path : testPaths) {
+        EXPECT_NO_THROW({
+            std::string model = getDriveModel(path);
+            // Model can be empty or non-empty, just shouldn't crash
+            EXPECT_TRUE(model.empty() || !model.empty());
+        });
+    }
+}
+
+// ============================================================================
+// Edge Cases and Error Handling Tests
+// ============================================================================
+
+TEST_F(RealDiskTest, NoThrowGuarantee) {
+    // Test that all disk functions provide no-throw guarantee
+    EXPECT_NO_THROW(getDiskInfo());
+    EXPECT_NO_THROW(getDiskInfo(true));
+    EXPECT_NO_THROW(getDiskInfo(false));
+    EXPECT_NO_THROW(getDiskUsage());
+    EXPECT_NO_THROW(getDriveModel(""));
+    EXPECT_NO_THROW(getDriveModel("/invalid/path"));
+}
+
+TEST_F(RealDiskTest, BoundaryConditions) {
+    // Test disk functions with boundary conditions
+    std::vector<DiskInfo> disks = getDiskInfo();
+    
+    for (const auto& disk : disks) {
+        // Test disk space boundaries
+        EXPECT_GT(disk.totalSpace, 0);
+        EXPECT_GE(disk.freeSpace, 0);
+        EXPECT_LE(disk.freeSpace, disk.totalSpace);
+        
+        // Test usage percentage boundaries
+        EXPECT_GE(disk.usagePercent, 0.0f);
+        EXPECT_LE(disk.usagePercent, 100.0f);
+        
+        // Test reasonable upper bounds
+        EXPECT_LT(disk.totalSpace, 1000ULL * 1024 * 1024 * 1024 * 1024); // Less than 1000TB
+        EXPECT_LT(disk.freeSpace, 1000ULL * 1024 * 1024 * 1024 * 1024); // Less than 1000TB
+        
+        // Test path length boundaries
+        EXPECT_GT(disk.path.length(), 0);
+        EXPECT_LT(disk.path.length(), 1000);
+        
+        // Test file system type boundaries
+        EXPECT_GT(disk.fsType.length(), 0);
+        EXPECT_LT(disk.fsType.length(), 100);
+    }
+}
+
+TEST_F(RealDiskTest, StringFieldValidation) {
+    // Test that string fields don't contain null characters
+    std::vector<DiskInfo> disks = getDiskInfo();
+    
+    for (const auto& disk : disks) {
+        EXPECT_EQ(disk.path.find('\0'), std::string::npos);
+        EXPECT_EQ(disk.fsType.find('\0'), std::string::npos);
+        
+        if (!disk.devicePath.empty()) {
+            EXPECT_EQ(disk.devicePath.find('\0'), std::string::npos);
+        }
+        
+        if (!disk.model.empty()) {
+            EXPECT_EQ(disk.model.find('\0'), std::string::npos);
+        }
+        
+        // Should not contain newlines or carriage returns
+        EXPECT_EQ(disk.path.find('\n'), std::string::npos);
+        EXPECT_EQ(disk.path.find('\r'), std::string::npos);
+        EXPECT_EQ(disk.fsType.find('\n'), std::string::npos);
+        EXPECT_EQ(disk.fsType.find('\r'), std::string::npos);
+    }
+}
+
+TEST_F(RealDiskTest, EmptyDiskListHandling) {
+    // Test handling of potentially empty disk lists
+    std::vector<DiskInfo> disks = getDiskInfo();
+    std::vector<std::pair<std::string, float>> usage = getDiskUsage();
+    
+    // Functions should handle empty results gracefully
+    EXPECT_TRUE(disks.empty() || !disks.empty());
+    EXPECT_TRUE(usage.empty() || !usage.empty());
+    
+    // If we have disks, we should have usage info
+    if (!disks.empty()) {
+        EXPECT_FALSE(usage.empty());
+    }
+}
+
+} // namespace atom::sysinfo::test

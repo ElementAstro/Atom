@@ -13,6 +13,7 @@ Description: System Information Module - Memory Implementation
 **************************************************/
 
 #include "memory.hpp"
+#include <spdlog/spdlog.h>
 #include "common.hpp"
 
 // 包含平台特定的头文件
@@ -34,7 +35,7 @@ auto getMemoryUsage() -> float {
 #elif defined(__APPLE__)
     return macos::getMemoryUsage();
 #else
-    LOG_F(ERROR, "getMemoryUsage: Unsupported platform");
+    spdlog::error( "getMemoryUsage: Unsupported platform");
     return 0.0f;
 #endif
 }
@@ -47,7 +48,7 @@ auto getTotalMemorySize() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getTotalMemorySize();
 #else
-    LOG_F(ERROR, "getTotalMemorySize: Unsupported platform");
+    spdlog::error( "getTotalMemorySize: Unsupported platform");
     return 0;
 #endif
 }
@@ -60,7 +61,7 @@ auto getAvailableMemorySize() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getAvailableMemorySize();
 #else
-    LOG_F(ERROR, "getAvailableMemorySize: Unsupported platform");
+    spdlog::error( "getAvailableMemorySize: Unsupported platform");
     return 0;
 #endif
 }
@@ -73,7 +74,7 @@ auto getPhysicalMemoryInfo() -> MemoryInfo::MemorySlot {
 #elif defined(__APPLE__)
     return macos::getPhysicalMemoryInfo();
 #else
-    LOG_F(ERROR, "getPhysicalMemoryInfo: Unsupported platform");
+    spdlog::error( "getPhysicalMemoryInfo: Unsupported platform");
     return MemoryInfo::MemorySlot();
 #endif
 }
@@ -86,7 +87,7 @@ auto getVirtualMemoryMax() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getVirtualMemoryMax();
 #else
-    LOG_F(ERROR, "getVirtualMemoryMax: Unsupported platform");
+    spdlog::error( "getVirtualMemoryMax: Unsupported platform");
     return 0;
 #endif
 }
@@ -99,7 +100,7 @@ auto getVirtualMemoryUsed() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getVirtualMemoryUsed();
 #else
-    LOG_F(ERROR, "getVirtualMemoryUsed: Unsupported platform");
+    spdlog::error( "getVirtualMemoryUsed: Unsupported platform");
     return 0;
 #endif
 }
@@ -112,7 +113,7 @@ auto getSwapMemoryTotal() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getSwapMemoryTotal();
 #else
-    LOG_F(ERROR, "getSwapMemoryTotal: Unsupported platform");
+    spdlog::error( "getSwapMemoryTotal: Unsupported platform");
     return 0;
 #endif
 }
@@ -125,7 +126,7 @@ auto getSwapMemoryUsed() -> unsigned long long {
 #elif defined(__APPLE__)
     return macos::getSwapMemoryUsed();
 #else
-    LOG_F(ERROR, "getSwapMemoryUsed: Unsupported platform");
+    spdlog::error( "getSwapMemoryUsed: Unsupported platform");
     return 0;
 #endif
 }
@@ -138,7 +139,7 @@ auto getCommittedMemory() -> size_t {
 #elif defined(__APPLE__)
     return macos::getCommittedMemory();
 #else
-    LOG_F(ERROR, "getCommittedMemory: Unsupported platform");
+    spdlog::error( "getCommittedMemory: Unsupported platform");
     return 0;
 #endif
 }
@@ -151,7 +152,7 @@ auto getUncommittedMemory() -> size_t {
 #elif defined(__APPLE__)
     return macos::getUncommittedMemory();
 #else
-    LOG_F(ERROR, "getUncommittedMemory: Unsupported platform");
+    spdlog::error( "getUncommittedMemory: Unsupported platform");
     return 0;
 #endif
 }
@@ -164,7 +165,7 @@ auto getDetailedMemoryStats() -> MemoryInfo {
 #elif defined(__APPLE__)
     return macos::getDetailedMemoryStats();
 #else
-    LOG_F(ERROR, "getDetailedMemoryStats: Unsupported platform");
+    spdlog::error( "getDetailedMemoryStats: Unsupported platform");
     return MemoryInfo();
 #endif
 }
@@ -177,7 +178,7 @@ auto getPeakWorkingSetSize() -> size_t {
 #elif defined(__APPLE__)
     return macos::getPeakWorkingSetSize();
 #else
-    LOG_F(ERROR, "getPeakWorkingSetSize: Unsupported platform");
+    spdlog::error( "getPeakWorkingSetSize: Unsupported platform");
     return 0;
 #endif
 }
@@ -190,7 +191,7 @@ auto getCurrentWorkingSetSize() -> size_t {
 #elif defined(__APPLE__)
     return macos::getCurrentWorkingSetSize();
 #else
-    LOG_F(ERROR, "getCurrentWorkingSetSize: Unsupported platform");
+    spdlog::error( "getCurrentWorkingSetSize: Unsupported platform");
     return 0;
 #endif
 }
@@ -203,7 +204,7 @@ auto getPageFaultCount() -> size_t {
 #elif defined(__APPLE__)
     return macos::getPageFaultCount();
 #else
-    LOG_F(ERROR, "getPageFaultCount: Unsupported platform");
+    spdlog::error( "getPageFaultCount: Unsupported platform");
     return 0;
 #endif
 }
@@ -216,7 +217,7 @@ auto getMemoryLoadPercentage() -> double {
 #elif defined(__APPLE__)
     return macos::getMemoryLoadPercentage();
 #else
-    LOG_F(ERROR, "getMemoryLoadPercentage: Unsupported platform");
+    spdlog::error( "getMemoryLoadPercentage: Unsupported platform");
     return 0.0;
 #endif
 }
@@ -229,7 +230,7 @@ auto getMemoryPerformance() -> MemoryPerformance {
 #elif defined(__APPLE__)
     return macos::getMemoryPerformance();
 #else
-    LOG_F(ERROR, "getMemoryPerformance: Unsupported platform");
+    spdlog::error( "getMemoryPerformance: Unsupported platform");
     return MemoryPerformance();
 #endif
 }
