@@ -257,5 +257,3 @@ TEST_F(TrackableTest, ComplexTypeTracking) {
     EXPECT_EQ(newComplex.id, 2);
     EXPECT_EQ(newComplex.name, "updated");
 }
-
-

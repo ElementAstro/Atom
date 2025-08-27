@@ -108,18 +108,18 @@ private:
     bool simulateErrors_;
 
 public:
-    explicit MockSearchEngine(bool simulateErrors = false) 
+    explicit MockSearchEngine(bool simulateErrors = false)
         : simulateErrors_(simulateErrors) {}
 
     void addDocument(const MockDocument& doc) {
         if (simulateErrors_ && doc.getId() == "error_trigger") {
             throw MockSearchOperationException("Simulated error during document addition");
         }
-        
+
         if (documents_.count(doc.getId())) {
             throw std::invalid_argument("Document ID already exists: " + doc.getId());
         }
-        
+
         documents_[doc.getId()] = std::make_shared<MockDocument>(doc);
     }
 
@@ -127,7 +127,7 @@ public:
         if (simulateErrors_ && docId == "error_trigger") {
             throw MockSearchOperationException("Simulated error during document removal");
         }
-        
+
         auto it = documents_.find(docId);
         if (it == documents_.end()) {
             throw MockDocumentNotFoundException(docId);
@@ -139,7 +139,7 @@ public:
         if (simulateErrors_ && doc.getId() == "error_trigger") {
             throw MockSearchOperationException("Simulated error during document update");
         }
-        
+
         if (!documents_.count(doc.getId())) {
             throw MockDocumentNotFoundException(doc.getId());
         }
@@ -150,7 +150,7 @@ public:
         if (simulateErrors_ && tag == "error_trigger") {
             throw MockSearchOperationException("Simulated error during tag search");
         }
-        
+
         std::vector<std::shared_ptr<MockDocument>> results;
         for (const auto& [id, doc] : documents_) {
             for (const auto& docTag : doc->getTags()) {
@@ -173,7 +173,7 @@ public:
         if (simulateErrors_ && tag == "error_trigger") {
             throw MockSearchOperationException("Simulated error during fuzzy search");
         }
-        
+
         // Simple implementation for testing
         return searchByTag(tag);
     }
@@ -182,7 +182,7 @@ public:
         if (simulateErrors_ && query == "error_trigger") {
             throw MockSearchOperationException("Simulated error during content search");
         }
-        
+
         std::vector<std::shared_ptr<MockDocument>> results;
         for (const auto& [id, doc] : documents_) {
             if (doc->getContent().find(query) != std::string::npos) {
@@ -243,7 +243,7 @@ TEST_F(ErrorHandlingTest, DocumentValidationEmptyContent) {
 }
 
 TEST_F(ErrorHandlingTest, DocumentValidationEmptyTag) {
-    EXPECT_THROW(MockDocument("valid_id", "Valid content", {"valid_tag", ""}), 
+    EXPECT_THROW(MockDocument("valid_id", "Valid content", {"valid_tag", ""}),
                  MockDocumentValidationException);
 }
 
@@ -259,24 +259,24 @@ TEST_F(ErrorHandlingTest, DocumentValidationLongContent) {
 
 TEST_F(ErrorHandlingTest, DocumentValidationLongTag) {
     std::string longTag(150, 'A');
-    EXPECT_THROW(MockDocument("valid_id", "Valid content", {longTag}), 
+    EXPECT_THROW(MockDocument("valid_id", "Valid content", {longTag}),
                  MockDocumentValidationException);
 }
 
 TEST_F(ErrorHandlingTest, DocumentSetContentValidation) {
     MockDocument doc("valid_id", "Valid content");
-    
+
     EXPECT_THROW(doc.setContent(""), MockDocumentValidationException);
-    
+
     std::string longContent(1000001, 'A');
     EXPECT_THROW(doc.setContent(longContent), MockDocumentValidationException);
 }
 
 TEST_F(ErrorHandlingTest, DocumentAddTagValidation) {
     MockDocument doc("valid_id", "Valid content");
-    
+
     EXPECT_THROW(doc.addTag(""), MockDocumentValidationException);
-    
+
     std::string longTag(150, 'A');
     EXPECT_THROW(doc.addTag(longTag), MockDocumentValidationException);
 }
@@ -295,7 +295,7 @@ TEST_F(ErrorHandlingTest, UpdateNonexistentDocument) {
 TEST_F(ErrorHandlingTest, AddDuplicateDocument) {
     MockDocument doc1("duplicate_id", "Content 1");
     MockDocument doc2("duplicate_id", "Content 2");
-    
+
     EXPECT_NO_THROW(engine->addDocument(doc1));
     EXPECT_THROW(engine->addDocument(doc2), std::invalid_argument);
 }
@@ -309,7 +309,7 @@ TEST_F(ErrorHandlingTest, SearchOperationErrors) {
 
 TEST_F(ErrorHandlingTest, DocumentOperationErrors) {
     MockDocument errorDoc("error_trigger", "Error content");
-    
+
     EXPECT_THROW(errorEngine->addDocument(errorDoc), MockSearchOperationException);
     EXPECT_THROW(errorEngine->removeDocument("error_trigger"), MockSearchOperationException);
     EXPECT_THROW(errorEngine->updateDocument(errorDoc), MockSearchOperationException);

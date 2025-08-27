@@ -18,7 +18,7 @@ protected:
     void SetUp() override {
         // Setup libuv test environment
     }
-    
+
     void TearDown() override {
         // Cleanup
     }

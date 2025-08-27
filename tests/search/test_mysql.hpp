@@ -84,8 +84,8 @@ TEST_F(MySQLDBTest, BasicConnection) {
 }
 
 TEST_F(MySQLDBTest, ConnectionWithParams) {
-    auto db2 = std::make_unique<MysqlDB>(testParams.host, testParams.user, 
-                                         testParams.password, testParams.database, 
+    auto db2 = std::make_unique<MysqlDB>(testParams.host, testParams.user,
+                                         testParams.password, testParams.database,
                                          testParams.port);
     EXPECT_TRUE(db2->connect());
     EXPECT_TRUE(db2->isConnected());
@@ -95,7 +95,7 @@ TEST_F(MySQLDBTest, ConnectionWithParams) {
 TEST_F(MySQLDBTest, InvalidConnection) {
     ConnectionParams invalidParams = testParams;
     invalidParams.password = "wrong_password";
-    
+
     auto invalidDB = std::make_unique<MysqlDB>(invalidParams);
     EXPECT_FALSE(invalidDB->connect());
     EXPECT_FALSE(invalidDB->isConnected());
@@ -115,16 +115,16 @@ TEST_F(MySQLDBTest, BasicSelect) {
     ASSERT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Bob', 'bob@test.com', 30)"
     ));
-    
+
     // Select data
     auto result = db->executeQueryWithResults("SELECT * FROM test_users WHERE name = 'Bob'");
     ASSERT_TRUE(result.next());
-    
+
     Row row = result.getCurrentRow();
     EXPECT_EQ(row.getString(1), "Bob");
     EXPECT_EQ(row.getString(2), "bob@test.com");
     EXPECT_EQ(row.getInt(3), 30);
-    
+
     EXPECT_FALSE(result.next()); // Should be only one row
 }
 
@@ -133,10 +133,10 @@ TEST_F(MySQLDBTest, BasicUpdate) {
     ASSERT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Charlie', 'charlie@test.com', 35)"
     ));
-    
+
     EXPECT_TRUE(db->executeQuery("UPDATE test_users SET age = 36 WHERE name = 'Charlie'"));
     EXPECT_EQ(db->getAffectedRows(), 1);
-    
+
     // Verify update
     auto result = db->executeQueryWithResults("SELECT age FROM test_users WHERE name = 'Charlie'");
     ASSERT_TRUE(result.next());
@@ -148,10 +148,10 @@ TEST_F(MySQLDBTest, BasicDelete) {
     ASSERT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('David', 'david@test.com', 40)"
     ));
-    
+
     EXPECT_TRUE(db->executeQuery("DELETE FROM test_users WHERE name = 'David'"));
     EXPECT_EQ(db->getAffectedRows(), 1);
-    
+
     // Verify deletion
     auto result = db->executeQueryWithResults("SELECT * FROM test_users WHERE name = 'David'");
     EXPECT_FALSE(result.next());
@@ -162,13 +162,13 @@ TEST_F(MySQLDBTest, PreparedStatementInsert) {
     auto stmt = db->prepareStatement(
         "INSERT INTO test_users (name, email, age) VALUES (?, ?, ?)"
     );
-    
+
     ASSERT_NE(stmt, nullptr);
-    
+
     stmt->bindString(0, "Eve")
          .bindString(1, "eve@test.com")
          .bindInt(2, 28);
-    
+
     EXPECT_TRUE(stmt->execute());
     EXPECT_GT(db->getLastInsertId(), 0);
 }
@@ -178,13 +178,13 @@ TEST_F(MySQLDBTest, PreparedStatementSelect) {
     ASSERT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Frank', 'frank@test.com', 32)"
     ));
-    
+
     auto stmt = db->prepareStatement("SELECT * FROM test_users WHERE age > ?");
     ASSERT_NE(stmt, nullptr);
-    
+
     stmt->bindInt(0, 30);
     EXPECT_TRUE(stmt->execute());
-    
+
     auto result = stmt->getResultSet();
     ASSERT_TRUE(result.next());
     EXPECT_EQ(result.getCurrentRow().getString(1), "Frank");
@@ -194,23 +194,23 @@ TEST_F(MySQLDBTest, PreparedStatementBatch) {
     auto stmt = db->prepareStatement(
         "INSERT INTO test_users (name, email, age) VALUES (?, ?, ?)"
     );
-    
+
     ASSERT_NE(stmt, nullptr);
-    
+
     // Insert multiple records
     std::vector<std::tuple<std::string, std::string, int>> users = {
         {"Grace", "grace@test.com", 27},
         {"Henry", "henry@test.com", 45},
         {"Ivy", "ivy@test.com", 29}
     };
-    
+
     for (const auto& [name, email, age] : users) {
         stmt->bindString(0, name)
              .bindString(1, email)
              .bindInt(2, age);
         EXPECT_TRUE(stmt->execute());
     }
-    
+
     // Verify all records were inserted
     auto result = db->executeQueryWithResults("SELECT COUNT(*) FROM test_users");
     ASSERT_TRUE(result.next());
@@ -220,13 +220,13 @@ TEST_F(MySQLDBTest, PreparedStatementBatch) {
 // Transaction Tests
 TEST_F(MySQLDBTest, BasicTransaction) {
     EXPECT_TRUE(db->beginTransaction());
-    
+
     EXPECT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Jack', 'jack@test.com', 33)"
     ));
-    
+
     EXPECT_TRUE(db->commitTransaction());
-    
+
     // Verify data was committed
     auto result = db->executeQueryWithResults("SELECT * FROM test_users WHERE name = 'Jack'");
     EXPECT_TRUE(result.next());
@@ -234,13 +234,13 @@ TEST_F(MySQLDBTest, BasicTransaction) {
 
 TEST_F(MySQLDBTest, TransactionRollback) {
     EXPECT_TRUE(db->beginTransaction());
-    
+
     EXPECT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Kate', 'kate@test.com', 26)"
     ));
-    
+
     EXPECT_TRUE(db->rollbackTransaction());
-    
+
     // Verify data was rolled back
     auto result = db->executeQueryWithResults("SELECT * FROM test_users WHERE name = 'Kate'");
     EXPECT_FALSE(result.next());
@@ -249,15 +249,15 @@ TEST_F(MySQLDBTest, TransactionRollback) {
 TEST_F(MySQLDBTest, TransactionIsolation) {
     // Test different isolation levels
     EXPECT_TRUE(db->setTransactionIsolation(TransactionIsolation::READ_COMMITTED));
-    
+
     EXPECT_TRUE(db->beginTransaction());
     EXPECT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Leo', 'leo@test.com', 31)"
     ));
-    
+
     // In a real scenario, another connection wouldn't see this data yet
     EXPECT_TRUE(db->commitTransaction());
-    
+
     auto result = db->executeQueryWithResults("SELECT * FROM test_users WHERE name = 'Leo'");
     EXPECT_TRUE(result.next());
 }
@@ -273,7 +273,7 @@ TEST_F(MySQLDBTest, ConstraintViolation) {
     ASSERT_TRUE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Mike', 'mike@test.com', 34)"
     ));
-    
+
     // Try to insert duplicate email (should fail due to UNIQUE constraint)
     EXPECT_FALSE(db->executeQuery(
         "INSERT INTO test_users (name, email, age) VALUES ('Mike2', 'mike@test.com', 35)"
@@ -289,15 +289,15 @@ TEST_F(MySQLDBTest, InvalidTableAccess) {
 // Connection Pool Tests
 TEST_F(MySQLDBTest, ConnectionReconnect) {
     EXPECT_TRUE(db->isConnected());
-    
+
     // Force disconnect
     db->disconnect();
     EXPECT_FALSE(db->isConnected());
-    
+
     // Reconnect
     EXPECT_TRUE(db->connect());
     EXPECT_TRUE(db->isConnected());
-    
+
     // Should be able to execute queries again
     EXPECT_TRUE(db->executeQuery("SELECT 1"));
 }
@@ -305,30 +305,30 @@ TEST_F(MySQLDBTest, ConnectionReconnect) {
 // Performance Tests
 TEST_F(MySQLDBTest, BulkInsert) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     EXPECT_TRUE(db->beginTransaction());
-    
+
     auto stmt = db->prepareStatement(
         "INSERT INTO test_users (name, email, age) VALUES (?, ?, ?)"
     );
-    
+
     for (int i = 0; i < 1000; ++i) {
         stmt->bindString(0, "BulkUser" + std::to_string(i))
              .bindString(1, "bulk" + std::to_string(i) + "@test.com")
              .bindInt(2, 20 + (i % 50));
         EXPECT_TRUE(stmt->execute());
     }
-    
+
     EXPECT_TRUE(db->commitTransaction());
-    
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+
     // Verify all records were inserted
     auto result = db->executeQueryWithResults("SELECT COUNT(*) FROM test_users");
     ASSERT_TRUE(result.next());
     EXPECT_EQ(result.getCurrentRow().getInt(0), 1000);
-    
+
     // Performance should be reasonable (less than 10 seconds for 1000 inserts)
     EXPECT_LT(duration.count(), 10000);
 }

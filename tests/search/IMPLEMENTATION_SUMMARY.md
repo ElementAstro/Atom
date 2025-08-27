@@ -15,7 +15,7 @@
   - CRUD operations, transactions, parameterized queries
   - Error handling, concurrency, performance tests
   - Edge cases, resource management, schema validation
-  
+
 - **`test_mysql.hpp`**: Complete MySQL database testing (584 lines)
   - Connection management, prepared statements, transactions
   - Concurrency, performance, character encoding
@@ -142,7 +142,7 @@ cd tests/search
 
 ### Test Files (8 files)
 1. `test_sqlite.hpp` - SQLite database tests
-2. `test_mysql.hpp` - MySQL database tests  
+2. `test_mysql.hpp` - MySQL database tests
 3. `test_database_integration.hpp` - Database integration patterns
 4. `test_document.hpp` - Document class tests
 5. `test_search_engine.hpp` - SearchEngine tests

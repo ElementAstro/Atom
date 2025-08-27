@@ -70,7 +70,7 @@ public:
 
     void put(const Key& key, const Value& value) {
         std::lock_guard<std::mutex> lock(mutex_);
-        
+
         auto it = cache_.find(key);
         if (it != cache_.end()) {
             it->second = value;
@@ -137,10 +137,10 @@ public:
         if (newMaxSize == 0) {
             throw std::invalid_argument("Max size cannot be zero");
         }
-        
+
         std::lock_guard<std::mutex> lock(mutex_);
         maxSize_ = newMaxSize;
-        
+
         // Evict items if necessary
         while (cache_.size() > maxSize_ && !lruOrder_.empty()) {
             Key lruKey = lruOrder_.back();
@@ -246,7 +246,7 @@ TEST_F(LRUCacheEnhancedTest, ZeroCapacityThrows) {
 
 TEST_F(LRUCacheEnhancedTest, SingleItemCapacity) {
     auto singleCache = std::make_unique<MockThreadSafeLRUCache<std::string, int>>(1);
-    
+
     singleCache->put("key1", 1);
     EXPECT_EQ(singleCache->size(), 1);
     EXPECT_TRUE(singleCache->contains("key1"));
@@ -260,7 +260,7 @@ TEST_F(LRUCacheEnhancedTest, SingleItemCapacity) {
 TEST_F(LRUCacheEnhancedTest, EraseExistingKey) {
     cache->put("key1", 1);
     cache->put("key2", 2);
-    
+
     EXPECT_TRUE(cache->erase("key1"));
     EXPECT_EQ(cache->size(), 1);
     EXPECT_FALSE(cache->contains("key1"));
@@ -277,7 +277,7 @@ TEST_F(LRUCacheEnhancedTest, ClearCache) {
     cache->put("key1", 1);
     cache->put("key2", 2);
     cache->put("key3", 3);
-    
+
     cache->clear();
     EXPECT_EQ(cache->size(), 0);
     EXPECT_TRUE(cache->empty());
@@ -287,24 +287,24 @@ TEST_F(LRUCacheEnhancedTest, ClearCache) {
 // Statistics Tests
 TEST_F(LRUCacheEnhancedTest, HitRateCalculation) {
     cache->put("key1", 1);
-    
+
     // Hit
     (void)cache->get("key1");
     // Miss
     (void)cache->get("key2");
-    
+
     EXPECT_FLOAT_EQ(cache->hitRate(), 0.5f);
 }
 
 TEST_F(LRUCacheEnhancedTest, LoadFactorCalculation) {
     EXPECT_FLOAT_EQ(cache->loadFactor(), 0.0f);
-    
+
     cache->put("key1", 1);
     EXPECT_FLOAT_EQ(cache->loadFactor(), 1.0f / 3.0f);
-    
+
     cache->put("key2", 2);
     EXPECT_FLOAT_EQ(cache->loadFactor(), 2.0f / 3.0f);
-    
+
     cache->put("key3", 3);
     EXPECT_FLOAT_EQ(cache->loadFactor(), 1.0f);
 }
@@ -313,9 +313,9 @@ TEST_F(LRUCacheEnhancedTest, ResetStatistics) {
     cache->put("key1", 1);
     (void)cache->get("key1");
     (void)cache->get("key2");
-    
+
     EXPECT_GT(cache->hitRate(), 0.0f);
-    
+
     cache->resetStatistics();
     EXPECT_FLOAT_EQ(cache->hitRate(), 0.0f);
 }
@@ -325,11 +325,11 @@ TEST_F(LRUCacheEnhancedTest, ResizeToLargerCapacity) {
     cache->put("key1", 1);
     cache->put("key2", 2);
     cache->put("key3", 3);
-    
+
     cache->resize(5);
     EXPECT_EQ(cache->maxSize(), 5);
     EXPECT_EQ(cache->size(), 3);
-    
+
     // Should be able to add more items
     cache->put("key4", 4);
     cache->put("key5", 5);
@@ -340,11 +340,11 @@ TEST_F(LRUCacheEnhancedTest, ResizeToSmallerCapacity) {
     cache->put("key1", 1);
     cache->put("key2", 2);
     cache->put("key3", 3);
-    
+
     cache->resize(2);
     EXPECT_EQ(cache->maxSize(), 2);
     EXPECT_EQ(cache->size(), 2);
-    
+
     // Should have evicted the least recently used item
     EXPECT_FALSE(cache->contains("key1"));
 }

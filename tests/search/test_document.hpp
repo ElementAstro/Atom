@@ -130,7 +130,7 @@ protected:
 // Constructor Tests
 TEST_F(DocumentTest, BasicConstruction) {
     MockDocument doc("test_id", "Test content", {"tag1", "tag2"});
-    
+
     EXPECT_EQ(doc.getId(), "test_id");
     EXPECT_EQ(doc.getContent(), "Test content");
     EXPECT_EQ(doc.getTags().size(), 2);
@@ -141,7 +141,7 @@ TEST_F(DocumentTest, BasicConstruction) {
 
 TEST_F(DocumentTest, ConstructionWithoutTags) {
     MockDocument doc("test_id", "Test content");
-    
+
     EXPECT_EQ(doc.getId(), "test_id");
     EXPECT_EQ(doc.getContent(), "Test content");
     EXPECT_TRUE(doc.getTags().empty());
@@ -150,7 +150,7 @@ TEST_F(DocumentTest, ConstructionWithoutTags) {
 
 TEST_F(DocumentTest, ConstructionWithEmptyTags) {
     MockDocument doc("test_id", "Test content", {});
-    
+
     EXPECT_EQ(doc.getId(), "test_id");
     EXPECT_EQ(doc.getContent(), "Test content");
     EXPECT_TRUE(doc.getTags().empty());
@@ -178,14 +178,14 @@ TEST_F(DocumentTest, ValidationValidDocument) {
 TEST_F(DocumentTest, CopyConstructor) {
     MockDocument original("test_id", "Test content", {"tag1", "tag2"});
     original.setClickCount(5);
-    
+
     MockDocument copy(original);
-    
+
     EXPECT_EQ(copy.getId(), original.getId());
     EXPECT_EQ(copy.getContent(), original.getContent());
     EXPECT_EQ(copy.getTags(), original.getTags());
     EXPECT_EQ(copy.getClickCount(), original.getClickCount());
-    
+
     // Verify they are independent
     copy.addTag("new_tag");
     EXPECT_NE(copy.getTags().size(), original.getTags().size());
@@ -194,10 +194,10 @@ TEST_F(DocumentTest, CopyConstructor) {
 TEST_F(DocumentTest, CopyAssignment) {
     MockDocument original("test_id", "Test content", {"tag1", "tag2"});
     original.setClickCount(10);
-    
+
     MockDocument copy("other_id", "Other content");
     copy = original;
-    
+
     EXPECT_EQ(copy.getId(), original.getId());
     EXPECT_EQ(copy.getContent(), original.getContent());
     EXPECT_EQ(copy.getTags(), original.getTags());
@@ -207,9 +207,9 @@ TEST_F(DocumentTest, CopyAssignment) {
 TEST_F(DocumentTest, SelfAssignment) {
     MockDocument doc("test_id", "Test content", {"tag1", "tag2"});
     doc.setClickCount(7);
-    
+
     doc = doc; // Self-assignment
-    
+
     EXPECT_EQ(doc.getId(), "test_id");
     EXPECT_EQ(doc.getContent(), "Test content");
     EXPECT_EQ(doc.getTags().size(), 2);
@@ -220,19 +220,19 @@ TEST_F(DocumentTest, SelfAssignment) {
 TEST_F(DocumentTest, MoveConstructor) {
     MockDocument original("test_id", "Test content", {"tag1", "tag2"});
     original.setClickCount(15);
-    
+
     std::string originalId = std::string(original.getId());
     std::string originalContent = std::string(original.getContent());
     auto originalTags = original.getTags();
     int originalClickCount = original.getClickCount();
-    
+
     MockDocument moved(std::move(original));
-    
+
     EXPECT_EQ(moved.getId(), originalId);
     EXPECT_EQ(moved.getContent(), originalContent);
     EXPECT_EQ(moved.getTags(), originalTags);
     EXPECT_EQ(moved.getClickCount(), originalClickCount);
-    
+
     // Original should be in valid but unspecified state
     EXPECT_EQ(original.getClickCount(), 0); // Reset after move
 }
@@ -240,15 +240,15 @@ TEST_F(DocumentTest, MoveConstructor) {
 TEST_F(DocumentTest, MoveAssignment) {
     MockDocument original("test_id", "Test content", {"tag1", "tag2"});
     original.setClickCount(20);
-    
+
     std::string originalId = std::string(original.getId());
     std::string originalContent = std::string(original.getContent());
     auto originalTags = original.getTags();
     int originalClickCount = original.getClickCount();
-    
+
     MockDocument moved("other_id", "Other content");
     moved = std::move(original);
-    
+
     EXPECT_EQ(moved.getId(), originalId);
     EXPECT_EQ(moved.getContent(), originalContent);
     EXPECT_EQ(moved.getTags(), originalTags);
@@ -258,21 +258,21 @@ TEST_F(DocumentTest, MoveAssignment) {
 // Content Management Tests
 TEST_F(DocumentTest, SetContent) {
     MockDocument doc("test_id", "Initial content");
-    
+
     doc.setContent("Updated content");
     EXPECT_EQ(doc.getContent(), "Updated content");
 }
 
 TEST_F(DocumentTest, SetEmptyContent) {
     MockDocument doc("test_id", "Initial content");
-    
+
     EXPECT_THROW(doc.setContent(""), std::invalid_argument);
     EXPECT_EQ(doc.getContent(), "Initial content"); // Should remain unchanged
 }
 
 TEST_F(DocumentTest, SetLargeContent) {
     MockDocument doc("test_id", "Initial content");
-    
+
     std::string largeContent(10000, 'A');
     EXPECT_NO_THROW(doc.setContent(largeContent));
     EXPECT_EQ(doc.getContent(), largeContent);
@@ -281,7 +281,7 @@ TEST_F(DocumentTest, SetLargeContent) {
 // Tag Management Tests
 TEST_F(DocumentTest, AddTag) {
     MockDocument doc("test_id", "Test content", {"initial_tag"});
-    
+
     doc.addTag("new_tag");
     EXPECT_EQ(doc.getTags().size(), 2);
     EXPECT_TRUE(doc.getTags().count("initial_tag"));
@@ -290,7 +290,7 @@ TEST_F(DocumentTest, AddTag) {
 
 TEST_F(DocumentTest, AddDuplicateTag) {
     MockDocument doc("test_id", "Test content", {"existing_tag"});
-    
+
     doc.addTag("existing_tag");
     EXPECT_EQ(doc.getTags().size(), 1); // Should not duplicate
     EXPECT_TRUE(doc.getTags().count("existing_tag"));
@@ -298,14 +298,14 @@ TEST_F(DocumentTest, AddDuplicateTag) {
 
 TEST_F(DocumentTest, AddEmptyTag) {
     MockDocument doc("test_id", "Test content");
-    
+
     EXPECT_THROW(doc.addTag(""), std::invalid_argument);
     EXPECT_TRUE(doc.getTags().empty());
 }
 
 TEST_F(DocumentTest, RemoveTag) {
     MockDocument doc("test_id", "Test content", {"tag1", "tag2", "tag3"});
-    
+
     doc.removeTag("tag2");
     EXPECT_EQ(doc.getTags().size(), 2);
     EXPECT_TRUE(doc.getTags().count("tag1"));
@@ -315,7 +315,7 @@ TEST_F(DocumentTest, RemoveTag) {
 
 TEST_F(DocumentTest, RemoveNonexistentTag) {
     MockDocument doc("test_id", "Test content", {"tag1", "tag2"});
-    
+
     doc.removeTag("nonexistent");
     EXPECT_EQ(doc.getTags().size(), 2); // Should remain unchanged
     EXPECT_TRUE(doc.getTags().count("tag1"));
@@ -325,32 +325,32 @@ TEST_F(DocumentTest, RemoveNonexistentTag) {
 // Click Count Tests
 TEST_F(DocumentTest, IncrementClickCount) {
     MockDocument doc("test_id", "Test content");
-    
+
     EXPECT_EQ(doc.getClickCount(), 0);
-    
+
     doc.incrementClickCount();
     EXPECT_EQ(doc.getClickCount(), 1);
-    
+
     doc.incrementClickCount();
     EXPECT_EQ(doc.getClickCount(), 2);
 }
 
 TEST_F(DocumentTest, SetClickCount) {
     MockDocument doc("test_id", "Test content");
-    
+
     doc.setClickCount(42);
     EXPECT_EQ(doc.getClickCount(), 42);
-    
+
     doc.setClickCount(0);
     EXPECT_EQ(doc.getClickCount(), 0);
 }
 
 TEST_F(DocumentTest, ResetClickCount) {
     MockDocument doc("test_id", "Test content");
-    
+
     doc.setClickCount(100);
     EXPECT_EQ(doc.getClickCount(), 100);
-    
+
     doc.resetClickCount();
     EXPECT_EQ(doc.getClickCount(), 0);
 }

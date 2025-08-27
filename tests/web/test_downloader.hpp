@@ -128,7 +128,7 @@ TEST_F(DownloadManagerTest, ConstructorDestructor) {
 
 TEST_F(DownloadManagerTest, ConstructorWithNonexistentDirectory) {
     fs::path nonexistentPath = tempDir / "nonexistent" / "tasks.json";
-    
+
     // Should create directory structure
     ASSERT_NO_THROW({
         DownloadManager dm(nonexistentPath.string());
@@ -138,48 +138,48 @@ TEST_F(DownloadManagerTest, ConstructorWithNonexistentDirectory) {
 // Task Management Tests
 TEST_F(DownloadManagerTest, AddTask) {
     DownloadManager dm(taskFile.string());
-    
+
     fs::path outputFile = downloadDir / "test1.bin";
-    
+
     ASSERT_NO_THROW(dm.addTask(TEST_SMALL_FILE_URL, outputFile.string()));
-    
+
     EXPECT_EQ(dm.getTotalTaskCount(), 1);
     EXPECT_FALSE(dm.isRunning());
 }
 
 TEST_F(DownloadManagerTest, AddTaskWithPriority) {
     DownloadManager dm(taskFile.string());
-    
+
     fs::path outputFile1 = downloadDir / "test1.bin";
     fs::path outputFile2 = downloadDir / "test2.bin";
-    
+
     ASSERT_NO_THROW(dm.addTask(TEST_SMALL_FILE_URL, outputFile1.string(), 5));
     ASSERT_NO_THROW(dm.addTask(TEST_MEDIUM_FILE_URL, outputFile2.string(), 10));
-    
+
     EXPECT_EQ(dm.getTotalTaskCount(), 2);
 }
 
 TEST_F(DownloadManagerTest, AddTaskInvalidArguments) {
     DownloadManager dm(taskFile.string());
-    
+
     // Empty URL should throw
     EXPECT_THROW(dm.addTask("", "output.txt"), std::invalid_argument);
-    
+
     // Empty filepath should throw
     EXPECT_THROW(dm.addTask(TEST_SMALL_FILE_URL, ""), std::invalid_argument);
 }
 
 TEST_F(DownloadManagerTest, RemoveTask) {
     DownloadManager dm(taskFile.string());
-    
+
     fs::path outputFile = downloadDir / "test1.bin";
     dm.addTask(TEST_SMALL_FILE_URL, outputFile.string());
-    
+
     EXPECT_EQ(dm.getTotalTaskCount(), 1);
-    
+
     EXPECT_TRUE(dm.removeTask(0));
     EXPECT_EQ(dm.getTotalTaskCount(), 0);
-    
+
     // Removing non-existent task should return false
     EXPECT_FALSE(dm.removeTask(0));
 }
@@ -188,22 +188,22 @@ TEST_F(DownloadManagerTest, RemoveTask) {
 TEST_F(DownloadManagerTest, SingleDownload) {
     DownloadManager dm(taskFile.string());
     setupCallbacks(dm);
-    
+
     fs::path outputFile = downloadDir / "single_test.bin";
     dm.addTask(TEST_SMALL_FILE_URL, outputFile.string());
-    
+
     ASSERT_NO_THROW(dm.start(1));  // Single thread
     EXPECT_TRUE(dm.isRunning());
-    
+
     waitForDownloads(dm);
-    
+
     dm.stop();
     EXPECT_FALSE(dm.isRunning());
-    
+
     // Check if file was downloaded
     EXPECT_TRUE(fs::exists(outputFile));
     EXPECT_GT(fs::file_size(outputFile), 0);
-    
+
     // Check callbacks
     EXPECT_GT(downloadCompleteCount.load(), 0);
     EXPECT_TRUE(lastCompletedSuccess);
@@ -212,25 +212,25 @@ TEST_F(DownloadManagerTest, SingleDownload) {
 TEST_F(DownloadManagerTest, MultipleDownloads) {
     DownloadManager dm(taskFile.string());
     setupCallbacks(dm);
-    
+
     std::vector<fs::path> outputFiles;
     for (int i = 0; i < 3; ++i) {
         fs::path outputFile = downloadDir / ("multi_test_" + std::to_string(i) + ".bin");
         outputFiles.push_back(outputFile);
         dm.addTask(TEST_SMALL_FILE_URL, outputFile.string());
     }
-    
+
     ASSERT_NO_THROW(dm.start(2));  // Two threads
-    
+
     waitForDownloads(dm);
     dm.stop();
-    
+
     // Check all files were downloaded
     for (const auto& file : outputFiles) {
         EXPECT_TRUE(fs::exists(file));
         EXPECT_GT(fs::file_size(file), 0);
     }
-    
+
     EXPECT_EQ(downloadCompleteCount.load(), 3);
 }
 
@@ -238,15 +238,15 @@ TEST_F(DownloadManagerTest, MultipleDownloads) {
 TEST_F(DownloadManagerTest, ProgressTracking) {
     DownloadManager dm(taskFile.string());
     setupCallbacks(dm);
-    
+
     fs::path outputFile = downloadDir / "progress_test.bin";
     dm.addTask(TEST_MEDIUM_FILE_URL, outputFile.string());
-    
+
     dm.start(1);
-    
+
     waitForDownloads(dm);
     dm.stop();
-    
+
     // Should have received progress updates
     EXPECT_GT(progressUpdateCount.load(), 0);
     EXPECT_GE(lastProgressPercent.load(), 0.0);
@@ -255,24 +255,24 @@ TEST_F(DownloadManagerTest, ProgressTracking) {
 
 TEST_F(DownloadManagerTest, GetProgress) {
     DownloadManager dm(taskFile.string());
-    
+
     fs::path outputFile = downloadDir / "get_progress_test.bin";
     dm.addTask(TEST_MEDIUM_FILE_URL, outputFile.string());
-    
+
     // Before starting, progress should be 0
     EXPECT_EQ(dm.getProgress(0), 0.0);
-    
+
     dm.start(1);
-    
+
     // During download, progress should be between 0 and 100
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
     double progress = dm.getProgress(0);
     EXPECT_GE(progress, 0.0);
     EXPECT_LE(progress, 100.0);
-    
+
     waitForDownloads(dm);
     dm.stop();
-    
+
     // After completion, progress should be 100 or -1 (if task is cleaned up)
     double finalProgress = dm.getProgress(0);
     EXPECT_TRUE(finalProgress == 100.0 || finalProgress == -1.0);

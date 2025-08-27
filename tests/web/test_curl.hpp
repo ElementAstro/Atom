@@ -116,7 +116,7 @@ TEST_F(CurlWrapperTest, ConstructorDestructor) {
 // URL Setting Tests
 TEST_F(CurlWrapperTest, SetUrl) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setUrl(TEST_GET_URL));
     ASSERT_NO_THROW(curl.setUrl("http://example.com"));
     ASSERT_NO_THROW(curl.setUrl("https://secure.example.com"));
@@ -124,7 +124,7 @@ TEST_F(CurlWrapperTest, SetUrl) {
 
 TEST_F(CurlWrapperTest, SetUrlEmpty) {
     CurlWrapper curl;
-    
+
     // Empty URL should not crash but may cause issues during perform
     ASSERT_NO_THROW(curl.setUrl(""));
 }
@@ -132,7 +132,7 @@ TEST_F(CurlWrapperTest, SetUrlEmpty) {
 // HTTP Method Tests
 TEST_F(CurlWrapperTest, SetRequestMethod) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setRequestMethod("GET"));
     ASSERT_NO_THROW(curl.setRequestMethod("POST"));
     ASSERT_NO_THROW(curl.setRequestMethod("PUT"));
@@ -144,7 +144,7 @@ TEST_F(CurlWrapperTest, SetRequestMethod) {
 
 TEST_F(CurlWrapperTest, SetRequestMethodInvalid) {
     CurlWrapper curl;
-    
+
     // Invalid methods should not crash
     ASSERT_NO_THROW(curl.setRequestMethod("INVALID"));
     ASSERT_NO_THROW(curl.setRequestMethod(""));
@@ -153,7 +153,7 @@ TEST_F(CurlWrapperTest, SetRequestMethodInvalid) {
 // Header Tests
 TEST_F(CurlWrapperTest, AddHeader) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.addHeader("User-Agent", "TestAgent/1.0"));
     ASSERT_NO_THROW(curl.addHeader("Content-Type", "application/json"));
     ASSERT_NO_THROW(curl.addHeader("Authorization", "Bearer token123"));
@@ -162,7 +162,7 @@ TEST_F(CurlWrapperTest, AddHeader) {
 
 TEST_F(CurlWrapperTest, AddHeaderEmpty) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.addHeader("", ""));
     ASSERT_NO_THROW(curl.addHeader("EmptyValue", ""));
     ASSERT_NO_THROW(curl.addHeader("", "EmptyKey"));
@@ -171,7 +171,7 @@ TEST_F(CurlWrapperTest, AddHeaderEmpty) {
 // Callback Tests
 TEST_F(CurlWrapperTest, SetCallbacks) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(setupErrorCallback(curl));
     ASSERT_NO_THROW(setupResponseCallback(curl));
 }
@@ -179,7 +179,7 @@ TEST_F(CurlWrapperTest, SetCallbacks) {
 // Timeout Tests
 TEST_F(CurlWrapperTest, SetTimeout) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setTimeout(30L));
     ASSERT_NO_THROW(curl.setTimeout(0L));   // No timeout
     ASSERT_NO_THROW(curl.setTimeout(1L));   // Very short timeout
@@ -189,7 +189,7 @@ TEST_F(CurlWrapperTest, SetTimeout) {
 // Follow Location Tests
 TEST_F(CurlWrapperTest, SetFollowLocation) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setFollowLocation(true));
     ASSERT_NO_THROW(curl.setFollowLocation(false));
 }
@@ -197,11 +197,11 @@ TEST_F(CurlWrapperTest, SetFollowLocation) {
 // Request Body Tests
 TEST_F(CurlWrapperTest, SetRequestBody) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setRequestBody("param1=value1&param2=value2"));
     ASSERT_NO_THROW(curl.setRequestBody(R"({"key": "value", "number": 123})"));
     ASSERT_NO_THROW(curl.setRequestBody(""));
-    
+
     // Large body
     std::string largeBody(10000, 'X');
     ASSERT_NO_THROW(curl.setRequestBody(largeBody));
@@ -210,13 +210,13 @@ TEST_F(CurlWrapperTest, SetRequestBody) {
 // File Upload Tests
 TEST_F(CurlWrapperTest, SetUploadFile) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setUploadFile(testFile.string()));
 }
 
 TEST_F(CurlWrapperTest, SetUploadFileNonexistent) {
     CurlWrapper curl;
-    
+
     // Should not crash, but will fail during perform
     ASSERT_NO_THROW(curl.setUploadFile("nonexistent_file.txt"));
 }
@@ -224,7 +224,7 @@ TEST_F(CurlWrapperTest, SetUploadFileNonexistent) {
 // Proxy Tests
 TEST_F(CurlWrapperTest, SetProxy) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setProxy("http://proxy.example.com:8080"));
     ASSERT_NO_THROW(curl.setProxy("socks5://proxy.example.com:1080"));
     ASSERT_NO_THROW(curl.setProxy(""));
@@ -233,7 +233,7 @@ TEST_F(CurlWrapperTest, SetProxy) {
 // SSL Options Tests
 TEST_F(CurlWrapperTest, SetSSLOptions) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setSSLOptions(true, true));   // Verify both
     ASSERT_NO_THROW(curl.setSSLOptions(false, false)); // Verify neither
     ASSERT_NO_THROW(curl.setSSLOptions(true, false));  // Verify peer only
@@ -243,7 +243,7 @@ TEST_F(CurlWrapperTest, SetSSLOptions) {
 // Download Speed Tests
 TEST_F(CurlWrapperTest, SetMaxDownloadSpeed) {
     CurlWrapper curl;
-    
+
     ASSERT_NO_THROW(curl.setMaxDownloadSpeed(1024));     // 1KB/s
     ASSERT_NO_THROW(curl.setMaxDownloadSpeed(1048576));  // 1MB/s
     ASSERT_NO_THROW(curl.setMaxDownloadSpeed(0));        // No limit

@@ -26,11 +26,11 @@ public:
     std::string content;
     std::set<std::string> tags;
     std::atomic<int> clickCount{0};
-    
-    MockDocument(const std::string& id, const std::string& content, 
+
+    MockDocument(const std::string& id, const std::string& content,
                  std::initializer_list<std::string> tags = {})
         : id(id), content(content), tags(tags) {}
-    
+
     std::string getId() const { return id; }
     std::string getContent() const { return content; }
     const std::set<std::string>& getTags() const { return tags; }
@@ -45,7 +45,7 @@ private:
     std::map<std::string, std::set<std::string>> contentIndex_;
     std::atomic<size_t> totalDocs_{0};
     unsigned maxThreads_;
-    
+
     std::vector<std::string> tokenize(const std::string& content) const {
         std::vector<std::string> tokens;
         std::string token;
@@ -62,14 +62,14 @@ private:
         }
         return tokens;
     }
-    
+
     void addToContentIndex(const std::shared_ptr<MockDocument>& doc) {
         auto tokens = tokenize(doc->getContent());
         for (const auto& token : tokens) {
             contentIndex_[token].insert(doc->getId());
         }
     }
-    
+
     void addToTagIndex(const std::shared_ptr<MockDocument>& doc) {
         for (const auto& tag : doc->getTags()) {
             tagIndex_[tag].push_back(doc->getId());
@@ -78,25 +78,25 @@ private:
 
 public:
     explicit MockSearchEngine(unsigned maxThreads = 0) : maxThreads_(maxThreads) {}
-    
+
     void addDocument(const MockDocument& doc) {
         if (documents_.count(doc.getId())) {
             throw std::invalid_argument("Document ID already exists");
         }
-        
+
         auto docPtr = std::make_shared<MockDocument>(doc);
         documents_[doc.getId()] = docPtr;
         addToTagIndex(docPtr);
         addToContentIndex(docPtr);
         totalDocs_++;
     }
-    
+
     void removeDocument(const std::string& docId) {
         auto it = documents_.find(docId);
         if (it == documents_.end()) {
             throw std::runtime_error("Document not found: " + docId);
         }
-        
+
         // Remove from indices
         auto doc = it->second;
         for (const auto& tag : doc->getTags()) {
@@ -106,7 +106,7 @@ public:
                 tagIndex_.erase(tag);
             }
         }
-        
+
         auto tokens = tokenize(doc->getContent());
         for (const auto& token : tokens) {
             contentIndex_[token].erase(docId);
@@ -114,20 +114,20 @@ public:
                 contentIndex_.erase(token);
             }
         }
-        
+
         documents_.erase(it);
         totalDocs_--;
     }
-    
+
     void updateDocument(const MockDocument& doc) {
         if (!documents_.count(doc.getId())) {
             throw std::runtime_error("Document not found: " + doc.getId());
         }
-        
+
         removeDocument(doc.getId());
         addDocument(doc);
     }
-    
+
     std::vector<std::shared_ptr<MockDocument>> searchByTag(const std::string& tag) {
         std::vector<std::shared_ptr<MockDocument>> results;
         auto it = tagIndex_.find(tag);
@@ -140,12 +140,12 @@ public:
         }
         return results;
     }
-    
+
     std::vector<std::shared_ptr<MockDocument>> fuzzySearchByTag(const std::string& tag, int tolerance) {
         if (tolerance < 0) {
             throw std::invalid_argument("Tolerance cannot be negative");
         }
-        
+
         std::vector<std::shared_ptr<MockDocument>> results;
         for (const auto& [indexTag, docIds] : tagIndex_) {
             if (levenshteinDistance(tag, indexTag) <= tolerance) {
@@ -158,13 +158,13 @@ public:
         }
         return results;
     }
-    
+
     std::vector<std::shared_ptr<MockDocument>> searchByTags(const std::vector<std::string>& tags) {
         if (tags.empty()) return {};
-        
+
         std::set<std::string> resultIds;
         bool first = true;
-        
+
         for (const auto& tag : tags) {
             std::set<std::string> tagResults;
             auto it = tagIndex_.find(tag);
@@ -173,7 +173,7 @@ public:
                     tagResults.insert(docId);
                 }
             }
-            
+
             if (first) {
                 resultIds = tagResults;
                 first = false;
@@ -185,7 +185,7 @@ public:
                 resultIds = intersection;
             }
         }
-        
+
         std::vector<std::shared_ptr<MockDocument>> results;
         for (const auto& docId : resultIds) {
             if (documents_.count(docId)) {
@@ -194,11 +194,11 @@ public:
         }
         return results;
     }
-    
+
     std::vector<std::shared_ptr<MockDocument>> searchByContent(const std::string& query) {
         auto tokens = tokenize(query);
         std::map<std::string, double> scores;
-        
+
         for (const auto& token : tokens) {
             auto it = contentIndex_.find(token);
             if (it != contentIndex_.end()) {
@@ -207,7 +207,7 @@ public:
                 }
             }
         }
-        
+
         std::vector<std::shared_ptr<MockDocument>> results;
         for (const auto& [docId, score] : scores) {
             if (documents_.count(docId)) {
@@ -216,17 +216,17 @@ public:
         }
         return results;
     }
-    
+
     std::vector<std::shared_ptr<MockDocument>> booleanSearch(const std::string& query) {
         // Simple boolean search implementation
         if (query.find(" AND ") != std::string::npos) {
             auto pos = query.find(" AND ");
             auto term1 = query.substr(0, pos);
             auto term2 = query.substr(pos + 5);
-            
+
             auto results1 = searchByContent(term1);
             auto results2 = searchByContent(term2);
-            
+
             std::vector<std::shared_ptr<MockDocument>> intersection;
             for (const auto& doc1 : results1) {
                 for (const auto& doc2 : results2) {
@@ -240,7 +240,7 @@ public:
         }
         return searchByContent(query);
     }
-    
+
     std::vector<std::string> autoComplete(const std::string& prefix, size_t maxResults = 0) {
         std::vector<std::string> suggestions;
         for (const auto& [tag, _] : tagIndex_) {
@@ -253,20 +253,20 @@ public:
         }
         return suggestions;
     }
-    
+
     size_t getDocumentCount() const { return totalDocs_.load(); }
-    
+
     void clear() {
         documents_.clear();
         tagIndex_.clear();
         contentIndex_.clear();
         totalDocs_ = 0;
     }
-    
+
     bool hasDocument(const std::string& docId) const {
         return documents_.count(docId) > 0;
     }
-    
+
     std::vector<std::string> getAllDocumentIds() const {
         std::vector<std::string> ids;
         for (const auto& [id, _] : documents_) {
@@ -274,15 +274,15 @@ public:
         }
         return ids;
     }
-    
+
 private:
     int levenshteinDistance(const std::string& s1, const std::string& s2) const {
         const size_t len1 = s1.size(), len2 = s2.size();
         std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
-        
+
         for (size_t i = 1; i <= len1; ++i) d[i][0] = i;
         for (size_t i = 1; i <= len2; ++i) d[0][i] = i;
-        
+
         for (size_t i = 1; i <= len1; ++i) {
             for (size_t j = 1; j <= len2; ++j) {
                 d[i][j] = std::min({
@@ -302,7 +302,7 @@ protected:
 
     void SetUp() override {
         engine = std::make_unique<MockSearchEngine>();
-        
+
         // Add some initial test documents
         engine->addDocument(MockDocument("1", "Hello world programming", {"greeting", "world", "programming"}));
         engine->addDocument(MockDocument("2", "Goodbye world", {"farewell", "world"}));

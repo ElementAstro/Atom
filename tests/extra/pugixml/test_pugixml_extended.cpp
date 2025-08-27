@@ -22,13 +22,13 @@ protected:
         temp_dir_ = std::filesystem::temp_directory_path() / "pugixml_extended_test";
         std::filesystem::create_directories(temp_dir_);
     }
-    
+
     void TearDown() override {
         // Cleanup
         std::error_code ec;
         std::filesystem::remove_all(temp_dir_, ec);
     }
-    
+
     std::filesystem::path temp_dir_;
 };
 

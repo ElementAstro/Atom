@@ -24,12 +24,12 @@ protected:
         ioc_ = std::make_unique<net::io_context>();
         client_ = std::make_unique<HttpClient>(*ioc_);
     }
-    
+
     void TearDown() override {
         client_.reset();
         ioc_.reset();
     }
-    
+
     std::unique_ptr<net::io_context> ioc_;
     std::unique_ptr<HttpClient> client_;
 };

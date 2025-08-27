@@ -19,9 +19,9 @@ std::string captureOutput(std::function<void()> func) {
     std::ostringstream oss;
     std::streambuf* orig = std::cout.rdbuf();
     std::cout.rdbuf(oss.rdbuf());
-    
+
     func();
-    
+
     std::cout.rdbuf(orig);
     return oss.str();
 }

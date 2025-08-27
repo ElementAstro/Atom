@@ -90,7 +90,7 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 ```
 [==========] Running 57 tests from 3 test suites.
 [----------] 18 tests from ArgsViewTest (74 ms total)
-[----------] 19 tests from CompatTest (67 ms total)  
+[----------] 19 tests from CompatTest (67 ms total)
 [----------] 20 tests from NonCopyableTest (101 ms total)
 [==========] 57 tests from 3 test suites ran. (264 ms total)
 [  PASSED  ] 57 tests.

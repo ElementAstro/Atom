@@ -22,7 +22,7 @@ protected:
     void SetUp() override {
         // Setup boost test environment
     }
-    
+
     void TearDown() override {
         // Cleanup
     }

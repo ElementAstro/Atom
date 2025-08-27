@@ -29,7 +29,7 @@ protected:
     void SetUp() override {
         // Setup curl test environment
     }
-    
+
     void TearDown() override {
         // Cleanup
     }

@@ -43,7 +43,7 @@ class TestService {
 public:
     TestService(std::shared_ptr<ILogger> logger, std::shared_ptr<IDatabase> db)
         : logger_(logger), database_(db) {}
-    
+
     void doWork() {
         logger_->log("Starting work");
         database_->connect();
@@ -51,7 +51,7 @@ public:
         database_->disconnect();
         logger_->log("Work completed");
     }
-    
+
 private:
     std::shared_ptr<ILogger> logger_;
     std::shared_ptr<IDatabase> database_;
@@ -62,7 +62,7 @@ protected:
     void SetUp() override {
         // Setup dependency injection container
     }
-    
+
     void TearDown() override {
         // Cleanup
     }

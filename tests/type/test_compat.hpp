@@ -33,10 +33,10 @@ TEST_F(CompatTest, ExpectedWithCustomErrorType) {
 TEST_F(CompatTest, ExpectedDefaultErrorType) {
     // Test that default error type is std::string
     expected<int> result = 42;
-    
+
     // This should compile, confirming std::string is the default error type
     static_assert(std::is_same_v<decltype(result), expected<int, std::string>>);
-    
+
     EXPECT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), 42);
 }
@@ -45,7 +45,7 @@ TEST_F(CompatTest, ExpectedDefaultErrorType) {
 TEST_F(CompatTest, UnexpectedTypeExists) {
     // Test that the unexpected type alias exists and is usable
     auto error = unexpected<std::string>("error message");
-    
+
     expected<int, std::string> result = error;
     EXPECT_FALSE(result.has_value());
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
@@ -59,10 +59,10 @@ TEST_F(CompatTest, UnexpectedWithDifferentTypes) {
     // Test unexpected with different error types
     auto int_error = unexpected<int>(404);
     auto string_error = unexpected<std::string>("not found");
-    
+
     expected<std::string, int> result1 = int_error;
     expected<int, std::string> result2 = string_error;
-    
+
     EXPECT_FALSE(result1.has_value());
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
     EXPECT_EQ(result1.error(), 404);
@@ -81,7 +81,7 @@ TEST_F(CompatTest, UnexpectedWithDifferentTypes) {
 // Success Cases Tests
 TEST_F(CompatTest, SuccessfulExpected) {
     expected<std::string> result = std::string("success");
-    
+
     EXPECT_TRUE(result.has_value());
     EXPECT_TRUE(result);  // Should be convertible to bool
     EXPECT_EQ(result.value(), "success");
@@ -92,15 +92,15 @@ TEST_F(CompatTest, SuccessfulExpectedWithComplexType) {
     struct ComplexType {
         int id;
         std::string name;
-        
+
         bool operator==(const ComplexType& other) const {
             return id == other.id && name == other.name;
         }
     };
-    
+
     ComplexType obj{42, "test"};
     expected<ComplexType> result = obj;
-    
+
     EXPECT_TRUE(result.has_value());
     EXPECT_EQ(result.value().id, 42);
     EXPECT_EQ(result.value().name, "test");
@@ -126,9 +126,9 @@ TEST_F(CompatTest, ErrorExpectedWithCustomErrorType) {
         NOT_FOUND = 404,
         INTERNAL_ERROR = 500
     };
-    
+
     expected<std::string, ErrorCode> result = unexpected<ErrorCode>(ErrorCode::NOT_FOUND);
-    
+
     EXPECT_FALSE(result.has_value());
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
     EXPECT_EQ(result.error(), ErrorCode::NOT_FOUND);
@@ -141,19 +141,19 @@ TEST_F(CompatTest, ErrorExpectedWithCustomErrorType) {
 TEST_F(CompatTest, ValueAccess) {
     expected<int> success_result = 42;
     expected<int> error_result = unexpected<std::string>("error");
-    
+
     // Test value() method
     EXPECT_EQ(success_result.value(), 42);
     EXPECT_THROW(error_result.value(), std::exception);  // Should throw on error
-    
+
     // Test dereference operator
     EXPECT_EQ(*success_result, 42);
-    
+
     // Test arrow operator (if available)
     struct TestStruct {
         int getValue() const { return 100; }
     };
-    
+
     expected<TestStruct> struct_result = TestStruct{};
     EXPECT_EQ(struct_result->getValue(), 100);
 }
@@ -161,7 +161,7 @@ TEST_F(CompatTest, ValueAccess) {
 TEST_F(CompatTest, ValueOrMethod) {
     expected<int> success_result = 42;
     expected<int> error_result = unexpected<std::string>("error");
-    
+
     // Test value_or method
     EXPECT_EQ(success_result.value_or(0), 42);
     EXPECT_EQ(error_result.value_or(100), 100);
@@ -182,15 +182,15 @@ TEST_F(CompatTest, ErrorAccess) {
 TEST_F(CompatTest, MonadicOperations) {
     expected<int> success_result = 42;
     expected<int> error_result = unexpected<std::string>("error");
-    
+
     // Test and_then (if available)
     auto doubled = success_result.and_then([](int value) -> expected<int> {
         return value * 2;
     });
-    
+
     EXPECT_TRUE(doubled.has_value());
     EXPECT_EQ(doubled.value(), 84);
-    
+
     // Test and_then with error
     auto error_doubled = error_result.and_then([](int value) -> expected<int> {
         return value * 2;
@@ -237,7 +237,7 @@ TEST_F(CompatTest, TransformOperation) {
 TEST_F(CompatTest, TypeTraits) {
     // Test that expected and unexpected are the correct types
     static_assert(std::is_same_v<expected<int>, expected<int, std::string>>);
-    
+
     // Test that we can detect if we're using std::expected or custom implementation
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
     // Using std::expected
@@ -260,13 +260,13 @@ TEST_F(CompatTest, CrossPlatformCompatibility) {
             return unexpected<std::string>("operation failed");
         }
     };
-    
+
     auto success_result = create_result(true);
     auto error_result = create_result(false);
-    
+
     EXPECT_TRUE(success_result.has_value());
     EXPECT_EQ(success_result.value(), 42);
-    
+
     EXPECT_FALSE(error_result.has_value());
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
     EXPECT_EQ(error_result.error(), "operation failed");
@@ -280,7 +280,7 @@ TEST_F(CompatTest, VoidExpected) {
     // Test expected<void> if supported
     expected<void> success_result;
     expected<void> error_result = unexpected<std::string>("void error");
-    
+
     EXPECT_TRUE(success_result.has_value());
     EXPECT_FALSE(error_result.has_value());
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
@@ -294,10 +294,10 @@ TEST_F(CompatTest, MoveSemantics) {
     // Test move semantics
     std::string large_string(1000, 'x');
     expected<std::string> result = std::move(large_string);
-    
+
     EXPECT_TRUE(result.has_value());
     EXPECT_EQ(result.value().size(), 1000);
-    
+
     // Test moving the result
     auto moved_result = std::move(result);
     EXPECT_TRUE(moved_result.has_value());
@@ -306,7 +306,7 @@ TEST_F(CompatTest, MoveSemantics) {
 
 TEST_F(CompatTest, ConstCorrectness) {
     const expected<int> const_result = 42;
-    
+
     EXPECT_TRUE(const_result.has_value());
     EXPECT_EQ(const_result.value(), 42);
     EXPECT_EQ(*const_result, 42);
@@ -316,7 +316,7 @@ TEST_F(CompatTest, ConstCorrectness) {
 TEST_F(CompatTest, NoThrowOperations) {
     // Test that basic operations are noexcept where expected
     expected<int> result = 42;
-    
+
     EXPECT_TRUE(noexcept(result.has_value()));
     EXPECT_TRUE(noexcept(static_cast<bool>(result)));
 }

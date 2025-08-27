@@ -25,17 +25,17 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/extra)
 # Function to create test executable for a module
 function(create_extra_test_executable MODULE_NAME)
     set(TEST_TARGET atom-extra-${MODULE_NAME}-test)
-    
+
     # Collect all test source files for the module
-    file(GLOB_RECURSE TEST_SOURCES 
+    file(GLOB_RECURSE TEST_SOURCES
         "${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}/*.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}/*.hpp"
     )
-    
+
     if(TEST_SOURCES)
         # Create test executable
         add_executable(${TEST_TARGET} ${TEST_SOURCES})
-        
+
         # Link libraries
         target_link_libraries(${TEST_TARGET}
             PRIVATE
@@ -45,7 +45,7 @@ function(create_extra_test_executable MODULE_NAME)
             GTest::gmock_main
             Threads::Threads
         )
-        
+
         # Link to the corresponding extra module if it exists
         if(TARGET atom-extra-${MODULE_NAME})
             target_link_libraries(${TEST_TARGET} PRIVATE atom-extra-${MODULE_NAME})
@@ -67,29 +67,29 @@ function(create_extra_test_executable MODULE_NAME)
             find_package(TBB REQUIRED)
             target_link_libraries(${TEST_TARGET} PRIVATE TBB::tbb atom-error)
         endif()
-        
+
         # Set compiler features
         target_compile_features(${TEST_TARGET} PRIVATE cxx_std_20)
-        
+
         # Compiler flags
         if(MSVC)
             target_compile_options(${TEST_TARGET} PRIVATE /W4)
         else()
             target_compile_options(${TEST_TARGET} PRIVATE -Wall -Wextra -Wpedantic)
         endif()
-        
+
         # Enable testing
         enable_testing()
-        
+
         # Add test
         add_test(NAME ${TEST_TARGET} COMMAND ${TEST_TARGET})
-        
+
         # Set test properties
         set_tests_properties(${TEST_TARGET} PROPERTIES
             TIMEOUT 300
             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
         )
-        
+
         message(STATUS "Created test executable: ${TEST_TARGET}")
     else()
         message(STATUS "No test sources found for module: ${MODULE_NAME}")

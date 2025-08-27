@@ -22,12 +22,12 @@ protected:
         // Setup logger test environment
         log_stream_ = std::make_shared<std::ostringstream>();
     }
-    
+
     void TearDown() override {
         // Cleanup
         log_stream_.reset();
     }
-    
+
     std::shared_ptr<std::ostringstream> log_stream_;
 };
 
