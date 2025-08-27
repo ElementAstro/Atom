@@ -45,15 +45,15 @@ protected:
 TEST_F(BiosTest, GetBiosInfo) {
     // Test basic BIOS information retrieval
     BiosInfoData info = biosInfo->getBiosInfo();
-    
+
     // BIOS info should have at least some basic information
     EXPECT_FALSE(info.version.empty() && info.manufacturer.empty());
-    
+
     // If we have version info, it should be valid
     if (!info.version.empty()) {
         EXPECT_GT(info.version.length(), 0);
     }
-    
+
     // If we have manufacturer info, it should be valid
     if (!info.manufacturer.empty()) {
         EXPECT_GT(info.manufacturer.length(), 0);
@@ -63,10 +63,10 @@ TEST_F(BiosTest, GetBiosInfo) {
 TEST_F(BiosTest, BiosInfoDataValidation) {
     // Test BiosInfoData validation
     BiosInfoData info = biosInfo->getBiosInfo();
-    
+
     // Test isValid method
     bool isValid = info.isValid();
-    
+
     // If BIOS info is available, it should be valid
     if (!info.version.empty() || !info.manufacturer.empty()) {
         EXPECT_TRUE(isValid);
@@ -77,7 +77,7 @@ TEST_F(BiosTest, BiosInfoToString) {
     // Test string representation of BIOS info
     BiosInfoData info = biosInfo->getBiosInfo();
     std::string infoStr = info.toString();
-    
+
     // String representation should not be empty if we have BIOS info
     if (info.isValid()) {
         EXPECT_FALSE(infoStr.empty());
@@ -88,7 +88,7 @@ TEST_F(BiosTest, BiosInfoToString) {
 TEST_F(BiosTest, SecureBootSupport) {
     // Test Secure Boot support detection
     bool secureBootSupported = biosInfo->isSecureBootSupported();
-    
+
     // This is a boolean value, so just verify it doesn't throw
     EXPECT_TRUE(secureBootSupported || !secureBootSupported);
 }
@@ -96,7 +96,7 @@ TEST_F(BiosTest, SecureBootSupport) {
 TEST_F(BiosTest, UEFIBootSupport) {
     // Test UEFI Boot support detection
     bool uefiBootSupported = biosInfo->isUEFIBootSupported();
-    
+
     // This is a boolean value, so just verify it doesn't throw
     EXPECT_TRUE(uefiBootSupported || !uefiBootSupported);
 }
@@ -104,10 +104,10 @@ TEST_F(BiosTest, UEFIBootSupport) {
 TEST_F(BiosTest, GetSMBIOSData) {
     // Test SMBIOS data retrieval
     std::vector<std::string> smbiosData = biosInfo->getSMBIOSData();
-    
+
     // SMBIOS data might be empty on some systems, but should not throw
     EXPECT_TRUE(smbiosData.empty() || !smbiosData.empty());
-    
+
     // If we have SMBIOS data, entries should not be empty
     for (const auto& entry : smbiosData) {
         EXPECT_FALSE(entry.empty());
@@ -117,7 +117,7 @@ TEST_F(BiosTest, GetSMBIOSData) {
 TEST_F(BiosTest, CheckForUpdates) {
     // Test BIOS update checking
     BiosUpdateInfo updateInfo = biosInfo->checkForUpdates();
-    
+
     // Update info should have valid structure
     EXPECT_TRUE(updateInfo.updateAvailable || !updateInfo.updateAvailable);
 
@@ -134,9 +134,9 @@ TEST_F(BiosTest, CheckForUpdates) {
 TEST_F(BiosTest, SecureBootManagement) {
     // Test Secure Boot enable/disable (read-only test)
     // Note: Actual modification requires elevated privileges and is risky
-    
+
     bool originalSupported = biosInfo->isSecureBootSupported();
-    
+
     if (originalSupported) {
         // Just test that the methods don't crash
         // In a real scenario, we would need elevated privileges
@@ -150,9 +150,9 @@ TEST_F(BiosTest, SecureBootManagement) {
 TEST_F(BiosTest, UEFIBootManagement) {
     // Test UEFI Boot enable/disable (read-only test)
     // Note: Actual modification requires elevated privileges and is risky
-    
+
     bool originalSupported = biosInfo->isUEFIBootSupported();
-    
+
     if (originalSupported) {
         // Just test that the methods don't crash
         EXPECT_NO_THROW({
@@ -169,7 +169,7 @@ TEST_F(BiosTest, UEFIBootManagement) {
 TEST_F(BiosTest, BackupBiosSettings) {
     // Test BIOS settings backup
     std::string testBackupPath = "test_bios_backup.dat";
-    
+
     // This might fail due to permissions, but shouldn't crash
     EXPECT_NO_THROW({
         bool result = biosInfo->backupBiosSettings(testBackupPath);
@@ -181,7 +181,7 @@ TEST_F(BiosTest, BackupBiosSettings) {
 TEST_F(BiosTest, RestoreBiosSettings) {
     // Test BIOS settings restore
     std::string testBackupPath = "nonexistent_backup.dat";
-    
+
     // This should fail gracefully for non-existent file
     EXPECT_NO_THROW({
         bool result = biosInfo->restoreBiosSettings(testBackupPath);
@@ -214,7 +214,7 @@ TEST_F(BiosTest, SingletonPattern) {
     // Test that BiosInfo follows singleton pattern
     BiosInfo* instance1 = &BiosInfo::getInstance();
     BiosInfo* instance2 = &BiosInfo::getInstance();
-    
+
     EXPECT_EQ(instance1, instance2);
 }
 

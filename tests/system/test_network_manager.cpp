@@ -32,14 +32,14 @@ class NetworkManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mockNetworkManager = std::make_unique<::testing::NiceMock<MockNetworkManager>>();
-        
+
         // Set up sample network interfaces
         sampleInterfaces = {
             {"eth0", "192.168.1.100", "255.255.255.0", "00:11:22:33:44:55", InterfaceType::ETHERNET, true},
             {"wlan0", "192.168.1.101", "255.255.255.0", "AA:BB:CC:DD:EE:FF", InterfaceType::WIRELESS, true},
             {"lo", "127.0.0.1", "255.0.0.0", "00:00:00:00:00:00", InterfaceType::LOOPBACK, true}
         };
-        
+
         // Set up default behavior for the mock
         ON_CALL(*mockNetworkManager, getNetworkInterfaces())
             .WillByDefault(::testing::Return(sampleInterfaces));
@@ -69,28 +69,28 @@ protected:
 TEST_F(NetworkManagerTest, GetNetworkInterfaces) {
     EXPECT_CALL(*mockNetworkManager, getNetworkInterfaces())
         .WillOnce(::testing::Return(sampleInterfaces));
-    
+
     auto interfaces = mockNetworkManager->getNetworkInterfaces();
-    
+
     EXPECT_EQ(interfaces.size(), 3);
     EXPECT_EQ(interfaces[0].name, "eth0");
     EXPECT_EQ(interfaces[0].ipAddress, "192.168.1.100");
     EXPECT_EQ(interfaces[0].type, InterfaceType::ETHERNET);
     EXPECT_TRUE(interfaces[0].isUp);
-    
+
     EXPECT_EQ(interfaces[1].name, "wlan0");
     EXPECT_EQ(interfaces[1].type, InterfaceType::WIRELESS);
-    
+
     EXPECT_EQ(interfaces[2].name, "lo");
     EXPECT_EQ(interfaces[2].type, InterfaceType::LOOPBACK);
 }
 
 TEST_F(NetworkManagerTest, GetNetworkInterfacesEmpty) {
     std::vector<NetworkInterface> emptyInterfaces;
-    
+
     EXPECT_CALL(*mockNetworkManager, getNetworkInterfaces())
         .WillOnce(::testing::Return(emptyInterfaces));
-    
+
     auto interfaces = mockNetworkManager->getNetworkInterfaces();
     EXPECT_TRUE(interfaces.empty());
 }
@@ -99,21 +99,21 @@ TEST_F(NetworkManagerTest, GetNetworkInterfacesEmpty) {
 TEST_F(NetworkManagerTest, EnableInterface) {
     EXPECT_CALL(*mockNetworkManager, enableInterface("eth0"))
         .Times(1);
-    
+
     mockNetworkManager->enableInterface("eth0");
 }
 
 TEST_F(NetworkManagerTest, DisableInterface) {
     EXPECT_CALL(*mockNetworkManager, disableInterface("wlan0"))
         .Times(1);
-    
+
     mockNetworkManager->disableInterface("wlan0");
 }
 
 TEST_F(NetworkManagerTest, GetInterfaceStatus) {
     EXPECT_CALL(*mockNetworkManager, getInterfaceStatus("eth0"))
         .WillOnce(::testing::Return("UP"));
-    
+
     std::string status = mockNetworkManager->getInterfaceStatus("eth0");
     EXPECT_EQ(status, "UP");
 }
@@ -121,7 +121,7 @@ TEST_F(NetworkManagerTest, GetInterfaceStatus) {
 TEST_F(NetworkManagerTest, GetInterfaceStatusDown) {
     EXPECT_CALL(*mockNetworkManager, getInterfaceStatus("eth1"))
         .WillOnce(::testing::Return("DOWN"));
-    
+
     std::string status = mockNetworkManager->getInterfaceStatus("eth1");
     EXPECT_EQ(status, "DOWN");
 }
@@ -130,7 +130,7 @@ TEST_F(NetworkManagerTest, GetInterfaceStatusDown) {
 TEST_F(NetworkManagerTest, ResolveDNSSuccess) {
     EXPECT_CALL(*mockNetworkManager, resolveDNS("google.com"))
         .WillOnce(::testing::Return("172.217.164.110"));
-    
+
     std::string ip = mockNetworkManager->resolveDNS("google.com");
     EXPECT_EQ(ip, "172.217.164.110");
 }
@@ -138,7 +138,7 @@ TEST_F(NetworkManagerTest, ResolveDNSSuccess) {
 TEST_F(NetworkManagerTest, ResolveDNSFailure) {
     EXPECT_CALL(*mockNetworkManager, resolveDNS("nonexistent.domain"))
         .WillOnce(::testing::Return(""));
-    
+
     std::string ip = mockNetworkManager->resolveDNS("nonexistent.domain");
     EXPECT_TRUE(ip.empty());
 }
@@ -148,10 +148,10 @@ TEST_F(NetworkManagerTest, ResolveDNSMultipleHosts) {
         .WillOnce(::testing::Return("172.217.164.110"));
     EXPECT_CALL(*mockNetworkManager, resolveDNS("github.com"))
         .WillOnce(::testing::Return("140.82.114.4"));
-    
+
     std::string googleIP = mockNetworkManager->resolveDNS("google.com");
     std::string githubIP = mockNetworkManager->resolveDNS("github.com");
-    
+
     EXPECT_EQ(googleIP, "172.217.164.110");
     EXPECT_EQ(githubIP, "140.82.114.4");
 }
@@ -160,7 +160,7 @@ TEST_F(NetworkManagerTest, ResolveDNSMultipleHosts) {
 TEST_F(NetworkManagerTest, MonitorConnectionStatus) {
     EXPECT_CALL(*mockNetworkManager, monitorConnectionStatus())
         .Times(1);
-    
+
     mockNetworkManager->monitorConnectionStatus();
 }
 
@@ -168,17 +168,17 @@ TEST_F(NetworkManagerTest, MonitorConnectionStatus) {
 TEST_F(NetworkManagerTest, GetDefaultGateway) {
     EXPECT_CALL(*mockNetworkManager, getDefaultGateway())
         .WillOnce(::testing::Return("192.168.1.1"));
-    
+
     std::string gateway = mockNetworkManager->getDefaultGateway();
     EXPECT_EQ(gateway, "192.168.1.1");
 }
 
 TEST_F(NetworkManagerTest, GetActiveConnections) {
     std::vector<std::string> expectedConnections = {"eth0", "wlan0"};
-    
+
     EXPECT_CALL(*mockNetworkManager, getActiveConnections())
         .WillOnce(::testing::Return(expectedConnections));
-    
+
     auto connections = mockNetworkManager->getActiveConnections();
     EXPECT_EQ(connections.size(), 2);
     EXPECT_EQ(connections[0], "eth0");
@@ -189,7 +189,7 @@ TEST_F(NetworkManagerTest, GetActiveConnections) {
 TEST_F(NetworkManagerTest, PingHostSuccess) {
     EXPECT_CALL(*mockNetworkManager, pingHost("8.8.8.8", 5000))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockNetworkManager->pingHost("8.8.8.8", 5000);
     EXPECT_TRUE(result);
 }
@@ -197,7 +197,7 @@ TEST_F(NetworkManagerTest, PingHostSuccess) {
 TEST_F(NetworkManagerTest, PingHostFailure) {
     EXPECT_CALL(*mockNetworkManager, pingHost("192.168.255.255", 1000))
         .WillOnce(::testing::Return(false));
-    
+
     bool result = mockNetworkManager->pingHost("192.168.255.255", 1000);
     EXPECT_FALSE(result);
 }
@@ -205,7 +205,7 @@ TEST_F(NetworkManagerTest, PingHostFailure) {
 TEST_F(NetworkManagerTest, GetPublicIP) {
     EXPECT_CALL(*mockNetworkManager, getPublicIP())
         .WillOnce(::testing::Return("203.0.113.1"));
-    
+
     std::string publicIP = mockNetworkManager->getPublicIP();
     EXPECT_EQ(publicIP, "203.0.113.1");
 }
@@ -219,7 +219,7 @@ TEST_F(NetworkManagerTest, NetworkInterfaceStructure) {
     interface.macAddress = "11:22:33:44:55:66";
     interface.type = InterfaceType::ETHERNET;
     interface.isUp = true;
-    
+
     EXPECT_EQ(interface.name, "test0");
     EXPECT_EQ(interface.ipAddress, "10.0.0.1");
     EXPECT_EQ(interface.subnetMask, "255.255.255.0");
@@ -233,15 +233,15 @@ TEST_F(NetworkManagerTest, InterfaceTypes) {
     NetworkInterface ethernetInterface;
     ethernetInterface.type = InterfaceType::ETHERNET;
     EXPECT_EQ(ethernetInterface.type, InterfaceType::ETHERNET);
-    
+
     NetworkInterface wirelessInterface;
     wirelessInterface.type = InterfaceType::WIRELESS;
     EXPECT_EQ(wirelessInterface.type, InterfaceType::WIRELESS);
-    
+
     NetworkInterface loopbackInterface;
     loopbackInterface.type = InterfaceType::LOOPBACK;
     EXPECT_EQ(loopbackInterface.type, InterfaceType::LOOPBACK);
-    
+
     NetworkInterface unknownInterface;
     unknownInterface.type = InterfaceType::UNKNOWN;
     EXPECT_EQ(unknownInterface.type, InterfaceType::UNKNOWN);

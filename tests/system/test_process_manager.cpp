@@ -35,20 +35,20 @@ class ProcessManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mockProcessManager = std::make_unique<::testing::NiceMock<MockProcessManager>>();
-        
+
         // Set up sample process data
         sampleProcesses = {
             {1234, "test_process_1", "running", 50.0, 1024, "/usr/bin/test1"},
             {5678, "test_process_2", "sleeping", 25.0, 2048, "/usr/bin/test2"},
             {9012, "background_task", "running", 10.0, 512, "/usr/bin/bg_task"}
         };
-        
+
         sampleOutput = {
             "Process output line 1",
             "Process output line 2",
             "Process completed successfully"
         };
-        
+
         // Set up default behavior for the mock
         ON_CALL(*mockProcessManager, createProcess(::testing::_, ::testing::_, ::testing::_))
             .WillByDefault(::testing::Return(true));
@@ -83,7 +83,7 @@ protected:
 TEST_F(ProcessManagerTest, CreateProcessSuccess) {
     EXPECT_CALL(*mockProcessManager, createProcess("echo 'Hello World'", "test_echo", false))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockProcessManager->createProcess("echo 'Hello World'", "test_echo", false);
     EXPECT_TRUE(result);
 }
@@ -91,7 +91,7 @@ TEST_F(ProcessManagerTest, CreateProcessSuccess) {
 TEST_F(ProcessManagerTest, CreateProcessFailure) {
     EXPECT_CALL(*mockProcessManager, createProcess("invalid_command", "test_invalid", false))
         .WillOnce(::testing::Return(false));
-    
+
     bool result = mockProcessManager->createProcess("invalid_command", "test_invalid", false);
     EXPECT_FALSE(result);
 }
@@ -99,7 +99,7 @@ TEST_F(ProcessManagerTest, CreateProcessFailure) {
 TEST_F(ProcessManagerTest, CreateBackgroundProcess) {
     EXPECT_CALL(*mockProcessManager, createProcess("long_running_task", "bg_task", true))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockProcessManager->createProcess("long_running_task", "bg_task", true);
     EXPECT_TRUE(result);
 }
@@ -108,7 +108,7 @@ TEST_F(ProcessManagerTest, CreateBackgroundProcess) {
 TEST_F(ProcessManagerTest, TerminateProcessByPid) {
     EXPECT_CALL(*mockProcessManager, terminateProcess(1234, 15))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockProcessManager->terminateProcess(1234, 15);
     EXPECT_TRUE(result);
 }
@@ -116,7 +116,7 @@ TEST_F(ProcessManagerTest, TerminateProcessByPid) {
 TEST_F(ProcessManagerTest, TerminateProcessByName) {
     EXPECT_CALL(*mockProcessManager, terminateProcessByName("test_process", 15))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockProcessManager->terminateProcessByName("test_process", 15);
     EXPECT_TRUE(result);
 }
@@ -126,7 +126,7 @@ TEST_F(ProcessManagerTest, TerminateProcessWithDifferentSignals) {
         .WillOnce(::testing::Return(true));
     EXPECT_CALL(*mockProcessManager, terminateProcess(5678, 2))  // SIGINT
         .WillOnce(::testing::Return(true));
-    
+
     EXPECT_TRUE(mockProcessManager->terminateProcess(1234, 9));
     EXPECT_TRUE(mockProcessManager->terminateProcess(5678, 2));
 }
@@ -137,7 +137,7 @@ TEST_F(ProcessManagerTest, HasProcess) {
         .WillOnce(::testing::Return(true));
     EXPECT_CALL(*mockProcessManager, hasProcess("nonexistent_process"))
         .WillOnce(::testing::Return(false));
-    
+
     EXPECT_TRUE(mockProcessManager->hasProcess("existing_process"));
     EXPECT_FALSE(mockProcessManager->hasProcess("nonexistent_process"));
 }
@@ -146,9 +146,9 @@ TEST_F(ProcessManagerTest, HasProcess) {
 TEST_F(ProcessManagerTest, GetRunningProcesses) {
     EXPECT_CALL(*mockProcessManager, getRunningProcesses())
         .WillOnce(::testing::Return(sampleProcesses));
-    
+
     auto processes = mockProcessManager->getRunningProcesses();
-    
+
     EXPECT_EQ(processes.size(), 3);
     EXPECT_EQ(processes[0].pid, 1234);
     EXPECT_EQ(processes[0].name, "test_process_1");
@@ -159,10 +159,10 @@ TEST_F(ProcessManagerTest, GetRunningProcesses) {
 
 TEST_F(ProcessManagerTest, GetRunningProcessesEmpty) {
     std::vector<Process> emptyProcesses;
-    
+
     EXPECT_CALL(*mockProcessManager, getRunningProcesses())
         .WillOnce(::testing::Return(emptyProcesses));
-    
+
     auto processes = mockProcessManager->getRunningProcesses();
     EXPECT_TRUE(processes.empty());
 }
@@ -171,9 +171,9 @@ TEST_F(ProcessManagerTest, GetRunningProcessesEmpty) {
 TEST_F(ProcessManagerTest, GetProcessOutput) {
     EXPECT_CALL(*mockProcessManager, getProcessOutput("test_process"))
         .WillOnce(::testing::Return(sampleOutput));
-    
+
     auto output = mockProcessManager->getProcessOutput("test_process");
-    
+
     EXPECT_EQ(output.size(), 3);
     EXPECT_EQ(output[0], "Process output line 1");
     EXPECT_EQ(output[1], "Process output line 2");
@@ -182,10 +182,10 @@ TEST_F(ProcessManagerTest, GetProcessOutput) {
 
 TEST_F(ProcessManagerTest, GetProcessOutputEmpty) {
     std::vector<std::string> emptyOutput;
-    
+
     EXPECT_CALL(*mockProcessManager, getProcessOutput("silent_process"))
         .WillOnce(::testing::Return(emptyOutput));
-    
+
     auto output = mockProcessManager->getProcessOutput("silent_process");
     EXPECT_TRUE(output.empty());
 }
@@ -193,20 +193,20 @@ TEST_F(ProcessManagerTest, GetProcessOutputEmpty) {
 // Test script execution
 TEST_F(ProcessManagerTest, RunScript) {
     std::string script = "#!/bin/bash\necho 'Script executed'\nexit 0";
-    
+
     EXPECT_CALL(*mockProcessManager, runScript(script, "test_script", false))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockProcessManager->runScript(script, "test_script", false);
     EXPECT_TRUE(result);
 }
 
 TEST_F(ProcessManagerTest, RunBackgroundScript) {
     std::string script = "#!/bin/bash\nsleep 10\necho 'Background script done'";
-    
+
     EXPECT_CALL(*mockProcessManager, runScript(script, "bg_script", true))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockProcessManager->runScript(script, "bg_script", true);
     EXPECT_TRUE(result);
 }
@@ -215,7 +215,7 @@ TEST_F(ProcessManagerTest, RunBackgroundScript) {
 TEST_F(ProcessManagerTest, MonitorProcesses) {
     EXPECT_CALL(*mockProcessManager, monitorProcesses())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockProcessManager->monitorProcesses();
     EXPECT_TRUE(result);
 }
@@ -224,9 +224,9 @@ TEST_F(ProcessManagerTest, MonitorProcesses) {
 TEST_F(ProcessManagerTest, GetProcessInfo) {
     EXPECT_CALL(*mockProcessManager, getProcessInfo(1234))
         .WillOnce(::testing::Return(sampleProcesses[0]));
-    
+
     Process info = mockProcessManager->getProcessInfo(1234);
-    
+
     EXPECT_EQ(info.pid, 1234);
     EXPECT_EQ(info.name, "test_process_1");
     EXPECT_EQ(info.status, "running");
@@ -239,7 +239,7 @@ TEST_F(ProcessManagerTest, GetProcessInfo) {
 TEST_F(ProcessManagerTest, WaitForCompletion) {
     EXPECT_CALL(*mockProcessManager, waitForCompletion())
         .Times(1);
-    
+
     mockProcessManager->waitForCompletion();
 }
 
@@ -247,10 +247,10 @@ TEST_F(ProcessManagerTest, WaitForCompletion) {
 // Windows-specific tests
 TEST_F(ProcessManagerTest, GetProcessHandle) {
     void* mockHandle = reinterpret_cast<void*>(0x12345678);
-    
+
     EXPECT_CALL(*mockProcessManager, getProcessHandle(1234))
         .WillOnce(::testing::Return(mockHandle));
-    
+
     void* handle = mockProcessManager->getProcessHandle(1234);
     EXPECT_EQ(handle, mockHandle);
 }
@@ -265,7 +265,7 @@ TEST_F(ProcessManagerTest, ProcessStructure) {
     process.cpuUsage = 75.5;
     process.memoryUsage = 4096;
     process.executablePath = "/usr/bin/test_app";
-    
+
     EXPECT_EQ(process.pid, 9999);
     EXPECT_EQ(process.name, "test_app");
     EXPECT_EQ(process.status, "running");

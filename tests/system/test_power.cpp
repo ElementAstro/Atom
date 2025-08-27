@@ -25,7 +25,7 @@ protected:
     void SetUp() override {
         // Create mock power manager for controlled testing
         mockPowerManager = std::make_unique<::testing::NiceMock<MockPowerManager>>();
-        
+
         // Set up default behavior for the mock
         ON_CALL(*mockPowerManager, shutdown())
             .WillByDefault(::testing::Return(true));
@@ -55,7 +55,7 @@ TEST_F(PowerTest, ShutdownSuccess) {
     // Test successful shutdown
     EXPECT_CALL(*mockPowerManager, shutdown())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->shutdown();
     EXPECT_TRUE(result);
 }
@@ -64,7 +64,7 @@ TEST_F(PowerTest, ShutdownFailure) {
     // Test shutdown failure (e.g., insufficient permissions)
     EXPECT_CALL(*mockPowerManager, shutdown())
         .WillOnce(::testing::Return(false));
-    
+
     bool result = mockPowerManager->shutdown();
     EXPECT_FALSE(result);
 }
@@ -74,7 +74,7 @@ TEST_F(PowerTest, RebootSuccess) {
     // Test successful reboot
     EXPECT_CALL(*mockPowerManager, reboot())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->reboot();
     EXPECT_TRUE(result);
 }
@@ -83,7 +83,7 @@ TEST_F(PowerTest, RebootFailure) {
     // Test reboot failure
     EXPECT_CALL(*mockPowerManager, reboot())
         .WillOnce(::testing::Return(false));
-    
+
     bool result = mockPowerManager->reboot();
     EXPECT_FALSE(result);
 }
@@ -93,7 +93,7 @@ TEST_F(PowerTest, HibernateSuccess) {
     // Test successful hibernation
     EXPECT_CALL(*mockPowerManager, hibernate())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->hibernate();
     EXPECT_TRUE(result);
 }
@@ -102,7 +102,7 @@ TEST_F(PowerTest, HibernateFailure) {
     // Test hibernation failure (e.g., hibernation not supported)
     EXPECT_CALL(*mockPowerManager, hibernate())
         .WillOnce(::testing::Return(false));
-    
+
     bool result = mockPowerManager->hibernate();
     EXPECT_FALSE(result);
 }
@@ -111,7 +111,7 @@ TEST_F(PowerTest, HibernateFailure) {
 TEST_F(PowerTest, SuspendSuccess) {
     EXPECT_CALL(*mockPowerManager, suspend())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->suspend();
     EXPECT_TRUE(result);
 }
@@ -119,7 +119,7 @@ TEST_F(PowerTest, SuspendSuccess) {
 TEST_F(PowerTest, SuspendFailure) {
     EXPECT_CALL(*mockPowerManager, suspend())
         .WillOnce(::testing::Return(false));
-    
+
     bool result = mockPowerManager->suspend();
     EXPECT_FALSE(result);
 }
@@ -128,7 +128,7 @@ TEST_F(PowerTest, SuspendFailure) {
 TEST_F(PowerTest, LogoffSuccess) {
     EXPECT_CALL(*mockPowerManager, logoff())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->logoff();
     EXPECT_TRUE(result);
 }
@@ -136,7 +136,7 @@ TEST_F(PowerTest, LogoffSuccess) {
 TEST_F(PowerTest, LogoffFailure) {
     EXPECT_CALL(*mockPowerManager, logoff())
         .WillOnce(::testing::Return(false));
-    
+
     bool result = mockPowerManager->logoff();
     EXPECT_FALSE(result);
 }
@@ -150,7 +150,7 @@ TEST_F(PowerTest, MultipleOperationsSequence) {
         .WillOnce(::testing::Return(true));
     EXPECT_CALL(*mockPowerManager, shutdown())
         .WillOnce(::testing::Return(true));
-    
+
     EXPECT_TRUE(mockPowerManager->hibernate());
     EXPECT_TRUE(mockPowerManager->suspend());
     EXPECT_TRUE(mockPowerManager->shutdown());
@@ -176,7 +176,7 @@ TEST_F(PowerEdgeCaseTest, RapidSuccessiveCalls) {
     EXPECT_CALL(*mockPowerManager, shutdown())
         .Times(3)
         .WillRepeatedly(::testing::Return(false)); // Should fail on rapid calls
-    
+
     for (int i = 0; i < 3; ++i) {
         bool result = mockPowerManager->shutdown();
         EXPECT_FALSE(result);
@@ -189,20 +189,20 @@ TEST_F(PowerEdgeCaseTest, ConcurrentAccess) {
     EXPECT_CALL(*mockPowerManager, shutdown())
         .Times(::testing::AtLeast(1))
         .WillRepeatedly(::testing::Return(true));
-    
+
     std::vector<std::thread> threads;
     std::vector<bool> results(5);
-    
+
     for (int i = 0; i < 5; ++i) {
         threads.emplace_back([this, &results, i]() {
             results[i] = mockPowerManager->shutdown();
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     // At least one should succeed
     bool anySuccess = false;
     for (bool result : results) {
@@ -221,7 +221,7 @@ TEST_F(PowerTest, WindowsSpecificOperations) {
     // Test Windows-specific power operations
     EXPECT_CALL(*mockPowerManager, hibernate())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->hibernate();
     EXPECT_TRUE(result);
 }
@@ -231,7 +231,7 @@ TEST_F(PowerTest, LinuxSpecificOperations) {
     // Test Linux-specific power operations
     EXPECT_CALL(*mockPowerManager, shutdown())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->shutdown();
     EXPECT_TRUE(result);
 }
@@ -241,7 +241,7 @@ TEST_F(PowerTest, MacOSSpecificOperations) {
     // Test macOS-specific power operations
     EXPECT_CALL(*mockPowerManager, suspend())
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockPowerManager->suspend();
     EXPECT_TRUE(result);
 }

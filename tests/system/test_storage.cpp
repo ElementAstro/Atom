@@ -27,10 +27,10 @@ protected:
     void SetUp() override {
         // Create a storage monitor instance
         storageMonitor = std::make_unique<StorageMonitor>();
-        
+
         // Create mock filesystem
         mockFileSystem = std::make_unique<::testing::NiceMock<MockFileSystem>>();
-        
+
         // Set up default behavior for mock filesystem
         ON_CALL(*mockFileSystem, exists(::testing::_))
             .WillByDefault(::testing::Return(true));
@@ -42,7 +42,7 @@ protected:
             .WillByDefault(::testing::Return(std::vector<std::string>{"dir1", "dir2"}));
         ON_CALL(*mockFileSystem, list_files(::testing::_))
             .WillByDefault(::testing::Return(std::vector<std::string>{"file1.txt", "file2.txt"}));
-        
+
         // Test paths
         testPath1 = "/test/path1";
         testPath2 = "/test/path2";
@@ -72,17 +72,17 @@ TEST_F(StorageMonitorTest, CreateStorageMonitor) {
 TEST_F(StorageMonitorTest, RegisterCallback) {
     bool callbackCalled = false;
     std::string receivedPath;
-    
+
     auto callback = [&callbackCalled, &receivedPath](const std::string& path) {
         callbackCalled = true;
         receivedPath = path;
     };
-    
+
     EXPECT_NO_THROW(storageMonitor->registerCallback(callback));
-    
+
     // Trigger callback manually
     storageMonitor->triggerCallbacks(testPath1);
-    
+
     EXPECT_TRUE(callbackCalled);
     EXPECT_EQ(receivedPath, testPath1);
 }
@@ -91,21 +91,21 @@ TEST_F(StorageMonitorTest, RegisterCallback) {
 TEST_F(StorageMonitorTest, RegisterMultipleCallbacks) {
     int callback1Called = 0;
     int callback2Called = 0;
-    
+
     auto callback1 = [&callback1Called](const std::string&) {
         callback1Called++;
     };
-    
+
     auto callback2 = [&callback2Called](const std::string&) {
         callback2Called++;
     };
-    
+
     storageMonitor->registerCallback(callback1);
     storageMonitor->registerCallback(callback2);
-    
+
     // Trigger callbacks
     storageMonitor->triggerCallbacks(testPath1);
-    
+
     EXPECT_EQ(callback1Called, 1);
     EXPECT_EQ(callback2Called, 1);
 }
@@ -119,17 +119,17 @@ TEST_F(StorageMonitorTest, AddStoragePath) {
 TEST_F(StorageMonitorTest, RemoveStoragePath) {
     storageMonitor->addStoragePath(testPath1);
     storageMonitor->addStoragePath(testPath2);
-    
+
     EXPECT_NO_THROW(storageMonitor->removeStoragePath(testPath1));
 }
 
 // Test monitoring start/stop
 TEST_F(StorageMonitorTest, StartStopMonitoring) {
     storageMonitor->addStoragePath(testPath1);
-    
+
     EXPECT_TRUE(storageMonitor->startMonitoring());
     EXPECT_TRUE(storageMonitor->isRunning());
-    
+
     storageMonitor->stopMonitoring();
     EXPECT_FALSE(storageMonitor->isRunning());
 }
@@ -145,11 +145,11 @@ TEST_F(StorageMonitorTest, NewMediaDetection) {
     EXPECT_CALL(*mockFileSystem, exists(testPath1))
         .WillOnce(::testing::Return(false))  // First check: not exists
         .WillOnce(::testing::Return(true));  // Second check: exists
-    
+
     // First check should return false (no media)
     bool hasMedia1 = storageMonitor->isNewMediaInserted(testPath1);
     EXPECT_FALSE(hasMedia1);
-    
+
     // Second check should return true (new media detected)
     bool hasMedia2 = storageMonitor->isNewMediaInserted(testPath1);
     EXPECT_TRUE(hasMedia2);
@@ -164,7 +164,7 @@ TEST_F(StorageMonitorTest, ListAllStorage) {
 TEST_F(StorageMonitorTest, ListFiles) {
     EXPECT_CALL(*mockFileSystem, list_files(testPath1))
         .WillOnce(::testing::Return(std::vector<std::string>{"test1.txt", "test2.txt"}));
-    
+
     EXPECT_NO_THROW(storageMonitor->listFiles(testPath1));
 }
 
@@ -237,7 +237,7 @@ protected:
 TEST_F(StorageMonitorErrorTest, InvalidPathHandling) {
     EXPECT_CALL(*mockFileSystem, exists(""))
         .WillRepeatedly(::testing::Return(false));
-    
+
     // Empty path should be handled gracefully
     EXPECT_NO_THROW(storageMonitor->addStoragePath(""));
     EXPECT_FALSE(storageMonitor->isNewMediaInserted(""));
@@ -254,24 +254,24 @@ TEST_F(StorageMonitorErrorTest, FilesystemErrorHandling) {
 TEST_F(StorageMonitorErrorTest, ConcurrentAccess) {
     std::vector<std::thread> threads;
     std::atomic<int> callbackCount{0};
-    
+
     auto callback = [&callbackCount](const std::string&) {
         callbackCount++;
     };
-    
+
     storageMonitor->registerCallback(callback);
-    
+
     // Start multiple threads that trigger callbacks
     for (int i = 0; i < 5; ++i) {
         threads.emplace_back([this, i]() {
             storageMonitor->triggerCallbacks("/test/path" + std::to_string(i));
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(callbackCount.load(), 5);
 }
 
@@ -295,23 +295,23 @@ protected:
 // Test callback performance
 TEST_F(StorageMonitorPerformanceTest, CallbackPerformance) {
     std::atomic<int> callbackCount{0};
-    
+
     auto callback = [&callbackCount](const std::string&) {
         callbackCount++;
     };
-    
+
     storageMonitor->registerCallback(callback);
-    
+
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     // Trigger many callbacks
     for (int i = 0; i < 1000; ++i) {
         storageMonitor->triggerCallbacks("/test/path");
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+
     EXPECT_EQ(callbackCount.load(), 1000);
     // Should complete within reasonable time (1 second for 1000 callbacks)
     EXPECT_LT(duration.count(), 1000);

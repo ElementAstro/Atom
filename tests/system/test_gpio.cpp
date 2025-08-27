@@ -42,7 +42,7 @@ class GPIOTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mockGPIO = std::make_unique<::testing::NiceMock<MockGPIO>>();
-        
+
         // Set up default behavior for the mock
         ON_CALL(*mockGPIO, getValue())
             .WillByDefault(::testing::Return(false));
@@ -81,14 +81,14 @@ protected:
 TEST_F(GPIOTest, SetValue) {
     EXPECT_CALL(*mockGPIO, setValue(true))
         .Times(1);
-    
+
     mockGPIO->setValue(true);
 }
 
 TEST_F(GPIOTest, GetValue) {
     EXPECT_CALL(*mockGPIO, getValue())
         .WillOnce(::testing::Return(true));
-    
+
     bool value = mockGPIO->getValue();
     EXPECT_TRUE(value);
 }
@@ -96,7 +96,7 @@ TEST_F(GPIOTest, GetValue) {
 TEST_F(GPIOTest, Toggle) {
     EXPECT_CALL(*mockGPIO, toggle())
         .WillOnce(::testing::Return(true));
-    
+
     bool newValue = mockGPIO->toggle();
     EXPECT_TRUE(newValue);
 }
@@ -105,7 +105,7 @@ TEST_F(GPIOTest, Toggle) {
 TEST_F(GPIOTest, Pulse) {
     EXPECT_CALL(*mockGPIO, pulse(true, std::chrono::milliseconds(100)))
         .Times(1);
-    
+
     mockGPIO->pulse(true, std::chrono::milliseconds(100));
 }
 
@@ -114,7 +114,7 @@ TEST_F(GPIOTest, PulseWithDifferentDurations) {
         .Times(1);
     EXPECT_CALL(*mockGPIO, pulse(true, std::chrono::milliseconds(200)))
         .Times(1);
-    
+
     mockGPIO->pulse(false, std::chrono::milliseconds(50));
     mockGPIO->pulse(true, std::chrono::milliseconds(200));
 }
@@ -123,7 +123,7 @@ TEST_F(GPIOTest, PulseWithDifferentDurations) {
 TEST_F(GPIOTest, SetPwm) {
     EXPECT_CALL(*mockGPIO, setPwm(1000.0, 50.0, PwmMode::HARDWARE))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockGPIO->setPwm(1000.0, 50.0, PwmMode::HARDWARE);
     EXPECT_TRUE(result);
 }
@@ -131,7 +131,7 @@ TEST_F(GPIOTest, SetPwm) {
 TEST_F(GPIOTest, SetPwmSoftwareMode) {
     EXPECT_CALL(*mockGPIO, setPwm(500.0, 25.0, PwmMode::SOFTWARE))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockGPIO->setPwm(500.0, 25.0, PwmMode::SOFTWARE);
     EXPECT_TRUE(result);
 }
@@ -139,7 +139,7 @@ TEST_F(GPIOTest, SetPwmSoftwareMode) {
 TEST_F(GPIOTest, UpdatePwmDutyCycle) {
     EXPECT_CALL(*mockGPIO, updatePwmDutyCycle(75.0))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockGPIO->updatePwmDutyCycle(75.0);
     EXPECT_TRUE(result);
 }
@@ -147,7 +147,7 @@ TEST_F(GPIOTest, UpdatePwmDutyCycle) {
 TEST_F(GPIOTest, StopPwm) {
     EXPECT_CALL(*mockGPIO, stopPwm())
         .Times(1);
-    
+
     mockGPIO->stopPwm();
 }
 
@@ -157,12 +157,12 @@ TEST_F(GPIOTest, PwmEdgeCases) {
     EXPECT_CALL(*mockGPIO, setPwm(1000.0, 0.0, PwmMode::HARDWARE))
         .WillOnce(::testing::Return(true));
     EXPECT_TRUE(mockGPIO->setPwm(1000.0, 0.0, PwmMode::HARDWARE));
-    
+
     // Test maximum duty cycle
     EXPECT_CALL(*mockGPIO, setPwm(1000.0, 100.0, PwmMode::HARDWARE))
         .WillOnce(::testing::Return(true));
     EXPECT_TRUE(mockGPIO->setPwm(1000.0, 100.0, PwmMode::HARDWARE));
-    
+
     // Test invalid duty cycle (should fail)
     EXPECT_CALL(*mockGPIO, setPwm(1000.0, 150.0, PwmMode::HARDWARE))
         .WillOnce(::testing::Return(false));
@@ -174,10 +174,10 @@ TEST_F(GPIOTest, SetupButtonDebounce) {
     auto callback = []() {
         // Mock button press callback
     };
-    
+
     EXPECT_CALL(*mockGPIO, setupButtonDebounce(::testing::_, 50))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockGPIO->setupButtonDebounce(callback, 50);
     EXPECT_TRUE(result);
 }
@@ -186,7 +186,7 @@ TEST_F(GPIOTest, SetupButtonDebounce) {
 TEST_F(GPIOTest, SetupInterruptCounter) {
     EXPECT_CALL(*mockGPIO, setupInterruptCounter(Edge::RISING))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockGPIO->setupInterruptCounter(Edge::RISING);
     EXPECT_TRUE(result);
 }
@@ -194,7 +194,7 @@ TEST_F(GPIOTest, SetupInterruptCounter) {
 TEST_F(GPIOTest, GetInterruptCount) {
     EXPECT_CALL(*mockGPIO, getInterruptCount())
         .WillOnce(::testing::Return(5));
-    
+
     unsigned int count = mockGPIO->getInterruptCount();
     EXPECT_EQ(count, 5);
 }
@@ -202,7 +202,7 @@ TEST_F(GPIOTest, GetInterruptCount) {
 TEST_F(GPIOTest, ResetInterruptCount) {
     EXPECT_CALL(*mockGPIO, resetInterruptCount())
         .Times(1);
-    
+
     mockGPIO->resetInterruptCount();
 }
 
@@ -211,10 +211,10 @@ TEST_F(GPIOTest, OnValueChange) {
     auto callback = [](bool value) {
         // Mock value change callback
     };
-    
+
     EXPECT_CALL(*mockGPIO, onValueChange(::testing::_))
         .WillOnce(::testing::Return(true));
-    
+
     bool result = mockGPIO->onValueChange(callback);
     EXPECT_TRUE(result);
 }
@@ -223,14 +223,14 @@ TEST_F(GPIOTest, OnValueChange) {
 TEST_F(GPIOTest, SetPullMode) {
     EXPECT_CALL(*mockGPIO, setPullMode(PullMode::PULL_UP))
         .Times(1);
-    
+
     mockGPIO->setPullMode(PullMode::PULL_UP);
 }
 
 TEST_F(GPIOTest, GetPullMode) {
     EXPECT_CALL(*mockGPIO, getPullMode())
         .WillOnce(::testing::Return(PullMode::PULL_DOWN));
-    
+
     PullMode mode = mockGPIO->getPullMode();
     EXPECT_EQ(mode, PullMode::PULL_DOWN);
 }
@@ -241,7 +241,7 @@ TEST_F(GPIOTest, SetPullModeAllTypes) {
         PullMode::PULL_UP,
         PullMode::PULL_DOWN
     };
-    
+
     for (auto mode : modes) {
         EXPECT_CALL(*mockGPIO, setPullMode(mode))
             .Times(1);
@@ -253,14 +253,14 @@ TEST_F(GPIOTest, SetPullModeAllTypes) {
 TEST_F(GPIOTest, SetEdge) {
     EXPECT_CALL(*mockGPIO, setEdge(Edge::FALLING))
         .Times(1);
-    
+
     mockGPIO->setEdge(Edge::FALLING);
 }
 
 TEST_F(GPIOTest, GetEdge) {
     EXPECT_CALL(*mockGPIO, getEdge())
         .WillOnce(::testing::Return(Edge::BOTH));
-    
+
     Edge edge = mockGPIO->getEdge();
     EXPECT_EQ(edge, Edge::BOTH);
 }
@@ -272,7 +272,7 @@ TEST_F(GPIOTest, SetEdgeAllTypes) {
         Edge::FALLING,
         Edge::BOTH
     };
-    
+
     for (auto edge : edges) {
         EXPECT_CALL(*mockGPIO, setEdge(edge))
             .Times(1);
@@ -284,7 +284,7 @@ TEST_F(GPIOTest, SetEdgeAllTypes) {
 TEST_F(GPIOTest, GetDirection) {
     EXPECT_CALL(*mockGPIO, getDirection())
         .WillOnce(::testing::Return(Direction::INPUT));
-    
+
     Direction direction = mockGPIO->getDirection();
     EXPECT_EQ(direction, Direction::INPUT);
 }
@@ -292,7 +292,7 @@ TEST_F(GPIOTest, GetDirection) {
 TEST_F(GPIOTest, GetPin) {
     EXPECT_CALL(*mockGPIO, getPin())
         .WillOnce(::testing::Return("24"));
-    
+
     std::string pin = mockGPIO->getPin();
     EXPECT_EQ(pin, "24");
 }

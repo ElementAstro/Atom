@@ -19,13 +19,13 @@ protected:
         // Create temporary test directory
         testDir = fs::temp_directory_path() / "atom_stat_test";
         fs::create_directories(testDir);
-        
+
         // Create test files
         testFile = testDir / "test_file.txt";
         testEmptyFile = testDir / "empty_file.txt";
         testBinaryFile = testDir / "binary_file.bin";
         testSymlink = testDir / "test_symlink";
-        
+
         // Create regular file with content
         {
             std::ofstream file(testFile);
@@ -33,12 +33,12 @@ protected:
             file << "It has multiple lines.\n";
             file << "For testing purposes.\n";
         }
-        
+
         // Create empty file
         {
             std::ofstream file(testEmptyFile);
         }
-        
+
         // Create binary file
         {
             std::ofstream file(testBinaryFile, std::ios::binary);
@@ -46,7 +46,7 @@ protected:
                 file.put(static_cast<char>(i));
             }
         }
-        
+
         // Create symlink (if supported)
         try {
             fs::create_symlink(testFile, testSymlink);
@@ -54,7 +54,7 @@ protected:
         } catch (const std::exception&) {
             symlinkSupported = false;
         }
-        
+
         nonExistentFile = testDir / "nonexistent.txt";
     }
 
@@ -77,7 +77,7 @@ protected:
 TEST_F(StatTest, FileExists) {
     Stat stat(testFile);
     EXPECT_TRUE(stat.exists());
-    
+
     Stat nonExistentStat(nonExistentFile);
     EXPECT_FALSE(nonExistentStat.exists());
 }
@@ -86,14 +86,14 @@ TEST_F(StatTest, FileExists) {
 TEST_F(StatTest, FileType) {
     Stat regularFileStat(testFile);
     EXPECT_EQ(regularFileStat.type(), fs::file_type::regular);
-    
+
     Stat directoryStat(testDir);
     EXPECT_EQ(directoryStat.type(), fs::file_type::directory);
-    
+
     if (symlinkSupported) {
         Stat symlinkStat(testSymlink, false); // Don't follow symlinks
         EXPECT_EQ(symlinkStat.type(), fs::file_type::symlink);
-        
+
         Stat symlinkTargetStat(testSymlink, true); // Follow symlinks
         EXPECT_EQ(symlinkTargetStat.type(), fs::file_type::regular);
     }
@@ -104,10 +104,10 @@ TEST_F(StatTest, FileSize) {
     Stat regularFileStat(testFile);
     std::uintmax_t size = regularFileStat.size();
     EXPECT_GT(size, 0);
-    
+
     Stat emptyFileStat(testEmptyFile);
     EXPECT_EQ(emptyFileStat.size(), 0);
-    
+
     Stat binaryFileStat(testBinaryFile);
     EXPECT_EQ(binaryFileStat.size(), 256);
 }
@@ -115,15 +115,15 @@ TEST_F(StatTest, FileSize) {
 // Test file timestamps
 TEST_F(StatTest, FileTimestamps) {
     Stat stat(testFile);
-    
+
     std::time_t atime = stat.atime();
     std::time_t mtime = stat.mtime();
     std::time_t ctime = stat.ctime();
-    
+
     EXPECT_GT(atime, 0);
     EXPECT_GT(mtime, 0);
     EXPECT_GT(ctime, 0);
-    
+
     // Modification time should be recent (within last hour)
     std::time_t now = std::time(nullptr);
     EXPECT_LT(now - mtime, 3600); // Within 1 hour
@@ -132,15 +132,15 @@ TEST_F(StatTest, FileTimestamps) {
 // Test file permissions
 TEST_F(StatTest, FilePermissions) {
     Stat stat(testFile);
-    
+
     bool isReadable = stat.isReadable();
     bool isWritable = stat.isWritable();
     bool isExecutable = stat.isExecutable();
-    
+
     EXPECT_TRUE(isReadable);
     EXPECT_TRUE(isWritable);
     // Executable depends on platform and file creation
-    
+
     // Test permission checking
     EXPECT_TRUE(stat.hasPermission(FilePermission::Read));
     EXPECT_TRUE(stat.hasPermission(FilePermission::Write));
@@ -149,7 +149,7 @@ TEST_F(StatTest, FilePermissions) {
 // Test directory permissions
 TEST_F(StatTest, DirectoryPermissions) {
     Stat dirStat(testDir);
-    
+
     EXPECT_TRUE(dirStat.isReadable());
     EXPECT_TRUE(dirStat.isWritable());
     EXPECT_TRUE(dirStat.isExecutable()); // Execute permission for directories means "searchable"
@@ -158,17 +158,17 @@ TEST_F(StatTest, DirectoryPermissions) {
 // Test file ownership (platform-dependent)
 TEST_F(StatTest, FileOwnership) {
     Stat stat(testFile);
-    
+
     auto uid = stat.getUID();
     auto gid = stat.getGID();
-    
+
     // UID and GID should be valid (non-negative)
     EXPECT_GE(uid, 0);
     EXPECT_GE(gid, 0);
-    
+
     std::string owner = stat.getOwner();
     std::string group = stat.getGroup();
-    
+
     // Owner and group names should not be empty (on most systems)
     EXPECT_FALSE(owner.empty());
     EXPECT_FALSE(group.empty());
@@ -177,25 +177,25 @@ TEST_F(StatTest, FileOwnership) {
 // Test file update functionality
 TEST_F(StatTest, UpdateFileStats) {
     Stat stat(testFile);
-    
+
     std::uintmax_t originalSize = stat.size();
     std::time_t originalMtime = stat.mtime();
-    
+
     // Wait a moment to ensure timestamp difference
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     // Modify the file
     {
         std::ofstream file(testFile, std::ios::app);
         file << "\nAdditional content added.\n";
     }
-    
+
     // Update stats
     stat.update();
-    
+
     std::uintmax_t newSize = stat.size();
     std::time_t newMtime = stat.mtime();
-    
+
     EXPECT_GT(newSize, originalSize);
     EXPECT_GE(newMtime, originalMtime);
 }
@@ -210,12 +210,12 @@ TEST_F(StatTest, FileTypeChecking) {
     EXPECT_FALSE(regularFileStat.isCharacterFile());
     EXPECT_FALSE(regularFileStat.isFifo());
     EXPECT_FALSE(regularFileStat.isSocket());
-    
+
     Stat directoryStat(testDir);
     EXPECT_FALSE(directoryStat.isRegularFile());
     EXPECT_TRUE(directoryStat.isDirectory());
     EXPECT_FALSE(directoryStat.isSymlink());
-    
+
     if (symlinkSupported) {
         Stat symlinkStat(testSymlink, false); // Don't follow symlinks
         EXPECT_FALSE(symlinkStat.isRegularFile());
@@ -227,19 +227,19 @@ TEST_F(StatTest, FileTypeChecking) {
 // Test hard link count
 TEST_F(StatTest, HardLinkCount) {
     Stat stat(testFile);
-    
+
     auto linkCount = stat.getHardLinkCount();
     EXPECT_GE(linkCount, 1); // At least one link (the file itself)
-    
+
     // Create a hard link (if supported)
     fs::path hardLink = testDir / "hard_link.txt";
     try {
         fs::create_hard_link(testFile, hardLink);
-        
+
         stat.update();
         auto newLinkCount = stat.getHardLinkCount();
         EXPECT_EQ(newLinkCount, linkCount + 1);
-        
+
         // Clean up
         fs::remove(hardLink);
     } catch (const std::exception&) {
@@ -251,10 +251,10 @@ TEST_F(StatTest, HardLinkCount) {
 // Test device information
 TEST_F(StatTest, DeviceInformation) {
     Stat stat(testFile);
-    
+
     auto deviceId = stat.getDeviceId();
     auto inodeNumber = stat.getInodeNumber();
-    
+
     EXPECT_GE(deviceId, 0);
     EXPECT_GT(inodeNumber, 0);
 }
@@ -262,14 +262,14 @@ TEST_F(StatTest, DeviceInformation) {
 // Test file mode
 TEST_F(StatTest, FileMode) {
     Stat stat(testFile);
-    
+
     auto mode = stat.getMode();
     EXPECT_GT(mode, 0);
-    
+
     // Check that mode contains expected permission bits
     bool hasOwnerRead = (mode & 0400) != 0;
     bool hasOwnerWrite = (mode & 0200) != 0;
-    
+
     EXPECT_TRUE(hasOwnerRead);
     EXPECT_TRUE(hasOwnerWrite);
 }

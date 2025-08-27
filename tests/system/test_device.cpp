@@ -19,20 +19,20 @@ class DeviceTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mockDeviceEnumerator = std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
-        
+
         // Set up sample device data
         usbDevices = {
             {"USB Mass Storage Device", "VID_1234&PID_5678"},
             {"USB Keyboard", "VID_046D&PID_C31C"},
             {"USB Mouse", "VID_046D&PID_C077"}
         };
-        
+
         serialPorts = {
             {"COM1", "Serial Port (COM1)"},
             {"COM3", "USB Serial Port (COM3)"},
             {"/dev/ttyUSB0", "USB-to-Serial Adapter"}
         };
-        
+
         // Set up default behavior for the mock
         ON_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
             .WillByDefault(::testing::Return(usbDevices));
@@ -53,9 +53,9 @@ protected:
 TEST_F(DeviceTest, EnumerateUsbDevicesSuccess) {
     EXPECT_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
         .WillOnce(::testing::Return(usbDevices));
-    
+
     auto devices = mockDeviceEnumerator->enumerateUsbDevices();
-    
+
     EXPECT_EQ(devices.size(), 3);
     EXPECT_EQ(devices[0].description, "USB Mass Storage Device");
     EXPECT_EQ(devices[0].address, "VID_1234&PID_5678");
@@ -65,10 +65,10 @@ TEST_F(DeviceTest, EnumerateUsbDevicesSuccess) {
 
 TEST_F(DeviceTest, EnumerateUsbDevicesEmpty) {
     std::vector<DeviceInfo> emptyDevices;
-    
+
     EXPECT_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
         .WillOnce(::testing::Return(emptyDevices));
-    
+
     auto devices = mockDeviceEnumerator->enumerateUsbDevices();
     EXPECT_TRUE(devices.empty());
 }
@@ -77,9 +77,9 @@ TEST_F(DeviceTest, EnumerateUsbDevicesEmpty) {
 TEST_F(DeviceTest, EnumerateSerialPortsSuccess) {
     EXPECT_CALL(*mockDeviceEnumerator, enumerateSerialPorts())
         .WillOnce(::testing::Return(serialPorts));
-    
+
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
-    
+
     EXPECT_EQ(ports.size(), 3);
     EXPECT_EQ(ports[0].description, "COM1");
     EXPECT_EQ(ports[0].address, "Serial Port (COM1)");
@@ -89,10 +89,10 @@ TEST_F(DeviceTest, EnumerateSerialPortsSuccess) {
 
 TEST_F(DeviceTest, EnumerateSerialPortsEmpty) {
     std::vector<DeviceInfo> emptyPorts;
-    
+
     EXPECT_CALL(*mockDeviceEnumerator, enumerateSerialPorts())
         .WillOnce(::testing::Return(emptyPorts));
-    
+
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     EXPECT_TRUE(ports.empty());
 }
@@ -102,7 +102,7 @@ TEST_F(DeviceTest, DeviceInfoStructure) {
     DeviceInfo device;
     device.description = "Test Device";
     device.address = "Test Address";
-    
+
     EXPECT_EQ(device.description, "Test Device");
     EXPECT_EQ(device.address, "Test Address");
 }
@@ -111,9 +111,9 @@ TEST_F(DeviceTest, DeviceInfoCopyConstructor) {
     DeviceInfo original;
     original.description = "Original Device";
     original.address = "Original Address";
-    
+
     DeviceInfo copy = original;
-    
+
     EXPECT_EQ(copy.description, "Original Device");
     EXPECT_EQ(copy.address, "Original Address");
 }
@@ -122,10 +122,10 @@ TEST_F(DeviceTest, DeviceInfoAssignment) {
     DeviceInfo device1;
     device1.description = "Device 1";
     device1.address = "Address 1";
-    
+
     DeviceInfo device2;
     device2 = device1;
-    
+
     EXPECT_EQ(device2.description, "Device 1");
     EXPECT_EQ(device2.address, "Address 1");
 }
@@ -135,7 +135,7 @@ class DeviceFilterTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mockDeviceEnumerator = std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
-        
+
         // Set up diverse device data for filtering tests
         mixedUsbDevices = {
             {"USB Mass Storage Device", "VID_1234&PID_5678"},
@@ -144,7 +144,7 @@ protected:
             {"Arduino Uno", "VID_2341&PID_0043"},
             {"FTDI USB Serial", "VID_0403&PID_6001"}
         };
-        
+
         mixedSerialPorts = {
             {"COM1", "Built-in Serial Port"},
             {"COM3", "USB-to-Serial Adapter"},
@@ -152,7 +152,7 @@ protected:
             {"/dev/ttyUSB0", "FTDI USB Serial"},
             {"/dev/ttyACM0", "Arduino Serial"}
         };
-        
+
         ON_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
             .WillByDefault(::testing::Return(mixedUsbDevices));
         ON_CALL(*mockDeviceEnumerator, enumerateSerialPorts())
@@ -166,7 +166,7 @@ protected:
     std::unique_ptr<MockDeviceEnumerator> mockDeviceEnumerator;
     std::vector<DeviceInfo> mixedUsbDevices;
     std::vector<DeviceInfo> mixedSerialPorts;
-    
+
     // Helper function to filter devices by description substring
     std::vector<DeviceInfo> filterDevicesByDescription(const std::vector<DeviceInfo>& devices, const std::string& substring) {
         std::vector<DeviceInfo> filtered;
@@ -177,7 +177,7 @@ protected:
         }
         return filtered;
     }
-    
+
     // Helper function to filter devices by vendor ID
     std::vector<DeviceInfo> filterDevicesByVendorId(const std::vector<DeviceInfo>& devices, const std::string& vendorId) {
         std::vector<DeviceInfo> filtered;
@@ -194,12 +194,12 @@ protected:
 TEST_F(DeviceFilterTest, FilterUsbDevicesByDescription) {
     EXPECT_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
         .WillOnce(::testing::Return(mixedUsbDevices));
-    
+
     auto devices = mockDeviceEnumerator->enumerateUsbDevices();
     auto usbDevices = filterDevicesByDescription(devices, "USB");
-    
+
     EXPECT_EQ(usbDevices.size(), 4); // All except Arduino Uno
-    
+
     auto logitechDevices = filterDevicesByDescription(devices, "Logitech");
     EXPECT_EQ(logitechDevices.size(), 1);
     EXPECT_EQ(logitechDevices[0].description, "Logitech USB Keyboard");
@@ -209,13 +209,13 @@ TEST_F(DeviceFilterTest, FilterUsbDevicesByDescription) {
 TEST_F(DeviceFilterTest, FilterUsbDevicesByVendorId) {
     EXPECT_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
         .WillOnce(::testing::Return(mixedUsbDevices));
-    
+
     auto devices = mockDeviceEnumerator->enumerateUsbDevices();
     auto logitechDevices = filterDevicesByVendorId(devices, "VID_046D");
-    
+
     EXPECT_EQ(logitechDevices.size(), 1);
     EXPECT_EQ(logitechDevices[0].description, "Logitech USB Keyboard");
-    
+
     auto ftdiDevices = filterDevicesByVendorId(devices, "VID_0403");
     EXPECT_EQ(ftdiDevices.size(), 1);
     EXPECT_EQ(ftdiDevices[0].description, "FTDI USB Serial");
@@ -225,12 +225,12 @@ TEST_F(DeviceFilterTest, FilterUsbDevicesByVendorId) {
 TEST_F(DeviceFilterTest, FilterSerialPortsByType) {
     EXPECT_CALL(*mockDeviceEnumerator, enumerateSerialPorts())
         .WillOnce(::testing::Return(mixedSerialPorts));
-    
+
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     auto usbSerialPorts = filterDevicesByDescription(ports, "USB");
-    
+
     EXPECT_GE(usbSerialPorts.size(), 1); // At least one USB serial port
-    
+
     auto bluetoothPorts = filterDevicesByDescription(ports, "Bluetooth");
     EXPECT_EQ(bluetoothPorts.size(), 1);
     EXPECT_EQ(bluetoothPorts[0].description, "COM5");
@@ -241,20 +241,20 @@ TEST_F(DeviceFilterTest, FilterSerialPortsByType) {
 TEST_F(DeviceFilterTest, WindowsSpecificPorts) {
     EXPECT_CALL(*mockDeviceEnumerator, enumerateSerialPorts())
         .WillOnce(::testing::Return(mixedSerialPorts));
-    
+
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     auto comPorts = filterDevicesByDescription(ports, "COM");
-    
+
     EXPECT_GE(comPorts.size(), 1); // Should have at least one COM port on Windows
 }
 #elif defined(__linux__)
 TEST_F(DeviceFilterTest, LinuxSpecificPorts) {
     EXPECT_CALL(*mockDeviceEnumerator, enumerateSerialPorts())
         .WillOnce(::testing::Return(mixedSerialPorts));
-    
+
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     auto ttyPorts = filterDevicesByDescription(ports, "/dev/tty");
-    
+
     EXPECT_GE(ttyPorts.size(), 1); // Should have at least one tty port on Linux
 }
 #endif
@@ -280,10 +280,10 @@ TEST_F(DeviceErrorTest, EnumerationFailureHandling) {
         .WillOnce(::testing::Return(std::vector<DeviceInfo>()));
     EXPECT_CALL(*mockDeviceEnumerator, enumerateSerialPorts())
         .WillOnce(::testing::Return(std::vector<DeviceInfo>()));
-    
+
     auto usbDevices = mockDeviceEnumerator->enumerateUsbDevices();
     auto serialPorts = mockDeviceEnumerator->enumerateSerialPorts();
-    
+
     EXPECT_TRUE(usbDevices.empty());
     EXPECT_TRUE(serialPorts.empty());
 }
@@ -295,12 +295,12 @@ TEST_F(DeviceErrorTest, InvalidDeviceDataHandling) {
         {"Valid Device", ""},  // Empty address
         {"", "Valid Address"}  // Empty description
     };
-    
+
     EXPECT_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
         .WillOnce(::testing::Return(invalidDevices));
-    
+
     auto devices = mockDeviceEnumerator->enumerateUsbDevices();
-    
+
     EXPECT_EQ(devices.size(), 3);
     // Should handle invalid data gracefully without crashing
     for (const auto& device : devices) {

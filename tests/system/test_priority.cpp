@@ -33,7 +33,7 @@ class PriorityTest : public ::testing::Test {
 protected:
     void SetUp() override {
         mockPriorityManager = std::make_unique<::testing::NiceMock<MockPriorityManager>>();
-        
+
         // Set up default behavior for the mock
         ON_CALL(*mockPriorityManager, getProcessPriority(::testing::_))
             .WillByDefault(::testing::Return(PriorityLevel::NORMAL));
@@ -58,7 +58,7 @@ protected:
 TEST_F(PriorityTest, SetProcessPrioritySuccess) {
     EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGH, 0))
         .Times(1);
-    
+
     mockPriorityManager->setProcessPriority(PriorityLevel::HIGH, 0);
 }
 
@@ -72,7 +72,7 @@ TEST_F(PriorityTest, SetProcessPriorityAllLevels) {
         PriorityLevel::HIGHEST,
         PriorityLevel::REALTIME
     };
-    
+
     for (auto level : levels) {
         EXPECT_CALL(*mockPriorityManager, setProcessPriority(level, 0))
             .Times(1);
@@ -83,10 +83,10 @@ TEST_F(PriorityTest, SetProcessPriorityAllLevels) {
 // Test thread priority setting
 TEST_F(PriorityTest, SetThreadPrioritySuccess) {
     std::thread::id tid = std::this_thread::get_id();
-    
+
     EXPECT_CALL(*mockPriorityManager, setThreadPriority(PriorityLevel::HIGH, tid))
         .Times(1);
-    
+
     mockPriorityManager->setThreadPriority(PriorityLevel::HIGH, tid);
 }
 
@@ -94,17 +94,17 @@ TEST_F(PriorityTest, SetThreadPrioritySuccess) {
 TEST_F(PriorityTest, GetProcessPriority) {
     EXPECT_CALL(*mockPriorityManager, getProcessPriority(0))
         .WillOnce(::testing::Return(PriorityLevel::NORMAL));
-    
+
     PriorityLevel level = mockPriorityManager->getProcessPriority(0);
     EXPECT_EQ(level, PriorityLevel::NORMAL);
 }
 
 TEST_F(PriorityTest, GetThreadPriority) {
     std::thread::id tid = std::this_thread::get_id();
-    
+
     EXPECT_CALL(*mockPriorityManager, getThreadPriority(tid))
         .WillOnce(::testing::Return(PriorityLevel::HIGH));
-    
+
     PriorityLevel level = mockPriorityManager->getThreadPriority(tid);
     EXPECT_EQ(level, PriorityLevel::HIGH);
 }
@@ -113,14 +113,14 @@ TEST_F(PriorityTest, GetThreadPriority) {
 TEST_F(PriorityTest, SetSchedulingPolicy) {
     EXPECT_CALL(*mockPriorityManager, setSchedulingPolicy(SchedulingPolicy::FIFO, 0))
         .Times(1);
-    
+
     mockPriorityManager->setSchedulingPolicy(SchedulingPolicy::FIFO, 0);
 }
 
 TEST_F(PriorityTest, GetSchedulingPolicy) {
     EXPECT_CALL(*mockPriorityManager, getSchedulingPolicy(0))
         .WillOnce(::testing::Return(SchedulingPolicy::ROUND_ROBIN));
-    
+
     SchedulingPolicy policy = mockPriorityManager->getSchedulingPolicy(0);
     EXPECT_EQ(policy, SchedulingPolicy::ROUND_ROBIN);
 }
@@ -131,7 +131,7 @@ TEST_F(PriorityTest, SetSchedulingPolicyAllTypes) {
         SchedulingPolicy::FIFO,
         SchedulingPolicy::ROUND_ROBIN
     };
-    
+
     for (auto policy : policies) {
         EXPECT_CALL(*mockPriorityManager, setSchedulingPolicy(policy, 0))
             .Times(1);
@@ -142,19 +142,19 @@ TEST_F(PriorityTest, SetSchedulingPolicyAllTypes) {
 // Test CPU affinity
 TEST_F(PriorityTest, SetProcessAffinity) {
     std::vector<int> cpus = {0, 2, 4};
-    
+
     EXPECT_CALL(*mockPriorityManager, setProcessAffinity(cpus, 0))
         .Times(1);
-    
+
     mockPriorityManager->setProcessAffinity(cpus, 0);
 }
 
 TEST_F(PriorityTest, GetProcessAffinity) {
     std::vector<int> expectedCpus = {0, 1, 2, 3};
-    
+
     EXPECT_CALL(*mockPriorityManager, getProcessAffinity(0))
         .WillOnce(::testing::Return(expectedCpus));
-    
+
     std::vector<int> cpus = mockPriorityManager->getProcessAffinity(0);
     EXPECT_EQ(cpus, expectedCpus);
 }
@@ -162,20 +162,20 @@ TEST_F(PriorityTest, GetProcessAffinity) {
 TEST_F(PriorityTest, SetThreadAffinity) {
     std::thread::id tid = std::this_thread::get_id();
     std::vector<int> cpus = {1, 3};
-    
+
     EXPECT_CALL(*mockPriorityManager, setThreadAffinity(cpus, tid))
         .Times(1);
-    
+
     mockPriorityManager->setThreadAffinity(cpus, tid);
 }
 
 TEST_F(PriorityTest, GetThreadAffinity) {
     std::thread::id tid = std::this_thread::get_id();
     std::vector<int> expectedCpus = {0, 2};
-    
+
     EXPECT_CALL(*mockPriorityManager, getThreadAffinity(tid))
         .WillOnce(::testing::Return(expectedCpus));
-    
+
     std::vector<int> cpus = mockPriorityManager->getThreadAffinity(tid);
     EXPECT_EQ(cpus, expectedCpus);
 }
@@ -185,17 +185,17 @@ TEST_F(PriorityTest, StartPriorityMonitor) {
     auto callback = [](PriorityLevel level) {
         // Mock callback function
     };
-    
+
     EXPECT_CALL(*mockPriorityManager, startPriorityMonitor(1234, ::testing::_, std::chrono::seconds(1)))
         .Times(1);
-    
+
     mockPriorityManager->startPriorityMonitor(1234, callback, std::chrono::seconds(1));
 }
 
 TEST_F(PriorityTest, StopPriorityMonitor) {
     EXPECT_CALL(*mockPriorityManager, stopPriorityMonitor(1234))
         .Times(1);
-    
+
     mockPriorityManager->stopPriorityMonitor(1234);
 }
 
@@ -219,7 +219,7 @@ TEST_F(PriorityEdgeCaseTest, InvalidProcessId) {
     EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::NORMAL, -1))
         .Times(1);
     mockPriorityManager->setProcessPriority(PriorityLevel::NORMAL, -1);
-    
+
     // Test with very large PID
     EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::NORMAL, 999999))
         .Times(1);
@@ -229,20 +229,20 @@ TEST_F(PriorityEdgeCaseTest, InvalidProcessId) {
 // Test empty CPU affinity
 TEST_F(PriorityEdgeCaseTest, EmptyCpuAffinity) {
     std::vector<int> emptyCpus;
-    
+
     EXPECT_CALL(*mockPriorityManager, setProcessAffinity(emptyCpus, 0))
         .Times(1);
-    
+
     mockPriorityManager->setProcessAffinity(emptyCpus, 0);
 }
 
 // Test invalid CPU numbers
 TEST_F(PriorityEdgeCaseTest, InvalidCpuNumbers) {
     std::vector<int> invalidCpus = {-1, 1000};
-    
+
     EXPECT_CALL(*mockPriorityManager, setProcessAffinity(invalidCpus, 0))
         .Times(1);
-    
+
     mockPriorityManager->setProcessAffinity(invalidCpus, 0);
 }
 

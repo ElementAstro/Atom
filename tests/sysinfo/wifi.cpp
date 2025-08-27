@@ -47,7 +47,7 @@ TEST_F(WifiTest, GetNetworkStats) {
     // Test getting network statistics
     EXPECT_NO_THROW({
         NetworkStats stats = getNetworkStats();
-        
+
         // Validate network stats
         EXPECT_GE(stats.downloadSpeed, 0.0);
         EXPECT_GE(stats.uploadSpeed, 0.0);
@@ -63,10 +63,10 @@ TEST_F(WifiTest, GetInterfaceNames) {
     // Test getting network interface names
     EXPECT_NO_THROW({
         std::vector<std::string> interfaces = getInterfaceNames();
-        
+
         // Should have at least one interface (loopback)
         EXPECT_GT(interfaces.size(), 0);
-        
+
         // Validate interface names
         for (const auto& interface : interfaces) {
             EXPECT_FALSE(interface.empty());
@@ -79,7 +79,7 @@ TEST_F(WifiTest, ScanAvailableNetworks) {
     // Test scanning available networks
     EXPECT_NO_THROW({
         std::vector<std::string> networks = scanAvailableNetworks();
-        
+
         // Networks can be empty if no WiFi adapter or no networks found
         for (const auto& network : networks) {
             EXPECT_FALSE(network.empty());
@@ -127,7 +127,7 @@ TEST_F(WifiTest, GetConnectedDevices) {
     // Test getting connected devices
     EXPECT_NO_THROW({
         std::vector<std::string> devices = getConnectedDevices();
-        
+
         // Devices list can be empty
         for (const auto& device : devices) {
             EXPECT_FALSE(device.empty());
@@ -154,21 +154,21 @@ protected:
 TEST_F(RealWifiTest, NetworkStatsConsistency) {
     // Test network stats consistency over multiple calls
     std::vector<NetworkStats> statsHistory;
-    
+
     for (int i = 0; i < 3; ++i) {
         NetworkStats stats = getNetworkStats();
         statsHistory.push_back(stats);
-        
+
         // Validate each measurement
         EXPECT_GE(stats.downloadSpeed, 0.0);
         EXPECT_GE(stats.uploadSpeed, 0.0);
         EXPECT_GE(stats.latency, 0.0);
         EXPECT_GE(stats.packetLoss, 0.0);
         EXPECT_LE(stats.packetLoss, 100.0);
-        
+
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
-    
+
     // Stats should be reasonable across measurements
     EXPECT_EQ(statsHistory.size(), 3);
 }
@@ -178,10 +178,10 @@ TEST_F(RealWifiTest, InterfaceNamesStability) {
     std::vector<std::string> interfaces1 = getInterfaceNames();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     std::vector<std::string> interfaces2 = getInterfaceNames();
-    
+
     // Interface list should be stable
     EXPECT_EQ(interfaces1.size(), interfaces2.size());
-    
+
     // Interface names should be the same
     std::sort(interfaces1.begin(), interfaces1.end());
     std::sort(interfaces2.begin(), interfaces2.end());
@@ -192,17 +192,17 @@ TEST_F(RealWifiTest, NetworkConnectionStatus) {
     // Test network connection status
     std::string currentWifi = getCurrentWifi();
     std::string currentWired = getCurrentWiredNetwork();
-    
+
     // At least one should be available on most systems
     bool hasConnection = !currentWifi.empty() || !currentWired.empty();
-    
+
     if (hasConnection) {
         // If we have a connection, network stats should be reasonable
         NetworkStats stats = getNetworkStats();
         EXPECT_GE(stats.downloadSpeed, 0.0);
         EXPECT_GE(stats.uploadSpeed, 0.0);
     }
-    
+
     // This test is informational - connection status can vary
     EXPECT_TRUE(hasConnection || !hasConnection);
 }
@@ -226,7 +226,7 @@ TEST_F(RealWifiTest, NoThrowGuarantee) {
 
 TEST_F(RealWifiTest, EmptyResultHandling) {
     // Test handling of potentially empty results
-    
+
     // These functions might return empty results on some systems
     std::string currentWifi = getCurrentWifi();
     std::string currentWired = getCurrentWiredNetwork();
@@ -234,7 +234,7 @@ TEST_F(RealWifiTest, EmptyResultHandling) {
     std::string security = getNetworkSecurity();
     std::string quality = analyzeNetworkQuality();
     std::vector<std::string> devices = getConnectedDevices();
-    
+
     // All should handle empty results gracefully
     EXPECT_TRUE(currentWifi.empty() || !currentWifi.empty());
     EXPECT_TRUE(currentWired.empty() || !currentWired.empty());
@@ -246,19 +246,19 @@ TEST_F(RealWifiTest, EmptyResultHandling) {
 
 TEST_F(RealWifiTest, StringFieldValidation) {
     // Test that string fields don't contain null characters
-    
+
     std::string currentWifi = getCurrentWifi();
     std::string currentWired = getCurrentWiredNetwork();
     std::vector<std::string> interfaces = getInterfaceNames();
-    
+
     if (!currentWifi.empty()) {
         EXPECT_EQ(currentWifi.find('\0'), std::string::npos);
     }
-    
+
     if (!currentWired.empty()) {
         EXPECT_EQ(currentWired.find('\0'), std::string::npos);
     }
-    
+
     for (const auto& interface : interfaces) {
         EXPECT_EQ(interface.find('\0'), std::string::npos);
         EXPECT_FALSE(interface.empty());
