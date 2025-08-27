@@ -178,13 +178,13 @@ auto SystemInfoPrinter::formatOsInfo(const OperatingSystemInfo& info)
 }
 
 /* GPU 信息格式化功能未实现，相关接口和结构体缺失，已注释处理 */
-// auto SystemInfoPrinter::formatGpuInfo() -> std::string {
-//     std::stringstream ss;
-//     ss << createTableHeader("GPU Information");
-//     ss << createTableRow("Error", "GPU information not implemented.");
-//     ss << createTableFooter();
-//     return ss.str();
-// }
+auto SystemInfoPrinter::formatGpuInfo() -> std::string {
+    std::stringstream ss;
+    ss << createTableHeader("GPU Information");
+    ss << createTableRow("Error", "GPU information not implemented.");
+    ss << createTableFooter();
+    return ss.str();
+}
 
 // SystemInfo not available - commented out
 // auto SystemInfoPrinter::formatSystemInfo(const SystemInfo& info)

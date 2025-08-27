@@ -1,7 +1,7 @@
 #ifndef ATOM_SEARCH_TEST_LRU_HPP
 #define ATOM_SEARCH_TEST_LRU_HPP
 
-#include "atom/search/lru.hpp"
+#include "atom/search/cache/lru.hpp"
 
 #include <gtest/gtest.h>
 #include <thread>
@@ -89,8 +89,8 @@ TEST_F(ThreadSafeLRUCacheTest, LoadFactor) {
 
 TEST_F(ThreadSafeLRUCacheTest, HitRate) {
     cache->put("key1", 1);
-    cache->get("key1");
-    cache->get("key2");
+    (void)cache->get("key1");  // Hit
+    (void)cache->get("key2");  // Miss
     EXPECT_FLOAT_EQ(cache->hitRate(), 0.5);
 }
 
@@ -229,8 +229,8 @@ TEST_F(ThreadSafeLRUCacheTest, Prefetch) {
 
 TEST_F(ThreadSafeLRUCacheTest, GetStatistics) {
     cache->put("key1", 1);
-    cache->get("key1");         // Hit
-    cache->get("nonexistent");  // Miss
+    (void)cache->get("key1");         // Hit
+    (void)cache->get("nonexistent");  // Miss
 
     auto stats = cache->getStatistics();
 
@@ -477,7 +477,7 @@ TEST_F(ThreadSafeLRUCacheTest, AccessOrder) {
     cache->put("key3", 3);
 
     // Access key1 to move it to front
-    cache->get("key1");
+    (void)cache->get("key1");
 
     // Add a new key to evict LRU item (should be key2)
     cache->put("key4", 4);

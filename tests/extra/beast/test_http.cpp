@@ -1,4 +1,4 @@
-#include "http.hpp"
+#include "atom/extra/beast/http.hpp"
 
 #include <gtest/gtest.h>
 #include <boost/asio/dispatch.hpp>
@@ -320,7 +320,4 @@ TEST_F(HttpClientTest, InvalidValues) {
     EXPECT_THROW(client_->setDefaultHeader("", "value"), std::invalid_argument);
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function provided by GTest::Main

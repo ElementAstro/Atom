@@ -186,11 +186,11 @@ TEST(ClientStatsTest, CustomValues) {
 }
 
 TEST(ResultTest, SuccessAndError) {
-    Result<int> ok = 42;
+    auto ok = Result<int>::success(42);
     ASSERT_TRUE(ok.has_value());
     EXPECT_EQ(ok.value(), 42);
 
-    Result<int> err = std::unexpected(ErrorCode::PROTOCOL_ERROR);
+    auto err = Result<int>::error(ErrorCode::PROTOCOL_ERROR);
     ASSERT_FALSE(err.has_value());
     EXPECT_EQ(err.error(), ErrorCode::PROTOCOL_ERROR);
 }

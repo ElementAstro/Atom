@@ -15,14 +15,14 @@ TEST(TimerTest, setTimeout) {
 
 TEST(TimerTest, setInterval) {
     atom::async::Timer timer;
-    int funcCalls = 0;
+    std::atomic<int> funcCalls{0};
 
-    timer.setInterval([&funcCalls]() { funcCalls++; }, 100, 5, 0);
+    timer.setInterval([&funcCalls]() { funcCalls.fetch_add(1); }, 50, 5, 0);
 
-    // Run the timer for 1 second
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
+    // Wait for all executions to complete
+    std::this_thread::sleep_for(std::chrono::milliseconds(400));
 
-    EXPECT_GE(funcCalls, 5);
+    EXPECT_EQ(funcCalls.load(), 5);
 }
 
 TEST(TimerTest, cancelAllTasks) {
@@ -84,8 +84,11 @@ TEST(TimerTest, setCallback) {
 
     timer.setCallback([&callbackCalled]() { callbackCalled = true; });
 
-    // Trigger the callback
-    timer.now();
+    // Add a task to trigger the callback when it completes
+    auto future = timer.setTimeout([]() {}, 50);
+
+    // Wait for the task to complete, which should trigger the callback
+    future.wait();
 
     EXPECT_TRUE(callbackCalled);
 }
@@ -95,7 +98,7 @@ TEST(TimerTest, getTaskCount) {
 
     EXPECT_EQ(timer.getTaskCount(), 0);
 
-    timer.setTimeout([]() {}, 100);
+    auto future1 = timer.setTimeout([]() {}, 100);
     EXPECT_EQ(timer.getTaskCount(), 1);
 
     timer.setInterval([]() {}, 100, 5, 0);

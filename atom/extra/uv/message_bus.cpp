@@ -79,10 +79,10 @@ public:
 
     // **Publish message**
     template <MessageType T>
-    Result<void> publish(const std::string& topic, T&& message,
+    Result<void, MessageBusError> publish(const std::string& topic, T&& message,
                          const std::string& sender_id = "") {
         if (shutdown_.load()) {
-            return std::unexpected(MessageBusError::ShutdownInProgress);
+            return MessageBusError::ShutdownInProgress;
         }
 
         auto envelope = std::make_shared<MessageEnvelope<T>>(
@@ -99,7 +99,7 @@ public:
                         "Dropped oldest message due to queue overflow");
                 } else {
                     spdlog::warn("Message queue full, dropping message");
-                    return std::unexpected(MessageBusError::QueueFull);
+                    return MessageBusError::QueueFull;
                 }
             }
 
@@ -115,7 +115,7 @@ public:
         spdlog::debug("Published message to topic '{}' with ID {}", topic,
                       envelope->message_id);
 
-        return {};
+        return Result<void, MessageBusError>();
     }
 
     // **Coroutine-based message waiting**
@@ -342,7 +342,7 @@ private:
 template <typename T>
 template <typename Promise>
 bool MessageAwaiter<T>::await_suspend(std::coroutine_handle<Promise> handle) {
-    promise_ = std::make_shared<std::promise<Result<MessageEnvelope<T>>>>();
+    promise_ = std::make_shared<std::promise<Result<MessageEnvelope<T>, MessageBusError>>>();
 
     // **Set up temporary subscription**
     auto bus = MessageBus::get_instance();
@@ -360,7 +360,7 @@ bool MessageAwaiter<T>::await_suspend(std::coroutine_handle<Promise> handle) {
     // **Set up timeout**
     std::thread([promise = promise_, timeout = timeout, handle]() {
         std::this_thread::sleep_for(timeout);
-        promise->set_value(std::unexpected(MessageBusError::NetworkError));
+        promise->set_value(MessageBusError::NetworkError);
         handle.resume();
     }).detach();
 
@@ -368,7 +368,7 @@ bool MessageAwaiter<T>::await_suspend(std::coroutine_handle<Promise> handle) {
 }
 
 template <typename T>
-Result<MessageEnvelope<T>> MessageAwaiter<T>::await_resume() {
+Result<MessageEnvelope<T>, MessageBusError> MessageAwaiter<T>::await_resume() {
     auto future = promise_->get_future();
     return future.get();
 }

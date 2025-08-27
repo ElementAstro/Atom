@@ -397,3 +397,316 @@ TEST_F(ArgsTest, MoveSemantics) {
     EXPECT_EQ(movedArgs.size(), 1);
     EXPECT_EQ(movedArgs.get<int>("key1"), 42);
 }
+
+// Additional Edge Case Tests
+TEST_F(ArgsTest, EmptyStringKeys) {
+    // Test empty string as key
+    args.set("", 42);
+    EXPECT_TRUE(args.contains(""));
+    EXPECT_EQ(args.get<int>(""), 42);
+
+    // Test whitespace-only keys
+    args.set(" ", 100);
+    args.set("\t", 200);
+    args.set("\n", 300);
+
+    EXPECT_EQ(args.get<int>(" "), 100);
+    EXPECT_EQ(args.get<int>("\t"), 200);
+    EXPECT_EQ(args.get<int>("\n"), 300);
+}
+
+TEST_F(ArgsTest, SpecialCharacterKeys) {
+    // Test keys with special characters
+    args.set("key.with.dots", 1);
+    args.set("key-with-dashes", 2);
+    args.set("key_with_underscores", 3);
+    args.set("key with spaces", 4);
+    args.set("key/with/slashes", 5);
+    args.set("key\\with\\backslashes", 6);
+    args.set("key@with#symbols$", 7);
+
+    EXPECT_EQ(args.get<int>("key.with.dots"), 1);
+    EXPECT_EQ(args.get<int>("key-with-dashes"), 2);
+    EXPECT_EQ(args.get<int>("key_with_underscores"), 3);
+    EXPECT_EQ(args.get<int>("key with spaces"), 4);
+    EXPECT_EQ(args.get<int>("key/with/slashes"), 5);
+    EXPECT_EQ(args.get<int>("key\\with\\backslashes"), 6);
+    EXPECT_EQ(args.get<int>("key@with#symbols$"), 7);
+}
+
+TEST_F(ArgsTest, UnicodeKeys) {
+    // Test Unicode keys
+    args.set("键", 1);  // Chinese
+    args.set("ключ", 2);  // Russian
+    args.set("🔑", 3);  // Emoji
+    args.set("café", 4);  // Accented characters
+
+    EXPECT_EQ(args.get<int>("键"), 1);
+    EXPECT_EQ(args.get<int>("ключ"), 2);
+    EXPECT_EQ(args.get<int>("🔑"), 3);
+    EXPECT_EQ(args.get<int>("café"), 4);
+}
+
+TEST_F(ArgsTest, LargeKeys) {
+    // Test very long keys
+    std::string long_key(1000, 'a');
+    args.set(long_key, 42);
+
+    EXPECT_TRUE(args.contains(long_key));
+    EXPECT_EQ(args.get<int>(long_key), 42);
+}
+
+TEST_F(ArgsTest, NullPointerValues) {
+    // Test null pointer values
+    int* null_ptr = nullptr;
+    args.set("null_ptr", null_ptr);
+
+    EXPECT_TRUE(args.contains("null_ptr"));
+    EXPECT_EQ(args.get<int*>("null_ptr"), nullptr);
+}
+
+TEST_F(ArgsTest, ZeroValues) {
+    // Test various zero values
+    args.set("zero_int", 0);
+    args.set("zero_double", 0.0);
+    args.set("zero_float", 0.0f);
+    args.set("false_bool", false);
+    args.set("empty_string", std::string(""));
+
+    EXPECT_EQ(args.get<int>("zero_int"), 0);
+    EXPECT_EQ(args.get<double>("zero_double"), 0.0);
+    EXPECT_EQ(args.get<float>("zero_float"), 0.0f);
+    EXPECT_EQ(args.get<bool>("false_bool"), false);
+    EXPECT_EQ(args.get<std::string>("empty_string"), "");
+}
+
+TEST_F(ArgsTest, ExtremeValues) {
+    // Test extreme numeric values
+    args.set("max_int", std::numeric_limits<int>::max());
+    args.set("min_int", std::numeric_limits<int>::min());
+    args.set("max_double", std::numeric_limits<double>::max());
+    args.set("min_double", std::numeric_limits<double>::lowest());
+    args.set("infinity", std::numeric_limits<double>::infinity());
+    args.set("neg_infinity", -std::numeric_limits<double>::infinity());
+
+    EXPECT_EQ(args.get<int>("max_int"), std::numeric_limits<int>::max());
+    EXPECT_EQ(args.get<int>("min_int"), std::numeric_limits<int>::min());
+    EXPECT_EQ(args.get<double>("max_double"), std::numeric_limits<double>::max());
+    EXPECT_EQ(args.get<double>("min_double"), std::numeric_limits<double>::lowest());
+    EXPECT_EQ(args.get<double>("infinity"), std::numeric_limits<double>::infinity());
+    EXPECT_EQ(args.get<double>("neg_infinity"), -std::numeric_limits<double>::infinity());
+}
+
+TEST_F(ArgsTest, OverwriteValues) {
+    // Test overwriting values with different types
+    args.set("key", 42);
+    EXPECT_EQ(args.get<int>("key"), 42);
+
+    args.set("key", std::string("hello"));
+    EXPECT_EQ(args.get<std::string>("key"), "hello");
+    EXPECT_THROW(args.get<int>("key"), std::bad_any_cast);
+
+    args.set("key", 3.14);
+    EXPECT_EQ(args.get<double>("key"), 3.14);
+    EXPECT_THROW(args.get<std::string>("key"), std::bad_any_cast);
+}
+
+TEST_F(ArgsTest, CaseSensitiveKeys) {
+    // Test that keys are case-sensitive
+    args.set("Key", 1);
+    args.set("key", 2);
+    args.set("KEY", 3);
+    args.set("kEy", 4);
+
+    EXPECT_EQ(args.size(), 4);
+    EXPECT_EQ(args.get<int>("Key"), 1);
+    EXPECT_EQ(args.get<int>("key"), 2);
+    EXPECT_EQ(args.get<int>("KEY"), 3);
+    EXPECT_EQ(args.get<int>("kEy"), 4);
+}
+
+TEST_F(ArgsTest, ValidatorEdgeCases) {
+    // Test validator with null values
+    args.setValidator("test_key", [](const any_type& val) {
+        try {
+#ifdef ATOM_USE_BOOST
+            auto ptr = boost::any_cast<int*>(val);
+#else
+            auto ptr = std::any_cast<int*>(val);
+#endif
+            return ptr != nullptr;
+        } catch (...) {
+            return false;
+        }
+    });
+
+    int value = 42;
+    int* valid_ptr = &value;
+    int* null_ptr = nullptr;
+
+    // Valid pointer should work
+    args.set("test_key", valid_ptr);
+    EXPECT_EQ(args.get<int*>("test_key"), valid_ptr);
+
+    // Null pointer should be rejected
+    EXPECT_THROW(args.set("test_key", null_ptr), std::runtime_error);
+
+    // Wrong type should be rejected
+    EXPECT_THROW(args.set("test_key", 42), std::runtime_error);
+}
+
+// Comprehensive Error Handling Tests
+TEST_F(ArgsTest, ExceptionSafety) {
+    // Test that exceptions during set operations don't corrupt the container
+    args.set("existing_key", 42);
+
+    // Set a validator that always throws
+    args.setValidator("throwing_key", [](const any_type&) -> bool {
+        throw std::runtime_error("Validator exception");
+    });
+
+    EXPECT_EQ(args.size(), 1);
+
+    // Attempt to set value that will cause validator to throw
+    EXPECT_THROW(args.set("throwing_key", 100), std::runtime_error);
+
+    // Container should still be in valid state
+    EXPECT_EQ(args.size(), 1);
+    EXPECT_EQ(args.get<int>("existing_key"), 42);
+    EXPECT_FALSE(args.contains("throwing_key"));
+}
+
+TEST_F(ArgsTest, BadAnyCastHandling) {
+    args.set("int_value", 42);
+    args.set("string_value", std::string("hello"));
+    args.set("double_value", 3.14);
+
+    // Test various bad casts
+    EXPECT_THROW(args.get<std::string>("int_value"), std::bad_any_cast);
+    EXPECT_THROW(args.get<int>("string_value"), std::bad_any_cast);
+    EXPECT_THROW(args.get<float>("string_value"), std::bad_any_cast);
+    EXPECT_THROW(args.get<bool>("double_value"), std::bad_any_cast);
+
+    // Test operator[] with bad casts
+    EXPECT_THROW(args.operator[]<std::string>("int_value"), std::bad_any_cast);
+    EXPECT_THROW(args.operator[]<int>("string_value"), std::bad_any_cast);
+}
+
+TEST_F(ArgsTest, OutOfRangeHandling) {
+    args.set("existing", 42);
+
+    // Test various ways to access non-existent keys
+    EXPECT_THROW(args.get<int>("nonexistent"), std::out_of_range);
+    EXPECT_THROW(args.operator[]<int>("nonexistent"), std::out_of_range);
+    EXPECT_THROW(args.remove("nonexistent"), std::out_of_range);
+
+    // Test that getOr and getOptional don't throw
+    EXPECT_NO_THROW(args.getOr("nonexistent", 100));
+    EXPECT_NO_THROW(args.getOptional<int>("nonexistent"));
+}
+
+TEST_F(ArgsTest, MemoryStressTest) {
+    // Test memory allocation/deallocation under stress
+    const int iterations = 1000;
+
+    for (int i = 0; i < iterations; ++i) {
+        // Add many items
+        for (int j = 0; j < 100; ++j) {
+            args.set("key_" + std::to_string(i) + "_" + std::to_string(j), i * j);
+        }
+
+        // Remove half of them
+        for (int j = 0; j < 50; ++j) {
+            args.remove("key_" + std::to_string(i) + "_" + std::to_string(j));
+        }
+
+        // Clear periodically
+        if (i % 100 == 0) {
+            args.clear();
+        }
+    }
+
+    // Should not crash and should be in valid state
+    EXPECT_NO_THROW(args.size());
+}
+
+TEST_F(ArgsTest, RecursiveDataStructures) {
+    // Test with recursive/complex data structures
+    std::vector<std::vector<int>> nested_vector = {{1, 2}, {3, 4, 5}, {6}};
+    args.set("nested_vector", nested_vector);
+
+    auto result = args.get<std::vector<std::vector<int>>>("nested_vector");
+    EXPECT_EQ(result.size(), 3);
+    EXPECT_EQ(result[0].size(), 2);
+    EXPECT_EQ(result[1].size(), 3);
+    EXPECT_EQ(result[2].size(), 1);
+    EXPECT_EQ(result[0][0], 1);
+    EXPECT_EQ(result[1][2], 5);
+    EXPECT_EQ(result[2][0], 6);
+}
+
+TEST_F(ArgsTest, ConstCorrectnessEdgeCases) {
+    args.set("test_key", 42);
+
+    const Args& const_args = args;
+
+    // Test const access methods
+    EXPECT_EQ(const_args.size(), 1);
+    EXPECT_TRUE(const_args.contains("test_key"));
+    EXPECT_FALSE(const_args.empty());
+    EXPECT_EQ(const_args.get<int>("test_key"), 42);
+
+    // Test const iterators
+    auto const_items = const_args.items();
+    EXPECT_EQ(const_items.size(), 1);
+
+    // Test that const reference prevents modification
+    // These should not compile if uncommented:
+    // const_args.set("new_key", 100);
+    // const_args.remove("test_key");
+    // const_args.clear();
+}
+
+TEST_F(ArgsTest, ValidatorChaining) {
+    // Test multiple validators on the same key (if supported)
+    bool validator1_called = false;
+    bool validator2_called = false;
+
+    args.setValidator("test_key", [&validator1_called](const any_type& val) {
+        validator1_called = true;
+        try {
+#ifdef ATOM_USE_BOOST
+            return boost::any_cast<int>(val) > 0;
+#else
+            return std::any_cast<int>(val) > 0;
+#endif
+        } catch (...) {
+            return false;
+        }
+    });
+
+    // If the implementation supports multiple validators, this would add another
+    // For now, this will replace the first validator
+    args.setValidator("test_key", [&validator2_called](const any_type& val) {
+        validator2_called = true;
+        try {
+#ifdef ATOM_USE_BOOST
+            return boost::any_cast<int>(val) < 100;
+#else
+            return std::any_cast<int>(val) < 100;
+#endif
+        } catch (...) {
+            return false;
+        }
+    });
+
+    // Valid value (should pass second validator)
+    args.set("test_key", 50);
+    EXPECT_TRUE(validator2_called);
+    EXPECT_EQ(args.get<int>("test_key"), 50);
+
+    // Invalid value (should fail second validator)
+    validator2_called = false;
+    EXPECT_THROW(args.set("test_key", 150), std::runtime_error);
+    EXPECT_TRUE(validator2_called);
+}

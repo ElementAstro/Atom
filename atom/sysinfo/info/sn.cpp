@@ -4,8 +4,35 @@
 
 #ifdef _WIN32
 #include <Wbemidl.h>
-#include <comdef.h>
 #pragma comment(lib, "wbemuuid.lib")
+
+// Helper function to convert BSTR to std::string (MinGW compatible)
+static std::string BSTRToString(BSTR bstr) {
+    if (!bstr) return "";
+
+    int len = WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return "";
+
+    std::string result(len - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr, nullptr);
+    return result;
+}
+
+// RAII wrapper for BSTR (MinGW compatible)
+class BSTRWrapper {
+public:
+    explicit BSTRWrapper(const wchar_t* str) : bstr_(SysAllocString(str)) {}
+    ~BSTRWrapper() { if (bstr_) SysFreeString(bstr_); }
+
+    BSTRWrapper(const BSTRWrapper&) = delete;
+    BSTRWrapper& operator=(const BSTRWrapper&) = delete;
+
+    operator BSTR() const { return bstr_; }
+    BSTR get() const { return bstr_; }
+
+private:
+    BSTR bstr_;
+};
 
 class HardwareInfo::Impl {
 public:
@@ -33,8 +60,10 @@ public:
             return "";
         }
 
+        BSTRWrapper wql(L"WQL");
+        BSTRWrapper query((L"SELECT * FROM " + wmiClass).c_str());
         HRESULT hres = pSvc->ExecQuery(
-            bstr_t("WQL"), bstr_t((L"SELECT * FROM " + wmiClass).c_str()),
+            wql, query,
             WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
             &pEnumerator);
 
@@ -56,7 +85,7 @@ public:
             hr = pclsObj->Get(property.c_str(), 0, &vtProp, nullptr, nullptr);
             if (SUCCEEDED(hr) && vtProp.vt == VT_BSTR &&
                 vtProp.bstrVal != nullptr) {
-                result = _bstr_t(vtProp.bstrVal);
+                result = BSTRToString(vtProp.bstrVal);
                 spdlog::debug("Retrieved WMI property value: {}", result);
             }
             VariantClear(&vtProp);
@@ -93,8 +122,10 @@ public:
             return results;
         }
 
+        BSTRWrapper wql2(L"WQL");
+        BSTRWrapper query2((L"SELECT * FROM " + wmiClass).c_str());
         HRESULT hres = pSvc->ExecQuery(
-            bstr_t("WQL"), bstr_t((L"SELECT * FROM " + wmiClass).c_str()),
+            wql2, query2,
             WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
             &pEnumerator);
 
@@ -116,8 +147,7 @@ public:
             hr = pclsObj->Get(property.c_str(), 0, &vtProp, nullptr, nullptr);
             if (SUCCEEDED(hr) && vtProp.vt == VT_BSTR &&
                 vtProp.bstrVal != nullptr) {
-                std::string value =
-                    static_cast<const char*>(_bstr_t(vtProp.bstrVal));
+                std::string value = BSTRToString(vtProp.bstrVal);
                 results.emplace_back(value);
                 spdlog::debug("Retrieved WMI property value: {}", value);
             }
@@ -168,7 +198,8 @@ public:
             return false;
         }
 
-        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), nullptr, nullptr, 0,
+        BSTRWrapper rootCimv2(L"ROOT\\CIMV2");
+        hres = pLoc->ConnectServer(rootCimv2, nullptr, nullptr, 0,
                                    0, 0, 0, &pSvc);
 
         if (FAILED(hres)) {

@@ -355,7 +355,7 @@ public:
         };
         auto sp = std::shared_ptr<ChainedSignal<Args...>>(
             &nextSignal, [](ChainedSignal<Args...>*) {});
-        chains_.push_back(sp);
+        chains_.push_back(WeakSignalPtr(sp));
     }
 
     /**
@@ -370,7 +370,7 @@ public:
         }
 
         std::lock_guard lock(mutex_);
-        chains_.push_back(nextSignal);
+        chains_.push_back(WeakSignalPtr(nextSignal));
     }
 
     /**
@@ -787,6 +787,7 @@ class ScopedSignal {
 public:
     using SlotType = std::function<void(Args...)>;
     using SlotPtr = std::shared_ptr<SlotType>;
+    using WeakSlotPtr = std::weak_ptr<SlotType>;
 
     /**
      * @brief Connect a slot to the signal using a shared pointer.
@@ -800,7 +801,7 @@ public:
         }
 
         std::lock_guard lock(mutex_);
-        slots_.push_back(std::move(slotPtr));
+        slots_.push_back(WeakSlotPtr(slotPtr));
     }
 
     /**
@@ -831,13 +832,15 @@ public:
     void emit(Args... args) {
         try {
             std::lock_guard lock(mutex_);
-            // 修复：使用 std::erase_if 代替范围和spans，避免引入ranges头文件
+            // Remove expired weak_ptr slots
             auto it = std::remove_if(slots_.begin(), slots_.end(),
-                                     [](const auto& slot) { return !slot; });
+                                     [](const WeakSlotPtr& weakSlot) {
+                                         return weakSlot.expired();
+                                     });
             slots_.erase(it, slots_.end());
 
-            for (const auto& slot : slots_) {
-                if (slot) {
+            for (const auto& weakSlot : slots_) {
+                if (auto slot = weakSlot.lock()) {
                     (*slot)(args...);
                 }
             }
@@ -864,11 +867,11 @@ public:
         std::lock_guard lock(mutex_);
         return std::count_if(
             slots_.begin(), slots_.end(),
-            [](const auto& slot) { return static_cast<bool>(slot); });
+            [](const WeakSlotPtr& weakSlot) { return !weakSlot.expired(); });
     }
 
 private:
-    std::vector<SlotPtr> slots_;
+    std::vector<WeakSlotPtr> slots_;
     mutable std::mutex mutex_;
 };
 

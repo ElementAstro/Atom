@@ -269,3 +269,166 @@ TEST_F(TimeManagerTest, ConcurrentOperations) {
     t4.join();
     EXPECT_TRUE(true);
 }
+
+// Additional Edge Cases and Error Conditions
+TEST_F(TimeManagerTest, BoundaryDateValues) {
+    // Test year boundaries
+    auto result1970 = timeManager_.setSystemTime(1970, 1, 1, 0, 0, 0);
+    EXPECT_FALSE(result1970);  // Should succeed
+
+    auto result2038 = timeManager_.setSystemTime(2038, 1, 19, 3, 14, 7);
+    EXPECT_FALSE(result2038);  // Should succeed (32-bit time_t limit)
+
+    // Test month boundaries
+    auto resultJan = timeManager_.setSystemTime(2022, 1, 1, 0, 0, 0);
+    EXPECT_FALSE(resultJan);
+
+    auto resultDec = timeManager_.setSystemTime(2022, 12, 31, 23, 59, 59);
+    EXPECT_FALSE(resultDec);
+}
+
+TEST_F(TimeManagerTest, LeapYearHandling) {
+    // Test leap year February 29th
+    auto leapYearResult = timeManager_.setSystemTime(2024, 2, 29, 12, 0, 0);
+    EXPECT_FALSE(leapYearResult);  // Should succeed for leap year
+
+    // Test non-leap year February 29th
+    auto nonLeapYearResult = timeManager_.setSystemTime(2023, 2, 29, 12, 0, 0);
+    EXPECT_TRUE(nonLeapYearResult);  // Should fail for non-leap year
+
+    // Test century years
+    auto century1900 = timeManager_.setSystemTime(1900, 2, 29, 12, 0, 0);
+    EXPECT_TRUE(century1900);  // 1900 is not a leap year
+
+    auto century2000 = timeManager_.setSystemTime(2000, 2, 29, 12, 0, 0);
+    EXPECT_FALSE(century2000);  // 2000 is a leap year
+}
+
+TEST_F(TimeManagerTest, TimezoneEdgeCases) {
+    // Test very long timezone name
+    std::string longTimezone(65, 'A');
+    auto longResult = timeManager_.setSystemTimezone(longTimezone);
+    EXPECT_TRUE(longResult);
+    EXPECT_EQ(static_cast<int>(longResult.value()),
+              static_cast<int>(TimeError::InvalidParameter));
+
+    // Test timezone with special characters
+    auto specialResult = timeManager_.setSystemTimezone("UTC+8:30");
+    EXPECT_FALSE(specialResult);  // Should succeed
+
+    // Test common timezone formats
+    auto utcResult = timeManager_.setSystemTimezone("UTC");
+    EXPECT_FALSE(utcResult);
+
+    auto gmtResult = timeManager_.setSystemTimezone("GMT");
+    EXPECT_FALSE(gmtResult);
+
+    auto posixResult = timeManager_.setSystemTimezone("America/New_York");
+    EXPECT_FALSE(posixResult);
+}
+
+TEST_F(TimeManagerTest, NtpTimeoutVariations) {
+    mockImpl_->setMockNtpTime(1620000000);
+
+    // Test very short timeout
+    auto shortResult = timeManager_.getNtpTime("pool.ntp.org", 1ms);
+    ASSERT_TRUE(shortResult.has_value());
+
+    // Test very long timeout
+    auto longResult = timeManager_.getNtpTime("pool.ntp.org", 60000ms);
+    ASSERT_TRUE(longResult.has_value());
+
+    // Test zero timeout
+    auto zeroResult = timeManager_.getNtpTime("pool.ntp.org", 0ms);
+    ASSERT_TRUE(zeroResult.has_value());
+}
+
+TEST_F(TimeManagerTest, NtpHostnameVariations) {
+    mockImpl_->setMockNtpTime(1620000000);
+
+    // Test various hostname formats
+    std::vector<std::string> hostnames = {
+        "pool.ntp.org",
+        "time.google.com",
+        "time.cloudflare.com",
+        "0.pool.ntp.org",
+        "1.pool.ntp.org",
+        "time-a.nist.gov",
+        "192.168.1.1",  // IP address
+        "::1"           // IPv6 localhost
+    };
+
+    for (const auto& hostname : hostnames) {
+        auto result = timeManager_.getNtpTime(hostname);
+        EXPECT_TRUE(result.has_value()) << "Failed for hostname: " << hostname;
+    }
+}
+
+TEST_F(TimeManagerTest, SystemTimeConsistency) {
+    std::time_t expectedTime = 1620000000;
+    mockImpl_->setMockTime(expectedTime);
+
+    // Get time multiple times and ensure consistency
+    auto time1 = timeManager_.getSystemTime();
+    auto time2 = timeManager_.getSystemTime();
+    auto timePoint1 = timeManager_.getSystemTimePoint();
+    auto timePoint2 = timeManager_.getSystemTimePoint();
+
+    EXPECT_EQ(time1, expectedTime);
+    EXPECT_EQ(time2, expectedTime);
+    EXPECT_EQ(std::chrono::system_clock::to_time_t(timePoint1), expectedTime);
+    EXPECT_EQ(std::chrono::system_clock::to_time_t(timePoint2), expectedTime);
+}
+
+TEST_F(TimeManagerTest, ErrorCodeConsistency) {
+    // Test that error codes are consistent across calls
+    auto result1 = timeManager_.setSystemTime(1969, 1, 1, 0, 0, 0);
+    auto result2 = timeManager_.setSystemTime(1969, 1, 1, 0, 0, 0);
+
+    EXPECT_TRUE(result1);
+    EXPECT_TRUE(result2);
+    EXPECT_EQ(result1.value(), result2.value());
+
+    auto tzResult1 = timeManager_.setSystemTimezone("");
+    auto tzResult2 = timeManager_.setSystemTimezone("");
+
+    EXPECT_TRUE(tzResult1);
+    EXPECT_TRUE(tzResult2);
+    EXPECT_EQ(tzResult1.value(), tzResult2.value());
+}
+
+TEST_F(TimeManagerTest, MoveSemantics) {
+    std::time_t expectedTime = 1620000000;
+    mockImpl_->setMockTime(expectedTime);
+
+    // Test move constructor
+    TimeManager movedManager = std::move(timeManager_);
+    EXPECT_EQ(movedManager.getSystemTime(), expectedTime);
+
+    // Test move assignment
+    TimeManager assignedManager;
+    assignedManager = std::move(movedManager);
+    EXPECT_EQ(assignedManager.getSystemTime(), expectedTime);
+}
+
+TEST_F(TimeManagerTest, StressTestOperations) {
+    mockImpl_->setMockTime(1620000000);
+    mockImpl_->setMockNtpTime(1620000100);
+
+    // Perform many operations rapidly
+    for (int i = 0; i < 1000; ++i) {
+        timeManager_.getSystemTime();
+        timeManager_.getSystemTimePoint();
+
+        if (i % 10 == 0) {
+            timeManager_.setSystemTime(2022, 1, 1, 12, 0, i % 60);
+        }
+
+        if (i % 20 == 0) {
+            timeManager_.getNtpTime("pool.ntp.org", 1000ms);
+        }
+    }
+
+    // Should complete without issues
+    EXPECT_TRUE(true);
+}

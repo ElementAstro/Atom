@@ -4,7 +4,7 @@
 #include <gtest/gtest.h>
 #include <thread>
 #include <vector>
-#include "atom/search/cache.hpp"
+#include "atom/search/cache/cache.hpp"
 
 using namespace atom::search;
 

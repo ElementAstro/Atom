@@ -6,18 +6,32 @@
 # Author: Max Qian
 # License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
-project(atom-sysinfo VERSION 1.0.0 LANGUAGES C CXX)
+# Only set project if this is the top-level CMakeLists.txt
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+    cmake_minimum_required(VERSION 3.20)
+    project(atom-sysinfo VERSION 1.0.0 LANGUAGES C CXX)
+endif()
 
-# 添加子模块子目录
-add_subdirectory(hardware/memory)
-add_subdirectory(network/wifi)
+# Guard against multiple inclusions
+if(TARGET atom-sysinfo)
+    return()
+endif()
+
+# 添加子模块子目录 - temporarily disabled to fix duplicate target issues
+# add_subdirectory(hardware/memory)
+# add_subdirectory(network/wifi)
 
 # Hardware Sources
 set(HARDWARE_SOURCES
     hardware/battery.cpp
     hardware/bios.cpp
     hardware/gpu.cpp
+    # Memory module sources (integrated to fix duplicate targets)
+    hardware/memory/memory.cpp
+    hardware/memory/common.cpp
+    hardware/memory/windows.cpp
+    hardware/memory/linux.cpp
+    hardware/memory/macos.cpp
 )
 
 # CPU component files
@@ -40,6 +54,16 @@ set(STORAGE_SOURCES
     storage/disk/disk_monitor.cpp
     storage/disk/disk_security.cpp
     storage/disk/disk_util.cpp
+)
+
+# Network Sources
+set(NETWORK_SOURCES
+    # WiFi module sources (integrated to fix duplicate targets)
+    network/wifi/wifi.cpp
+    network/wifi/common.cpp
+    network/wifi/windows.cpp
+    network/wifi/linux.cpp
+    network/wifi/macos.cpp
 )
 
 set(STORAGE_HEADERS
@@ -116,17 +140,18 @@ set(COMPAT_HEADERS
 )
 
 set(LIBS
-
-    atom_sysinfo_memory
-    atom_sysinfo_wifi
+    # Temporarily disabled to fix duplicate target issues
+    # atom_sysinfo_memory
+    # atom_sysinfo_wifi
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
 # Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT
+add_library(atom-sysinfo_object OBJECT
     ${HARDWARE_SOURCES}
     ${CPU_SOURCES}
     ${STORAGE_SOURCES}
+    ${NETWORK_SOURCES}
     ${INFO_SOURCES}
     ${UTILS_SOURCES}
     ${HARDWARE_HEADERS}
@@ -137,40 +162,49 @@ add_library(${PROJECT_NAME}_object OBJECT
     ${UTILS_HEADERS}
     ${COMPAT_HEADERS}
 )
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+set_property(TARGET atom-sysinfo_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME}_object PUBLIC . hardware storage network info utils ../.. ../../..)
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY CXX_STANDARD 20)
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY CXX_STANDARD_REQUIRED ON)
+target_link_libraries(atom-sysinfo_object PRIVATE ${LIBS})
+target_include_directories(atom-sysinfo_object PUBLIC . hardware storage network info utils ../.. ../../..)
+set_property(TARGET atom-sysinfo_object PROPERTY CXX_STANDARD 20)
+set_property(TARGET atom-sysinfo_object PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC . hardware storage network info utils ../.. ../../..)
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 20)
-set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD_REQUIRED ON)
+add_library(atom-sysinfo STATIC $<TARGET_OBJECTS:atom-sysinfo_object>)
+target_link_libraries(atom-sysinfo PRIVATE ${LIBS})
+target_include_directories(atom-sysinfo PUBLIC . hardware storage network info utils ../.. ../../..)
+set_property(TARGET atom-sysinfo PROPERTY CXX_STANDARD 20)
+set_property(TARGET atom-sysinfo PROPERTY CXX_STANDARD_REQUIRED ON)
+
+# Link required libraries for sysinfo functionality
+find_package(fmt REQUIRED)
+find_package(spdlog REQUIRED)
+target_link_libraries(atom-sysinfo PRIVATE fmt::fmt spdlog::spdlog atom-error)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi ws2_32 setupapi)
+    target_link_libraries(atom-sysinfo PRIVATE
+        pdh wlanapi ws2_32 setupapi
+        iphlpapi icmp dwmapi comdlg32 comctl32 ole32 oleaut32
+        powrprof wbemuuid
+    )
 endif()
 
 # Set library properties
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
+set_target_properties(atom-sysinfo PROPERTIES
+    VERSION 1.0.0
+    SOVERSION 1
+    OUTPUT_NAME atom-sysinfo
 )
 
 # Installation
-install(TARGETS ${PROJECT_NAME}
+install(TARGETS atom-sysinfo
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
+    PUBLIC_HEADER DESTINATION include/atom-sysinfo
 )
 
 # Register this module to the global target list
 get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS ${PROJECT_NAME})
+list(APPEND ATOM_MODULE_TARGETS atom-sysinfo)
 set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

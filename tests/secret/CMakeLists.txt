@@ -64,10 +64,10 @@ add_custom_target(run_encryption_tests
     COMMENT "Running encryption tests"
 )
 
-add_custom_target(run_security_tests
+add_custom_target(run_secret_security_tests
     COMMAND ${PROJECT_NAME} --gtest_filter="SecurityTest.*"
     DEPENDS ${PROJECT_NAME}
-    COMMENT "Running security tests"
+    COMMENT "Running secret security tests"
 )
 
 # Code coverage (if available)

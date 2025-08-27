@@ -62,7 +62,7 @@ public:
      * @brief Checks if UUID is nil (all zeros)
      * @return True if UUID is nil
      */
-    [[nodiscard]] constexpr bool isNil() const noexcept {
+    [[nodiscard]] bool isNil() const noexcept {
         return uuid_.is_nil();
     }
 
@@ -71,7 +71,7 @@ public:
      * @param other UUID to compare with
      * @return Comparison result
      */
-    constexpr std::strong_ordering operator<=>(
+    std::strong_ordering operator<=>(
         const UUID& other) const noexcept {
         if (uuid_ < other.uuid_) [[likely]] {
             return std::strong_ordering::less;
@@ -87,7 +87,7 @@ public:
      * @param other UUID to compare with
      * @return True if UUIDs are equal
      */
-    constexpr bool operator==(const UUID& other) const noexcept {
+    bool operator==(const UUID& other) const noexcept {
         return uuid_ == other.uuid_;
     }
 
@@ -137,7 +137,7 @@ public:
      * @brief Gets DNS namespace UUID
      * @return DNS namespace UUID
      */
-    static constexpr UUID namespaceDNS() noexcept {
+    static UUID namespaceDNS() noexcept {
         return UUID(::boost::uuids::ns::dns());
     }
 
@@ -145,7 +145,7 @@ public:
      * @brief Gets URL namespace UUID
      * @return URL namespace UUID
      */
-    static constexpr UUID namespaceURL() noexcept {
+    static UUID namespaceURL() noexcept {
         return UUID(::boost::uuids::ns::url());
     }
 
@@ -153,7 +153,7 @@ public:
      * @brief Gets OID namespace UUID
      * @return OID namespace UUID
      */
-    static constexpr UUID namespaceOID() noexcept {
+    static UUID namespaceOID() noexcept {
         return UUID(::boost::uuids::ns::oid());
     }
 
@@ -183,7 +183,7 @@ public:
      * @brief Gets UUID version
      * @return Version number
      */
-    [[nodiscard]] constexpr int version() const noexcept {
+    [[nodiscard]] int version() const noexcept {
         return uuid_.version();
     }
 
@@ -191,7 +191,7 @@ public:
      * @brief Gets UUID variant
      * @return Variant number
      */
-    [[nodiscard]] constexpr int variant() const noexcept {
+    [[nodiscard]] int variant() const noexcept {
         return uuid_.variant();
     }
 

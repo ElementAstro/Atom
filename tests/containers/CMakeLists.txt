@@ -58,10 +58,10 @@ add_custom_target(run_container_tests
     COMMENT "Running all container tests"
 )
 
-add_custom_target(run_performance_tests
+add_custom_target(run_containers_performance_tests
     COMMAND ${PROJECT_NAME} --gtest_filter="*PerformanceTest.*"
     DEPENDS ${PROJECT_NAME}
-    COMMENT "Running performance tests"
+    COMMENT "Running containers performance tests"
 )
 
 add_custom_target(run_thread_safety_tests

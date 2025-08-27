@@ -225,7 +225,9 @@ public:
                    << " but none was thrown";
         } catch (const ExceptionType& e) {
             if (!expectedMessage.empty()) {
-                EXPECT_THAT(e.what(), ::testing::HasSubstr(expectedMessage));
+                std::string what_str(e.what());
+                EXPECT_TRUE(what_str.find(expectedMessage) != std::string::npos)
+                    << "Expected message '" << expectedMessage << "' not found in '" << what_str << "'";
             }
         } catch (const std::exception& e) {
             FAIL() << "Expected exception of type " << typeid(ExceptionType).name()

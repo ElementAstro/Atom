@@ -66,8 +66,7 @@ Description: System Information Module - CPU Common Header
 
 namespace atom::system {
 
-namespace {
-// Cache variables with a validity duration
+// Cache variables with a validity duration (moved out of anonymous namespace)
 extern std::mutex g_cacheMutex;
 extern std::chrono::steady_clock::time_point g_lastCacheRefresh;
 extern const std::chrono::seconds g_cacheValidDuration;
@@ -75,8 +74,6 @@ extern const std::chrono::seconds g_cacheValidDuration;
 // Cached CPU info
 extern std::atomic<bool> g_cacheInitialized;
 extern CpuInfo g_cpuInfoCache;
-
-}  // anonymous namespace
 
 // Platform-specific function declarations - these will be implemented in
 // platform-specific files

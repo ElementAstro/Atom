@@ -1,4 +1,4 @@
-#include "ws.hpp"
+#include "atom/extra/beast/ws.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -478,7 +478,4 @@ TEST_F(WSClientTest, DestructorBehavior) {
     EXPECT_NO_THROW(local_client.reset());
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function provided by GTest::Main

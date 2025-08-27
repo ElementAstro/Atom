@@ -75,14 +75,14 @@ public:
      * @param config LogConfig structure describing logger settings.
      * @return Result containing the created Logger or an error.
      */
-    Result<std::shared_ptr<Logger>> create_logger(const LogConfig& config);
+    Result<std::shared_ptr<Logger>, LogError> create_logger(const LogConfig& config);
 
     /**
      * @brief Retrieve a logger by name.
      * @param name Name of the logger.
      * @return Result containing the Logger or an error if not found.
      */
-    Result<std::shared_ptr<Logger>> get_logger(const std::string& name);
+    Result<std::shared_ptr<Logger>, LogError> get_logger(const std::string& name);
 
     /**
      * @brief Remove a logger by name.
@@ -145,7 +145,7 @@ public:
      * @param console Whether to log to console (default: true).
      * @return Result containing the created Logger or an error.
      */
-    static Result<std::shared_ptr<Logger>> create_simple_logger(
+    static Result<std::shared_ptr<Logger>, LogError> create_simple_logger(
         const std::string& name, Level level = Level::info,
         bool console = true);
 
@@ -157,7 +157,7 @@ public:
      * @param rotating Whether to use rotating file sink (default: false).
      * @return Result containing the created Logger or an error.
      */
-    static Result<std::shared_ptr<Logger>> create_file_logger(
+    static Result<std::shared_ptr<Logger>, LogError> create_file_logger(
         const std::string& name, const std::string& filename,
         Level level = Level::info, bool rotating = false);
 
@@ -167,7 +167,7 @@ public:
      * @param config LogConfig structure describing logger settings.
      * @return Result containing the created Logger or an error.
      */
-    static Result<std::shared_ptr<Logger>> create_async_logger(
+    static Result<std::shared_ptr<Logger>, LogError> create_async_logger(
         const std::string& name, const LogConfig& config);
 
     /**

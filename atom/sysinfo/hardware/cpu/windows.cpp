@@ -814,6 +814,11 @@ auto getPerCoreScalingGovernors() -> std::vector<std::string> {
     return governors;
 }
 
+// Wrapper function for getCurrentCpuUsage (the only one missing)
+auto getCurrentCpuUsage() -> float {
+    return getCurrentCpuUsage_Windows();
+}
+
 }  // namespace atom::system
 
 #endif /* _WIN32 */

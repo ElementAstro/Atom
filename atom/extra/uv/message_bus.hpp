@@ -4,7 +4,9 @@
 #include <chrono>
 #include <concepts>
 #include <coroutine>
-#include <expected>
+// Temporarily disable std::expected usage until compiler support is stable
+// #include <expected>
+#include <variant>
 #include <functional>
 #include <future>
 #include <memory>
@@ -14,6 +16,51 @@
 #include <uv.h>
 
 namespace msgbus {
+
+// Simple Result type as a replacement for std::expected
+template<typename T, typename E>
+class Result {
+private:
+    std::variant<T, E> data_;
+
+public:
+    Result(const T& value) : data_(value) {}
+    Result(T&& value) : data_(std::move(value)) {}
+    Result(const E& error) : data_(error) {}
+    Result(E&& error) : data_(std::move(error)) {}
+
+    bool has_value() const { return std::holds_alternative<T>(data_); }
+    operator bool() const { return has_value(); }
+
+    const T& value() const { return std::get<T>(data_); }
+    T& value() { return std::get<T>(data_); }
+
+    const E& error() const { return std::get<E>(data_); }
+    E& error() { return std::get<E>(data_); }
+
+    const T& operator*() const { return value(); }
+    T& operator*() { return value(); }
+};
+
+// Specialization for void type
+template<typename E>
+class Result<void, E> {
+private:
+    std::optional<E> error_;
+
+public:
+    Result() : error_(std::nullopt) {}
+    Result(const E& error) : error_(error) {}
+    Result(E&& error) : error_(std::move(error)) {}
+
+    bool has_value() const { return !error_.has_value(); }
+    operator bool() const { return has_value(); }
+
+    void value() const { /* void has no value to return */ }
+
+    const E& error() const { return error_.value(); }
+    E& error() { return error_.value(); }
+};
 
 // **Core Concepts**
 template <typename T>
@@ -43,8 +90,7 @@ enum class MessageBusError {
     ShutdownInProgress
 };
 
-template <typename T>
-using Result = std::expected<T, MessageBusError>;
+// Note: Result template is now defined above as a class template
 
 // **Message Envelope**
 template <MessageType T>
@@ -111,10 +157,10 @@ struct MessageAwaiter {
     template <typename Promise>
     bool await_suspend(std::coroutine_handle<Promise> handle);
 
-    Result<MessageEnvelope<T>> await_resume();
+    Result<MessageEnvelope<T>, MessageBusError> await_resume();
 
 private:
-    std::shared_ptr<std::promise<Result<MessageEnvelope<T>>>> promise_;
+    std::shared_ptr<std::promise<Result<MessageEnvelope<T>, MessageBusError>>> promise_;
 };
 
 }  // namespace msgbus

@@ -45,7 +45,8 @@ TEST(IniFileBaseTest, SetFieldSep) {
 // Test setCommentPrefixes method
 TEST(IniFileBaseTest, SetCommentPrefixes) {
     IniFile iniFile;
-    iniFile.setCommentPrefixes({"//"});
+    std::vector<std::string> prefixes = {"//"};
+    iniFile.setCommentPrefixes(prefixes);
     std::istringstream iss("[section]\nkey=value\n//comment\n");
     iniFile.decode(iss);
     EXPECT_EQ(iniFile["section"]["key"].as<std::string>(), "value");

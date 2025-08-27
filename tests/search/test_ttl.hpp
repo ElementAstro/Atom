@@ -1,7 +1,7 @@
 #ifndef ATOM_SEARCH_TEST_TTL_HPP
 #define ATOM_SEARCH_TEST_TTL_HPP
 
-#include "atom/search/ttl.hpp"
+#include "atom/search/cache/ttl.hpp"
 
 #include <gtest/gtest.h>
 #include <thread>
@@ -57,9 +57,9 @@ TEST_F(TTLCacheTest, Cleanup) {
 
 TEST_F(TTLCacheTest, HitRate) {
     cache->put("key1", 1);
-    cache->get("key1");
-    cache->get("key2");
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 0.5);
+    (void)cache->get("key1");  // Hit
+    (void)cache->get("key2");  // Miss
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.5);
 }
 
 TEST_F(TTLCacheTest, Size) {
@@ -92,7 +92,7 @@ TEST_F(TTLCacheTest, AccessOrderUpdate) {
     cache->put("key3", 3);
 
     // Access key1 to move it to front of LRU list
-    cache->get("key1");
+    (void)cache->get("key1");
 
     // Add new element which should evict the least recently used (key2)
     cache->put("key4", 4);
@@ -140,25 +140,25 @@ TEST_F(TTLCacheTest, HitRateUpdatesCorrectly) {
     // Test that hit rate calculations are accurate
 
     // No accesses yet
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 0.0);
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.0);
 
     // All misses
-    cache->get("nonexistent1");
-    cache->get("nonexistent2");
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 0.0);
+    (void)cache->get("nonexistent1");
+    (void)cache->get("nonexistent2");
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.0);
 
     // Add some hits
     cache->put("key1", 1);
-    cache->get("key1");
-    cache->get("key1");
+    (void)cache->get("key1");
+    (void)cache->get("key1");
 
     // Should be 2 hits out of 4 accesses
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 0.5);
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.5);
 
     // Add one more hit
-    cache->get("key1");
+    (void)cache->get("key1");
     // Should be 3 hits out of 5 accesses
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 0.6);
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.6);
 }
 
 TEST_F(TTLCacheTest, MaxCapacityZero) {
@@ -176,23 +176,23 @@ TEST_F(TTLCacheTest, ClearResetsHitRate) {
     // Test that clear() resets hit rate stats
     cache->put("key1", 1);
     cache->get("key1");
-    cache->get("nonexistent");
+    (void)cache->get("nonexistent");
 
     // Hit rate should be 0.5
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 0.5);
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.5);
 
     // Clear the cache
     cache->clear();
 
     // Hit rate should reset to 0
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 0.0);
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 0.0);
 
     // Add a new item and hit it
     cache->put("newkey", 5);
-    cache->get("newkey");
+    (void)cache->get("newkey");
 
     // Hit rate should now be 1.0
-    EXPECT_DOUBLE_EQ(cache->hitRate(), 1.0);
+    EXPECT_DOUBLE_EQ(cache->hit_rate(), 1.0);
 }
 
 TEST_F(TTLCacheTest, PartialExpiry) {
@@ -278,7 +278,7 @@ TEST_F(TTLCacheTest, RefreshOnAccess) {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     // Access key1 to refresh its LRU position
-    cache->get("key1");
+    (void)cache->get("key1");
 
     // Add a new key, which should evict the least recently used item (key2)
     cache->put("key4", 4);

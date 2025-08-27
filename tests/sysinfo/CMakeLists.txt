@@ -200,16 +200,16 @@ add_custom_target(run_integration_tests_only
     COMMENT "Running integration tests only"
 )
 
-add_custom_target(run_performance_tests
+add_custom_target(run_sysinfo_performance_tests
     COMMAND ${PROJECT_NAME} --gtest_filter="*Performance*:*Monitoring*:*Load*"
     DEPENDS ${PROJECT_NAME}
-    COMMENT "Running performance-related tests"
+    COMMENT "Running sysinfo performance-related tests"
 )
 
-add_custom_target(run_security_tests
+add_custom_target(run_sysinfo_security_tests
     COMMAND ${PROJECT_NAME} --gtest_filter="*Security*:*Secure*:BiosTest.*"
     DEPENDS ${PROJECT_NAME}
-    COMMENT "Running security-related tests"
+    COMMENT "Running sysinfo security-related tests"
 )
 
 add_custom_target(run_quick_tests

@@ -19,15 +19,13 @@ Description: System Information Module - CPU Common Implementation
 
 namespace atom::system {
 
-namespace {
+// Cache variables (moved out of anonymous namespace)
 std::mutex g_cacheMutex;
 std::chrono::steady_clock::time_point g_lastCacheRefresh;
-constexpr std::chrono::seconds g_cacheValidDuration{5};
+const std::chrono::seconds g_cacheValidDuration{5};
 
 std::atomic<bool> g_cacheInitialized{false};
 CpuInfo g_cpuInfoCache;
-
-}  // anonymous namespace
 
 /**
  * @brief Converts a string to bytes

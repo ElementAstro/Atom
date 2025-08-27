@@ -50,6 +50,11 @@ if(BEAST_DEPS_FOUND)
     # Link dependencies
     target_link_libraries(atom-extra-beast PUBLIC Boost::system)
 
+    # Link fmt and spdlog libraries for logging compatibility
+    find_package(fmt REQUIRED)
+    find_package(spdlog REQUIRED)
+    target_link_libraries(atom-extra-beast PUBLIC fmt::fmt spdlog::spdlog)
+
     if(nlohmann_json_FOUND)
         target_link_libraries(atom-extra-beast PUBLIC nlohmann_json::nlohmann_json)
         message(STATUS "atom-extra-beast: Built with Boost and nlohmann_json (CMake)")

@@ -1,7 +1,6 @@
 #include "bios.hpp"
 
 #ifdef _WIN32
-#include <comdef.h>
 #include <sysinfoapi.h>
 #include <wbemidl.h>
 #include <winbase.h>
@@ -9,6 +8,34 @@
 #if defined(_MSC_VER)
 #pragma comment(lib, "wbemuuid.lib")
 #endif
+
+// Helper function to convert BSTR to std::string (MinGW compatible)
+static std::string BSTRToString(BSTR bstr) {
+    if (!bstr) return "";
+
+    int len = WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0) return "";
+
+    std::string result(len - 1, '\0');
+    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr, nullptr);
+    return result;
+}
+
+// RAII wrapper for BSTR (MinGW compatible)
+class BSTRWrapper {
+public:
+    explicit BSTRWrapper(const wchar_t* str) : bstr_(SysAllocString(str)) {}
+    ~BSTRWrapper() { if (bstr_) SysFreeString(bstr_); }
+
+    BSTRWrapper(const BSTRWrapper&) = delete;
+    BSTRWrapper& operator=(const BSTRWrapper&) = delete;
+
+    operator BSTR() const { return bstr_; }
+    BSTR get() const { return bstr_; }
+
+private:
+    BSTR bstr_;
+};
 
 namespace {
 /**
@@ -163,7 +190,8 @@ BiosHealthStatus BiosInfo::checkHealth() const {
             throw std::runtime_error("Failed to create IWbemLocator object");
         }
 
-        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), nullptr, nullptr, 0,
+        BSTRWrapper rootCimv2(L"ROOT\\CIMV2");
+        hres = pLoc->ConnectServer(rootCimv2, nullptr, nullptr, 0,
                                    0, 0, 0, pSvc.getAddressOf());
         if (FAILED(hres)) {
             throw std::runtime_error("Could not connect to WMI namespace");
@@ -179,11 +207,12 @@ BiosHealthStatus BiosInfo::checkHealth() const {
         }
 
         ComPtr<IEnumWbemClassObject> pEnumerator;
+        BSTRWrapper wql2(L"WQL");
+        BSTRWrapper query2(L"SELECT * FROM Win32_NTLogEvent WHERE LogFile='System' AND "
+                          L"EventCode='7' AND SourceName='Microsoft-Windows-BIOS' AND "
+                          L"TimeWritten > '20230101000000.000000-000'");
         hres = pSvc->ExecQuery(
-            bstr_t("WQL"),
-            bstr_t("SELECT * FROM Win32_NTLogEvent WHERE LogFile='System' AND "
-                   "EventCode='7' AND SourceName='Microsoft-Windows-BIOS' AND "
-                   "TimeWritten > '20230101000000.000000-000'"),
+            wql2, query2,
             WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
             pEnumerator.getAddressOf());
 
@@ -202,7 +231,7 @@ BiosHealthStatus BiosInfo::checkHealth() const {
                 if (SUCCEEDED(pclsObj->Get(L"Message", 0, &vtProp, 0, 0))) {
                     status.isHealthy = false;
                     status.errors.push_back(
-                        _com_util::ConvertBSTRToString(vtProp.bstrVal));
+                        BSTRToString(vtProp.bstrVal));
                 }
 
                 VariantClear(&vtProp);
@@ -519,7 +548,8 @@ BiosInfoData BiosInfo::fetchBiosInfo() {
             throw std::runtime_error("Failed to create IWbemLocator object");
         }
 
-        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), nullptr, nullptr, 0,
+        BSTRWrapper rootCimv2_2(L"ROOT\\CIMV2");
+        hres = pLoc->ConnectServer(rootCimv2_2, nullptr, nullptr, 0,
                                    0, 0, 0, pSvc.getAddressOf());
         if (FAILED(hres)) {
             throw std::runtime_error("Could not connect to WMI namespace");
@@ -537,8 +567,10 @@ BiosInfoData BiosInfo::fetchBiosInfo() {
         const wchar_t* query = L"SELECT * FROM Win32_BIOS";
 
         ComPtr<IEnumWbemClassObject> pEnumerator;
+        BSTRWrapper wql(L"WQL");
+        BSTRWrapper queryBstr(query);
         hres = pSvc->ExecQuery(
-            _bstr_t(L"WQL"), _bstr_t(query),
+            wql, queryBstr,
             WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
             pEnumerator.getAddressOf());
 
@@ -561,7 +593,7 @@ BiosInfoData BiosInfo::fetchBiosInfo() {
                         pclsObj->Get(prop, 0, &vtProp, nullptr, nullptr))) {
                     std::string result =
                         (vtProp.vt == VT_BSTR)
-                            ? _com_util::ConvertBSTRToString(vtProp.bstrVal)
+                            ? BSTRToString(vtProp.bstrVal)
                             : "";
                     VariantClear(&vtProp);
                     return result;
@@ -651,14 +683,17 @@ bool BiosInfo::isUEFIBootSupported() {
         if (FAILED(hres) || !pLoc.get())
             return false;
 
-        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\WMI"), nullptr, nullptr, 0,
+        BSTRWrapper rootWmi(L"ROOT\\WMI");
+        hres = pLoc->ConnectServer(rootWmi, nullptr, nullptr, 0,
                                    0, 0, 0, pSvc.getAddressOf());
         if (FAILED(hres) || !pSvc.get())
             return false;
 
         ComPtr<IEnumWbemClassObject> pEnumerator;
+        BSTRWrapper wql3(L"WQL");
+        BSTRWrapper query3(L"SELECT * FROM MSFirmwareUefiInfo");
         hres = pSvc->ExecQuery(
-            bstr_t("WQL"), bstr_t("SELECT * FROM MSFirmwareUefiInfo"),
+            wql3, query3,
             WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
             pEnumerator.getAddressOf());
 
