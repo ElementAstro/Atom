@@ -22,15 +22,14 @@
  * @date 2024
  */
 
-#include "atom/async/async.hpp"
-#include "atom/async/async_executor.hpp"
-#include "atom/async/future.hpp"
-#include "atom/async/message_bus.hpp"
-#include "atom/async/message_queue.hpp"
-#include "atom/async/pool.hpp"
-#include "atom/async/promise.hpp"
-#include "atom/async/timer.hpp"
-#include "atom/async/trigger.hpp"
+#include "atom/async/core/promise.hpp"
+#include "atom/async/core/future.hpp"
+#include "atom/async/execution/async_executor.hpp"
+#include "atom/async/messaging/message_bus.hpp"
+#include "atom/async/messaging/message_queue.hpp"
+#include "atom/async/execution/pool.hpp"
+#include "atom/async/utils/timer.hpp"
+#include "atom/async/sync/trigger.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -177,8 +176,9 @@ void promise_executor_integration() {
 
         // Create AsyncExecutor with custom configuration
         AsyncExecutor::Configuration config;
-        config.threadCount = 4;
-        config.enableWorkStealing = true;
+        config.minThreads = 4;
+        config.maxThreads = 4;
+        config.useWorkStealing = true;
         config.queueSizePerThread = 100;
 
         auto executor = std::make_shared<AsyncExecutor>(config);
@@ -193,11 +193,11 @@ void promise_executor_integration() {
 
             // Execute promise resolution through AsyncExecutor
             executor->execute(
-                [promise = std::move(promise), i]() mutable {
+                [promisePtr = std::make_shared<Promise<int>>(std::move(promise)), i]() {
                     print_safe("🔧 Executor thread processing promise ", i);
                     std::this_thread::sleep_for(
                         std::chrono::milliseconds(100 + i * 50));
-                    promise.setValue(i * 10);
+                    promisePtr->setValue(i * 10);
                     print_safe("🔧 Promise ", i, " resolved with value ",
                                i * 10);
                 },

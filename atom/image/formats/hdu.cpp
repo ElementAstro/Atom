@@ -34,7 +34,7 @@ bool ImageHDU::validateCoordinates(int x, int y, int channel) const noexcept {
 
 void ImageHDU::readHDU(
     std::ifstream& file,
-    std::function<void(float, const std::string&)> progressCallback) {
+    std::function<void(float, const std::string&)> /*progressCallback*/) {
     if (!file || !file.good()) {
         throw FileOperationException("Invalid file stream for reading HDU");
     }

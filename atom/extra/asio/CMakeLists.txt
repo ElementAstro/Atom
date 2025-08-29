@@ -4,6 +4,11 @@
 # Find required dependencies
 find_package(Threads REQUIRED)
 
+# Set CMake policy for FindBoost module
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+
 # Try to find ASIO (standalone or Boost.Asio)
 find_package(asio QUIET)
 find_package(Boost QUIET COMPONENTS system)

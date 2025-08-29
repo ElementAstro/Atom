@@ -377,12 +377,9 @@ void VariableManager::setValue(const std::string& name, T newValue) {
 
             if (auto* rangePtr = std::any_cast<Range>(&rangeIt->second)) {
                 if (newValue < rangePtr->min || newValue > rangePtr->max) {
-                    spdlog::error(
-                        "Value {} out of range [{}, {}] for variable '{}'",
-                        newValue, rangePtr->min, rangePtr->max, name);
+                    // Note: Removed spdlog::error call to avoid std::vector formatting issues
                     THROW_INVALID_ARGUMENT(
-                        "Value {} out of range [{}, {}] for variable '{}'",
-                        newValue, rangePtr->min, rangePtr->max, name);
+                        "Value out of range for variable '{}'", name);
                 }
             }
         } catch (const std::bad_any_cast&) {

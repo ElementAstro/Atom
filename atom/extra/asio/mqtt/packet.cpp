@@ -267,7 +267,7 @@ Result<ErrorCode> PacketCodec::parse_connack(std::span<const uint8_t> data,
 
     // Connect acknowledge flags
     uint8_t flags = data[pos++];
-    bool session_present = (flags & 0x01) != 0;
+    [[maybe_unused]] bool session_present = (flags & 0x01) != 0;
 
     // Return code
     uint8_t return_code = data[pos++];

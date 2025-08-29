@@ -883,8 +883,11 @@ auto PowerPlanManager::getCurrentPowerPlan() -> std::optional<PowerPlan> {
     }
 
     using PFN_PowerGetActiveScheme = DWORD(WINAPI*)(HKEY, GUID**);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
     auto pGetActiveScheme = reinterpret_cast<PFN_PowerGetActiveScheme>(
         GetProcAddress(hPowrProf, "PowerGetActiveScheme"));
+#pragma GCC diagnostic pop
 
     if (!pGetActiveScheme) {
         spdlog::error("Failed to get PowerGetActiveScheme address: {}",
@@ -920,6 +923,9 @@ auto PowerPlanManager::getCurrentPowerPlan() -> std::optional<PowerPlan> {
         spdlog::error("Failed to get active power scheme: {}", GetLastError());
         return std::nullopt;
     }
+
+    // Fallback return for Windows
+    return std::nullopt;
 
 #elif defined(__linux__)
     std::string cmd = "powerprofilesctl get";

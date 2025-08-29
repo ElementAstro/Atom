@@ -1,9 +1,9 @@
 /**
  * @file async_worker_advanced.cpp
- * @brief Advanced AsyncWorker patterns and WorkerContainer usage
+ * @brief Advanced AsyncWorker patterns and AsyncWorkerManager usage
  *
  * @details This example demonstrates:
- * - WorkerContainer for managing multiple AsyncWorkers
+ * - AsyncWorkerManager for managing multiple AsyncWorkers
  * - Batch task execution and coordination
  * - Advanced error handling and recovery patterns
  * - Complex task dependencies and chaining
@@ -112,12 +112,12 @@ private:
 };
 
 // ============================================================================
-// SECTION 1: WORKERCONTAINER BASICS
+// SECTION 1: ASYNCWORKERMANAGER BASICS
 // ============================================================================
 /**
- * @section worker_container WorkerContainer for Multiple Workers
+ * @section worker_manager AsyncWorkerManager for Multiple Workers
  *
- * This section demonstrates WorkerContainer usage for managing multiple
+ * This section demonstrates AsyncWorkerManager usage for managing multiple
  * AsyncWorker instances:
  * - Creating and managing multiple workers
  * - Batch task execution
@@ -125,22 +125,22 @@ private:
  * - Resource cleanup and error handling
  *
  * Key concepts:
- * - WorkerContainer<T>: Manages multiple AsyncWorker<T> instances
+ * - AsyncWorkerManager<T>: Manages multiple AsyncWorker<T> instances
  * - Batch operations: Execute multiple tasks concurrently
  * - Resource management: Automatic cleanup of worker resources
  *
  * @see async_executor.cpp for alternative task execution approaches
  */
 void worker_container_examples() {
-    print_section("SECTION 1: WorkerContainer for Multiple Workers");
+    print_section("SECTION 1: AsyncWorkerManager for Multiple Workers");
 
-    // Example 1.1: Basic WorkerContainer usage
-    print_safe("Example 1.1: Basic WorkerContainer usage");
+    // Example 1.1: Basic AsyncWorkerManager usage
+    print_safe("Example 1.1: Basic AsyncWorkerManager usage");
     {
         PerformanceTimer timer;
-        timer.start("WorkerContainer basics");
+        timer.start("AsyncWorkerManager basics");
 
-        atom::async::WorkerContainer<int> container;
+        atom::async::AsyncWorkerManager<int> container;
         RandomGenerator rng;
 
         // Create multiple workers with different tasks

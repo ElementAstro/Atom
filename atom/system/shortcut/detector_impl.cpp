@@ -124,7 +124,7 @@ bool ShortcutDetectorImpl::attemptHotkeyRegistration(const Shortcut& shortcut) {
 }
 
 bool ShortcutDetectorImpl::hasInterceptingKeyboardHook(
-    const Shortcut& shortcut) {
+    const Shortcut& /*shortcut*/) {
     return hasKeyboardHookInstalled();
 }
 
@@ -137,7 +137,7 @@ std::vector<std::string> ShortcutDetectorImpl::getProcessesWithKeyboardHooks() {
 }
 
 std::string ShortcutDetectorImpl::findCapturingApplication(
-    const Shortcut& shortcut) {
+    const Shortcut& /*shortcut*/) {
     return "";
 }
 

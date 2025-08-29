@@ -112,6 +112,7 @@ Logger& LogManager::default_logger() {
     static std::shared_ptr<Logger> logger = []() {
         LogConfig config{.name = "default",
                          .level = Level::info,
+                         .file_config = {},
                          .console_output = true,
                          .colored_output = true};
         auto result = instance().create_logger(config);
@@ -126,7 +127,7 @@ Logger& LogManager::default_logger() {
 
 Result<std::shared_ptr<Logger>, LogError> LogManager::create_simple_logger(
     const std::string& name, Level level, bool console) {
-    LogConfig config{.name = name, .level = level, .console_output = console};
+    LogConfig config{.name = name, .level = level, .file_config = {}, .console_output = console};
     return instance().create_logger(config);
 }
 

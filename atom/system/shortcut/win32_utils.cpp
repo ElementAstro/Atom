@@ -32,7 +32,8 @@ std::vector<std::string> getProcessesWithKeyboardHooks() {
         return result;
     }
 
-    PROCESSENTRY32 processEntry = {sizeof(PROCESSENTRY32)};
+    PROCESSENTRY32 processEntry = {};
+    processEntry.dwSize = sizeof(PROCESSENTRY32);
 
     if (Process32First(snapshot, &processEntry)) {
         do {

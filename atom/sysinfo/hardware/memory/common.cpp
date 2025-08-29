@@ -169,7 +169,7 @@ auto detectMemoryLeaks() -> std::vector<std::string> {
 auto getMemoryFragmentation() -> double {
     spdlog::info("Calculating memory fragmentation");
 
-    const auto total = getTotalMemorySize();
+    [[maybe_unused]] const auto total = getTotalMemorySize();
     const auto available = getAvailableMemorySize();
 
     if (available == 0) {

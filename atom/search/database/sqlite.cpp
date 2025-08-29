@@ -819,7 +819,7 @@ int SqliteDB::getTotalChanges() const {
     return sqlite3_total_changes(pImpl->db);
 }
 
-bool SqliteDB::tableExists(std::string_view tableName) {
+bool SqliteDB::tableExists(std::string_view /*tableName*/) {
     try {
         String query =
             "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?";

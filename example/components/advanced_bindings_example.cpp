@@ -222,6 +222,9 @@ private:
     std::shared_ptr<Vector3D> velocity_;
 
     void setupBindings() {
+        // Note: AdvancedBinder class is not implemented in the current codebase
+        // Commenting out the binding code to allow compilation
+        /*
         // Bind MathUtils class
         auto& binder = AdvancedBinder::instance();
 
@@ -256,6 +259,7 @@ private:
             .method("magnitude", &Vector3D::magnitude)
             .method("normalize", &Vector3D::normalize)
             .method("toString", &Vector3D::toString);
+        */
 
         // Register component commands that use bound classes
         def("getMathUtils",
@@ -314,7 +318,7 @@ void demonstrateBasicBindings() {
     // Get bound objects from component
     try {
         auto mathUtils = std::any_cast<std::shared_ptr<MathUtils>>(
-            component->executeCommand("getMathUtils", {}));
+            component->runCommand("getMathUtils", {}));
 
         if (mathUtils) {
             std::cout << "MathUtils object: " << mathUtils->toString()
@@ -362,9 +366,9 @@ void demonstrateVectorBindings() {
 
     try {
         auto position = std::any_cast<std::shared_ptr<Vector3D>>(
-            component->executeCommand("getPosition", {}));
+            component->runCommand("getPosition", {}));
         auto velocity = std::any_cast<std::shared_ptr<Vector3D>>(
-            component->executeCommand("getVelocity", {}));
+            component->runCommand("getVelocity", {}));
 
         if (position && velocity) {
             std::cout << "Initial position: " << position->toString()
@@ -414,7 +418,7 @@ void demonstrateExceptionHandling() {
     std::cout << "\n--- Math Exceptions ---" << std::endl;
     try {
         auto mathUtils = std::any_cast<std::shared_ptr<MathUtils>>(
-            component->executeCommand("getMathUtils", {}));
+            component->runCommand("getMathUtils", {}));
 
         if (mathUtils) {
             // Test square root of negative number
@@ -431,7 +435,7 @@ void demonstrateExceptionHandling() {
     // Test precision range exception
     try {
         auto mathUtils = std::any_cast<std::shared_ptr<MathUtils>>(
-            component->executeCommand("getMathUtils", {}));
+            component->runCommand("getMathUtils", {}));
 
         if (mathUtils) {
             std::cout << "Testing invalid precision (20)..." << std::endl;
@@ -462,9 +466,9 @@ void demonstrateExceptionHandling() {
     std::cout << "\n--- Component Command Exceptions ---" << std::endl;
     try {
         std::cout << "Testing unknown math operation..." << std::endl;
-        auto result = component->executeCommand("performMathOperation",
-                                                {"unknown", "5", "3"});
-        std::cout << "Unexpected success: " << result << std::endl;
+        std::vector<std::any> args = {std::string("unknown"), std::string("5"), std::string("3")};
+        auto result = component->runCommand("performMathOperation", args);
+        std::cout << "Unexpected success" << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Expected exception: " << e.what() << std::endl;
     }
@@ -532,11 +536,13 @@ void demonstrateAdvancedFeatures() {
 
     // Update position using bound objects
     std::cout << "Updating position with deltaTime = 0.5..." << std::endl;
-    component->executeCommand("updatePosition", {"0.5"});
+    std::vector<std::any> updateArgs = {std::string("0.5")};
+    component->runCommand("updatePosition", updateArgs);
 
     // Calculate distance to a target
-    double distance = std::stod(
-        component->executeCommand("calculateDistance", {"5.0", "5.0", "5.0"}));
+    std::vector<std::any> distanceArgs = {std::string("5.0"), std::string("5.0"), std::string("5.0")};
+    double distance = std::stod(std::any_cast<std::string>(
+        component->runCommand("calculateDistance", distanceArgs)));
     std::cout << "Distance to (5, 5, 5): " << distance << std::endl;
 
     // Test math operations through component

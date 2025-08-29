@@ -1760,7 +1760,7 @@ auto suspendProcess(int pid) -> bool {
     using NtSuspendProcess = LONG(NTAPI *)(HANDLE ProcessHandle);
     FARPROC procAddr =
         GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtSuspendProcess");
-    auto pfnNtSuspendProcess = (NtSuspendProcess)(procAddr);
+    auto pfnNtSuspendProcess = reinterpret_cast<NtSuspendProcess>(procAddr);
 
     if (!pfnNtSuspendProcess) {
         spdlog::error("Failed to get NtSuspendProcess function");
@@ -1810,7 +1810,7 @@ auto resumeProcess(int pid) -> bool {
     using NtResumeProcess = LONG(NTAPI *)(HANDLE ProcessHandle);
     FARPROC procAddr =
         GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtResumeProcess");
-    auto pfnNtResumeProcess = (NtResumeProcess)(procAddr);
+    auto pfnNtResumeProcess = reinterpret_cast<NtResumeProcess>(procAddr);
 
     if (!pfnNtResumeProcess) {
         spdlog::error("Failed to get NtResumeProcess function");

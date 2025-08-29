@@ -520,7 +520,8 @@ std::optional<std::string> getDeviceSerialNumber(
     query.PropertyId = StorageDeviceProperty;
     query.QueryType = PropertyStandardQuery;
 
-    STORAGE_DESCRIPTOR_HEADER header = {0};
+    STORAGE_DESCRIPTOR_HEADER header = {};
+    header.Size = 0;
     DWORD bytesReturned = 0;
 
     if (!DeviceIoControl(hDevice, IOCTL_STORAGE_QUERY_PROPERTY, &query,
@@ -699,7 +700,7 @@ std::optional<std::string> getDeviceSerialNumber(
 #endif
 }
 
-std::variant<int, std::string> getDiskHealth(const std::string& devicePath) {
+std::variant<int, std::string> getDiskHealth(const std::string& /*devicePath*/) {
 #ifdef _WIN32
     spdlog::info("Disk health check not fully implemented for Windows");
     return "Not implemented for Windows yet";

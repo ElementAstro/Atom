@@ -646,7 +646,7 @@ std::string YamlDocument::to_yaml(const YamlSerializeOptions& options) const {
 
 auto YamlParser::parse(const std::string& str, const YamlParseOptions& options)
     -> YamlValue {
-    ParseContext ctx{str, 0, {1, 1}, options};
+    ParseContext ctx{str, 0, {1, 1}, options, {}};
     skip_whitespace(ctx);
 
     // Check for document start marker
@@ -681,7 +681,7 @@ auto YamlParser::parse_multi_documents(const std::string& str,
     -> std::vector<YamlDocument> {
     std::vector<YamlDocument> documents;
 
-    ParseContext ctx{str, 0, {1, 1}, options};
+    ParseContext ctx{str, 0, {1, 1}, options, {}};
     while (ctx.index < ctx.str.size()) {
         skip_whitespace(ctx);
 
@@ -1317,7 +1317,7 @@ auto YamlParser::parse_flow_array(ParseContext& ctx) -> YamlArray {
     return arr;
 }
 
-auto YamlParser::parse_block_scalar(ParseContext& ctx, char style)
+auto YamlParser::parse_block_scalar(ParseContext& ctx, char /*style*/)
     -> std::string {
     if (ctx.str[ctx.index] != '|' && ctx.str[ctx.index] != '>') {
         throw YamlException("Expected '|' or '>'", ctx.position);

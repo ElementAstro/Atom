@@ -165,8 +165,8 @@ void FITSFile::readFITS(const std::string& filename, bool useMmap,
     }
 }
 
-void FITSFile::readFITSWithMmap(const std::string& filename,
-                                bool validateData) {
+void FITSFile::readFITSWithMmap(const std::string& /*filename*/,
+                                bool /*validateData*/) {
     // Memory-mapped file implementation for large files
     // This is a placeholder - the actual implementation would depend on
     // platform-specific code or a library like Boost.Interprocess for memory

@@ -144,7 +144,7 @@ TEST_F(CompatTest, ValueAccess) {
 
     // Test value() method
     EXPECT_EQ(success_result.value(), 42);
-    EXPECT_THROW(error_result.value(), std::exception);  // Should throw on error
+    EXPECT_THROW([[maybe_unused]] auto _ = error_result.value(), std::exception);  // Should throw on error
 
     // Test dereference operator
     EXPECT_EQ(*success_result, 42);

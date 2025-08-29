@@ -22,15 +22,15 @@
  * @date 2024
  */
 
-#include "atom/async/async.hpp"
-#include "atom/async/async_executor.hpp"
-#include "atom/async/future.hpp"
-#include "atom/async/limiter.hpp"
-#include "atom/async/message_bus.hpp"
-#include "atom/async/message_queue.hpp"
-#include "atom/async/pool.hpp"
-#include "atom/async/promise.hpp"
-#include "atom/async/safetype.hpp"
+#include "atom/async/core/future.hpp"
+#include "atom/async/core/promise.hpp"
+#include "atom/async/execution/async_executor.hpp"
+#include "atom/async/execution/pool.hpp"
+#include "atom/async/messaging/message_bus.hpp"
+#include "atom/async/messaging/message_queue.hpp"
+#include "atom/async/sync/limiter.hpp"
+#include "atom/async/sync/safetype.hpp"
+#include "atom/async/utils/timer.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -140,7 +140,7 @@ struct HttpResponse {
 
 // Database Query representation
 struct DatabaseQuery {
-    enum class Type { SELECT, INSERT, UPDATE, DELETE };
+    enum class Type { SELECT_QUERY, INSERT_QUERY, UPDATE_QUERY, DELETE_QUERY };
 
     Type type;
     std::string table;
@@ -218,7 +218,7 @@ public:
 
             DatabaseResult result(true);
 
-            if (query.type == DatabaseQuery::Type::SELECT) {
+            if (query.type == DatabaseQuery::Type::SELECT_QUERY) {
                 // Simulate returning some data
                 result.rows.push_back({{"id", "1"},
                                        {"name", "John"},
@@ -263,13 +263,13 @@ private:
 
     std::string getQueryTypeString(DatabaseQuery::Type type) {
         switch (type) {
-            case DatabaseQuery::Type::SELECT:
+            case DatabaseQuery::Type::SELECT_QUERY:
                 return "SELECT";
-            case DatabaseQuery::Type::INSERT:
+            case DatabaseQuery::Type::INSERT_QUERY:
                 return "INSERT";
-            case DatabaseQuery::Type::UPDATE:
+            case DatabaseQuery::Type::UPDATE_QUERY:
                 return "UPDATE";
-            case DatabaseQuery::Type::DELETE:
+            case DatabaseQuery::Type::DELETE_QUERY:
                 return "DELETE";
             default:
                 return "UNKNOWN";
@@ -534,7 +534,7 @@ private:
         print_safe("👤 Processing user registration");
 
         // Simulate user validation and database insertion
-        DatabaseQuery query(DatabaseQuery::Type::INSERT, "users",
+        DatabaseQuery query(DatabaseQuery::Type::INSERT_QUERY, "users",
                             "INSERT INTO users (username, email, "
                             "password_hash) VALUES (?, ?, ?)",
                             1);
@@ -557,7 +557,7 @@ private:
         print_safe("🔐 Processing user login");
 
         // Simulate user authentication
-        DatabaseQuery query(DatabaseQuery::Type::SELECT, "users",
+        DatabaseQuery query(DatabaseQuery::Type::SELECT_QUERY, "users",
                             "SELECT id, username FROM users WHERE username = ? "
                             "AND password_hash = ?",
                             1);
@@ -590,7 +590,7 @@ private:
         }
 
         // Query users from database
-        DatabaseQuery query(DatabaseQuery::Type::SELECT, "users",
+        DatabaseQuery query(DatabaseQuery::Type::SELECT_QUERY, "users",
                             "SELECT id, username, email FROM users", 1);
 
         auto dbFuture = db_pool_.executeQuery(query);
@@ -616,7 +616,7 @@ private:
         }
 
         // Update user profile
-        DatabaseQuery query(DatabaseQuery::Type::UPDATE, "users",
+        DatabaseQuery query(DatabaseQuery::Type::UPDATE_QUERY, "users",
                             "UPDATE users SET name = ?, bio = ? WHERE id = ?",
                             1);
 

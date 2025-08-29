@@ -18,7 +18,7 @@ namespace atom::image {
 ImageProcessor::ImageProcessor(const ProcessingOptions& options)
     : m_options(options) {}
 
-blob ImageProcessor::convertFormat(const blob& input, ImageFormat targetFormat) const {
+blob ImageProcessor::convertFormat(const blob& input, [[maybe_unused]] ImageFormat targetFormat) const {
     if (input.size() == 0) {
         THROW_RUNTIME_ERROR("Cannot convert empty image");
     }

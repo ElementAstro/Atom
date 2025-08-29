@@ -986,7 +986,9 @@ size_t TypedFITSData<T>::tryRecover(bool fixNaN, bool fixInfinity,
         if (fixNaN || fixInfinity) {
             reportProgress(0.2f, "Scanning for invalid values");
 
+#ifdef _OPENMP
 #pragma omp parallel for reduction(+ : fixedCount)
+#endif
             for (size_t i = 0; i < data.size(); ++i) {
                 bool needsFix = (fixNaN && std::isnan(data[i])) ||
                                 (fixInfinity && std::isinf(data[i]));

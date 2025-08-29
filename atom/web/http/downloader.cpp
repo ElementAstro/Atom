@@ -313,7 +313,7 @@ void DownloadManager::Impl::stop() {
 }
 
 void DownloadManager::Impl::pauseTask(size_t index) {
-    if (auto* task = getTaskByIndex(index)) {
+    if ([[maybe_unused]] auto* task = getTaskByIndex(index)) {
         updateTaskStatus(index, TaskStatus::Paused);
         spdlog::debug("Paused task at index: {}", index);
     }
@@ -334,7 +334,7 @@ void DownloadManager::Impl::resumeTask(size_t index) {
 }
 
 void DownloadManager::Impl::cancelTask(size_t index) {
-    if (auto* task = getTaskByIndex(index)) {
+    if ([[maybe_unused]] auto* task = getTaskByIndex(index)) {
         updateTaskStatus(index, TaskStatus::Cancelled);
         spdlog::debug("Cancelled task at index: {}", index);
     }

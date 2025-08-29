@@ -305,7 +305,9 @@ public:
         for (size_t i = 0; i < size(); ++i) {
             T current = storage_[i];
             size_t count = 1;
+#ifdef __NVCC__
 #pragma unroll
+#endif
             while (i + 1 < size() && storage_[i + 1] == current) {
                 ++count;
                 ++i;
@@ -323,7 +325,9 @@ public:
             size_t count;
             std::memcpy(&value, &storage_[i], sizeof(T));
             std::memcpy(&count, &storage_[i + sizeof(T)], sizeof(size_t));
+#ifdef __NVCC__
 #pragma unroll
+#endif
             for (size_t j = 0; j < count; ++j) {
                 decompressed.append(&value, sizeof(T));
             }

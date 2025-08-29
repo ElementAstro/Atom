@@ -23,10 +23,10 @@ class ScopedTimer {
 private:
     Logger* logger_;    ///< Pointer to the logger instance.
     std::string name_;  ///< Name or label for the timed scope.
-    std::chrono::high_resolution_clock::time_point
-        start_;     ///< Start time point.
     Level level_;   ///< Log level for reporting the timing result.
     bool enabled_;  ///< Whether the timer is currently enabled.
+    std::chrono::high_resolution_clock::time_point
+        start_;     ///< Start time point.
 
 public:
     /**

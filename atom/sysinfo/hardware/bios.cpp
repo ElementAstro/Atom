@@ -220,7 +220,7 @@ BiosHealthStatus BiosInfo::checkHealth() const {
             ComPtr<IWbemClassObject> pclsObj;
             ULONG uReturn = 0;
 
-            while (pEnumerator->Next(WBEM_INFINITE, 1, pclsObj.getAddressOf(),
+            while (pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, pclsObj.getAddressOf(),
                                      &uReturn) == S_OK) {
                 if (uReturn == 0)
                     break;
@@ -248,7 +248,8 @@ BiosHealthStatus BiosInfo::checkHealth() const {
         auto biosAge = std::chrono::duration_cast<std::chrono::days>(
                            currentTime - biosTime)
                            .count();
-        status.biosAgeInDays = static_cast<int>(biosAge);
+        // Clamp to reasonable range to avoid overflow
+        status.biosAgeInDays = static_cast<int>(std::min(biosAge, static_cast<decltype(biosAge)>(INT_MAX)));
 
         if (biosAge > 730) {
             status.warnings.push_back(
@@ -320,7 +321,8 @@ BiosHealthStatus BiosInfo::checkHealth() const {
                                currentTime - biosTime)
                                .count() /
                            24;
-            status.biosAgeInDays = static_cast<int>(biosAge);
+            // Clamp to reasonable range to avoid overflow
+            status.biosAgeInDays = static_cast<int>(std::min(biosAge, static_cast<decltype(biosAge)>(INT_MAX)));
 
             if (biosAge > 730) {
                 status.warnings.push_back(

@@ -352,7 +352,7 @@ auto SystemInfoPrinter::generatePerformanceReport() -> std::string {
         auto disks = getDiskInfo();
         ss << createTableHeader("Disk Performance");
         for (size_t i = 0; i < disks.size(); ++i) {
-            const auto& disk = disks[i];
+            [[maybe_unused]] const auto& disk = disks[i];
             // DiskInfo结构体无readSpeed/writeSpeed成员，以下两行已注释或移除
             // ss << createTableRow("Disk " + std::to_string(i + 1) + " Read
             // Speed",
