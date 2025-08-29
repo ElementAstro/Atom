@@ -175,7 +175,7 @@ private:
         size_t bytes_received{0};
 
         ClientSession() : last_seen(std::chrono::steady_clock::now()) {}
-        
+
         ClientSession(const std::string& ep)
             : endpoint(ep), last_seen(std::chrono::steady_clock::now()) {}
     };
