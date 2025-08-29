@@ -82,7 +82,7 @@ public:
         return Component::initialize();
     }
 
-    bool activate() override {
+    bool activate() {
         std::cout << "  [ACTIVATE] Activating component '" << getName() << "'"
                   << std::endl;
 
@@ -93,29 +93,30 @@ public:
         }
 
         setValue("status", std::string("active"));
+        setState(ComponentState::Active);
         std::cout << "  [ACTIVATE] Component '" << getName()
                   << "' activated successfully" << std::endl;
-        return Component::activate();
+        return true;
     }
 
-    bool deactivate() override {
+    bool deactivate() {
         std::cout << "  [DEACTIVATE] Deactivating component '" << getName()
                   << "'" << std::endl;
 
         setValue("status", std::string("inactive"));
+        setState(ComponentState::Disabled);
         std::cout << "  [DEACTIVATE] Component '" << getName()
                   << "' deactivated successfully" << std::endl;
-        return Component::deactivate();
+        return true;
     }
 
-    void cleanup() override {
+    void cleanup() {
         std::cout << "  [CLEANUP] Cleaning up component '" << getName() << "'"
                   << std::endl;
 
         setValue("status", std::string("cleaned"));
         setValue("counter", 0);
 
-        Component::cleanup();
         std::cout << "  [CLEANUP] Component '" << getName() << "' cleaned up"
                   << std::endl;
     }
@@ -132,7 +133,7 @@ void demonstrateBasicLifecycle() {
     std::cout << "\n2. Initial state:" << std::endl;
     std::cout << "   State: " << static_cast<int>(component->getState())
               << std::endl;
-    std::cout << "   Status: " << component->executeCommand("getStatus", {})
+    std::cout << "   Status: " << std::any_cast<std::string>(component->runCommand("getStatus", {}))
               << std::endl;
 
     // Initialize component
@@ -155,9 +156,9 @@ void demonstrateBasicLifecycle() {
 
     // Use component
     std::cout << "\n5. Using component..." << std::endl;
-    component->executeCommand("increment", {});
-    component->executeCommand("increment", {});
-    component->executeCommand("increment", {});
+    component->runCommand("increment", {});
+    component->runCommand("increment", {});
+    component->runCommand("increment", {});
 
     auto counter = component->getVariable<int>("counter");
     std::cout << "   Final counter value: " << (counter ? counter->get() : -1)
@@ -174,7 +175,7 @@ void demonstrateBasicLifecycle() {
     component->cleanup();
 
     std::cout << "\n   Final status: "
-              << component->executeCommand("getStatus", {}) << std::endl;
+              << std::any_cast<std::string>(component->runCommand("getStatus", {})) << std::endl;
 }
 
 void demonstrateStateTransitions() {
@@ -245,14 +246,14 @@ void demonstrateErrorHandling() {
 
     std::cout << "\n3. Testing command execution..." << std::endl;
     try {
-        component->executeCommand("nonexistent", {});
+        component->runCommand("nonexistent", {});
     } catch (const std::exception& e) {
         std::cout << "   Command execution correctly failed: " << e.what()
                   << std::endl;
     }
 
     // Test valid command
-    component->executeCommand("increment", {});
+    component->runCommand("increment", {});
     std::cout << "   Valid command executed successfully" << std::endl;
 }
 

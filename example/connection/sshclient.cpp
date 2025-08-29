@@ -23,6 +23,7 @@ to be running on the target host.
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #if __has_include(<libssh/libssh.h>)
@@ -31,7 +32,7 @@ to be running on the target host.
 // Utility class for formatted logging
 class Logger {
 public:
-    enum Level { INFO, SUCCESS, WARNING, ERROR };
+    enum Level { INFO, SUCCESS, WARNING, LOG_ERROR };
 
     static void log(Level level, const std::string& component,
                     const std::string& message) {
@@ -51,7 +52,7 @@ public:
             case WARNING:
                 std::cout << "[WARN] ";
                 break;
-            case ERROR:
+            case LOG_ERROR:
                 std::cout << "[ERROR] ";
                 break;
         }
@@ -85,12 +86,12 @@ void basicConnectionExample(const std::string& host,
             Logger::log(Logger::INFO, "Example1",
                         "Disconnected from SSH server");
         } else {
-            Logger::log(Logger::ERROR, "Example1",
+            Logger::log(Logger::LOG_ERROR, "Example1",
                         "Failed to connect to SSH server");
         }
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::ERROR, "Example1",
+        Logger::log(Logger::LOG_ERROR, "Example1",
                     "Exception: " + std::string(e.what()));
     }
 
@@ -142,7 +143,7 @@ void commandExecutionExample(const std::string& host,
         }
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::ERROR, "Example2",
+        Logger::log(Logger::LOG_ERROR, "Example2",
                     "Exception: " + std::string(e.what()));
     }
 
@@ -220,7 +221,7 @@ void fileOperationsExample(const std::string& host, const std::string& username,
         }
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::ERROR, "Example3",
+        Logger::log(Logger::LOG_ERROR, "Example3",
                     "Exception: " + std::string(e.what()));
     }
 
@@ -270,7 +271,7 @@ void directoryOperationsExample(const std::string& host,
         }
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::ERROR, "Example4",
+        Logger::log(Logger::LOG_ERROR, "Example4",
                     "Exception: " + std::string(e.what()));
     }
 
@@ -312,7 +313,7 @@ int main() {
         return 0;
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::ERROR, "Main",
+        Logger::log(Logger::LOG_ERROR, "Main",
                     "Exception: " + std::string(e.what()));
         return 1;
     }

@@ -274,7 +274,9 @@ private:
         def("updatePosition", [this](double deltaTime) {
             auto displacement = velocity_->multiply(deltaTime);
             position_ =
-                std::make_shared<Vector3D>(position_->add(*displacement));
+                std::make_shared<Vector3D>(position_->getX() + displacement.getX(),
+                                         position_->getY() + displacement.getY(),
+                                         position_->getZ() + displacement.getZ());
             std::cout << "  [" << getName()
                       << "] Position updated to: " << position_->toString()
                       << std::endl;
@@ -307,7 +309,7 @@ void demonstrateBasicBindings() {
     std::cout << "\n=== Basic Bindings Demo ===" << std::endl;
 
     auto& registry = Registry::instance();
-    auto& binder = AdvancedBinder::instance();
+    // auto& binder = AdvancedBinder::instance(); // AdvancedBinder not implemented
 
     std::cout << "\n1. Creating component with bound classes..." << std::endl;
     auto component =
@@ -548,55 +550,30 @@ void demonstrateAdvancedFeatures() {
     // Test math operations through component
     std::cout << "\n--- Math Operations Through Component ---" << std::endl;
 
-    double addResult = std::stod(component->executeCommand(
-        "performMathOperation", {"add", "10.5", "7.3"}));
-    std::cout << "10.5 + 7.3 = " << addResult << std::endl;
+    std::vector<std::any> addArgs = {"add", "10.5", "7.3"};
+    auto addResult = component->runCommand("performMathOperation", addArgs);
+    double addValue = std::any_cast<double>(addResult);
+    std::cout << "10.5 + 7.3 = " << addValue << std::endl;
 
-    double multiplyResult = std::stod(component->executeCommand(
-        "performMathOperation", {"multiply", "4.2", "3.1"}));
-    std::cout << "4.2 * 3.1 = " << multiplyResult << std::endl;
+    std::vector<std::any> multiplyArgs = {"multiply", "4.2", "3.1"};
+    auto multiplyResult = component->runCommand("performMathOperation", multiplyArgs);
+    double multiplyValue = std::any_cast<double>(multiplyResult);
+    std::cout << "4.2 * 3.1 = " << multiplyValue << std::endl;
 
-    double powerResult = std::stod(component->executeCommand(
-        "performMathOperation", {"power", "3.0", "4.0"}));
-    std::cout << "3^4 = " << powerResult << std::endl;
+    std::vector<std::any> powerArgs = {"power", "3.0", "4.0"};
+    auto powerResult = component->runCommand("performMathOperation", powerArgs);
+    double powerValue = std::any_cast<double>(powerResult);
+    std::cout << "3^4 = " << powerValue << std::endl;
 }
 
 void demonstrateBindingStatistics() {
     std::cout << "\n=== Binding Statistics Demo ===" << std::endl;
 
-    auto& binder = AdvancedBinder::instance();
+    // auto& binder = AdvancedBinder::instance(); // AdvancedBinder not implemented
 
     std::cout << "\n7. Binding system statistics..." << std::endl;
-
-    auto stats = binder.getStatistics();
-    std::cout << "Registered classes: " << stats.registeredClasses << std::endl;
-    std::cout << "Registered methods: " << stats.registeredMethods << std::endl;
-    std::cout << "Registered properties: " << stats.registeredProperties
-              << std::endl;
-    std::cout << "Method calls: " << stats.methodCalls << std::endl;
-    std::cout << "Property accesses: " << stats.propertyAccesses << std::endl;
-    std::cout << "Exceptions thrown: " << stats.exceptionsThrown << std::endl;
-
-    // List registered classes
-    auto classNames = binder.getRegisteredClasses();
-    std::cout << "\nRegistered classes:" << std::endl;
-    for (const auto& className : classNames) {
-        std::cout << "  - " << className << std::endl;
-
-        auto methods = binder.getClassMethods(className);
-        std::cout << "    Methods: ";
-        for (const auto& method : methods) {
-            std::cout << method << " ";
-        }
-        std::cout << std::endl;
-
-        auto properties = binder.getClassProperties(className);
-        std::cout << "    Properties: ";
-        for (const auto& property : properties) {
-            std::cout << property << " ";
-        }
-        std::cout << std::endl;
-    }
+    std::cout << "AdvancedBinder not implemented in this version" << std::endl;
+    std::cout << "Statistics functionality would be available with AdvancedBinder" << std::endl;
 }
 
 int main() {
