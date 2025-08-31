@@ -136,15 +136,15 @@ void basic_usage_examples() {
         PerformanceTimer timer;
         timer.start("Basic integer promise");
 
-        atom::async::Promise<int> promise;
-        auto future = promise.getEnhancedFuture();
+        auto promise = std::make_shared<atom::async::Promise<int>>();
+        auto future = promise->getEnhancedFuture();
 
         // Execute in a separate thread
-        std::thread worker([&promise]() {
+        std::thread worker([promise]() {
             print_safe("🔧 Worker thread [", get_thread_id(),
                        "] processing...");
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
-            promise.setValue(42);
+            promise->setValue(42);
             print_safe("🔧 Worker thread set value to 42");
         });
 
@@ -156,6 +156,10 @@ void basic_usage_examples() {
 
         validate_result(result, 42, "Basic integer promise");
         worker.join();
+
+        // Small delay to ensure all Promise operations complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
         timer.stop();
     }
 
@@ -182,6 +186,10 @@ void basic_usage_examples() {
         validate_result(result, std::string("Hello from async world!"),
                         "String promise");
         worker.join();
+
+        // Small delay to ensure all Promise operations complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
         timer.stop();
     }
 
@@ -206,6 +214,10 @@ void basic_usage_examples() {
         print_safe("🏠 Task completed successfully");
 
         worker.join();
+
+        // Small delay to ensure all Promise operations complete
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
         timer.stop();
     }
 
@@ -890,6 +902,12 @@ int main() {
         coroutine_examples();
 
         std::cout << "\n====== All Examples Completed ======" << std::endl;
+
+        // Allow any background threads to complete before program exit
+        std::cout << "⏳ Waiting for background threads to complete..." << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        std::cout << "✅ Program completed successfully!" << std::endl;
+
     } catch (const std::exception& e) {
         std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
         return 1;

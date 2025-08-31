@@ -325,7 +325,7 @@ std::vector<std::byte> ImageFilter::medianFilter(const std::vector<std::byte>& i
     return output;
 }
 
-std::unique_ptr<ImageFilter> createOptimalFilter(bool useGPU) {
+std::unique_ptr<ImageFilter> createOptimalFilter(bool useGPU [[maybe_unused]]) {
     // For now, return basic CPU implementation
     // TODO: Add GPU implementation when CUDA/OpenCL support is added
     return std::make_unique<ImageFilter>();

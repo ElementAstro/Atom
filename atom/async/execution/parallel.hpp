@@ -32,17 +32,16 @@ Description: High-performance parallel algorithms library
 #include <span>
 #include <stop_token>
 
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS 1
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 #include <processthreadsapi.h>
 #include <windows.h>
-#elif defined(__APPLE__)
-#define ATOM_PLATFORM_MACOS 1
+#elif defined(ATOM_PLATFORM_APPLE)
 #include <mach/thread_act.h>
 #include <mach/thread_policy.h>
 #include <pthread.h>
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX 1
+#elif defined(ATOM_PLATFORM_LINUX)
 #include <pthread.h>
 #include <sched.h>
 #endif
@@ -445,7 +444,7 @@ public:
         if (range_size == 0)
             return;
 
-        if (range_size <= numThreads || numThreads == 1) {
+        if (range_size <= static_cast<decltype(range_size)>(numThreads) || numThreads == 1) {
             // For small ranges, just use std::for_each
             std::for_each(begin, end, func);
             return;
@@ -693,7 +692,7 @@ public:
         if (range_size == 0)
             return {};
 
-        if (range_size <= numThreads * 4 || numThreads == 1) {
+        if (range_size <= static_cast<decltype(range_size)>(numThreads * 4) || numThreads == 1) {
             // For small ranges, just filter sequentially
             std::vector<ValueType> result;
             for (auto it = begin; it != end; ++it) {

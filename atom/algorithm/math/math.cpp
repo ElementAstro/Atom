@@ -608,8 +608,7 @@ auto modPow(u64 base, u64 exponent, u64 modulus) -> u64 {
             // If u is 1, then v is the inverse of r mod n
             if (u == 1) {
                 inv_r = v % modulus;
-                if (inv_r < 0)
-                    inv_r += modulus;
+                // No need to check if inv_r < 0 since it's unsigned
             }
 
             return (result_mont * inv_r) % modulus;
@@ -648,7 +647,7 @@ std::vector<uint64_t> parallelVectorAdd(const std::vector<uint64_t>& a,
         THROW_INVALID_ARGUMENT("Input vectors must have the same length");
     }
     std::vector<uint64_t> result(a.size());
-#ifdef _OPENMP
+#if defined(_OPENMP)
 #pragma omp parallel for
 #endif
     for (size_t i = 0; i < a.size(); ++i) {

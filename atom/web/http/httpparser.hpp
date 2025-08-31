@@ -22,6 +22,13 @@ Description: Http Header Parser with C++20 features
 #include <string>
 #include <vector>
 
+// Windows compatibility: Undefine problematic macros
+#ifdef _WIN32
+#ifdef DELETE
+#undef DELETE
+#endif
+#endif
+
 namespace atom::web {
 
 /**

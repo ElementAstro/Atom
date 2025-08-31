@@ -85,7 +85,7 @@ public:
             // Create socket based on IPv4/IPv6 preference
             socket_ = socket(options.ipv6_enabled ? AF_INET6 : AF_INET,
                              SOCK_STREAM, IPPROTO_TCP);
-            if (socket_ < 0) {
+            if (socket_ == INVALID_SOCKET) {
                 throw createSystemError("Socket creation failed");
             }
 
@@ -269,7 +269,7 @@ public:
             // Recreate socket for reuse
             socket_ = socket(options_.ipv6_enabled ? AF_INET6 : AF_INET,
                              SOCK_STREAM, IPPROTO_TCP);
-            if (socket_ >= 0) {
+            if (socket_ != INVALID_SOCKET) {
                 configureSocket();
             }
 
@@ -763,7 +763,7 @@ private:
     void cleanupResources() {
         stopReceiving();
 
-        if (socket_ >= 0) {
+        if (socket_ != INVALID_SOCKET) {
 #ifdef _WIN32
             closesocket(socket_);
 #else

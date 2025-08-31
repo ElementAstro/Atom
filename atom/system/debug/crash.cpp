@@ -27,7 +27,9 @@ Description: Crash Report
 #ifdef _WIN32
 #include <windows.h>
 #include <dbghelp.h>
+#ifdef _MSC_VER
 #pragma comment(lib, "dbghelp.lib")
+#endif
 #endif
 
 #include "atom/error/stacktrace.hpp"
@@ -189,7 +191,7 @@ void saveCrashLog(std::string_view error_msg) {
 
                 BOOL dumpResult = MiniDumpWriteDump(
                     GetCurrentProcess(), GetCurrentProcessId(), hFile,
-                    MiniDumpNormal, nullptr, nullptr, nullptr);
+                    MiniDumpNormal, &mdei, nullptr, nullptr);
 
                 if (dumpResult) {
                     spdlog::info("Minidump file created at {}", dumpFile);

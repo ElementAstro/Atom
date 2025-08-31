@@ -17,19 +17,18 @@
 #include <vector>
 
 // Platform-specific optimizations
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 // clang-format off
 #include <windows.h>
 #include <processthreadsapi.h>
 // clang-format on
-#elif defined(__APPLE__)
-#define ATOM_PLATFORM_MACOS
+#elif defined(ATOM_PLATFORM_APPLE)
 #include <dispatch/dispatch.h>
 #include <mach/thread_policy.h>
 #include <pthread.h>
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX
+#elif defined(ATOM_PLATFORM_LINUX)
 #include <pthread.h>
 #include <sched.h>
 #include <sys/sysinfo.h>

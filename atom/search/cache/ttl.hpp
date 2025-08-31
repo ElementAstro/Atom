@@ -51,9 +51,7 @@ using UniqueLock = boost::unique_lock<T>;
 using CondVarAny = boost::condition_variable_any;
 using Thread = boost::thread;
 #else
-template <typename T>
-using SharedMutex = std::shared_mutex;
-
+// Note: SharedMutex is already defined in cache.hpp, so we don't redefine it
 template <typename T>
 using SharedLock = std::shared_lock<T>;
 
@@ -444,7 +442,7 @@ private:
     CacheList cache_list_;
     CacheMap cache_map_;
 
-    mutable SharedMutex<std::shared_mutex> mutex_;
+    mutable std::shared_mutex mutex_;
 
     Atomic<size_t> hit_count_{0};
     Atomic<size_t> miss_count_{0};

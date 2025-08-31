@@ -17,7 +17,7 @@ namespace {
  * @param bits Raw bitmap pixel data
  * @return HBITMAP handle if successful, nullptr on failure
  */
-HBITMAP CreateBitmapFromDIB(const BITMAPINFO* bmi, const void* bits) {
+[[maybe_unused]] HBITMAP CreateBitmapFromDIB(const BITMAPINFO* bmi, const void* bits) {
     return CreateDIBitmap(GetDC(nullptr), &bmi->bmiHeader, CBM_INIT, bits, bmi,
                           DIB_RGB_COLORS);
 }
@@ -28,7 +28,7 @@ HBITMAP CreateBitmapFromDIB(const BITMAPINFO* bmi, const void* bits) {
  * @return Pair containing bitmap info structure and raw pixel data
  * @throws std::runtime_error If bitmap data cannot be accessed
  */
-std::pair<std::unique_ptr<BITMAPINFO>, std::unique_ptr<std::byte[]>>
+[[maybe_unused]] std::pair<std::unique_ptr<BITMAPINFO>, std::unique_ptr<std::byte[]>>
 GetDIBFromClipboard(HBITMAP hBitmap) {
     if (!hBitmap) {
         throw std::runtime_error("Invalid bitmap handle");
@@ -103,7 +103,7 @@ public:
         m_isOpen = OpenClipboard(nullptr);
         if (!m_isOpen) {
             // Get the last error message for debugging
-            DWORD errorCode = GetLastError();
+            [[maybe_unused]] DWORD errorCode = GetLastError();
             // We don't throw here because failure to open is a normal condition
             // that calling code should handle
         }
@@ -115,7 +115,7 @@ public:
         if (m_isOpen) {
             if (!CloseClipboard()) {
                 // Get the last error message for debugging
-                DWORD errorCode = GetLastError();
+                [[maybe_unused]] DWORD errorCode = GetLastError();
                 // Log but don't throw exception here as this is a cleanup
                 // operation
             }
@@ -129,7 +129,7 @@ public:
                 return false;
 
             bool result = EmptyClipboard();
-            DWORD errorCode = result ? 0 : GetLastError();
+            [[maybe_unused]] DWORD errorCode = result ? 0 : GetLastError();
 
             close();
             return result;

@@ -53,8 +53,8 @@ blob ImageProcessor::convertFormat(const blob& input, [[maybe_unused]] ImageForm
 #endif
 }
 
-blob ImageProcessor::resize(const blob& input, int newWidth, int newHeight,
-                           const std::string& algorithm) const {
+blob ImageProcessor::resize(const blob& input [[maybe_unused]], int newWidth [[maybe_unused]], int newHeight [[maybe_unused]],
+                           const std::string& algorithm [[maybe_unused]]) const {
     validateImageDimensions(newWidth, newHeight);
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
@@ -77,7 +77,7 @@ blob ImageProcessor::resize(const blob& input, int newWidth, int newHeight,
 #endif
 }
 
-blob ImageProcessor::rotate(const blob& input, double angle, bool expandCanvas) const {
+blob ImageProcessor::rotate(const blob& input [[maybe_unused]], double angle [[maybe_unused]], bool expandCanvas [[maybe_unused]]) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
@@ -117,8 +117,8 @@ blob ImageProcessor::crop(const blob& input, int x, int y, int width, int height
 #endif
 }
 
-blob ImageProcessor::applyFilter(const blob& input, FilterType filterType,
-                                const std::unordered_map<std::string, double>& parameters) const {
+blob ImageProcessor::applyFilter(const blob& input [[maybe_unused]], FilterType filterType [[maybe_unused]],
+                                const std::unordered_map<std::string, double>& parameters [[maybe_unused]]) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     switch (filterType) {
         case FilterType::GAUSSIAN_BLUR: {
@@ -145,9 +145,9 @@ blob ImageProcessor::applyFilter(const blob& input, FilterType filterType,
 #endif
 }
 
-blob ImageProcessor::applyCustomKernel(const blob& input,
-                                      const std::vector<float>& kernel,
-                                      int kernelSize) const {
+blob ImageProcessor::applyCustomKernel(const blob& input [[maybe_unused]],
+                                      const std::vector<float>& kernel [[maybe_unused]],
+                                      int kernelSize [[maybe_unused]]) const {
     validateKernel(kernel, kernelSize);
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
@@ -165,9 +165,9 @@ blob ImageProcessor::applyCustomKernel(const blob& input,
 #endif
 }
 
-blob ImageProcessor::adjustBrightnessContrast(const blob& input,
-                                             double brightness,
-                                             double contrast) const {
+blob ImageProcessor::adjustBrightnessContrast(const blob& input [[maybe_unused]],
+                                             double brightness [[maybe_unused]],
+                                             double contrast [[maybe_unused]]) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
@@ -183,7 +183,7 @@ blob ImageProcessor::adjustBrightnessContrast(const blob& input,
 #endif
 }
 
-blob ImageProcessor::adjustGamma(const blob& input, double gamma) const {
+blob ImageProcessor::adjustGamma(const blob& input [[maybe_unused]], double gamma [[maybe_unused]]) const {
     if (gamma <= 0.0) {
         THROW_RUNTIME_ERROR("Gamma value must be positive");
     }
@@ -206,7 +206,7 @@ blob ImageProcessor::adjustGamma(const blob& input, double gamma) const {
 #endif
 }
 
-blob ImageProcessor::enhanceHistogram(const blob& input, bool adaptive) const {
+blob ImageProcessor::enhanceHistogram(const blob& input [[maybe_unused]], bool adaptive [[maybe_unused]]) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
@@ -266,7 +266,7 @@ std::vector<blob> ImageProcessor::processBatch(
     return results;
 }
 
-std::unordered_map<std::string, double> ImageProcessor::getStatistics(const blob& input) const {
+std::unordered_map<std::string, double> ImageProcessor::getStatistics(const blob& input [[maybe_unused]]) const {
     std::unordered_map<std::string, double> stats;
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
@@ -302,7 +302,7 @@ const ProcessingOptions& ImageProcessor::getOptions() const noexcept {
 }
 
 // Private helper methods
-blob ImageProcessor::applyGaussianBlur(const blob& input, double sigma) const {
+blob ImageProcessor::applyGaussianBlur(const blob& input [[maybe_unused]], double sigma [[maybe_unused]]) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
@@ -317,7 +317,7 @@ blob ImageProcessor::applyGaussianBlur(const blob& input, double sigma) const {
 #endif
 }
 
-blob ImageProcessor::applySharpen(const blob& input, double strength) const {
+blob ImageProcessor::applySharpen(const blob& input [[maybe_unused]], double strength [[maybe_unused]]) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat blurred, outputMat;
@@ -359,7 +359,7 @@ void ImageProcessor::validateCropParameters(const blob& input, int x, int y, int
     }
 }
 
-std::unique_ptr<ImageProcessor> createOptimalProcessor(bool useGPU) {
+std::unique_ptr<ImageProcessor> createOptimalProcessor(bool useGPU [[maybe_unused]]) {
     ProcessingOptions options;
     options.useMultithreading = true;
     options.enableSIMD = true;

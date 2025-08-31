@@ -138,7 +138,7 @@ auto PriorityManager::getThreadPriority(std::thread::native_handle_type thread)
 }
 
 void PriorityManager::setThreadSchedulingPolicy(
-    SchedulingPolicy policy, std::thread::native_handle_type thread) {
+    [[maybe_unused]] SchedulingPolicy policy, [[maybe_unused]] std::thread::native_handle_type thread) {
 #ifdef _WIN32
     spdlog::error("Thread scheduling policy changes not supported on Windows");
     THROW_RUNTIME_ERROR(

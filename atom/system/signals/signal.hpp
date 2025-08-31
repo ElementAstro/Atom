@@ -422,6 +422,13 @@ private:
     std::vector<std::jthread> workerThreads_;
     std::unordered_map<SignalID, SignalStats> signalStats_;
     mutable std::shared_mutex statsMutex_;
+
+    // Lazy initialization support
+    size_t initialThreadCount_;
+    std::atomic<bool> initialized_;
+    mutable std::mutex initMutex_;
+
+    void ensureInitialized();
 };
 
 /**

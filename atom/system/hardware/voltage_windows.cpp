@@ -184,7 +184,7 @@ std::vector<PowerSourceInfo> WindowsVoltageMonitor::getWMIPowerInfo() const {
                              NULL,                     // User name
                              NULL,                     // User password
                              0,                        // Locale
-                             NULL,                     // Security flags
+                             static_cast<LONG>(0),     // Security flags
                              0,                        // Authority
                              0,                        // Context object
                              &pSvc                     // IWbemServices proxy
@@ -225,7 +225,7 @@ std::vector<PowerSourceInfo> WindowsVoltageMonitor::getWMIPowerInfo() const {
         ULONG uReturn = 0;
 
         while (pEnumerator) {
-            hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+            hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
 
             if (uReturn == 0) {
                 break;
@@ -286,7 +286,7 @@ std::vector<PowerSourceInfo> WindowsVoltageMonitor::getWMIPowerInfo() const {
         ULONG uReturn = 0;
 
         while (pEnumerator) {
-            hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+            hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
 
             if (uReturn == 0) {
                 break;

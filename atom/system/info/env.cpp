@@ -26,7 +26,9 @@ Description: Environment variable management
 #include <shlobj.h>
 #include <userenv.h>
 #include <windows.h>
+#ifdef _MSC_VER
 #pragma comment(lib, "userenv.lib")
+#endif
 #else
 #include <limits.h>
 #include <pwd.h>

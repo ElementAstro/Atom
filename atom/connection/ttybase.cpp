@@ -40,7 +40,7 @@ public:
         try {
             stopAsyncOperations();
             if (m_PortFD != -1) {
-                disconnect();
+                (void)disconnect();
             }
         } catch (...) {
             // Silently catch any exceptions in destructor

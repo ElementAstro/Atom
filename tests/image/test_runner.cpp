@@ -4,7 +4,7 @@
 
 // Include all test headers
 #include "test_image_blob.hpp"
-// #include "test_image_processor.hpp"  // Disabled - files were cleared
+#include "test_image_processor.hpp"  // Re-enabled - tests restored
 #include "test_hdu.hpp"
 #include "test_ocr.hpp"
 #ifdef ATOM_IMAGE_HAS_OPENCV

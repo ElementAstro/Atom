@@ -13,8 +13,19 @@
 #include "atom/async/future.hpp"
 
 #ifdef __cpp_lib_hardware_interference_size
+#ifdef __has_include
+#if __has_include(<new>)
+#include <new>
 using std::hardware_constructive_interference_size;
 using std::hardware_destructive_interference_size;
+#else
+constexpr std::size_t hardware_constructive_interference_size = 64;
+constexpr std::size_t hardware_destructive_interference_size = 64;
+#endif
+#else
+constexpr std::size_t hardware_constructive_interference_size = 64;
+constexpr std::size_t hardware_destructive_interference_size = 64;
+#endif
 #else
 constexpr std::size_t hardware_constructive_interference_size = 64;
 constexpr std::size_t hardware_destructive_interference_size = 64;
@@ -262,11 +273,11 @@ public:
     }
 
 protected:
+    std::atomic<bool> cancelled_;
     alignas(hardware_destructive_interference_size) TaskType task_;
     std::unique_ptr<std::promise<ResultType>> promise_;
     std::shared_future<ResultType> future_;
     std::vector<std::function<void(const ResultType&)>> callbacks_;
-    std::atomic<bool> cancelled_;
     mutable std::mutex callbacksMutex_;
 
 #ifdef ATOM_USE_ASIO
@@ -537,11 +548,11 @@ public:
     }
 
 protected:
+    std::atomic<bool> cancelled_;
     TaskType task_;
     std::unique_ptr<std::promise<void>> promise_;
     std::shared_future<void> future_;
     std::vector<std::function<void()>> callbacks_;
-    std::atomic<bool> cancelled_;
     mutable std::mutex callbacksMutex_;
 
 #ifdef ATOM_USE_ASIO

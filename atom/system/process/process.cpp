@@ -1760,7 +1760,12 @@ auto suspendProcess(int pid) -> bool {
     using NtSuspendProcess = LONG(NTAPI *)(HANDLE ProcessHandle);
     FARPROC procAddr =
         GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtSuspendProcess");
+
+    // Suppress function pointer casting warning - this cast is necessary for Windows NT API
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
     auto pfnNtSuspendProcess = reinterpret_cast<NtSuspendProcess>(procAddr);
+#pragma GCC diagnostic pop
 
     if (!pfnNtSuspendProcess) {
         spdlog::error("Failed to get NtSuspendProcess function");
@@ -1810,7 +1815,12 @@ auto resumeProcess(int pid) -> bool {
     using NtResumeProcess = LONG(NTAPI *)(HANDLE ProcessHandle);
     FARPROC procAddr =
         GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtResumeProcess");
+
+    // Suppress function pointer casting warning - this cast is necessary for Windows NT API
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-function-type"
     auto pfnNtResumeProcess = reinterpret_cast<NtResumeProcess>(procAddr);
+#pragma GCC diagnostic pop
 
     if (!pfnNtResumeProcess) {
         spdlog::error("Failed to get NtResumeProcess function");

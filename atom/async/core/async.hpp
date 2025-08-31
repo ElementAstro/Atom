@@ -16,15 +16,14 @@ Description: A simple but useful async worker manager
 #define ATOM_ASYNC_CORE_ASYNC_HPP
 
 // Platform detection
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(__APPLE__)
-#define ATOM_PLATFORM_MACOS
+#elif defined(ATOM_PLATFORM_APPLE)
 #include <mach/thread_policy.h>
 #include <pthread.h>
-#else
-#define ATOM_PLATFORM_LINUX
+#elif defined(ATOM_PLATFORM_LINUX)
 #include <pthread.h>
 #include <sched.h>
 #endif

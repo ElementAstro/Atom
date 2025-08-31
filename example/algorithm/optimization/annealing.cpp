@@ -6,7 +6,7 @@
 
 // Define progress callback function
 void progressCallback(int iteration, double energy,
-                      const std::vector<int>& solution) {
+                      const std::vector<int>& solution [[maybe_unused]]) {
     if (iteration % 100 == 0) {  // Reduce output frequency
         std::cout << "Iteration: " << iteration << ", Energy: " << std::fixed
                   << std::setprecision(4) << energy << std::endl;
@@ -15,7 +15,7 @@ void progressCallback(int iteration, double energy,
 
 // Define stop condition function
 bool stopCondition(int iteration, double energy,
-                   const std::vector<int>& solution) {
+                   const std::vector<int>& solution [[maybe_unused]]) {
     // Stop when energy is below threshold or iterations exceed 5000
     return energy < 10.0 || iteration > 5000;
 }

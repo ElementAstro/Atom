@@ -235,7 +235,7 @@ u32 Blowfish::F(u32 x) const noexcept {
     unsigned char c = (x >> 8) & 0xFF;
     unsigned char d = x & 0xFF;
 
-    return (S_[0][a] + S_[1][b]) ^ S_[2][c] + S_[3][d];
+    return ((S_[0][a] + S_[1][b]) ^ S_[2][c]) + S_[3][d];
 }
 
 void Blowfish::encrypt(std::span<std::byte, BLOCK_SIZE> block) noexcept {

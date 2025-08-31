@@ -16,14 +16,13 @@
 #include <vector>
 
 // Platform-specific includes
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(__APPLE__)
-#define ATOM_PLATFORM_MACOS
+#elif defined(ATOM_PLATFORM_APPLE)
 #include <dispatch/dispatch.h>
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX
+#elif defined(ATOM_PLATFORM_LINUX)
 #include <semaphore.h>
 #endif
 

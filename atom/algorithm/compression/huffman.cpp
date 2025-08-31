@@ -469,7 +469,7 @@ void validateInput(
 
 std::vector<unsigned char> decompressParallel(
     const std::string& compressedData, const atom::algorithm::HuffmanNode* root,
-    size_t threadCount) {
+    [[maybe_unused]] size_t threadCount) {
     if (compressedData.empty()) {
         return {};
     }

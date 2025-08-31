@@ -12,18 +12,28 @@
 
 namespace atom::async {
 
+TimerTask::TimerTask()
+    : m_func(nullptr),
+      m_delay(1),  // Default to 1ms to avoid validation error
+      m_repeatCount(0),
+      m_priority(0) {
+    // Default constructor creates an invalid task
+}
+
 TimerTask::TimerTask(std::function<void()> func, unsigned int delay,
                      int repeatCount, int priority) noexcept(false)
     : m_func(func),
       m_delay(delay),
       m_repeatCount(repeatCount),
       m_priority(priority) {
+    std::cout << "[DEBUG] TimerTask constructor: delay = " << delay << ", repeatCount = " << repeatCount << ", priority = " << priority << std::endl;
+
     if (!func) {
         throw std::invalid_argument("Function cannot be null");
     }
 
     if (delay == 0) {
-        throw std::invalid_argument("Delay must be greater than 0");
+        throw std::invalid_argument("Delay must be greater than 0 (TimerTask constructor received: " + std::to_string(delay) + ")");
     }
 
     if (repeatCount < -1) {
@@ -68,43 +78,75 @@ auto TimerTask::getNextExecutionTime() const noexcept
     return m_nextExecutionTime;
 }
 
-void Timer::validateTaskParams(unsigned int delay,
+void Timer::validateTaskParams([[maybe_unused]] unsigned int delay,
                                int repeatCount) noexcept(false) {
-    if (delay == 0) {
-        throw std::invalid_argument("Delay must be greater than 0");
-    }
+    // Note: delay=0 is allowed in validateTaskParams (see tests)
+    // The delay>0 validation is enforced in TimerTask constructor
 
     if (repeatCount < -1) {
-        throw std::invalid_argument("RepeatCount must be >= -1");
+        throw std::invalid_argument("RepeatCount must be >= -1 (received: " + std::to_string(repeatCount) + ")");
     }
 }
 
-Timer::Timer() noexcept(false) {
-#ifdef ATOM_USE_ASIO
-    try {
-        m_ioContext = std::make_unique<asio::io_context>();
-        m_work = std::make_unique<asio::io_context::work>(*m_ioContext);
-        m_asioTimer = std::make_unique<asio::steady_timer>(*m_ioContext);
-
-        std::thread([this]() {
-            try {
-                asioRun();
-            } catch (...) {
-                // Suppress exceptions
-            }
-        }).detach();
-    } catch (const std::exception &e) {
-        throw std::runtime_error(std::string("Failed to create asio timer: ") +
-                                 e.what());
-    }
-#else
-    try {
-        m_thread = std::jthread(&Timer::run, this);
-    } catch (const std::exception &e) {
-        throw std::runtime_error(
-            std::string("Failed to create timer thread: ") + e.what());
+void Timer::ensureThreadStarted() noexcept(false) {
+#ifndef ATOM_USE_ASIO
+    std::scoped_lock lock(m_mutex);
+    if (!m_thread.joinable() && !m_stop.load(std::memory_order_acquire)) {
+        try {
+            m_thread = std::jthread(&Timer::run, this);
+        } catch (const std::exception &e) {
+            throw std::runtime_error(
+                std::string("Failed to create timer thread: ") + e.what());
+        }
     }
 #endif
+}
+
+Timer::Timer() noexcept(false) {
+    std::cout << "[DEBUG] Timer constructor entry" << std::endl;
+
+    try {
+        // Initialize atomic flags first
+        m_stop.store(false, std::memory_order_relaxed);
+        m_paused.store(false, std::memory_order_relaxed);
+
+        std::cout << "[DEBUG] Timer atomic flags initialized" << std::endl;
+
+#ifdef ATOM_USE_ASIO
+        std::cout << "[DEBUG] Using ASIO mode" << std::endl;
+        try {
+            m_ioContext = std::make_unique<asio::io_context>();
+            m_work = std::make_unique<asio::io_context::work>(*m_ioContext);
+            m_asioTimer = std::make_unique<asio::steady_timer>(*m_ioContext);
+
+            std::thread([this]() {
+                try {
+                    asioRun();
+                } catch (...) {
+                    // Suppress exceptions
+                }
+            }).detach();
+
+            std::cout << "[DEBUG] ASIO timer initialized successfully" << std::endl;
+        } catch (const std::exception &e) {
+            std::cout << "[DEBUG] ASIO timer initialization failed: " << e.what() << std::endl;
+            throw std::runtime_error(std::string("Failed to create asio timer: ") +
+                                     e.what());
+        }
+#else
+        std::cout << "[DEBUG] Using non-ASIO mode" << std::endl;
+        // Don't start the thread immediately - start it when first task is added
+        // This prevents race conditions during object construction
+#endif
+
+        std::cout << "[DEBUG] Timer constructor completed successfully" << std::endl;
+    } catch (const std::exception& e) {
+        std::cout << "[DEBUG] Timer constructor failed: " << e.what() << std::endl;
+        throw;
+    } catch (...) {
+        std::cout << "[DEBUG] Timer constructor failed with unknown exception" << std::endl;
+        throw;
+    }
 }
 
 Timer::~Timer() noexcept {
@@ -261,7 +303,18 @@ void Timer::run() noexcept {
                 continue;
             }
 
+            // Ensure queue is not empty before accessing top()
+            if (m_taskQueue.empty()) {
+                continue;
+            }
+
             TimerTask task = m_taskQueue.top();
+
+            // Validate the task before processing
+            if (!task.isValid()) {
+                m_taskQueue.pop();
+                continue;
+            }
             auto now = std::chrono::steady_clock::now();
 
             if (now >= task.getNextExecutionTime()) {

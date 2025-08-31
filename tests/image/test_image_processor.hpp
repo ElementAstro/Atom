@@ -410,3 +410,123 @@ TEST_F(ImageProcessorTest, DISABLED_PerformanceBatchProcessing) {
     GTEST_SKIP() << "OpenCV not available, skipping performance tests";
     #endif
 }
+
+// Additional comprehensive tests for edge cases and error handling
+TEST_F(ImageProcessorTest, EdgeCaseHandling) {
+    #ifdef ATOM_IMAGE_HAS_OPENCV
+    // Test with empty image data
+    std::vector<std::byte> empty_data;
+    auto empty_blob = atom::image::ImageBlob::create(empty_data, 0, 0, atom::image::ImageFormat::RGB);
+    EXPECT_FALSE(empty_blob.has_value());
+
+    // Test with invalid dimensions
+    auto invalid_blob = atom::image::ImageBlob::create(test_image_data, 0, 8, atom::image::ImageFormat::RGB);
+    EXPECT_FALSE(invalid_blob.has_value());
+
+    // Test with mismatched data size and dimensions
+    std::vector<std::byte> small_data(10); // Too small for 8x8 RGB
+    auto mismatched_blob = atom::image::ImageBlob::create(small_data, 8, 8, atom::image::ImageFormat::RGB);
+    EXPECT_FALSE(mismatched_blob.has_value());
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping edge case tests";
+    #endif
+}
+
+TEST_F(ImageProcessorTest, ErrorHandling) {
+    #ifdef ATOM_IMAGE_HAS_OPENCV
+    // Test processing with null processor
+    atom::image::ImageProcessor* null_processor = nullptr;
+    EXPECT_THROW({
+        if (null_processor) {
+            null_processor->resize(test_blob.value(), 16, 16);
+        }
+    }, std::exception);
+
+    // Test with invalid file paths
+    EXPECT_FALSE(processor->loadFromFile("nonexistent_file.png").has_value());
+    EXPECT_FALSE(processor->saveToFile(test_blob.value(), "/invalid/path/output.png"));
+
+    // Test with invalid resize dimensions
+    auto invalid_resize = processor->resize(test_blob.value(), 0, 0);
+    EXPECT_FALSE(invalid_resize.has_value());
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping error handling tests";
+    #endif
+}
+
+TEST_F(ImageProcessorTest, MemoryStressTest) {
+    #ifdef ATOM_IMAGE_HAS_OPENCV
+    // Test with large image processing to check memory handling
+    const size_t large_size = 1000;
+    std::vector<std::byte> large_data(large_size * large_size * 3);
+
+    // Fill with pattern data
+    for (size_t i = 0; i < large_data.size(); i += 3) {
+        large_data[i] = std::byte{static_cast<uint8_t>(i % 256)};
+        large_data[i + 1] = std::byte{static_cast<uint8_t>((i + 1) % 256)};
+        large_data[i + 2] = std::byte{static_cast<uint8_t>((i + 2) % 256)};
+    }
+
+    auto large_blob = atom::image::ImageBlob::create(large_data, large_size, large_size, atom::image::ImageFormat::RGB);
+
+    if (large_blob.has_value()) {
+        // Test multiple operations on large image
+        auto resized = processor->resize(large_blob.value(), large_size / 2, large_size / 2);
+        EXPECT_TRUE(resized.has_value());
+
+        if (resized.has_value()) {
+            EXPECT_EQ(resized->getWidth(), large_size / 2);
+            EXPECT_EQ(resized->getHeight(), large_size / 2);
+        }
+    } else {
+        GTEST_SKIP() << "Insufficient memory for large image test";
+    }
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping memory stress tests";
+    #endif
+}
+
+TEST_F(ImageProcessorTest, ThreadSafetyTest) {
+    #ifdef ATOM_IMAGE_HAS_OPENCV
+    // Test concurrent processing with multiple threads
+    const int num_threads = 4;
+    const int operations_per_thread = 10;
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count{0};
+    std::atomic<int> error_count{0};
+
+    for (int t = 0; t < num_threads; ++t) {
+        threads.emplace_back([this, operations_per_thread, &success_count, &error_count]() {
+            for (int i = 0; i < operations_per_thread; ++i) {
+                try {
+                    auto result = processor->resize(test_blob.value(), 16 + i, 16 + i);
+                    if (result.has_value()) {
+                        success_count.fetch_add(1);
+                    } else {
+                        error_count.fetch_add(1);
+                    }
+                } catch (...) {
+                    error_count.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_GT(success_count.load(), 0);
+    EXPECT_LT(error_count.load(), num_threads * operations_per_thread / 2); // Allow some errors but not too many
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping thread safety tests";
+    #endif
+}
+
+} // namespace atom::image::test
+
+#endif

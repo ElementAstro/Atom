@@ -239,7 +239,12 @@ template <StringLike T>
 auto validateImpl(T&& str, const ValidationOptions& options)
     -> std::expected<ValidationResult, std::string> {
     // Input validation result
-    ValidationResult result;
+    ValidationResult result{
+        .isValid = true,
+        .invalidBrackets = {},
+        .errorMessages = {},
+        .sourceLocation = {}
+    };
 
     try {
         auto span = getDataSpan(str);

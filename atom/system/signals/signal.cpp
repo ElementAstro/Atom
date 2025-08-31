@@ -297,22 +297,40 @@ auto SignalHandlerRegistry::getStandardCrashSignals() -> std::set<SignalID> {
 }
 
 SafeSignalManager::SafeSignalManager(size_t threadCount, size_t queueSize)
-    : maxQueueSize_(queueSize) {
+    : maxQueueSize_(queueSize), initialThreadCount_(threadCount), initialized_(false) {
 #ifdef ATOM_USE_BOOST
 #else
 #endif
 
+    // Don't create worker threads during static initialization
+    // They will be created lazily when first needed
     workerThreads_.reserve(threadCount);
-    for (size_t i = 0; i < threadCount; ++i) {
-        workerThreads_.emplace_back([this](std::stop_token stopToken) {
-            this->processSignals(stopToken);
-        });
-    }
 
-    spdlog::info(
-        "SafeSignalManager initialized with {} worker threads and queue size "
-        "{}",
-        threadCount, queueSize);
+    // Don't log during static initialization - defer until explicit initialization
+}
+
+void SafeSignalManager::ensureInitialized() {
+    if (!initialized_.load(std::memory_order_acquire)) {
+        std::lock_guard<std::mutex> lock(initMutex_);
+        if (!initialized_.load(std::memory_order_relaxed)) {
+            // Create worker threads now that we're safely past static initialization
+            for (size_t i = 0; i < initialThreadCount_; ++i) {
+                workerThreads_.emplace_back([this](std::stop_token stopToken) {
+                    this->processSignals(stopToken);
+                });
+            }
+
+            try {
+                spdlog::info(
+                    "SafeSignalManager initialized with {} worker threads and queue size {}",
+                    initialThreadCount_, maxQueueSize_);
+            } catch (...) {
+                // Suppress logging errors if spdlog isn't ready
+            }
+
+            initialized_.store(true, std::memory_order_release);
+        }
+    }
 }
 
 SafeSignalManager::~SafeSignalManager() {
@@ -323,13 +341,19 @@ SafeSignalManager::~SafeSignalManager() {
     queueCondition_.notify_all();
 #endif
 
-    spdlog::info("SafeSignalManager shutting down");
+    try {
+        spdlog::info("SafeSignalManager shutting down");
+    } catch (...) {
+        // Suppress logging errors during shutdown
+    }
 }
 
 int SafeSignalManager::addSafeSignalHandler(SignalID signal,
                                             const SignalHandler& handler,
                                             int priority,
                                             std::string_view handlerName) {
+    ensureInitialized();  // Ensure threads are created before adding handlers
+
     std::unique_lock lock(queueMutex_);
     int handlerId = nextHandlerId_++;
     safeHandlers_[signal].emplace(handler, priority, handlerName);
@@ -338,9 +362,13 @@ int SafeSignalManager::addSafeSignalHandler(SignalID signal,
     std::unique_lock statsLock(statsMutex_);
     signalStats_.try_emplace(signal, SignalStats{});
 
-    spdlog::info(
-        "Added safe signal handler for signal {} with priority {} and ID {}",
-        signal, priority, handlerId);
+    try {
+        spdlog::info(
+            "Added safe signal handler for signal {} with priority {} and ID {}",
+            signal, priority, handlerId);
+    } catch (...) {
+        // Suppress logging errors if spdlog isn't ready
+    }
 
     return handlerId;
 }
@@ -421,7 +449,8 @@ void SafeSignalManager::safeSignalDispatcher(int signal) {
 }
 
 auto SafeSignalManager::getInstance() -> SafeSignalManager& {
-    static SafeSignalManager instance;
+    // Use default parameters that are safe during static initialization
+    static SafeSignalManager instance(0, 1000);  // 0 threads initially, will be created lazily
     return instance;
 }
 

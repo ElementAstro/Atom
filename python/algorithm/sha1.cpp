@@ -340,14 +340,18 @@ Examples:
                 results;
             results.reserve(string_data.size());
 
+#if defined(_OPENMP)
 #pragma omp parallel for
+#endif
             for (size_t i = 0; i < string_data.size(); ++i) {
                 atom::algorithm::SHA1 hasher;
                 hasher.update(
                     reinterpret_cast<const uint8_t*>(string_data[i].data()),
                     string_data[i].size());
 
+#if defined(_OPENMP)
 #pragma omp critical
+#endif
                 results.push_back(hasher.digest());
             }
 

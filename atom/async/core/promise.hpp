@@ -14,14 +14,13 @@
 #include <vector>
 
 // Platform-specific optimizations
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(__APPLE__)
-#define ATOM_PLATFORM_MACOS
+#elif defined(ATOM_PLATFORM_APPLE)
 #include <dispatch/dispatch.h>
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX
+#elif defined(ATOM_PLATFORM_LINUX)
 #include <pthread.h>
 #endif
 
@@ -109,7 +108,17 @@ public:
     Promise() noexcept;
 
     // Rule of five for proper resource management
-    ~Promise() noexcept = default;
+    ~Promise() noexcept {
+        // Ensure cancellation thread is properly cleaned up
+        if (cancellationThread_.has_value() && cancellationThread_->joinable()) {
+            cancellationThread_->request_stop();
+            try {
+                cancellationThread_->join();
+            } catch (...) {
+                // Ignore exceptions in destructor
+            }
+        }
+    }
     Promise(const Promise&) = delete;
     Promise& operator=(const Promise&) = delete;
 
@@ -254,7 +263,17 @@ public:
     Promise() noexcept;
 
     // Rule of five for proper resource management
-    ~Promise() noexcept = default;
+    ~Promise() noexcept {
+        // Ensure cancellation thread is properly cleaned up
+        if (cancellationThread_.has_value() && cancellationThread_->joinable()) {
+            cancellationThread_->request_stop();
+            try {
+                cancellationThread_->join();
+            } catch (...) {
+                // Ignore exceptions in destructor
+            }
+        }
+    }
     Promise(const Promise&) = delete;
     Promise& operator=(const Promise&) = delete;
 
@@ -912,7 +931,7 @@ void Promise<T>::runCallbacks() noexcept {
     // them
     std::vector<std::function<void(T)>> localCallbacks;
     {
-        std::shared_lock lock(mutex_);
+        std::unique_lock lock(mutex_);  // Use unique_lock for modification
         if (callbacks_.empty())
             return;
         localCallbacks = std::move(callbacks_);

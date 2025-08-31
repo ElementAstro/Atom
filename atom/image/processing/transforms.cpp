@@ -17,7 +17,7 @@ blob ImageTransform::resize(const blob& input, int newWidth, int newHeight,
 
     int inputWidth = input.getCols();
     int inputHeight = input.getRows();
-    int channels = input.getChannels();
+    [[maybe_unused]] int channels = input.getChannels();
 
     // Preserve aspect ratio if requested
     if (preserveAspect) {
@@ -42,7 +42,7 @@ blob ImageTransform::resize(const blob& input, int newWidth, int newHeight,
 blob ImageTransform::rotate(const blob& input, double angle,
                            const Point2D& center, bool expandCanvas,
                            InterpolationMethod method, BorderMode borderMode,
-                           uint8_t fillValue) const {
+                           uint8_t fillValue [[maybe_unused]]) const {
     if (input.isEmpty()) {
         return blob{};
     }
@@ -66,7 +66,9 @@ blob ImageTransform::rotate(const blob& input, double angle,
     if (expandCanvas) {
         // Calculate bounding box of rotated image
         std::vector<Point2D> corners = {
-            {0, 0}, {inputWidth, 0}, {inputWidth, inputHeight}, {0, inputHeight}
+            {0.0, 0.0}, {static_cast<double>(inputWidth), 0.0},
+            {static_cast<double>(inputWidth), static_cast<double>(inputHeight)},
+            {0.0, static_cast<double>(inputHeight)}
         };
 
         double minX = std::numeric_limits<double>::max();
@@ -343,7 +345,7 @@ Point2D ImageTransform::transformPoint(const Point2D& point, const TransformMatr
     return Point2D(x, y);
 }
 
-std::unique_ptr<ImageTransform> createOptimalTransform(bool useGPU) {
+std::unique_ptr<ImageTransform> createOptimalTransform(bool useGPU [[maybe_unused]]) {
     // For now, return basic CPU implementation
     // TODO: Add GPU implementation when CUDA/OpenCL support is added
     return std::make_unique<ImageTransform>();

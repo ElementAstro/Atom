@@ -38,44 +38,25 @@ Description: Advanced async task executor with thread pooling
 #include <vector>
 
 // Platform-specific optimizations
-#if defined(_WIN32) || defined(_WIN64)
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 #include <windows.h>
-#define ATOM_PLATFORM_WINDOWS 1
 #define WIN32_LEAN_AND_MEAN
-#elif defined(__APPLE__)
+#elif defined(ATOM_PLATFORM_APPLE)
 #include <dispatch/dispatch.h>
 #include <mach/thread_policy.h>
 #include <pthread.h>
-#define ATOM_PLATFORM_MACOS 1
-#elif defined(__linux__)
+#elif defined(ATOM_PLATFORM_LINUX)
 #include <pthread.h>
 #include <sched.h>
-#define ATOM_PLATFORM_LINUX 1
 #endif
 
-// Add compiler-specific optimizations
-#if defined(__GNUC__) || defined(__clang__)
-#define ATOM_LIKELY(x) __builtin_expect(!!(x), 1)
-#define ATOM_UNLIKELY(x) __builtin_expect(!!(x), 0)
-#define ATOM_FORCE_INLINE __attribute__((always_inline)) inline
-#define ATOM_NO_INLINE __attribute__((noinline))
-#elif defined(_MSC_VER)
-#define ATOM_LIKELY(x) (x)
-#define ATOM_UNLIKELY(x) (x)
-#define ATOM_FORCE_INLINE __forceinline
-#define ATOM_NO_INLINE __declspec(noinline)
-#else
-#define ATOM_LIKELY(x) (x)
-#define ATOM_UNLIKELY(x) (x)
-#define ATOM_FORCE_INLINE inline
-#define ATOM_NO_INLINE
-#endif
-
-// Cache line size definition - to avoid false sharing
+// Cache line size definition - to avoid false sharing (if not already defined in macro.hpp)
 #ifndef ATOM_CACHE_LINE_SIZE
 #if defined(ATOM_PLATFORM_WINDOWS)
 #define ATOM_CACHE_LINE_SIZE 64
-#elif defined(ATOM_PLATFORM_MACOS)
+#elif defined(ATOM_PLATFORM_APPLE)
 #define ATOM_CACHE_LINE_SIZE 128
 #else
 #define ATOM_CACHE_LINE_SIZE 64

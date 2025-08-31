@@ -2,6 +2,11 @@ cmake_minimum_required(VERSION 3.20)
 
 project(atom_iosearch.test)
 
+# Set C++ standard to C++20 for concepts support
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
 # Find required packages
 find_package(GTest QUIET)
 if(NOT GTEST_FOUND)
@@ -28,7 +33,18 @@ file(GLOB TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 # Exclude CMake generated files
 list(FILTER TEST_SOURCES EXCLUDE REGEX ".*CMakeFiles.*")
 
-add_executable(${PROJECT_NAME} ${TEST_SOURCES})
+# Add atom search implementation sources
+set(ATOM_SEARCH_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../atom/search/core/search.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../atom/search/database/sqlite.cpp
+)
+
+# Add MySQL source only if MariaDB is available
+if(MARIADB_FOUND)
+    list(APPEND ATOM_SEARCH_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/../../atom/search/database/mysql.cpp)
+endif()
+
+add_executable(${PROJECT_NAME} ${TEST_SOURCES} ${ATOM_SEARCH_SOURCES})
 
 # Set include directories to find atom headers
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -36,12 +52,12 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_SOURCE_DIR}/../../atom
 )
 
-# For now, let's build a simple test without external dependencies
-# We'll add the actual library linking later once the main project is built
+# Link required libraries including atom search dependencies
 target_link_libraries(${PROJECT_NAME}
     gtest
     gtest_main
     ${SQLite3_LIBRARIES}
+    fmt
 )
 
 # Add MariaDB if available

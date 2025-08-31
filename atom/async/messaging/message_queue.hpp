@@ -37,14 +37,12 @@
 #include <asio.hpp>
 #endif
 
-#if defined(_WIN32) || defined(_WIN64)
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 #include <windows.h>
-#define ATOM_PLATFORM_WINDOWS 1
-#elif defined(__APPLE__)
+#elif defined(ATOM_PLATFORM_APPLE)
 #include <TargetConditionals.h>
-#define ATOM_PLATFORM_MACOS 1
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX 1
 #endif
 
 #if defined(__GNUC__) || defined(__clang__)

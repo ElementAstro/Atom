@@ -22,6 +22,7 @@
 #include <iostream>
 #include <memory>
 #include <numeric>
+#include <random>
 #include <ranges>
 #include <string>
 #include <vector>
@@ -125,7 +126,9 @@ void demonstratePerformanceMeasurement() {
     for (size_t size : sizes) {
         std::vector<int> test_data(size);
         std::iota(test_data.begin(), test_data.end(), 1);
-        std::random_shuffle(test_data.begin(), test_data.end());
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(test_data.begin(), test_data.end(), g);
 
         start = std::chrono::high_resolution_clock::now();
         std::sort(test_data.begin(), test_data.end());

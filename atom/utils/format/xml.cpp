@@ -342,7 +342,7 @@ auto XMLReader::getValuesByPathsAsync(const std::vector<std::string>& paths)
     });
 }
 
-auto XMLReader::getElementByPath(std::string_view path) const
+auto XMLReader::getElementByPath([[maybe_unused]] std::string_view path) const
     -> tinyxml2::XMLElement* {
     // Implementation for path-based element retrieval
     // This would need to be implemented based on your path format

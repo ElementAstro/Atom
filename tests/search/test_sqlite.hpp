@@ -102,42 +102,51 @@ TEST_F(SqliteDBTest, BasicDelete) {
 
 // Parameterized Query Tests
 TEST_F(SqliteDBTest, ParameterizedInsert) {
+    const char* name = "Eve";
+    const char* email = "eve@test.com";
     EXPECT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Eve", "eve@test.com", 28
+        name, email, 28
     ));
     EXPECT_GT(db->getLastInsertRowId(), 0);
 }
 
 TEST_F(SqliteDBTest, ParameterizedSelect) {
     // Insert test data
+    const char* name = "Frank";
+    const char* email = "frank@test.com";
     ASSERT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Frank", "frank@test.com", 32
+        name, email, 32
     ));
 
     // Parameterized select
-    auto result = db->selectDataParameterized("SELECT * FROM users WHERE age > ?", 30);
+    auto result = db->selectParameterizedData("SELECT * FROM users WHERE age > ?", 30);
     ASSERT_EQ(result.size(), 1);
     EXPECT_EQ(result[0][1], "Frank");
 }
 
 TEST_F(SqliteDBTest, ParameterizedUpdate) {
+    const char* name = "Grace";
+    const char* email = "grace@test.com";
     ASSERT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Grace", "grace@test.com", 27
+        name, email, 27
     ));
 
+    const char* update_name = "Grace";
     EXPECT_TRUE(db->executeParameterizedQuery(
-        "UPDATE users SET age = ? WHERE name = ?", 28, "Grace"
+        "UPDATE users SET age = ? WHERE name = ?", 28, update_name
     ));
     EXPECT_EQ(db->getChanges(), 1);
 }
 
 TEST_F(SqliteDBTest, ParameterizedDelete) {
+    const char* name = "Henry";
+    const char* email = "henry@test.com";
     ASSERT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Henry", "henry@test.com", 45
+        name, email, 45
     ));
 
     EXPECT_TRUE(db->executeParameterizedQuery("DELETE FROM users WHERE age > ?", 40));
@@ -148,9 +157,11 @@ TEST_F(SqliteDBTest, ParameterizedDelete) {
 TEST_F(SqliteDBTest, BasicTransaction) {
     EXPECT_NO_THROW(db->beginTransaction());
 
+    const char* name = "Ivy";
+    const char* email = "ivy@test.com";
     EXPECT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Ivy", "ivy@test.com", 29
+        name, email, 29
     ));
 
     EXPECT_NO_THROW(db->commitTransaction());
@@ -163,9 +174,11 @@ TEST_F(SqliteDBTest, BasicTransaction) {
 TEST_F(SqliteDBTest, TransactionRollback) {
     EXPECT_NO_THROW(db->beginTransaction());
 
+    const char* name = "Jack";
+    const char* email = "jack@test.com";
     EXPECT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Jack", "jack@test.com", 33
+        name, email, 33
     ));
 
     EXPECT_NO_THROW(db->rollbackTransaction());
@@ -182,15 +195,18 @@ TEST_F(SqliteDBTest, InvalidQuery) {
 
 TEST_F(SqliteDBTest, ConstraintViolation) {
     // Insert first user
+    const char* name1 = "Kate";
+    const char* email = "kate@test.com";
     ASSERT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Kate", "kate@test.com", 26
+        name1, email, 26
     ));
 
     // Try to insert duplicate email (should fail due to UNIQUE constraint)
+    const char* name2 = "Kate2";
     EXPECT_THROW(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Kate2", "kate@test.com", 27
+        name2, email, 27
     ), SQLiteException);
 }
 
@@ -200,17 +216,20 @@ TEST_F(SqliteDBTest, InvalidTableAccess) {
 
 // File Operations Tests
 TEST_F(SqliteDBTest, FileBasedDatabase) {
-    std::string filename = "test_file_db.sqlite";
+    std::string filename = "test_file_db_" + std::to_string(std::time(nullptr)) + ".sqlite";
     createFileBasedDB(filename);
 
     // Insert data
+    const char* name = "Leo";
+    const char* email = "leo@test.com";
     EXPECT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Leo", "leo@test.com", 31
+        name, email, 31
     ));
 
     // Close and reopen database
     db.reset();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Allow file to be released
     db = std::make_unique<SqliteDB>(filename);
 
     // Verify data persisted
@@ -218,6 +237,8 @@ TEST_F(SqliteDBTest, FileBasedDatabase) {
     EXPECT_EQ(result.size(), 1);
 
     // Cleanup
+    db.reset();
+    std::this_thread::sleep_for(std::chrono::milliseconds(100)); // Allow file to be released
     std::filesystem::remove(filename);
 }
 
@@ -247,23 +268,27 @@ TEST_F(SqliteDBTest, Pagination) {
 // Search and Validation Tests
 TEST_F(SqliteDBTest, SearchData) {
     // Insert test data
+    const char* name = "Mike";
+    const char* email = "mike@test.com";
     ASSERT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Mike", "mike@test.com", 34
+        name, email, 34
     ));
 
     // Search for existing data
-    EXPECT_TRUE(db->searchData("SELECT * FROM users", "Mike"));
+    EXPECT_TRUE(db->searchData("SELECT * FROM users WHERE name = ?", "Mike"));
 
     // Search for non-existing data
-    EXPECT_FALSE(db->searchData("SELECT * FROM users", "NonExistent"));
+    EXPECT_FALSE(db->searchData("SELECT * FROM users WHERE name = ?", "NonExistent"));
 }
 
 TEST_F(SqliteDBTest, ValidateData) {
     // Insert test data
+    const char* name = "Nina";
+    const char* email = "nina@test.com";
     ASSERT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "Nina", "nina@test.com", 24
+        name, email, 24
     ));
 
     // Valid validation
@@ -417,9 +442,11 @@ TEST_F(SqliteDBTest, TransactionErrorRecovery) {
     EXPECT_NO_THROW(db->beginTransaction());
 
     // Valid insert
+    const char* name = "ValidUser";
+    const char* email = "valid@test.com";
     EXPECT_TRUE(db->executeParameterizedQuery(
         "INSERT INTO users (name, email, age) VALUES (?, ?, ?)",
-        "ValidUser", "valid@test.com", 25
+        name, email, 25
     ));
 
     // Invalid insert (should fail)

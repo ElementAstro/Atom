@@ -4,7 +4,9 @@
 
 #ifdef _WIN32
 #include <Wbemidl.h>
+#ifdef _MSC_VER
 #pragma comment(lib, "wbemuuid.lib")
+#endif
 
 // Helper function to convert BSTR to std::string (MinGW compatible)
 static std::string BSTRToString(BSTR bstr) {
@@ -76,7 +78,7 @@ public:
 
         while (pEnumerator) {
             HRESULT hr =
-                pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+                pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
             if (0 == uReturn) {
                 break;
             }
@@ -138,7 +140,7 @@ public:
 
         while (pEnumerator) {
             HRESULT hr =
-                pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+                pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
             if (0 == uReturn) {
                 break;
             }

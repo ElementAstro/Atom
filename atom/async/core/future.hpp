@@ -14,10 +14,11 @@
 #include <type_traits>
 #include <vector>
 
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
+#include "atom/macro.hpp"
+
+#if defined(ATOM_PLATFORM_WINDOWS)
 #include <windows.h>
-#elif defined(__APPLE__)
+#elif defined(ATOM_PLATFORM_APPLE)
 #define ATOM_PLATFORM_MACOS
 #include <dispatch/dispatch.h>
 #elif defined(__linux__)

@@ -122,7 +122,7 @@ auto StackTrace::toString() const -> std::string {
 }
 
 #ifdef _WIN32
-auto StackTrace::processFrame(void* frame, int frameIndex) const
+auto StackTrace::processFrame(void* frame, [[maybe_unused]] int frameIndex) const
     -> std::string {
     std::ostringstream oss;
     uintptr_t address = reinterpret_cast<uintptr_t>(frame);

@@ -50,7 +50,8 @@ public:
     }
 
     bool isBluetoothEnabled() const {
-        BLUETOOTH_RADIO_INFO radioInfo = {sizeof(BLUETOOTH_RADIO_INFO)};
+        [[maybe_unused]] BLUETOOTH_RADIO_INFO radioInfo = {};
+        radioInfo.dwSize = sizeof(BLUETOOTH_RADIO_INFO);
         HANDLE radio;
         BLUETOOTH_FIND_RADIO_PARAMS findParams = {
             sizeof(BLUETOOTH_FIND_RADIO_PARAMS)};
@@ -65,7 +66,7 @@ public:
         return false;
     }
 
-    void enableBluetooth(bool enable) {
+    void enableBluetooth([[maybe_unused]] bool enable) {
         throw BluetoothException(
             "Cannot directly enable/disable Bluetooth adapter on Windows, "
             "user must operate through system settings");
@@ -74,11 +75,17 @@ public:
     std::vector<BluetoothDeviceInfo> scanDevices(std::chrono::seconds timeout) {
         std::vector<BluetoothDeviceInfo> devices;
 
-        BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {
-            sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS), 1, 1, 1, 1, 1,
-            static_cast<UCHAR>(timeout.count())};
+        BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {};
+        searchParams.dwSize = sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS);
+        searchParams.fReturnAuthenticated = 1;
+        searchParams.fReturnRemembered = 1;
+        searchParams.fReturnUnknown = 1;
+        searchParams.fReturnConnected = 1;
+        searchParams.fIssueInquiry = 1;
+        searchParams.cTimeoutMultiplier = static_cast<UCHAR>(timeout.count());
 
-        BLUETOOTH_DEVICE_INFO deviceInfo = {sizeof(BLUETOOTH_DEVICE_INFO)};
+        BLUETOOTH_DEVICE_INFO deviceInfo = {};
+        deviceInfo.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
 
         HBLUETOOTH_DEVICE_FIND hFind =
             BluetoothFindFirstDevice(&searchParams, &deviceInfo);
@@ -126,11 +133,17 @@ public:
                                    timeout]() {
             std::unordered_set<std::string> discoveredAddresses;
 
-            BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {
-                sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS), 1, 1, 1, 1, 1,
-                static_cast<UCHAR>(timeout.count())};
+            BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {};
+            searchParams.dwSize = sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS);
+            searchParams.fReturnAuthenticated = 1;
+            searchParams.fReturnRemembered = 1;
+            searchParams.fReturnUnknown = 1;
+            searchParams.fReturnConnected = 1;
+            searchParams.fIssueInquiry = 1;
+            searchParams.cTimeoutMultiplier = static_cast<UCHAR>(timeout.count());
 
-            BLUETOOTH_DEVICE_INFO deviceInfo = {sizeof(BLUETOOTH_DEVICE_INFO)};
+            BLUETOOTH_DEVICE_INFO deviceInfo = {};
+            deviceInfo.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
 
             auto startTime = std::chrono::steady_clock::now();
 
@@ -199,7 +212,8 @@ public:
 
         config_ = config;
 
-        SOCKADDR_BTH btAddr = {0};
+        SOCKADDR_BTH btAddr = {};
+        btAddr.addressFamily = AF_BTH;
         btAddr.addressFamily = AF_BTH;
         btAddr.port = 1;
 
@@ -304,7 +318,8 @@ public:
         wchar_t widePin[16] = {0};
         mbstowcs(widePin, pin.c_str(), pin.length());
 
-        BLUETOOTH_DEVICE_INFO deviceInfo = {sizeof(BLUETOOTH_DEVICE_INFO)};
+        BLUETOOTH_DEVICE_INFO deviceInfo = {};
+        deviceInfo.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
         deviceInfo.Address = btAddr;
         deviceInfo.ulClassofDevice = 0;
 
@@ -320,7 +335,8 @@ public:
             throw BluetoothException("Invalid Bluetooth address: " + address);
         }
 
-        BLUETOOTH_DEVICE_INFO deviceInfo = {sizeof(BLUETOOTH_DEVICE_INFO)};
+        BLUETOOTH_DEVICE_INFO deviceInfo = {};
+        deviceInfo.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
         deviceInfo.Address = btAddr;
 
         DWORD removeResult = BluetoothRemoveDevice(&btAddr);
@@ -331,10 +347,17 @@ public:
     std::vector<BluetoothDeviceInfo> getPairedDevices() {
         std::vector<BluetoothDeviceInfo> pairedDevices;
 
-        BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {
-            sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS), 1, 0, 1, 1, 1, 15};
+        BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {};
+        searchParams.dwSize = sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS);
+        searchParams.fReturnAuthenticated = 1;
+        searchParams.fReturnRemembered = 0;
+        searchParams.fReturnUnknown = 1;
+        searchParams.fReturnConnected = 1;
+        searchParams.fIssueInquiry = 1;
+        searchParams.cTimeoutMultiplier = 15;
 
-        BLUETOOTH_DEVICE_INFO deviceInfo = {sizeof(BLUETOOTH_DEVICE_INFO)};
+        BLUETOOTH_DEVICE_INFO deviceInfo = {};
+        deviceInfo.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
 
         HBLUETOOTH_DEVICE_FIND hFind =
             BluetoothFindFirstDevice(&searchParams, &deviceInfo);

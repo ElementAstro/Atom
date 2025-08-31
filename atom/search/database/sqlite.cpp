@@ -860,3 +860,19 @@ template std::optional<int> SqliteDB::getSingleValue<int>(
     std::string_view query, int (*columnFunc)(sqlite3_stmt*, int));
 template std::optional<double> SqliteDB::getSingleValue<double>(
     std::string_view query, double (*columnFunc)(sqlite3_stmt*, int));
+
+// Additional explicit template instantiations for test cases
+template bool SqliteDB::executeParameterizedQuery<const char*, int>(std::string_view, const char*&&, int&&);
+template bool SqliteDB::executeParameterizedQuery<const char*&, const char*&, int>(std::string_view, const char*&, const char*&, int&&);
+template bool SqliteDB::executeParameterizedQuery<int, const char*&>(std::string_view, int&&, const char*&);
+template bool SqliteDB::executeParameterizedQuery<std::string, std::string, int>(std::string_view, std::string&&, std::string&&, int&&);
+
+// Final template instantiations for remaining string literal combinations
+template bool SqliteDB::executeParameterizedQuery<std::string&, char const (&)[15], int>(std::string_view, std::string&, char const (&)[15], int&&);
+template bool SqliteDB::executeParameterizedQuery<std::string&, char const (&)[17], int>(std::string_view, std::string&, char const (&)[17], int&&);
+
+// selectParameterizedData instantiations (these are new)
+template SqliteDB::ResultSet SqliteDB::selectParameterizedData<int>(std::string_view, int&&);
+template SqliteDB::ResultSet SqliteDB::selectParameterizedData<std::string>(std::string_view, std::string&&);
+template SqliteDB::ResultSet SqliteDB::selectParameterizedData<const char*>(std::string_view, const char*&&);
+template SqliteDB::ResultSet SqliteDB::selectParameterizedData<const char*, int>(std::string_view, const char*&&, int&&);

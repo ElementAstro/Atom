@@ -16,15 +16,7 @@
 #include <type_traits>
 
 // 跨平台支持
-#if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
-#elif defined(__APPLE__)
-#define ATOM_PLATFORM_APPLE
-#elif defined(__linux__)
-#define ATOM_PLATFORM_LINUX
-#elif defined(__unix__)
-#define ATOM_PLATFORM_UNIX
-#endif
+#include "atom/macro.hpp"
 
 // 线程支持
 #ifdef ATOM_USE_BOOST

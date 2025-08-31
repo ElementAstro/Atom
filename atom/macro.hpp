@@ -15,13 +15,13 @@ Description: Useful Macros
 #pragma once
 
 #if defined(_WIN32) || defined(_WIN64)
-#define ATOM_PLATFORM_WINDOWS
+#define ATOM_PLATFORM_WINDOWS 1
 #include <malloc.h>
 #elif defined(__APPLE__)
-#define ATOM_PLATFORM_APPLE
+#define ATOM_PLATFORM_APPLE 1
 #include <stdlib.h>
 #elif defined(__linux__) || defined(__unix__)
-#define ATOM_PLATFORM_LINUX
+#define ATOM_PLATFORM_LINUX 1
 #include <stdlib.h>
 #endif
 

@@ -42,7 +42,6 @@ constexpr time_t K_MAX_TIMESTAMP = std::numeric_limits<time_t>::max();
 constexpr size_t K_BUFFER_SIZE = 80;
 
 thread_local std::array<char, K_BUFFER_SIZE> tls_buffer{};
-thread_local std::tm tls_timeInfo{};
 
 // Check if a timestamp is valid
 bool isValidTimestamp(time_t timestamp) {
@@ -388,9 +387,9 @@ auto getUtcTime() -> std::string {
         // C++20 format approach if available
 #if __cpp_lib_format >= 202106L
         // 使用 strftime 替代 std::format
-        if (std::strftime(tls_buffer.data(), tls_buffer.size(), "%FT%TZ",
+        if (std::strftime(tls_buffer.data(), tls_buffer.size(), "%Y-%m-%dT%H:%M:%SZ",
                           &utcTime) == 0) {
-            THROW_TIME_CONVERT_ERROR("strftime failed with format %FT%TZ");
+            THROW_TIME_CONVERT_ERROR("strftime failed with format %Y-%m-%dT%H:%M:%SZ");
         }
         return std::string(tls_buffer.data());
 #else

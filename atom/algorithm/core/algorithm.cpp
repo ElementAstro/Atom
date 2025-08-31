@@ -119,7 +119,7 @@ auto KMP::search(std::string_view text) const -> std::vector<int> {
                 }
             }
         }
-#elif defined(ATOM_USE_OPENMP)
+#elif defined(ATOM_USE_OPENMP) && defined(_OPENMP)
         // Modern OpenMP implementation with better load balancing
         const int max_threads = omp_get_max_threads();
         std::vector<std::vector<int>> local_occurrences(max_threads);
@@ -359,7 +359,7 @@ auto BoyerMoore::search(std::string_view text) const -> std::vector<int> {
             return occurrences;
         }
 
-#ifdef ATOM_USE_OPENMP
+#if defined(ATOM_USE_OPENMP) && defined(_OPENMP)
         std::vector<int> local_occurrences[omp_get_max_threads()];
 #pragma omp parallel
         {
@@ -532,7 +532,7 @@ auto BoyerMoore::searchOptimized(std::string_view text) const
                 }
             }
         }
-#elif defined(ATOM_USE_OPENMP)
+#elif defined(ATOM_USE_OPENMP) && defined(_OPENMP)
         // Improved OpenMP implementation with efficient scheduling
         const int max_threads = omp_get_max_threads();
         std::vector<std::vector<int>> local_occurrences(max_threads);

@@ -106,7 +106,7 @@ public:
     }
 };
 
-PatternCache& get_pattern_cache() {
+[[maybe_unused]] PatternCache& get_pattern_cache() {
     static PatternCache cache;
     return cache;
 }

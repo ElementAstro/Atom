@@ -221,7 +221,7 @@ void SerialPortScanner::monitor_thread_func() {
     spdlog::info("Port monitoring thread started");
 
     std::unordered_set<std::string> previous_ports;
-    auto last_scan = std::chrono::steady_clock::now();
+    [[maybe_unused]] auto last_scan = std::chrono::steady_clock::now();
 
     // Initial scan to establish baseline
     if (auto result = list_available_ports(false);
@@ -954,7 +954,7 @@ std::string SerialPortScanner::get_cache_info() const {
     oss << "  Cache hits: " << stats_.cache_hits.load() << "\n";
     oss << "  Cache misses: " << stats_.cache_misses.load() << "\n";
 
-    auto now = std::chrono::steady_clock::now();
+    [[maybe_unused]] auto now = std::chrono::steady_clock::now();
     size_t expired_count = 0;
     for (const auto& [name, entry] : port_cache_) {
         if (entry.is_expired(config_.cache_ttl)) {

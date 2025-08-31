@@ -148,7 +148,7 @@ public:
 
     void createSocket() {
         socket_ = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-        if (socket_ < 0) {
+        if (socket_ == INVALID_SOCKET) {
             throw std::runtime_error("Socket creation failed: " +
                                      getLastErrorMsg());
         }
@@ -171,7 +171,7 @@ public:
     void cleanup() {
         stopReceiving();
 
-        if (socket_ >= 0) {
+        if (socket_ != INVALID_SOCKET) {
             CLOSE_SOCKET(socket_);
             socket_ = -1;
         }
@@ -802,7 +802,7 @@ public:
             leaveMulticastGroup(group);
         }
 
-        if (socket_ >= 0) {
+        if (socket_ != INVALID_SOCKET) {
             CLOSE_SOCKET(socket_);
             socket_ = -1;
         }

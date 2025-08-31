@@ -21,7 +21,9 @@ Description: System Information Module - CPU Windows Implementation
 #include <powersetting.h>
 #include <powrprof.h>  // Add this header for PowerGetActiveScheme
 
+#ifdef _MSC_VER
 #pragma comment(lib, "PowrProf.lib")  // Link against the PowerProf library
+#endif
 
 namespace atom::system {
 
