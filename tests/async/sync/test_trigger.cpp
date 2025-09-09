@@ -167,11 +167,11 @@ TEST_F(TriggerTest, CallbackPriorities) {
 
 TEST_F(TriggerTest, EmptyEventName) {
     Trigger<int> trigger;
-    
+
     // Test triggering empty event name
     auto triggeredCount = trigger.trigger("", 42);
     EXPECT_EQ(triggeredCount, 0);
-    
+
     // Test registering callback with empty event name
     auto callback = [](int) {};
     EXPECT_THROW(trigger.registerCallback("", callback), atom::async::TriggerException);
@@ -179,11 +179,11 @@ TEST_F(TriggerTest, EmptyEventName) {
 
 TEST_F(TriggerTest, NonExistentEvent) {
     Trigger<int> trigger;
-    
+
     // Test triggering non-existent event
     auto triggeredCount = trigger.trigger("non_existent", 42);
     EXPECT_EQ(triggeredCount, 0);
-    
+
     // Test unregistering from non-existent event
     bool unregistered = trigger.unregisterCallback("non_existent", 123);
     EXPECT_FALSE(unregistered);
@@ -191,43 +191,43 @@ TEST_F(TriggerTest, NonExistentEvent) {
 
 TEST_F(TriggerTest, HasCallbacks) {
     Trigger<int> trigger;
-    
+
     // Initially no callbacks
     EXPECT_FALSE(trigger.hasCallbacks("test_event"));
     EXPECT_EQ(trigger.callbackCount("test_event"), 0);
-    
+
     // Register a callback
     auto callback = [](int) {};
     auto callbackId = trigger.registerCallback("test_event", callback);
-    
+
     EXPECT_TRUE(trigger.hasCallbacks("test_event"));
     EXPECT_EQ(trigger.callbackCount("test_event"), 1);
-    
+
     // Unregister callback
     trigger.unregisterCallback("test_event", callbackId);
-    
+
     EXPECT_FALSE(trigger.hasCallbacks("test_event"));
     EXPECT_EQ(trigger.callbackCount("test_event"), 0);
 }
 
 TEST_F(TriggerTest, UnregisterAllCallbacks) {
     Trigger<int> trigger;
-    
+
     // Register multiple callbacks
     auto callback1 = [](int) {};
     auto callback2 = [](int) {};
     auto callback3 = [](int) {};
-    
+
     trigger.registerCallback("test_event", callback1);
     trigger.registerCallback("test_event", callback2);
     trigger.registerCallback("test_event", callback3);
-    
+
     EXPECT_EQ(trigger.callbackCount("test_event"), 3);
-    
+
     // Unregister all callbacks for the event
     auto unregisteredCount = trigger.unregisterAllCallbacks("test_event");
     EXPECT_EQ(unregisteredCount, 3);
-    
+
     EXPECT_FALSE(trigger.hasCallbacks("test_event"));
     EXPECT_EQ(trigger.callbackCount("test_event"), 0);
 }

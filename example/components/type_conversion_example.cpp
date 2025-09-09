@@ -32,14 +32,14 @@ public:
         static TypeConverter instance;
         return instance;
     }
-    
+
     struct Statistics {
         uint64_t totalConversions = 0;
         uint64_t successfulConversions = 0;
         uint64_t failedConversions = 0;
         uint64_t registeredConverters = 0;
     };
-    
+
     Statistics getStatistics() const {
         return Statistics{};
     }
@@ -68,14 +68,14 @@ struct PlayerData {
         return id == other.id && name == other.name && score == other.score &&
                active == other.active;
     }
-    
+
     bool operator<(const PlayerData& other) const {
         if (id != other.id) return id < other.id;
         if (name != other.name) return name < other.name;
         if (score != other.score) return score < other.score;
         return active < other.active;
     }
-    
+
     bool operator>(const PlayerData& other) const {
         return other < *this;
     }
@@ -103,12 +103,12 @@ public:
         return std::abs(x_ - other.x_) < epsilon &&
                std::abs(y_ - other.y_) < epsilon;
     }
-    
+
     bool operator<(const Point2D& other) const {
         if (x_ != other.x_) return x_ < other.x_;
         return y_ < other.y_;
     }
-    
+
     bool operator>(const Point2D& other) const {
         return other < *this;
     }
@@ -135,18 +135,18 @@ int main() {
     try {
         // Create a simple component to demonstrate basic functionality
         auto component = std::make_shared<TypeConversionComponent>("TypeConversionDemo");
-        
+
         std::cout << "\n1. Component created successfully" << std::endl;
         std::cout << "2. TypeConverter stub is functional" << std::endl;
         std::cout << "3. Custom types have comparison operators" << std::endl;
-        
+
         // Test basic functionality
         PlayerData player(1, "TestPlayer", 100.0, true);
         Point2D point(3.14, 2.71);
-        
+
         std::cout << "4. PlayerData: " << player.toString() << std::endl;
         std::cout << "5. Point2D: " << point.toString() << std::endl;
-        
+
         // Test TypeConverter stub
         auto& converter = TypeConverter::instance();
         auto stats = converter.getStatistics();

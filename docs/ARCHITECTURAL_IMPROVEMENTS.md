@@ -179,7 +179,7 @@ atom_setup_networking_deps(${module_name})
 
 ### Core Dependencies ✅
 - **OpenSSL**: Cryptographic operations - Working
-- **ZLIB**: Compression - Working  
+- **ZLIB**: Compression - Working
 - **SQLite3**: Database operations - Working
 - **fmt**: String formatting - Working
 - **Asio**: Networking (standalone) - Working

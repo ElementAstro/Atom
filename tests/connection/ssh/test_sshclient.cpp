@@ -12,7 +12,7 @@ protected:
         // Use localhost for testing - requires SSH server to be running
         host_ = "127.0.0.1";
         port_ = 22;
-        
+
         // Create test key files for testing
         createTestKeyFiles();
     }
@@ -27,14 +27,14 @@ protected:
     void createTestKeyFiles() {
         private_key_path_ = "test_private_key";
         public_key_path_ = "test_public_key.pub";
-        
+
         // Create dummy key files for testing
         std::ofstream private_key(private_key_path_);
         private_key << "-----BEGIN OPENSSH PRIVATE KEY-----\n";
         private_key << "dummy_private_key_content\n";
         private_key << "-----END OPENSSH PRIVATE KEY-----\n";
         private_key.close();
-        
+
         std::ofstream public_key(public_key_path_);
         public_key << "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ dummy_public_key test@example.com\n";
         public_key.close();
@@ -67,9 +67,9 @@ TEST_F(SSHClientTest, MoveConstructor) {
 TEST_F(SSHClientTest, AssignmentOperators) {
     SSHClient client1(host_, port_);
     SSHClient client2("192.168.1.1", 2222);
-    
+
     EXPECT_NO_THROW(client2 = client1);  // Copy assignment
-    
+
     SSHClient client3("10.0.0.1", 3333);
     EXPECT_NO_THROW(client3 = std::move(client1));  // Move assignment
 }
@@ -80,14 +80,14 @@ TEST_F(SSHClientTest, AssignmentOperators) {
 
 TEST_F(SSHClientTest, ConnectionFailureInvalidHost) {
     SSHClient client("invalid.host.example.com", 22);
-    
+
     // Should throw or return error when connecting to invalid host
     EXPECT_THROW(client.connect("testuser", "testpass", 5), std::exception);
 }
 
 TEST_F(SSHClientTest, ConnectionFailureInvalidPort) {
     SSHClient client(host_, 99999);  // Invalid port
-    
+
     // Should throw or return error when connecting to invalid port
     EXPECT_THROW(client.connect("testuser", "testpass", 5), std::exception);
 }
@@ -99,7 +99,7 @@ TEST_F(SSHClientTest, IsConnectedInitialState) {
 
 TEST_F(SSHClientTest, DisconnectWithoutConnection) {
     SSHClient client(host_, port_);
-    
+
     // Should not throw when disconnecting without connection
     EXPECT_NO_THROW(client.disconnect());
     EXPECT_FALSE(client.isConnected());
@@ -128,7 +128,7 @@ protected:
 
 TEST_F(MockSSHClientTest, ExecuteCommandWithoutConnection) {
     std::vector<std::string> output;
-    
+
     // Should throw when trying to execute command without connection
     EXPECT_THROW(client_->executeCommand("ls", output), std::exception);
 }
@@ -136,7 +136,7 @@ TEST_F(MockSSHClientTest, ExecuteCommandWithoutConnection) {
 TEST_F(MockSSHClientTest, ExecuteCommandsWithoutConnection) {
     std::vector<std::string> commands = {"ls", "pwd", "whoami"};
     std::vector<std::vector<std::string>> outputs;
-    
+
     // Should throw when trying to execute commands without connection
     EXPECT_THROW(client_->executeCommands(commands, outputs), std::exception);
 }
@@ -158,7 +158,7 @@ TEST_F(MockSSHClientTest, CreateDirectoryWithoutConnection) {
 
 TEST_F(MockSSHClientTest, ListDirectoryWithoutConnection) {
     std::vector<std::string> files;
-    
+
     // Should throw when trying to list directory without connection
     EXPECT_THROW(client_->listDirectory("/remote/path", files), std::exception);
 }
@@ -176,17 +176,17 @@ TEST_F(MockSSHClientTest, GetFileInfoWithoutConnection) {
 // Test SSH key authentication methods
 TEST_F(SSHClientTest, ConnectWithPublicKeyInvalidFiles) {
     SSHClient client(host_, port_);
-    
+
     // Should throw when using non-existent key files
-    EXPECT_THROW(client.connectWithPublicKey("testuser", "nonexistent_private_key", 
+    EXPECT_THROW(client.connectWithPublicKey("testuser", "nonexistent_private_key",
                                            "nonexistent_public_key", 5), std::exception);
 }
 
 TEST_F(SSHClientTest, ConnectWithPublicKeyValidFiles) {
     SSHClient client(host_, port_);
-    
+
     // Should handle key files gracefully (may still fail due to invalid keys or no server)
-    EXPECT_THROW(client.connectWithPublicKey("testuser", private_key_path_, 
+    EXPECT_THROW(client.connectWithPublicKey("testuser", private_key_path_,
                                            public_key_path_, 5), std::exception);
 }
 
@@ -202,7 +202,7 @@ protected:
 
 TEST_F(SSHCommandTest, ExecuteEmptyCommand) {
     std::vector<std::string> output;
-    
+
     // Should handle empty command gracefully
     EXPECT_THROW(client_->executeCommand("", output), std::exception);
 }
@@ -210,7 +210,7 @@ TEST_F(SSHCommandTest, ExecuteEmptyCommand) {
 TEST_F(SSHCommandTest, ExecuteMultipleEmptyCommands) {
     std::vector<std::string> commands = {"", "", ""};
     std::vector<std::vector<std::string>> outputs;
-    
+
     // Should handle empty commands gracefully
     EXPECT_THROW(client_->executeCommands(commands, outputs), std::exception);
 }
@@ -218,7 +218,7 @@ TEST_F(SSHCommandTest, ExecuteMultipleEmptyCommands) {
 TEST_F(SSHCommandTest, ExecuteLongCommand) {
     std::vector<std::string> output;
     std::string longCommand(1000, 'a');  // Very long command
-    
+
     // Should handle long commands
     EXPECT_THROW(client_->executeCommand(longCommand, output), std::exception);
 }
@@ -228,7 +228,7 @@ class SSHFileTest : public ::testing::Test {
 protected:
     void SetUp() override {
         client_ = std::make_unique<SSHClient>("localhost", 22);
-        
+
         // Create test files
         test_file_ = "test_upload_file.txt";
         std::ofstream file(test_file_);
@@ -272,7 +272,7 @@ TEST_F(SSHFileTest, CreateEmptyDirectory) {
 
 TEST_F(SSHFileTest, ListEmptyDirectory) {
     std::vector<std::string> files;
-    
+
     // Should throw when trying to list directory with empty path
     EXPECT_THROW(client_->listDirectory("", files), std::exception);
 }
@@ -302,7 +302,7 @@ TEST_F(SSHTimeoutTest, ConnectionTimeoutShort) {
     auto start = std::chrono::steady_clock::now();
     EXPECT_THROW(client_->connect("testuser", "testpass", 1), std::exception);
     auto duration = std::chrono::steady_clock::now() - start;
-    
+
     // Should timeout within reasonable time
     EXPECT_LE(duration, std::chrono::seconds(5));
 }
@@ -326,7 +326,7 @@ TEST_F(SSHThreadSafetyTest, ConcurrentIsConnectedCalls) {
     const int numThreads = 5;
     std::vector<std::thread> threads;
     std::atomic<int> callCount{0};
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([this, &callCount]() {
             try {
@@ -337,11 +337,11 @@ TEST_F(SSHThreadSafetyTest, ConcurrentIsConnectedCalls) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(callCount.load(), numThreads);
 }
 
@@ -349,7 +349,7 @@ TEST_F(SSHThreadSafetyTest, ConcurrentDisconnectCalls) {
     const int numThreads = 3;
     std::vector<std::thread> threads;
     std::atomic<int> callCount{0};
-    
+
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([this, &callCount]() {
             try {
@@ -360,10 +360,10 @@ TEST_F(SSHThreadSafetyTest, ConcurrentDisconnectCalls) {
             }
         });
     }
-    
+
     for (auto& thread : threads) {
         thread.join();
     }
-    
+
     EXPECT_EQ(callCount.load(), numThreads);
 }

@@ -94,7 +94,7 @@ atom-system (system operations)
 
 #### Missing Example Files
 - **Issue**: Multiple example files referenced but not present
-- **Locations**: 
+- **Locations**:
   - `example/image/io/` (4 missing files)
   - `example/image/processing/` (4 missing files)
   - `example/image/formats/` (5 missing files)
@@ -132,7 +132,7 @@ atom-system (system operations)
 
 #### Inconsistent Package Finding
 - **Issue**: Different modules use different approaches for finding dependencies
-- **Examples**: 
+- **Examples**:
   - Some use `find_package()`
   - Others use `pkg_check_modules()`
   - Inconsistent error handling

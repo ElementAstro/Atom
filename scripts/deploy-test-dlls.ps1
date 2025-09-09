@@ -31,11 +31,11 @@ function Copy-DllIfExists {
         [string]$SourcePath,
         [string]$DestinationDir
     )
-    
+
     if (Test-Path $SourcePath) {
         $FileName = Split-Path $SourcePath -Leaf
         $DestPath = Join-Path $DestinationDir $FileName
-        
+
         try {
             Copy-Item $SourcePath $DestPath -Force
             if ($Verbose) {
@@ -61,7 +61,7 @@ $TotalCopied = 0
 foreach ($TestDir in $TestDirectories) {
     if (Test-Path $TestDir) {
         Write-Host "Deploying to: $TestDir" -ForegroundColor Yellow
-        
+
         foreach ($DllSource in $DllSources) {
             if (Copy-DllIfExists $DllSource $TestDir) {
                 $TotalCopied++

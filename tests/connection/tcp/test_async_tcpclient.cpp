@@ -22,8 +22,8 @@ public:
 
     ~MockAsyncServer() { stop(); }
 
-    void start() { 
-        serverThread_ = std::thread(&MockAsyncServer::run, this); 
+    void start() {
+        serverThread_ = std::thread(&MockAsyncServer::run, this);
         // Give server time to start
         std::this_thread::sleep_for(100ms);
     }
@@ -74,7 +74,7 @@ private:
         while (!stop_) {
             struct sockaddr_in clientAddr {};
             socklen_t clientLen = sizeof(clientAddr);
-            
+
             int clientSocket = accept(serverSocket_, (struct sockaddr*)&clientAddr, &clientLen);
             if (clientSocket < 0 || stop_) break;
 
@@ -121,7 +121,7 @@ protected:
     void SetUp() override {
         mockServer_ = std::make_unique<MockAsyncServer>(8081);
         mockServer_->start();
-        
+
         ConnectionConfig config;
         config.use_ssl = false;
         config.connect_timeout = 5000ms;
@@ -148,20 +148,20 @@ TEST_F(AsyncTcpClientTest, BasicConnection) {
     });
 
     ASSERT_TRUE(client_->connect("127.0.0.1", 8081));
-    
+
     // Wait for connection callback
     auto start = std::chrono::steady_clock::now();
     while (!connected && std::chrono::steady_clock::now() - start < 2s) {
         std::this_thread::sleep_for(10ms);
     }
-    
+
     EXPECT_TRUE(connected);
     EXPECT_TRUE(client_->isConnected());
 }
 
 TEST_F(AsyncTcpClientTest, AsyncConnection) {
     auto future = client_->connectAsync("127.0.0.1", 8081);
-    
+
     ASSERT_EQ(future.wait_for(5s), std::future_status::ready);
     EXPECT_TRUE(future.get());
     EXPECT_TRUE(client_->isConnected());
@@ -181,34 +181,34 @@ TEST_F(AsyncTcpClientTest, ConnectionCallbacks) {
     });
 
     ASSERT_TRUE(client_->connect("127.0.0.1", 8081));
-    
+
     // Wait for callbacks
     std::this_thread::sleep_for(500ms);
-    
+
     EXPECT_TRUE(connecting);
     EXPECT_TRUE(connected);
     EXPECT_EQ(lastState, ConnectionState::Connected);
 
     client_->disconnect();
     std::this_thread::sleep_for(100ms);
-    
+
     EXPECT_TRUE(disconnected);
 }
 
 TEST_F(AsyncTcpClientTest, SendAndReceiveData) {
     mockServer_->setEchoMode(true);
-    
+
     ASSERT_TRUE(client_->connect("127.0.0.1", 8081));
     std::this_thread::sleep_for(100ms);
 
     std::string testMessage = "Hello, Async TCP!";
     std::vector<char> data(testMessage.begin(), testMessage.end());
-    
+
     ASSERT_TRUE(client_->send(data));
-    
+
     auto future = client_->receive(data.size());
     ASSERT_EQ(future.wait_for(3s), std::future_status::ready);
-    
+
     auto received = future.get();
     std::string receivedMessage(received.begin(), received.end());
     EXPECT_EQ(receivedMessage, testMessage);
@@ -216,16 +216,16 @@ TEST_F(AsyncTcpClientTest, SendAndReceiveData) {
 
 TEST_F(AsyncTcpClientTest, SendString) {
     mockServer_->setEchoMode(true);
-    
+
     ASSERT_TRUE(client_->connect("127.0.0.1", 8081));
     std::this_thread::sleep_for(100ms);
 
     std::string testMessage = "String message test";
     ASSERT_TRUE(client_->sendString(testMessage));
-    
+
     auto future = client_->receive(testMessage.length());
     ASSERT_EQ(future.wait_for(3s), std::future_status::ready);
-    
+
     auto received = future.get();
     std::string receivedMessage(received.begin(), received.end());
     EXPECT_EQ(receivedMessage, testMessage);
@@ -245,7 +245,7 @@ TEST_F(AsyncTcpClientTest, ReceiveTimeout) {
 
     auto future = client_->receive(100, 500ms);
     ASSERT_EQ(future.wait_for(1s), std::future_status::ready);
-    
+
     // Should timeout and return empty vector
     auto received = future.get();
     EXPECT_TRUE(received.empty());
@@ -253,10 +253,10 @@ TEST_F(AsyncTcpClientTest, ReceiveTimeout) {
 
 TEST_F(AsyncTcpClientTest, DataReceivedCallback) {
     mockServer_->setEchoMode(true);
-    
+
     std::vector<char> receivedData;
     bool dataReceived = false;
-    
+
     client_->setOnDataReceivedCallback([&](const std::vector<char>& data) {
         receivedData = data;
         dataReceived = true;
@@ -267,15 +267,15 @@ TEST_F(AsyncTcpClientTest, DataReceivedCallback) {
 
     std::string testMessage = "Callback test";
     std::vector<char> data(testMessage.begin(), testMessage.end());
-    
+
     ASSERT_TRUE(client_->send(data));
-    
+
     // Wait for callback
     auto start = std::chrono::steady_clock::now();
     while (!dataReceived && std::chrono::steady_clock::now() - start < 3s) {
         std::this_thread::sleep_for(10ms);
     }
-    
+
     EXPECT_TRUE(dataReceived);
     std::string received(receivedData.begin(), receivedData.end());
     EXPECT_EQ(received, testMessage);
@@ -284,7 +284,7 @@ TEST_F(AsyncTcpClientTest, DataReceivedCallback) {
 TEST_F(AsyncTcpClientTest, ErrorCallback) {
     std::string lastError;
     bool errorOccurred = false;
-    
+
     client_->setOnErrorCallback([&](const std::string& error) {
         lastError = error;
         errorOccurred = true;
@@ -292,10 +292,10 @@ TEST_F(AsyncTcpClientTest, ErrorCallback) {
 
     // Try to connect to non-existent server
     EXPECT_FALSE(client_->connect("127.0.0.1", 9999, 1000ms));
-    
+
     // Wait for error callback
     std::this_thread::sleep_for(1500ms);
-    
+
     EXPECT_TRUE(errorOccurred);
     EXPECT_FALSE(lastError.empty());
 }
@@ -310,14 +310,14 @@ TEST_F(AsyncTcpClientTest, Disconnect) {
     ASSERT_TRUE(client_->connect("127.0.0.1", 8081));
     std::this_thread::sleep_for(100ms);
     EXPECT_TRUE(client_->isConnected());
-    
+
     client_->disconnect();
     EXPECT_FALSE(client_->isConnected());
 }
 
 TEST_F(AsyncTcpClientTest, ReconnectionConfiguration) {
     client_->configureReconnection(3, 100ms);
-    
+
     // This test verifies the configuration is accepted
     // Actual reconnection testing would require more complex setup
     EXPECT_NO_THROW(client_->configureReconnection(5, 200ms));
@@ -325,7 +325,7 @@ TEST_F(AsyncTcpClientTest, ReconnectionConfiguration) {
 
 TEST_F(AsyncTcpClientTest, HeartbeatConfiguration) {
     std::vector<char> heartbeatData = {'H', 'B'};
-    
+
     EXPECT_NO_THROW(client_->setHeartbeatInterval(1000ms, heartbeatData));
     EXPECT_NO_THROW(client_->setHeartbeatInterval(500ms));
 }

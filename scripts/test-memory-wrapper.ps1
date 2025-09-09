@@ -37,9 +37,9 @@ try {
         param($ExePath)
         & $ExePath --gtest_list_tests 2>&1
     } -ArgumentList $TestExe
-    
+
     $Result = Wait-Job -Job $Job -Timeout 10
-    
+
     if ($Result) {
         $Output = Receive-Job -Job $Job
         Write-Host "SUCCESS: Test executed and returned output:" -ForegroundColor Green
@@ -63,10 +63,10 @@ try {
     $ProcessInfo.RedirectStandardOutput = $true
     $ProcessInfo.RedirectStandardError = $true
     $ProcessInfo.CreateNoWindow = $true
-    
+
     $Process = New-Object System.Diagnostics.Process
     $Process.StartInfo = $ProcessInfo
-    
+
     if ($Process.Start()) {
         $Process.WaitForExit(5000)  # 5 second timeout
         if ($Process.HasExited) {

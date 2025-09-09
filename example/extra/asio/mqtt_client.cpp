@@ -79,7 +79,7 @@ public:
     void async_connect(const std::string& host, uint16_t port, const ConnectionOptions& options) {
         std::cout << "Connecting to " << host << ":" << port << " (stub)" << std::endl;
         std::cout << "  Client ID: " << options.client_id << std::endl;
-        
+
         // Simulate connection
         std::thread([this]() {
             std::this_thread::sleep_for(100ms);
@@ -91,7 +91,7 @@ public:
 
     void async_subscribe(const std::string& topic, QoS qos) {
         std::cout << "Subscribing to topic: " << topic << " with QoS " << static_cast<int>(qos) << " (stub)" << std::endl;
-        
+
         // Simulate receiving messages
         std::thread([this, topic]() {
             std::this_thread::sleep_for(200ms);

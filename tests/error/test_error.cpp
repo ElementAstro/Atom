@@ -33,7 +33,7 @@ protected:
     void SetUp() override {
         // Setup test environment
     }
-    
+
     void TearDown() override {
         // Cleanup
     }
@@ -46,7 +46,7 @@ TEST_F(ExceptionTest, BasicExceptionHandling) {
     } catch (const std::exception& e) {
         EXPECT_STREQ(e.what(), "Test exception");
     }
-    
+
     // Test custom exception types
     try {
         throw std::invalid_argument("Invalid parameter");
@@ -67,7 +67,7 @@ TEST_F(ExceptionTest, NestedExceptions) {
         }
     } catch (const std::logic_error& e) {
         EXPECT_STREQ(e.what(), "Outer exception");
-        
+
         // Check for nested exception
         try {
             std::rethrow_if_nested(e);
@@ -86,20 +86,20 @@ protected:
     void SetUp() override {
         // Setup test environment
     }
-    
+
     void TearDown() override {
         // Cleanup
     }
-    
+
     // Helper function to create a call stack
     void level3Function() {
         throw std::runtime_error("Exception at level 3");
     }
-    
+
     void level2Function() {
         level3Function();
     }
-    
+
     void level1Function() {
         level2Function();
     }
@@ -111,7 +111,7 @@ TEST_F(StackTraceTest, BasicStackTrace) {
         level1Function();
     } catch (const std::exception& e) {
         EXPECT_STREQ(e.what(), "Exception at level 3");
-        
+
         // Note: Actual stack trace testing depends on the implementation
         // This test verifies the exception propagates correctly through the call stack
         SUCCEED();
@@ -121,20 +121,20 @@ TEST_F(StackTraceTest, BasicStackTrace) {
 TEST_F(StackTraceTest, StackTraceDepth) {
     // Test stack trace with various depths
     std::vector<std::function<void()>> call_stack;
-    
+
     // Create a deep call stack
     call_stack.push_back([&]() {
         call_stack[1]();
     });
-    
+
     call_stack.push_back([&]() {
         call_stack[2]();
     });
-    
+
     call_stack.push_back([&]() {
         throw std::runtime_error("Deep stack exception");
     });
-    
+
     try {
         call_stack[0]();
     } catch (const std::exception& e) {
@@ -152,7 +152,7 @@ protected:
     void SetUp() override {
         // Setup test environment
     }
-    
+
     void TearDown() override {
         // Cleanup
     }
@@ -160,7 +160,7 @@ protected:
 
 TEST_F(ErrorCodeTest, BasicErrorCodes) {
     // Test basic error code functionality
-    
+
     // Simulate different error conditions
     enum class TestErrorCode {
         Success = 0,
@@ -169,7 +169,7 @@ TEST_F(ErrorCodeTest, BasicErrorCodes) {
         NetworkError = 3,
         OutOfMemory = 4
     };
-    
+
     auto testFunction = [](int input) -> TestErrorCode {
         if (input < 0) return TestErrorCode::InvalidInput;
         if (input == 404) return TestErrorCode::FileNotFound;
@@ -177,7 +177,7 @@ TEST_F(ErrorCodeTest, BasicErrorCodes) {
         if (input > 1000000) return TestErrorCode::OutOfMemory;
         return TestErrorCode::Success;
     };
-    
+
     // Test various error conditions
     EXPECT_EQ(testFunction(42), TestErrorCode::Success);
     EXPECT_EQ(testFunction(-1), TestErrorCode::InvalidInput);
@@ -188,7 +188,7 @@ TEST_F(ErrorCodeTest, BasicErrorCodes) {
 
 TEST_F(ErrorCodeTest, ErrorCodeMapping) {
     // Test error code to string mapping
-    
+
     auto errorCodeToString = [](int code) -> std::string {
         switch (code) {
             case 0: return "Success";
@@ -199,7 +199,7 @@ TEST_F(ErrorCodeTest, ErrorCodeMapping) {
             default: return "Unknown Error";
         }
     };
-    
+
     EXPECT_EQ(errorCodeToString(0), "Success");
     EXPECT_EQ(errorCodeToString(1), "Invalid Input");
     EXPECT_EQ(errorCodeToString(2), "File Not Found");
@@ -217,7 +217,7 @@ protected:
     void SetUp() override {
         // Setup test environment
     }
-    
+
     void TearDown() override {
         // Cleanup
     }
@@ -225,7 +225,7 @@ protected:
 
 TEST_F(ErrorIntegrationTest, CompleteErrorHandling) {
     // Test complete error handling workflow
-    
+
     auto riskyOperation = [](int mode) -> void {
         switch (mode) {
             case 1:
@@ -241,16 +241,16 @@ TEST_F(ErrorIntegrationTest, CompleteErrorHandling) {
                 break;
         }
     };
-    
+
     // Test successful operation
     EXPECT_NO_THROW(riskyOperation(0));
-    
+
     // Test various exception types
     EXPECT_THROW(riskyOperation(1), std::invalid_argument);
     EXPECT_THROW(riskyOperation(2), std::runtime_error);
     EXPECT_THROW(riskyOperation(3), std::logic_error);
     EXPECT_THROW(riskyOperation(4), std::out_of_range);
-    
+
     // Test exception message content
     try {
         riskyOperation(1);
@@ -261,11 +261,11 @@ TEST_F(ErrorIntegrationTest, CompleteErrorHandling) {
 
 TEST_F(ErrorIntegrationTest, ErrorRecovery) {
     // Test error recovery mechanisms
-    
+
     int attempt_count = 0;
     const int max_attempts = 3;
     bool operation_succeeded = false;
-    
+
     auto unreliableOperation = [&]() -> bool {
         attempt_count++;
         if (attempt_count < max_attempts) {
@@ -273,7 +273,7 @@ TEST_F(ErrorIntegrationTest, ErrorRecovery) {
         }
         return true;
     };
-    
+
     // Retry mechanism
     for (int i = 0; i < max_attempts; ++i) {
         try {
@@ -284,7 +284,7 @@ TEST_F(ErrorIntegrationTest, ErrorRecovery) {
             EXPECT_TRUE(std::string(e.what()).find("Operation failed") != std::string::npos);
         }
     }
-    
+
     EXPECT_TRUE(operation_succeeded);
     EXPECT_EQ(attempt_count, max_attempts);
 }

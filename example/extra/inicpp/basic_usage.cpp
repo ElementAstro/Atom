@@ -18,13 +18,13 @@ public:
         std::cout << "Checking if section has key (stub): " << key << std::endl;
         return keys_.find(key) != keys_.end();
     }
-    
+
     std::string operator[](const std::string& key) const {
         std::cout << "Getting value (stub): " << key << std::endl;
         auto it = keys_.find(key);
         return it != keys_.end() ? it->second : "";
     }
-    
+
     void set(const std::string& key, const std::string& value) {
         std::cout << "Setting value (stub): " << key << " = " << value << std::endl;
         keys_[key] = value;
@@ -40,7 +40,7 @@ public:
     IniFileBase() {
         std::cout << "IniFile created (stub implementation)" << std::endl;
     }
-    
+
     void load(const std::string& filename) {
         std::cout << "Loading INI file (stub): " << filename << std::endl;
         // Simulate loading some sections
@@ -48,42 +48,42 @@ public:
         sections_["database"] = IniSectionBase();
         sections_["server"] = IniSectionBase();
     }
-    
+
     void save(const std::string& filename) const {
         std::cout << "Saving INI file (stub): " << filename << std::endl;
     }
-    
+
     void decode(const std::string& content) {
         std::cout << "Decoding INI content (stub): " << content.size() << " characters" << std::endl;
     }
-    
+
     std::string encode() const {
         std::cout << "Encoding INI content (stub)" << std::endl;
         return "[application]\nname=MyApp\nversion=1.0.0\n\n[database]\nhost=localhost\nport=5432\n";
     }
-    
+
     IniSectionBase& operator[](const std::string& section_name) {
         std::cout << "Accessing section (stub): " << section_name << std::endl;
         return sections_[section_name];
     }
-    
+
     const IniSectionBase& operator[](const std::string& section_name) const {
         std::cout << "Accessing section const (stub): " << section_name << std::endl;
         static IniSectionBase empty_section;
         auto it = sections_.find(section_name);
         return it != sections_.end() ? it->second : empty_section;
     }
-    
+
     bool has(const std::string& section_name) const {
         std::cout << "Checking if file has section (stub): " << section_name << std::endl;
         return sections_.find(section_name) != sections_.end();
     }
-    
+
     void setFieldSep(char separator) {
         std::cout << "Setting field separator (stub): " << separator << std::endl;
         field_separator_ = separator;
     }
-    
+
     void setCommentPrefixes(const std::vector<std::string>& prefixes) {
         std::cout << "Setting comment prefixes (stub): " << prefixes.size() << " prefixes" << std::endl;
         comment_prefixes_ = prefixes;
@@ -123,7 +123,7 @@ int main() {
         {
             IniFile ini;
             ini.load("config.ini");
-            
+
             // Access sections and values
             if (ini["application"].has("name")) {
                 std::string app_name = ini["application"]["name"];
@@ -142,7 +142,7 @@ int main() {
             ini["application"].set("version", "1.0.0");
             ini["database"].set("host", "localhost");
             ini["database"].set("port", "5432");
-            
+
             ini.save("output.ini");
             std::cout << "INI file created and saved (stub)" << std::endl;
         }
@@ -153,7 +153,7 @@ int main() {
             IniFile ini;
             ini.setFieldSep(':');
             ini.setCommentPrefixes({"//", "#"});
-            
+
             std::cout << "Custom configuration applied (stub)" << std::endl;
         }
 
@@ -162,7 +162,7 @@ int main() {
         {
             IniFileInsensitive case_insensitive;
             case_insensitive.load("case_test.ini");
-            
+
             std::cout << "Case-insensitive INI operations (stub)" << std::endl;
         }
 
@@ -179,7 +179,7 @@ version=2.0.0
 host=127.0.0.1
 port=3306
 )";
-            
+
             ini.decode(ini_content);
             std::string encoded = ini.encode();
             std::cout << "Encoded content: " << encoded.substr(0, 100) << "..." << std::endl;

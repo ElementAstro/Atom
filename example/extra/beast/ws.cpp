@@ -46,7 +46,7 @@ public:
     template<typename ConnectHandler>
     void asyncConnect(std::string_view host, std::string_view port, ConnectHandler&& handler) {
         std::cout << "Async connecting to " << host << ":" << port << " (stub)" << std::endl;
-        
+
         // Simulate async connection
         std::thread([handler = std::forward<ConnectHandler>(handler)]() mutable {
             std::this_thread::sleep_for(100ms);

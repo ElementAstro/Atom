@@ -22,7 +22,7 @@ function(atom_find_dependency dep_name)
 
     string(TOUPPER ${dep_name} DEP_UPPER)
     set(found_var "${DEP_UPPER}_FOUND")
-    
+
     # Skip if already found
     if(${found_var})
         return()
@@ -57,9 +57,9 @@ function(atom_find_dependency dep_name)
 
     # Method 3: Manual search for header-only libraries
     if(NOT ${found_var} AND AFD_PATHS)
-        find_path(${DEP_UPPER}_INCLUDE_DIR 
+        find_path(${DEP_UPPER}_INCLUDE_DIR
             NAMES ${AFD_PATHS}
-            PATHS 
+            PATHS
                 /usr/include
                 /usr/local/include
                 /mingw64/include
@@ -95,26 +95,26 @@ endfunction()
 # Function to setup a dependency target
 function(atom_setup_dependency_target dep_name target_name)
     string(TOUPPER ${dep_name} DEP_UPPER)
-    
+
     if(NOT TARGET ${target_name})
         # Create imported target if it doesn't exist
         if(${DEP_UPPER}_FOUND)
             add_library(${target_name} INTERFACE IMPORTED)
-            
+
             # Set include directories
             if(${DEP_UPPER}_INCLUDE_DIRS)
                 target_include_directories(${target_name} INTERFACE ${${DEP_UPPER}_INCLUDE_DIRS})
             elseif(${DEP_UPPER}_INCLUDE_DIR)
                 target_include_directories(${target_name} INTERFACE ${${DEP_UPPER}_INCLUDE_DIR})
             endif()
-            
+
             # Set libraries
             if(${DEP_UPPER}_LIBRARIES)
                 target_link_libraries(${target_name} INTERFACE ${${DEP_UPPER}_LIBRARIES})
             elseif(${dep_name}_LIBRARIES)
                 target_link_libraries(${target_name} INTERFACE ${${dep_name}_LIBRARIES})
             endif()
-            
+
             # Set compile flags
             if(${DEP_UPPER}_CFLAGS_OTHER)
                 target_compile_options(${target_name} INTERFACE ${${DEP_UPPER}_CFLAGS_OTHER})
@@ -130,7 +130,7 @@ endfunction()
 # OpenSSL - Always required
 atom_find_dependency(OpenSSL REQUIRED)
 
-# ZLIB - Always required  
+# ZLIB - Always required
 atom_find_dependency(ZLIB REQUIRED)
 
 # SQLite3 - Core database functionality
@@ -184,19 +184,19 @@ endif()
 
 if(ATOM_USE_BOOST)
     set(BOOST_COMPONENTS)
-    
+
     if(ATOM_USE_BOOST_LOCKFREE)
         list(APPEND BOOST_COMPONENTS atomic thread)
     endif()
-    
+
     if(ATOM_USE_BOOST_GRAPH)
         list(APPEND BOOST_COMPONENTS graph)
     endif()
-    
+
     if(ATOM_USE_BOOST_CONTAINER)
         list(APPEND BOOST_COMPONENTS container)
     endif()
-    
+
     if(BOOST_COMPONENTS)
         atom_find_dependency(Boost QUIET VERSION 1.74 COMPONENTS ${BOOST_COMPONENTS})
     else()

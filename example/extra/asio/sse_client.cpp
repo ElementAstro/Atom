@@ -91,7 +91,7 @@ public:
         if (connection_handler_) {
             connection_handler_(true, "Connected to stub server");
         }
-        
+
         // Simulate some events
         if (event_handler_) {
             std::thread([this]() {
@@ -128,12 +128,12 @@ public:
         std::cout << "Running io_context (stub)..." << std::endl;
         std::this_thread::sleep_for(1s);
     }
-    
+
     void run_for(std::chrono::milliseconds duration) {
         std::cout << "Running io_context for " << duration.count() << "ms (stub)..." << std::endl;
         std::this_thread::sleep_for(duration);
     }
-    
+
     void stop() {
         std::cout << "Stopping io_context (stub)..." << std::endl;
     }
@@ -174,7 +174,7 @@ int main() {
             });
 
             client.set_connection_handler([](bool connected, const std::string& message) {
-                std::cout << "Connection status: " << (connected ? "Connected" : "Disconnected") 
+                std::cout << "Connection status: " << (connected ? "Connected" : "Disconnected")
                           << " - " << message << std::endl;
             });
 

@@ -547,5 +547,3 @@ TEST_F(MD5Test, VerificationEdgeCases) {
     invalid_hash[0] = 'g'; // Invalid hex character
     EXPECT_FALSE(MD5::verify(input, invalid_hash));
 }
-
-
