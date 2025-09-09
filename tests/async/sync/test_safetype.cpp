@@ -26,6 +26,7 @@ Tests thread-safe type wrappers, concurrent operations, and synchronization guar
 
 using namespace std::chrono_literals;
 using namespace atom::async;
+using namespace atom::async::sync;
 
 namespace atom::async::sync::test {
 
@@ -387,9 +388,11 @@ TEST_F(SafeTypeTest, MoveSemantics) {
 
     EXPECT_EQ(ptr, nullptr); // Should be moved
 
-    auto retrieved = safePtr.get();
-    EXPECT_NE(retrieved, nullptr);
-    EXPECT_EQ(*retrieved, 42);
+    // Use read() for move-only types instead of get()
+    safePtr.read([](const std::unique_ptr<int>& retrieved) {
+        EXPECT_NE(retrieved, nullptr);
+        EXPECT_EQ(*retrieved, 42);
+    });
 }
 
 // Test SafeType with custom types requiring special handling

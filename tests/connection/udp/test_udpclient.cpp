@@ -101,8 +101,9 @@ TEST_F(UdpClientTest, SendToInvalidPort) {
     std::span<const char> data_span(message.data(), message.size());
     RemoteEndpoint endpoint{"127.0.0.1", 0};
 
-    // Should handle invalid port gracefully
-    EXPECT_NO_THROW(client_->send(endpoint, data_span));
+    // Port 0 is invalid for sending; expect error
+    auto result = client_->send(endpoint, data_span);
+    EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(UdpClientTest, SendEmptyMessage) {
@@ -111,7 +112,8 @@ TEST_F(UdpClientTest, SendEmptyMessage) {
     RemoteEndpoint endpoint{"127.0.0.1", 12346};
 
     auto result = client_->send(endpoint, data_span);
-    EXPECT_TRUE(result.has_value());
+    // Empty data is considered invalid parameter
+    EXPECT_FALSE(result.has_value());
 }
 
 TEST_F(UdpClientTest, SendLargeMessage) {
@@ -140,9 +142,9 @@ TEST_F(UdpClientTest, ReceiveTimeout) {
 }
 
 TEST_F(UdpClientTest, BindToInvalidPort) {
-    // Port 0 should be invalid
+    // Port 0 is allowed for system-assigned port
     auto result = client_->bind(0);
-    EXPECT_FALSE(result.has_value());
+    EXPECT_TRUE(result.has_value());
 }
 
 TEST_F(UdpClientTest, MultipleBindCalls) {

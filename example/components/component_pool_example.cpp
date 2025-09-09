@@ -116,8 +116,8 @@ private:
 void demonstrateBasicPoolOperations() {
     std::cout << "\n=== Basic Pool Operations Demo ===" << std::endl;
 
-    // Create a component pool
-    ComponentPool pool;
+    // Create a component pool with explicit template parameter
+    ComponentPool<PoolTestComponent> pool;
 
     std::cout << "\n1. Creating component pool..." << std::endl;
     std::cout << "   Pool created successfully" << std::endl;
@@ -128,12 +128,11 @@ void demonstrateBasicPoolOperations() {
 
     // Allocate multiple components
     for (int i = 0; i < 10; ++i) {
-        auto component = pool.allocate<PoolTestComponent>("PoolComponent_" +
-                                                          std::to_string(i));
+        auto component = pool.allocate("PoolComponent_" + std::to_string(i));
         if (component) {
             components.push_back(component);
             std::cout << "   Allocated component " << i
-                      << " with ID: " << component->executeCommand("getId", {})
+                      << " with ID: " << std::any_cast<int>(component->runCommand("getId", {}))
                       << std::endl;
         }
     }
@@ -150,15 +149,15 @@ void demonstrateBasicPoolOperations() {
 
     std::cout << "\n4. Using allocated components..." << std::endl;
     for (auto& component : components) {
-        component->executeCommand("process", {});
-        std::cout << "   Component " << component->executeCommand("getId", {})
+        [[maybe_unused]] auto result = component->runCommand("process", {});
+        std::cout << "   Component " << std::any_cast<int>(component->runCommand("getId", {}))
                   << " processed, new value: "
-                  << component->executeCommand("getValue", {}) << std::endl;
+                  << std::any_cast<double>(component->runCommand("getValue", {})) << std::endl;
     }
 
     std::cout << "\n5. Deallocating components..." << std::endl;
     for (auto& component : components) {
-        int id = std::stoi(component->executeCommand("getId", {}));
+        int id = std::any_cast<int>(component->runCommand("getId", {}));
         pool.deallocate(component);
         std::cout << "   Deallocated component " << id << std::endl;
     }
@@ -198,7 +197,7 @@ void demonstratePerformanceComparison() {
 
         // Use components
         for (auto& component : directComponents) {
-            component->executeCommand("process", {});
+            [[maybe_unused]] auto result = component->runCommand("process", {});
         }
 
         // Deallocate (automatic with shared_ptr)
@@ -213,7 +212,7 @@ void demonstratePerformanceComparison() {
 
     // Test pool allocation
     std::cout << "\n   Pool allocation test:" << std::endl;
-    ComponentPool pool;
+    ComponentPool<PoolTestComponent> pool;
 
     start = std::chrono::high_resolution_clock::now();
 
@@ -222,14 +221,13 @@ void demonstratePerformanceComparison() {
 
         // Allocate from pool
         for (int i = 0; i < NUM_COMPONENTS; ++i) {
-            auto component =
-                pool.allocate<PoolTestComponent>("Pool_" + std::to_string(i));
+            auto component = pool.allocate("Pool_" + std::to_string(i));
             poolComponents.push_back(component);
         }
 
         // Use components
         for (auto& component : poolComponents) {
-            component->executeCommand("process", {});
+            [[maybe_unused]] auto result = component->runCommand("process", {});
         }
 
         // Deallocate to pool
@@ -277,7 +275,7 @@ void demonstratePerformanceComparison() {
 void demonstrateMemoryUsage() {
     std::cout << "\n=== Memory Usage Demo ===" << std::endl;
 
-    ComponentPool pool;
+    ComponentPool<HeavyComponent> pool;
 
     std::cout << "\n8. Testing memory usage with heavy components..."
               << std::endl;
@@ -287,8 +285,7 @@ void demonstrateMemoryUsage() {
     // Allocate heavy components
     std::cout << "   Allocating 50 heavy components..." << std::endl;
     for (int i = 0; i < 50; ++i) {
-        auto component =
-            pool.allocate<HeavyComponent>("Heavy_" + std::to_string(i));
+        auto component = pool.allocate("Heavy_" + std::to_string(i));
         if (component) {
             heavyComponents.push_back(component);
         }
@@ -301,8 +298,8 @@ void demonstrateMemoryUsage() {
     std::cout << "   Performing heavy computations..." << std::endl;
     double totalResult = 0.0;
     for (auto& component : heavyComponents) {
-        auto result = component->executeCommand("heavyComputation", {});
-        totalResult += std::stod(result);
+        auto result = component->runCommand("heavyComputation", {});
+        totalResult += std::any_cast<double>(result);
     }
 
     std::cout << "   Total computation result: " << totalResult << std::endl;
@@ -310,9 +307,8 @@ void demonstrateMemoryUsage() {
     // Check computation counts
     std::cout << "   Computation counts:" << std::endl;
     for (size_t i = 0; i < std::min(size_t(5), heavyComponents.size()); ++i) {
-        auto count =
-            heavyComponents[i]->executeCommand("getComputationCount", {});
-        std::cout << "     Component " << i << ": " << count << " computations"
+        auto count = heavyComponents[i]->runCommand("getComputationCount", {});
+        std::cout << "     Component " << i << ": " << std::any_cast<int>(count) << " computations"
                   << std::endl;
     }
 
@@ -337,7 +333,7 @@ void demonstrateMemoryUsage() {
 void demonstrateConcurrentAccess() {
     std::cout << "\n=== Concurrent Access Demo ===" << std::endl;
 
-    ComponentPool pool;
+    ComponentPool<PoolTestComponent> pool;
 
     std::cout << "\n9. Testing concurrent pool access..." << std::endl;
 
@@ -353,7 +349,7 @@ void demonstrateConcurrentAccess() {
 
         // Allocate components
         for (int i = 0; i < COMPONENTS_PER_THREAD; ++i) {
-            auto component = pool.allocate<PoolTestComponent>(
+            auto component = pool.allocate(
                 "Thread" + std::to_string(threadId) + "_" + std::to_string(i));
             if (component) {
                 localComponents.push_back(component);
@@ -363,7 +359,7 @@ void demonstrateConcurrentAccess() {
 
         // Process components
         for (auto& component : localComponents) {
-            component->executeCommand("process", {});
+            [[maybe_unused]] auto result = component->runCommand("process", {});
             totalProcessed.fetch_add(1);
         }
 

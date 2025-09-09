@@ -19,12 +19,41 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
 
-# Find loguru
-find_path(LOGURU_INCLUDE_DIR loguru.hpp)
-find_library(LOGURU_LIBRARY loguru)
+# Find loguru - try multiple approaches
+find_path(LOGURU_INCLUDE_DIR loguru.hpp
+    PATHS
+        /usr/include
+        /usr/local/include
+        /mingw64/include
+        ${CMAKE_PREFIX_PATH}/include
+)
+find_library(LOGURU_LIBRARY
+    NAMES loguru
+    PATHS
+        /usr/lib
+        /usr/local/lib
+        /mingw64/lib
+        ${CMAKE_PREFIX_PATH}/lib
+)
 
+# Try pkg-config as fallback
 if(NOT LOGURU_INCLUDE_DIR OR NOT LOGURU_LIBRARY)
-    message(WARNING "Loguru not found, examples may not compile")
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(LOGURU QUIET loguru)
+    endif()
+endif()
+
+if(NOT LOGURU_INCLUDE_DIR AND NOT LOGURU_FOUND)
+    message(STATUS "Loguru not found, web examples will be built without logging")
+    set(LOGURU_AVAILABLE FALSE)
+else()
+    set(LOGURU_AVAILABLE TRUE)
+    if(LOGURU_INCLUDE_DIR)
+        message(STATUS "Found Loguru: ${LOGURU_INCLUDE_DIR}")
+    else()
+        message(STATUS "Found Loguru via pkg-config")
+    endif()
 endif()
 
 # Options for building examples
@@ -66,8 +95,14 @@ function(create_web_example EXAMPLE_PATH CATEGORY)
         )
 
         # Add loguru if available
-        if(LOGURU_LIBRARY)
-            target_link_libraries(${TARGET_NAME} ${LOGURU_LIBRARY})
+        if(LOGURU_AVAILABLE)
+            if(LOGURU_LIBRARY)
+                target_link_libraries(${TARGET_NAME} ${LOGURU_LIBRARY})
+                target_include_directories(${TARGET_NAME} PRIVATE ${LOGURU_INCLUDE_DIR})
+            elseif(LOGURU_FOUND)
+                target_link_libraries(${TARGET_NAME} ${LOGURU_LIBRARIES})
+                target_include_directories(${TARGET_NAME} PRIVATE ${LOGURU_INCLUDE_DIRS})
+            endif()
         endif()
 
         # Platform-specific libraries

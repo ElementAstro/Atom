@@ -43,14 +43,30 @@ TEST_F(TTLCacheTest, PutUpdatesValue) {
 
 TEST_F(TTLCacheTest, Expiry) {
     cache->put("key1", 1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Wait with timeout protection
+    auto start = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    // Ensure we didn't hang
+    EXPECT_LT(elapsed, std::chrono::milliseconds(500));
+
     auto value = cache->get("key1");
     EXPECT_FALSE(value.has_value());
 }
 
 TEST_F(TTLCacheTest, Cleanup) {
     cache->put("key1", 1);
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+    // Wait with timeout protection
+    auto start = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    auto elapsed = std::chrono::steady_clock::now() - start;
+
+    // Ensure we didn't hang
+    EXPECT_LT(elapsed, std::chrono::milliseconds(500));
+
     cache->cleanup();
     EXPECT_EQ(cache->size(), 0);
 }
@@ -122,7 +138,11 @@ TEST_F(TTLCacheTest, CleanupAfterExpiry) {
     cache->put("key1", 1);
     cache->put("key2", 2);
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    // Wait with timeout protection
+    auto start = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(120));
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_LT(elapsed, std::chrono::milliseconds(300));
 
     // Both keys should expire
     EXPECT_FALSE(cache->get("key1").has_value());
@@ -205,8 +225,11 @@ TEST_F(TTLCacheTest, PartialExpiry) {
     cache->put("short1", 1);
     cache->put("short2", 2);
 
-    // Wait for short TTL items to expire
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    // Wait for short TTL items to expire with timeout protection
+    auto start = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(150));
+    auto elapsed = std::chrono::steady_clock::now() - start;
+    EXPECT_LT(elapsed, std::chrono::milliseconds(400));
 
     // Short TTL items should have expired
     EXPECT_FALSE(cache->get("short1").has_value());
@@ -273,8 +296,11 @@ TEST_F(TTLCacheTest, RefreshOnAccess) {
     cache->put("key2", 2);
     cache->put("key3", 3);
 
-    // Wait a bit but not enough for expiry
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    // Wait a bit but not enough for expiry with timeout protection
+    auto start1 = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(40));
+    auto elapsed1 = std::chrono::steady_clock::now() - start1;
+    EXPECT_LT(elapsed1, std::chrono::milliseconds(200));
 
     // Access key1 to refresh its LRU position
     (void)cache->get("key1");
@@ -287,8 +313,11 @@ TEST_F(TTLCacheTest, RefreshOnAccess) {
     EXPECT_TRUE(cache->get("key3").has_value());
     EXPECT_TRUE(cache->get("key4").has_value());
 
-    // Wait for original TTL to expire
-    std::this_thread::sleep_for(std::chrono::milliseconds(60));
+    // Wait for original TTL to expire with timeout protection
+    auto start2 = std::chrono::steady_clock::now();
+    std::this_thread::sleep_for(std::chrono::milliseconds(70));
+    auto elapsed2 = std::chrono::steady_clock::now() - start2;
+    EXPECT_LT(elapsed2, std::chrono::milliseconds(200));
 
     // Even though key1 was accessed recently, it should still expire
     // based on its original insertion time

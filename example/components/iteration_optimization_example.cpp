@@ -86,7 +86,7 @@ public:
     const Transform& getTransform() const { return transform_; }
 
     // Batch processing interface
-    void batchUpdate() { executeCommand("update", {}); }
+    void batchUpdate() { [[maybe_unused]] auto result = runCommand("update", {}); }
 
     float* getUpdateData() { return transform_.position; }
     size_t getUpdateDataSize() const { return 3; }
@@ -148,7 +148,7 @@ public:
     const PhysicsData& getPhysicsData() const { return physics_; }
 
     // Batch processing interface
-    void batchUpdate() { executeCommand("updatePhysics", {}); }
+    void batchUpdate() { [[maybe_unused]] auto result = runCommand("updatePhysics", {}); }
 
     float* getUpdateData() { return physics_.velocity; }
     size_t getUpdateDataSize() const { return 3; }
@@ -197,12 +197,12 @@ void demonstrateBasicIteration() {
     for (int iter = 0; iter < ITERATIONS; ++iter) {
         // Update all transform components
         for (auto& transform : transforms) {
-            transform->executeCommand("update", {});
+            [[maybe_unused]] auto result = transform->runCommand("update", {});
         }
 
         // Update all physics components
         for (auto& physicsComp : physics) {
-            physicsComp->executeCommand("updatePhysics", {});
+            [[maybe_unused]] auto result = physicsComp->runCommand("updatePhysics", {});
         }
     }
 

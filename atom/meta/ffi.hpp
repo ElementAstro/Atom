@@ -835,13 +835,10 @@ public:
     void registerCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        using Traits = FunctionTraits<std::decay_t<Func>>;
-        using FuncSig = typename Traits::return_type(
-            typename std::tuple_element<0, typename Traits::argument_types>::type,
-            typename std::tuple_element<1, typename Traits::argument_types>::type);
+        // Store the function directly without trying to construct a specific signature
         callbackMap_.emplace(
             std::string(callbackName),
-            std::any{std::in_place_type<std::function<FuncSig>>, std::function<FuncSig>(std::forward<Func>(func))});
+            std::any{std::forward<Func>(func)});
     }
 
     /**
@@ -877,20 +874,14 @@ public:
     void registerAsyncCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        using Traits = FunctionTraits<std::decay_t<Func>>;
-        using RawRet = typename Traits::return_type;
-        using ArgsTuple = typename Traits::argument_types;
-        using FuncSig = std::future<RawRet>(
-            typename std::tuple_element<0, ArgsTuple>::type,
-            typename std::tuple_element<1, ArgsTuple>::type);
+        // Store the async wrapper directly without trying to construct a specific signature
+        auto asyncWrapper = [func = std::forward<Func>(func)](auto&&... args) {
+            return std::async(std::launch::async, func, std::forward<decltype(args)>(args)...);
+        };
+
         callbackMap_.emplace(
             std::string(callbackName),
-            std::make_any<std::function<FuncSig>>(
-                [f = std::function<RawRet(typename std::tuple_element<0, ArgsTuple>::type,
-                                          typename std::tuple_element<1, ArgsTuple>::type)>(std::forward<Func>(func))](auto&&... args) {
-                    return std::async(std::launch::async, f,
-                                      std::forward<decltype(args)>(args)...);
-                }));
+            std::any{asyncWrapper});
     }
 
     /**

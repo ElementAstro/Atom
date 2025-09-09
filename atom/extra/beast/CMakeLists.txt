@@ -1,6 +1,11 @@
 # CMakeLists.txt for Beast HTTP/WebSocket library
 # Integrated with main Atom build system
 
+# Set CMake policy for Boost module
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+
 # Find required dependencies
 find_package(Boost QUIET COMPONENTS system)
 

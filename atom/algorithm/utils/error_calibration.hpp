@@ -76,9 +76,10 @@ private:
         if (!thread_pool_) {
             const u32 num_threads =
                 std::min(std::thread::hardware_concurrency(), 8u);
-            // Option 2: If Options has a constructor taking thread count
-            thread_pool_ = std::make_unique<atom::async::ThreadPool>(
-                atom::async::ThreadPool::Options(num_threads));
+            // Create Options with proper initialization
+            atom::async::ThreadPool::Options options;
+            options.initialThreadCount = num_threads;
+            thread_pool_ = std::make_unique<atom::async::ThreadPool>(options);
 
             spdlog::info("Thread pool initialized with {} threads",
                          num_threads);

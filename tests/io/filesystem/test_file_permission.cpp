@@ -5,6 +5,11 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#include <aclapi.h>
+#endif
+
 #include "atom/io/file_permission.hpp"
 
 namespace fs = std::filesystem;
@@ -66,10 +71,11 @@ protected:
         BOOL daclPresent = FALSE;
         BOOL daclDefaulted = FALSE;
 
+        PSECURITY_DESCRIPTOR psd = nullptr;
         if (GetNamedSecurityInfoA(executable_path.string().c_str(),
                                   SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
                                   NULL, NULL, &acl, NULL,
-                                  &sd) == ERROR_SUCCESS) {
+                                  &psd) == ERROR_SUCCESS) {
             // Set the ACL on the test file
             SetNamedSecurityInfoA(const_cast<char*>(test_file.string().c_str()),
                                   SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,

@@ -623,12 +623,13 @@ TEST_F(SlotTest, MixedOperationsThreadSafety) {
                     }
                     break;
 
-                case 2: // Size checks
+                case 2: { // Size checks
                     volatile size_t size = slot.size();
                     volatile bool empty = slot.empty();
                     volatile bool hasValue = slot.hasValue();
                     (void)size; (void)empty; (void)hasValue;
                     break;
+                }
 
                 case 3: // Occasional clear
                     if (i % 20 == 0) {

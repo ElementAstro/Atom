@@ -63,7 +63,10 @@ TEST_F(SnowflakeTest, IdStructure) {
     EXPECT_EQ(datacenter_id, 0);
     EXPECT_EQ(worker_id, 0);
     EXPECT_GE(timestamp, TEST_EPOCH);
-    EXPECT_LE(timestamp, TEST_EPOCH + 100000);
+    // Check that timestamp is close to current time (within 10 seconds)
+    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    EXPECT_NEAR(timestamp, current_time, 10000);
     EXPECT_LT(sequence, (1ULL << Snowflake<TEST_EPOCH>::SEQUENCE_BITS));
 }
 

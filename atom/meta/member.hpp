@@ -218,7 +218,7 @@ const Container* container_of(const T* ptr, MemberPtr Container::* member_ptr) {
 }
 
 /**
- * @brief Finds the container of a range of elements using C++20 ranges
+ * @brief Finds the container element that contains the given member pointer
  */
 template <std::ranges::range Container, typename T>
 auto container_of_range(Container& container, const T* ptr)
@@ -226,10 +226,16 @@ auto container_of_range(Container& container, const T* ptr)
     try {
         validate_pointer(ptr, "container_of_range");
 
-        // Use std::find with equality; requires operator== for T
-        auto it = std::find(container.begin(), container.end(), *ptr);
-        if (it != container.end()) {
-            return &(*it);
+        // Find the container element that contains this member pointer
+        for (auto it = container.begin(); it != container.end(); ++it) {
+            // Check if the pointer is within the memory range of this object
+            const auto* obj_start = reinterpret_cast<const char*>(&(*it));
+            const auto* obj_end = obj_start + sizeof(*it);
+            const auto* ptr_addr = reinterpret_cast<const char*>(ptr);
+
+            if (ptr_addr >= obj_start && ptr_addr < obj_end) {
+                return &(*it);
+            }
         }
         return type::unexpected(
             member_pointer_error("Element not found in container"));

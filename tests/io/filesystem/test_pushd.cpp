@@ -8,6 +8,8 @@
 #include <thread>
 #include <vector>
 
+#include <asio.hpp>
+
 #include "atom/io/pushd.hpp"
 
 namespace fs = std::filesystem;
@@ -15,7 +17,7 @@ namespace fs = std::filesystem;
 class DirectoryStackTest : public ::testing::Test {
 protected:
     asio::io_context io_context;
-    std::unique_ptr<asio::io_context::work> work;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> work;
     std::thread io_thread;
     atom::io::DirectoryStack dir_stack;
     fs::path original_path;
@@ -24,7 +26,8 @@ protected:
 
     DirectoryStackTest() : dir_stack(io_context) {
         // Keep io_context running
-        work = std::make_unique<asio::io_context::work>(io_context);
+        work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
+            asio::make_work_guard(io_context));
         io_thread = std::thread([this]() { io_context.run(); });
     }
 
@@ -100,7 +103,13 @@ protected:
         std::future<fs::path> future = promise.get_future();
 
         dir_stack.asyncGetCurrentDirectory(
-            [&promise](const fs::path& path) { promise.set_value(path); });
+            [&promise](const fs::path& path, const std::error_code& ec) {
+                if (!ec) {
+                    promise.set_value(path);
+                } else {
+                    promise.set_value(fs::path{});
+                }
+            });
 
         // Wait for completion or timeout
         if (future.wait_for(std::chrono::seconds(5)) ==
@@ -427,7 +436,11 @@ TEST_F(DirectoryStackTest, ConcurrentOperations) {
                     // Odd threads get current directory
                     fs::path current;
                     dir_stack.asyncGetCurrentDirectory(
-                        [&current](const fs::path& path) { current = path; });
+                        [&current](const fs::path& path, const std::error_code& ec) {
+                            if (!ec) {
+                                current = path;
+                            }
+                        });
 
                     // Simple timeout wait for async operation
                     std::this_thread::sleep_for(std::chrono::milliseconds(100));

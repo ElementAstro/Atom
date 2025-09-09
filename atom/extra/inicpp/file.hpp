@@ -74,8 +74,8 @@ private:
                 // Check for escaped comment
                 if (pos > 0 && str[pos - 1] == esc_) {
                     str.erase(pos - 1, 1);
-                    // Need to adjust startpos since we've modified the string
-                    eraseComment(str, pos);
+                    // Need to adjust position since we've modified the string
+                    eraseComment(str, pos - 1);
                     return;
                 }
                 str.erase(pos);

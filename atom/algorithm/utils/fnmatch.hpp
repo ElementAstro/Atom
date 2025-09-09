@@ -18,6 +18,7 @@ Description: Enhanced Python-Like fnmatch for C++
 #include <concepts>
 #include <exception>
 #include <ranges>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -176,66 +177,23 @@ auto fnmatch_nothrow(T1&& pattern, T2&& string, int flags) noexcept
     }
 #else
 #ifdef _WIN32
-    // Windows implementation - simplified fallback
+    // Windows implementation - use regex translation for full compatibility
     try {
-        // Simple pattern matching for basic cases
-        auto p = pattern_view.begin();
-        auto s = string_view.begin();
-
-        while (p != pattern_view.end() && s != string_view.end()) {
-            const char current_char = *p;
-            switch (current_char) {
-                case '?': {
-                    ++s;
-                    ++p;
-                    break;
-                }
-                case '*': {
-                    if (++p == pattern_view.end()) {
-                        return true;
-                    }
-                    while (s != string_view.end()) {
-                        auto inner_result = fnmatch_nothrow(
-                            std::string_view(p, pattern_view.end() - p),
-                            std::string_view(s, string_view.end() - s), flags);
-
-                        if (!inner_result) {
-                            return inner_result;
-                        }
-
-                        if (inner_result.value()) {
-                            return true;
-                        }
-                        ++s;
-                    }
-                    return false;
-                }
-                case '\\': {
-                    if ((flags & flags::NOESCAPE) == 0) {
-                        if (++p == pattern_view.end()) {
-                            return atom::type::unexpected(FnmatchError::EscapeAtEnd);
-                        }
-                    }
-                    [[fallthrough]];
-                }
-                default: {
-                    if ((flags & flags::CASEFOLD)
-                            ? (std::tolower(*p) != std::tolower(*s))
-                            : (*p != *s)) {
-                        return false;
-                    }
-                    ++s;
-                    ++p;
-                    break;
-                }
-            }
+        auto translated = translate(pattern_view, flags);
+        if (!translated) {
+            return atom::type::unexpected(translated.error().error());
         }
 
-        while (p != pattern_view.end() && *p == '*') {
-            ++p;
+        std::regex::flag_type regex_flags = std::regex::ECMAScript;
+        if (flags & flags::CASEFOLD) {
+            regex_flags |= std::regex::icase;
         }
 
-        return p == pattern_view.end() && s == string_view.end();
+        std::regex regex(translated.value(), regex_flags);
+        bool result = std::regex_match(
+            std::string(string_view.begin(), string_view.end()), regex);
+
+        return result;
     } catch (...) {
         return atom::type::unexpected(FnmatchError::InternalError);
     }
@@ -297,7 +255,10 @@ auto translate(Pattern&& pattern, int flags) noexcept
     }
 
     std::string result;
-    result.reserve(pattern_view.size() * 2);
+    result.reserve(pattern_view.size() * 2 + 2); // +2 for anchors
+
+    // Add start anchor
+    result += '^';
 
     try {
         for (auto it = pattern_view.begin(); it != pattern_view.end(); ++it) {
@@ -340,8 +301,22 @@ auto translate(Pattern&& pattern, int flags) noexcept
                             if (it == pattern_view.end()) {
                                 return atom::type::unexpected(FnmatchError::UnmatchedBracket);
                             }
+                            // Escape special regex characters inside brackets
+                            // Note: dots are literal inside character classes, so don't escape them
+                            if (*it == '+' || *it == '(' || *it == ')' ||
+                                *it == '{' || *it == '}' || *it == '|' ||
+                                *it == '$' || *it == '\\') {
+                                result += "\\";
+                            }
                             result += *it;
                         } else {
+                            // Escape special regex characters inside brackets
+                            // Note: dots, *, and ? are literal inside character classes, so don't escape them
+                            if (*it == '+' || *it == '(' || *it == ')' ||
+                                *it == '{' || *it == '}' || *it == '|' ||
+                                *it == '$' || *it == '\\') {
+                                result += "\\";
+                            }
                             result += *it;
                         }
                         ++it;
@@ -360,6 +335,15 @@ auto translate(Pattern&& pattern, int flags) noexcept
                         if (++it == pattern_view.end()) {
                             return atom::type::unexpected(FnmatchError::EscapeAtEnd);
                         }
+                        // Escape the next character for regex
+                        if (*it == '.' || *it == '*' || *it == '?' || *it == '+' ||
+                            *it == '(' || *it == ')' || *it == '{' || *it == '}' ||
+                            *it == '|' || *it == '^' || *it == '$' || *it == '[' ||
+                            *it == ']' || *it == '\\') {
+                            result += '\\';
+                        }
+                        result += *it;
+                        break;
                     }
                     [[fallthrough]];
 
@@ -370,11 +354,21 @@ auto translate(Pattern&& pattern, int flags) noexcept
                         result += static_cast<char>(std::toupper(*it));
                         result += ']';
                     } else {
+                        // Escape special regex characters outside brackets
+                        if (*it == '.' || *it == '+' || *it == '(' || *it == ')' ||
+                                   *it == '{' || *it == '}' || *it == '|' || *it == '^' ||
+                                   *it == '$') {
+                            result += '\\';
+                        }
                         result += *it;
                     }
                     break;
             }
         }
+
+        // Add end anchor
+        result += '$';
+
         return result;
     } catch (const std::exception& e) {
         return atom::type::unexpected(FnmatchError::InternalError);
@@ -444,6 +438,11 @@ auto filter(const Range& names, const PatternRange& patterns, int flags,
                 result.emplace_back(name);
             }
         }
+
+        // Debug output to see what regex is generated
+        #ifdef DEBUG_FNMATCH
+        std::cout << "Pattern: " << pattern_view << " -> Regex: " << result << std::endl;
+        #endif
 
         return result;
     } catch (const std::exception& e) {

@@ -8,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-using namespace uv_message_bus;
+using namespace msgbus;
 using namespace std::chrono_literals;
 
 // Example message types
@@ -108,7 +108,7 @@ class AuditService {
 private:
     std::string name_;
     std::vector<std::string> audit_log_;
-    std::mutex log_mutex_;
+    mutable std::mutex log_mutex_;
 
 public:
     explicit AuditService(const std::string& name) : name_(name) {}

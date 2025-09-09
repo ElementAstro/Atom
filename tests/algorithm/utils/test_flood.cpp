@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "atom/algorithm/flood.hpp"
+#include "atom/error/exception.hpp"
 #include "atom/log/loguru.hpp"
 
 using namespace atom::algorithm;
@@ -97,7 +98,8 @@ TEST_F(FloodFillTest, BFSFillSimple) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor);
+    auto filled_count = FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor);
+    (void)filled_count; // Suppress unused variable warning
 
     // Check that all inner cells (0s) are now filled with 2s
     for (int i = 1; i < 4; ++i) {
@@ -121,7 +123,8 @@ TEST_F(FloodFillTest, BFSFillIsland) {
     int targetColor = 1;
     int fillColor = 2;
 
-    FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor);
+    auto filled_count = FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor);
+    (void)filled_count; // Suppress unused variable warning
 
     // Check that all island cells (1s) are now filled with 2s
     for (int i = 1; i < 4; ++i) {
@@ -145,7 +148,8 @@ TEST_F(FloodFillTest, BFSFillMaze) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillBFS(grid, 1, 2, targetColor, fillColor);
+    auto filled_count = FloodFill::fillBFS(grid, 1, 2, targetColor, fillColor);
+    (void)filled_count; // Suppress unused variable warning
 
     // Check that all accessible path cells (0s) are filled
     EXPECT_EQ(grid[1][1], fillColor);
@@ -168,7 +172,8 @@ TEST_F(FloodFillTest, DFSFillSimple) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor);
+    auto filled_count = FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor);
+    (void)filled_count; // Suppress unused variable warning
 
     // Check that all inner cells (0s) are now filled with 2s
     for (int i = 1; i < 4; ++i) {
@@ -192,7 +197,8 @@ TEST_F(FloodFillTest, DFSFillIsland) {
     int targetColor = 1;
     int fillColor = 2;
 
-    FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor);
+    auto filled_count = FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor);
+    (void)filled_count; // Suppress unused variable warning
 
     // Check that all island cells (1s) are now filled with 2s
     for (int i = 1; i < 4; ++i) {
@@ -216,7 +222,8 @@ TEST_F(FloodFillTest, DFSFillMaze) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillDFS(grid, 1, 2, targetColor, fillColor);
+    auto filled_count = FloodFill::fillDFS(grid, 1, 2, targetColor, fillColor);
+    (void)filled_count; // Suppress unused variable warning
 
     // Check that all accessible path cells (0s) are filled
     EXPECT_EQ(grid[1][1], fillColor);
@@ -245,7 +252,8 @@ TEST_F(FloodFillTest, BFSFillFourConnectivity) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor, Connectivity::Four);
+    auto filled_count = FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor, Connectivity::Four);
+    (void)filled_count; // Suppress unused variable warning
 
     // Only center cell should be filled with 4-way connectivity
     EXPECT_EQ(grid[2][2], fillColor);
@@ -268,7 +276,8 @@ TEST_F(FloodFillTest, BFSFillEightConnectivity) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor, Connectivity::Eight);
+    auto filled_count = FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor, Connectivity::Eight);
+    (void)filled_count; // Suppress unused variable warning
 
     // Center and diagonally adjacent cells should be filled with 8-way
     // connectivity
@@ -290,7 +299,8 @@ TEST_F(FloodFillTest, DFSFillFourConnectivity) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor, Connectivity::Four);
+    auto filled_count = FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor, Connectivity::Four);
+    (void)filled_count; // Suppress unused variable warning
 
     // Only center cell should be filled with 4-way connectivity
     EXPECT_EQ(grid[2][2], fillColor);
@@ -313,7 +323,8 @@ TEST_F(FloodFillTest, DFSFillEightConnectivity) {
     int targetColor = 0;
     int fillColor = 2;
 
-    FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor, Connectivity::Eight);
+    auto filled_count = FloodFill::fillDFS(grid, 2, 2, targetColor, fillColor, Connectivity::Eight);
+    (void)filled_count; // Suppress unused variable warning
 
     // Center and diagonally adjacent cells should be filled with 8-way
     // connectivity
@@ -330,23 +341,23 @@ TEST_F(FloodFillTest, EmptyGrid) {
 
     // Should throw an exception
     EXPECT_THROW(FloodFill::fillBFS(emptyGrid, 0, 0, 0, 1),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
 
     EXPECT_THROW(FloodFill::fillDFS(emptyGrid, 0, 0, 0, 1),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
 }
 
 TEST_F(FloodFillTest, OutOfBoundsCoordinates) {
     auto grid = createSimpleGrid();
 
     // Out of bounds starting points should throw
-    EXPECT_THROW(FloodFill::fillBFS(grid, -1, 0, 0, 1), std::invalid_argument);
+    EXPECT_THROW(FloodFill::fillBFS(grid, -1, 0, 0, 1), atom::error::InvalidArgument);
 
-    EXPECT_THROW(FloodFill::fillDFS(grid, 0, -1, 0, 1), std::invalid_argument);
+    EXPECT_THROW(FloodFill::fillDFS(grid, 0, -1, 0, 1), atom::error::InvalidArgument);
 
-    EXPECT_THROW(FloodFill::fillBFS(grid, 5, 0, 0, 1), std::invalid_argument);
+    EXPECT_THROW(FloodFill::fillBFS(grid, 5, 0, 0, 1), atom::error::InvalidArgument);
 
-    EXPECT_THROW(FloodFill::fillDFS(grid, 0, 5, 0, 1), std::invalid_argument);
+    EXPECT_THROW(FloodFill::fillDFS(grid, 0, 5, 0, 1), atom::error::InvalidArgument);
 }
 
 TEST_F(FloodFillTest, SameTargetAndFillColor) {
@@ -354,7 +365,8 @@ TEST_F(FloodFillTest, SameTargetAndFillColor) {
     auto originalGrid = grid;  // Make a copy for comparison
 
     // When target and fill colors are the same, no change should occur
-    FloodFill::fillBFS(grid, 2, 2, 0, 0);
+    auto filled_count = FloodFill::fillBFS(grid, 2, 2, 0, 0);
+    (void)filled_count; // Suppress unused variable warning
 
     // Grid should remain unchanged
     for (size_t i = 0; i < grid.size(); ++i) {
@@ -370,7 +382,8 @@ TEST_F(FloodFillTest, StartPositionDoesNotMatchTarget) {
     auto originalGrid = grid;  // Make a copy for comparison
 
     // Starting position has color 1, but target color is 0
-    FloodFill::fillBFS(grid, 0, 0, 0, 2);
+    auto filled_count = FloodFill::fillBFS(grid, 0, 0, 0, 2);
+    (void)filled_count; // Suppress unused variable warning
 
     // Grid should remain unchanged
     for (size_t i = 0; i < grid.size(); ++i) {
@@ -384,7 +397,8 @@ TEST_F(FloodFillTest, StartPositionDoesNotMatchTarget) {
 TEST_F(FloodFillTest, SingleCellGrid) {
     std::vector<std::vector<int>> singleCellGrid = {{5}};
 
-    FloodFill::fillBFS(singleCellGrid, 0, 0, 5, 10);
+    auto filled_count = FloodFill::fillBFS(singleCellGrid, 0, 0, 5, 10);
+    (void)filled_count; // Suppress unused variable warning
 
     EXPECT_EQ(singleCellGrid[0][0], 10);
 }
@@ -394,7 +408,8 @@ TEST_F(FloodFillTest, EntireGridSameColor) {
     int targetColor = 1;
     int fillColor = 2;
 
-    FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor);
+    auto filled_count = FloodFill::fillBFS(grid, 2, 2, targetColor, fillColor);
+    (void)filled_count; // Suppress unused variable warning
 
     // The entire grid should now be filled with the fill color
     for (int i = 0; i < 5; ++i) {
@@ -413,8 +428,10 @@ TEST_F(FloodFillTest, ParallelFillSimple) {
     int fillColor = 2;
 
     // Fill one grid using BFS and the other with parallel fill
-    FloodFill::fillBFS(grid1, 2, 2, targetColor, fillColor);
-    FloodFill::fillParallel(grid2, 2, 2, targetColor, fillColor, FloodFill::FloodFillConfig{});
+    auto filled_count1 = FloodFill::fillBFS(grid1, 2, 2, targetColor, fillColor);
+    auto filled_count2 = FloodFill::fillParallel(grid2, 2, 2, targetColor, fillColor, FloodFill::FloodFillConfig{});
+    (void)filled_count1; // Suppress unused variable warning
+    (void)filled_count2; // Suppress unused variable warning
 
     // Results should be identical
     for (size_t i = 0; i < grid1.size(); ++i) {

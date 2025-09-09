@@ -549,32 +549,58 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByTags(
         return {};
     }
 
-    HashMap<String, double> scores;
+    std::set<String> candidateDocIds;
+    bool firstTag = true;
 
     try {
         threading::shared_lock lock(indexMutex_);
 
         for (const auto& tag : tags) {
             auto it = tagIndex_.find(tag);
-            if (it != tagIndex_.end()) {
-                for (const auto& docId : it->second) {
-                    auto docIt = documents_.find(docId);
-                    if (docIt != documents_.end()) {
-                        scores[docId] += tfIdf(*docIt->second, tag);
-                        spdlog::trace("Tag '{}' found in document id: {}", tag,
-                                      std::string(docId));
-                    }
-                }
+            if (it == tagIndex_.end()) {
+                // If any tag is not found, no documents can match all tags
+                spdlog::debug("Tag '{}' not found in index, returning empty result", tag);
+                return {};
+            }
+
+            std::set<String> tagDocIds(it->second.begin(), it->second.end());
+
+            if (firstTag) {
+                candidateDocIds = tagDocIds;
+                firstTag = false;
+            } else {
+                // Intersection: keep only documents that have this tag AND previous tags
+                std::set<String> intersection;
+                std::set_intersection(candidateDocIds.begin(), candidateDocIds.end(),
+                                    tagDocIds.begin(), tagDocIds.end(),
+                                    std::inserter(intersection, intersection.begin()));
+                candidateDocIds = intersection;
+            }
+
+            // Early exit if no documents match all tags so far
+            if (candidateDocIds.empty()) {
+                spdlog::debug("No documents match all tags up to '{}'", tag);
+                return {};
             }
         }
+
+        // Build results from candidate documents
+        std::vector<std::shared_ptr<Document>> results;
+        for (const auto& docId : candidateDocIds) {
+            auto docIt = documents_.find(docId);
+            if (docIt != documents_.end()) {
+                results.push_back(docIt->second);
+                spdlog::trace("Document id: {} matches all tags", std::string(docId));
+            }
+        }
+
+        spdlog::debug("Found {} documents matching all tags", results.size());
+        return results;
+
     } catch (const std::exception& e) {
         spdlog::error("Error during multi-tag search: {}", e.what());
         throw SearchOperationException(e.what());
     }
-
-    auto results = getRankedResults(scores);
-    spdlog::debug("Found {} documents matching the tags", results.size());
-    return results;
 }
 
 void SearchEngine::searchByContentWorker(const std::vector<String>& wordChunk,
@@ -686,66 +712,120 @@ std::vector<std::shared_ptr<Document>> SearchEngine::booleanSearch(
         return {};
     }
 
-    HashMap<String, double> scores;
+    // Parse the query to extract terms and operators
     std::istringstream iss{std::string(query)};
-    std::string wordStd;
+    std::string token;
+    std::vector<std::string> terms;
+    std::vector<std::string> operators;
     bool isNot = false;
+
+    while (iss >> token) {
+        if (token == "NOT") {
+            isNot = true;
+            continue;
+        }
+
+        if (token == "AND" || token == "OR") {
+            operators.push_back(token);
+            continue;
+        }
+
+        // Clean and normalize the term
+        std::transform(token.begin(), token.end(), token.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        token = std::regex_replace(token, std::regex("[^a-zA-Z0-9]"), "");
+
+        if (!token.empty()) {
+            if (isNot) {
+                terms.push_back("NOT_" + token);
+                isNot = false;
+            } else {
+                terms.push_back(token);
+            }
+        }
+    }
+
+    if (terms.empty()) {
+        spdlog::warn("No valid terms found in boolean query");
+        return {};
+    }
 
     try {
         threading::shared_lock lock(indexMutex_);
 
-        while (iss >> wordStd) {
-            if (wordStd == "NOT") {
-                isNot = true;
-                continue;
-            }
+        std::set<String> candidateDocIds;
+        bool firstTerm = true;
 
-            if (wordStd == "AND" || wordStd == "OR") {
-                continue;
-            }
+        for (size_t i = 0; i < terms.size(); ++i) {
+            std::set<String> termDocIds;
+            bool isNotTerm = terms[i].substr(0, 4) == "NOT_";
+            std::string actualTerm = isNotTerm ? terms[i].substr(4) : terms[i];
 
-            std::transform(wordStd.begin(), wordStd.end(), wordStd.begin(),
-                           [](unsigned char c) { return std::tolower(c); });
-            wordStd =
-                std::regex_replace(wordStd, std::regex("[^a-zA-Z0-9]"), "");
-
-            if (wordStd.empty()) {
-                continue;
-            }
-
-            String wordKey(wordStd);
+            String wordKey(actualTerm);
             auto it = contentIndex_.find(wordKey);
+
             if (it != contentIndex_.end()) {
                 for (const auto& docId : it->second) {
-                    auto docIt = documents_.find(docId);
-                    if (docIt != documents_.end()) {
-                        double tfidfScore =
-                            tfIdf(*docIt->second, std::string_view(wordKey));
-
-                        if (isNot) {
-                            scores[docId] -= tfidfScore * 2.0;
-                            spdlog::trace(
-                                "Word '{}' excluded from document id: {}",
-                                wordStd, std::string(docId));
-                        } else {
-                            scores[docId] += tfidfScore;
-                            spdlog::trace(
-                                "Word '{}' included in document id: {}",
-                                wordStd, std::string(docId));
-                        }
-                    }
+                    termDocIds.insert(docId);
                 }
             }
-            isNot = false;
+
+            if (isNotTerm) {
+                // For NOT terms, we want documents that DON'T contain this term
+                std::set<String> allDocIds;
+                for (const auto& doc : documents_) {
+                    allDocIds.insert(doc.first);
+                }
+                std::set<String> notTermDocIds;
+                std::set_difference(allDocIds.begin(), allDocIds.end(),
+                                  termDocIds.begin(), termDocIds.end(),
+                                  std::inserter(notTermDocIds, notTermDocIds.begin()));
+                termDocIds = notTermDocIds;
+            }
+
+            if (firstTerm) {
+                candidateDocIds = termDocIds;
+                firstTerm = false;
+            } else {
+                // Default to AND operation if no explicit operator or if AND is specified
+                std::string op = (i-1 < operators.size()) ? operators[i-1] : "AND";
+
+                if (op == "AND") {
+                    std::set<String> intersection;
+                    std::set_intersection(candidateDocIds.begin(), candidateDocIds.end(),
+                                        termDocIds.begin(), termDocIds.end(),
+                                        std::inserter(intersection, intersection.begin()));
+                    candidateDocIds = intersection;
+                } else if (op == "OR") {
+                    std::set<String> unionSet;
+                    std::set_union(candidateDocIds.begin(), candidateDocIds.end(),
+                                 termDocIds.begin(), termDocIds.end(),
+                                 std::inserter(unionSet, unionSet.begin()));
+                    candidateDocIds = unionSet;
+                }
+            }
+
+            spdlog::trace("After processing term '{}': {} candidate documents",
+                         actualTerm, candidateDocIds.size());
         }
+
+        // Build results from candidate documents
+        std::vector<std::shared_ptr<Document>> results;
+        for (const auto& docId : candidateDocIds) {
+            auto docIt = documents_.find(docId);
+            if (docIt != documents_.end()) {
+                results.push_back(docIt->second);
+                spdlog::trace("Document id: {} matches boolean query", std::string(docId));
+            }
+        }
+
+        spdlog::debug("Found {} documents matching boolean query", results.size());
+        return results;
+
     } catch (const std::exception& e) {
         spdlog::error("Error during boolean search: {}", e.what());
         throw SearchOperationException(e.what());
     }
-
-    auto results = getRankedResults(scores);
-    spdlog::debug("Found {} documents matching boolean query", results.size());
-    return results;
 }
 
 std::vector<String> SearchEngine::autoComplete(const String& prefix,

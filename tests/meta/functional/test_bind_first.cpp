@@ -131,7 +131,7 @@ TEST_F(BindFirstTest, BindToSharedPtr) {
     auto obj = std::make_shared<TestClass>();
     obj->value = 30;
 
-    auto boundAdd = bindFirst(&TestClass::addValue, *obj);
+    auto boundAdd = bindFirst(&TestClass::addValue, std::ref(*obj));
     EXPECT_EQ(boundAdd(10), 40);
 
     // The object should be modified
@@ -340,6 +340,7 @@ TEST_F(BindFirstTest, VariousParameterTypes) {
 #if __cpp_lib_coroutine
 // Test coroutine support if available
 #include <coroutine>
+#include "atom/meta/awaitable.hpp"
 
 // Simple coroutine task type for testing
 struct Task {
@@ -366,12 +367,18 @@ struct Task {
     int get_result() { return handle.promise().value; }
 };
 
+// Simple test class for coroutine test
+struct CoroutineTestClass {
+    int value = 0;
+    int addValue(int x) const { return value + x; }
+};
+
 Task test_coroutine() {
-    TestClass obj;
+    CoroutineTestClass obj;
     obj.value = 10;
 
-    auto addTen = bindFirst(&TestClass::addValue, obj);
-    auto awaitable = makeAwaitable(addTen, 5);
+    auto addTen = bindFirst(&CoroutineTestClass::addValue, obj);
+    auto awaitable = atom::meta::makeAwaitable(addTen, 5);
 
     int result = co_await awaitable;
     co_return result;

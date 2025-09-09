@@ -32,8 +32,6 @@ protected:
 
 TEST_F(AsyncUdpClientTest, BasicBinding) {
     EXPECT_TRUE(client_->bind(12346));
-    // Note: isReceiving() method may not exist in actual implementation
-    // EXPECT_TRUE(client_->isReceiving());
 }
 
 TEST_F(AsyncUdpClientTest, BindWithAddress) {
@@ -121,7 +119,8 @@ TEST_F(AsyncUdpClientTest, AsyncReceiveCallback) {
         }
     });
     
-    ASSERT_TRUE(client_->startReceiving(1024));
+    // startReceiving returns void in async client
+    client_->startReceiving(1024);
     
     // Send data from another client
     std::thread sender([this]() {
@@ -201,13 +200,14 @@ TEST_F(AsyncUdpClientTest, StatusCallback) {
 
 TEST_F(AsyncUdpClientTest, StartStopReceiving) {
     ASSERT_TRUE(client_->bind(12356));
-    EXPECT_TRUE(client_->isReceiving());
     
-    EXPECT_TRUE(client_->startReceiving(1024));
-    EXPECT_TRUE(client_->isReceiving());
+    // startReceiving returns void and there's no isReceiving() in async client
+    client_->startReceiving(1024);
     
+    // Give it a brief moment to start and then stop
+    std::this_thread::sleep_for(50ms);
     client_->stopReceiving();
-    EXPECT_FALSE(client_->isReceiving());
+    SUCCEED();
 }
 
 TEST_F(AsyncUdpClientTest, MulticastJoinLeave) {
@@ -219,11 +219,8 @@ TEST_F(AsyncUdpClientTest, MulticastJoinLeave) {
 }
 
 TEST_F(AsyncUdpClientTest, BroadcastSend) {
-    ASSERT_TRUE(client_->bind(12358));
-    
-    std::vector<char> broadcastData = {'B', 'r', 'o', 'a', 'd', 'c', 'a', 's', 't'};
-    // Broadcast send (may require special network configuration)
-    EXPECT_NO_THROW(client_->sendBroadcast(12359, broadcastData));
+    // The async UdpClient does not support sendBroadcast; skip this test
+    GTEST_SKIP() << "sendBroadcast is not supported by async::connection::UdpClient";
 }
 
 TEST_F(AsyncUdpClientTest, GetStatistics) {
@@ -276,8 +273,6 @@ TEST_F(AsyncUdpClientTest, IPv6Support) {
     // IPv6 binding (may not work in all environments)
     bool bound = ipv6Client->bind(12365, "::1");
     if (bound) {
-        EXPECT_TRUE(ipv6Client->isReceiving());
-        
         // Test IPv6 send
         std::vector<char> testData = {'I', 'P', 'v', '6'};
         EXPECT_NO_THROW(ipv6Client->send("::1", 12366, testData));

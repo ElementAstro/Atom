@@ -132,32 +132,37 @@ set(HEADERS
     core/switch.hpp
 )
 
-find_package(TBB REQUIRED)
-
-set(LIBS
-    atom-error
-    loguru
-    tinyxml2
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    ${CMAKE_THREAD_LIBS_INIT}
-    TBB::tbb
-)
-
-if (WIN32 OR WIN64)
-    list(APPEND LIBS iphlpapi)
-endif()
+# Use standardized dependency management
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
 set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
-
 # Build Static Library
 add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+
+# Configure module with standard dependencies
+atom_configure_module(${PROJECT_NAME})
+
+# Setup module-specific dependencies
+atom_setup_crypto_deps(${PROJECT_NAME})
+atom_setup_xml_deps(${PROJECT_NAME})
+atom_setup_logging_deps(${PROJECT_NAME})
+atom_find_tbb(${PROJECT_NAME})
+
+# Link to atom-error (required dependency)
+if(TARGET atom-error)
+    target_link_libraries(${PROJECT_NAME} PUBLIC atom-error)
+endif()
+
+# Platform-specific libraries
+if(WIN32)
+    target_link_libraries(${PROJECT_NAME} PUBLIC iphlpapi)
+endif()
+
+# Copy dependencies to object library
+target_link_libraries(${PROJECT_NAME}_object PRIVATE $<TARGET_PROPERTY:${PROJECT_NAME},LINK_LIBRARIES>)
 
 # Set library properties
 set_target_properties(${PROJECT_NAME} PROPERTIES

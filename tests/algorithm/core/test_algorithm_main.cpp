@@ -110,7 +110,8 @@ TEST_F(KMPTest, PerformanceTest) {
 
     EXPECT_PERFORMANCE_BETTER_THAN({
         for (int i = 0; i < 1000; ++i) {
-            kmp.search(large_text_);
+            auto result = kmp.search(large_text_);
+            (void)result; // Suppress unused variable warning
         }
     }, 100); // Should complete in less than 100ms
 }

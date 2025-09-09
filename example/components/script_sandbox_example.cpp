@@ -150,7 +150,10 @@ void demonstrateBasicSandbox() {
     Permission permissions =
         Permission::ComponentAccess | Permission::ReadFiles;
 
-    auto sandbox = std::make_unique<ScriptSandbox>(limits, permissions);
+    SandboxConfig config;
+    config.limits = limits;
+    config.permissions = permissions;
+    auto sandbox = std::make_unique<ScriptSandbox>(config);
 
     std::cout << "Sandbox created with restrictive limits:" << std::endl;
     std::cout << "  Memory limit: " << (limits.maxMemoryUsage / 1024 / 1024)
@@ -173,11 +176,11 @@ void demonstratePermissionSystem() {
     // Test public access (should work)
     std::cout << "\n--- Testing public access ---" << std::endl;
     try {
-        auto publicData = component->executeCommand("getPublicData", {});
-        std::cout << "Public data: " << publicData << std::endl;
+        auto publicData = component->runCommand("getPublicData", {});
+        std::cout << "Public data: " << std::any_cast<std::string>(publicData) << std::endl;
 
-        auto securityLevel = component->executeCommand("getSecurityLevel", {});
-        std::cout << "Security level: " << securityLevel << std::endl;
+        auto securityLevel = component->runCommand("getSecurityLevel", {});
+        std::cout << "Security level: " << std::any_cast<int>(securityLevel) << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Error accessing public data: " << e.what() << std::endl;
     }
@@ -186,8 +189,8 @@ void demonstratePermissionSystem() {
     std::cout << "\n--- Testing private access without permission ---"
               << std::endl;
     try {
-        auto privateData = component->executeCommand("getPrivateData", {});
-        std::cout << "Unexpected success: " << privateData << std::endl;
+        auto privateData = component->runCommand("getPrivateData", {});
+        std::cout << "Unexpected success: " << std::any_cast<std::string>(privateData) << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Expected error: " << e.what() << std::endl;
     }
@@ -195,15 +198,17 @@ void demonstratePermissionSystem() {
     // Grant access and try again
     std::cout << "\n--- Granting access with correct password ---" << std::endl;
     try {
-        auto granted = component->executeCommand("grantAccess", {"secure123"});
-        std::cout << "Access granted: " << granted << std::endl;
+        std::vector<std::any> grantArgs = {std::any(std::string("secure123"))};
+        auto granted = component->runCommand("grantAccess", grantArgs);
+        std::cout << "Access granted: " << std::any_cast<bool>(granted) << std::endl;
 
-        auto privateData = component->executeCommand("getPrivateData", {});
-        std::cout << "Private data: " << privateData << std::endl;
+        auto privateData = component->runCommand("getPrivateData", {});
+        std::cout << "Private data: " << std::any_cast<std::string>(privateData) << std::endl;
 
-        component->executeCommand("setSecurityLevel", {"5"});
-        auto newLevel = component->executeCommand("getSecurityLevel", {});
-        std::cout << "New security level: " << newLevel << std::endl;
+        std::vector<std::any> levelArgs = {std::any(std::string("5"))};
+        [[maybe_unused]] auto setResult = component->runCommand("setSecurityLevel", levelArgs);
+        auto newLevel = component->runCommand("getSecurityLevel", {});
+        std::cout << "New security level: " << std::any_cast<int>(newLevel) << std::endl;
 
     } catch (const std::exception& e) {
         std::cout << "Error: " << e.what() << std::endl;
@@ -211,11 +216,11 @@ void demonstratePermissionSystem() {
 
     // Test wrong password
     std::cout << "\n--- Testing wrong password ---" << std::endl;
-    component->executeCommand("revokeAccess", {});
+    [[maybe_unused]] auto revokeResult = component->runCommand("revokeAccess", {});
     try {
-        auto granted =
-            component->executeCommand("grantAccess", {"wrongpassword"});
-        std::cout << "Access granted: " << granted << std::endl;
+        std::vector<std::any> wrongArgs = {std::any(std::string("wrongpassword"))};
+        auto granted = component->runCommand("grantAccess", wrongArgs);
+        std::cout << "Access granted: " << std::any_cast<bool>(granted) << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Error: " << e.what() << std::endl;
     }
@@ -291,14 +296,14 @@ len(big_list)
         auto start = std::chrono::high_resolution_clock::now();
 
         // This should be interrupted by time limit
-        auto result =
-            component->executeCommand("intensiveComputation", {"1000000"});
+        std::vector<std::any> computeArgs = {std::any(std::string("1000000"))};
+        auto result = component->runCommand("intensiveComputation", computeArgs);
 
         auto end = std::chrono::high_resolution_clock::now();
         auto duration =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-        std::cout << "Computation result: " << result << std::endl;
+        std::cout << "Computation result: " << std::any_cast<std::string>(result) << std::endl;
         std::cout << "Execution time: " << duration.count() << " ms"
                   << std::endl;
 
@@ -319,33 +324,13 @@ void demonstrateSandboxViolations() {
     limits.maxStackDepth = 50;
 
     Permission permissions = Permission::ComponentAccess;
-    auto sandbox = std::make_unique<ScriptSandbox>(limits, permissions);
+    SandboxConfig config;
+    config.limits = limits;
+    config.permissions = permissions;
+    auto sandbox = std::make_unique<ScriptSandbox>(config);
 
-    // Set up violation handler
-    sandbox->setViolationHandler([](const SandboxViolation& violation) {
-        std::cout << "VIOLATION DETECTED:" << std::endl;
-        std::cout << "  Type: ";
-        switch (violation.type) {
-            case SandboxViolation::MemoryLimit:
-                std::cout << "Memory Limit";
-                break;
-            case SandboxViolation::TimeLimit:
-                std::cout << "Time Limit";
-                break;
-            case SandboxViolation::PermissionDenied:
-                std::cout << "Permission Denied";
-                break;
-            case SandboxViolation::ResourceLimit:
-                std::cout << "Resource Limit";
-                break;
-            case SandboxViolation::SecurityViolation:
-                std::cout << "Security Violation";
-                break;
-        }
-        std::cout << std::endl;
-        std::cout << "  Description: " << violation.description << std::endl;
-        std::cout << "  Script: " << violation.scriptName << std::endl;
-    });
+    // Note: setViolationHandler is not available in current API
+    // Violations will be tracked automatically and can be retrieved via getRecentViolations
 
     // Test various violations
     std::vector<std::pair<std::string, std::string>> violationTests = {
@@ -376,7 +361,7 @@ void demonstrateSandboxViolations() {
 
     // Get violation history
     std::cout << "\n--- Violation History ---" << std::endl;
-    auto violations = sandbox->getViolationHistory();
+    auto violations = sandbox->getRecentViolations();
     std::cout << "Total violations detected: " << violations.size()
               << std::endl;
 
@@ -403,8 +388,10 @@ void demonstrateSandboxConfiguration() {
     Permission permissivePerms = Permission::ComponentAccess |
                                  Permission::ReadFiles | Permission::SystemInfo;
 
-    auto permissiveSandbox =
-        std::make_unique<ScriptSandbox>(permissiveLimits, permissivePerms);
+    SandboxConfig permissiveConfig;
+    permissiveConfig.limits = permissiveLimits;
+    permissiveConfig.permissions = permissivePerms;
+    auto permissiveSandbox = std::make_unique<ScriptSandbox>(permissiveConfig);
 
     std::cout << "Permissive sandbox allows:" << std::endl;
     std::cout << "  Component access: "
@@ -430,8 +417,10 @@ void demonstrateSandboxConfiguration() {
 
     Permission restrictivePerms = Permission::None;
 
-    auto restrictiveSandbox =
-        std::make_unique<ScriptSandbox>(restrictiveLimits, restrictivePerms);
+    SandboxConfig restrictiveConfig;
+    restrictiveConfig.limits = restrictiveLimits;
+    restrictiveConfig.permissions = restrictivePerms;
+    auto restrictiveSandbox = std::make_unique<ScriptSandbox>(restrictiveConfig);
 
     std::cout << "Restrictive sandbox allows:" << std::endl;
     std::cout << "  Component access: "
@@ -456,7 +445,10 @@ void demonstrateSandboxConfiguration() {
     Permission devPerms = Permission::ComponentAccess | Permission::ReadFiles |
                           Permission::WriteFiles | Permission::SystemInfo;
 
-    auto devSandbox = std::make_unique<ScriptSandbox>(devLimits, devPerms);
+    SandboxConfig devConfig;
+    devConfig.limits = devLimits;
+    devConfig.permissions = devPerms;
+    auto devSandbox = std::make_unique<ScriptSandbox>(devConfig);
 
     std::cout << "Development sandbox allows:" << std::endl;
     std::cout << "  Component access: "
@@ -484,7 +476,10 @@ void demonstrateSandboxStatistics() {
     limits.maxExecutionTime = std::chrono::milliseconds(3000);
 
     Permission permissions = Permission::ComponentAccess;
-    auto sandbox = std::make_unique<ScriptSandbox>(limits, permissions);
+    SandboxConfig config;
+    config.limits = limits;
+    config.permissions = permissions;
+    auto sandbox = std::make_unique<ScriptSandbox>(config);
 
 #if ATOM_ENABLE_LUA || ATOM_ENABLE_PYTHON
     // Execute several test scripts
@@ -501,20 +496,14 @@ void demonstrateSandboxStatistics() {
     // Get and display statistics
     auto stats = sandbox->getStatistics();
     std::cout << "Sandbox Statistics:" << std::endl;
-    std::cout << "  Scripts executed: " << stats.scriptsExecuted << std::endl;
+    std::cout << "  Total executions: " << stats.totalExecutions << std::endl;
     std::cout << "  Successful executions: " << stats.successfulExecutions
               << std::endl;
-    std::cout << "  Failed executions: " << stats.failedExecutions << std::endl;
-    std::cout << "  Security violations: " << stats.securityViolations
-              << std::endl;
-    std::cout << "  Resource violations: " << stats.resourceViolations
+    std::cout << "  Scripts terminated: " << stats.scriptsTerminated << std::endl;
+    std::cout << "  Violations detected: " << stats.violationsDetected
               << std::endl;
     std::cout << "  Total execution time: " << stats.totalExecutionTime.count()
-              << " ms" << std::endl;
-    std::cout << "  Average execution time: "
-              << stats.averageExecutionTime.count() << " ms" << std::endl;
-    std::cout << "  Peak memory usage: " << (stats.peakMemoryUsage / 1024)
-              << " KB" << std::endl;
+              << " microseconds" << std::endl;
 }
 
 int main() {

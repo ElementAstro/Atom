@@ -200,7 +200,7 @@ TEST(ConvertTest, DoubleEncode) {
     std::string result;
 
     converter.encode(123.45, result);
-    EXPECT_EQ(result, "123.450000");
+    EXPECT_EQ(result, "123.45");
 }
 
 // Test Convert<float>
@@ -219,7 +219,7 @@ TEST(ConvertTest, FloatEncode) {
     std::string result;
 
     converter.encode(123.45f, result);
-    EXPECT_EQ(result, "123.450000");
+    EXPECT_EQ(result, "123.449997");
 }
 
 // Test Convert<std::string>

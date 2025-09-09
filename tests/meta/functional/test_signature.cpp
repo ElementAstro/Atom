@@ -447,7 +447,7 @@ TEST_F(SignatureTest, ParameterComparison) {
     Parameter p3{"name", "int", false, std::nullopt};
     Parameter p4{"other", "string", false, std::nullopt};
     Parameter p5{"name", "string", true,
-                 std::make_optional(std::string_view{"default"})};
+                 std::make_optional(std::string{"default"})};
 
     EXPECT_EQ(p1, p2);
     EXPECT_NE(p1, p3);

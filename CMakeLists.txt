@@ -136,59 +136,10 @@ endif()
 # -----------------------------------------------------------------------------
 message(STATUS "Finding dependency packages...")
 
-# Essential dependencies for the project
-find_package(PkgConfig REQUIRED)
+# Use standardized dependency finding
+include(cmake/FindDependencies.cmake)
 
-# Try to find Asio (header-only library)
-find_path(ASIO_INCLUDE_DIR asio.hpp PATHS /mingw64/include /usr/include /usr/local/include)
-if(ASIO_INCLUDE_DIR)
-    message(STATUS "Found Asio headers at: ${ASIO_INCLUDE_DIR}")
-    include_directories(${ASIO_INCLUDE_DIR})
-    add_definitions(-DASIO_STANDALONE)
-else()
-    message(WARNING "Asio not found - networking features may be limited")
-endif()
-
-find_package(OpenSSL REQUIRED)
-
-# Try to find SQLite3
-find_package(SQLite3 QUIET)
-if(SQLite3_FOUND)
-    message(STATUS "Found SQLite3: ${SQLite3_VERSION}")
-else()
-    message(WARNING "SQLite3 not found - database features may be limited")
-endif()
-
-# Try to find fmt
-find_package(fmt QUIET)
-if(fmt_FOUND)
-    message(STATUS "Found fmt: ${fmt_VERSION}")
-else()
-    message(WARNING "fmt not found - formatting features may be limited")
-endif()
-
-find_package(ZLIB REQUIRED)
-
-# SSH support
-if(ATOM_USE_SSH)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(LIBSSH REQUIRED libssh)
-    if(LIBSSH_FOUND)
-        message(STATUS "Found LibSSH: ${LIBSSH_VERSION}")
-        add_definitions(-DENABLE_SSH -DENABLE_LIBSSH)
-        include_directories(${LIBSSH_INCLUDE_DIRS})
-        link_directories(${LIBSSH_LIBRARY_DIRS})
-    else()
-        message(FATAL_ERROR "LibSSH not found but ATOM_USE_SSH is enabled")
-    endif()
-endif()
-
-# Python & pybind11
-if(ATOM_BUILD_PYTHON_BINDINGS)
-  find_package(Python COMPONENTS Interpreter Development REQUIRED)
-  find_package(pybind11 CONFIG REQUIRED)
-  include_directories(${pybind11_INCLUDE_DIRS} ${Python_INCLUDE_DIRS})
-endif()
+# SSH support and Python bindings are now handled by FindDependencies.cmake
 
 # Skip platform-specific dependencies for now
 # Linux/WSL/Windows platform-specific dependencies

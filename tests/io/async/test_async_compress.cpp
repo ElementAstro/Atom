@@ -13,9 +13,10 @@
 #include <thread>
 #include <vector>
 
-#include "atom/system/software.hpp"
+#include "atom/system/info/software.hpp"
 
 using namespace atom::async::io;
+using namespace atom::system;
 using namespace testing;
 
 class AsyncCompressTest : public ::testing::Test {
@@ -284,7 +285,7 @@ TEST_F(AsyncCompressTest, ZipOperations) {
     fs::path zip_file = output_dir_ / "test.zip";
 
     // We need to check if zip is available
-    bool zip_available = atom::system::checkSoftwareInstalled("zip");
+    bool zip_available = checkSoftwareInstalled("zip");
     if (!zip_available) {
         GTEST_SKIP() << "Skipping test as 'zip' command is not available";
     }

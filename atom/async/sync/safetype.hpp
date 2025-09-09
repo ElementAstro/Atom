@@ -847,6 +847,179 @@ private:
     }
 };
 
+namespace sync {
+
+/**
+ * @brief Thread-safe wrapper for any type T
+ *
+ * SafeType provides thread-safe access to a value of type T using a shared_mutex
+ * for reader-writer synchronization. Multiple readers can access the value
+ * concurrently, but writers have exclusive access.
+ *
+ * @tparam T The type to wrap
+ */
+template <typename T>
+class SafeType {
+public:
+    /**
+     * @brief Default constructor
+     */
+    SafeType() = default;
+
+    /**
+     * @brief Constructor with initial value
+     * @param value Initial value
+     */
+    explicit SafeType(const T& value) : value_(value) {}
+
+    /**
+     * @brief Constructor with initial value (move)
+     * @param value Initial value
+     */
+    explicit SafeType(T&& value) : value_(std::move(value)) {}
+
+    /**
+     * @brief Copy constructor
+     * @param other Other SafeType to copy from
+     */
+    SafeType(const SafeType& other) {
+        std::shared_lock lock(other.mutex_);
+        value_ = other.value_;
+    }
+
+    /**
+     * @brief Move constructor
+     * @param other Other SafeType to move from
+     */
+    SafeType(SafeType&& other) noexcept {
+        std::unique_lock lock(other.mutex_);
+        value_ = std::move(other.value_);
+    }
+
+    /**
+     * @brief Copy assignment operator
+     * @param other Other SafeType to copy from
+     * @return Reference to this
+     */
+    SafeType& operator=(const SafeType& other) {
+        if (this != &other) {
+            std::unique_lock lock1(mutex_, std::defer_lock);
+            std::shared_lock lock2(other.mutex_, std::defer_lock);
+            std::lock(lock1, lock2);
+            value_ = other.value_;
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Move assignment operator
+     * @param other Other SafeType to move from
+     * @return Reference to this
+     */
+    SafeType& operator=(SafeType&& other) noexcept {
+        if (this != &other) {
+            std::unique_lock lock1(mutex_, std::defer_lock);
+            std::unique_lock lock2(other.mutex_, std::defer_lock);
+            std::lock(lock1, lock2);
+            value_ = std::move(other.value_);
+        }
+        return *this;
+    }
+
+    /**
+     * @brief Get a copy of the current value
+     * @return Copy of the current value
+     */
+    T get() const {
+        std::shared_lock lock(mutex_);
+        return value_;
+    }
+
+    /**
+     * @brief Set the value
+     * @param value New value
+     */
+    void set(const T& value) {
+        std::unique_lock lock(mutex_);
+        value_ = value;
+    }
+
+    /**
+     * @brief Set the value (move)
+     * @param value New value
+     */
+    void set(T&& value) {
+        std::unique_lock lock(mutex_);
+        value_ = std::move(value);
+    }
+
+    /**
+     * @brief Modify the value using a function
+     * @tparam Func Function type
+     * @param func Function to apply to the value
+     * @return Result of the function (if any)
+     */
+    template <typename Func>
+    auto modify(Func&& func) -> decltype(func(std::declval<T&>())) {
+        std::unique_lock lock(mutex_);
+        if constexpr (std::is_void_v<decltype(func(value_))>) {
+            func(value_);
+        } else {
+            return func(value_);
+        }
+    }
+
+    /**
+     * @brief Read the value using a function (read-only access)
+     * @tparam Func Function type
+     * @param func Function to apply to the value
+     * @return Result of the function (if any)
+     */
+    template <typename Func>
+    auto read(Func&& func) const -> decltype(func(std::declval<const T&>())) {
+        std::shared_lock lock(mutex_);
+        if constexpr (std::is_void_v<decltype(func(value_))>) {
+            func(value_);
+        } else {
+            return func(value_);
+        }
+    }
+
+    /**
+     * @brief Swap values with another SafeType
+     * @param other Other SafeType to swap with
+     */
+    void swap(SafeType& other) {
+        if (this != &other) {
+            std::unique_lock lock1(mutex_, std::defer_lock);
+            std::unique_lock lock2(other.mutex_, std::defer_lock);
+            std::lock(lock1, lock2);
+            std::swap(value_, other.value_);
+        }
+    }
+
+    /**
+     * @brief Compare and swap operation
+     * @param expected Expected value
+     * @param desired Desired value
+     * @return true if swap occurred, false otherwise
+     */
+    bool compareAndSwap(const T& expected, const T& desired) {
+        std::unique_lock lock(mutex_);
+        if (value_ == expected) {
+            value_ = desired;
+            return true;
+        }
+        return false;
+    }
+
+private:
+    mutable std::shared_mutex mutex_;  ///< Mutex for thread-safe access
+    T value_{};                        ///< The wrapped value
+};
+
+}  // namespace sync
+
 }  // namespace atom::async
 
 #endif  // ATOM_ASYNC_SYNC_SAFETYPE_HPP

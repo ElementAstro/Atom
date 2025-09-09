@@ -23,24 +23,45 @@ int main() {
             auto& manager = LogManager::instance();
 
             // Create a file logger
-            auto file_logger =
-                manager.create_logger("file_logger", LogType::file);
-            file_logger.info("This message goes to file logger");
+            LogConfig file_config{
+                .name = "file_logger",
+                .level = Level::info,
+                .file_config = LogConfig::FileConfig{.filename = "test.log"},
+                .console_output = false
+            };
+            auto file_logger_result = manager.create_logger(file_config);
+            if (file_logger_result) {
+                file_logger_result.value()->info("This message goes to file logger");
+            }
 
             // Create a console logger
-            auto console_logger =
-                manager.create_logger("console_logger", LogType::console);
-            console_logger.info("This message goes to console logger");
+            LogConfig console_config{
+                .name = "console_logger",
+                .level = Level::info,
+                .file_config = {},
+                .console_output = true
+            };
+            auto console_logger_result = manager.create_logger(console_config);
+            if (console_logger_result) {
+                console_logger_result.value()->info("This message goes to console logger");
+            }
 
-            // Create a network logger
-            auto network_logger =
-                manager.create_logger("network_logger", LogType::network);
-            network_logger.info("This message goes to network logger");
+            // Create a network logger (using general type)
+            LogConfig network_config{
+                .name = "network_logger",
+                .level = Level::info,
+                .file_config = {},
+                .console_output = true
+            };
+            auto network_logger_result = manager.create_logger(network_config);
+            if (network_logger_result) {
+                network_logger_result.value()->info("This message goes to network logger");
+            }
 
             // Get logger by name
-            auto retrieved_logger = manager.get_logger("file_logger");
-            if (retrieved_logger) {
-                retrieved_logger->info("Retrieved logger by name");
+            auto retrieved_logger_result = manager.get_logger("file_logger");
+            if (retrieved_logger_result) {
+                retrieved_logger_result.value()->info("Retrieved logger by name");
             }
 
             std::cout << "Custom logger management completed" << std::endl;

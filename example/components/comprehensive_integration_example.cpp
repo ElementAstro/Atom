@@ -111,19 +111,19 @@ public:
         // Register lifecycle hooks
         auto& lifecycle = LifecycleManager::instance();
 
-        lifecycle.registerHook(name, LifecyclePhase::Initialize,
+        lifecycle.registerHook(name, LifecyclePhase::PostInitialization,
             [this](Component& comp, LifecyclePhase phase) {
                 std::cout << "  Service initializing..." << std::endl;
                 setValue("running", false);
             });
 
-        lifecycle.registerHook(name, LifecyclePhase::Activate,
+        lifecycle.registerHook(name, LifecyclePhase::PostActivation,
             [this](Component& comp, LifecyclePhase phase) {
                 std::cout << "  Service starting..." << std::endl;
                 setValue("running", true);
             });
 
-        lifecycle.registerHook(name, LifecyclePhase::Deactivate,
+        lifecycle.registerHook(name, LifecyclePhase::PreDeactivation,
             [this](Component& comp, LifecyclePhase phase) {
                 std::cout << "  Service stopping..." << std::endl;
                 setValue("running", false);
@@ -132,12 +132,12 @@ public:
         // Add service commands
         def("start", [this]() {
             auto& lifecycle = LifecycleManager::instance();
-            lifecycle.executePhase(*this, LifecyclePhase::Activate);
+            lifecycle.executePhase(*this, LifecyclePhase::PostActivation);
         });
 
         def("stop", [this]() {
             auto& lifecycle = LifecycleManager::instance();
-            lifecycle.executePhase(*this, LifecyclePhase::Deactivate);
+            lifecycle.executePhase(*this, LifecyclePhase::PreDeactivation);
         });
 
         def("isRunning", [this]() -> bool {
@@ -177,8 +177,8 @@ public:
 
         // Initialize lifecycle
         auto& lifecycle = LifecycleManager::instance();
-        lifecycle.executePhase(*processor_, LifecyclePhase::Initialize);
-        lifecycle.executePhase(*service_, LifecyclePhase::Initialize);
+        lifecycle.executePhase(*processor_, LifecyclePhase::PostInitialization);
+        lifecycle.executePhase(*service_, LifecyclePhase::PostInitialization);
     }
 
     void setupScripting() {
@@ -222,14 +222,17 @@ public:
 
         // Lifecycle management
         std::cout << "\n--- Lifecycle Management ---" << std::endl;
-        service_->executeCommand("start", {});
+        [[maybe_unused]] auto startResult = service_->runCommand("start", {});
 
         // Variable management and command dispatch
         std::cout << "\n--- Data Processing ---" << std::endl;
-        processor_->executeCommand("processData", {"sample_data_1"});
-        processor_->executeCommand("processData", {"sample_data_2"});
-        processor_->executeCommand("processData", {"sample_data_3"});
-        processor_->executeCommand("getStats", {});
+        std::vector<std::any> args1 = {std::any(std::string("sample_data_1"))};
+        std::vector<std::any> args2 = {std::any(std::string("sample_data_2"))};
+        std::vector<std::any> args3 = {std::any(std::string("sample_data_3"))};
+        [[maybe_unused]] auto result1 = processor_->runCommand("processData", args1);
+        [[maybe_unused]] auto result2 = processor_->runCommand("processData", args2);
+        [[maybe_unused]] auto result3 = processor_->runCommand("processData", args3);
+        [[maybe_unused]] auto statsResult = processor_->runCommand("getStats", {});
 
         // Serialization demonstration
         std::cout << "\n--- Serialization ---" << std::endl;
@@ -241,27 +244,18 @@ public:
 
         // Cleanup
         std::cout << "\n--- Cleanup ---" << std::endl;
-        processor_->executeCommand("clearQueue", {});
-        service_->executeCommand("stop", {});
+        [[maybe_unused]] auto clearResult = processor_->runCommand("clearQueue", {});
+        [[maybe_unused]] auto stopResult = service_->runCommand("stop", {});
     }
 
     void demonstrateSerialization() {
         try {
-            // Create serializer
-            ComponentSerializer serializer;
-
-            // Serialize processor component
-            std::string serializedData = serializer.serialize(*processor_);
-            std::cout << "  Component serialized successfully" << std::endl;
-            std::cout << "  Serialized data length: " << serializedData.length() << " bytes" << std::endl;
-
-            // Save to file
-            std::ofstream file("processor_component.json");
-            if (file.is_open()) {
-                file << serializedData;
-                file.close();
-                std::cout << "  Serialized data saved to file" << std::endl;
-            }
+            // Note: ComponentSerializer is not available in current API
+            // This is a placeholder for serialization functionality
+            std::cout << "  Serialization functionality not available in current API" << std::endl;
+            std::cout << "  Component state can be accessed via variables instead" << std::endl;
+            // Placeholder for actual serialization
+            std::cout << "  Component state would be serialized here" << std::endl;
 
             // Demonstrate deserialization (would create new component)
             std::cout << "  Deserialization would restore component state" << std::endl;
@@ -299,7 +293,8 @@ public:
 
         // Process many items
         for (int i = 0; i < 1000; ++i) {
-            processor_->executeCommand("processData", {"test_data_" + std::to_string(i)});
+            std::vector<std::any> args = {std::any(std::string("test_data_" + std::to_string(i)))};
+            [[maybe_unused]] auto result = processor_->runCommand("processData", args);
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
@@ -308,7 +303,7 @@ public:
         std::cout << "  Processed 1000 items in " << duration.count() << " microseconds" << std::endl;
         std::cout << "  Average: " << (duration.count() / 1000.0) << " microseconds per item" << std::endl;
 
-        processor_->executeCommand("getStats", {});
+        [[maybe_unused]] auto statsResult = processor_->runCommand("getStats", {});
     }
 };
 

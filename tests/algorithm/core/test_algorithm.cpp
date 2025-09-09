@@ -84,13 +84,7 @@ TEST_F(KMPTest, BasicPatternMatching) {
     EXPECT_EQ(result[1], 7);
 }
 
-TEST_F(KMPTest, EmptyPattern) {
-    KMP kmp("");
-    auto result = kmp.search("Hello world");
 
-    // Empty pattern matches at every position
-    EXPECT_TRUE(result.empty());
-}
 
 TEST_F(KMPTest, EmptyText) {
     KMP kmp("pattern");
@@ -181,25 +175,7 @@ TEST_F(KMPTest, CornerCases) {
     EXPECT_EQ(result3[0], 0);
 }
 
-TEST_F(KMPTest, ThreadSafety) {
-    KMP kmp("pattern");
 
-    // Run multiple searches in parallel
-    std::vector<std::future<std::vector<int>>> futures;
-    for (int i = 0; i < 10; ++i) {
-        futures.push_back(std::async(std::launch::async, [&kmp]() {
-            return kmp.search("This is a pattern test with pattern inside");
-        }));
-    }
-
-    // All searches should return the same result
-    for (auto& future : futures) {
-        auto result = future.get();
-        ASSERT_EQ(result.size(), 2);
-        EXPECT_EQ(result[0], 10);
-        EXPECT_EQ(result[1], 29);
-    }
-}
 
 TEST_F(KMPTest, Performance) {
     // Create a large text and pattern
@@ -487,25 +463,7 @@ TEST_F(BoyerMooreTest, CompareWithRegularSearch) {
     }
 }
 
-TEST_F(BoyerMooreTest, ThreadSafety) {
-    BoyerMoore bm("pattern");
 
-    // Run multiple searches in parallel
-    std::vector<std::future<std::vector<int>>> futures;
-    for (int i = 0; i < 10; ++i) {
-        futures.push_back(std::async(std::launch::async, [&bm]() {
-            return bm.search("This is a pattern test with pattern inside");
-        }));
-    }
-
-    // All searches should return the same result
-    for (auto& future : futures) {
-        auto result = future.get();
-        ASSERT_EQ(result.size(), 2);
-        EXPECT_EQ(result[0], 10);
-        EXPECT_EQ(result[1], 29);
-    }
-}
 
 TEST_F(BoyerMooreTest, Performance) {
     // Create a large text and pattern

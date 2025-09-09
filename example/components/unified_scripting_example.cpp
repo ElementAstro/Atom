@@ -78,7 +78,7 @@ public:
                 // Auto level up every 100 experience
                 if (static_cast<int>(newExp / 100) >
                     static_cast<int>(experience->get() / 100)) {
-                    executeCommand("levelUp", {});
+                    [[maybe_unused]] auto result = runCommand("levelUp", {});
                 }
 
                 return newExp;
@@ -210,7 +210,7 @@ public:
                       << " engine:" << std::endl;
             auto result = pair.second->executeScript(script, context);
             if (result.success) {
-                std::cout << "  Result: " << result.output << std::endl;
+                std::cout << "  Result: " << result.returnValue.get<std::string>() << std::endl;
             } else {
                 std::cout << "  Error: " << result.errorMessage << std::endl;
             }
@@ -224,13 +224,13 @@ public:
             std::cout << "\n" << pair.first << " Engine:" << std::endl;
             std::cout << "  Scripts executed: " << stats.scriptsExecuted
                       << std::endl;
-            std::cout << "  Successful: " << stats.successfulExecutions
+            std::cout << "  Scripts executed: " << stats.scriptsExecuted
                       << std::endl;
-            std::cout << "  Failed: " << stats.failedExecutions << std::endl;
+            std::cout << "  Errors encountered: " << stats.errorsEncountered << std::endl;
             std::cout << "  Total time: " << stats.totalExecutionTime.count()
                       << " ms" << std::endl;
             std::cout << "  Average time: "
-                      << stats.averageExecutionTime.count() << " ms"
+                      << (stats.totalExecutionTime.count() / std::max(1ULL, stats.scriptsExecuted)) << " μs"
                       << std::endl;
         }
     }
@@ -277,17 +277,17 @@ void setupUnifiedScriptingManager(
     manager.registerUniversalFunction(
         "level_up",
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
-            auto result = component->executeCommand("levelUp", {});
-            return ScriptValue(static_cast<int64_t>(std::stoi(result)));
+            auto result = component->runCommand("levelUp", {});
+            return ScriptValue(static_cast<int64_t>(std::stoi(std::any_cast<std::string>(result))));
         });
 
     manager.registerUniversalFunction(
         "gain_exp",
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
             if (args.size() >= 1 && args[0].holds<double>()) {
-                auto result = component->executeCommand(
-                    "gainExperience", {std::to_string(args[0].get<double>())});
-                return ScriptValue(std::stod(result));
+                std::vector<std::any> expArgs = {std::any(std::to_string(args[0].get<double>()))};
+                auto result = component->runCommand("gainExperience", expArgs);
+                return ScriptValue(std::stod(std::any_cast<std::string>(result)));
             }
             return ScriptValue(0.0);
         });
@@ -296,9 +296,9 @@ void setupUnifiedScriptingManager(
         "learn_skill",
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
             if (args.size() >= 1 && args[0].holds<std::string>()) {
-                auto result = component->executeCommand(
-                    "learnSkill", {args[0].get<std::string>()});
-                return ScriptValue(result == "1");
+                std::vector<std::any> skillArgs = {std::any(args[0].get<std::string>())};
+                auto result = component->runCommand("learnSkill", skillArgs);
+                return ScriptValue(std::any_cast<std::string>(result) == "1");
             }
             return ScriptValue(false);
         });
@@ -306,8 +306,8 @@ void setupUnifiedScriptingManager(
     manager.registerUniversalFunction(
         "get_info",
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
-            auto result = component->executeCommand("getCharacterInfo", {});
-            return ScriptValue(result);
+            auto result = component->runCommand("getCharacterInfo", {});
+            return ScriptValue(std::any_cast<std::string>(result));
         });
 
     manager.registerUniversalFunction(
@@ -315,10 +315,12 @@ void setupUnifiedScriptingManager(
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
             if (args.size() >= 2 && args[0].holds<std::string>() &&
                 args[1].holds<double>()) {
-                auto result = component->executeCommand(
-                    "performAction", {args[0].get<std::string>(),
-                                      std::to_string(args[1].get<double>())});
-                return ScriptValue(result);
+                std::vector<std::any> actionArgs = {
+                    std::any(args[0].get<std::string>()),
+                    std::any(std::to_string(args[1].get<double>()))
+                };
+                auto result = component->runCommand("performAction", actionArgs);
+                return ScriptValue(std::any_cast<std::string>(result));
             }
             return ScriptValue("Invalid arguments");
         });
@@ -376,7 +378,7 @@ void demonstrateLanguageSpecificFeatures(UnifiedScriptingManager& manager) {
                                              "lua_tables");
 
     if (luaResult.success) {
-        std::cout << "Lua result: " << luaResult.output << std::endl;
+        std::cout << "Lua result: " << luaResult.returnValue.get<std::string>() << std::endl;
     } else {
         std::cout << "Lua error: " << luaResult.errorMessage << std::endl;
     }
@@ -402,7 +404,7 @@ f"Total stats: {total_stats}, Skills: {len(skills)}"
                                                 "python_comprehension");
 
     if (pythonResult.success) {
-        std::cout << "Python result: " << pythonResult.output << std::endl;
+        std::cout << "Python result: " << pythonResult.returnValue.get<std::string>() << std::endl;
     } else {
         std::cout << "Python error: " << pythonResult.errorMessage << std::endl;
     }
@@ -447,7 +449,7 @@ f"Int: {test_int}, Double: {test_double:.2f}, String: {test_string}, Bool: {test
         if (!testScript.empty()) {
             auto result = engine->executeScript(testScript, "value_conversion");
             if (result.success) {
-                std::cout << "   Result: " << result.output << std::endl;
+                std::cout << "   Result: " << result.returnValue.get<std::string>() << std::endl;
             } else {
                 std::cout << "   Error: " << result.errorMessage << std::endl;
             }
@@ -501,14 +503,14 @@ sum(i * i for i in range(1, 1001))
         const auto& stats = engine->getStatistics();
         std::cout << "   Executed " << stats.scriptsExecuted << " scripts"
                   << std::endl;
-        std::cout << "   Success rate: "
-                  << (stats.successfulExecutions * 100.0 /
-                      stats.scriptsExecuted)
+        std::cout << "   Error rate: "
+                  << (stats.errorsEncountered * 100.0 /
+                      std::max(1ULL, stats.scriptsExecuted))
                   << "%" << std::endl;
         std::cout << "   Total time: " << stats.totalExecutionTime.count()
-                  << " ms" << std::endl;
-        std::cout << "   Average time: " << stats.averageExecutionTime.count()
-                  << " ms" << std::endl;
+                  << " μs" << std::endl;
+        std::cout << "   Average time: " << (stats.totalExecutionTime.count() / std::max(1ULL, stats.scriptsExecuted))
+                  << " μs" << std::endl;
     }
 }
 

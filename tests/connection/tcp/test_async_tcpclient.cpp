@@ -124,7 +124,7 @@ protected:
         
         ConnectionConfig config;
         config.use_ssl = false;
-        config.connection_timeout = 5000ms;
+        config.connect_timeout = 5000ms;
         config.read_timeout = 3000ms;
         config.write_timeout = 3000ms;
         client_ = std::make_unique<TcpClient>(config);

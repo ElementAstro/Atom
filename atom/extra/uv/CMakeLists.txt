@@ -31,6 +31,35 @@ set_target_properties(atom-extra-uv PROPERTIES
 find_package(Threads REQUIRED)
 target_link_libraries(atom-extra-uv PUBLIC Threads::Threads)
 
+# Find and link libuv library
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(LIBUV QUIET libuv)
+endif()
+
+if(LIBUV_FOUND)
+    target_include_directories(atom-extra-uv PUBLIC ${LIBUV_INCLUDE_DIRS})
+    target_link_libraries(atom-extra-uv PUBLIC ${LIBUV_LIBRARIES})
+    target_compile_options(atom-extra-uv PUBLIC ${LIBUV_CFLAGS_OTHER})
+    message(STATUS "Found libuv, linking to atom-extra-uv")
+else()
+    # Try to find libuv using find_library as fallback
+    find_library(LIBUV_LIBRARY NAMES uv libuv)
+    find_path(LIBUV_INCLUDE_DIR NAMES uv.h)
+
+    if(LIBUV_LIBRARY AND LIBUV_INCLUDE_DIR)
+        target_include_directories(atom-extra-uv PUBLIC ${LIBUV_INCLUDE_DIR})
+        target_link_libraries(atom-extra-uv PUBLIC ${LIBUV_LIBRARY})
+        message(STATUS "Found libuv library: ${LIBUV_LIBRARY}")
+    else()
+        message(WARNING "libuv not found - atom-extra-uv may have linking issues")
+        message(STATUS "Please install libuv development package:")
+        message(STATUS "  Ubuntu/Debian: sudo apt-get install libuv1-dev")
+        message(STATUS "  CentOS/RHEL: sudo yum install libuv-devel")
+        message(STATUS "  Windows: vcpkg install libuv")
+    endif()
+endif()
+
 # Installation rules (optional)
 # install(TARGETS atom-extra-uv DESTINATION lib)
 # install(FILES ${UV_HEADERS} DESTINATION include/atom/extra/uv)

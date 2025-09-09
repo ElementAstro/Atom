@@ -24,11 +24,46 @@ endif()
 # Add include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 
-# Create a simple test that doesn't require external libraries
+# Create comprehensive component tests
 set(TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/simple_test.cpp
+    ${PROJECT_SOURCE_DIR}/comprehensive_component_test.cpp
 )
 
 add_executable(${PROJECT_NAME} ${TEST_SOURCES})
 
-target_link_libraries(${PROJECT_NAME} gtest gtest_main)
+# Link with atom-component library and its dependencies
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE
+    gtest
+    gtest_main
+    atom-component
+    atom-error
+    atom-utils
+)
+
+# Set C++20 standard
+target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+
+# Add compiler flags
+if(MSVC)
+    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+else()
+    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+endif()
+
+# Pass macro definitions for optional features
+if(ATOM_ENABLE_LUA)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ATOM_ENABLE_LUA=1)
+endif()
+
+if(ATOM_ENABLE_PYTHON)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ATOM_ENABLE_PYTHON=1)
+endif()
+
+# Enable testing
+enable_testing()
+
+# Add test discovery
+include(GoogleTest)
+gtest_discover_tests(${PROJECT_NAME})

@@ -72,9 +72,13 @@ TEST_F(FnmatchTest, CharacterClasses) {
     EXPECT_FALSE(fnmatch("file.[A-Z]*", "file.txt"));
     EXPECT_TRUE(fnmatch("file.[0-9a-z]*", "file.txt"));
     EXPECT_TRUE(fnmatch("file.[0-9a-z]*", "file.1txt"));
-    EXPECT_TRUE(fnmatch("file.[.]*", "file.txt"));
-    EXPECT_FALSE(fnmatch("file.[^.]*", "file.txt"));
-    EXPECT_TRUE(fnmatch("file.[*?]*", "file?txt"));
+    // Fixed to match standard Python fnmatch behavior:
+    // [.] matches only literal '.', so should not match 't' in "file.txt"
+    EXPECT_FALSE(fnmatch("file.[.]*", "file.txt"));
+    // [^.] matches any character except '.', so should match 't' in "file.txt"
+    EXPECT_TRUE(fnmatch("file.[^.]*", "file.txt"));
+    // [*?] matches only literal '*' or '?', so should not match 't' in "file?txt"
+    EXPECT_FALSE(fnmatch("file.[*?]*", "file?txt"));
 }
 
 TEST_F(FnmatchTest, ComplexPatterns) {
@@ -84,7 +88,8 @@ TEST_F(FnmatchTest, ComplexPatterns) {
     EXPECT_FALSE(fnmatch("*z*.*", "file.txt"));
     EXPECT_TRUE(fnmatch("[a-z]*.[a-z]*", "file.txt"));
     EXPECT_FALSE(fnmatch("[A-Z]*.[a-z]*", "file.txt"));
-    EXPECT_TRUE(fnmatch("*[aeiou]*.[!b-df-hj-np-tv-z]*", "file.txt"));
+    // Fixed: 't' in "txt" is in the excluded range p-t, so should return FALSE
+    EXPECT_FALSE(fnmatch("*[aeiou]*.[!b-df-hj-np-tv-z]*", "file.txt"));
     EXPECT_FALSE(fnmatch("*[aeiou]*.[!b-df-hj-np-tv-z]*", "file.jpg"));
     EXPECT_TRUE(fnmatch("*[!.][a-z]?[a-z][!0-9]*", "file.txt"));
     EXPECT_TRUE(fnmatch("*[!.][a-z]?[a-z][!0-9]*", "main.cpp"));

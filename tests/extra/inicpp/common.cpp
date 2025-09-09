@@ -67,6 +67,6 @@ TEST(CommonTest, StringInsensitiveLess) {
     EXPECT_TRUE(cmp("apple", "Banana"));
     EXPECT_FALSE(cmp("Banana", "apple"));
     EXPECT_FALSE(cmp("apple", "apple"));
-    EXPECT_TRUE(cmp("apple", "APPLE"));
+    EXPECT_FALSE(cmp("apple", "APPLE")); // Case-insensitive comparison: "apple" == "APPLE", so not less
     EXPECT_FALSE(cmp("APPLE", "apple"));
 }

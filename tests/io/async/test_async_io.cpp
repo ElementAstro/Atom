@@ -41,27 +41,12 @@ protected:
 
         createFile(testDir / "subdir1" / "nested_file.txt", "Nested file content");
 
-        // Initialize IO context and start thread to run it
-        io_context_ptr = std::make_unique<asio::io_context>();
-
-        // Start the io_context in a separate thread
-        io_thread = std::thread([this]() {
-            asio::io_context::work work(*io_context_ptr);
-            io_context_ptr->run();
-        });
-
-        // Create the async file instance
-        async_file = std::make_unique<AsyncFile>(*io_context_ptr);
-        async_dir = std::make_unique<AsyncDirectory>(*io_context_ptr);
+        // Create the async file instance (no ASIO mode)
+        async_file = std::make_unique<AsyncFile>();
+        async_dir = std::make_unique<AsyncDirectory>();
     }
 
     void TearDown() override {
-        // Stop the io_context and join the thread
-        io_context_ptr->stop();
-        if (io_thread.joinable()) {
-            io_thread.join();
-        }
-
         // Clean up the test directory
         if (fs::exists(testDir)) {
             fs::remove_all(testDir);
@@ -88,20 +73,18 @@ protected:
     }
 
     fs::path testDir;
-    std::unique_ptr<asio::io_context> io_context_ptr;
-    std::thread io_thread;
     std::unique_ptr<AsyncFile> async_file;
     std::unique_ptr<AsyncDirectory> async_dir;
 };
 
 // Test AsyncFile constructor
 TEST_F(AsyncIOTest, AsyncFileConstructor) {
-    ASSERT_NO_THROW(AsyncFile(*io_context_ptr));
+    ASSERT_NO_THROW(AsyncFile());
 }
 
 // Test AsyncDirectory constructor
 TEST_F(AsyncIOTest, AsyncDirectoryConstructor) {
-    ASSERT_NO_THROW(AsyncDirectory(*io_context_ptr));
+    ASSERT_NO_THROW(AsyncDirectory());
 }
 
 // Test AsyncFile::asyncRead with existing file

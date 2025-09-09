@@ -61,17 +61,16 @@ public:
 
     bool initialize() override {
         std::cout << "  [DB] Initializing database component..." << std::endl;
-        // Note: executeCommand is not available in Component base class
-        // Using direct command dispatcher call instead
-        auto result = getCommandDispatcher()->execute("connect", {});
+        // Use runCommand instead of getCommandDispatcher
+        [[maybe_unused]] auto result = runCommand("connect", {});
         return Component::initialize();
     }
 
     // Note: cleanup() is not a virtual method in Component base class
     void performCleanup() {
         std::cout << "  [DB] Cleaning up database component..." << std::endl;
-        // Note: executeCommand is not available in Component base class
-        auto result = getCommandDispatcher()->execute("disconnect", {});
+        // Use runCommand instead of getCommandDispatcher
+        [[maybe_unused]] auto result = runCommand("disconnect", {});
     }
 };
 

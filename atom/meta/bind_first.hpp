@@ -158,7 +158,6 @@ template <typename O, typename Ret, typename P1, typename... Param>
  * \return Bound function
  */
 template <typename F, typename O>
-    requires Invocable<F, O>
 [[nodiscard]] constexpr auto bindFirst(F&& func, O&& object) {
     return [func = std::forward<F>(func), object = std::forward<O>(object)](
                auto&&... param) -> decltype(auto) {
@@ -315,6 +314,8 @@ template <typename O, typename Ret, typename... Param>
         return (object.get()->*func)(std::forward<Param>(param)...);
     };
 }
+
+
 
 }  // namespace atom::meta
 

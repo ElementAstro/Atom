@@ -60,7 +60,6 @@ int main() {
                        process.getStatus() ==
                            UvProcess::ProcessStatus::RUNNING) {
                     std::this_thread::sleep_for(10ms);
-                    process.runEventLoop(10);
                 }
 
                 std::cout << "Process completed with exit code: " << exit_code
@@ -106,7 +105,6 @@ int main() {
                        process.getStatus() ==
                            UvProcess::ProcessStatus::RUNNING) {
                     std::this_thread::sleep_for(10ms);
-                    process.runEventLoop(10);
                 }
 
                 std::cout << "Directory listing output:" << std::endl;
@@ -152,7 +150,6 @@ int main() {
                        process.getStatus() ==
                            UvProcess::ProcessStatus::RUNNING) {
                     std::this_thread::sleep_for(10ms);
-                    process.runEventLoop(10);
                 }
 
                 std::cout << "Environment variable output: " << output
@@ -208,7 +205,6 @@ int main() {
                        process.getStatus() ==
                            UvProcess::ProcessStatus::RUNNING) {
                     std::this_thread::sleep_for(10ms);
-                    process.runEventLoop(10);
                 }
 
                 std::cout << "Interactive process completed" << std::endl;
@@ -259,7 +255,6 @@ int main() {
                        process.getStatus() ==
                            UvProcess::ProcessStatus::RUNNING) {
                     std::this_thread::sleep_for(10ms);
-                    process.runEventLoop(10);
                 }
 
                 auto end_time = std::chrono::steady_clock::now();
@@ -339,7 +334,6 @@ int main() {
                         processes[i]->getStatus() ==
                             UvProcess::ProcessStatus::RUNNING) {
                         all_completed = false;
-                        processes[i]->runEventLoop(10);
                     }
                 }
                 std::this_thread::sleep_for(10ms);

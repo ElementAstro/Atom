@@ -283,7 +283,7 @@ public:
         auto& components = pluginComponents_[name];
         for (auto& comp : components) {
             if (comp) {
-                comp->setState(ComponentState::Destroyed);
+                comp->setState(ComponentState::Destroying);
             }
         }
         components.clear();
@@ -371,22 +371,28 @@ int main() {
 
         // Use audio component
         if (audioComp) {
-            audioComp->executeCommand("setVolume", {"0.8"});
-            audioComp->executeCommand("applyEffect", {"reverb"});
-            audioComp->executeCommand("process", {});
+            std::vector<std::any> volumeArgs = {std::any(std::string("0.8"))};
+            [[maybe_unused]] auto volumeResult = audioComp->runCommand("setVolume", volumeArgs);
+            std::vector<std::any> effectArgs = {std::any(std::string("reverb"))};
+            [[maybe_unused]] auto effectResult = audioComp->runCommand("applyEffect", effectArgs);
+            [[maybe_unused]] auto processResult = audioComp->runCommand("process", {});
         }
 
         // Use graphics component
         if (graphicsComp) {
-            graphicsComp->executeCommand("setResolution", {"2560", "1440"});
-            graphicsComp->executeCommand("setRenderer", {"Vulkan"});
-            graphicsComp->executeCommand("render", {});
+            std::vector<std::any> resolutionArgs = {std::any(std::string("2560")), std::any(std::string("1440"))};
+            [[maybe_unused]] auto resolutionResult = graphicsComp->runCommand("setResolution", resolutionArgs);
+            std::vector<std::any> rendererArgs = {std::any(std::string("Vulkan"))};
+            [[maybe_unused]] auto rendererResult = graphicsComp->runCommand("setRenderer", rendererArgs);
+            [[maybe_unused]] auto renderResult = graphicsComp->runCommand("render", {});
         }
 
         // Use network component
         if (networkComp) {
-            networkComp->executeCommand("connect", {"game.server.com", "9999"});
-            networkComp->executeCommand("sendData", {"player_position:100,200,50"});
+            std::vector<std::any> connectArgs = {std::any(std::string("game.server.com")), std::any(std::string("9999"))};
+            [[maybe_unused]] auto connectResult = networkComp->runCommand("connect", connectArgs);
+            std::vector<std::any> sendArgs = {std::any(std::string("player_position:100,200,50"))};
+            [[maybe_unused]] auto sendResult = networkComp->runCommand("sendData", sendArgs);
         }
 
         std::cout << "\n4. Plugin hot-swapping demonstration..." << std::endl;
@@ -398,9 +404,11 @@ int main() {
         // Create new component from reloaded plugin
         auto newAudioComp = pluginManager.createComponent("AudioPlugin", "ReloadedAudio");
         if (newAudioComp) {
-            newAudioComp->executeCommand("setVolume", {"1.2"});
-            newAudioComp->executeCommand("applyEffect", {"echo"});
-            newAudioComp->executeCommand("process", {});
+            std::vector<std::any> newVolumeArgs = {std::any(std::string("1.2"))};
+            [[maybe_unused]] auto newVolumeResult = newAudioComp->runCommand("setVolume", newVolumeArgs);
+            std::vector<std::any> newEffectArgs = {std::any(std::string("echo"))};
+            [[maybe_unused]] auto newEffectResult = newAudioComp->runCommand("applyEffect", newEffectArgs);
+            [[maybe_unused]] auto newProcessResult = newAudioComp->runCommand("process", {});
         }
 
         pluginManager.listPlugins();

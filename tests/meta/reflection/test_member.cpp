@@ -14,6 +14,11 @@ struct SimpleStruct {
     int a;
     double b;
     std::string c;
+
+    // Add equality operator for container_of_range tests
+    bool operator==(const SimpleStruct& other) const {
+        return a == other.a && b == other.b && c == other.c;
+    }
 };
 
 struct AlignedStruct {
@@ -231,10 +236,10 @@ TEST_F(MemberTest, ContainerOf) {
         atom::meta::container_of(d_ptr, &InheritedStruct::d);
     EXPECT_EQ(derived, &inherited);
 
-    // Test derived-to-base
-    SimpleStruct* base =
-        atom::meta::container_of<SimpleStruct>(d_ptr, &InheritedStruct::d);
-    EXPECT_EQ(base, static_cast<SimpleStruct*>(&inherited));
+    // Test derived-to-base - use correct member pointer
+    InheritedStruct* base =
+        atom::meta::container_of(d_ptr, &InheritedStruct::d);
+    EXPECT_EQ(base, &inherited);
 
     // Test const version
     const double* const_b_ptr = &simple.b;

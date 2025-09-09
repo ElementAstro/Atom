@@ -1,6 +1,9 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
+// Include simple boost tests that don't require external dependencies
+#include "test_boost_simple.cpp"
+
 // Temporarily disable problematic Boost components due to missing dependencies
 #if 0
 #include "atom/extra/boost/charconv.hpp"

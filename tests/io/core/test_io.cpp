@@ -1,11 +1,13 @@
 #include <gtest/gtest.h>
 
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <string>
 #include <vector>
 #include "atom/io/io.hpp"
+#include <nlohmann/json.hpp>
 
 namespace fs = std::filesystem;
 

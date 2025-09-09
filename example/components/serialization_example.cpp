@@ -132,12 +132,15 @@ void demonstrateBasicSerialization() {
         registry.createComponent<SerializableComponent>("PlayerData");
 
     // Add some dynamic data
-    component->executeCommand("addAchievement", {"serialization_master"});
-    component->executeCommand("addInventoryItem", {"999"});
-    component->executeCommand("incrementSaveCount", {});
+    std::vector<std::any> achievementArgs = {std::any(std::string("serialization_master"))};
+    [[maybe_unused]] auto achievementResult = component->runCommand("addAchievement", achievementArgs);
+    std::vector<std::any> itemArgs = {std::any(std::string("999"))};
+    [[maybe_unused]] auto itemResult = component->runCommand("addInventoryItem", itemArgs);
+    [[maybe_unused]] auto saveResult = component->runCommand("incrementSaveCount", {});
 
+    auto playerInfo = component->runCommand("getPlayerInfo", {});
     std::cout << "Component data: "
-              << component->executeCommand("getPlayerInfo", {}) << std::endl;
+              << std::any_cast<std::string>(playerInfo) << std::endl;
 
     std::cout << "\n2. Testing JSON serialization..." << std::endl;
 
@@ -286,11 +289,11 @@ void demonstrateDeserialization() {
                   << std::endl;
 
         // Test the deserialized component
-        auto info = jsonResult.component->executeCommand("getPlayerInfo", {});
-        std::cout << "Deserialized component info: " << info << std::endl;
+        auto info = jsonResult.component->runCommand("getPlayerInfo", {});
+        std::cout << "Deserialized component info: " << std::any_cast<std::string>(info) << std::endl;
 
-        // Register the deserialized component
-        registry.addComponent("DeserializedFromJSON", jsonResult.component);
+        // Note: addComponent method not available in current Registry API
+        // Component is already created and can be used directly
     } else {
         std::cout << "JSON deserialization failed: " << jsonResult.errorMessage
                   << std::endl;
@@ -307,10 +310,11 @@ void demonstrateDeserialization() {
                   << binaryResult.deserializationTime.count() << " μs"
                   << std::endl;
 
-        auto info = binaryResult.component->executeCommand("getPlayerInfo", {});
-        std::cout << "Deserialized component info: " << info << std::endl;
+        auto info = binaryResult.component->runCommand("getPlayerInfo", {});
+        std::cout << "Deserialized component info: " << std::any_cast<std::string>(info) << std::endl;
 
-        registry.addComponent("DeserializedFromBinary", binaryResult.component);
+        // Note: addComponent method not available in current Registry API
+        // Component is already created and can be used directly
     } else {
         std::cout << "Binary deserialization failed: "
                   << binaryResult.errorMessage << std::endl;
@@ -378,16 +382,8 @@ void demonstrateCustomSerialization() {
 
     std::cout << "\n7. Testing custom serialization formats..." << std::endl;
 
-    // Register custom serializer
-    serializer.registerCustomSerializer(
-        "CUSTOM", [](const Component& component) -> std::vector<uint8_t> {
-            std::string customData = "CUSTOM_FORMAT|";
-            customData += std::string(component.getName()) + "|";
-            customData += std::to_string(component.getVariableManager().getVariableCount()) + "|";
-            customData += "END";
-
-            return std::vector<uint8_t>(customData.begin(), customData.end());
-        });
+    // Note: registerCustomSerializer is not available in current API
+    // Custom serialization would be implemented here
 
     // Note: Custom deserializer registration is not available in the current API
     // The SerializationManager uses the registered serializers for both serialization and deserialization
@@ -448,10 +444,10 @@ void demonstratePerformanceAnalysis() {
         // Add some data to make serialization more realistic
         for (int j = 0; j < 10; ++j) {
             std::vector<std::any> achievementArgs = {std::string("achievement_" + std::to_string(j))};
-            comp->runCommand("addAchievement", achievementArgs);
+            [[maybe_unused]] auto achievementResult = comp->runCommand("addAchievement", achievementArgs);
 
             std::vector<std::any> itemArgs = {1000 + j};
-            comp->runCommand("addInventoryItem", itemArgs);
+            [[maybe_unused]] auto itemResult = comp->runCommand("addInventoryItem", itemArgs);
         }
 
         components.push_back(comp);

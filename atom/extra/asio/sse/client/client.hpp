@@ -5,9 +5,9 @@
  * @brief SSE client implementation
  */
 
-#include "../asio_compatibility.hpp"
+#include "../../asio_compatibility.hpp"
 #include "client_config.hpp"
-#include "event.hpp"
+#include "../event.hpp"
 
 #include <functional>
 #include <memory>

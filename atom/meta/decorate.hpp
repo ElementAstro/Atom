@@ -102,7 +102,7 @@ public:
         : func_(std::move(func)) {}
 
     template <typename F>
-        requires std::invocable<F>
+        requires std::assignable_from<std::function<Func>&, F>
     void switchTo(F&& new_f) {
         func_ = std::forward<F>(new_f);
     }

@@ -10,6 +10,13 @@
 
 // 不使用 using namespace atom::io，而是明确指定要使用的函数
 namespace fs = std::filesystem;
+using atom::containers::String;
+
+// Helper function to avoid overload resolution issues
+auto glob_helper(const char* pattern, bool recursive = false, bool dironly = false) {
+    return atom::io::glob(String(pattern), recursive, dironly);
+}
+
 using ::testing::Contains;
 using ::testing::ElementsAre;
 using ::testing::IsEmpty;
@@ -73,16 +80,16 @@ protected:
 // Test basic glob with no wildcards
 TEST_F(GlobTest, BasicGlobNoWildcards) {
     // 使用atom::io::名称空间前缀明确调用静态glob函数
-    auto results = atom::io::glob("file1.txt");
+    auto results = glob_helper("file1.txt");
     ASSERT_EQ(results.size(), 1);
     EXPECT_EQ(results[0].filename().string(), "file1.txt");
 
     // Non-existent file
-    results = atom::io::glob("nonexistent.txt");
+    results = glob_helper("nonexistent.txt");
     EXPECT_THAT(results, IsEmpty());
 
     // Exact directory match
-    results = atom::io::glob("dir1");
+    results = glob_helper("dir1");
     ASSERT_EQ(results.size(), 1);
     EXPECT_EQ(results[0].filename().string(), "dir1");
 }
@@ -90,7 +97,7 @@ TEST_F(GlobTest, BasicGlobNoWildcards) {
 // Test glob with * wildcard
 TEST_F(GlobTest, GlobWithAsterisk) {
     // Match all .txt files in current directory
-    auto results = atom::io::glob("*.txt");
+    auto results = glob_helper("*.txt");
     EXPECT_EQ(results.size(), 2);  // file1.txt and file2.txt
     EXPECT_THAT(results, Contains(fs::path("file1.txt")));
     EXPECT_THAT(results, Contains(fs::path("file2.txt")));
@@ -99,15 +106,15 @@ TEST_F(GlobTest, GlobWithAsterisk) {
                     ".hidden.txt"))));  // Hidden files should not be matched
 
     // Match all files with any extension
-    results = atom::io::glob("file*");
+    results = glob_helper("file*");
     EXPECT_EQ(results.size(), 4);  // file1.txt, file2.txt, file.md, file.cpp
 
     // Match files with specific pattern
-    results = atom::io::glob("file?.txt");
+    results = glob_helper("file?.txt");
     EXPECT_EQ(results.size(), 2);  // file1.txt and file2.txt
 
     // Match all files in subdirectory
-    results = atom::io::glob("dir1/*");
+    results = glob_helper("dir1/*");
     EXPECT_EQ(results.size(), 2);  // nested1.txt and nested2.txt
     EXPECT_THAT(results,
                 Not(Contains(fs::path(
@@ -117,33 +124,33 @@ TEST_F(GlobTest, GlobWithAsterisk) {
 // Test glob with ? wildcard
 TEST_F(GlobTest, GlobWithQuestionMark) {
     // Match single character
-    auto results = atom::io::glob("file?.txt");
+    auto results = glob_helper("file?.txt");
     EXPECT_EQ(results.size(), 2);  // file1.txt and file2.txt
 
     // Multiple question marks
-    results = atom::io::glob("nested?.txt");
+    results = glob_helper("nested?.txt");
     EXPECT_THAT(results, IsEmpty());  // not in current directory
 
-    results = atom::io::glob("dir1/nested?.txt");
+    results = glob_helper("dir1/nested?.txt");
     EXPECT_EQ(results.size(), 2);  // nested1.txt and nested2.txt
 }
 
 // Test glob with character classes
 TEST_F(GlobTest, GlobWithCharacterClasses) {
     // Match character range
-    auto results = atom::io::glob("file[1-2].txt");
+    auto results = glob_helper("file[1-2].txt");
     EXPECT_EQ(results.size(), 2);  // file1.txt and file2.txt
 
     // Match specific characters
-    results = atom::io::glob("file[12].txt");
+    results = glob_helper("file[12].txt");
     EXPECT_EQ(results.size(), 2);  // file1.txt and file2.txt
 
     // Negated character class
-    results = atom::io::glob("file[!2].txt");
+    results = glob_helper("file[!2].txt");
     EXPECT_EQ(results.size(), 1);  // file1.txt
 
     // Character class with special characters
-    results = atom::io::glob("file.[cm]*");
+    results = glob_helper("file.[cm]*");
     EXPECT_EQ(results.size(), 2);  // file.md and file.cpp
 }
 
@@ -169,7 +176,7 @@ TEST_F(GlobTest, RecursiveGlob) {
 // Test directory-only globbing
 TEST_F(GlobTest, DirectoryOnlyGlob) {
     // 直接调用非静态的glob函数以指定dironly参数
-    auto results = atom::io::glob("*", false, true);
+    auto results = atom::io::glob(String("*"), false, true);
     EXPECT_EQ(results.size(), 2);  // dir1 and dir2
     EXPECT_THAT(results, Contains(fs::path("dir1")));
     EXPECT_THAT(results, Contains(fs::path("dir2")));
@@ -178,7 +185,7 @@ TEST_F(GlobTest, DirectoryOnlyGlob) {
         Not(Contains(fs::path("file1.txt"))));  // Files should not be matched
 
     // Test recursive directory-only glob
-    results = atom::io::glob("**", true, true);
+    results = atom::io::glob(String("**"), true, true);
     EXPECT_GE(results.size(), 2);  // dir1 and dir2
     EXPECT_THAT(results, Contains(fs::path("dir1")));
     EXPECT_THAT(results, Contains(fs::path("dir2")));
@@ -248,31 +255,31 @@ TEST_F(GlobTest, GlobWithInitializerList) {
 // Test edge cases and corner conditions
 TEST_F(GlobTest, EdgeCases) {
     // Empty pattern
-    auto results = atom::io::glob("");
+    auto results = glob_helper("");
     EXPECT_THAT(results, IsEmpty());
 
     // Current directory
-    results = atom::io::glob(".");
+    results = glob_helper(".");
     EXPECT_EQ(results.size(), 1);
 
     // Parent directory
-    results = atom::io::glob("..");
+    results = glob_helper("..");
     EXPECT_EQ(results.size(), 1);
 
     // Pattern with just wildcards
-    results = atom::io::glob("*");
+    results = glob_helper("*");
     EXPECT_GT(results.size(), 0);
 
     // Multiple wildcards
-    results = atom::io::glob("*.*");
+    results = glob_helper("*.*");
     EXPECT_GT(results.size(), 0);
 
     // Complex pattern
-    results = atom::io::glob("*.[ct]*");
+    results = glob_helper("*.[ct]*");
     EXPECT_GT(results.size(), 0);  // Should match .txt and .cpp files
 
     // Non-existent directory
-    results = atom::io::glob("nonexistent_dir/*");
+    results = glob_helper("nonexistent_dir/*");
     EXPECT_THAT(results, IsEmpty());
 }
 
