@@ -13,7 +13,8 @@ Each module follows this standardized pattern:
 atom/<module>/
 ├── CMakeLists.txt           # Module build config with dependency checks
 ├── <module>.hpp             # Compatibility header (may redirect to core/)
-└── core/<module>.hpp        # Actual implementation (newer pattern)
+├── core/<module>.hpp        # Actual implementation (newer pattern)
+└── xmake.lua               # XMake build configuration
 ```
 
 **Key architectural principle**: Many root-level headers like `algorithm.hpp` are compatibility redirects to `core/algorithm.hpp`. Always check for the `core/` subdirectory when examining module structure.
@@ -28,6 +29,14 @@ The build system enforces a strict dependency hierarchy defined in `cmake/module
 
 Build order: `atom-error` → `atom-log` → `atom-meta`/`atom-utils` → specialized modules
 
+### Component Architecture Pattern
+
+The library uses a sophisticated component registry system for dependency injection and lifecycle management:
+- **Registry Pattern**: Central `Registry` class manages all components with thread-safe operations
+- **Lifecycle Management**: `LifecycleManager` handles component initialization order and dependency resolution
+- **Dependency Injection**: Components can declare required/optional dependencies that are auto-resolved
+- **Hot Reload**: Components support runtime reloading for development efficiency
+
 ## Build Commands
 
 ### CMake (Primary)
@@ -36,16 +45,23 @@ Build order: `atom-error` → `atom-log` → `atom-meta`/`atom-utils` → specia
 cmake --preset release
 cmake --build --preset release -j
 
-# Manual configuration
-cmake -B build -DATOM_BUILD_EXAMPLES=ON -DATOM_BUILD_TESTS=ON
+# Available presets: debug, release, relwithdebinfo
+# Platform-specific: debug-msys2, release-msys2, debug-make, release-make, debug-vs, release-vs
+cmake --preset debug
+cmake --build --preset debug -j
+
+# Manual configuration with common options
+cmake -B build -DATOM_BUILD_EXAMPLES=ON -DATOM_BUILD_TESTS=ON -DATOM_BUILD_PYTHON_BINDINGS=ON
 cmake --build build --target atom-algorithm  # Build specific module
+cmake --build build --parallel 8             # Parallel build
 ```
 
-### Cross-Platform Scripts
+### Cross-Platform Scripts (Recommended)
 ```bash
-# Unix/Linux/macOS
+# Unix/Linux/macOS - Enhanced build script
 ./build.sh --release --tests --examples --jobs 8
-./build.sh --debug --run-tests --docs
+./build.sh --debug --run-tests --docs --python
+./build.sh --clean --install-deps --package    # Full clean build with packaging
 
 # Windows
 build.bat --release --tests --examples
@@ -54,8 +70,10 @@ build.bat --debug --run-tests --docs
 
 ### XMake (Alternative)
 ```bash
-xmake f --build_examples=y --build_tests=y
+xmake f --build_examples=y --build_tests=y --python=y
 xmake build
+xmake test     # Run tests
+xmake install  # Install built libraries
 ```
 
 ### Python Development
@@ -92,6 +110,12 @@ ctest --preset default --output-on-failure
 
 # Run specific test module
 cmake --build build --target test_<module>
+
+# Using build script (runs tests automatically)
+./build.sh --debug --run-tests
+
+# XMake testing
+xmake test
 ```
 
 ### Test Organization
@@ -194,9 +218,23 @@ clang-format -i **/*.cpp **/*.hpp  # Use .clang-format config
 pre-commit run -a  # Python formatting (Black, isort, Ruff, MyPy)
 ```
 
-### Package Management
-- **C++ Dependencies**: Via vcpkg/Conan
+### Package Management & Installation
+- **C++ Dependencies**: Via vcpkg/Conan (currently disabled by default)
 - **Python Dependencies**: Via pip/conda
 - **Modular Installation**: `scripts/modular-installer.py` for component-wise installation
+- **System Dependencies**: `./build.sh --install-deps` auto-installs required packages
+
+### Modular Installation System
+```bash
+# Install specific components with dependency resolution
+python scripts/modular-installer.py install core networking
+python scripts/modular-installer.py install algorithm async --force
+
+# List available components and meta-packages
+python scripts/modular-installer.py list --available
+
+# Uninstall components
+python scripts/modular-installer.py uninstall web connection
+```
 
 This codebase emphasizes modular design, cross-platform compatibility, and modern C++ practices. Always respect the dependency hierarchy and use existing utilities before creating new ones.
