@@ -24,7 +24,7 @@ atom/<module>/
 The build system enforces a strict dependency hierarchy defined in `cmake/module_dependencies.cmake`:
 
 - **Foundation**: `atom-error` (base, no dependencies)
-- **Core**: `atom-log` → `atom-meta`/`atom-utils` 
+- **Core**: `atom-log` → `atom-meta`/`atom-utils`
 - **Specialized**: `atom-web`, `atom-async`, `atom-system`, etc.
 
 Build order: `atom-error` → `atom-log` → `atom-meta`/`atom-utils` → specialized modules
@@ -182,7 +182,7 @@ Use `atom-log` structured logging instead of `std::cout`
 
 ### Naming Conventions (per STYLE_OF_CODE.md)
 - **Variables/Functions**: camelCase
-- **Classes/Namespaces**: PascalCase 
+- **Classes/Namespaces**: PascalCase
 - **Constants**: UPPER_SNAKE_CASE
 - **Files**: lower_snake_case.[cpp|hpp]
 - **Class members**: m_prefix for private variables

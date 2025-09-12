@@ -23,7 +23,7 @@ TEST_F(SimpleMemoryAlternativeTest, BasicAllocation) {
     void* ptr = std::malloc(1024);
     EXPECT_NE(ptr, nullptr);
     std::free(ptr);
-    
+
     // Test new/delete
     int* int_ptr = new int(42);
     EXPECT_NE(int_ptr, nullptr);
@@ -37,7 +37,7 @@ TEST_F(SimpleMemoryAlternativeTest, SmartPointers) {
     auto unique = std::make_unique<int>(100);
     EXPECT_NE(unique.get(), nullptr);
     EXPECT_EQ(*unique, 100);
-    
+
     // Test shared_ptr
     auto shared1 = std::make_shared<int>(200);
     auto shared2 = shared1;
@@ -49,17 +49,17 @@ TEST_F(SimpleMemoryAlternativeTest, SmartPointers) {
 // Test vector memory management
 TEST_F(SimpleMemoryAlternativeTest, VectorMemory) {
     std::vector<int> vec;
-    
+
     // Test basic operations
     vec.push_back(1);
     vec.push_back(2);
     vec.push_back(3);
-    
+
     EXPECT_EQ(vec.size(), 3);
     EXPECT_EQ(vec[0], 1);
     EXPECT_EQ(vec[1], 2);
     EXPECT_EQ(vec[2], 3);
-    
+
     // Test capacity growth
     size_t initial_capacity = vec.capacity();
     for (int i = 0; i < 100; ++i) {
@@ -93,12 +93,12 @@ TEST_F(SimpleMemoryAlternativeTest, ExceptionSafety) {
         // Test that normal allocations work
         std::vector<int> vec(1000);
         EXPECT_EQ(vec.size(), 1000);
-        
+
         // Test that we can handle allocation failures gracefully
         // (This test doesn't actually force a failure, just ensures no crash)
         std::unique_ptr<int[]> large_array(new int[10000]);
         EXPECT_NE(large_array.get(), nullptr);
-        
+
     } catch (const std::exception& e) {
         // If an exception occurs, that's also acceptable
         std::cout << "Memory allocation exception (acceptable): " << e.what() << std::endl;
@@ -108,12 +108,12 @@ TEST_F(SimpleMemoryAlternativeTest, ExceptionSafety) {
 // Test memory operations without complex tracking
 TEST_F(SimpleMemoryAlternativeTest, BasicMemoryOperations) {
     const size_t size = 1024;
-    
+
     // Test malloc/free cycle
     for (int i = 0; i < 10; ++i) {
         void* ptr = std::malloc(size);
         EXPECT_NE(ptr, nullptr);
-        
+
         // Write some data
         memset(ptr, i, size);
 
@@ -121,7 +121,7 @@ TEST_F(SimpleMemoryAlternativeTest, BasicMemoryOperations) {
         unsigned char* byte_ptr = static_cast<unsigned char*>(ptr);
         EXPECT_EQ(byte_ptr[0], static_cast<unsigned char>(i));
         EXPECT_EQ(byte_ptr[size-1], static_cast<unsigned char>(i));
-        
+
         std::free(ptr);
     }
 }
@@ -130,19 +130,19 @@ TEST_F(SimpleMemoryAlternativeTest, BasicMemoryOperations) {
 TEST_F(SimpleMemoryAlternativeTest, MemoryReallocation) {
     void* ptr = std::malloc(100);
     EXPECT_NE(ptr, nullptr);
-    
+
     // Write initial data
     memset(ptr, 0xAA, 100);
-    
+
     // Reallocate to larger size
     ptr = std::realloc(ptr, 200);
     EXPECT_NE(ptr, nullptr);
-    
+
     // Verify original data is preserved
     unsigned char* byte_ptr = static_cast<unsigned char*>(ptr);
     EXPECT_EQ(byte_ptr[0], 0xAA);
     EXPECT_EQ(byte_ptr[99], 0xAA);
-    
+
     std::free(ptr);
 }
 
@@ -150,14 +150,14 @@ TEST_F(SimpleMemoryAlternativeTest, MemoryReallocation) {
 TEST_F(SimpleMemoryAlternativeTest, DifferentSizes) {
     std::vector<void*> ptrs;
     std::vector<size_t> sizes = {1, 16, 64, 256, 1024, 4096};
-    
+
     // Allocate different sizes
     for (size_t size : sizes) {
         void* ptr = std::malloc(size);
         EXPECT_NE(ptr, nullptr);
         ptrs.push_back(ptr);
     }
-    
+
     // Free all allocations
     for (void* ptr : ptrs) {
         std::free(ptr);

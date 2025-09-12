@@ -9,7 +9,7 @@ function(atom_setup_module_dependencies module_name)
     cmake_parse_arguments(AMD "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
     string(TOUPPER ${module_name} MODULE_UPPER)
-    
+
     # Link required dependencies
     foreach(dep ${AMD_REQUIRED_DEPS})
         if(TARGET ${dep})
@@ -18,7 +18,7 @@ function(atom_setup_module_dependencies module_name)
             message(WARNING "Required dependency ${dep} not found for module ${module_name}")
         endif()
     endforeach()
-    
+
     # Link optional dependencies
     foreach(dep ${AMD_OPTIONAL_DEPS})
         if(TARGET ${dep})
@@ -28,7 +28,7 @@ function(atom_setup_module_dependencies module_name)
             message(STATUS "Optional dependency ${dep} not available for ${module_name}")
         endif()
     endforeach()
-    
+
     # Link system libraries
     foreach(lib ${AMD_SYSTEM_LIBS})
         target_link_libraries(${module_name} PUBLIC ${lib})
@@ -41,11 +41,11 @@ function(atom_setup_standard_dependencies module_name)
     if(TARGET atom-error)
         target_link_libraries(${module_name} PUBLIC atom-error)
     endif()
-    
+
     # Most modules need threading
     find_package(Threads REQUIRED)
     target_link_libraries(${module_name} PUBLIC Threads::Threads)
-    
+
     # Platform-specific libraries
     if(WIN32)
         # Windows-specific libraries that many modules need
@@ -67,15 +67,15 @@ endfunction()
 # Function to setup logging dependencies
 function(atom_setup_logging_deps module_name)
     # Try to find loguru
-    find_library(LOGURU_LIBRARY 
+    find_library(LOGURU_LIBRARY
         NAMES loguru
-        PATHS 
+        PATHS
             /usr/lib
             /usr/local/lib
             /mingw64/lib
             ${CMAKE_PREFIX_PATH}/lib
     )
-    
+
     if(LOGURU_LIBRARY)
         target_link_libraries(${module_name} PUBLIC ${LOGURU_LIBRARY})
         message(STATUS "Loguru linked to ${module_name}")
@@ -96,7 +96,7 @@ function(atom_setup_xml_deps module_name)
             return()
         endif()
     endif()
-    
+
     # Fallback to find_package
     find_package(tinyxml2 QUIET)
     if(tinyxml2_FOUND)
@@ -112,7 +112,7 @@ function(atom_setup_compression_deps module_name)
     if(ZLIB_FOUND)
         target_link_libraries(${module_name} PUBLIC ZLIB::ZLIB)
     endif()
-    
+
     # Try to find additional compression libraries
     find_package(PkgConfig QUIET)
     if(PkgConfig_FOUND)
@@ -142,12 +142,12 @@ function(atom_setup_networking_deps module_name)
         target_compile_definitions(${module_name} PRIVATE ASIO_STANDALONE)
         message(STATUS "Asio linked to ${module_name}")
     endif()
-    
+
     if(OpenSSL_FOUND)
         target_link_libraries(${module_name} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
         message(STATUS "OpenSSL linked to ${module_name}")
     endif()
-    
+
     # Platform-specific networking libraries
     if(WIN32)
         target_link_libraries(${module_name} PUBLIC ws2_32 wsock32 iphlpapi)
@@ -194,20 +194,20 @@ endfunction()
 # Macro to simplify common module setup
 macro(atom_configure_module module_name)
     atom_setup_standard_dependencies(${module_name})
-    
+
     # Set common compile features
     target_compile_features(${module_name} PUBLIC cxx_std_20)
-    
+
     # Set common compile options
     if(MSVC)
         target_compile_options(${module_name} PRIVATE /W4)
     else()
         target_compile_options(${module_name} PRIVATE -Wall -Wextra -Wpedantic)
     endif()
-    
+
     # Set common include directories
-    target_include_directories(${module_name} 
-        PUBLIC 
+    target_include_directories(${module_name}
+        PUBLIC
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
             $<INSTALL_INTERFACE:include>
     )

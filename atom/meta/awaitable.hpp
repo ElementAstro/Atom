@@ -18,21 +18,21 @@ template <typename F, typename... Args>
 class SimpleAwaitable {
 public:
     using result_type = std::invoke_result_t<F, Args...>;
-    
+
     SimpleAwaitable(F&& func, Args&&... args)
         : func_(std::forward<F>(func)), args_(std::forward<Args>(args)...) {}
-    
+
     bool await_ready() const noexcept { return false; }
-    
+
     void await_suspend(std::coroutine_handle<> handle) const noexcept {
         // For this simple implementation, we just resume immediately
         handle.resume();
     }
-    
+
     result_type await_resume() {
         return std::apply(func_, args_);
     }
-    
+
 private:
     F func_;
     std::tuple<Args...> args_;

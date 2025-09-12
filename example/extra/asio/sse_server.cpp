@@ -91,7 +91,7 @@ public:
     void run() {
         std::cout << "Running SSE server (stub)..." << std::endl;
         current_connections_ = 5; // Simulate some connections
-        
+
         // Simulate server running
         std::this_thread::sleep_for(100ms);
     }
@@ -112,12 +112,12 @@ public:
         std::cout << "Running io_context (stub)..." << std::endl;
         std::this_thread::sleep_for(1s);
     }
-    
+
     void run_for(std::chrono::milliseconds duration) {
         std::cout << "Running io_context for " << duration.count() << "ms (stub)..." << std::endl;
         std::this_thread::sleep_for(duration);
     }
-    
+
     void stop() {
         std::cout << "Stopping io_context (stub)..." << std::endl;
     }
@@ -146,14 +146,14 @@ int main() {
 
             // Simulate broadcasting events
             for (int i = 0; i < 3; ++i) {
-                Event event("event_" + std::to_string(i), "message", 
+                Event event("event_" + std::to_string(i), "message",
                            "Hello from SSE server stub #" + std::to_string(i));
                 server.broadcast_event(event);
                 std::this_thread::sleep_for(100ms);
             }
 
             server.run();
-            
+
             auto metrics = server.get_metrics();
             std::cout << "Server metrics:" << std::endl;
             std::cout << "  Events sent: " << metrics["total_events_sent"] << std::endl;

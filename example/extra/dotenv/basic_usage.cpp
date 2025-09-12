@@ -34,7 +34,7 @@ public:
         result.variables_loaded = 5;
         return result;
     }
-    
+
     static LoadResult loadWithOptions(const std::string& filename, const LoadOptions& options) {
         std::cout << "Loading .env file with options (stub): " << filename << std::endl;
         std::cout << "  Ignore missing files: " << (options.ignore_missing_files ? "true" : "false") << std::endl;
@@ -44,7 +44,7 @@ public:
         result.variables_loaded = 3;
         return result;
     }
-    
+
     static void quickLoadAndApply(const std::string& filename = ".env") {
         std::cout << "Quick load and apply (stub): " << filename << std::endl;
         // Simulate setting environment variables
@@ -52,7 +52,7 @@ public:
         setenv("APP_VERSION", "1.0.0", 1);
         setenv("DEBUG", "true", 1);
     }
-    
+
     static std::unordered_map<std::string, std::string> parse(const std::string& content) {
         std::cout << "Parsing .env content (stub): " << content.size() << " characters" << std::endl;
         std::unordered_map<std::string, std::string> result;
@@ -104,7 +104,7 @@ int main() {
             LoadOptions options;
             options.ignore_missing_files = true;
             options.override_existing = false;
-            
+
             auto result = Dotenv::loadWithOptions("optional.env", options);
             if (result.success) {
                 std::cout << "Successfully loaded with options: " << result.variables_loaded << " variables" << std::endl;
@@ -128,7 +128,7 @@ DEBUG=true
 DATABASE_URL=postgresql://localhost:5432/mydb
 API_KEY=secret123
 )";
-            
+
             auto variables = Dotenv::parse(env_content);
             std::cout << "Parsed " << variables.size() << " variables:" << std::endl;
             for (const auto& [key, value] : variables) {
