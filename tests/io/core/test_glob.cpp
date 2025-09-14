@@ -331,4 +331,3 @@ TEST_F(GlobTest, DirectoryIteration) {
     results = atom::io::glob2(fs::path("."), "**", false);
     EXPECT_GT(results.size(), 0);
 }
-

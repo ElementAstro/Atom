@@ -581,7 +581,7 @@ template <typename T>
         throw std::invalid_argument(
             "XML tag name contains invalid characters");
     }
-    
+
     try {
 
         if constexpr (StringType<T>) {
@@ -598,7 +598,7 @@ template <typename T>
             std_content =
                 std::regex_replace(std_content, std::regex("'"), "&apos;");
             content = atom::utils::String(std_content.c_str());
-            
+
             return "<" + tagName + ">" + content + "</" + tagName + ">";
         } else if constexpr (AnyChar<T>) {
             atom::utils::String content = atom::utils::String(1, value);
@@ -779,7 +779,7 @@ template <typename T>
                 strValue.find('#') != atom::utils::String::npos ||
                 (!strValue.empty() &&
                  (strValue.front() == ' ' || strValue.back() == ' '));
-            
+
             formattedValue = needsQuotes ? "\"" + strValue + "\"" : strValue;
         } else if constexpr (AnyChar<T>) {
             atom::utils::String strValue = atom::utils::String(1, value);

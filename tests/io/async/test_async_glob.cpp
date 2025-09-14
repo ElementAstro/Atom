@@ -468,4 +468,3 @@ TEST_F(AsyncGlobTest, SpecialCharacters) {
     EXPECT_THAT(mixedResult, Contains(testDir / "file+with+plus.txt"));
     EXPECT_THAT(mixedResult, Contains(testDir / "file.with.dots.txt"));
 }
-

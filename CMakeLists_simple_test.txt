@@ -25,7 +25,7 @@ endif()
 add_executable(test_directorystack_simple test_directorystack_simple.cpp)
 
 # Link against the atom-io library
-target_link_libraries(test_directorystack_simple 
+target_link_libraries(test_directorystack_simple
     ${CMAKE_CURRENT_SOURCE_DIR}/build/atom/io/libatom-io.a
     ${CMAKE_CURRENT_SOURCE_DIR}/build/atom/async/libatom-async.a
     ${CMAKE_CURRENT_SOURCE_DIR}/build/atom/log/libloguru.dll.a
