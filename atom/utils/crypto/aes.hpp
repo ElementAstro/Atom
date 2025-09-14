@@ -114,6 +114,23 @@ concept StringLike = requires(T t) {
 [[nodiscard]] auto calculateSha512(const std::string& data) noexcept
     -> std::string;
 
+// Template function implementations must be in the header
+
+// Forward declarations for classes used in implementations
+class CipherContext;
+class MessageDigestContext;
+class ZlibStream;
+
+// Constants
+constexpr size_t ZLIB_BUFFER_SIZE = 32768;
+constexpr size_t FILE_BUFFER_SIZE = 16384;
+constexpr size_t AES_IV_SIZE = 12;
+constexpr size_t AES_TAG_SIZE = 16;
+constexpr size_t MIN_KEY_SIZE = 16;
+
 }  // namespace atom::utils
+
+// Include implementation details
+#include "aes_impl.hpp"
 
 #endif

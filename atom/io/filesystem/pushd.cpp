@@ -498,9 +498,6 @@ DirectoryStack::DirectoryStack(
           io_context
 #endif
           )) {
-#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
-    executor_ = io_context.get_executor();
-#endif
 }
 
 DirectoryStack::~DirectoryStack() noexcept = default;

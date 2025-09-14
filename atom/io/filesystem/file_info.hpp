@@ -50,6 +50,14 @@ FileInfo getFileInfo(const fs::path& filePath);
  */
 void printFileInfo(const FileInfo& info);
 
+/**
+ * @brief Deletes a file.
+ *
+ * @param filePath The path to the file to delete.
+ * @throws std::runtime_error if the file cannot be deleted.
+ */
+void deleteFile(const fs::path& filePath);
+
 }  // namespace atom::io
 
 #endif  // ATOM_IO_FILE_INFO_HPP

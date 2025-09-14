@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "atom/error/exception.hpp"
+#include "atom/utils/text/string.hpp"
 
 namespace atom::utils {
 class ParserException : public atom::error::RuntimeError {
@@ -27,8 +28,6 @@ public:
 template <typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;
 
-template <typename T>
-concept StringLike = std::convertible_to<T, std::string_view>;
 
 /**
  * @class Parser

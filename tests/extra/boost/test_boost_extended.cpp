@@ -1,8 +1,8 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-// Include simple boost tests that don't require external dependencies
-#include "test_boost_simple.cpp"
+// Extended tests for boost functionality - test_boost_simple.cpp is compiled separately
+// Do not include .cpp files directly to avoid duplicate symbols
 
 // Temporarily disable problematic Boost components due to missing dependencies
 #if 0

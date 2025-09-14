@@ -237,49 +237,54 @@ if(ATOM_BUILD_TESTS)
 endif()
 
 # Add minimal timer test for debugging
-add_executable(test_timer_minimal_isolated test_timer_minimal_isolated.cpp)
-target_link_libraries(test_timer_minimal_isolated
-    PRIVATE
-    atom-async
-    atom-utils
-    atom-error
-)
-target_compile_features(test_timer_minimal_isolated PRIVATE cxx_std_20)
-target_include_directories(test_timer_minimal_isolated PRIVATE ${CMAKE_SOURCE_DIR})
+# Temporarily commented out due to missing source files
+# add_executable(test_timer_minimal_isolated test_timer_minimal_isolated.cpp)
+# target_link_libraries(test_timer_minimal_isolated
+#     PRIVATE
+#     atom-async
+#     atom-utils
+#     atom-error
+# )
+# target_compile_features(test_timer_minimal_isolated PRIVATE cxx_std_20)
+# target_include_directories(test_timer_minimal_isolated PRIVATE ${CMAKE_SOURCE_DIR})
 
 # Add header-only test
-add_executable(test_timer_header_only test_timer_header_only.cpp)
-target_link_libraries(test_timer_header_only
-    PRIVATE
-    atom-async
-    atom-utils
-    atom-error
-)
-target_compile_features(test_timer_header_only PRIVATE cxx_std_20)
-target_include_directories(test_timer_header_only PRIVATE ${CMAKE_SOURCE_DIR})
+# Temporarily commented out due to missing source files
+# add_executable(test_timer_header_only test_timer_header_only.cpp)
+# target_link_libraries(test_timer_header_only
+#     PRIVATE
+#     atom-async
+#     atom-utils
+#     atom-error
+# )
+# target_compile_features(test_timer_header_only PRIVATE cxx_std_20)
+# target_include_directories(test_timer_header_only PRIVATE ${CMAKE_SOURCE_DIR})
 
 # Add constructor-only test
-add_executable(test_timer_constructor_only test_timer_constructor_only.cpp)
-target_link_libraries(test_timer_constructor_only
-    PRIVATE
-    atom-async
-    atom-utils
-    atom-error
-)
-target_compile_features(test_timer_constructor_only PRIVATE cxx_std_20)
-target_include_directories(test_timer_constructor_only PRIVATE ${CMAKE_SOURCE_DIR})
+# Temporarily commented out due to missing source files
+# add_executable(test_timer_constructor_only test_timer_constructor_only.cpp)
+# target_link_libraries(test_timer_constructor_only
+#     PRIVATE
+#     atom-async
+#     atom-utils
+#     atom-error
+# )
+# target_compile_features(test_timer_constructor_only PRIVATE cxx_std_20)
+# target_include_directories(test_timer_constructor_only PRIVATE ${CMAKE_SOURCE_DIR})
 
 # Add basic C++ test (no Atom dependencies)
 add_executable(test_basic_cpp test_basic_cpp.cpp)
 target_compile_features(test_basic_cpp PRIVATE cxx_std_20)
 
 # Add minimal timer test (no Atom dependencies)
-add_executable(test_minimal_timer_isolated test_minimal_timer_isolated.cpp)
-target_compile_features(test_minimal_timer_isolated PRIVATE cxx_std_20)
+# Temporarily commented out due to missing source files
+# add_executable(test_minimal_timer_isolated test_minimal_timer_isolated.cpp)
+# target_compile_features(test_minimal_timer_isolated PRIVATE cxx_std_20)
 
 # Add isolated timer test (no Atom dependencies, more complete implementation)
-add_executable(test_timer_no_atom_deps test_timer_no_atom_deps.cpp)
-target_compile_features(test_timer_no_atom_deps PRIVATE cxx_std_20)
+# Temporarily commented out due to missing source files
+# add_executable(test_timer_no_atom_deps test_timer_no_atom_deps.cpp)
+# target_compile_features(test_timer_no_atom_deps PRIVATE cxx_std_20)
 
 # -----------------------------------------------------------------------------
 # Documentation

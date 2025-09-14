@@ -9,6 +9,10 @@
 cmake_minimum_required(VERSION 3.20)
 project(atom-sysinfo-tests VERSION 1.0.0 LANGUAGES C CXX)
 
+# Enforce C++20 for this subtree and all added subdirectories
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
 # Find required packages
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
@@ -16,8 +20,14 @@ find_package(Threads REQUIRED)
 # Include parent directory for sysinfo headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
-# Add sysinfo library as subdirectory
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/sysinfo ${CMAKE_CURRENT_BINARY_DIR}/atom-sysinfo)
+# Bring in required Atom modules as subdirectories so targets are available locally
+# Avoid duplicate target definitions if building from the repository top-level
+if(NOT TARGET atom-error)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/error ${CMAKE_CURRENT_BINARY_DIR}/atom-error)
+endif()
+if(NOT TARGET atom-sysinfo)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/sysinfo ${CMAKE_CURRENT_BINARY_DIR}/atom-sysinfo)
+endif()
 
 # Test source files
 set(TEST_SOURCES

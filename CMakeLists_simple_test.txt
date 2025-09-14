@@ -1,0 +1,42 @@
+cmake_minimum_required(VERSION 3.20)
+project(test_directorystack_simple)
+
+# Add the necessary include directories
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/atom/io)
+
+# Find ASIO
+find_package(asio QUIET)
+if(asio_FOUND)
+    message(STATUS "ASIO found - enabling ASIO support")
+    add_definitions(-DASIO_STANDALONE -DATOM_USE_ASIO)
+else()
+    find_path(ASIO_INCLUDE_DIR NAMES asio.hpp)
+    if(ASIO_INCLUDE_DIR)
+        message(STATUS "ASIO headers found - enabling ASIO support")
+        add_definitions(-DASIO_STANDALONE -DATOM_USE_ASIO)
+        include_directories(${ASIO_INCLUDE_DIR})
+    else()
+        message(STATUS "ASIO not found - building without ASIO support")
+    endif()
+endif()
+
+# Create the test executable
+add_executable(test_directorystack_simple test_directorystack_simple.cpp)
+
+# Link against the atom-io library
+target_link_libraries(test_directorystack_simple 
+    ${CMAKE_CURRENT_SOURCE_DIR}/build/atom/io/libatom-io.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/build/atom/async/libatom-async.a
+    ${CMAKE_CURRENT_SOURCE_DIR}/build/atom/log/libloguru.dll.a
+)
+
+# Add necessary Windows libraries
+if(WIN32)
+    target_link_libraries(test_directorystack_simple ws2_32 wsock32)
+endif()
+
+set_target_properties(test_directorystack_simple PROPERTIES
+    CXX_STANDARD 23
+    CXX_STANDARD_REQUIRED ON
+)

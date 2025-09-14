@@ -31,6 +31,7 @@ namespace atom::utils::test {
 // Custom type with toString method
 class CustomStringifiable {
 public:
+    CustomStringifiable() = default;
     CustomStringifiable(std::string value) : value_(std::move(value)) {}
 
     std::string toString() const { return "Custom(" + value_ + ")"; }
@@ -382,10 +383,10 @@ TEST_F(ToYamlTest, CustomTypes) {
 class ToTomlTest : public AnyUtilsTest {};
 
 TEST_F(ToTomlTest, BasicTypes) {
-    EXPECT_EQ(toToml(intValue, "int"), "int: 42\n");
-    EXPECT_EQ(toToml(floatValue, "float"), "float: 3.14159\n");
-    EXPECT_EQ(toToml(boolValue, "bool"), "bool: true\n");
-    EXPECT_EQ(toToml(stringValue, "string"), "string: Hello, World!\n");
+    EXPECT_EQ(toToml(intValue, "int"), "int = 42\n");
+    EXPECT_EQ(toToml(floatValue, "float"), "float = 3.14159\n");
+    EXPECT_EQ(toToml(boolValue, "bool"), "bool = true\n");
+    EXPECT_EQ(toToml(stringValue, "string"), "string = \"Hello, World!\"\n");
 }
 
 TEST_F(ToTomlTest, ContainerTypes) {
@@ -398,11 +399,11 @@ TEST_F(ToTomlTest, ContainerTypes) {
 
 TEST_F(ToTomlTest, MapTypes) {
     std::string result = toToml(mapOfInts, "dict");
-    EXPECT_TRUE(result.find("dict:") != std::string::npos);
+    EXPECT_TRUE(result.find("dict = {") != std::string::npos);
     // Test presence of at least one key-value pair
-    EXPECT_TRUE(result.find("1:") != std::string::npos ||
-                result.find("2:") != std::string::npos ||
-                result.find("3:") != std::string::npos);
+    EXPECT_TRUE(result.find("1 = 100") != std::string::npos ||
+                result.find("2 = 200") != std::string::npos ||
+                result.find("3 = 300") != std::string::npos);
 }
 
 TEST_F(ToTomlTest, CustomTypes) {

@@ -183,37 +183,18 @@ auto CommandDispatcher::executeWithoutTimeout(const Command& cmd,
 auto CommandDispatcher::executeFunctions(const Command& cmd,
                                          const std::vector<std::any>& args)
     -> std::any {
-    // spdlog::trace("Entering function: {}", __func__); // Replaced
-    // LOG_SCOPE_FUNCTION
-    std::string funcHash = computeFunctionHash(args);
-
-    // Check if hash matches
-    if (cmd.hash == funcHash) {
-        try {
-            spdlog::info("Executing function for command with hash: {}",
-                         funcHash);
-            return std::invoke(cmd.func, args);
-        } catch (const std::bad_any_cast& e) {
-            spdlog::error(
-                "Failed to call function for command with hash {}: {}",
-                funcHash, e.what());
-            THROW_DISPATCH_EXCEPTION(
-                "Failed to call function for command with hash {}: {}",
-                funcHash, e.what());
-        } catch (const std::exception& e) {
-            spdlog::error(
-                "Error executing function for command with hash {}: {}",
-                funcHash, e.what());
-            THROW_DISPATCH_EXCEPTION(
-                "Error executing function for command with hash {}: {}",
-                funcHash, e.what());
-        }
+    // We already selected the correct overload earlier by signature.
+    // Directly invoke the stored proxy function and surface any type errors.
+    try {
+        spdlog::info("Executing function for command (skipping hash validation)");
+        return std::invoke(cmd.func, const_cast<std::vector<std::any>&>(args));
+    } catch (const std::bad_any_cast& e) {
+        spdlog::error("Failed to call function: {}", e.what());
+        THROW_DISPATCH_EXCEPTION("Failed to call function: {}", e.what());
+    } catch (const std::exception& e) {
+        spdlog::error("Error executing function: {}", e.what());
+        THROW_DISPATCH_EXCEPTION("Error executing function: {}", e.what());
     }
-
-    spdlog::error("No matching overload found for command with hash: {}",
-                  funcHash);
-    THROW_INVALID_ARGUMENT(
-        "No matching overload found for command with hash: {}", funcHash);
 }
 
 auto CommandDispatcher::computeFunctionHash(const std::vector<std::any>& args)
@@ -648,71 +629,7 @@ CommandDispatcher::getCommandArgAndReturnType(std::string_view name) const {
 auto CommandDispatcher::dispatchHelper(const std::string& name,
                                        const std::vector<std::any>& args)
     -> std::any {
-    // spdlog::trace("Entering function: {}", __func__); // Replaced
-    // LOG_SCOPE_FUNCTION
-
-    // Thread-safe shared lock for read operations
-    std::shared_lock lock(mutex_);
-
-    // Compute function hash once
-    const std::string funcHash = computeFunctionHash(args);
-    spdlog::info("Dispatching command '{}' with hash '{}'", name, funcHash);
-
-    auto commandIterator = commands_.find(name);
-    if (commandIterator == commands_.end()) {
-        // Command not found, check aliases
-        for (const auto& [cmdName, cmdMap] : commands_) {
-            for (const auto& [hash, cmd] : cmdMap) {
-                if (cmd.aliases.find(name) != cmd.aliases.end()) {
-                    spdlog::info("Found command alias '{}' -> '{}'", name,
-                                 cmdName);
-                    commandIterator = commands_.find(cmdName);
-                    break;
-                }
-            }
-            if (commandIterator != commands_.end())
-                break;
-        }
-
-        if (commandIterator == commands_.end()) {
-            spdlog::error("Command '{}' not found.", name);
-            THROW_INVALID_ARGUMENT("Command '{}' not found.", name);
-        }
-    }
-
-    // Find and make a local copy of the matching command
-    Command matchingCmd;
-    bool found = false;
-
-    // Try to find a matching overload with the correct hash
-    for (const auto& [hash, cmd] : commandIterator->second) {
-        if (cmd.hash == funcHash) {
-            matchingCmd = cmd;
-            found = true;
-            break;
-        }
-    }
-
-    // Release the lock before executing
-    lock.unlock();
-
-    if (found) {
-        // Check precondition
-        checkPrecondition(matchingCmd, name);
-
-        // Execute command
-        std::any result = executeCommand(matchingCmd, name, args);
-
-        // Check postcondition
-        checkPostcondition(matchingCmd, name);
-
-        return result;
-    }
-
-    spdlog::error(
-        "No matching overload for command '{}' with the given arguments.",
-        name);
-    THROW_INVALID_ARGUMENT(
-        "No matching overload for command '{}' with the given arguments.",
-        name);
+    // Delegate to the template-based dispatcher which uses signature matching
+    // and default argument completion for consistent behavior across call sites.
+    return dispatchHelper<std::vector<std::any>>(name, args);
 }

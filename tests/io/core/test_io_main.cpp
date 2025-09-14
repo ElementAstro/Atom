@@ -1,4 +1,4 @@
-#include "atom/io/io.hpp"
+#include "atom/io/core/io.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -74,7 +74,5 @@ void demonstrateFileOperations() {
     std::cout << "Removed sample directory and its contents." << std::endl;
 }
 
-int main() {
-    demonstrateFileOperations();
-    return 0;
-}
+// Note: This file was converted from a demo to be included in the test suite
+// The demonstrateFileOperations() function can be called from actual tests if needed

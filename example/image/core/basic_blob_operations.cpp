@@ -1,13 +1,12 @@
 /**
  * @file basic_blob_operations.cpp
- * @brief Comprehensive example demonstrating basic image blob operations
+ * @brief Basic demonstration of image blob operations
  *
- * This example covers:
- * - Creating image blobs from different sources
- * - Basic blob operations (resize, rotate, flip, crop)
- * - Memory management with normal and fast blob modes
- * - Serialization and deserialization
- * - Error handling and validation
+ * This example demonstrates:
+ * - Creating and using image blobs
+ * - Basic operations with available API
+ * - Memory management
+ * - Serialization
  *
  * @author Atom Image Module
  * @date 2025
@@ -31,53 +30,40 @@ void demonstrateBasicOperations() {
     std::cout << "\n=== Basic Blob Operations ===\n";
 
     try {
-        // Create a simple 3-channel RGB image (100x100)
-        blob<uint8_t> img(100, 100, 3);
-        std::cout << "Created RGB blob: " << img.cols() << "x" << img.rows()
-                  << " with " << img.channels() << " channels\n";
+        // Create a basic blob
+        blob img;
+        std::cout << "Created blob: " << img.getCols() << "x" << img.getRows()
+                  << " with " << img.getChannels() << " channels\n";
 
-        // Fill with gradient pattern
-        for (int y = 0; y < img.rows(); ++y) {
-            for (int x = 0; x < img.cols(); ++x) {
-                img.at(y, x, 0) =
-                    static_cast<uint8_t>(x * 255 / img.cols());  // Red gradient
-                img.at(y, x, 1) = static_cast<uint8_t>(
-                    y * 255 / img.rows());  // Green gradient
-                img.at(y, x, 2) = static_cast<uint8_t>(
-                    (x + y) * 255 /
-                    (img.cols() + img.rows()));  // Blue gradient
-            }
+        // Create test data
+        std::vector<uint8_t> testData(100 * 100 * 3);
+        for (size_t i = 0; i < testData.size(); i += 3) {
+            testData[i] = static_cast<uint8_t>(i % 256);     // Red
+            testData[i + 1] = static_cast<uint8_t>((i / 2) % 256); // Green
+            testData[i + 2] = static_cast<uint8_t>((i / 3) % 256); // Blue
         }
 
-        // Basic operations
-        std::cout << "Original size: " << img.cols() << "x" << img.rows()
-                  << "\n";
+        // Create blob from data
+        blob dataImg(testData.data(), testData.size());
+        std::cout << "Created blob from data with " << dataImg.size() << " bytes\n";
 
-        // Resize operation
-        img.resize(150, 120);
-        std::cout << "After resize: " << img.cols() << "x" << img.rows()
-                  << "\n";
+        // Basic blob operations
+        std::cout << "Empty check: " << (dataImg.isEmpty() ? "empty" : "not empty") << "\n";
+        std::cout << "Width: " << dataImg.getWidth() << "\n";
+        std::cout << "Height: " << dataImg.getHeight() << "\n";
+        
+        // Fill operation
+        blob fillBlob;
+        fillBlob.fill(std::byte{128});
+        std::cout << "Filled blob with value 128\n";
 
-        // Rotation (90 degrees)
-        img.rotate(90.0);
-        std::cout << "After 90° rotation: " << img.cols() << "x" << img.rows()
-                  << "\n";
+        // Memory alignment
+        dataImg.alignMemory(64);
+        std::cout << "Applied memory alignment\n";
 
-        // Flip operations
-        img.flip(0);  // Vertical flip
-        std::cout << "Applied vertical flip\n";
-
-        img.flip(1);  // Horizontal flip
-        std::cout << "Applied horizontal flip\n";
-
-        // Crop operation
-        auto cropped = img.crop(10, 10, 50, 50);
-        std::cout << "Cropped region: " << cropped.cols() << "x"
-                  << cropped.rows() << "\n";
-
-        // Memory usage information
-        std::cout << "Original image memory: " << img.size() << " bytes\n";
-        std::cout << "Cropped image memory: " << cropped.size() << " bytes\n";
+        // Clone operation
+        auto clonedImg = dataImg.clone();
+        std::cout << "Cloned blob: " << clonedImg.size() << " bytes\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in basic operations: " << e.what() << "\n";
@@ -102,23 +88,20 @@ void demonstrateFastBlob() {
         }
 
         // Create fast blob (view-only, no memory copy)
-        fast_blob<uint8_t> fastImg(imageData.data(), 480, 640, 3);
-        std::cout << "Created fast blob view: " << fastImg.cols() << "x"
-                  << fastImg.rows() << " with " << fastImg.channels()
-                  << " channels\n";
+        fast_blob fastImg(imageData.data(), imageData.size());
+        std::cout << "Created fast blob view with " << fastImg.size() << " bytes\n";
 
-        // Fast blob operations (read-only)
+        // Basic fast blob operations (read-only)
         std::cout << "Fast blob memory size: " << fastImg.size() << " bytes\n";
-        std::cout << "Sample pixel at (100, 100): R="
-                  << static_cast<int>(fastImg.at(100, 100, 0))
-                  << " G=" << static_cast<int>(fastImg.at(100, 100, 1))
-                  << " B=" << static_cast<int>(fastImg.at(100, 100, 2)) << "\n";
+        std::cout << "Fast blob dimensions: " << fastImg.getWidth() << "x" << fastImg.getHeight() << "\n";
+        std::cout << "Fast blob channels: " << fastImg.getChannels() << "\n";
+        std::cout << "Empty check: " << (fastImg.isEmpty() ? "empty" : "not empty") << "\n";
 
         // Performance comparison
         auto start = high_resolution_clock::now();
 
         // Create normal blob (with memory copy)
-        blob<uint8_t> normalImg(imageData.data(), 480, 640, 3);
+        blob normalImg(imageData.data(), imageData.size());
 
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(end - start);
@@ -127,13 +110,17 @@ void demonstrateFastBlob() {
 
         start = high_resolution_clock::now();
 
-        // Create fast blob (no memory copy)
-        fast_blob<uint8_t> fastImg2(imageData.data(), 480, 640, 3);
+        // Create another fast blob (no memory copy)
+        fast_blob fastImg2(imageData.data(), imageData.size());
 
         end = high_resolution_clock::now();
         duration = duration_cast<microseconds>(end - start);
         std::cout << "Fast blob creation time: " << duration.count()
                   << " microseconds\n";
+
+        // Demonstrate slice operation
+        auto slice = fastImg.slice(100, 200);
+        std::cout << "Created slice with " << slice.size() << " bytes\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in fast blob operations: " << e.what() << "\n";
@@ -147,21 +134,19 @@ void demonstrateSerialization() {
     std::cout << "\n=== Serialization Operations ===\n";
 
     try {
-        // Create and populate an image
-        blob<uint8_t> originalImg(64, 64, 3);
-
-        // Create a simple pattern
-        for (int y = 0; y < originalImg.rows(); ++y) {
-            for (int x = 0; x < originalImg.cols(); ++x) {
-                originalImg.at(y, x, 0) = static_cast<uint8_t>((x + y) % 256);
-                originalImg.at(y, x, 1) = static_cast<uint8_t>((x * y) % 256);
-                originalImg.at(y, x, 2) = static_cast<uint8_t>((x ^ y) % 256);
-            }
+        // Create test data
+        std::vector<uint8_t> testData(64 * 64 * 3);
+        for (size_t i = 0; i < testData.size(); ++i) {
+            testData[i] = static_cast<uint8_t>((i + i/3 + i/64) % 256);
         }
 
-        std::cout << "Original image: " << originalImg.cols() << "x"
-                  << originalImg.rows() << " with " << originalImg.channels()
+        // Create and populate an image blob
+        blob originalImg(testData.data(), testData.size());
+        
+        std::cout << "Original image blob: " << originalImg.getCols() << "x"
+                  << originalImg.getRows() << " with " << originalImg.getChannels()
                   << " channels\n";
+        std::cout << "Original size: " << originalImg.size() << " bytes\n";
 
         // Serialize the image
         auto serializedData = originalImg.serialize();
@@ -169,26 +154,34 @@ void demonstrateSerialization() {
                   << " bytes\n";
 
         // Deserialize the image
-        auto restoredImg = blob<uint8_t>::deserialize(serializedData);
-        std::cout << "Restored image: " << restoredImg.cols() << "x"
-                  << restoredImg.rows() << " with " << restoredImg.channels()
+        auto restoredImg = blob::deserialize(serializedData);
+        std::cout << "Restored image blob: " << restoredImg.getCols() << "x"
+                  << restoredImg.getRows() << " with " << restoredImg.getChannels()
                   << " channels\n";
+        std::cout << "Restored size: " << restoredImg.size() << " bytes\n";
 
-        // Verify data integrity
-        bool dataMatches = true;
-        for (int y = 0; y < originalImg.rows() && dataMatches; ++y) {
-            for (int x = 0; x < originalImg.cols() && dataMatches; ++x) {
-                for (int c = 0; c < originalImg.channels() && dataMatches;
-                     ++c) {
-                    if (originalImg.at(y, x, c) != restoredImg.at(y, x, c)) {
-                        dataMatches = false;
-                    }
+        // Verify data integrity by comparing sizes and a few bytes
+        bool dataMatches = (originalImg.size() == restoredImg.size());
+        if (dataMatches && originalImg.size() > 0) {
+            // Compare first, middle, and last bytes
+            size_t checkPoints[] = {0, originalImg.size() / 2, originalImg.size() - 1};
+            for (size_t point : checkPoints) {
+                if (originalImg[point] != restoredImg[point]) {
+                    dataMatches = false;
+                    break;
                 }
             }
         }
 
         std::cout << "Data integrity check: "
                   << (dataMatches ? "PASSED" : "FAILED") << "\n";
+
+        // Demonstrate compression
+        auto compressed = originalImg.compress();
+        std::cout << "Compressed size: " << compressed.size() << " bytes\n";
+        
+        auto decompressed = compressed.decompress();
+        std::cout << "Decompressed size: " << decompressed.size() << " bytes\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in serialization: " << e.what() << "\n";

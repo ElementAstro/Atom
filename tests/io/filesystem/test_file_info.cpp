@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
-#include "atom/io/file_info.hpp"
+#include "atom/io/filesystem/file_info.hpp"
+#include "atom/io/core/io.hpp"
+#include "atom/io/filesystem/file_permission.hpp"
 
 #include <chrono>
 #include <cstring>

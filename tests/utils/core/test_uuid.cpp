@@ -12,13 +12,17 @@
 #include <thread>
 #include <vector>
 
-#include "atom/utils/uuid.hpp"
+#include "atom/utils/random/uuid.hpp"
 
 using namespace atom::utils;
 using ::testing::HasSubstr;
 using ::testing::IsFalse;
 using ::testing::IsTrue;
 using ::testing::StartsWith;
+
+// Explicit using declarations to help with namespace resolution
+using atom::utils::UUID;
+using atom::utils::UuidError;
 
 class UUIDTest : public ::testing::Test {
 protected:
@@ -131,7 +135,7 @@ TEST_F(UUIDTest, FromStringInvalidFormat) {
     auto result = UUID::fromString(invalidStr);
 
     EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), UuidError::InvalidFormat);
+    EXPECT_EQ(result.error().error(), UuidError::InvalidFormat);
 }
 
 // Test fromString method with non-hex characters
@@ -141,7 +145,7 @@ TEST_F(UUIDTest, FromStringInvalidChars) {
     auto result = UUID::fromString(invalidStr);
 
     EXPECT_FALSE(result.has_value());
-    EXPECT_EQ(result.error(), UuidError::InvalidFormat);
+    EXPECT_EQ(result.error().error(), UuidError::InvalidFormat);
 }
 
 // Test isValidUUID static method

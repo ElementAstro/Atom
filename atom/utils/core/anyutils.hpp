@@ -41,24 +41,17 @@ template <typename T>
 using Vector = atom::containers::Vector<T>;
 }  // namespace atom::utils
 
-// Define missing concepts using the ones from concept.hpp
-template <typename T>
-concept IsBuiltIn = atom::meta::IsBuiltIn<T>;
+// Use concepts from concept.hpp via using declarations
+namespace atom::utils {
 
-template <typename T>
-concept String = atom::meta::StringType<T>;
+using ::IsBuiltIn;
+using ::StringType;
+using ::AnyChar;
+using ::Number;
+using ::Pointer;
+using ::SmartPointer;
 
-template <typename T>
-concept Char = atom::meta::AnyChar<T>;
-
-template <typename T>
-concept Number = atom::meta::Number<T>;
-
-template <typename T>
-concept Pointer = atom::meta::Pointer<T>;
-
-template <typename T>
-concept SmartPointer = atom::meta::SmartPointer<T>;
+}  // namespace atom::utils
 
 template <typename T>
 concept CanBeStringified = requires(T t) {
@@ -94,20 +87,21 @@ std::mutex cacheMutex;
 atom::utils::HashMap<std::size_t, atom::utils::String> conversionCache;
 
 template <typename T>
-std::size_t getTypeHash(const T &value) {
+std::size_t getTypeHash(const T &value, bool prettyPrint = false) {
     std::size_t typeHash = typeid(T).hash_code();
     std::size_t valueHash = 0;
     if constexpr (std::is_trivially_copyable_v<T> &&
                   sizeof(T) <= sizeof(std::size_t)) {
         std::memcpy(&valueHash, &value, sizeof(T));
     }
-    return typeHash ^ (valueHash << 1);
+    std::size_t prettyHash = prettyPrint ? 1 : 0;
+    return typeHash ^ (valueHash << 1) ^ (prettyHash << 16);
 }
 
 template <typename T>
-std::optional<atom::utils::String> getCachedString(const T &value) {
+std::optional<atom::utils::String> getCachedString(const T &value, bool prettyPrint = false) {
     std::lock_guard<std::mutex> lock(cacheMutex);
-    auto hash = getTypeHash(value);
+    auto hash = getTypeHash(value, prettyPrint);
     auto it = conversionCache.find(hash);
     if (it != conversionCache.end()) {
         return it->second;
@@ -116,14 +110,15 @@ std::optional<atom::utils::String> getCachedString(const T &value) {
 }
 
 template <typename T>
-void cacheString(const T &value, const atom::utils::String &str) {
+void cacheString(const T &value, const atom::utils::String &str, bool prettyPrint = false) {
     std::lock_guard<std::mutex> lock(cacheMutex);
-    auto hash = getTypeHash(value);
+    auto hash = getTypeHash(value, prettyPrint);
     conversionCache[hash] = str;
 }
 }  // namespace
 
 template <std::ranges::input_range Container>
+requires (!StringType<Container>)
 [[nodiscard]] auto toString(const Container &container,
                             bool prettyPrint = false) -> atom::utils::String {
     try {
@@ -131,7 +126,7 @@ template <std::ranges::input_range Container>
             return "[]";
         }
 
-        if (auto cached = getCachedString(container)) {
+        if (auto cached = getCachedString(container, prettyPrint)) {
             return *cached;
         }
 
@@ -164,7 +159,7 @@ template <std::ranges::input_range Container>
 
         if constexpr (std::ranges::sized_range<Container>) {
             if (std::ranges::size(container) < 1000) {
-                cacheString(container, result);
+                cacheString(container, result, prettyPrint);
             }
         }
 
@@ -226,8 +221,10 @@ template <typename T>
 [[nodiscard]] auto toString(const T &value, bool prettyPrint)
     -> atom::utils::String {
     try {
-        if constexpr (String<T> || Char<T>) {
+        if constexpr (StringType<T>) {
             return atom::utils::String(value);
+        } else if constexpr (AnyChar<T>) {
+            return atom::utils::String(1, value);
         } else if constexpr (std::is_same_v<T, bool>) {
             return value ? "true" : "false";
         } else if constexpr (Number<T>) {
@@ -256,6 +253,7 @@ template <typename T>
     -> atom::utils::String;
 
 template <std::ranges::input_range Container>
+requires (!StringType<Container>)
 [[nodiscard]] auto toJson(const Container &container, bool prettyPrint = false)
     -> atom::utils::String {
     try {
@@ -377,7 +375,7 @@ template <typename T>
 [[nodiscard]] auto toJson(const T &value, bool prettyPrint)
     -> atom::utils::String {
     try {
-        if constexpr (String<T>) {
+        if constexpr (StringType<T>) {
             atom::utils::String escaped;
             escaped.reserve(atom::utils::String(value).size() + 10);
 
@@ -417,7 +415,7 @@ template <typename T>
                 }
             }
             return "\"" + escaped + "\"";
-        } else if constexpr (Char<T>) {
+        } else if constexpr (AnyChar<T>) {
             if (static_cast<unsigned char>(value) < 32) {
                 return atom::utils::String(std::format(
                     "\"\\u{:04x}\"", static_cast<unsigned int>(value)));
@@ -456,6 +454,7 @@ template <typename T>
     -> atom::utils::String;
 
 template <std::ranges::input_range Container>
+requires (!StringType<Container>)
 [[nodiscard]] auto toXml(const Container &container,
                          const atom::utils::String &tagName)
     -> atom::utils::String {
@@ -574,18 +573,35 @@ template <typename T1, typename T2>
 template <typename T>
 [[nodiscard]] auto toXml(const T &value, const atom::utils::String &tagName)
     -> atom::utils::String {
+    if (tagName.empty()) {
+        throw std::invalid_argument("XML tag name cannot be empty");
+    }
+    if (tagName.find('<') != atom::utils::String::npos ||
+        tagName.find('>') != atom::utils::String::npos) {
+        throw std::invalid_argument(
+            "XML tag name contains invalid characters");
+    }
+    
     try {
-        if (tagName.empty()) {
-            throw std::invalid_argument("XML tag name cannot be empty");
-        }
-        if (tagName.find('<') != atom::utils::String::npos ||
-            tagName.find('>') != atom::utils::String::npos) {
-            throw std::invalid_argument(
-                "XML tag name contains invalid characters");
-        }
 
-        if constexpr (String<T> || Char<T>) {
+        if constexpr (StringType<T>) {
             atom::utils::String content = atom::utils::String(value);
+            std::string std_content(content.begin(), content.end());
+            std_content =
+                std::regex_replace(std_content, std::regex("&"), "&amp;");
+            std_content =
+                std::regex_replace(std_content, std::regex("<"), "&lt;");
+            std_content =
+                std::regex_replace(std_content, std::regex(">"), "&gt;");
+            std_content =
+                std::regex_replace(std_content, std::regex("\""), "&quot;");
+            std_content =
+                std::regex_replace(std_content, std::regex("'"), "&apos;");
+            content = atom::utils::String(std_content.c_str());
+            
+            return "<" + tagName + ">" + content + "</" + tagName + ">";
+        } else if constexpr (AnyChar<T>) {
+            atom::utils::String content = atom::utils::String(1, value);
             std::string std_content(content.begin(), content.end());
             std_content =
                 std::regex_replace(std_content, std::regex("&"), "&amp;");
@@ -626,6 +642,7 @@ template <typename T>
     -> atom::utils::String;
 
 template <std::ranges::input_range Container>
+requires (!StringType<Container>)
 [[nodiscard]] auto toYaml(const Container &container,
                           const atom::utils::String &key)
     -> atom::utils::String {
@@ -695,8 +712,18 @@ template <typename K, typename V>
 
         for (const auto &pair : map) {
             atom::utils::String keyStr;
-            if constexpr (String<K> || Char<K>) {
+            if constexpr (StringType<K>) {
                 atom::utils::String k = atom::utils::String(pair.first);
+                if (k.find(':') != atom::utils::String::npos ||
+                    k.find('#') != atom::utils::String::npos ||
+                    k.find('\n') != atom::utils::String::npos || k.empty() ||
+                    (!k.empty() && (k.front() == ' ' || k.back() == ' '))) {
+                    keyStr = "\"" + k + "\"";
+                } else {
+                    keyStr = k;
+                }
+            } else if constexpr (AnyChar<K>) {
+                atom::utils::String k = atom::utils::String(1, pair.first);
                 if (k.find(':') != atom::utils::String::npos ||
                     k.find('#') != atom::utils::String::npos ||
                     k.find('\n') != atom::utils::String::npos || k.empty() ||
@@ -743,8 +770,19 @@ template <typename T>
     -> atom::utils::String {
     try {
         atom::utils::String formattedValue;
-        if constexpr (String<T> || Char<T>) {
+        if constexpr (StringType<T>) {
             atom::utils::String strValue = atom::utils::String(value);
+            bool needsQuotes =
+                strValue.empty() ||
+                strValue.find('\n') != atom::utils::String::npos ||
+                strValue.find(':') != atom::utils::String::npos ||
+                strValue.find('#') != atom::utils::String::npos ||
+                (!strValue.empty() &&
+                 (strValue.front() == ' ' || strValue.back() == ' '));
+            
+            formattedValue = needsQuotes ? "\"" + strValue + "\"" : strValue;
+        } else if constexpr (AnyChar<T>) {
+            atom::utils::String strValue = atom::utils::String(1, value);
             bool needsQuotes =
                 strValue.empty() ||
                 strValue.find('\n') != atom::utils::String::npos ||
@@ -826,6 +864,7 @@ template <typename T>
     -> atom::utils::String;
 
 template <std::ranges::input_range Container>
+requires (!StringType<Container>)
 [[nodiscard]] auto toToml(const Container &container,
                           const atom::utils::String &key)
     -> atom::utils::String {
@@ -868,8 +907,16 @@ template <typename K, typename V>
                 result += ", ";
             }
             atom::utils::String keyStr;
-            if constexpr (String<K> || Char<K>) {
+            if constexpr (StringType<K>) {
                 atom::utils::String k = atom::utils::String(pair.first);
+                bool needsQuotes =
+                    k.empty() ||
+                    k.find_first_not_of(
+                        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz01"
+                        "23456789_-") != atom::utils::String::npos;
+                keyStr = needsQuotes ? "\"" + k + "\"" : k;
+            } else if constexpr (AnyChar<K>) {
+                atom::utils::String k = atom::utils::String(1, pair.first);
                 bool needsQuotes =
                     k.empty() ||
                     k.find_first_not_of(
@@ -924,8 +971,19 @@ template <typename T>
     -> atom::utils::String {
     try {
         atom::utils::String formattedValue;
-        if constexpr (String<T> || Char<T>) {
+        if constexpr (StringType<T>) {
             atom::utils::String strValue = atom::utils::String(value);
+            std::string std_str(strValue.begin(), strValue.end());
+            std_str = std::regex_replace(std_str, std::regex("\\\\"), "\\\\");
+            std_str = std::regex_replace(std_str, std::regex("\""), "\\\"");
+            std_str = std::regex_replace(std_str, std::regex("\b"), "\\b");
+            std_str = std::regex_replace(std_str, std::regex("\t"), "\\t");
+            std_str = std::regex_replace(std_str, std::regex("\n"), "\\n");
+            std_str = std::regex_replace(std_str, std::regex("\f"), "\\f");
+            std_str = std::regex_replace(std_str, std::regex("\r"), "\\r");
+            formattedValue = "\"" + atom::utils::String(std_str.c_str()) + "\"";
+        } else if constexpr (AnyChar<T>) {
+            atom::utils::String strValue = atom::utils::String(1, value);
             bool needsQuotes = true;
             if (needsQuotes) {
                 std::string std_str(strValue.begin(), strValue.end());
@@ -964,8 +1022,8 @@ template <typename T>
             } else [[likely]] {
                 return toToml(*value, "");
             }
-        } else if constexpr (requires { value.toToml(""); }) {
-            return value.toToml("");
+        } else if constexpr (requires { value.toToml(key); }) {
+            return value.toToml(key);
         } else {
             throw std::runtime_error(
                 "Cannot represent unknown type in TOML value");

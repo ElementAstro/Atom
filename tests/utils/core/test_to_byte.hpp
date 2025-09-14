@@ -11,7 +11,7 @@
 #include <variant>
 #include <vector>
 
-#include "to_byte.hpp"
+#include "atom/utils/conversion/to_byte.hpp"
 
 using namespace atom::utils;
 using ::testing::ElementsAreArray;

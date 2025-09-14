@@ -258,7 +258,7 @@ class PackageValidator:
         """Validate package dependencies."""
         logger.info("Validating dependencies")
 
-        issues = []
+        issues: list[str] = []
         content_dir = self._find_content_directory(extract_dir)
 
         # Check for dependency information
@@ -300,7 +300,7 @@ class PackageValidator:
         """Validate package integrity."""
         logger.info("Validating package integrity")
 
-        issues = []
+        issues: list[str] = []
         content_dir = self._find_content_directory(extract_dir)
 
         # Check for corrupted files
@@ -363,7 +363,7 @@ class PackageValidator:
         """Test package installation."""
         logger.info("Testing package installation")
 
-        issues = []
+        issues: list[str] = []
         content_dir = self._find_content_directory(extract_dir)
         package_type = self.validation_results['package_info']['type']
 

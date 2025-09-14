@@ -23,8 +23,11 @@ set(HEADERS
 
 # Dependencies
 set(LIBS
-    loguru
 )
+
+if (WIN32)
+    list(APPEND LIBS dbghelp)
+endif()
 
 if (LINUX)
     list(APPEND LIBS dl)

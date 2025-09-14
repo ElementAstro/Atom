@@ -77,12 +77,34 @@ endif()
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
 set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
+# Check for ASIO support
+find_package(asio QUIET)
+if(asio_FOUND)
+    target_compile_definitions(${PROJECT_NAME}_object PRIVATE ASIO_STANDALONE ATOM_USE_ASIO)
+    target_link_libraries(${PROJECT_NAME}_object PRIVATE asio::asio)
+else()
+    find_path(ASIO_INCLUDE_DIR NAMES asio.hpp)
+    if(ASIO_INCLUDE_DIR)
+        target_compile_definitions(${PROJECT_NAME}_object PRIVATE ASIO_STANDALONE ATOM_USE_ASIO)
+        target_include_directories(${PROJECT_NAME}_object PRIVATE ${ASIO_INCLUDE_DIR})
+    endif()
+endif()
+
 target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS} atom-async)
 
 # Build Static Library
 add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS} atom-async)
 target_include_directories(${PROJECT_NAME} PUBLIC .)
+
+# Apply ASIO definitions to static library as well
+if(asio_FOUND)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
+    target_link_libraries(${PROJECT_NAME} PUBLIC asio::asio)
+elseif(ASIO_INCLUDE_DIR)
+    target_compile_definitions(${PROJECT_NAME} PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
+    target_include_directories(${PROJECT_NAME} PUBLIC ${ASIO_INCLUDE_DIR})
+endif()
 
 # Register as Atom module
 set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})

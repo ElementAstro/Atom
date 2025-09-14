@@ -495,7 +495,3 @@ TEST_F(AsyncCompressTest, CompressionPerformance) {
     EXPECT_GT(compression_ratio, 2.0) << "Compression ratio is lower than expected";
 }
 
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}

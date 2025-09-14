@@ -30,9 +30,6 @@ concept PathLike = std::convertible_to<T, std::filesystem::path>;
 
 class DirectoryStack {
 public:
-#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
-    static inline asio::io_context::executor_type executor_;
-#endif
 
     template <typename T>
     class [[nodiscard]] Task {
@@ -54,9 +51,6 @@ public:
             }
             void return_value(T value) { result_ = std::move(value); }
 
-#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
-            auto get_executor() { return DirectoryStack::executor_; }
-#endif
         };
 
         explicit Task(std::coroutine_handle<promise_type> h) : coro_(h) {}
@@ -93,16 +87,10 @@ public:
                 void await_suspend(std::coroutine_handle<> h) const {
                     auto resume_coro = coro;
                     auto resume_awaiting = h;
-#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
-                    asio::post(coro.promise().get_executor(),
-                               [resume_coro, resume_awaiting]() mutable {
-                                   resume_coro.resume();
-                                   resume_awaiting.resume();
-                               });
-#else
+                    // For now, execute synchronously
+                    // TODO: Add proper executor support for coroutines
                     resume_coro.resume();
                     resume_awaiting.resume();
-#endif
                 }
             };
             return Awaiter{coro_};
@@ -287,9 +275,6 @@ public:
         void unhandled_exception() { exception_ = std::current_exception(); }
         void return_void() {}
 
-#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
-        auto get_executor() { return DirectoryStack::executor_; }
-#endif
     };
 
     explicit Task(std::coroutine_handle<promise_type> h) : coro_(h) {}
@@ -325,16 +310,10 @@ public:
             void await_suspend(std::coroutine_handle<> h) const {
                 auto resume_coro = coro;
                 auto resume_awaiting = h;
-#if defined(ATOM_USE_BOOST) || defined(ATOM_USE_ASIO)
-                asio::post(coro.promise().get_executor(),
-                           [resume_coro, resume_awaiting]() mutable {
-                               resume_coro.resume();
-                               resume_awaiting.resume();
-                           });
-#else
+                // For now, execute synchronously
+                // TODO: Add proper executor support for coroutines
                 resume_coro.resume();
                 resume_awaiting.resume();
-#endif
             }
         };
         return Awaiter{coro_};

@@ -1278,7 +1278,8 @@ private:
         AsioContextWrapper() : context_(std::make_unique<asio::io_context>()) {
             // Start the work guard to prevent io_context from running out of
             // work
-            workGuard_ = std::make_unique<asio::io_context::work>(*context_);
+            workGuard_ = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
+                context_->get_executor());
         }
 
         ~AsioContextWrapper() { stop(); }
@@ -1297,7 +1298,7 @@ private:
 
     private:
         std::unique_ptr<asio::io_context> context_;
-        std::unique_ptr<asio::io_context::work> workGuard_;
+        std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> workGuard_;
     };
 
     /**

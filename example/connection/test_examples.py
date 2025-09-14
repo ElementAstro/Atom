@@ -23,7 +23,7 @@ import time
 import threading
 import signal
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple
+from typing import List, Dict, Optional, Tuple, cast
 
 
 class Colors:
@@ -236,12 +236,12 @@ class ExampleTester:
     def test_example_execution(self, example_name: str) -> TestResult:
         """Test execution of a specific example"""
         example_info = self.examples.get(example_name, {})
-        timeout = example_info.get("timeout", 10)
+        timeout: int = cast(int, example_info.get("timeout", 10))
 
         self.log(f"Testing execution of {example_name}...", Colors.YELLOW)
 
         # Check platform compatibility
-        platform_specific = example_info.get("platform_specific", [])
+        platform_specific: list[str] = cast(list[str], example_info.get("platform_specific", []))
         if platform_specific and sys.platform not in platform_specific:
             return TestResult(
                 f"run_{example_name}",

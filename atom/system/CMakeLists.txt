@@ -190,7 +190,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC .)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi userenv)
+    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi userenv version)
 endif()
 
 # Set library properties

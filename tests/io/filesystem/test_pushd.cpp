@@ -76,24 +76,75 @@ protected:
         }
     }
 
-    // Helper to run async operation and wait for completion
-    template <typename Func, typename... Args>
-    std::error_code runAsyncOp(Func&& func, Args&&... args) {
+    // Helper functions for specific async operations
+    template<typename P>
+    std::error_code asyncPushd(const P& path) {
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
-
-        // Call the async function with completion handler that sets the promise
-        // value
-        std::invoke(
-            std::forward<Func>(func), &dir_stack, std::forward<Args>(args)...,
-            [&promise](const std::error_code& ec) { promise.set_value(ec); });
-
-        // Wait for completion or timeout
-        if (future.wait_for(std::chrono::seconds(5)) ==
-            std::future_status::timeout) {
+        
+        dir_stack.asyncPushd(path, [&promise](const std::error_code& ec) {
+            promise.set_value(ec);
+        });
+        
+        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
-
+        return future.get();
+    }
+    
+    std::error_code asyncPopd() {
+        std::promise<std::error_code> promise;
+        std::future<std::error_code> future = promise.get_future();
+        
+        dir_stack.asyncPopd([&promise](const std::error_code& ec) {
+            promise.set_value(ec);
+        });
+        
+        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+            return std::make_error_code(std::errc::timed_out);
+        }
+        return future.get();
+    }
+    
+    std::error_code asyncGotoIndex(size_t index) {
+        std::promise<std::error_code> promise;
+        std::future<std::error_code> future = promise.get_future();
+        
+        dir_stack.asyncGotoIndex(index, [&promise](const std::error_code& ec) {
+            promise.set_value(ec);
+        });
+        
+        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+            return std::make_error_code(std::errc::timed_out);
+        }
+        return future.get();
+    }
+    
+    std::error_code asyncSaveStackToFile(const std::string& filename) {
+        std::promise<std::error_code> promise;
+        std::future<std::error_code> future = promise.get_future();
+        
+        dir_stack.asyncSaveStackToFile(filename, [&promise](const std::error_code& ec) {
+            promise.set_value(ec);
+        });
+        
+        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+            return std::make_error_code(std::errc::timed_out);
+        }
+        return future.get();
+    }
+    
+    std::error_code asyncLoadStackFromFile(const std::string& filename) {
+        std::promise<std::error_code> promise;
+        std::future<std::error_code> future = promise.get_future();
+        
+        dir_stack.asyncLoadStackFromFile(filename, [&promise](const std::error_code& ec) {
+            promise.set_value(ec);
+        });
+        
+        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+            return std::make_error_code(std::errc::timed_out);
+        }
         return future.get();
     }
 
@@ -128,34 +179,33 @@ TEST_F(DirectoryStackTest, AsyncPushdPopd) {
     ASSERT_EQ(fs::current_path(), test_dir);
 
     // Push to first subdir
-    auto ec =
-        runAsyncOp(&atom::io::DirectoryStack::asyncPushd, test_subdirs[0]);
+    auto ec = asyncPushd(test_subdirs[0]);
     EXPECT_FALSE(ec);
     EXPECT_EQ(fs::current_path(), test_subdirs[0]);
     EXPECT_EQ(dir_stack.size(), 1);
     EXPECT_EQ(dir_stack.peek(), test_dir);
 
     // Push to second subdir
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, test_subdirs[1]);
+    ec = asyncPushd(test_subdirs[1]);
     EXPECT_FALSE(ec);
     EXPECT_EQ(fs::current_path(), test_subdirs[1]);
     EXPECT_EQ(dir_stack.size(), 2);
 
     // Pop back to first subdir
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncPopd);
+    ec = asyncPopd();
     EXPECT_FALSE(ec);
     EXPECT_EQ(fs::current_path(), test_subdirs[0]);
     EXPECT_EQ(dir_stack.size(), 1);
 
     // Pop back to test_dir
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncPopd);
+    ec = asyncPopd();
     EXPECT_FALSE(ec);
     EXPECT_EQ(fs::current_path(), test_dir);
     EXPECT_EQ(dir_stack.size(), 0);
     EXPECT_TRUE(dir_stack.isEmpty());
 
     // Try to pop empty stack
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncPopd);
+    ec = asyncPopd();
     EXPECT_TRUE(ec);
 }
 
@@ -212,20 +262,20 @@ TEST_F(DirectoryStackTest, InvalidPaths) {
 
     // Try pushing to non-existent directory
     fs::path non_existent = test_dir / "non_existent";
-    auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, non_existent);
+    auto ec = asyncPushd(non_existent);
     EXPECT_TRUE(ec);
     EXPECT_EQ(fs::current_path(), test_dir);
     EXPECT_EQ(dir_stack.size(), 0);
 
     // Try with empty path
     fs::path empty_path;
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, empty_path);
+    ec = asyncPushd(empty_path);
     EXPECT_TRUE(ec);
     EXPECT_EQ(fs::current_path(), test_dir);
     EXPECT_EQ(dir_stack.size(), 0);
 
     // Push valid directory first
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, test_subdirs[0]);
+    ec = asyncPushd(test_subdirs[0]);
     EXPECT_FALSE(ec);
     EXPECT_EQ(fs::current_path(), test_subdirs[0]);
 
@@ -256,7 +306,7 @@ TEST_F(DirectoryStackTest, InvalidPaths) {
     */
 
     // Try to popd (should fail safely)
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncPopd);
+    ec = asyncPopd();
     // May or may not error depending on platform and stack state
 }
 
@@ -266,7 +316,7 @@ TEST_F(DirectoryStackTest, DirectoryOperations) {
 
     // Push all subdirs
     for (const auto& subdir : test_subdirs) {
-        auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, subdir);
+        auto ec = asyncPushd(subdir);
         EXPECT_FALSE(ec);
     }
 
@@ -293,7 +343,7 @@ TEST_F(DirectoryStackTest, GotoIndex) {
 
     // Push all subdirs
     for (const auto& subdir : test_subdirs) {
-        auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, subdir);
+        auto ec = asyncPushd(subdir);
         EXPECT_FALSE(ec);
     }
 
@@ -301,12 +351,12 @@ TEST_F(DirectoryStackTest, GotoIndex) {
     EXPECT_EQ(fs::current_path(), test_subdirs.back());
 
     // Go to second directory in stack (index 1)
-    auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncGotoIndex, 1);
+    auto ec = asyncGotoIndex(1);
     EXPECT_FALSE(ec);
     EXPECT_EQ(fs::current_path(), test_subdirs[0]);
 
     // Go to invalid index
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncGotoIndex, 99);
+    ec = asyncGotoIndex(99);
     EXPECT_TRUE(ec);
 
     // Stack should be unchanged
@@ -320,13 +370,12 @@ TEST_F(DirectoryStackTest, SaveLoadStack) {
 
     // Push all subdirs
     for (const auto& subdir : test_subdirs) {
-        auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, subdir);
+        auto ec = asyncPushd(subdir);
         EXPECT_FALSE(ec);
     }
 
     // Save the stack
-    auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncSaveStackToFile,
-                         stack_file.string());
+    auto ec = asyncSaveStackToFile(stack_file.string());
     EXPECT_FALSE(ec);
     EXPECT_TRUE(fs::exists(stack_file));
 
@@ -335,8 +384,7 @@ TEST_F(DirectoryStackTest, SaveLoadStack) {
     EXPECT_EQ(dir_stack.size(), 0);
 
     // Load the stack back
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncLoadStackFromFile,
-                    stack_file.string());
+    ec = asyncLoadStackFromFile(stack_file.string());
     EXPECT_FALSE(ec);
 
     // Check if loaded correctly
@@ -349,8 +397,7 @@ TEST_F(DirectoryStackTest, SaveLoadStack) {
     }
 
     // Test with invalid file
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncLoadStackFromFile,
-                    "nonexistent.stack");
+    ec = asyncLoadStackFromFile("nonexistent.stack");
     EXPECT_TRUE(ec);
 }
 
@@ -360,7 +407,7 @@ TEST_F(DirectoryStackTest, RemoveSwapOperations) {
 
     // Push all subdirs
     for (const auto& subdir : test_subdirs) {
-        auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncPushd, subdir);
+        auto ec = asyncPushd(subdir);
         EXPECT_FALSE(ec);
     }
 
@@ -498,8 +545,7 @@ TEST_F(DirectoryStackTest, GetCurrentDirectory) {
     EXPECT_EQ(current, test_subdirs[0]);
 
     // Change using pushd
-    auto ec =
-        runAsyncOp(&atom::io::DirectoryStack::asyncPushd, test_subdirs[1]);
+    auto ec = asyncPushd(test_subdirs[1]);
     EXPECT_FALSE(ec);
     current = getCurrentDirAsync();
     EXPECT_EQ(current, test_subdirs[1]);
@@ -511,17 +557,15 @@ TEST_F(DirectoryStackTest, ErrorHandling) {
 
     // Test saving to invalid path
     fs::path invalid_file = "/nonexistent/dir/file.stack";
-    auto ec = runAsyncOp(&atom::io::DirectoryStack::asyncSaveStackToFile,
-                         invalid_file.string());
+    auto ec = asyncSaveStackToFile(invalid_file.string());
     EXPECT_TRUE(ec);
 
     // Test with empty filename
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncSaveStackToFile, "");
+    ec = asyncSaveStackToFile("");
     EXPECT_TRUE(ec);
 
     // Test loading non-existent file
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncLoadStackFromFile,
-                    "nonexistent.stack");
+    ec = asyncLoadStackFromFile("nonexistent.stack");
     EXPECT_TRUE(ec);
 
     // Save a file with invalid path contents
@@ -533,8 +577,7 @@ TEST_F(DirectoryStackTest, ErrorHandling) {
     }
 
     // Try loading the corrupt file
-    ec = runAsyncOp(&atom::io::DirectoryStack::asyncLoadStackFromFile,
-                    corrupt_file.string());
+    ec = asyncLoadStackFromFile(corrupt_file.string());
     EXPECT_TRUE(ec);
 }
 
@@ -543,14 +586,14 @@ TEST_F(DirectoryStackTest, MoveOperations) {
     fs::current_path(test_dir);
 
     // Push a directory to have something in the stack
-    auto ec =
-        runAsyncOp(&atom::io::DirectoryStack::asyncPushd, test_subdirs[0]);
+    auto ec = asyncPushd(test_subdirs[0]);
     EXPECT_FALSE(ec);
     EXPECT_EQ(dir_stack.size(), 1);
 
     // Create new io_context for new DirectoryStack
     asio::io_context new_io_context;
-    auto new_work = std::make_unique<asio::io_context::work>(new_io_context);
+    auto new_work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
+        asio::make_work_guard(new_io_context));
     std::thread new_thread([&new_io_context]() { new_io_context.run(); });
 
     // Move construct
@@ -581,7 +624,3 @@ TEST_F(DirectoryStackTest, MoveOperations) {
     }
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}

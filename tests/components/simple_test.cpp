@@ -172,7 +172,7 @@ TEST(ExceptionTest, NoException) {
 }
 
 // Death test (if supported)
-#ifndef WIN32
+#if !defined(_WIN32) && !defined(NDEBUG)
 TEST(DeathTest, Assertion) {
     EXPECT_DEATH({
         assert(false);

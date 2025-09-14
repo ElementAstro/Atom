@@ -24,6 +24,37 @@ endif()
 # Add include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 
+# Bring in required Atom modules so targets resolve locally
+# Only add subdirectories if the targets do not already exist (to avoid duplicates when included from the top-level)
+# Build error first (no external loguru dependency)
+if(NOT TARGET atom-error)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/error ${CMAKE_CURRENT_BINARY_DIR}/atom-error)
+endif()
+# Build log module which provides loguru target wrapper
+# Ensure ZLIB is available for atom-log and provide a stub for atom-web to satisfy link interface
+find_package(ZLIB REQUIRED)
+if(NOT TARGET atom-web)
+  add_library(atom-web INTERFACE)
+endif()
+if(NOT TARGET loguru)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/log ${CMAKE_CURRENT_BINARY_DIR}/atom-log)
+endif()
+# Build utils next (relies on ModuleDependencies.cmake from top-level; if missing, fall back to minimal)
+if(EXISTS ${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
+  if(NOT TARGET atom-utils)
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/utils ${CMAKE_CURRENT_BINARY_DIR}/atom-utils)
+  endif()
+else()
+  message(WARNING "ModuleDependencies.cmake not found; building a minimal atom-utils stub.")
+  if(NOT TARGET atom-utils)
+    add_library(atom-utils INTERFACE)
+  endif()
+endif()
+# Finally, build components
+if(NOT TARGET atom-component)
+  add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/components ${CMAKE_CURRENT_BINARY_DIR}/atom-components)
+endif()
+
 # Create comprehensive component tests
 set(TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/simple_test.cpp

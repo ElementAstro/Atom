@@ -13,7 +13,7 @@ import shutil
 import json
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 import logging
 import concurrent.futures
 from datetime import datetime
@@ -143,7 +143,7 @@ class AtomBuildSystem:
         # Base CMake arguments
         cmake_args = [
             'cmake', '-B', str(self.build_dir), '-S', str(self.source_dir),
-            f'-DCMAKE_BUILD_TYPE={config["cmake_build_type"]}',
+            f'-DCMAKE_BUILD_TYPE={str(config["cmake_build_type"])}',
             '-DATOM_BUILD_EXAMPLES=ON',
             '-DATOM_BUILD_TESTS=ON',
             '-DATOM_BUILD_PYTHON_BINDINGS=ON',
@@ -166,9 +166,9 @@ class AtomBuildSystem:
 
         # Feature options
         if features:
-            for feature, enabled in features.items():
-                value = 'ON' if enabled else 'OFF'
-                cmake_args.append(f'-DATOM_USE_{feature.upper()}={value}')
+            for feature, feature_enabled in features.items():
+                cmake_value: str = 'ON' if feature_enabled else 'OFF'
+                cmake_args.append(f'-DATOM_USE_{feature.upper()}={cmake_value}')
 
         # Platform-specific configuration
         if self.platform == 'windows':
@@ -198,9 +198,9 @@ class AtomBuildSystem:
         config = self.build_configs[build_type]
 
         # Build arguments
-        build_args = [
+        build_args: list[str] = [
             'cmake', '--build', str(self.build_dir),
-            '--config', config['cmake_build_type']
+            '--config', str(config['cmake_build_type'])
         ]
 
         if parallel:
@@ -356,7 +356,7 @@ class AtomBuildSystem:
 
     def generate_build_report(self) -> Dict:
         """Generate a comprehensive build report."""
-        report = {
+        report: Dict[str, Any] = {
             'build_info': {
                 'timestamp': datetime.now().isoformat(),
                 'platform': self.platform,

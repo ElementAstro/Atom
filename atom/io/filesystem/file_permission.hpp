@@ -15,16 +15,9 @@
 #include <string_view>
 
 #include "atom/containers/high_performance.hpp"
+#include "atom/io/core/io.hpp"
 
 namespace atom::io {
-
-/**
- * @brief Concept for types that can be converted to a filesystem path
- * @tparam T The type to check for path conversion compatibility
- */
-template <typename T>
-concept PathLike = std::convertible_to<T, std::filesystem::path> ||
-                   std::convertible_to<T, std::string_view>;
 
 /**
  * @brief Compare file permissions with current process permissions

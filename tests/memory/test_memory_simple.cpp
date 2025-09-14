@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 #include "atom/memory/memory.hpp"
+#include "atom/memory/memory_pool.hpp"
 
 using namespace atom::memory;
 
@@ -17,20 +18,22 @@ protected:
 
 // Test basic memory pool functionality
 TEST_F(SimpleMemoryTest, BasicMemoryPool) {
-    MemoryPool<int> pool;
+    // Use the simpler fixed-block memory pool
+    atom::memory::MemoryPool<64> pool;
 
     // Test basic allocation
-    int* ptr = pool.allocate(10);
+    void* ptr = pool.allocate();
     EXPECT_NE(ptr, nullptr);
 
     // Test deallocation
-    pool.deallocate(ptr, 10);
+    pool.deallocate(ptr);
 
     // Test statistics
-    EXPECT_EQ(pool.getTotalAllocated(), 0);
+    auto stats = pool.get_stats();
+    EXPECT_EQ(stats.first, 0);  // allocated blocks should be 0
 }
 
-// Test memory pool with custom types
+// Test memory pool with custom types using SimpleObjectPool
 TEST_F(SimpleMemoryTest, CustomTypeMemoryPool) {
     struct TestStruct {
         int value;
@@ -38,55 +41,51 @@ TEST_F(SimpleMemoryTest, CustomTypeMemoryPool) {
         TestStruct(int v = 0, double d = 0.0) : value(v), data(d) {}
     };
 
-    MemoryPool<TestStruct> pool;
+    atom::memory::SimpleObjectPool<TestStruct> pool;
 
-    TestStruct* obj = pool.allocate(1);
+    TestStruct* obj = pool.allocate(42, 3.14);
     EXPECT_NE(obj, nullptr);
 
-    // Initialize the object
-    new (obj) TestStruct(42, 3.14);
+    // Verify the object was initialized correctly
     EXPECT_EQ(obj->value, 42);
     EXPECT_DOUBLE_EQ(obj->data, 3.14);
 
     // Cleanup
-    obj->~TestStruct();
-    pool.deallocate(obj, 1);
+    pool.deallocate(obj);
 }
 
 // Test multiple allocations
 TEST_F(SimpleMemoryTest, MultipleAllocations) {
-    MemoryPool<int> pool;
-    std::vector<int*> ptrs;
+    atom::memory::MemoryPool<64> pool;
+    std::vector<void*> ptrs;
 
     // Allocate multiple blocks
     for (int i = 0; i < 10; ++i) {
-        int* ptr = pool.allocate(5);
+        void* ptr = pool.allocate();
         EXPECT_NE(ptr, nullptr);
         ptrs.push_back(ptr);
     }
 
     // Deallocate all blocks
     for (size_t i = 0; i < ptrs.size(); ++i) {
-        pool.deallocate(ptrs[i], 5);
+        pool.deallocate(ptrs[i]);
     }
 
-    EXPECT_EQ(pool.getTotalAllocated(), 0);
+    auto stats = pool.get_stats();
+    EXPECT_EQ(stats.first, 0);  // allocated blocks should be 0
 }
 
 // Test exception handling without complex setup
 TEST_F(SimpleMemoryTest, BasicExceptionHandling) {
-    MemoryPool<int> pool;
+    atom::memory::MemoryPool<64> pool;
 
-    // Test that very large allocations throw exceptions
-    EXPECT_THROW({
-        int* ptr = pool.allocate(1000000);  // Very large allocation
-        (void)ptr;  // Avoid unused variable warning
-    }, std::exception);
+    // Pool should handle null pointer deallocations gracefully
+    EXPECT_NO_THROW(pool.deallocate(nullptr));
 
-    // Pool should still be functional after exception
-    int* ptr = pool.allocate(10);
+    // Pool should still be functional
+    void* ptr = pool.allocate();
     EXPECT_NE(ptr, nullptr);
-    pool.deallocate(ptr, 10);
+    pool.deallocate(ptr);
 }
 
 // Test basic object pool functionality
@@ -96,10 +95,10 @@ TEST_F(SimpleMemoryTest, BasicObjectPool) {
         SimpleObject(int i = 0) : id(i) {}
     };
 
-    ObjectPool<SimpleObject> objPool(5);  // Pool of 5 objects
+    SimpleObjectPool<SimpleObject> objPool;  // Object pool
 
     // Get object from pool
-    auto obj = objPool.acquire();
+    auto obj = objPool.allocate();
     EXPECT_NE(obj, nullptr);
 
     // Use the object
@@ -107,62 +106,69 @@ TEST_F(SimpleMemoryTest, BasicObjectPool) {
     EXPECT_EQ(obj->id, 123);
 
     // Return object to pool
-    objPool.release(std::move(obj));
+    objPool.deallocate(obj);
 
-    // Pool should have objects available
-    EXPECT_GT(objPool.available(), 0);
+    // Test that the pool can allocate again
+    auto obj2 = objPool.allocate();
+    EXPECT_NE(obj2, nullptr);
+    objPool.deallocate(obj2);
 }
 
 // Test thread safety basics (without complex threading)
 TEST_F(SimpleMemoryTest, BasicThreadSafety) {
-    MemoryPool<int> pool;
+    atom::memory::MemoryPool<64> pool;
 
     // Simple test that allocation/deallocation works
     // This doesn't test actual thread safety but ensures basic functionality
-    std::vector<int*> ptrs;
+    std::vector<void*> ptrs;
 
     for (int i = 0; i < 5; ++i) {
-        int* ptr = pool.allocate(1);
+        void* ptr = pool.allocate();
         EXPECT_NE(ptr, nullptr);
         ptrs.push_back(ptr);
     }
 
-    for (int* ptr : ptrs) {
-        pool.deallocate(ptr, 1);
+    for (void* ptr : ptrs) {
+        pool.deallocate(ptr);
     }
 
-    EXPECT_EQ(pool.getTotalAllocated(), 0);
+    auto stats = pool.get_stats();
+    EXPECT_EQ(stats.first, 0);  // allocated blocks should be 0
 }
 
 // Test memory alignment
 TEST_F(SimpleMemoryTest, MemoryAlignment) {
-    MemoryPool<double> pool;  // double requires 8-byte alignment
+    atom::memory::MemoryPool<64> pool;  // 64-byte blocks should be well-aligned
 
-    double* ptr = pool.allocate(1);
+    void* ptr = pool.allocate();
     EXPECT_NE(ptr, nullptr);
 
-    // Check alignment (should be aligned to sizeof(double))
-    EXPECT_EQ(reinterpret_cast<uintptr_t>(ptr) % alignof(double), 0);
+    // Check alignment (should be aligned to max_align_t)
+    EXPECT_EQ(reinterpret_cast<uintptr_t>(ptr) % alignof(std::max_align_t), 0);
 
-    pool.deallocate(ptr, 1);
+    pool.deallocate(ptr);
 }
 
 // Test pool statistics
 TEST_F(SimpleMemoryTest, PoolStatistics) {
-    MemoryPool<int> pool;
+    atom::memory::MemoryPool<64> pool;
 
-    EXPECT_EQ(pool.getTotalAllocated(), 0);
-    EXPECT_EQ(pool.getTotalAvailable(), 0);
+    auto initial_stats = pool.get_stats();
+    EXPECT_EQ(initial_stats.first, 0);  // no allocated blocks initially
+    EXPECT_EQ(initial_stats.second, 0); // no total blocks initially
 
-    int* ptr1 = pool.allocate(10);
-    EXPECT_GT(pool.getTotalAllocated(), 0);
+    void* ptr1 = pool.allocate();
+    auto stats_after_alloc = pool.get_stats();
+    EXPECT_EQ(stats_after_alloc.first, 1);  // 1 allocated block
+    EXPECT_GT(stats_after_alloc.second, 0); // some total blocks
 
-    int* ptr2 = pool.allocate(5);
-    size_t allocated_after_two = pool.getTotalAllocated();
-    EXPECT_GT(allocated_after_two, 0);
+    void* ptr2 = pool.allocate();
+    auto stats_after_two = pool.get_stats();
+    EXPECT_EQ(stats_after_two.first, 2);  // 2 allocated blocks
 
-    pool.deallocate(ptr1, 10);
-    pool.deallocate(ptr2, 5);
+    pool.deallocate(ptr1);
+    pool.deallocate(ptr2);
 
-    EXPECT_EQ(pool.getTotalAllocated(), 0);
+    auto final_stats = pool.get_stats();
+    EXPECT_EQ(final_stats.first, 0);  // no allocated blocks after deallocation
 }

@@ -323,4 +323,15 @@ auto scanPortRangeAsync(const std::string& host, uint16_t startPort,
         });
 }
 
+// -----------------------------------------------------------------------------
+// Explicit template instantiations for common port number types
+// -----------------------------------------------------------------------------
+
+// uint16_t
+template bool isPortInUse<uint16_t>(uint16_t);
+template std::future<bool> isPortInUseAsync<uint16_t>(uint16_t);
+template std::optional<int> getProcessIDOnPort<uint16_t>(uint16_t);
+template bool checkAndKillProgramOnPort<uint16_t>(uint16_t);
+
+
 }  // namespace atom::web

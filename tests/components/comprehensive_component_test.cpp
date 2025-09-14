@@ -94,15 +94,13 @@ TEST_F(ComprehensiveComponentTest, ComponentCommandSystem) {
         return a + b;
     }, "math", "Addition command");
 
-    std::vector<std::any> args = {10, 20};
-    auto addResult = component_->runCommand("addCommand", args);
+    auto addResult = component_->dispatch("addCommand", 10, 20);
     EXPECT_EQ(std::any_cast<int>(addResult), 30);
 }
 
 TEST_F(ComprehensiveComponentTest, ComponentErrorHandling) {
-    // Test accessing non-existent variable
-    auto nonExistentVar = component_->getVariable<int>("nonExistent");
-    EXPECT_EQ(nonExistentVar, nullptr);
+    // Test accessing non-existent variable should throw
+    EXPECT_THROW(component_->getVariable<int>("nonExistent"), std::exception);
 
     // Test dispatching non-existent command
     EXPECT_THROW(component_->dispatch("nonExistentCommand"), std::exception);

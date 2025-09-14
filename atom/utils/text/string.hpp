@@ -311,9 +311,11 @@ struct SplitString {
               delimiter_(std::move(delimiter)),
               trim_(trim),
               skipEmpty_(skipEmpty),
-              ended_(false),
+              ended_(str.empty()),
               toBeEnded_(false) {
-            findNext();
+            if (!ended_) {
+                findNext();
+            }
         }
 
         auto operator*() const -> std::string_view { return current_; }

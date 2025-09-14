@@ -48,7 +48,8 @@ auto toUnderscore(std::string_view str) -> std::string {
 
         for (char ch : str) {
             if (std::isupper(static_cast<unsigned char>(ch))) {
-                if (!firstChar) {
+                // Only add underscore if not first char AND previous char wasn't underscore
+                if (!firstChar && !result.empty() && result.back() != '_') {
                     result.push_back('_');
                 }
                 result.push_back(std::tolower(static_cast<unsigned char>(ch)));
@@ -100,7 +101,7 @@ auto urlEncode(std::string_view str) -> std::string {
 
         std::ostringstream escaped;
         escaped.fill('0');
-        escaped << std::hex;
+        escaped << std::hex << std::uppercase;
 
         for (auto c : str) {
             const unsigned char uc = static_cast<unsigned char>(c);
@@ -404,7 +405,20 @@ auto stod(std::string_view str, std::size_t* idx) -> double {
     }
 
     try {
-        return std::stod(std::string(str), idx);
+        std::size_t pos = 0;
+        double result = std::stod(std::string(str), &pos);
+        
+        // If idx is null, validate that entire string was consumed
+        if (idx == nullptr && pos != str.size()) {
+            throw std::invalid_argument("Invalid characters found after valid number");
+        }
+        
+        // Set the position if idx is provided
+        if (idx != nullptr) {
+            *idx = pos;
+        }
+        
+        return result;
     } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(
             std::format("String to double conversion failed: {}", e.what()));
@@ -420,7 +434,20 @@ auto stof(std::string_view str, std::size_t* idx) -> float {
     }
 
     try {
-        return std::stof(std::string(str), idx);
+        std::size_t pos = 0;
+        float result = std::stof(std::string(str), &pos);
+        
+        // If idx is null, validate that entire string was consumed
+        if (idx == nullptr && pos != str.size()) {
+            throw std::invalid_argument("Invalid characters found after valid number");
+        }
+        
+        // Set the position if idx is provided
+        if (idx != nullptr) {
+            *idx = pos;
+        }
+        
+        return result;
     } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(
             std::format("String to float conversion failed: {}", e.what()));

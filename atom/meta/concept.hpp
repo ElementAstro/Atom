@@ -307,7 +307,14 @@ concept StringType =
     std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> ||
     std::is_same_v<T, std::wstring> || std::is_same_v<T, std::u8string> ||
     std::is_same_v<T, std::u16string> || std::is_same_v<T, std::u32string> ||
-    std::is_same_v<T, atom::containers::String>;
+    std::is_same_v<T, atom::containers::String> ||
+    std::is_same_v<T, const char*> || std::is_same_v<T, char*> ||
+    std::is_same_v<T, const wchar_t*> || std::is_same_v<T, wchar_t*> ||
+    std::is_same_v<std::remove_cvref_t<T>, const char*> || std::is_same_v<std::remove_cvref_t<T>, char*> ||
+    (std::is_array_v<std::remove_cvref_t<T>> && std::is_same_v<std::remove_all_extents_t<std::remove_cvref_t<T>>, char>) ||
+    (std::is_array_v<std::remove_cvref_t<T>> && std::is_same_v<std::remove_all_extents_t<std::remove_cvref_t<T>>, const char>) ||
+    (std::is_array_v<std::remove_cvref_t<T>> && std::is_same_v<std::remove_all_extents_t<std::remove_cvref_t<T>>, wchar_t>) ||
+    (std::is_array_v<std::remove_cvref_t<T>> && std::is_same_v<std::remove_all_extents_t<std::remove_cvref_t<T>>, const wchar_t>);
 
 /*!
  * \brief Concept for built-in types

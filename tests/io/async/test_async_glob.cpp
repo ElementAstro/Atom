@@ -469,7 +469,3 @@ TEST_F(AsyncGlobTest, SpecialCharacters) {
     EXPECT_THAT(mixedResult, Contains(testDir / "file.with.dots.txt"));
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}

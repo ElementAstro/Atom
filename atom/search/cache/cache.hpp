@@ -451,8 +451,23 @@ void ResourceCache<T>::insert(const String &key, const T &value,
 
 template <Cacheable T>
 auto ResourceCache<T>::contains(const String &key) const -> bool {
+    auto now = std::chrono::steady_clock::now();
     SharedLock lock(cacheMutex_);
-    return cache_.find(key) != cache_.end();
+    auto it = cache_.find(key);
+    if (it == cache_.end()) {
+        return false;
+    }
+    // Check expiration lazily so contains() reflects TTL semantics
+    auto expIt = expirationTimes_.find(key);
+    if (expIt != expirationTimes_.end()) {
+        if ((now - it->second.second) >= expIt->second) {
+            // Expired: release shared lock and remove the key
+            lock.unlock();
+            const_cast<ResourceCache<T>*>(this)->remove(key);
+            return false;
+        }
+    }
+    return true;
 }
 
 template <Cacheable T>

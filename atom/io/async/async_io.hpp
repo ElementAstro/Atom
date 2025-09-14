@@ -374,7 +374,7 @@ void AsyncFile::executeAsync(F&& operation) {
     }
 
 #ifdef ATOM_USE_ASIO
-    io_context_.post(std::forward<F>(operation));
+    asio::post(io_context_, std::forward<F>(operation));
 #else
     if (thread_pool_) {
         thread_pool_->submit(std::forward<F>(operation));

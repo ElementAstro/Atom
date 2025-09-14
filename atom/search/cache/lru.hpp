@@ -14,6 +14,7 @@
 #include <optional>
 #include <shared_mutex>
 #include <string>
+#include <thread>
 #include <type_traits>
 #include <unordered_map>
 #include <utility>
@@ -523,8 +524,10 @@ auto ThreadSafeLRUCache<Key, Value>::getShared(const Key& key) noexcept
             return nullptr;
         }
         hit_count_++;
-        cache_items_list_.splice(cache_items_list_.begin(), cache_items_list_,
-                                 iterator->second.iterator);
+        if constexpr (std::is_trivially_copy_constructible_v<Value>) {
+            cache_items_list_.splice(cache_items_list_.begin(), cache_items_list_,
+                                     iterator->second.iterator);
+        }
         return iterator->second.value;
     } catch (const std::exception& e) {
         spdlog::error("Exception in getShared: {}", e.what());
@@ -606,8 +609,15 @@ void ThreadSafeLRUCache<Key, Value>::put(
         }
 
         auto effectiveTtl = ttl ? ttl : default_ttl_;
-        auto expiryTime =
-            effectiveTtl ? Clock::now() + *effectiveTtl : TimePoint::max();
+        TimePoint expiryTime = TimePoint::max();
+        if (effectiveTtl) {
+            if (effectiveTtl->count() <= 0) {
+                // Avoid immediate expiry for non-positive TTLs
+                expiryTime = Clock::now() + std::chrono::milliseconds(1);
+            } else {
+                expiryTime = Clock::now() + *effectiveTtl;
+            }
+        }
         auto valuePtr = std::make_shared<Value>(std::move(value));
 
         auto iterator = cache_items_map_.find(key);
@@ -617,6 +627,8 @@ void ThreadSafeLRUCache<Key, Value>::put(
                                      iterator->second.iterator);
             iterator->second.value = valuePtr;
             iterator->second.expiryTime = expiryTime;
+            // Keep list's stored value in sync for operations that use it
+            iterator->second.iterator->second = *valuePtr;
         } else {
             cache_items_list_.emplace_front(key, *valuePtr);
             cache_items_map_[key] = {valuePtr, expiryTime,
@@ -655,8 +667,14 @@ void ThreadSafeLRUCache<Key, Value>::putBatch(
         }
 
         auto effectiveTtl = ttl ? ttl : default_ttl_;
-        auto expiryTime =
-            effectiveTtl ? Clock::now() + *effectiveTtl : TimePoint::max();
+        TimePoint expiryTime = TimePoint::max();
+        if (effectiveTtl) {
+            if (effectiveTtl->count() <= 0) {
+                expiryTime = Clock::now() + std::chrono::milliseconds(1);
+            } else {
+                expiryTime = Clock::now() + *effectiveTtl;
+            }
+        }
 
         for (const auto& [key, value] : items) {
             auto valuePtr = std::make_shared<Value>(value);
@@ -668,6 +686,7 @@ void ThreadSafeLRUCache<Key, Value>::putBatch(
                                          iterator->second.iterator);
                 iterator->second.value = valuePtr;
                 iterator->second.expiryTime = expiryTime;
+                iterator->second.iterator->second = value; // keep list in sync
             } else {
                 cache_items_list_.emplace_front(key, value);
                 cache_items_map_[key] = {valuePtr, expiryTime,
@@ -964,47 +983,55 @@ void ThreadSafeLRUCache<Key, Value>::saveToFile(
                                       filename);
         }
 
-        size_t size = cache_items_map_.size();
-        ofs.write(reinterpret_cast<const char*>(&size), sizeof(size));
-        ofs.write(reinterpret_cast<const char*>(&max_size_), sizeof(max_size_));
+        // Collect non-expired items in LRU order
+        struct ItemRec { Key key; int64_t ttl; Value value; };
+        std::vector<ItemRec> items;
+        items.reserve(cache_items_map_.size());
 
+        auto now = Clock::now();
         for (const auto& pair : cache_items_list_) {
             auto it = cache_items_map_.find(pair.first);
-            if (it == cache_items_map_.end()) {
-                continue;
-            }
+            if (it == cache_items_map_.end()) continue;
+            if (isExpired(it->second)) continue;
 
-            if (isExpired(it->second)) {
-                continue;
-            }
-
-            auto now = Clock::now();
             int64_t remainingTtl = -1;
-
             if (it->second.expiryTime != TimePoint::max()) {
                 auto ttlDuration =
                     std::chrono::duration_cast<std::chrono::seconds>(
                         it->second.expiryTime - now);
                 remainingTtl = ttlDuration.count();
-
-                if (remainingTtl <= 0) {
-                    continue;
-                }
+                if (remainingTtl <= 0) continue;
             }
+            items.push_back(ItemRec{pair.first, remainingTtl, *(it->second.value)});
+        }
 
-            ofs.write(reinterpret_cast<const char*>(&pair.first),
-                      sizeof(pair.first));
-            ofs.write(reinterpret_cast<const char*>(&remainingTtl),
-                      sizeof(remainingTtl));
+        size_t outSize = items.size();
+        ofs.write(reinterpret_cast<const char*>(&outSize), sizeof(outSize));
+        ofs.write(reinterpret_cast<const char*>(&max_size_), sizeof(max_size_));
 
+        auto writeKey = [&](const Key& key) {
+            if constexpr (std::is_same_v<Key, std::string>) {
+                size_t len = key.size();
+                ofs.write(reinterpret_cast<const char*>(&len), sizeof(len));
+                if (len) ofs.write(key.data(), static_cast<std::streamsize>(len));
+            } else {
+                ofs.write(reinterpret_cast<const char*>(&key), sizeof(Key));
+            }
+        };
+
+        for (const auto& rec : items) {
+            writeKey(rec.key);
+            ofs.write(reinterpret_cast<const char*>(&rec.ttl), sizeof(rec.ttl));
             if constexpr (std::is_same_v<Value, std::string>) {
-                size_t valueSize = pair.second.size();
+                size_t valueSize = rec.value.size();
                 ofs.write(reinterpret_cast<const char*>(&valueSize),
                           sizeof(valueSize));
-                ofs.write(pair.second.c_str(), valueSize);
+                if (valueSize)
+                    ofs.write(rec.value.c_str(),
+                              static_cast<std::streamsize>(valueSize));
             } else {
-                ofs.write(reinterpret_cast<const char*>(&pair.second),
-                          sizeof(pair.second));
+                ofs.write(reinterpret_cast<const char*>(&rec.value),
+                          sizeof(rec.value));
             }
         }
 
@@ -1025,46 +1052,51 @@ void ThreadSafeLRUCache<Key, Value>::saveToFile(
 template <typename Key, typename Value>
 void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
     try {
-        auto lock = acquireWriteLock();
-        if (!lock) {
-            throw LRUCacheLockException(
-                "Failed to acquire write lock during load operation");
-        }
-
+        // Read file contents without holding cache locks to avoid long critical sections
         std::ifstream ifs(filename, std::ios::binary);
         if (!ifs) {
             throw LRUCacheIOException("Failed to open file for reading: " +
                                       filename);
         }
 
-        cache_items_list_.clear();
-        cache_items_map_.clear();
-
-        size_t size;
-        size_t storedMaxSize;
-        ifs.read(reinterpret_cast<char*>(&size), sizeof(size));
-        ifs.read(reinterpret_cast<char*>(&storedMaxSize),
-                 sizeof(storedMaxSize));
-
+        size_t itemCount = 0;
+        size_t storedMaxSize = 0;
+        ifs.read(reinterpret_cast<char*>(&itemCount), sizeof(itemCount));
+        ifs.read(reinterpret_cast<char*>(&storedMaxSize), sizeof(storedMaxSize));
         if (!ifs) {
             throw LRUCacheIOException(
                 "Failed to read cache metadata from file");
         }
 
-        for (size_t i = 0; i < size && ifs; ++i) {
-            Key key;
-            ifs.read(reinterpret_cast<char*>(&key), sizeof(key));
+        auto readKey = [&](Key& key) {
+            if constexpr (std::is_same_v<Key, std::string>) {
+                size_t len = 0;
+                ifs.read(reinterpret_cast<char*>(&len), sizeof(len));
+                key.resize(len);
+                if (len) ifs.read(&key[0], static_cast<std::streamsize>(len));
+            } else {
+                ifs.read(reinterpret_cast<char*>(&key), sizeof(Key));
+            }
+        };
 
-            int64_t ttlSeconds;
+        struct InItem { Key key; Value value; std::optional<std::chrono::seconds> ttl; };
+        std::vector<InItem> items;
+        items.reserve(itemCount);
+
+        for (size_t i = 0; i < itemCount && ifs; ++i) {
+            Key key;
+            readKey(key);
+
+            int64_t ttlSeconds = -1;
             ifs.read(reinterpret_cast<char*>(&ttlSeconds), sizeof(ttlSeconds));
 
             Value value;
             if constexpr (std::is_same_v<Value, std::string>) {
-                size_t valueSize;
-                ifs.read(reinterpret_cast<char*>(&valueSize),
-                         sizeof(valueSize));
+                size_t valueSize = 0;
+                ifs.read(reinterpret_cast<char*>(&valueSize), sizeof(valueSize));
                 value.resize(valueSize);
-                ifs.read(&value[0], static_cast<std::streamsize>(valueSize));
+                if (valueSize)
+                    ifs.read(&value[0], static_cast<std::streamsize>(valueSize));
             } else {
                 ifs.read(reinterpret_cast<char*>(&value), sizeof(value));
             }
@@ -1079,9 +1111,14 @@ void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
                                         std::chrono::seconds(ttlSeconds))
                                   : std::nullopt;
 
-            put(key, std::move(value), ttl);
+            items.push_back(InItem{std::move(key), std::move(value), ttl});
+        }
 
-            if (cache_items_map_.size() >= max_size_) {
+        // Now update the cache state using public APIs (each acquires its own lock)
+        clear();
+        for (auto& it : items) {
+            put(it.key, std::move(it.value), it.ttl);
+            if (this->size() >= this->maxSize()) {
                 break;
             }
         }
@@ -1253,9 +1290,14 @@ auto ThreadSafeLRUCache<Key, Value>::acquireReadLock(
         return lock;
     }
 #else
-    if (lock.try_lock()) {
-        return lock;
-    }
+    // Retry until timeout to reduce spurious failures in low-contention paths
+    auto deadline = std::chrono::steady_clock::now() + timeout_ms;
+    do {
+        if (lock.try_lock()) {
+            return lock;
+        }
+        std::this_thread::yield();
+    } while (std::chrono::steady_clock::now() < deadline);
 #endif
 
     return std::nullopt;
@@ -1272,9 +1314,14 @@ auto ThreadSafeLRUCache<Key, Value>::acquireWriteLock(
         return lock;
     }
 #else
-    if (lock.try_lock()) {
-        return lock;
-    }
+    // Retry until timeout to avoid false negatives on transient contention
+    auto deadline = std::chrono::steady_clock::now() + timeout_ms;
+    do {
+        if (lock.try_lock()) {
+            return lock;
+        }
+        std::this_thread::yield();
+    } while (std::chrono::steady_clock::now() < deadline);
 #endif
 
     return std::nullopt;

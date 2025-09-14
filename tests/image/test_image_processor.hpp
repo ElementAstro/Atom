@@ -1,3 +1,6 @@
+#ifndef ATOM_IMAGE_TEST_IMAGE_PROCESSOR_HPP
+#define ATOM_IMAGE_TEST_IMAGE_PROCESSOR_HPP
+
 #pragma once
 
 #include <gtest/gtest.h>
@@ -11,6 +14,8 @@
 #include "atom/image/core/image_blob.hpp"
 
 namespace fs = std::filesystem;
+
+namespace atom::image::test {
 
 class ImageProcessorTest : public ::testing::Test {
 protected:
@@ -529,4 +534,4 @@ TEST_F(ImageProcessorTest, ThreadSafetyTest) {
 
 } // namespace atom::image::test
 
-#endif
+#endif // ATOM_IMAGE_TEST_IMAGE_PROCESSOR_HPP

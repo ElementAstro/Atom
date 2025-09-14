@@ -4,9 +4,11 @@
 #include <gtest/gtest.h>
 #include <thread>
 #include <vector>
-#include "atom/utils/switch.hpp"
+#include "atom/utils/core/switch.hpp"
 
 namespace atom::utils::test {
+
+using atom::utils::StringSwitch;
 
 class StringSwitchTest : public ::testing::Test {
 protected:
