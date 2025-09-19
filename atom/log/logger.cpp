@@ -47,17 +47,17 @@ String logLevelToString(LogLevel level) {
     switch (level) {
         case LogLevel::TRACE:
             return "TRACE";
-        case LogLevel::DEBUG:
+        case LogLevel::DEBUG_LEVEL:
             return "DEBUG";
-        case LogLevel::INFO:
+        case LogLevel::INFO_LEVEL:
             return "INFO";
-        case LogLevel::WARN:
+        case LogLevel::WARN_LEVEL:
             return "WARN";
-        case LogLevel::ERROR:
+        case LogLevel::ERROR_LEVEL:
             return "ERROR";
-        case LogLevel::CRITICAL:
+        case LogLevel::CRITICAL_LEVEL:
             return "CRITICAL";
-        case LogLevel::OFF:
+        case LogLevel::OFF_LEVEL:
             return "OFF";
         default:
             return "UNKNOWN";
@@ -71,18 +71,18 @@ LogLevel stringToLogLevel(std::string_view levelStr) {
     if (level == "TRACE" || level == "T")
         return LogLevel::TRACE;
     if (level == "DEBUG" || level == "D")
-        return LogLevel::DEBUG;
+        return LogLevel::DEBUG_LEVEL;
     if (level == "INFO" || level == "I")
-        return LogLevel::INFO;
+        return LogLevel::INFO_LEVEL;
     if (level == "WARN" || level == "WARNING" || level == "W")
-        return LogLevel::WARN;
+        return LogLevel::WARN_LEVEL;
     if (level == "ERROR" || level == "ERR" || level == "E")
-        return LogLevel::ERROR;
+        return LogLevel::ERROR_LEVEL;
     if (level == "CRITICAL" || level == "CRIT" || level == "C" ||
         level == "FATAL")
-        return LogLevel::CRITICAL;
+        return LogLevel::CRITICAL_LEVEL;
     if (level == "OFF")
-        return LogLevel::OFF;
+        return LogLevel::OFF_LEVEL;
 
     return LogLevel::UNKNOWN;
 }
@@ -317,10 +317,10 @@ String LoggerManager::Impl::categorizeLogEntry(const LogEntry &entry) {
     } else if (message.find("memory") != String::npos ||
                message.find("allocation") != String::npos) {
         return "Memory";
-    } else if (entry.level == LogLevel::ERROR ||
-               entry.level == LogLevel::CRITICAL) {
+    } else if (entry.level == LogLevel::ERROR_LEVEL ||
+               entry.level == LogLevel::CRITICAL_LEVEL) {
         return "Error";
-    } else if (entry.level == LogLevel::WARN) {
+    } else if (entry.level == LogLevel::WARN_LEVEL) {
         return "Warning";
     } else {
         return "General";
@@ -515,13 +515,13 @@ LogAnalysisResult LoggerManager::Impl::analyzeLogs() {
         }
 
         // Collect critical errors
-        if (entry.level == LogLevel::CRITICAL) {
+        if (entry.level == LogLevel::CRITICAL_LEVEL) {
             result.criticalErrors.push_back(entry);
         }
 
         // Extract error types for errors
-        if (entry.level == LogLevel::ERROR ||
-            entry.level == LogLevel::CRITICAL) {
+        if (entry.level == LogLevel::ERROR_LEVEL ||
+            entry.level == LogLevel::CRITICAL_LEVEL) {
             String errorType = extractErrorType(entry.message);
             result.errorTypeCount[errorType]++;
         }

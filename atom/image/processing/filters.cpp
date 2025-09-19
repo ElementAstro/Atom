@@ -3,6 +3,11 @@
 #include <cmath>
 #include <numeric>
 #include <execution>
+#include <stdexcept>
+
+// Define error macros to avoid atom error system namespace pollution
+#define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
+#define THROW_INVALID_ARGUMENT(msg) throw std::invalid_argument(msg)
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -318,6 +323,64 @@ std::vector<std::byte> ImageFilter::medianFilter(const std::vector<std::byte>& i
 
                 int outputIdx = (y * width + x) * channels + c;
                 output[outputIdx] = static_cast<std::byte>(median);
+            }
+        }
+    }
+
+    return output;
+}
+
+std::vector<std::byte> ImageFilter::bilateralFilter(const std::vector<std::byte>& input,
+                                                   const FilterParams& params,
+                                                   int width, int height, int channels) const {
+    std::vector<std::byte> output(input.size());
+    int kernelSize = params.kernelSize;
+    int kernelCenter = kernelSize / 2;
+    double sigmaSpace = params.sigma;
+    double sigmaColor = params.sigmaColor > 0 ? params.sigmaColor : sigmaSpace;
+
+    // Precompute spatial weights
+    std::vector<std::vector<double>> spatialWeights(kernelSize, std::vector<double>(kernelSize));
+    for (int dy = -kernelCenter; dy <= kernelCenter; ++dy) {
+        for (int dx = -kernelCenter; dx <= kernelCenter; ++dx) {
+            double distance = std::sqrt(dx * dx + dy * dy);
+            spatialWeights[dy + kernelCenter][dx + kernelCenter] =
+                std::exp(-(distance * distance) / (2 * sigmaSpace * sigmaSpace));
+        }
+    }
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            for (int c = 0; c < channels; ++c) {
+                int centerIdx = (y * width + x) * channels + c;
+                uint8_t centerValue = static_cast<uint8_t>(input[centerIdx]);
+
+                double weightSum = 0.0;
+                double valueSum = 0.0;
+
+                for (int dy = -kernelCenter; dy <= kernelCenter; ++dy) {
+                    for (int dx = -kernelCenter; dx <= kernelCenter; ++dx) {
+                        int ny = y + dy;
+                        int nx = x + dx;
+
+                        if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
+                            int neighborIdx = (ny * width + nx) * channels + c;
+                            uint8_t neighborValue = static_cast<uint8_t>(input[neighborIdx]);
+
+                            double colorDiff = std::abs(static_cast<int>(centerValue) - static_cast<int>(neighborValue));
+                            double colorWeight = std::exp(-(colorDiff * colorDiff) / (2 * sigmaColor * sigmaColor));
+                            double spatialWeight = spatialWeights[dy + kernelCenter][dx + kernelCenter];
+
+                            double totalWeight = spatialWeight * colorWeight;
+                            weightSum += totalWeight;
+                            valueSum += totalWeight * neighborValue;
+                        }
+                    }
+                }
+
+                output[centerIdx] = static_cast<std::byte>(
+                    weightSum > 0 ? static_cast<uint8_t>(valueSum / weightSum) : centerValue
+                );
             }
         }
     }

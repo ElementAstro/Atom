@@ -30,39 +30,30 @@ using namespace std::chrono;
 /**
  * @brief Simple memory pool for blob reuse
  */
-template <typename T>
 class BlobMemoryPool {
 private:
-    std::vector<std::unique_ptr<blob<T>>> available_blobs_;
+    std::vector<std::unique_ptr<blob>> available_blobs_;
     size_t max_pool_size_;
 
 public:
     explicit BlobMemoryPool(size_t max_size = 10) : max_pool_size_(max_size) {}
 
-    std::unique_ptr<blob<T>> acquire(int rows, int cols, int channels) {
+    std::unique_ptr<blob> acquire(size_t size) {
         // Try to find a suitable blob in the pool
-        for (auto it = available_blobs_.begin(); it != available_blobs_.end();
-             ++it) {
-            if ((*it)->rows() >= rows && (*it)->cols() >= cols &&
-                (*it)->channels() >= channels) {
+        for (auto it = available_blobs_.begin(); it != available_blobs_.end(); ++it) {
+            if ((*it)->size() >= size) {
                 auto blob_ptr = std::move(*it);
                 available_blobs_.erase(it);
-
-                // Resize to exact dimensions if needed
-                if (blob_ptr->rows() != rows || blob_ptr->cols() != cols) {
-                    blob_ptr->resize(
-                        cols, rows);  // Note: resize takes (width, height)
-                }
-
                 return blob_ptr;
             }
         }
 
         // No suitable blob found, create new one
-        return std::make_unique<blob<T>>(rows, cols, channels);
+        std::vector<uint8_t> data(size);
+        return std::make_unique<blob>(reinterpret_cast<std::byte*>(data.data()), size);
     }
 
-    void release(std::unique_ptr<blob<T>> blob_ptr) {
+    void release(std::unique_ptr<blob> blob_ptr) {
         if (available_blobs_.size() < max_pool_size_) {
             available_blobs_.push_back(std::move(blob_ptr));
         }
@@ -81,32 +72,30 @@ void demonstrateMemoryPool() {
     std::cout << "\n=== Memory Pool Demonstration ===\n";
 
     try {
-        BlobMemoryPool<uint8_t> pool(5);
+        BlobMemoryPool pool(5);
         std::cout << "Created memory pool with max size: 5\n";
 
         // Simulate multiple image processing operations
-        std::vector<std::unique_ptr<blob<uint8_t>>> active_blobs;
+        std::vector<std::unique_ptr<blob>> active_blobs;
 
         for (int i = 0; i < 8; ++i) {
             auto start = high_resolution_clock::now();
 
             // Acquire blob from pool
-            auto img = pool.acquire(100 + i * 10, 100 + i * 10, 3);
+            size_t blob_size = (100 + i * 10) * (100 + i * 10) * 3;
+            auto img = pool.acquire(blob_size);
 
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<microseconds>(end - start);
 
-            std::cout << "Iteration " << i << ": Acquired " << img->cols()
-                      << "x" << img->rows() << " blob in " << duration.count()
+            std::cout << "Iteration " << i << ": Acquired blob of " << img->size()
+                      << " bytes in " << duration.count()
                       << " μs (pool size: " << pool.pool_size() << ")\n";
 
-            // Simulate some processing
-            for (int y = 0; y < img->rows(); ++y) {
-                for (int x = 0; x < img->cols(); ++x) {
-                    img->at(y, x, 0) = static_cast<uint8_t>((x + y + i) % 256);
-                    img->at(y, x, 1) = static_cast<uint8_t>((x * y + i) % 256);
-                    img->at(y, x, 2) = static_cast<uint8_t>((x ^ y ^ i) % 256);
-                }
+            // Simulate some processing by filling blob data
+            // Use array operator since data() method is not public
+            for (size_t j = 0; j < img->size(); ++j) {
+                (*img)[j] = static_cast<std::byte>((j + i) % 256);
             }
 
             active_blobs.push_back(std::move(img));
@@ -136,14 +125,16 @@ void demonstrateCacheOptimization() {
         const int width = 1000;
         const int height = 1000;
         const int channels = 3;
-
-        blob<uint8_t> img(height, width, channels);
+        
+        std::vector<uint8_t> data(height * width * channels);
+        blob img(reinterpret_cast<std::byte*>(data.data()), data.size());
 
         // Fill image with test data
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
                 for (int c = 0; c < channels; ++c) {
-                    img.at(y, x, c) = static_cast<uint8_t>((x + y + c) % 256);
+                    int idx = (y * width + x) * channels + c;
+                    data[idx] = static_cast<uint8_t>((x + y + c) % 256);
                 }
             }
         }
@@ -154,7 +145,8 @@ void demonstrateCacheOptimization() {
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
                 for (int c = 0; c < channels; ++c) {
-                    sum1 += img.at(y, x, c);
+                    int idx = (y * width + x) * channels + c;
+                    sum1 += data[idx];
                 }
             }
         }
@@ -167,7 +159,8 @@ void demonstrateCacheOptimization() {
         for (int x = 0; x < width; ++x) {
             for (int y = 0; y < height; ++y) {
                 for (int c = 0; c < channels; ++c) {
-                    sum2 += img.at(y, x, c);
+                    int idx = (y * width + x) * channels + c;
+                    sum2 += data[idx];
                 }
             }
         }
@@ -200,14 +193,16 @@ void demonstrateMemoryMonitoring() {
     std::cout << "\n=== Memory Usage Monitoring ===\n";
 
     try {
-        std::vector<std::unique_ptr<blob<uint8_t>>> images;
+        std::vector<std::unique_ptr<blob>> images;
         size_t total_memory = 0;
 
         std::cout << "Creating images and monitoring memory usage:\n";
 
         for (int i = 1; i <= 10; ++i) {
             int size = i * 100;
-            auto img = std::make_unique<blob<uint8_t>>(size, size, 3);
+            // Create blob and wrap in unique_ptr
+            std::vector<uint8_t> img_data(size * size * 3);
+            auto img = std::make_unique<blob>(reinterpret_cast<std::byte*>(img_data.data()), img_data.size());
 
             size_t image_memory = img->size();
             total_memory += image_memory;
@@ -286,23 +281,24 @@ void demonstrateLargeImageHandling() {
                     std::min(tile_size, full_height - ty * tile_size);
 
                 // Create tile
-                blob<uint8_t> tile(tile_height, tile_width, channels);
-
+                std::vector<uint8_t> tile_data(tile_height * tile_width * channels);
+                
                 // Simulate processing (fill with pattern)
                 for (int y = 0; y < tile_height; ++y) {
                     for (int x = 0; x < tile_width; ++x) {
                         int global_x = tx * tile_size + x;
                         int global_y = ty * tile_size + y;
-
-                        tile.at(y, x, 0) = static_cast<uint8_t>(global_x % 256);
-                        tile.at(y, x, 1) = static_cast<uint8_t>(global_y % 256);
-                        tile.at(y, x, 2) =
-                            static_cast<uint8_t>((global_x + global_y) % 256);
+                        
+                        int pixel_idx = (y * tile_width + x) * channels;
+                        tile_data[pixel_idx] = static_cast<uint8_t>(global_x % 256);
+                        tile_data[pixel_idx + 1] = static_cast<uint8_t>(global_y % 256);
+                        tile_data[pixel_idx + 2] = static_cast<uint8_t>((global_x + global_y) % 256);
                     }
                 }
+                
+                blob tile(reinterpret_cast<std::byte*>(tile_data.data()), tile_data.size());
 
-                // Simulate some processing operation
-                tile.flip(0);  // Vertical flip
+                // Skip processing operations that don't exist on blob
 
                 // In a real application, you would save or accumulate results
                 // here
@@ -358,24 +354,24 @@ void demonstrateMultithreadedMemory() {
         // Launch threads
         for (int t = 0; t < num_threads; ++t) {
             threads.emplace_back([t, images_per_thread, &thread_memory]() {
-                std::vector<std::unique_ptr<blob<uint8_t>>> local_images;
+                std::vector<std::unique_ptr<blob>> local_images;
 
                 for (int i = 0; i < images_per_thread; ++i) {
                     int size = 200 + (t * images_per_thread + i) * 50;
-                    auto img = std::make_unique<blob<uint8_t>>(size, size, 3);
-
+                    // Create image data
+                    std::vector<uint8_t> img_data(size * size * 3);
+                    
                     // Fill with thread-specific pattern
-                    for (int y = 0; y < img->rows(); ++y) {
-                        for (int x = 0; x < img->cols(); ++x) {
-                            img->at(y, x, 0) =
-                                static_cast<uint8_t>((x + t) % 256);
-                            img->at(y, x, 1) =
-                                static_cast<uint8_t>((y + t) % 256);
-                            img->at(y, x, 2) =
-                                static_cast<uint8_t>((x + y + t) % 256);
+                    for (int y = 0; y < size; ++y) {
+                        for (int x = 0; x < size; ++x) {
+                            int pixel_idx = (y * size + x) * 3;
+                            img_data[pixel_idx] = static_cast<uint8_t>((x + t) % 256);
+                            img_data[pixel_idx + 1] = static_cast<uint8_t>((y + t) % 256);
+                            img_data[pixel_idx + 2] = static_cast<uint8_t>((x + y + t) % 256);
                         }
                     }
-
+                    
+                    auto img = std::make_unique<blob>(reinterpret_cast<std::byte*>(img_data.data()), img_data.size());
                     thread_memory[t] += img->size();
                     local_images.push_back(std::move(img));
                 }

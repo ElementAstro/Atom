@@ -12,6 +12,9 @@ project(atom-secret VERSION 1.0.0 LANGUAGES C CXX)
 # Sources and Headers
 set(SOURCES
     encryption.cpp
+    password_manager.cpp
+    password_utils.cpp
+    serialization.cpp
     storage.cpp
 )
 
@@ -19,6 +22,10 @@ set(HEADERS
     common.hpp
     encryption.hpp
     password_entry.hpp
+    password_manager.hpp
+    password_utils.hpp
+    result.hpp
+    serialization.hpp
     storage.hpp
 )
 

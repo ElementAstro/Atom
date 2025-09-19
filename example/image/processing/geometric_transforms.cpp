@@ -19,6 +19,7 @@
 #include <cmath>
 #include <iostream>
 #include <vector>
+#include <iomanip>
 
 #include "atom/image/core/image_blob.hpp"
 #include "atom/image/processing/image_processor.hpp"
@@ -30,10 +31,11 @@ using namespace std::chrono;
 /**
  * @brief Create a test image with geometric features
  */
-blob<uint8_t> createGeometricTestImage() {
+blob createGeometricTestImage() {
     const int width = 300;
     const int height = 200;
-    blob<uint8_t> img(height, width, 3);
+    // Create raw data buffer
+    std::vector<uint8_t> data(height * width * 3);
 
     // Create a pattern with geometric features
     for (int y = 0; y < height; ++y) {
@@ -83,13 +85,15 @@ blob<uint8_t> createGeometricTestImage() {
                 b = 255;  // Magenta rectangle
             }
 
-            img.at(y, x, 0) = r;
-            img.at(y, x, 1) = g;
-            img.at(y, x, 2) = b;
+            // Direct access to data vector
+            int pixel_idx = (y * width + x) * 3;
+            data[pixel_idx] = r;
+            data[pixel_idx + 1] = g;
+            data[pixel_idx + 2] = b;
         }
     }
 
-    return img;
+    return blob(reinterpret_cast<std::byte*>(data.data()), data.size());
 }
 
 /**
@@ -100,8 +104,7 @@ void demonstrateResize() {
 
     try {
         auto original = createGeometricTestImage();
-        std::cout << "Original image: " << original.cols() << "x"
-                  << original.rows() << "\n";
+        std::cout << "Original image blob size: " << original.size() << " bytes\n";
 
         ImageTransform transform;
 
@@ -131,13 +134,8 @@ void demonstrateResize() {
                 auto end = high_resolution_clock::now();
                 auto duration = duration_cast<microseconds>(end - start);
 
-                double scale_x = static_cast<double>(width) / original.cols();
-                double scale_y = static_cast<double>(height) / original.rows();
-
-                std::cout << "  " << original.cols() << "x" << original.rows()
-                          << " -> " << width << "x" << height
-                          << " (scale: " << std::fixed << std::setprecision(2)
-                          << scale_x << "x" << scale_y << ")"
+                // Skip scale calculation due to lack of blob dimension methods
+                std::cout << "  Resized to " << width << "x" << height
                           << " in " << duration.count() << " μs\n";
             }
         }
@@ -150,9 +148,7 @@ void demonstrateResize() {
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(end - start);
 
-        std::cout << "  Preserve aspect: " << original.cols() << "x"
-                  << original.rows() << " -> " << resized_preserve.cols() << "x"
-                  << resized_preserve.rows() << " in " << duration.count()
+        std::cout << "  Preserve aspect resize completed in " << duration.count()
                   << " μs\n";
 
     } catch (const std::exception& e) {
@@ -185,19 +181,16 @@ void demonstrateRotation() {
             auto duration = duration_cast<microseconds>(end - start);
 
             std::cout << "  Rotate " << std::setw(4) << angle
-                      << "°: " << original.cols() << "x" << original.rows()
-                      << " -> " << rotated.cols() << "x" << rotated.rows()
-                      << " in " << duration.count() << " μs\n";
+                      << "° completed in " << duration.count() << " μs\n";
         }
 
         // Demonstrate rotation around custom center
         std::cout << "\nRotation around custom center:\n";
-        Point2D custom_center = {original.cols() / 4.0, original.rows() / 4.0};
-
+        Point2D custom_center = {150, 100};  // Center point
         auto start = high_resolution_clock::now();
-        auto rotated_custom = transform.rotate(
-            original, 45, custom_center, true, InterpolationMethod::LINEAR,
-            BorderMode::REFLECT, 0);
+        auto custom_rotated = transform.rotate(original, 45, custom_center, false,
+                                             InterpolationMethod::LINEAR,
+                                             BorderMode::CONSTANT, 0);
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(end - start);
 
@@ -256,7 +249,7 @@ void demonstrateCropping() {
 
             std::cout << "  " << description << ": "
                       << "(" << x << "," << y << "," << width << "," << height
-                      << ") -> " << cropped.cols() << "x" << cropped.rows()
+                      << ") -> " << cropped.getCols() << "x" << cropped.getRows()
                       << " in " << duration.count() << " μs\n";
         }
 
@@ -264,10 +257,10 @@ void demonstrateCropping() {
         std::cout << "\nSmart cropping simulation:\n";
 
         // Simulate finding the most interesting region
-        int best_x = original.cols() / 4;
-        int best_y = original.rows() / 4;
-        int crop_width = original.cols() / 2;
-        int crop_height = original.rows() / 2;
+        int best_x = original.getCols() / 4;
+        int best_y = original.getRows() / 4;
+        int crop_width = original.getCols() / 2;
+        int crop_height = original.getRows() / 2;
 
         auto start = high_resolution_clock::now();
         auto smart_crop =
@@ -319,9 +312,9 @@ void demonstrateFlipping() {
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(end - start);
 
-        std::cout << "  Transpose: " << original.cols() << "x"
-                  << original.rows() << " -> " << transposed.cols() << "x"
-                  << transposed.rows() << " in " << duration.count() << " μs\n";
+        std::cout << "  Transpose: " << original.getCols() << "x"
+                  << original.getRows() << " -> " << transposed.getCols() << "x"
+                  << transposed.getRows() << " in " << duration.count() << " μs\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in flipping operations: " << e.what() << "\n";
@@ -358,8 +351,8 @@ void demonstrateAffineTransforms() {
 
             std::cout << "  " << description << ": " << duration.count()
                       << " μs\n";
-            std::cout << "    Result size: " << transformed.cols() << "x"
-                      << transformed.rows() << "\n";
+            std::cout << "    Result size: " << transformed.getCols() << "x"
+                      << transformed.getRows() << "\n";
         }
 
         // Demonstrate transformation composition
@@ -377,7 +370,7 @@ void demonstrateAffineTransforms() {
         auto duration = duration_cast<microseconds>(end - start);
 
         std::cout << "  Scale + Rotate: " << duration.count() << " μs\n";
-        std::cout << "  Final size: " << final.cols() << "x" << final.rows()
+        std::cout << "  Final size: " << final.getCols() << "x" << final.getRows()
                   << "\n";
 
     } catch (const std::exception& e) {
@@ -398,29 +391,29 @@ void demonstratePerspectiveTransforms() {
         // Define source and destination points for perspective correction
         std::vector<Point2D> src_points = {
             {0, 0},
-            {original.cols() - 1, 0},
-            {original.cols() - 1, original.rows() - 1},
-            {0, original.rows() - 1}};
+            {original.getCols() - 1, 0},
+            {original.getCols() - 1, original.getRows() - 1},
+            {0, original.getRows() - 1}};
 
         // Different perspective effects
         std::vector<std::pair<std::vector<Point2D>, std::string>>
             perspective_transforms = {
                 {{{20, 10},
-                  {original.cols() - 21, 10},
-                  {original.cols() - 1, original.rows() - 1},
-                  {0, original.rows() - 1}},
+                  {original.getCols() - 21, 10},
+                  {original.getCols() - 1, original.getRows() - 1},
+                  {0, original.getRows() - 1}},
                  "Keystone correction"},
 
                 {{{0, 20},
-                  {original.cols() - 1, 0},
-                  {original.cols() - 21, original.rows() - 21},
-                  {20, original.rows() - 1}},
+                  {original.getCols() - 1, 0},
+                  {original.getCols() - 21, original.getRows() - 21},
+                  {20, original.getRows() - 1}},
                  "Perspective tilt"},
 
                 {{{30, 30},
-                  {original.cols() - 31, 20},
-                  {original.cols() - 21, original.rows() - 31},
-                  {20, original.rows() - 21}},
+                  {original.getCols() - 31, 20},
+                  {original.getCols() - 21, original.getRows() - 31},
+                  {20, original.getRows() - 21}},
                  "Complex perspective"}};
 
         for (const auto& [dst_points, description] : perspective_transforms) {
@@ -434,8 +427,8 @@ void demonstratePerspectiveTransforms() {
 
             std::cout << "  " << description << ": " << duration.count()
                       << " μs\n";
-            std::cout << "    Result size: " << transformed.cols() << "x"
-                      << transformed.rows() << "\n";
+            std::cout << "    Result size: " << transformed.getCols() << "x"
+                      << transformed.getRows() << "\n";
         }
 
         // Demonstrate document rectification simulation
@@ -458,8 +451,8 @@ void demonstratePerspectiveTransforms() {
 
         std::cout << "  Document rectification: " << duration.count()
                   << " μs\n";
-        std::cout << "  Rectified size: " << rectified.cols() << "x"
-                  << rectified.rows() << "\n";
+        std::cout << "  Rectified size: " << rectified.getCols() << "x"
+                  << rectified.getRows() << "\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in perspective transformations: " << e.what()

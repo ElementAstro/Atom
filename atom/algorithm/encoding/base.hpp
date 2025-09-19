@@ -283,6 +283,44 @@ constexpr auto encode() {
 [[nodiscard]] auto isBase64(std::string_view str) noexcept -> bool;
 
 /**
+ * @brief Encodes binary data to hexadecimal string (Base16).
+ *
+ * @param data The binary data to encode
+ * @param uppercase Whether to use uppercase letters (default: true)
+ * @return Hexadecimal string representation
+ */
+[[nodiscard]] auto encodeHex(std::span<const std::uint8_t> data,
+                            bool uppercase = true) noexcept -> std::string;
+
+/**
+ * @brief Decodes hexadecimal string to binary data.
+ *
+ * @param hex The hexadecimal string to decode
+ * @return Binary data or error if invalid hex string
+ */
+[[nodiscard]] auto decodeHex(std::string_view hex) noexcept
+    -> atom::type::expected<std::vector<std::uint8_t>>;
+
+/**
+ * @brief URL-encodes a string according to RFC 3986.
+ *
+ * @param str The string to encode
+ * @param encodeSpaceAsPlus Whether to encode spaces as '+' instead of '%20'
+ * @return URL-encoded string
+ */
+[[nodiscard]] auto urlEncode(std::string_view str,
+                            bool encodeSpaceAsPlus = false) noexcept -> std::string;
+
+/**
+ * @brief URL-decodes a string.
+ *
+ * @param str The URL-encoded string to decode
+ * @return Decoded string or error if invalid encoding
+ */
+[[nodiscard]] auto urlDecode(std::string_view str) noexcept
+    -> atom::type::expected<std::string>;
+
+/**
  * @brief Parallel algorithm executor based on specified thread count
  *
  * Splits data into chunks and processes them in parallel using multiple

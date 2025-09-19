@@ -44,6 +44,22 @@ foreach(CPP_FILE ${CPP_FILES})
             atom-error
             Threads::Threads
         )
+        
+        # Add OpenSSL for SSL-enabled examples
+        if("${EXAMPLE_NAME}" MATCHES ".*sockethub.*" OR "${EXAMPLE_NAME}" MATCHES ".*tcp.*")
+            if(OPENSSL_FOUND)
+                target_link_libraries(${EXECUTABLE_NAME} 
+                    OpenSSL::SSL 
+                    OpenSSL::Crypto
+                )
+            else()
+                # Fallback to direct library linking
+                target_link_libraries(${EXECUTABLE_NAME} 
+                    ssl 
+                    crypto
+                )
+            endif()
+        endif()
 
         # Set C++ standard and compile features
         target_compile_features(${EXECUTABLE_NAME} PRIVATE cxx_std_20)

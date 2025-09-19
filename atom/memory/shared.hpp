@@ -1,5 +1,5 @@
-#ifndef ATOM_CONNECTION_SHARED_MEMORY_HPP
-#define ATOM_CONNECTION_SHARED_MEMORY_HPP
+#ifndef ATOM_MEMORY_SHARED_MEMORY_HPP
+#define ATOM_MEMORY_SHARED_MEMORY_HPP
 
 #include <atomic>
 #include <chrono>
@@ -36,14 +36,18 @@
 #include <unistd.h>
 #endif
 
-namespace atom::connection {
+namespace atom::memory {
+
+// Import concepts and types from other namespaces
+template<typename T>
+concept TriviallyCopyable = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>;
 
 /**
  * @brief Exception class for shared memory errors.
  */
-class SharedMemoryException : public atom::error::Exception {
+class SharedMemoryException : public std::runtime_error {
 public:
-    using atom::error::Exception::Exception;
+    using std::runtime_error::runtime_error;
 
     /**
      * @brief Specific error codes for shared memory operations.
@@ -70,7 +74,7 @@ public:
      */
     SharedMemoryException(const char* file, int line, const char* func,
                           const std::string& message, ErrorCode code)
-        : atom::error::Exception(file, line, func, message), code_(code) {}
+        : std::runtime_error(message), code_(code) {}
 
     /**
      * @brief Gets the specific error code.
@@ -112,16 +116,13 @@ private:
 };
 
 #define THROW_SHARED_MEMORY_ERROR_WITH_CODE(message, code) \
-    throw atom::connection::SharedMemoryException(         \
-        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, message, code)
+    throw atom::memory::SharedMemoryException(message)
 
-#define THROW_SHARED_MEMORY_ERROR(...)             \
-    throw atom::connection::SharedMemoryException( \
-        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
+#define THROW_SHARED_MEMORY_ERROR(message) \
+    throw atom::memory::SharedMemoryException(message)
 
-#define THROW_NESTED_SHARED_MEMORY_ERROR(...)               \
-    atom::connection::SharedMemoryException::rethrowNested( \
-        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
+#define THROW_NESTED_SHARED_MEMORY_ERROR(message) \
+    throw atom::memory::SharedMemoryException(message)
 
 /**
  * @brief Stream operator for SharedMemoryException::ErrorCode
@@ -165,9 +166,13 @@ struct SharedMemoryHeader {
  * copyable.
  */
 template <TriviallyCopyable T>
-class SharedMemory : public NonCopyable {
+class SharedMemory {
 public:
     using ChangeCallback = std::function<void(const T&)>;
+
+    // Non-copyable
+    SharedMemory(const SharedMemory&) = delete;
+    SharedMemory& operator=(const SharedMemory&) = delete;
 
     /**
      * @brief Constructs a new SharedMemory object.
@@ -182,7 +187,7 @@ public:
     /**
      * @brief Destructor for SharedMemory.
      */
-    ~SharedMemory() override;
+    ~SharedMemory();
 
     /**
      * @brief Writes data to shared memory.
@@ -452,9 +457,7 @@ SharedMemory<T>::SharedMemory(std::string_view name, bool create,
                     std::memcpy(getDataPtr(), &(*initialData), sizeof(T));
                     header_->initialized.store(true, std::memory_order_release);
                     header_->version.fetch_add(1, std::memory_order_release);
-                    spdlog::info(
-                        "Initialized shared memory '{}' with initial data",
-                        name_);
+                    spdlog::info("Initialized shared memory with initial data: " + name_);
                 },
                 std::chrono::milliseconds(100));
         }
@@ -484,15 +487,13 @@ void SharedMemory<T>::platformSpecificInit() {
     std::string eventName = name_ + "_event";
     changeEvent_ = CreateEventA(nullptr, TRUE, FALSE, eventName.c_str());
     if (!changeEvent_) {
-        spdlog::warn("Failed to create change event for shared memory: {}",
-                     getLastErrorMessage());
+        spdlog::warn("Failed to create change event for shared memory: " + getLastErrorMessage());
     }
 #else
     std::string semName = "/" + name_ + "_sem";
     semId_ = sem_open(semName.c_str(), O_CREAT, 0666, 0);
     if (semId_ == SEM_FAILED) {
-        spdlog::warn("Failed to create semaphore for shared memory: {}",
-                     strerror(errno));
+        spdlog::warn("Failed to create semaphore for shared memory: " + std::string(strerror(errno)));
     }
 #endif
 }
@@ -1229,6 +1230,13 @@ auto SharedMemory<T>::getNativeHandle() const -> void* {
 #endif
 }
 
+}  // namespace atom::memory
+
+// Backward compatibility alias
+namespace atom::connection {
+template<typename T>
+using SharedMemory = atom::memory::SharedMemory<T>;
+using SharedMemoryException = atom::memory::SharedMemoryException;
 }  // namespace atom::connection
 
-#endif  // ATOM_CONNECTION_SHARED_MEMORY_HPP
+#endif  // ATOM_MEMORY_SHARED_MEMORY_HPP

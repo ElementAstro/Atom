@@ -12,6 +12,8 @@
 #include <memory>
 #include <string>
 #include <unordered_map>
+#include <optional>
+#include <mutex>
 
 #include <uv.h>
 
@@ -161,6 +163,60 @@ struct MessageAwaiter {
 
 private:
     std::shared_ptr<std::promise<Result<MessageEnvelope<T>, MessageBusError>>> promise_;
+};
+
+// **MessageBus Class Declaration**
+class MessageBus {
+public:
+    struct QueueStats {
+        size_t pending_messages;
+        size_t max_queue_size;
+        size_t total_handlers;
+        std::chrono::milliseconds avg_delivery_time;
+    };
+
+    explicit MessageBus(const BackPressureConfig& config = {});
+    ~MessageBus();
+
+    // Template-based subscription
+    template <MessageType T, MessageHandler<T> Handler>
+    SubscriptionHandle subscribe(const std::string& topic_pattern,
+                                Handler&& handler,
+                                MessageFilter<T> filter = nullptr);
+
+    // Publish message
+    template <MessageType T>
+    Result<void, MessageBusError> publish(const std::string& topic, T&& message,
+                                          const std::string& sender_id = "");
+
+    // Simple publish without template deduction issues
+    template <MessageType T>
+    Result<void, MessageBusError> publish(const T& message) {
+        return publish("default", message, "");
+    }
+
+    // Coroutine-based message waiting
+    template <MessageType T>
+    MessageAwaiter<T> wait_for_message(
+        const std::string& topic, MessageFilter<T> filter = nullptr,
+        std::chrono::milliseconds timeout = std::chrono::milliseconds(5000));
+
+    // Get queue statistics
+    QueueStats get_stats() const;
+    
+    void shutdown();
+    void process_messages(); // Synchronous processing for examples
+    
+    static MessageBus* get_instance();
+
+private:
+    BackPressureConfig config_;
+    std::atomic<bool> shutdown_;
+    std::atomic<uint64_t> handler_id_counter_;
+    
+    // Implementation details (will be defined in .cpp)
+    struct Impl;
+    std::unique_ptr<Impl> pimpl_;
 };
 
 }  // namespace msgbus

@@ -61,13 +61,13 @@ constexpr std::string_view logLevelToString(LogLevel level) noexcept {
 
 LogLevel stringToLogLevel(std::string_view str) {
     static const std::unordered_map<std::string_view, LogLevel> level_map = {
-        {"TRACE", LogLevel::TRACE}, {"DEBUG", LogLevel::DEBUG},
-        {"INFO", LogLevel::INFO},   {"WARN", LogLevel::WARN},
-        {"ERROR", LogLevel::ERROR}, {"CRITICAL", LogLevel::CRITICAL},
-        {"OFF", LogLevel::OFF}};
+        {"TRACE", LogLevel::TRACE}, {"DEBUG", LogLevel::DEBUG_LEVEL},
+        {"INFO", LogLevel::INFO_LEVEL},   {"WARN", LogLevel::WARN_LEVEL},
+        {"ERROR", LogLevel::ERROR_LEVEL}, {"CRITICAL", LogLevel::CRITICAL_LEVEL},
+        {"OFF", LogLevel::OFF_LEVEL}};
 
     auto it = level_map.find(str);
-    return it != level_map.end() ? it->second : LogLevel::INFO;
+    return it != level_map.end() ? it->second : LogLevel::INFO_LEVEL;
 }
 
 struct LogEntry {
@@ -688,11 +688,11 @@ private:
         if (h_event_log_) {
             WORD eventType = EVENTLOG_INFORMATION_TYPE;
             switch (level) {
-                case LogLevel::CRITICAL:
-                case LogLevel::ERROR:
+                case LogLevel::CRITICAL_LEVEL:
+                case LogLevel::ERROR_LEVEL:
                     eventType = EVENTLOG_ERROR_TYPE;
                     break;
-                case LogLevel::WARN:
+                case LogLevel::WARN_LEVEL:
                     eventType = EVENTLOG_WARNING_TYPE;
                     break;
                 default:
@@ -717,16 +717,16 @@ private:
 #elif defined(__linux__)
         int priority = LOG_INFO;
         switch (level) {
-            case LogLevel::CRITICAL:
+            case LogLevel::CRITICAL_LEVEL:
                 priority = LOG_CRIT;
                 break;
-            case LogLevel::ERROR:
+            case LogLevel::ERROR_LEVEL:
                 priority = LOG_ERR;
                 break;
-            case LogLevel::WARN:
+            case LogLevel::WARN_LEVEL:
                 priority = LOG_WARNING;
                 break;
-            case LogLevel::DEBUG:
+            case LogLevel::DEBUG_LEVEL:
                 priority = LOG_DEBUG;
                 break;
             default:
@@ -743,16 +743,16 @@ private:
         if (os_log_handle_) {
             os_log_type_t type = OS_LOG_TYPE_INFO;
             switch (level) {
-                case LogLevel::CRITICAL:
+                case LogLevel::CRITICAL_LEVEL:
                     type = OS_LOG_TYPE_FAULT;
                     break;
-                case LogLevel::ERROR:
+                case LogLevel::ERROR_LEVEL:
                     type = OS_LOG_TYPE_ERROR;
                     break;
-                case LogLevel::WARN:
+                case LogLevel::WARN_LEVEL:
                     type = OS_LOG_TYPE_DEFAULT;
                     break;
-                case LogLevel::DEBUG:
+                case LogLevel::DEBUG_LEVEL:
                     type = OS_LOG_TYPE_DEBUG;
                     break;
                 default:
@@ -767,16 +767,16 @@ private:
 #elif defined(__ANDROID__)
         android_LogPriority priority = ANDROID_LOG_INFO;
         switch (level) {
-            case LogLevel::CRITICAL:
+            case LogLevel::CRITICAL_LEVEL:
                 priority = ANDROID_LOG_FATAL;
                 break;
-            case LogLevel::ERROR:
+            case LogLevel::ERROR_LEVEL:
                 priority = ANDROID_LOG_ERROR;
                 break;
-            case LogLevel::WARN:
+            case LogLevel::WARN_LEVEL:
                 priority = ANDROID_LOG_WARN;
                 break;
-            case LogLevel::DEBUG:
+            case LogLevel::DEBUG_LEVEL:
                 priority = ANDROID_LOG_DEBUG;
                 break;
             default:

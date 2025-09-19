@@ -196,15 +196,56 @@ CompressionResult compressFile(std::string_view file_path_sv,
 
         // Use fs::path directly with string_view if supported, else convert
         fs::path input_path(file_path_sv);
-        if (!fs::exists(input_path)) {
-            result.error_message = "Input file does not exist";
+
+        // Edge case: Check if input path is valid
+        std::error_code ec;
+        if (!fs::exists(input_path, ec) || ec) {
+            result.error_message = "Input file does not exist or is inaccessible";
             return result;
         }
 
+        // Edge case: Check if input is actually a regular file
+        if (!fs::is_regular_file(input_path, ec) || ec) {
+            result.error_message = "Input path is not a regular file";
+            return result;
+        }
+
+        // Edge case: Check file size (avoid compressing empty files or extremely large files)
+        auto file_size = fs::file_size(input_path, ec);
+        if (ec) {
+            result.error_message = "Cannot determine input file size";
+            return result;
+        }
+
+        if (file_size == 0) {
+            result.error_message = "Cannot compress empty file";
+            return result;
+        }
+
+        // Edge case: Check for extremely large files (> 4GB might cause issues with some zip implementations)
+        constexpr auto MAX_FILE_SIZE = static_cast<std::uintmax_t>(4ULL * 1024 * 1024 * 1024); // 4GB
+        if (file_size > MAX_FILE_SIZE) {
+            spdlog::warn("Compressing very large file ({}GB), this may take a long time",
+                        file_size / (1024.0 * 1024.0 * 1024.0));
+        }
+
         fs::path output_dir(output_folder_sv);
-        if (!fs::exists(output_dir)) {
-            if (!fs::create_directories(output_dir)) {
-                result.error_message = "Failed to create output directory";
+
+        // Edge case: Check if output directory path is valid
+        if (output_dir.empty()) {
+            result.error_message = "Invalid output directory path";
+            return result;
+        }
+
+        if (!fs::exists(output_dir, ec)) {
+            if (!fs::create_directories(output_dir, ec) || ec) {
+                result.error_message = "Failed to create output directory: " + ec.message();
+                return result;
+            }
+        } else {
+            // Edge case: Check if output path is actually a directory
+            if (!fs::is_directory(output_dir, ec) || ec) {
+                result.error_message = "Output path exists but is not a directory";
                 return result;
             }
         }

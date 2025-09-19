@@ -13,12 +13,83 @@
 #include <immintrin.h>
 #endif
 
+#ifdef __AVX2__
+#include <immintrin.h>
+#endif
+
 #if ATOM_ENABLE_ABSL
 #include <absl/strings/match.h>
 #include <absl/strings/str_replace.h>
 #endif
 
 namespace atom::io {
+
+/**
+ * @brief SIMD-optimized string search for pattern matching
+ * @param haystack The string to search in
+ * @param needle The character to search for
+ * @return Position of first occurrence or string::npos if not found
+ */
+static auto simdStringSearch(std::string_view haystack, char needle) -> size_t {
+#ifdef __AVX2__
+    if (haystack.size() >= 32) {
+        const __m256i needle_vec = _mm256_set1_epi8(needle);
+        const char* data = haystack.data();
+        size_t i = 0;
+
+        // Process 32 bytes at a time
+        for (; i + 32 <= haystack.size(); i += 32) {
+            __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data + i));
+            __m256i cmp = _mm256_cmpeq_epi8(chunk, needle_vec);
+            int mask = _mm256_movemask_epi8(cmp);
+
+            if (mask != 0) {
+                // Found a match, find the exact position
+                return i + __builtin_ctz(mask);
+            }
+        }
+
+        // Handle remaining bytes
+        for (; i < haystack.size(); ++i) {
+            if (haystack[i] == needle) {
+                return i;
+            }
+        }
+        return std::string_view::npos;
+    }
+#endif
+
+#ifdef __SSE4_2__
+    if (haystack.size() >= 16) {
+        const __m128i needle_vec = _mm_set1_epi8(needle);
+        const char* data = haystack.data();
+        size_t i = 0;
+
+        // Process 16 bytes at a time
+        for (; i + 16 <= haystack.size(); i += 16) {
+            __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i));
+            __m128i cmp = _mm_cmpeq_epi8(chunk, needle_vec);
+            int mask = _mm_movemask_epi8(cmp);
+
+            if (mask != 0) {
+                // Found a match, find the exact position
+                return i + __builtin_ctz(mask);
+            }
+        }
+
+        // Handle remaining bytes
+        for (; i < haystack.size(); ++i) {
+            if (haystack[i] == needle) {
+                return i;
+            }
+        }
+        return std::string_view::npos;
+    }
+#endif
+
+    // Fallback to standard library
+    return haystack.find(needle);
+}
 
 AsyncGlob::AsyncGlob(asio::io_context& io_context) noexcept
     : io_context_(io_context) {
@@ -42,7 +113,7 @@ auto AsyncGlob::escapeSpecialChars(std::string input) const -> std::string {
     result.reserve(input.size() * 2);
 
     // Escape backslashes
-    while (stringReplace(input, std::string{"\\"}, std::string{R"(\\)"})) {
+    while (atom::io::stringReplace(input, std::string{"\\"}, std::string{R"(\\)"})) {
     }
 
     // Escape regex special characters [&~|]
@@ -126,9 +197,9 @@ auto AsyncGlob::processCharacterRanges(std::string_view pattern,
     bool first = true;
     for (auto& chunk : chunks) {
         // Escape backslashes and hyphens
-        while (stringReplace(chunk, std::string{"\\"}, std::string{R"(\\)"})) {
+        while (atom::io::stringReplace(chunk, std::string{"\\"}, std::string{R"(\\)"})) {
         }
-        while (stringReplace(chunk, std::string{"-"}, std::string{R"(\-)"})) {
+        while (atom::io::stringReplace(chunk, std::string{"-"}, std::string{R"(\-)"})) {
         }
 
         if (first) {
@@ -422,10 +493,26 @@ auto AsyncGlob::expandTilde(const fs::path& path) const -> fs::path {
 auto AsyncGlob::hasMagic(std::string_view pathname) noexcept -> bool {
     spdlog::info("AsyncGlob::hasMagic called with pathname: {}", pathname);
 
-    bool result = pathname.find_first_of("*?[") != std::string_view::npos;
+    // Edge case: empty pathname has no magic
+    if (pathname.empty()) {
+        return false;
+    }
 
-    spdlog::info("AsyncGlob::hasMagic returning: {}", result);
-    return result;
+    // Edge case: Check for escaped magic characters
+    for (size_t i = 0; i < pathname.length(); ++i) {
+        char c = pathname[i];
+        if (c == '*' || c == '?' || c == '[') {
+            // Check if this character is escaped
+            if (i > 0 && pathname[i-1] == '\\') {
+                continue; // This magic character is escaped
+            }
+            spdlog::info("AsyncGlob::hasMagic returning: true (found unescaped '{}')", c);
+            return true;
+        }
+    }
+
+    spdlog::info("AsyncGlob::hasMagic returning: false");
+    return false;
 }
 
 auto AsyncGlob::isHidden(std::string_view pathname) noexcept -> bool {

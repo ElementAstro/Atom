@@ -29,10 +29,11 @@ using namespace std::chrono;
 /**
  * @brief Create a test image with various features for filter testing
  */
-blob<uint8_t> createTestImage() {
+blob createTestImage() {
     const int width = 400;
     const int height = 300;
-    blob<uint8_t> img(height, width, 3);
+    // Create raw data buffer
+    std::vector<uint8_t> data(height * width * 3);
 
     // Create a complex test pattern
     for (int y = 0; y < height; ++y) {
@@ -68,16 +69,15 @@ blob<uint8_t> createTestImage() {
             // Add noise
             int noise = (rand() % 21) - 10;  // -10 to +10
 
-            img.at(y, x, 0) =
-                static_cast<uint8_t>(std::clamp(base_r + noise, 0, 255));
-            img.at(y, x, 1) =
-                static_cast<uint8_t>(std::clamp(base_g + noise, 0, 255));
-            img.at(y, x, 2) =
-                static_cast<uint8_t>(std::clamp(base_b + noise, 0, 255));
+            // Direct access to data vector
+            int pixel_idx = (y * width + x) * 3;
+            data[pixel_idx] = static_cast<uint8_t>(std::clamp(base_r + noise, 0, 255));
+            data[pixel_idx + 1] = static_cast<uint8_t>(std::clamp(base_g + noise, 0, 255));
+            data[pixel_idx + 2] = static_cast<uint8_t>(std::clamp(base_b + noise, 0, 255));
         }
     }
 
-    return img;
+    return blob(reinterpret_cast<std::byte*>(data.data()), data.size());
 }
 
 /**
@@ -88,8 +88,7 @@ void demonstrateBlurFilters() {
 
     try {
         auto original = createTestImage();
-        std::cout << "Created test image: " << original.cols() << "x"
-                  << original.rows() << "\n";
+        std::cout << "Created test image blob size: " << original.size() << " bytes\n";
 
         // Create image filter processor
         ImageFilter filter;

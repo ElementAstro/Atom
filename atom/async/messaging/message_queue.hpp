@@ -35,12 +35,13 @@
 // Conditional Asio include
 #ifdef ATOM_USE_ASIO
 #include <asio.hpp>
+#include <asio/post.hpp>
 #endif
 
 #include "atom/macro.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
-#include <windows.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #elif defined(ATOM_PLATFORM_APPLE)
 #include <TargetConditionals.h>
 #endif
@@ -269,7 +270,7 @@ public:
 
         m_condition_.notify_one();
 #ifdef ATOM_USE_ASIO
-        ioContext_.post([this]() { processMessages(); });
+        asio::post(ioContext_, [this]() { processMessages(); });
 #endif
     }
 
@@ -303,7 +304,7 @@ public:
 
         m_condition_.notify_one();
 #ifdef ATOM_USE_ASIO
-        ioContext_.post([this]() { processMessages(); });
+        asio::post(ioContext_, [this]() { processMessages(); });
 #endif
     }
 
@@ -322,7 +323,7 @@ public:
         }
         m_condition_.notify_one();
 #ifdef ATOM_USE_ASIO
-        ioContext_.post([this]() { processMessages(); });
+        asio::post(ioContext_, [this]() { processMessages(); });
 #endif
     }
 
@@ -339,7 +340,7 @@ public:
         }
         m_condition_.notify_one();
 #ifdef ATOM_USE_ASIO
-        ioContext_.post([this]() { processMessages(); });
+        asio::post(ioContext_, [this]() { processMessages(); });
 #endif
     }
 #endif  // ATOM_USE_LOCKFREE_QUEUE
@@ -887,7 +888,7 @@ private:
         if (more_messages) {
             spdlog::trace(
                 "Asio: More messages in deque, re-posting processMessages.");
-            ioContext_.post([this]() { processMessages(); });
+            asio::post(ioContext_, [this]() { processMessages(); });
         } else {
             spdlog::trace("Asio: No more messages in deque for now.");
         }

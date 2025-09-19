@@ -44,9 +44,14 @@ function(check_compiler_requirements)
         set(CHECK_MIN_MSVC_VERSION 19.28)
     endif()
 
-    # Check C++ standard support
-    check_cxx_compiler_flag(-std=c++20 HAS_CXX20_FLAG)
-    check_cxx_compiler_flag(-std=c++23 HAS_CXX23_FLAG)
+    # Check C++ standard support (different flags for different compilers)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+        check_cxx_compiler_flag(/std:c++20 HAS_CXX20_FLAG)
+        check_cxx_compiler_flag(/std:c++latest HAS_CXX23_FLAG)
+    else()
+        check_cxx_compiler_flag(-std=c++20 HAS_CXX20_FLAG)
+        check_cxx_compiler_flag(-std=c++23 HAS_CXX23_FLAG)
+    endif()
 
     if(CHECK_CXX_STANDARD EQUAL 23)
         if(NOT HAS_CXX23_FLAG)
@@ -193,11 +198,11 @@ function(configure_compiler_options)
             list(APPEND compiler_options /Zi)
         endif()
 
-        # Link Time Optimization
-        if(ARGS_ENABLE_LTO)
-            list(APPEND compiler_options /GL)
-            list(APPEND linker_options /LTCG)
-        endif()
+        # Link Time Optimization - disabled due to compatibility issues
+        # if(ARGS_ENABLE_LTO)
+        #     list(APPEND compiler_options /GL)
+        #     list(APPEND linker_options /LTCG)
+        # endif()
 
     # GCC/Clang compiler options
     elseif(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -244,11 +249,11 @@ function(configure_compiler_options)
             list(APPEND compiler_options -g)
         endif()
 
-        # Link Time Optimization
-        if(ARGS_ENABLE_LTO)
-            list(APPEND compiler_options -flto)
-            list(APPEND linker_options -flto)
-        endif()
+        # Link Time Optimization - disabled due to issues with GCC 15
+        # if(ARGS_ENABLE_LTO)
+        #     list(APPEND compiler_options -flto)
+        #     list(APPEND linker_options -flto)
+        # endif()
     endif()
 
     # Add user-provided additional options

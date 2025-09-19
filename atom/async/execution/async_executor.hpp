@@ -41,8 +41,7 @@ Description: Advanced async task executor with thread pooling
 #include "atom/macro.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
-#include <windows.h>
-#define WIN32_LEAN_AND_MEAN
+#include "../../../cmake/WindowsCompat.hpp"
 #elif defined(ATOM_PLATFORM_APPLE)
 #include <dispatch/dispatch.h>
 #include <mach/thread_policy.h>

@@ -15,6 +15,7 @@ Description: Compressor using ZLib and MiniZip-ng
 #ifndef ATOM_IO_COMPRESSION_COMPRESS_HPP
 #define ATOM_IO_COMPRESSION_COMPRESS_HPP
 
+#include <concepts>
 #include <future>
 #include <optional>
 #include <ranges>
@@ -24,6 +25,21 @@ Description: Compressor using ZLib and MiniZip-ng
 #include "atom/containers/high_performance.hpp"
 
 namespace atom::io {
+
+/**
+ * @brief Concept for types that can be compressed
+ */
+template <typename T>
+concept CompressibleData = std::ranges::contiguous_range<T> &&
+                          std::is_trivially_copyable_v<std::ranges::range_value_t<T>>;
+
+/**
+ * @brief Concept for compression level values
+ */
+template <typename T>
+concept CompressionLevel = std::integral<T> && requires(T level) {
+    requires level >= -1 && level <= 9;
+};
 
 // Use type aliases from high_performance.hpp
 using atom::containers::String;

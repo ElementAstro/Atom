@@ -36,6 +36,7 @@ endforeach()
 set(SOURCES
     # Core files
     core/algorithm.cpp
+    core/opencl_utils.cpp
 
     # Crypto files
     crypto/md5.cpp
@@ -50,6 +51,7 @@ set(SOURCES
     math/math.cpp
     math/fraction.cpp
     math/bignumber.cpp
+    math/gpu_math.cpp
 
     # Compression files
     compression/huffman.cpp
@@ -101,6 +103,8 @@ set(HEADERS
     # Actual implementation headers (in subdirectories)
     core/algorithm.hpp
     core/rust_numeric.hpp
+    core/simd_utils.hpp
+    core/opencl_utils.hpp
 
     crypto/md5.hpp
     crypto/sha1.hpp
@@ -114,6 +118,9 @@ set(HEADERS
     math/matrix.hpp
     math/fraction.hpp
     math/bignumber.hpp
+    math/statistics.hpp
+    math/numerical.hpp
+    math/gpu_math.hpp
 
     compression/huffman.hpp
     compression/matrix_compress.hpp
@@ -127,11 +134,14 @@ set(HEADERS
 
     graphics/flood.hpp
     graphics/perlin.hpp
+    graphics/simplex.hpp
+    graphics/image_ops.hpp
 
     utils/error_calibration.hpp
     utils/fnmatch.hpp
     utils/snowflake.hpp
     utils/weight.hpp
+    utils/uuid.hpp
 )
 
 set(LIBS ${ATOM_ALGORITHM_DEPENDS})

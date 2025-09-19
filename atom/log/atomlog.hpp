@@ -36,13 +36,13 @@ using atom::containers::String;
  * Extended to support custom log levels.
  */
 enum class LogLevel : int {
-    TRACE = 0,  ///< Trace level logging.
-    DEBUG,      ///< Debug level logging.
-    INFO,       ///< Info level logging.
-    WARN,       ///< Warn level logging.
-    ERROR,      ///< Error level logging.
-    CRITICAL,   ///< Critical level logging.
-    OFF         ///< Used to disable logging.
+    TRACE = 0,     ///< Trace level logging.
+    DEBUG_LEVEL,   ///< Debug level logging.
+    INFO_LEVEL,    ///< Info level logging.
+    WARN_LEVEL,    ///< Warn level logging.
+    ERROR_LEVEL,   ///< Error level logging.
+    CRITICAL_LEVEL,///< Critical level logging.
+    OFF_LEVEL      ///< Used to disable logging.
 };
 
 /**
@@ -161,8 +161,8 @@ public:
      */
     void debug_at(std::string_view format,
                   const std::source_location& location) {
-        if (shouldLog(LogLevel::DEBUG)) {
-            log(LogLevel::DEBUG, std::string(format), location);
+        if (shouldLog(LogLevel::DEBUG_LEVEL)) {
+            log(LogLevel::DEBUG_LEVEL, std::string(format), location);
         }
     }
 
@@ -170,11 +170,11 @@ private:
     template <typename... Args>
     void debug_impl(const std::source_location& location,
                     std::string_view format, Args&&... args) {
-        if (shouldLog(LogLevel::DEBUG)) {
+        if (shouldLog(LogLevel::DEBUG_LEVEL)) {
             if constexpr (sizeof...(args) == 0) {
-                log(LogLevel::DEBUG, std::string(format), location);
+                log(LogLevel::DEBUG_LEVEL, std::string(format), location);
             } else {
-                log(LogLevel::DEBUG,
+                log(LogLevel::DEBUG_LEVEL,
                     std::vformat(format, std::make_format_args(args...)),
                     location);
             }
@@ -201,8 +201,8 @@ public:
      */
     void info_at(std::string_view format,
                  const std::source_location& location) {
-        if (shouldLog(LogLevel::INFO)) {
-            log(LogLevel::INFO, std::string(format), location);
+        if (shouldLog(LogLevel::INFO_LEVEL)) {
+            log(LogLevel::INFO_LEVEL, std::string(format), location);
         }
     }
 
@@ -210,11 +210,11 @@ private:
     template <typename... Args>
     void info_impl(const std::source_location& location,
                    std::string_view format, Args&&... args) {
-        if (shouldLog(LogLevel::INFO)) {
+        if (shouldLog(LogLevel::INFO_LEVEL)) {
             if constexpr (sizeof...(args) == 0) {
-                log(LogLevel::INFO, std::string(format), location);
+                log(LogLevel::INFO_LEVEL, std::string(format), location);
             } else {
-                log(LogLevel::INFO,
+                log(LogLevel::INFO_LEVEL,
                     std::vformat(format, std::make_format_args(args...)),
                     location);
             }
@@ -241,8 +241,8 @@ public:
      */
     void warn_at(std::string_view format,
                  const std::source_location& location) {
-        if (shouldLog(LogLevel::WARN)) {
-            log(LogLevel::WARN, std::string(format), location);
+        if (shouldLog(LogLevel::WARN_LEVEL)) {
+            log(LogLevel::WARN_LEVEL, std::string(format), location);
         }
     }
 
@@ -250,11 +250,11 @@ private:
     template <typename... Args>
     void warn_impl(const std::source_location& location,
                    std::string_view format, Args&&... args) {
-        if (shouldLog(LogLevel::WARN)) {
+        if (shouldLog(LogLevel::WARN_LEVEL)) {
             if constexpr (sizeof...(args) == 0) {
-                log(LogLevel::WARN, std::string(format), location);
+                log(LogLevel::WARN_LEVEL, std::string(format), location);
             } else {
-                log(LogLevel::WARN,
+                log(LogLevel::WARN_LEVEL,
                     std::vformat(format, std::make_format_args(args...)),
                     location);
             }
@@ -281,8 +281,8 @@ public:
      */
     void error_at(std::string_view format,
                   const std::source_location& location) {
-        if (shouldLog(LogLevel::ERROR)) {
-            log(LogLevel::ERROR, std::string(format), location);
+        if (shouldLog(LogLevel::ERROR_LEVEL)) {
+            log(LogLevel::ERROR_LEVEL, std::string(format), location);
         }
     }
 
@@ -305,8 +305,8 @@ public:
      */
     void critical_at(std::string_view format,
                      const std::source_location& location) {
-        if (shouldLog(LogLevel::CRITICAL)) {
-            log(LogLevel::CRITICAL, std::string(format), location);
+        if (shouldLog(LogLevel::CRITICAL_LEVEL)) {
+            log(LogLevel::CRITICAL_LEVEL, std::string(format), location);
         }
     }
 
@@ -314,11 +314,11 @@ private:
     template <typename... Args>
     void error_impl(const std::source_location& location,
                     std::string_view format, Args&&... args) {
-        if (shouldLog(LogLevel::ERROR)) {
+        if (shouldLog(LogLevel::ERROR_LEVEL)) {
             if constexpr (sizeof...(args) == 0) {
-                log(LogLevel::ERROR, std::string(format), location);
+                log(LogLevel::ERROR_LEVEL, std::string(format), location);
             } else {
-                log(LogLevel::ERROR,
+                log(LogLevel::ERROR_LEVEL,
                     std::vformat(format, std::make_format_args(args...)),
                     location);
             }
@@ -328,11 +328,11 @@ private:
     template <typename... Args>
     void critical_impl(const std::source_location& location,
                        std::string_view format, Args&&... args) {
-        if (shouldLog(LogLevel::CRITICAL)) {
+        if (shouldLog(LogLevel::CRITICAL_LEVEL)) {
             if constexpr (sizeof...(args) == 0) {
-                log(LogLevel::CRITICAL, std::string(format), location);
+                log(LogLevel::CRITICAL_LEVEL, std::string(format), location);
             } else {
-                log(LogLevel::CRITICAL,
+                log(LogLevel::CRITICAL_LEVEL,
                     std::vformat(format, std::make_format_args(args...)),
                     location);
             }

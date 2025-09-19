@@ -14,7 +14,7 @@
  * @version 1.0.0
  */
 
-#include "atom/image/core/image_blob.hpp"
+#include "../core/image_blob.hpp"
 #include <vector>
 #include <array>
 #include <memory>

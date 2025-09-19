@@ -36,7 +36,7 @@ Description: Daemon process implementation (Header-Only Library)
 // Platform-specific Includes
 #ifdef _WIN32
 // clang-format off
-#include <windows.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #include <TlHelp32.h>  // For getProcessCommandLine
 // clang-format on
 #else

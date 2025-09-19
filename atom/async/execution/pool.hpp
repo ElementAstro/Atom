@@ -21,7 +21,7 @@
 
 #if defined(ATOM_PLATFORM_WINDOWS)
 // clang-format off
-#include <windows.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #include <processthreadsapi.h>
 // clang-format on
 #elif defined(ATOM_PLATFORM_APPLE)

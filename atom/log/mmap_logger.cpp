@@ -655,7 +655,7 @@ private:
                 if (!stop_auto_flush_.load(std::memory_order_relaxed)) {
                     if (auto result = flush(); !result) {
                         // Log internal flush error without recursion
-                        log(LogLevel::ERROR, Category::General,
+                        log(LogLevel::ERROR_LEVEL, Category::General,
                             "Auto-flush failed with error code: " +
                                 std::to_string(
                                     static_cast<int>(result.error().error())),
@@ -699,17 +699,17 @@ private:
         switch (level) {
             case TRACE:
                 return "TRACE";
-            case DEBUG:
+            case DEBUG_LEVEL:
                 return "DEBUG";
-            case INFO:
+            case INFO_LEVEL:
                 return "INFO";
-            case WARN:
+            case WARN_LEVEL:
                 return "WARN";
-            case ERROR:
+            case ERROR_LEVEL:
                 return "ERROR";
-            case CRITICAL:
+            case CRITICAL_LEVEL:
                 return "CRITICAL";
-            case OFF:
+            case OFF_LEVEL:
                 return "OFF";
             default:
                 return "UNKNOWN";
@@ -985,15 +985,15 @@ private:
             // Determine event type based on log level
             WORD event_type;
             switch (level) {
-                case LogLevel::CRITICAL:
-                case LogLevel::ERROR:
+                case LogLevel::CRITICAL_LEVEL:
+                case LogLevel::ERROR_LEVEL:
                     event_type = EVENTLOG_ERROR_TYPE;
                     break;
-                case LogLevel::WARN:
+                case LogLevel::WARN_LEVEL:
                     event_type = EVENTLOG_WARNING_TYPE;
                     break;
-                case LogLevel::INFO:
-                case LogLevel::DEBUG:
+                case LogLevel::INFO_LEVEL:
+                case LogLevel::DEBUG_LEVEL:
                 case LogLevel::TRACE:
                 default:
                     event_type = EVENTLOG_INFORMATION_TYPE;
@@ -1025,13 +1025,13 @@ private:
         // Map log level to syslog priority with constexpr if for performance
         int syslog_priority;
         if constexpr (std::is_enum_v<LogLevel>) {
-            if (level == LogLevel::CRITICAL) {
+            if (level == LogLevel::CRITICAL_LEVEL) {
                 syslog_priority = LOG_CRIT;
-            } else if (level == LogLevel::ERROR) {
+            } else if (level == LogLevel::ERROR_LEVEL) {
                 syslog_priority = LOG_ERR;
-            } else if (level == LogLevel::WARN) {
+            } else if (level == LogLevel::WARN_LEVEL) {
                 syslog_priority = LOG_WARNING;
-            } else if (level == LogLevel::INFO) {
+            } else if (level == LogLevel::INFO_LEVEL) {
                 syslog_priority = LOG_INFO;
             } else {
                 syslog_priority = LOG_DEBUG;
@@ -1039,19 +1039,19 @@ private:
         } else {
             // Fallback if LogLevel is not an enum
             switch (level) {
-                case LogLevel::CRITICAL:
+                case LogLevel::CRITICAL_LEVEL:
                     syslog_priority = LOG_CRIT;
                     break;
-                case LogLevel::ERROR:
+                case LogLevel::ERROR_LEVEL:
                     syslog_priority = LOG_ERR;
                     break;
-                case LogLevel::WARN:
+                case LogLevel::WARN_LEVEL:
                     syslog_priority = LOG_WARNING;
                     break;
-                case LogLevel::INFO:
+                case LogLevel::INFO_LEVEL:
                     syslog_priority = LOG_INFO;
                     break;
-                case LogLevel::DEBUG:
+                case LogLevel::DEBUG_LEVEL:
                 case LogLevel::TRACE:
                 default:
                     syslog_priority = LOG_DEBUG;
@@ -1090,19 +1090,19 @@ private:
             // Map log level to os_log type
             os_log_type_t log_type;
             switch (level) {
-                case LogLevel::CRITICAL:
+                case LogLevel::CRITICAL_LEVEL:
                     log_type = OS_LOG_TYPE_FAULT;
                     break;
-                case LogLevel::ERROR:
+                case LogLevel::ERROR_LEVEL:
                     log_type = OS_LOG_TYPE_ERROR;
                     break;
-                case LogLevel::WARN:
+                case LogLevel::WARN_LEVEL:
                     log_type = OS_LOG_TYPE_DEFAULT;
                     break;
-                case LogLevel::INFO:
+                case LogLevel::INFO_LEVEL:
                     log_type = OS_LOG_TYPE_INFO;
                     break;
-                case LogLevel::DEBUG:
+                case LogLevel::DEBUG_LEVEL:
                 case LogLevel::TRACE:
                 default:
                     log_type = OS_LOG_TYPE_DEBUG;

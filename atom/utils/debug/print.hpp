@@ -61,7 +61,12 @@ concept Container = requires(T a) {
 /**
  * @brief Log levels for structured logging
  */
-enum class LogLevel { DEBUG, INFO, WARNING, ERROR };
+enum class LogLevel {
+    DEBUG_LEVEL,
+    INFO_LEVEL,
+    WARNING_LEVEL,
+    ERROR_LEVEL
+};
 
 /**
  * @brief Progress bar display styles
@@ -373,7 +378,11 @@ public:
     void print(std::string_view fmt, Args&&... args) const {
         std::cout << std::string(
             static_cast<size_t>(indent_level_) * SPACES_PER_INDENT, ' ');
-        atom::utils::print(fmt, std::forward<Args>(args)...);
+        if constexpr (sizeof...(args) > 0) {
+            std::cout << std::vformat(fmt, std::make_format_args(args...));
+        } else {
+            std::cout << fmt;
+        }
     }
 
     /**
@@ -386,7 +395,12 @@ public:
     void println(std::string_view fmt, Args&&... args) const {
         std::cout << std::string(
             static_cast<size_t>(indent_level_) * SPACES_PER_INDENT, ' ');
-        atom::utils::println(fmt, std::forward<Args>(args)...);
+        if constexpr (sizeof...(args) > 0) {
+            std::cout << std::vformat(fmt, std::make_format_args(args...));
+        } else {
+            std::cout << fmt;
+        }
+        std::cout << '\n';
     }
 
     /**
@@ -522,9 +536,9 @@ private:
                                  : std::distance(it, data.end()));
 
             futures.push_back(
-                std::async(std::launch::async, [start, it, mean_value]() {
+                std::async(std::launch::async, [start, end_it = it, mean_value]() {
                     double partial_sum = 0.0;
-                    for (auto current = start; current != it; ++current) {
+                    for (auto current = start; current != end_it; ++current) {
                         const double diff = *current - mean_value;
                         partial_sum += diff * diff;
                     }
@@ -680,7 +694,26 @@ public:
             return;
         }
 
-        atom::utils::log(log_file_, level, fmt, std::forward<Args>(args)...);
+        // Write timestamp and level
+        auto now = std::chrono::system_clock::now();
+        auto time_t = std::chrono::system_clock::to_time_t(now);
+        auto tm = *std::localtime(&time_t);
+
+        static constexpr std::array<std::string_view, 4> level_strings = {
+            "DEBUG", "INFO", "WARNING", "ERROR"};
+
+        log_file_ << std::format("[{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}] [{}] ",
+                                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                                tm.tm_hour, tm.tm_min, tm.tm_sec,
+                                level_strings[static_cast<size_t>(level)]);
+
+        if constexpr (sizeof...(args) > 0) {
+            log_file_ << std::vformat(fmt, std::make_format_args(args...));
+        } else {
+            log_file_ << fmt;
+        }
+        log_file_ << '\n';
+        log_file_.flush();
     }
 
     /**

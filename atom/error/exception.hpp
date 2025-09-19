@@ -21,7 +21,7 @@ Description: Better Exception Library
 #include <thread>
 #include <ostream>
 
-#include "atom/macro.hpp"
+#include "../macro.hpp"
 #include "stacktrace.hpp"
 
 namespace atom::error {

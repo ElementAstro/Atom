@@ -327,8 +327,9 @@ make coverage
 
 - **[API Reference](docs/API_REFERENCE.md)**: Complete API documentation
 - **[Usage Examples](docs/EXAMPLES.md)**: Comprehensive usage examples
-- **[Migration Guide](docs/MIGRATION_GUIDE.md)**: Guide for upgrading from the original system
+- **[Migration Guide](docs/MIGRATION_GUIDE.md)**: Comprehensive guide for upgrading from original system to v2.0
 - **[Performance Guide](docs/PERFORMANCE_GUIDE.md)**: Performance optimization techniques
+- **[Scripting Engine Evaluation](docs/SCRIPTING_ENGINE_EVALUATION.md)**: Technical evaluation of scripting engines
 
 ## Contributing
 

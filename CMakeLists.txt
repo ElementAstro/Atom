@@ -40,6 +40,13 @@ include(cmake/ModularInstall.cmake)
 # -----------------------------------------------------------------------------
 option(USE_VCPKG "Use vcpkg package manager" OFF)
 set(USE_VCPKG OFF CACHE BOOL "Force disable vcpkg" FORCE)
+if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    # Temporarily disable vcpkg due to network issues
+    # set(USE_VCPKG ON CACHE BOOL "Enable vcpkg for MSVC" FORCE)
+    # message(STATUS "Enabling vcpkg for MSVC builds")
+else()
+    # Keep user's preference for other platforms
+endif()
 option(UPDATE_VCPKG_BASELINE "Update vcpkg baseline to latest" OFF)
 option(ATOM_BUILD_EXAMPLES "Build examples" ON)
 option(ATOM_BUILD_EXAMPLES_SELECTIVE "Enable selective building of example modules" OFF)
@@ -73,11 +80,41 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   else()
     set(CMAKE_CXX_STANDARD 23)
   endif()
+elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+  # MSVC 2022 supports C++20 well, C++23 support is still experimental
+  if(CMAKE_CXX_COMPILER_VERSION VERSION_LESS "19.29")
+    set(CMAKE_CXX_STANDARD 20)
+  else()
+    set(CMAKE_CXX_STANDARD 20)  # Use C++20 for now until C++23 is stable
+  endif()
 else()
-  set(CMAKE_CXX_STANDARD 23)
+  set(CMAKE_CXX_STANDARD 20)  # Safe fallback
 endif()
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# -----------------------------------------------------------------------------
+# Compiler Configuration
+# -----------------------------------------------------------------------------
+# Setup compiler-specific options based on build type and compiler
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    message(STATUS "Configuring for MSVC compiler")
+    # Call compiler configuration from compiler_options.cmake
+    setup_project_defaults(
+        CXX_STANDARD ${CMAKE_CXX_STANDARD}
+        MIN_MSVC_VERSION 19.28
+        ENABLE_PCH
+        PCH_HEADERS <iostream> <string> <vector> <memory>
+    )
+else()
+    message(STATUS "Configuring for non-MSVC compiler: ${CMAKE_CXX_COMPILER_ID}")
+    # Call compiler configuration for other compilers
+    setup_project_defaults(
+        CXX_STANDARD ${CMAKE_CXX_STANDARD}
+        MIN_GCC_VERSION 10.0
+        MIN_CLANG_VERSION 10.0
+    )
+endif()
 
 # -----------------------------------------------------------------------------
 # Version Definitions
@@ -137,7 +174,12 @@ endif()
 message(STATUS "Finding dependency packages...")
 
 # Use standardized dependency finding
-include(cmake/FindDependencies.cmake)
+if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+    message(STATUS "Using MSVC-specific dependency finding")
+    include(cmake/FindDependenciesMSVC.cmake)
+else()
+    include(cmake/FindDependencies.cmake)
+endif()
 
 # SSH support and Python bindings are now handled by FindDependencies.cmake
 

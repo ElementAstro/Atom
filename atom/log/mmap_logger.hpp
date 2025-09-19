@@ -190,7 +190,7 @@ public:
     void debug(const String& format, Args&&... args,
                const std::source_location& location =
                    std::source_location::current()) {
-        log(LogLevel::DEBUG, Category::General,
+        log(LogLevel::DEBUG_LEVEL, Category::General,
             std::vformat(format.c_str(), std::make_format_args(args...)),
             location);
     }
@@ -207,7 +207,7 @@ public:
     void info(const String& format, Args&&... args,
               const std::source_location& location =
                   std::source_location::current()) {
-        log(LogLevel::INFO, Category::General,
+        log(LogLevel::INFO_LEVEL, Category::General,
             std::vformat(format.c_str(), std::make_format_args(args...)),
             location);
     }
@@ -224,7 +224,7 @@ public:
     void warn(const String& format, Args&&... args,
               const std::source_location& location =
                   std::source_location::current()) {
-        log(LogLevel::WARN, Category::General,
+        log(LogLevel::WARN_LEVEL, Category::General,
             std::vformat(format.c_str(), std::make_format_args(args...)),
             location);
     }
@@ -241,7 +241,7 @@ public:
     void error(const String& format, Args&&... args,
                const std::source_location& location =
                    std::source_location::current()) {
-        log(LogLevel::ERROR, Category::General,
+        log(LogLevel::ERROR_LEVEL, Category::General,
             std::vformat(format.c_str(), std::make_format_args(args...)),
             location);
     }
@@ -258,7 +258,7 @@ public:
     void critical(const String& format, Args&&... args,
                   const std::source_location& location =
                       std::source_location::current()) {
-        log(LogLevel::CRITICAL, Category::General,
+        log(LogLevel::CRITICAL_LEVEL, Category::General,
             std::vformat(format.c_str(), std::make_format_args(args...)),
             location);
     }

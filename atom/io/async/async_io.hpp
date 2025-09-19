@@ -19,6 +19,17 @@
 #include <asio.hpp>
 #endif
 
+// SIMD support detection
+#ifdef __SSE4_2__
+#include <immintrin.h>
+#define ATOM_HAS_SSE42 1
+#endif
+
+#ifdef __AVX2__
+#include <immintrin.h>
+#define ATOM_HAS_AVX2 1
+#endif
+
 #include <spdlog/spdlog.h>
 #include "atom/async/pool.hpp"
 
@@ -31,6 +42,49 @@ template <typename T>
 concept PathString = std::convertible_to<T, std::string> ||
                      std::convertible_to<T, std::filesystem::path> ||
                      std::convertible_to<T, std::string_view>;
+
+/**
+ * @brief Concept for types that can be used as file content
+ */
+template <typename T>
+concept FileContent = std::ranges::contiguous_range<T> &&
+                     (std::same_as<std::ranges::range_value_t<T>, char> ||
+                      std::same_as<std::ranges::range_value_t<T>, unsigned char> ||
+                      std::same_as<std::ranges::range_value_t<T>, std::byte>);
+
+/**
+ * @brief Concept for callback functions that can handle AsyncResult
+ * Note: This concept is defined after AsyncResult class
+ */
+
+/**
+ * @brief Concept for types that can be used as file permissions
+ */
+template <typename T>
+concept FilePermissions = std::same_as<T, std::filesystem::perms> ||
+                         std::convertible_to<T, std::filesystem::perms>;
+
+/**
+ * @brief Concept for types that represent file sizes
+ */
+template <typename T>
+concept FileSizeType = std::integral<T> && std::unsigned_integral<T>;
+
+/**
+ * @brief Concept for types that can be used as buffer data
+ */
+template <typename T>
+concept BufferData = std::ranges::contiguous_range<T> &&
+                    std::is_trivially_copyable_v<std::ranges::range_value_t<T>>;
+
+/**
+ * @brief Concept for types that can be used as compression options
+ */
+template <typename T>
+concept CompressionOptionsType = requires(T t) {
+    { t.compression_level } -> std::convertible_to<int>;
+    { t.enable_checksum } -> std::convertible_to<bool>;
+};
 
 /**
  * @brief Context for managing async operations with cancellation support
@@ -115,6 +169,12 @@ struct AsyncResult<void> {
         return result;
     }
 };
+
+/**
+ * @brief Concept for callback functions that can handle AsyncResult
+ */
+template <typename F, typename T>
+concept AsyncResultCallback = std::invocable<F, AsyncResult<T>>;
 
 template <typename T>
 class [[nodiscard]] Task;
@@ -287,6 +347,55 @@ public:
     [[nodiscard]] Task<AsyncResult<std::vector<std::filesystem::path>>>
     listDirectory(PathString auto&& path);
 
+    /**
+     * @brief Coroutine-based file deletion
+     * @param filename Path to the file to delete
+     * @return Task that completes when deletion finishes
+     */
+    [[nodiscard]] Task<AsyncResult<void>> deleteFile(
+        PathString auto&& filename);
+
+    /**
+     * @brief Coroutine-based file status retrieval
+     * @param filename Path to the file
+     * @return Task that completes with file status
+     */
+    [[nodiscard]] Task<AsyncResult<std::filesystem::file_status>> getFileStatus(
+        PathString auto&& filename);
+
+    /**
+     * @brief Coroutine-based file existence check
+     * @param filename Path to the file
+     * @return Task that completes with existence result
+     */
+    [[nodiscard]] Task<AsyncResult<bool>> fileExists(
+        PathString auto&& filename);
+
+    /**
+     * @brief Coroutine-based permission change
+     * @param filename Path to the file
+     * @param perms New permissions to set
+     * @return Task that completes when permission change finishes
+     */
+    [[nodiscard]] Task<AsyncResult<void>> changePermissions(
+        PathString auto&& filename, std::filesystem::perms perms);
+
+    /**
+     * @brief Coroutine-based directory creation
+     * @param path Path of the directory to create
+     * @return Task that completes when creation finishes
+     */
+    [[nodiscard]] Task<AsyncResult<void>> createDirectory(
+        PathString auto&& path);
+
+    /**
+     * @brief Coroutine-based directory removal
+     * @param path Path of the directory to remove
+     * @return Task that completes when removal finishes
+     */
+    [[nodiscard]] Task<AsyncResult<void>> removeDirectory(
+        PathString auto&& path);
+
 private:
 #ifdef ATOM_USE_ASIO
     asio::io_context& io_context_;
@@ -304,6 +413,69 @@ private:
      * @return True if valid, false otherwise
      */
     static bool validatePath(std::string_view path) noexcept;
+
+    /**
+     * @brief Validates file permissions for read/write operations
+     * @param path Path to validate
+     * @param write_access Whether write access is required
+     * @return True if permissions are valid, false otherwise
+     */
+    static bool validatePermissions(std::string_view path, bool write_access = false) noexcept;
+
+    /**
+     * @brief Sanitizes a filename by removing or replacing invalid characters
+     * @param filename Filename to sanitize
+     * @return Sanitized filename
+     */
+    static std::string sanitizeFilename(std::string_view filename) noexcept;
+
+    /**
+     * @brief SIMD-optimized buffer operations for high-performance I/O
+     */
+    static bool simdBufferCompare(std::span<const char> buffer1, std::span<const char> buffer2) noexcept;
+    static size_t simdFindByte(std::span<const char> buffer, char target) noexcept;
+    static void simdMemorySet(std::span<char> buffer, char value) noexcept;
+
+    /**
+     * @brief Performance optimization functions
+     */
+    /**
+     * @brief Asynchronously writes multiple files in parallel for optimal performance
+     * @param file_data_pairs Pairs of filename and data to write
+     * @param callback Callback function for the batch operation result
+     */
+    void asyncBatchWrite(std::span<const std::pair<std::string, std::string>> file_data_pairs,
+                        std::function<void(AsyncResult<void>)> callback);
+
+    /**
+     * @brief Asynchronously deletes multiple files in parallel
+     * @param files List of file paths to delete
+     * @param callback Callback function for the batch operation result
+     */
+    void asyncBatchDelete(std::span<const std::string> files,
+                         std::function<void(AsyncResult<void>)> callback);
+    /**
+     * @brief Asynchronously reads a file in chunks for memory-efficient processing
+     * @param filename Path to the file to read
+     * @param chunk_size Size of each chunk to read
+     * @param chunk_callback Callback for each chunk read
+     * @param completion_callback Callback when reading is complete
+     */
+    template <PathString T>
+    void asyncStreamRead(T&& filename, size_t chunk_size,
+                        std::function<void(AsyncResult<std::string>)> chunk_callback,
+                        std::function<void(AsyncResult<void>)> completion_callback);
+
+    /**
+     * @brief Asynchronously writes data to a file in chunks for memory efficiency
+     * @param filename Path to the file to write
+     * @param data Data to write
+     * @param chunk_size Size of each chunk to write
+     * @param callback Callback when writing is complete
+     */
+    template <PathString T>
+    void asyncStreamWrite(T&& filename, std::span<const char> data,
+                         size_t chunk_size, std::function<void(AsyncResult<void>)> callback);
 
     /**
      * @brief Converts path-like types to string efficiently
@@ -454,6 +626,227 @@ void AsyncFile::asyncDelete(T&& filename,
     });
 }
 
+template <PathString T>
+void AsyncFile::asyncStat(T&& filename,
+                         std::function<void(AsyncResult<std::filesystem::file_status>)> callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)), callback = std::move(callback)]() {
+        try {
+            std::error_code ec;
+            auto status = std::filesystem::status(filename, ec);
+            if (ec) {
+                callback(AsyncResult<std::filesystem::file_status>::error_result(
+                    "Failed to get file status: " + filename + " - " + ec.message()));
+                return;
+            }
+            callback(AsyncResult<std::filesystem::file_status>::success_result(std::move(status)));
+        } catch (const std::exception& e) {
+            callback(AsyncResult<std::filesystem::file_status>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncChangePermissions(T&& filename, std::filesystem::perms perms,
+                                      std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)), perms, callback = std::move(callback)]() {
+        try {
+            std::error_code ec;
+            std::filesystem::permissions(filename, perms, ec);
+            if (ec) {
+                callback(AsyncResult<void>::error_result(
+                    "Failed to change permissions: " + filename + " - " + ec.message()));
+                return;
+            }
+            callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncExists(T&& filename,
+                           std::function<void(AsyncResult<bool>)> callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)), callback = std::move(callback)]() {
+        try {
+            bool exists = std::filesystem::exists(filename);
+            callback(AsyncResult<bool>::success_result(exists));
+        } catch (const std::exception& e) {
+            callback(AsyncResult<bool>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncCreateDirectory(T&& path,
+                                    std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([path = toString(std::forward<T>(path)), callback = std::move(callback)]() {
+        try {
+            std::error_code ec;
+            std::filesystem::create_directories(path, ec);
+            if (ec) {
+                callback(AsyncResult<void>::error_result(
+                    "Failed to create directory: " + path + " - " + ec.message()));
+                return;
+            }
+            callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncRemoveDirectory(T&& path,
+                                    std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([path = toString(std::forward<T>(path)), callback = std::move(callback)]() {
+        try {
+            std::error_code ec;
+            std::filesystem::remove_all(path, ec);
+            if (ec) {
+                callback(AsyncResult<void>::error_result(
+                    "Failed to remove directory: " + path + " - " + ec.message()));
+                return;
+            }
+            callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncListDirectory(T&& path,
+                                  std::function<void(AsyncResult<std::vector<std::filesystem::path>>)> callback) {
+    executeAsync([path = toString(std::forward<T>(path)), callback = std::move(callback)]() {
+        try {
+            std::vector<std::filesystem::path> entries;
+            std::error_code ec;
+
+            for (const auto& entry : std::filesystem::directory_iterator(path, ec)) {
+                if (ec) {
+                    callback(AsyncResult<std::vector<std::filesystem::path>>::error_result(
+                        "Failed to iterate directory: " + path + " - " + ec.message()));
+                    return;
+                }
+                entries.push_back(entry.path());
+            }
+
+            callback(AsyncResult<std::vector<std::filesystem::path>>::success_result(std::move(entries)));
+        } catch (const std::exception& e) {
+            callback(AsyncResult<std::vector<std::filesystem::path>>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<std::string>> AsyncFile::readFile(T&& filename) {
+    std::promise<AsyncResult<std::string>> promise;
+    auto future = promise.get_future();
+
+    asyncRead(std::forward<T>(filename), [&promise](AsyncResult<std::string> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<void>> AsyncFile::writeFile(T&& filename, std::span<const char> content) {
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    asyncWrite(std::forward<T>(filename), content, [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<std::vector<std::filesystem::path>>> AsyncFile::listDirectory(T&& path) {
+    std::promise<AsyncResult<std::vector<std::filesystem::path>>> promise;
+    auto future = promise.get_future();
+
+    asyncListDirectory(std::forward<T>(path), [&promise](AsyncResult<std::vector<std::filesystem::path>> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<void>> AsyncFile::deleteFile(T&& filename) {
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    asyncDelete(std::forward<T>(filename), [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<std::filesystem::file_status>> AsyncFile::getFileStatus(T&& filename) {
+    std::promise<AsyncResult<std::filesystem::file_status>> promise;
+    auto future = promise.get_future();
+
+    asyncStat(std::forward<T>(filename), [&promise](AsyncResult<std::filesystem::file_status> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<bool>> AsyncFile::fileExists(T&& filename) {
+    std::promise<AsyncResult<bool>> promise;
+    auto future = promise.get_future();
+
+    asyncExists(std::forward<T>(filename), [&promise](AsyncResult<bool> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<void>> AsyncFile::changePermissions(T&& filename, std::filesystem::perms perms) {
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    asyncChangePermissions(std::forward<T>(filename), perms, [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<void>> AsyncFile::createDirectory(T&& path) {
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    asyncCreateDirectory(std::forward<T>(path), [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
+template <PathString T>
+[[nodiscard]] Task<AsyncResult<void>> AsyncFile::removeDirectory(T&& path) {
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    asyncRemoveDirectory(std::forward<T>(path), [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    co_return future.get();
+}
+
 /**
  * @brief High-performance coroutine Task implementation with cancellation
  * support
@@ -548,6 +941,65 @@ private:
     std::future<T> future_;
     std::shared_ptr<AsyncContext> context_;
 };
+
+// Implementation of streaming functions
+template <PathString T>
+void AsyncFile::asyncStreamRead(T&& filename, size_t chunk_size,
+                               std::function<void(AsyncResult<std::string>)> chunk_callback,
+                               std::function<void(AsyncResult<void>)> completion_callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)), chunk_size,
+                  chunk_callback = std::move(chunk_callback),
+                  completion_callback = std::move(completion_callback)]() mutable {
+        try {
+            std::ifstream file(filename, std::ios::binary);
+            if (!file) {
+                completion_callback(AsyncResult<void>::error_result("Failed to open file: " + filename));
+                return;
+            }
+
+            std::string chunk(chunk_size, '\0');
+            while (file.read(chunk.data(), chunk_size) || file.gcount() > 0) {
+                chunk.resize(file.gcount());
+                chunk_callback(AsyncResult<std::string>::success_result(std::string(chunk)));
+                chunk.resize(chunk_size);
+            }
+
+            completion_callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            completion_callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncStreamWrite(T&& filename, std::span<const char> data,
+                                size_t chunk_size, std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([filename = toString(std::forward<T>(filename)),
+                  data = std::string(data.begin(), data.end()), chunk_size,
+                  callback = std::move(callback)]() mutable {
+        try {
+            std::ofstream file(filename, std::ios::binary);
+            if (!file) {
+                callback(AsyncResult<void>::error_result("Failed to open file for writing: " + filename));
+                return;
+            }
+
+            size_t written = 0;
+            while (written < data.size()) {
+                size_t to_write = std::min(chunk_size, data.size() - written);
+                if (!file.write(data.data() + written, to_write)) {
+                    callback(AsyncResult<void>::error_result("Failed to write chunk to file: " + filename));
+                    return;
+                }
+                written += to_write;
+            }
+
+            callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
 
 }  // namespace atom::async::io
 

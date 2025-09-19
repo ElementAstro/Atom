@@ -32,11 +32,15 @@ if(SOURCES)
     target_link_libraries(${LIB_NAME}
         PUBLIC
         atom-error # Basic dependency
+        atom-meta  # For concept.hpp
+        atom-type  # For noncopyable.hpp
     )
 else()
     target_link_libraries(${LIB_NAME}
         INTERFACE
         atom-error # Basic dependency
+        atom-meta  # For concept.hpp
+        atom-type  # For noncopyable.hpp
     )
 endif()
 

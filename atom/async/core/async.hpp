@@ -19,7 +19,7 @@ Description: A simple but useful async worker manager
 #include "atom/macro.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
-#include <windows.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #elif defined(ATOM_PLATFORM_APPLE)
 #include <mach/thread_policy.h>
 #include <pthread.h>

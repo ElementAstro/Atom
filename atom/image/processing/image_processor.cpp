@@ -11,7 +11,12 @@
 #include <opencv2/imgproc.hpp>
 #endif
 
-#include "atom/error/exception.hpp"
+// Use standard exceptions to avoid atom error system namespace pollution
+#include <stdexcept>
+#undef THROW_RUNTIME_ERROR  // Remove the simple definition
+#define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
+
+
 
 namespace atom::image {
 
@@ -328,6 +333,55 @@ blob ImageProcessor::applySharpen(const blob& input [[maybe_unused]], double str
     return blob(outputMat);
 #else
     THROW_RUNTIME_ERROR("Sharpen filter requires OpenCV support");
+#endif
+}
+
+// Format-specific converters
+blob ImageProcessor::convertToJPEG(const blob& input) const {
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    cv::Mat inputMat = input.to_mat();
+    std::vector<uint8_t> buffer;
+    std::vector<int> params = {cv::IMWRITE_JPEG_QUALITY, 95};
+
+    if (!cv::imencode(".jpg", inputMat, buffer, params)) {
+        THROW_RUNTIME_ERROR("Failed to encode image as JPEG");
+    }
+
+    return blob(buffer.data(), buffer.size());
+#else
+    THROW_RUNTIME_ERROR("JPEG conversion requires OpenCV support");
+#endif
+}
+
+blob ImageProcessor::convertToPNG(const blob& input) const {
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    cv::Mat inputMat = input.to_mat();
+    std::vector<uint8_t> buffer;
+    std::vector<int> params = {cv::IMWRITE_PNG_COMPRESSION, 6};
+
+    if (!cv::imencode(".png", inputMat, buffer, params)) {
+        THROW_RUNTIME_ERROR("Failed to encode image as PNG");
+    }
+
+    return blob(buffer.data(), buffer.size());
+#else
+    THROW_RUNTIME_ERROR("PNG conversion requires OpenCV support");
+#endif
+}
+
+blob ImageProcessor::convertToTIFF(const blob& input) const {
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    cv::Mat inputMat = input.to_mat();
+    std::vector<uint8_t> buffer;
+    std::vector<int> params = {cv::IMWRITE_TIFF_COMPRESSION, 1}; // LZW compression
+
+    if (!cv::imencode(".tiff", inputMat, buffer, params)) {
+        THROW_RUNTIME_ERROR("Failed to encode image as TIFF");
+    }
+
+    return blob(buffer.data(), buffer.size());
+#else
+    THROW_RUNTIME_ERROR("TIFF conversion requires OpenCV support");
 #endif
 }
 

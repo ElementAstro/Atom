@@ -19,7 +19,7 @@ protected:
 // Test basic memory pool functionality
 TEST_F(SimpleMemoryTest, BasicMemoryPool) {
     // Use the simpler fixed-block memory pool
-    atom::memory::MemoryPool<64> pool;
+    atom::memory::FixedBlockPool<64> pool;
 
     // Test basic allocation
     void* ptr = pool.allocate();

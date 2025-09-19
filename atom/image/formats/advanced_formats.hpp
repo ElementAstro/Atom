@@ -14,11 +14,12 @@
  * @version 1.0.0
  */
 
-#include "atom/image/core/image_blob.hpp"
+#include "../core/image_blob.hpp"
 #include <vector>
 #include <string>
 #include <memory>
 #include <unordered_map>
+#include <functional>
 
 namespace atom::image {
 

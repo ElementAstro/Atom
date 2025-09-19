@@ -69,7 +69,7 @@ int main() {
     // Create a memory pool with 64-byte blocks and 100 blocks per chunk
     constexpr size_t BlockSize = 64;
     constexpr size_t BlocksPerChunk = 100;
-    atom::memory::MemoryPool<BlockSize, BlocksPerChunk> basicPool;
+    atom::memory::FixedBlockPool<BlockSize, BlocksPerChunk> basicPool;
 
     std::cout << "Created memory pool with:" << std::endl;
     std::cout << "  Block size: " << BlockSize << " bytes" << std::endl;
@@ -205,7 +205,7 @@ int main() {
     // Test memory pool
     std::cout << "\nTesting MemoryPool..." << std::endl;
     double poolTime = measureTime([&]() {
-        atom::memory::MemoryPool<BlockSize, BlocksPerChunk> perfPool;
+        atom::memory::FixedBlockPool<BlockSize, BlocksPerChunk> perfPool;
         std::vector<void*> ptrs;
         ptrs.reserve(numAllocations);
 

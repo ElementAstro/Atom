@@ -8,7 +8,12 @@
 #include <iostream>
 #include <random>
 
-#include "atom/error/exception.hpp"
+#include <stdexcept>
+
+// Define error macros to avoid atom error system namespace pollution
+#define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
+#define THROW_INVALID_ARGUMENT(msg) throw std::invalid_argument(msg)
+
 
 namespace atom {
 namespace image {

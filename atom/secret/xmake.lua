@@ -14,6 +14,9 @@ set_license("GPL3")
 -- Define source files
 local source_files = {
     "encryption.cpp",
+    "password_manager.cpp",
+    "password_utils.cpp",
+    "serialization.cpp",
     "storage.cpp"
 }
 
@@ -22,7 +25,10 @@ local header_files = {
     "common.hpp",
     "encryption.hpp",
     "password_entry.hpp",
+    "password_manager.hpp",
+    "password_utils.hpp",
     "result.hpp",
+    "serialization.hpp",
     "storage.hpp"
 }
 
@@ -35,7 +41,7 @@ target("atom-secret-object")
     add_headerfiles(table.unpack(header_files))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("loguru", "openssl")
     add_deps("atom-utils")
 
     -- Add include directories
@@ -62,7 +68,7 @@ target("atom-secret")
 
     -- Add dependencies
     add_deps("atom-secret-object", "atom-utils")
-    add_packages("loguru")
+    add_packages("loguru", "openssl")
 
     -- Platform-specific settings
     if is_plat("windows") then

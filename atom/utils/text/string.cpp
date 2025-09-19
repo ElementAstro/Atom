@@ -366,23 +366,55 @@ auto stringToWString(std::string_view str) -> std::wstring {
 
             // Single-byte character (ASCII)
             if (c < 0x80) {
+                result.push_back(static_cast<wchar_t>(c));
+            }
+            // 2-byte UTF-8 sequence
+            else if ((c & 0xE0) == 0xC0 && i < str.size()) {
+                const unsigned char c2 = static_cast<unsigned char>(str[i++]);
+                if ((c2 & 0xC0) == 0x80) {
+                    const uint32_t codepoint = ((c & 0x1F) << 6) | (c2 & 0x3F);
+                    result.push_back(static_cast<wchar_t>(codepoint));
+                } else {
+                    result.push_back(L'?');  // Invalid sequence
+                    --i;  // Back up to reprocess the byte
+                }
+            }
+            // 3-byte UTF-8 sequence
+            else if ((c & 0xF0) == 0xE0 && i + 1 < str.size()) {
+                const unsigned char c2 = static_cast<unsigned char>(str[i++]);
+                const unsigned char c3 = static_cast<unsigned char>(str[i++]);
+                if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80) {
+                    const uint32_t codepoint = ((c & 0x0F) << 12) |
+                                               ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+                    result.push_back(static_cast<wchar_t>(codepoint));
+                } else {
+                    result.push_back(L'?');  // Invalid sequence
+                    i -= 2;  // Back up to reprocess the bytes
+                }
+            }
+            // 4-byte UTF-8 sequence
+            else if ((c & 0xF8) == 0xF0 && i + 2 < str.size()) {
                 const unsigned char c2 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c3 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c4 = static_cast<unsigned char>(str[i++]);
-                // Convert to Unicode code point
-                const uint32_t codepoint = ((c & 0x07) << 18) |
-                                           ((c2 & 0x3F) << 12) |
-                                           ((c3 & 0x3F) << 6) | (c4 & 0x3F);
-                // Convert to UTF-16 surrogate pair
-                if (codepoint > 0xFFFF) {
-                    // High surrogate
-                    result.push_back(static_cast<wchar_t>(
-                        0xD800 + ((codepoint - 0x10000) >> 10)));
-                    // Low surrogate
-                    result.push_back(static_cast<wchar_t>(
-                        0xDC00 + ((codepoint - 0x10000) & 0x3FF)));
+                if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80 && (c4 & 0xC0) == 0x80) {
+                    const uint32_t codepoint = ((c & 0x07) << 18) |
+                                               ((c2 & 0x3F) << 12) |
+                                               ((c3 & 0x3F) << 6) | (c4 & 0x3F);
+                    // Convert to UTF-16 surrogate pair
+                    if (codepoint > 0xFFFF) {
+                        // High surrogate
+                        result.push_back(static_cast<wchar_t>(
+                            0xD800 + ((codepoint - 0x10000) >> 10)));
+                        // Low surrogate
+                        result.push_back(static_cast<wchar_t>(
+                            0xDC00 + ((codepoint - 0x10000) & 0x3FF)));
+                    } else {
+                        result.push_back(static_cast<wchar_t>(codepoint));
+                    }
                 } else {
-                    result.push_back(static_cast<wchar_t>(codepoint));
+                    result.push_back(L'?');  // Invalid sequence
+                    i -= 3;  // Back up to reprocess the bytes
                 }
             } else {
                 // Invalid UTF-8 sequence, skip
@@ -396,6 +428,70 @@ auto stringToWString(std::string_view str) -> std::wstring {
     } catch (const std::exception& e) {
         throw std::runtime_error(
             std::format("String to WString conversion failed: {}", e.what()));
+    }
+}
+
+auto wstringToString(std::wstring_view wstr) -> std::string {
+    try {
+        if (wstr.empty()) {
+            return {};
+        }
+
+        // Manual UTF-16 to UTF-8 conversion
+        std::string result;
+        result.reserve(wstr.size() * 3);  // Reserve space for worst case UTF-8
+
+        for (size_t i = 0; i < wstr.size(); ++i) {
+            const wchar_t wc = wstr[i];
+
+            // Handle ASCII characters (0-127)
+            if (wc < 0x80) {
+                result.push_back(static_cast<char>(wc));
+            }
+            // Handle 2-byte UTF-8 characters (128-2047)
+            else if (wc < 0x800) {
+                result.push_back(static_cast<char>(0xC0 | (wc >> 6)));
+                result.push_back(static_cast<char>(0x80 | (wc & 0x3F)));
+            }
+            // Handle surrogate pairs for 4-byte UTF-8 characters
+            else if (wc >= 0xD800 && wc <= 0xDBFF && i + 1 < wstr.size()) {
+                // High surrogate
+                const wchar_t high = wc;
+                const wchar_t low = wstr[++i];
+
+                if (low >= 0xDC00 && low <= 0xDFFF) {
+                    // Valid surrogate pair
+                    const uint32_t codepoint = 0x10000 +
+                        ((high - 0xD800) << 10) + (low - 0xDC00);
+
+                    result.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
+                    result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+                    result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+                    result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+                } else {
+                    // Invalid surrogate pair, replace with replacement character
+                    result.append("\xEF\xBF\xBD");  // UTF-8 replacement character
+                    --i;  // Back up to process the low surrogate separately
+                }
+            }
+            // Handle 3-byte UTF-8 characters (2048-65535)
+            else if (wc < 0x10000) {
+                result.push_back(static_cast<char>(0xE0 | (wc >> 12)));
+                result.push_back(static_cast<char>(0x80 | ((wc >> 6) & 0x3F)));
+                result.push_back(static_cast<char>(0x80 | (wc & 0x3F)));
+            }
+            // Invalid character, replace with replacement character
+            else {
+                result.append("\xEF\xBF\xBD");  // UTF-8 replacement character
+            }
+        }
+
+        return result;
+    } catch (const std::bad_alloc& e) {
+        throw std::bad_alloc();
+    } catch (const std::exception& e) {
+        throw std::runtime_error(
+            std::format("WString to String conversion failed: {}", e.what()));
     }
 }
 
@@ -659,6 +755,43 @@ auto toUpper(std::string_view str) -> std::string {
         return result;
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
+    }
+}
+
+auto splitTokens(std::string_view& str, const std::string_view& delims)
+    -> std::optional<std::string_view> {
+    try {
+        if (str.empty()) {
+            return std::nullopt;
+        }
+
+        // Find the start of the next token (skip leading delimiters)
+        const size_t start = str.find_first_not_of(delims);
+        if (start == std::string_view::npos) {
+            // No more tokens, only delimiters remain
+            str = std::string_view{};
+            return std::nullopt;
+        }
+
+        // Find the end of the current token
+        const size_t end = str.find_first_of(delims, start);
+
+        std::string_view token;
+        if (end == std::string_view::npos) {
+            // Last token, no more delimiters
+            token = str.substr(start);
+            str = std::string_view{};  // Mark as exhausted
+        } else {
+            // Extract token and update the string view
+            token = str.substr(start, end - start);
+            str = str.substr(end);
+        }
+
+        return token;
+    } catch (const std::exception& e) {
+        // If any error occurs, mark string as exhausted and return nullopt
+        str = std::string_view{};
+        return std::nullopt;
     }
 }
 

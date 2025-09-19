@@ -32,10 +32,13 @@ using namespace std::chrono;
 /**
  * @brief Create a test image with various lighting conditions
  */
-blob<uint8_t> createEnhancementTestImage() {
+blob createEnhancementTestImage() {
     const int width = 400;
     const int height = 300;
-    blob<uint8_t> img(height, width, 3);
+    // Create raw data buffer
+    std::vector<uint8_t> data(height * width * 3);
+    
+    blob img(reinterpret_cast<std::byte*>(data.data()), data.size());
 
     // Create regions with different brightness levels
     for (int y = 0; y < height; ++y) {
@@ -81,27 +84,30 @@ blob<uint8_t> createEnhancementTestImage() {
                 base_b = std::min(255, base_b + 50);
             }
 
-            img.at(y, x, 0) = base_r;
-            img.at(y, x, 1) = base_g;
-            img.at(y, x, 2) = base_b;
+            // Direct access to data vector
+            int pixel_idx = (y * width + x) * 3;
+            data[pixel_idx] = base_r;
+            data[pixel_idx + 1] = base_g;
+            data[pixel_idx + 2] = base_b;
         }
     }
 
-    return img;
+    return blob(reinterpret_cast<std::byte*>(data.data()), data.size());
 }
 
 /**
  * @brief Calculate and display histogram statistics
  */
-void displayHistogramStats(const blob<uint8_t>& img,
+void displayHistogramStats(const blob& img,
                            const std::string& description) {
     std::vector<int> histogram(256, 0);
-
-    // Calculate histogram for first channel
-    for (int y = 0; y < img.rows(); ++y) {
-        for (int x = 0; x < img.cols(); ++x) {
-            histogram[img.at(y, x, 0)]++;
-        }
+    
+    // Simplified histogram calculation
+    const uint8_t* data = reinterpret_cast<const uint8_t*>(img.data());
+    size_t pixel_count = img.size() / 3;  // Assume 3-channel image
+    
+    for (size_t i = 0; i < pixel_count; ++i) {
+        histogram[data[i * 3]]++;  // Only use first channel
     }
 
     // Find statistics
@@ -140,8 +146,7 @@ void demonstrateHistogramEqualization() {
 
     try {
         auto original = createEnhancementTestImage();
-        std::cout << "Original image: " << original.cols() << "x"
-                  << original.rows() << "\n";
+        std::cout << "Original image blob size: " << original.size() << " bytes\n";
 
         displayHistogramStats(original, "Original");
 

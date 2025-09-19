@@ -31,12 +31,9 @@ Description: Timer class for C++
 #include <type_traits>
 #include <vector>
 
-// Prevent Windows header conflicts
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#ifndef NOMINMAX
-#define NOMINMAX
+#ifdef _WIN32
+// Include Windows compatibility header to handle winsock2 conflicts
+#include "../../../cmake/WindowsCompat.hpp"
 #endif
 
 #ifdef ATOM_USE_BOOST_LOCKFREE
@@ -260,7 +257,7 @@ private:
 #ifdef ATOM_USE_ASIO
     void asioRun() noexcept;
     std::unique_ptr<asio::io_context> m_ioContext;
-    std::unique_ptr<asio::io_context::work> m_work;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> m_work;
     std::unique_ptr<asio::steady_timer> m_asioTimer;
 #endif
 

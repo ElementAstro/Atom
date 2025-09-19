@@ -1,6 +1,7 @@
 #include "atom/extra/spdlog/modern_log.h"
 
 #include <chrono>
+#include <format>
 #include <future>
 #include <iostream>
 #include <random>
@@ -67,14 +68,13 @@ int main() {
             std::cout << "Custom logger management completed" << std::endl;
         }
 
-        // 2. Advanced filtering
-        std::cout << "\n2. Advanced Filtering:" << std::endl;
+        // 2. Level-based filtering (using built-in level control)
+        std::cout << "\n2. Level-based Filtering:" << std::endl;
         {
             auto& logger = LogManager::default_logger();
 
-            // Create a level filter
-            auto level_filter = std::make_unique<LevelFilter>(Level::warn);
-            logger.set_filter(std::move(level_filter));
+            // Demonstrate level filtering by changing logger level
+            logger.set_level(Level::warn);
 
             // These should be filtered out (below warn level)
             logger.trace("This trace message should be filtered");
@@ -86,116 +86,68 @@ int main() {
             logger.error("This error message should pass");
             logger.critical("This critical message should pass");
 
-            // Create a pattern filter
-            auto pattern_filter = std::make_unique<PatternFilter>("user_.*");
-            logger.set_filter(std::move(pattern_filter));
+            // Reset to info level
+            logger.set_level(Level::info);
+            logger.info("Level reset - this message should pass");
 
-            logger.info("user_login: This should pass");
-            logger.info("user_logout: This should pass");
-            logger.info("system_startup: This should be filtered");
-
-            // Create a context filter
-            auto context_filter =
-                std::make_unique<ContextFilter>("environment", "production");
-            logger.set_filter(std::move(context_filter));
-
-            LogContext prod_ctx;
-            prod_ctx.add("environment", "production");
-            logger.log_with_context(Level::info, prod_ctx,
-                                    "Production message should pass");
-
-            LogContext dev_ctx;
-            dev_ctx.add("environment", "development");
-            logger.log_with_context(Level::info, dev_ctx,
-                                    "Development message should be filtered");
-
-            // Remove filter
-            logger.remove_filter();
-            logger.info("Filter removed - this message should pass");
-
-            std::cout << "Advanced filtering completed" << std::endl;
+            std::cout << "Level-based filtering completed" << std::endl;
         }
 
-        // 3. Log sampling strategies
-        std::cout << "\n3. Log Sampling Strategies:" << std::endl;
+        // 3. Manual sampling demonstration
+        std::cout << "\n3. Manual Sampling Demonstration:" << std::endl;
         {
             auto& logger = LogManager::default_logger();
 
-            // Rate-based sampling (1 in every 3 messages)
-            auto rate_sampler = std::make_unique<RateSampler>(3);
-            logger.set_sampler(std::move(rate_sampler));
-
-            std::cout << "Rate sampling (1 in 3):" << std::endl;
+            // Manual rate-based sampling (1 in every 3 messages)
+            std::cout << "Manual rate sampling (1 in 3):" << std::endl;
             for (int i = 0; i < 10; ++i) {
-                logger.info("Rate sampled message {}", i);
+                if (i % 3 == 0) {  // Manual sampling logic
+                    logger.info("Sampled message logged");
+                }
             }
 
-            // Time-based sampling (1 message per 100ms)
-            auto time_sampler = std::make_unique<TimeSampler>(100ms);
-            logger.set_sampler(std::move(time_sampler));
-
-            std::cout << "Time sampling (1 per 100ms):" << std::endl;
+            // Manual time-based sampling demonstration
+            std::cout << "Manual time-based sampling demonstration:" << std::endl;
+            auto last_log_time = std::chrono::steady_clock::now();
             for (int i = 0; i < 10; ++i) {
-                logger.info("Time sampled message {}", i);
+                auto now = std::chrono::steady_clock::now();
+                if (now - last_log_time >= 100ms) {
+                    logger.info("Time sampled message logged");
+                    last_log_time = now;
+                }
                 std::this_thread::sleep_for(50ms);
             }
 
-            // Adaptive sampling (adjusts based on load)
-            auto adaptive_sampler =
-                std::make_unique<AdaptiveSampler>(100, 1000);
-            logger.set_sampler(std::move(adaptive_sampler));
-
-            std::cout << "Adaptive sampling:" << std::endl;
-            for (int i = 0; i < 20; ++i) {
-                logger.info("Adaptive sampled message {}", i);
-            }
-
-            // Remove sampler
-            logger.remove_sampler();
-            logger.info("Sampler removed - all messages should pass");
-
-            std::cout << "Log sampling strategies completed" << std::endl;
+            std::cout << "Manual sampling demonstration completed" << std::endl;
         }
 
-        // 4. Event system integration
-        std::cout << "\n4. Event System Integration:" << std::endl;
+        // 4. Performance timing and statistics
+        std::cout << "\n4. Performance Timing and Statistics:" << std::endl;
         {
-            auto& event_system = LogEventSystem::instance();
-
-            // Register event handlers
-            event_system.register_handler(
-                LogEventType::message_logged, [](const LogEvent& event) {
-                    std::cout << "[EVENT] Message logged: " << event.message
-                              << std::endl;
-                });
-
-            event_system.register_handler(
-                LogEventType::error_occurred, [](const LogEvent& event) {
-                    std::cout << "[EVENT] Error occurred: " << event.message
-                              << std::endl;
-                });
-
-            event_system.register_handler(
-                LogEventType::performance_threshold, [](const LogEvent& event) {
-                    std::cout << "[EVENT] Performance threshold exceeded: "
-                              << event.message << std::endl;
-                });
-
             auto& logger = LogManager::default_logger();
 
-            // These will trigger events
-            logger.info("This will trigger a message_logged event");
-            logger.error(
-                "This will trigger both message_logged and error_occurred "
-                "events");
-
-            // Simulate performance threshold
+            // Demonstrate timing functionality
             {
-                auto timer = logger.time_scope("slow_operation");
-                std::this_thread::sleep_for(200ms);  // Simulate slow operation
+                auto timer = logger.time_scope("example_operation");
+                std::this_thread::sleep_for(100ms);
+                logger.info("Operation in progress...");
+                std::this_thread::sleep_for(50ms);
             }
 
-            std::cout << "Event system integration completed" << std::endl;
+            // Demonstrate different log levels for monitoring
+            logger.info("System running normally");
+            logger.warn("Minor issue detected");
+            logger.error("Error occurred, handling gracefully");
+
+            // Get logger statistics
+            try {
+                const auto& stats = logger.get_stats();
+                std::cout << "Logger statistics retrieved successfully" << std::endl;
+            } catch (const std::exception& e) {
+                std::cout << "Statistics not available: " << e.what() << std::endl;
+            }
+
+            std::cout << "Performance timing and statistics completed" << std::endl;
         }
 
         // 5. Structured data logging
@@ -213,7 +165,7 @@ int main() {
             user_data.add("last_login", "2024-01-15T10:30:00Z");
 
             // Log structured data
-            logger.log_structured(Level::info, "User profile", user_data);
+            logger.log_structured(Level::info, user_data);
 
             // Nested structured data
             StructuredData order_data;
@@ -226,13 +178,13 @@ int main() {
             items_data.add("item_2", "Product B");
             order_data.add("items", items_data);
 
-            logger.log_structured(Level::info, "Order created", order_data);
+            logger.log_structured(Level::info, order_data);
 
             // Convert to different formats
             std::cout << "Structured data as JSON: " << user_data.to_json()
                       << std::endl;
-            std::cout << "Structured data as XML: " << user_data.to_xml()
-                      << std::endl;
+            // Skip XML conversion as to_xml method doesn't exist
+            std::cout << "XML conversion would be shown here if implemented" << std::endl;
 
             std::cout << "Structured data logging completed" << std::endl;
         }
@@ -252,8 +204,8 @@ int main() {
                     std::launch::async, [&logger, t, messages_per_thread]() {
                         for (int i = 0; i < messages_per_thread; ++i) {
                             LogContext ctx;
-                            ctx.add("thread_id", std::to_string(t));
-                            ctx.add("message_id", std::to_string(i));
+                            ctx.with_field("thread_id", std::to_string(t));
+                            ctx.with_field("message_id", std::to_string(i));
 
                             logger.log_with_context(
                                 Level::info, ctx, "Thread {} message {}", t, i);
@@ -272,42 +224,15 @@ int main() {
             std::cout << "Multi-threaded logging completed" << std::endl;
         }
 
-        // 7. Log archiving and rotation
+        // 7. Log archiving and rotation (skipped - LogArchiver not implemented)
         std::cout << "\n7. Log Archiving and Rotation:" << std::endl;
         {
-            auto& archiver = LogArchiver::instance();
-
-            // Configure archiving
-            ArchiveConfig config;
-            config.max_file_size = 1024 * 1024;  // 1MB
-            config.max_files = 5;
-            config.compression_enabled = true;
-            config.archive_directory = "logs/archive";
-
-            archiver.configure(config);
-
-            // Simulate log rotation
-            for (int i = 0; i < 100; ++i) {
-                std::string log_content =
-                    "Log entry " + std::to_string(i) +
-                    " with some content to fill up the log file";
-                archiver.add_log_entry("application.log", log_content);
-            }
-
-            // Force archive
-            archiver.archive_logs();
-
-            // Get archive statistics
-            auto stats = archiver.get_stats();
-            std::cout << "Archive statistics:" << std::endl;
-            std::cout << "  Total archived files: "
-                      << stats.total_archived_files << std::endl;
-            std::cout << "  Total compressed size: "
-                      << stats.total_compressed_size << " bytes" << std::endl;
-            std::cout << "  Compression ratio: " << stats.compression_ratio
-                      << std::endl;
-
-            std::cout << "Log archiving and rotation completed" << std::endl;
+            std::cout << "LogArchiver functionality would be demonstrated here if implemented" << std::endl;
+            std::cout << "This would include:" << std::endl;
+            std::cout << "  - Automatic log rotation based on size" << std::endl;
+            std::cout << "  - Compression of archived logs" << std::endl;
+            std::cout << "  - Retention policies" << std::endl;
+            std::cout << "Log archiving and rotation skipped" << std::endl;
         }
 
         // 8. Performance benchmarking
@@ -351,8 +276,7 @@ int main() {
                 data.add("timestamp", std::chrono::system_clock::now()
                                           .time_since_epoch()
                                           .count());
-                logger.log_structured(Level::info, "Benchmark structured",
-                                      data);
+                logger.log_structured(Level::info, data);
             }
 
             end = std::chrono::high_resolution_clock::now();
@@ -379,8 +303,8 @@ int main() {
             // Test error handling
             try {
                 // Simulate a logging error
-                throw LogError("Simulated logging error");
-            } catch (const LogError& e) {
+                throw std::runtime_error("Simulated logging error");
+            } catch (const std::exception& e) {
                 logger.error("Caught logging error: {}", e.what());
             }
 
@@ -390,16 +314,20 @@ int main() {
             // Simulate network logger failure and fallback
             try {
                 auto& manager = LogManager::instance();
-                auto network_logger =
-                    manager.create_logger("failing_network", LogType::network);
+                LogConfig network_config{
+                    .name = "failing_network",
+                    .level = Level::info,
+                    .file_config = {},
+                    .console_output = true
+                };
+                auto network_logger_result = manager.create_logger(network_config);
+                auto network_logger = network_logger_result.value();
 
                 // This might fail in a real scenario
-                network_logger.info("This might fail if network is down");
+                network_logger->info("This might fail if network is down");
 
             } catch (const std::exception& e) {
-                logger.warn(
-                    "Network logger failed, falling back to local logging: {}",
-                    e.what());
+                logger.warn("Network logger failed, falling back to local logging: {}", e.what());
             }
 
             std::cout << "Error handling and recovery completed" << std::endl;

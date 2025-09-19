@@ -49,7 +49,7 @@ TEST_F(MemoryPoolTest, DefaultConstructor) {
 }
 
 TEST_F(MemoryPoolTest, BasicAllocation) {
-    MemoryPool<64, 1024> pool;
+    FixedBlockPool<64, 1024> pool;
 
     void* ptr = pool.allocate();
     EXPECT_NE(ptr, nullptr);

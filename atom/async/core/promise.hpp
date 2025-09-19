@@ -17,7 +17,7 @@
 #include "atom/macro.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
-#include <windows.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #elif defined(ATOM_PLATFORM_APPLE)
 #include <dispatch/dispatch.h>
 #elif defined(ATOM_PLATFORM_LINUX)

@@ -288,10 +288,10 @@ public:
                                        std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::DEBUG, std::move(msg),
+            co_return co_await logAsync(LogLevel::DEBUG_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::DEBUG, std::string(format),
+            co_return co_await logAsync(LogLevel::DEBUG_LEVEL, std::string(format),
                                         location);
         }
     }
@@ -311,10 +311,10 @@ public:
                                       std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::INFO, std::move(msg),
+            co_return co_await logAsync(LogLevel::INFO_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::INFO, std::string(format),
+            co_return co_await logAsync(LogLevel::INFO_LEVEL, std::string(format),
                                         location);
         }
     }
@@ -334,10 +334,10 @@ public:
                                       std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::WARN, std::move(msg),
+            co_return co_await logAsync(LogLevel::WARN_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::WARN, std::string(format),
+            co_return co_await logAsync(LogLevel::WARN_LEVEL, std::string(format),
                                         location);
         }
     }
@@ -357,10 +357,10 @@ public:
                                        std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::ERROR, std::move(msg),
+            co_return co_await logAsync(LogLevel::ERROR_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::ERROR, std::string(format),
+            co_return co_await logAsync(LogLevel::ERROR_LEVEL, std::string(format),
                                         location);
         }
     }
@@ -380,10 +380,10 @@ public:
                                           std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::CRITICAL, std::move(msg),
+            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::CRITICAL, std::string(format),
+            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL, std::string(format),
                                         location);
         }
     }

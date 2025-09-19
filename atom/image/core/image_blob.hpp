@@ -10,8 +10,16 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include <stdexcept>
 
-#include "atom/error/exception.hpp"
+
+// Forward declare error macros - actual definitions in source files
+#ifndef THROW_RUNTIME_ERROR
+#define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
+#endif
+#ifndef THROW_OUT_OF_RANGE
+#define THROW_OUT_OF_RANGE(msg) throw std::out_of_range(msg)
+#endif
 
 #if __has_include(<opencv2/core.hpp>)
 #include <opencv2/core.hpp>
@@ -99,20 +107,31 @@ public:
             storage_ = std::vector<T>(
                 reinterpret_cast<T*>(ptr),
                 reinterpret_cast<T*>(ptr) + n * sizeof(U));
-            // Initialize conservative default dimensions so BlobTest expectations hold
-            // Treat as 2x2 image with 3 channels when total bytes match 12 (common in tests)
-            const size_t total_bytes = storage_.size();
-            if (total_bytes == 12) {
-                rows_ = 2;
-                cols_ = 2;
-                channels_ = 3;
-            } else {
-                // Fallback: 1 row buffer with unknown width (cols = total bytes), 1 channel
-                rows_ = 1;
-                cols_ = static_cast<int>(total_bytes);
-                channels_ = 1;
-            }
         }
+    }
+
+    template <BlobValueType U, size_t N>
+    explicit Blob(const std::array<U, N>& arr) {
+        if constexpr (Mode == BlobMode::FAST) {
+            storage_ = std::span<T>(reinterpret_cast<const T*>(arr.data()), N * sizeof(U));
+        } else {
+            storage_.resize(N * sizeof(U));
+            std::memcpy(storage_.data(), arr.data(), N * sizeof(U));
+        }
+    }
+
+    // Constructor from raw data with dimensions
+    Blob(void* ptr, size_t size, int rows, int cols, int channels = 1, int depth = DEFAULT_DEPTH) {
+        if constexpr (Mode == BlobMode::FAST) {
+            storage_ = std::span<T>(reinterpret_cast<T*>(ptr), size);
+        } else {
+            storage_.resize(size);
+            std::memcpy(storage_.data(), ptr, size);
+        }
+        rows_ = rows;
+        cols_ = cols;
+        channels_ = channels;
+        depth_ = depth;
     }
 
     template <BlobValueType U, size_t N>

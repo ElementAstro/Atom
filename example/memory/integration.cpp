@@ -118,7 +118,7 @@ int main() {
     // Create fixed-size memory pool for small allocations
     constexpr size_t SmallBlockSize = 256;
     constexpr size_t BlocksPerChunk = 1000;
-    atom::memory::MemoryPool<SmallBlockSize, BlocksPerChunk> smallPool;
+    atom::memory::FixedBlockPool<SmallBlockSize, BlocksPerChunk> smallPool;
 
     std::cout << "System components initialized:" << std::endl;
     std::cout << "  - Object pool: 100 packets (configured)" << std::endl;

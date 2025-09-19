@@ -31,6 +31,10 @@
 #include "atom/async/utils/timer.hpp"
 #include "atom/async/sync/trigger.hpp"
 
+#ifdef ATOM_USE_ASIO
+#include <asio/io_context.hpp>
+#endif
+
 #include <algorithm>
 #include <atomic>
 #include <chrono>
@@ -251,7 +255,8 @@ void messagebus_timer_integration() {
         PerformanceTimer timer;
         timer.start("MessageBus-Timer integration");
 
-        auto messageBus = MessageBus::createShared();
+        asio::io_context ioContext;
+        auto messageBus = MessageBus::createShared(ioContext);
 
         std::atomic<int> notificationCount{0};
 
@@ -357,8 +362,9 @@ void threadpool_messagequeue_integration() {
         ThreadPool::Options options;
         options.initialThreadCount = 4;
         auto threadPool = std::make_shared<ThreadPool>(options);
-        MessageQueue<DataRequest> requestQueue;
-        MessageQueue<ProcessingResult> resultQueue;
+        asio::io_context ioContext;
+        MessageQueue<DataRequest> requestQueue(ioContext);
+        MessageQueue<ProcessingResult> resultQueue(ioContext);
 
         std::atomic<int> processedRequests{0};
         std::atomic<int> collectedResults{0};

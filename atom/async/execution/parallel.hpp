@@ -35,8 +35,8 @@ Description: High-performance parallel algorithms library
 #include "atom/macro.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
+#include "../../../cmake/WindowsCompat.hpp"
 #include <processthreadsapi.h>
-#include <windows.h>
 #elif defined(ATOM_PLATFORM_APPLE)
 #include <mach/thread_act.h>
 #include <mach/thread_policy.h>

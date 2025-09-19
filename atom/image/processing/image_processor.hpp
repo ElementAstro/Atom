@@ -8,8 +8,12 @@
 #include <vector>
 #include <unordered_map>
 
-#include "atom/image/core/image_blob.hpp"
-#include "atom/error/exception.hpp"
+#include "../core/image_blob.hpp"
+
+// Forward declare error macros for header
+#ifndef THROW_RUNTIME_ERROR
+#define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
+#endif
 
 namespace atom::image {
 

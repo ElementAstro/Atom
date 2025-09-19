@@ -41,7 +41,7 @@ Description: A simple wrapper of std::jthread
 
 // Platform-specific includes
 #if defined(_WIN32)
-#include <windows.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #elif defined(__linux__) || defined(__APPLE__)
 #include <pthread.h>
 #include <sched.h>  // For sched_param, SCHED_RR etc. in ThreadPool::setThreadPriority

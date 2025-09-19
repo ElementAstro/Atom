@@ -79,14 +79,17 @@ TEST_F(SearchEngineTest, FuzzySearchByTag) {
         GTEST_SKIP() << "Exact search failed, skipping fuzzy search test";
     }
 
-    // For now, just test that fuzzy search doesn't crash and adjust expectations
-    // The implementation might have issues that need to be fixed
-    auto result = engine->fuzzySearchByTag("wrold", 1);
-    // Temporarily lower expectations until we fix the fuzzy search implementation
-    EXPECT_GE(result.size(), 0) << "Fuzzy search should not crash";
+    // Test fuzzy search with tolerance 1 - "wrold" vs "world" has distance 2, so should not match
+    auto result1 = engine->fuzzySearchByTag("wrold", 1);
+    EXPECT_EQ(result1.size(), 0) << "Fuzzy search for 'wrold' with tolerance 1 should find 0 documents (distance=2)";
 
-    // TODO: Fix fuzzy search implementation to properly match "wrold" -> "world"
-    // ASSERT_EQ(result.size(), 2) << "Fuzzy search for 'wrold' with tolerance 1 should find 2 documents";
+    // Test fuzzy search with tolerance 2 - should match "world"
+    auto result2 = engine->fuzzySearchByTag("wrold", 2);
+    EXPECT_EQ(result2.size(), 2) << "Fuzzy search for 'wrold' with tolerance 2 should find 2 documents";
+
+    // Test fuzzy search with tolerance 1 for a closer match - "worl" vs "world" has distance 1
+    auto result3 = engine->fuzzySearchByTag("worl", 1);
+    EXPECT_EQ(result3.size(), 2) << "Fuzzy search for 'worl' with tolerance 1 should find 2 documents";
 }
 
 TEST_F(SearchEngineTest, SearchByTags) {

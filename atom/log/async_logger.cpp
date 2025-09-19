@@ -21,6 +21,7 @@ using C++20/23 Coroutines with optimized performance
 #include <condition_variable>
 #include <coroutine>
 #include <format>
+#include <iostream>
 #include <memory>
 #include <memory_resource>
 #include <mutex>
@@ -172,7 +173,7 @@ public:
     LockFreeTaskQueue(size_t capacity = 10000)
         : capacity_(capacity),
           current_size_(0),
-          head_(new LogTaskNode(LogLevel::INFO, "",
+          head_(new LogTaskNode(LogLevel::INFO_LEVEL, "",
                                 std::source_location::current(), nullptr)),
           dropped_messages_(0),
           max_size_(0) {
@@ -199,7 +200,7 @@ public:
         if (current >= capacity_) {
             dropped_messages_.fetch_add(1, std::memory_order_relaxed);
             // 对于严重级别的消息，我们始终尝试记录它们，即使队列已满
-            if (level < LogLevel::ERROR) {
+            if (level < LogLevel::ERROR_LEVEL) {
                 return false;  // 队列已满，拒绝消息
             }
             // 否则继续尝试记录严重错误
@@ -718,22 +719,22 @@ private:
                 case LogLevel::TRACE:
                     logger_->trace_at(String(message), location);
                     break;
-                case LogLevel::DEBUG:
+                case LogLevel::DEBUG_LEVEL:
                     logger_->debug_at(String(message), location);
                     break;
-                case LogLevel::INFO:
+                case LogLevel::INFO_LEVEL:
                     logger_->info_at(String(message), location);
                     break;
-                case LogLevel::WARN:
+                case LogLevel::WARN_LEVEL:
                     logger_->warn_at(String(message), location);
                     break;
-                case LogLevel::ERROR:
+                case LogLevel::ERROR_LEVEL:
                     logger_->error_at(String(message), location);
                     break;
-                case LogLevel::CRITICAL:
+                case LogLevel::CRITICAL_LEVEL:
                     logger_->critical_at(String(message), location);
                     break;
-                case LogLevel::OFF:
+                case LogLevel::OFF_LEVEL:
                     // 级别为OFF时不记录
                     break;
             }

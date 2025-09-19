@@ -19,6 +19,8 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <cmath>
+#include <algorithm>
 
 #include "atom/image/core/image_blob.hpp"
 
@@ -38,33 +40,46 @@ struct ConversionParams {
 };
 
 /**
+ * @brief Helper function to create image data with given dimensions and pattern
+ */
+std::vector<uint8_t> createImageData(int width, int height, int channels) {
+    std::vector<uint8_t> data(height * width * channels);
+    
+    // Fill with a complex pattern to test compression
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            // Create a pattern with varying frequency
+            double freq_x = 2.0 * M_PI * x / width;
+            double freq_y = 2.0 * M_PI * y / height;
+
+            int pixel_idx = (y * width + x) * channels;
+            data[pixel_idx] = static_cast<uint8_t>(128 + 127 * std::sin(freq_x * 3));
+            if (channels > 1) {
+                data[pixel_idx + 1] = static_cast<uint8_t>(128 + 127 * std::sin(freq_y * 2));
+            }
+            if (channels > 2) {
+                data[pixel_idx + 2] = static_cast<uint8_t>(128 + 127 * std::sin((freq_x + freq_y) * 1.5));
+            }
+        }
+    }
+    return data;
+}
+
+/**
  * @brief Demonstrate basic format conversion
  */
 void demonstrateBasicConversion() {
     std::cout << "\n=== Basic Format Conversion ===\n";
 
     try {
-        // Create a sample image
-        blob<uint8_t> original(400, 300, 3);
+        // Create sample image data
+        const int width = 400, height = 300, channels = 3;
+        auto imageData = createImageData(width, height, channels);
+        
+        // Create a blob from the image data
+        blob original(reinterpret_cast<std::byte*>(imageData.data()), imageData.size());
 
-        // Fill with a complex pattern to test compression
-        for (int y = 0; y < original.rows(); ++y) {
-            for (int x = 0; x < original.cols(); ++x) {
-                // Create a pattern with varying frequency
-                double freq_x = 2.0 * M_PI * x / original.cols();
-                double freq_y = 2.0 * M_PI * y / original.rows();
-
-                original.at(y, x, 0) =
-                    static_cast<uint8_t>(128 + 127 * std::sin(freq_x * 3));
-                original.at(y, x, 1) =
-                    static_cast<uint8_t>(128 + 127 * std::sin(freq_y * 2));
-                original.at(y, x, 2) = static_cast<uint8_t>(
-                    128 + 127 * std::sin((freq_x + freq_y) * 1.5));
-            }
-        }
-
-        std::cout << "Created test image: " << original.cols() << "x"
-                  << original.rows() << "\n";
+        std::cout << "Created test image: " << width << "x" << height << "\n";
 
         // Simulate conversions to different formats
         std::vector<ConversionParams> conversions = {
@@ -77,8 +92,9 @@ void demonstrateBasicConversion() {
         for (const auto& conv : conversions) {
             auto start = high_resolution_clock::now();
 
-            // Simulate format conversion
-            blob<uint8_t> converted = original;  // Copy for conversion
+            // Simulate format conversion by creating a copy of original data
+            std::vector<uint8_t> convertedData(imageData);  // Copy for conversion
+            blob converted(reinterpret_cast<std::byte*>(convertedData.data()), convertedData.size());
 
             // Apply format-specific processing
             if (conv.target_format == "JPEG") {
@@ -88,16 +104,16 @@ void demonstrateBasicConversion() {
                 // Simulate quality loss for demonstration
                 if (conv.quality < 90) {
                     // Apply slight blur to simulate compression artifacts
-                    for (int y = 1; y < converted.rows() - 1; ++y) {
-                        for (int x = 1; x < converted.cols() - 1; ++x) {
-                            for (int c = 0; c < 3; ++c) {
-                                int sum = converted.at(y - 1, x, c) +
-                                          converted.at(y + 1, x, c) +
-                                          converted.at(y, x - 1, c) +
-                                          converted.at(y, x + 1, c) +
-                                          converted.at(y, x, c) * 4;
-                                converted.at(y, x, c) =
-                                    static_cast<uint8_t>(sum / 8);
+                    for (int y = 1; y < height - 1; ++y) {
+                        for (int x = 1; x < width - 1; ++x) {
+                            for (int c = 0; c < channels; ++c) {
+                                int idx = (y * width + x) * channels + c;
+                                int sum = convertedData[(y-1) * width * channels + x * channels + c] +
+                                         convertedData[(y+1) * width * channels + x * channels + c] +
+                                         convertedData[y * width * channels + (x-1) * channels + c] +
+                                         convertedData[y * width * channels + (x+1) * channels + c] +
+                                         convertedData[idx] * 4;
+                                convertedData[idx] = static_cast<uint8_t>(sum / 8);
                             }
                         }
                     }
@@ -162,34 +178,39 @@ void demonstrateQualityTradeoffs() {
     std::cout << "\n=== Quality vs Size Trade-offs ===\n";
 
     try {
-        // Create a detailed test image
-        blob<uint8_t> test_image(512, 512, 3);
+        // Create a detailed test image data
+        const int width = 512, height = 512, channels = 3;
+        std::vector<uint8_t> testImageData(height * width * channels);
 
         // Create a detailed pattern with high-frequency components
-        for (int y = 0; y < test_image.rows(); ++y) {
-            for (int x = 0; x < test_image.cols(); ++x) {
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
                 // High-frequency checkerboard pattern
                 bool checker = ((x / 8) + (y / 8)) % 2 == 0;
 
                 // Gradient overlay
-                double grad_x = static_cast<double>(x) / test_image.cols();
-                double grad_y = static_cast<double>(y) / test_image.rows();
+                double grad_x = static_cast<double>(x) / width;
+                double grad_y = static_cast<double>(y) / height;
 
                 uint8_t base_r = static_cast<uint8_t>(grad_x * 255);
                 uint8_t base_g = static_cast<uint8_t>(grad_y * 255);
                 uint8_t base_b = static_cast<uint8_t>((grad_x + grad_y) * 127);
 
+                int pixel_idx = (y * width + x) * channels;
                 if (checker) {
-                    test_image.at(y, x, 0) = std::min(255, base_r + 50);
-                    test_image.at(y, x, 1) = std::min(255, base_g + 50);
-                    test_image.at(y, x, 2) = std::min(255, base_b + 50);
+                    testImageData[pixel_idx] = std::min(255, base_r + 50);
+                    testImageData[pixel_idx + 1] = std::min(255, base_g + 50);
+                    testImageData[pixel_idx + 2] = std::min(255, base_b + 50);
                 } else {
-                    test_image.at(y, x, 0) = std::max(0, base_r - 50);
-                    test_image.at(y, x, 1) = std::max(0, base_g - 50);
-                    test_image.at(y, x, 2) = std::max(0, base_b - 50);
+                    testImageData[pixel_idx] = std::max(0, base_r - 50);
+                    testImageData[pixel_idx + 1] = std::max(0, base_g - 50);
+                    testImageData[pixel_idx + 2] = std::max(0, base_b - 50);
                 }
             }
         }
+        
+        // Create blob from the data
+        blob test_image(reinterpret_cast<std::byte*>(testImageData.data()), testImageData.size());
 
         std::cout << "Testing JPEG quality levels:\n";
         std::cout << "Quality | Size (KB) | Compression | Processing Time\n";
@@ -200,35 +221,32 @@ void demonstrateQualityTradeoffs() {
         for (int quality = 10; quality <= 100; quality += 20) {
             auto start = high_resolution_clock::now();
 
-            // Simulate JPEG compression at different quality levels
-            blob<uint8_t> compressed = test_image;
+            // Simulate JPEG compression at different quality levels by creating a copy
+            std::vector<uint8_t> compressedData(testImageData);
+            blob compressed(reinterpret_cast<std::byte*>(compressedData.data()), compressedData.size());
 
             // Apply quality-dependent processing
             if (quality < 50) {
                 // Heavy compression artifacts simulation
-                for (int y = 0; y < compressed.rows(); y += 8) {
-                    for (int x = 0; x < compressed.cols(); x += 8) {
+                for (int y = 0; y < height; y += 8) {
+                    for (int x = 0; x < width; x += 8) {
                         // Block-based averaging (simulating DCT quantization)
-                        for (int c = 0; c < 3; ++c) {
+                        for (int c = 0; c < channels; ++c) {
                             int sum = 0;
                             int count = 0;
-                            for (int by = 0;
-                                 by < 8 && y + by < compressed.rows(); ++by) {
-                                for (int bx = 0;
-                                     bx < 8 && x + bx < compressed.cols();
-                                     ++bx) {
-                                    sum += compressed.at(y + by, x + bx, c);
+                            for (int by = 0; by < 8 && y + by < height; ++by) {
+                                for (int bx = 0; bx < 8 && x + bx < width; ++bx) {
+                                    int idx = ((y + by) * width + (x + bx)) * channels + c;
+                                    sum += compressedData[idx];
                                     count++;
                                 }
                             }
                             uint8_t avg = static_cast<uint8_t>(sum / count);
 
-                            for (int by = 0;
-                                 by < 8 && y + by < compressed.rows(); ++by) {
-                                for (int bx = 0;
-                                     bx < 8 && x + bx < compressed.cols();
-                                     ++bx) {
-                                    compressed.at(y + by, x + bx, c) = avg;
+                            for (int by = 0; by < 8 && y + by < height; ++by) {
+                                for (int bx = 0; bx < 8 && x + bx < width; ++bx) {
+                                    int idx = ((y + by) * width + (x + bx)) * channels + c;
+                                    compressedData[idx] = avg;
                                 }
                             }
                         }
@@ -269,47 +287,51 @@ void demonstrateColorSpaceConversion() {
     std::cout << "\n=== Color Space Conversions ===\n";
 
     try {
-        // Create RGB test image
-        blob<uint8_t> rgb_image(200, 200, 3);
+        // Create RGB test image data
+        const int width = 200, height = 200, channels = 3;
+        std::vector<uint8_t> rgbImageData(height * width * channels);
 
         // Fill with color gradients
-        for (int y = 0; y < rgb_image.rows(); ++y) {
-            for (int x = 0; x < rgb_image.cols(); ++x) {
-                rgb_image.at(y, x, 0) =
-                    static_cast<uint8_t>((x * 255) / rgb_image.cols());
-                rgb_image.at(y, x, 1) =
-                    static_cast<uint8_t>((y * 255) / rgb_image.rows());
-                rgb_image.at(y, x, 2) = static_cast<uint8_t>(
-                    ((x + y) * 255) / (rgb_image.cols() + rgb_image.rows()));
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int pixel_idx = (y * width + x) * channels;
+                rgbImageData[pixel_idx] = static_cast<uint8_t>((x * 255) / width);
+                rgbImageData[pixel_idx + 1] = static_cast<uint8_t>((y * 255) / height);
+                rgbImageData[pixel_idx + 2] = static_cast<uint8_t>(((x + y) * 255) / (width + height));
             }
         }
+        
+        // Create blob from the data
+        blob rgb_image(reinterpret_cast<std::byte*>(rgbImageData.data()), rgbImageData.size());
 
-        std::cout << "Original RGB image: " << rgb_image.cols() << "x"
-                  << rgb_image.rows() << "\n";
+        std::cout << "Original RGB image: " << width << "x" << height << "\n";
 
         // Convert to grayscale
-        blob<uint8_t> grayscale(rgb_image.rows(), rgb_image.cols(), 1);
-        for (int y = 0; y < rgb_image.rows(); ++y) {
-            for (int x = 0; x < rgb_image.cols(); ++x) {
+        std::vector<uint8_t> grayscaleData(height * width * 1);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
                 // Standard RGB to grayscale conversion
-                uint8_t r = rgb_image.at(y, x, 0);
-                uint8_t g = rgb_image.at(y, x, 1);
-                uint8_t b = rgb_image.at(y, x, 2);
-                uint8_t gray =
-                    static_cast<uint8_t>(0.299 * r + 0.587 * g + 0.114 * b);
-                grayscale.at(y, x, 0) = gray;
+                int rgb_idx = (y * width + x) * channels;
+                uint8_t r = rgbImageData[rgb_idx];
+                uint8_t g = rgbImageData[rgb_idx + 1];
+                uint8_t b = rgbImageData[rgb_idx + 2];
+                uint8_t gray = static_cast<uint8_t>(0.299 * r + 0.587 * g + 0.114 * b);
+                
+                int gray_idx = y * width + x;
+                grayscaleData[gray_idx] = gray;
             }
         }
-        std::cout << "Converted to grayscale: " << grayscale.cols() << "x"
-                  << grayscale.rows() << " (1 channel)\n";
+        blob grayscale(reinterpret_cast<std::byte*>(grayscaleData.data()), grayscaleData.size());
+        std::cout << "Converted to grayscale: " << width << "x" << height << " (1 channel)\n";
 
         // Simulate HSV conversion
-        blob<uint8_t> hsv_image(rgb_image.rows(), rgb_image.cols(), 3);
-        for (int y = 0; y < rgb_image.rows(); ++y) {
-            for (int x = 0; x < rgb_image.cols(); ++x) {
-                uint8_t r = rgb_image.at(y, x, 0);
-                uint8_t g = rgb_image.at(y, x, 1);
-                uint8_t b = rgb_image.at(y, x, 2);
+        std::vector<uint8_t> hsvImageData(height * width * channels);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int rgb_idx = (y * width + x) * channels;
+                uint8_t r = rgbImageData[rgb_idx];
+                uint8_t g = rgbImageData[rgb_idx + 1];
+                uint8_t b = rgbImageData[rgb_idx + 2];
 
                 // Simplified RGB to HSV conversion
                 double rf = r / 255.0;
@@ -338,36 +360,38 @@ void demonstrateColorSpaceConversion() {
                 double saturation = (max_val == 0) ? 0 : (delta / max_val);
                 double value = max_val;
 
-                hsv_image.at(y, x, 0) = static_cast<uint8_t>(hue * 255 / 360);
-                hsv_image.at(y, x, 1) = static_cast<uint8_t>(saturation * 255);
-                hsv_image.at(y, x, 2) = static_cast<uint8_t>(value * 255);
+                int hsv_idx = (y * width + x) * channels;
+                hsvImageData[hsv_idx] = static_cast<uint8_t>(hue * 255 / 360);
+                hsvImageData[hsv_idx + 1] = static_cast<uint8_t>(saturation * 255);
+                hsvImageData[hsv_idx + 2] = static_cast<uint8_t>(value * 255);
             }
         }
-        std::cout << "Converted to HSV: " << hsv_image.cols() << "x"
-                  << hsv_image.rows() << " (3 channels)\n";
+        blob hsv_image(reinterpret_cast<std::byte*>(hsvImageData.data()), hsvImageData.size());
+        std::cout << "Converted to HSV: " << width << "x" << height << " (3 channels)\n";
 
         // Convert RGB to RGBA (add alpha channel)
-        blob<uint8_t> rgba_image(rgb_image.rows(), rgb_image.cols(), 4);
-        for (int y = 0; y < rgb_image.rows(); ++y) {
-            for (int x = 0; x < rgb_image.cols(); ++x) {
-                rgba_image.at(y, x, 0) = rgb_image.at(y, x, 0);  // R
-                rgba_image.at(y, x, 1) = rgb_image.at(y, x, 1);  // G
-                rgba_image.at(y, x, 2) = rgb_image.at(y, x, 2);  // B
+        const int rgba_channels = 4;
+        std::vector<uint8_t> rgbaImageData(height * width * rgba_channels);
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int rgb_idx = (y * width + x) * channels;
+                int rgba_idx = (y * width + x) * rgba_channels;
+                
+                rgbaImageData[rgba_idx] = rgbImageData[rgb_idx];      // R
+                rgbaImageData[rgba_idx + 1] = rgbImageData[rgb_idx + 1]; // G
+                rgbaImageData[rgba_idx + 2] = rgbImageData[rgb_idx + 2]; // B
 
                 // Create alpha gradient
-                double distance_from_center =
-                    std::sqrt(std::pow(x - rgb_image.cols() / 2.0, 2) +
-                              std::pow(y - rgb_image.rows() / 2.0, 2));
-                double max_distance =
-                    std::sqrt(std::pow(rgb_image.cols() / 2.0, 2) +
-                              std::pow(rgb_image.rows() / 2.0, 2));
-                uint8_t alpha = static_cast<uint8_t>(
-                    255 * (1.0 - distance_from_center / max_distance));
-                rgba_image.at(y, x, 3) = alpha;  // A
+                double distance_from_center = std::sqrt(std::pow(x - width / 2.0, 2) +
+                                                       std::pow(y - height / 2.0, 2));
+                double max_distance = std::sqrt(std::pow(width / 2.0, 2) +
+                                              std::pow(height / 2.0, 2));
+                uint8_t alpha = static_cast<uint8_t>(255 * (1.0 - distance_from_center / max_distance));
+                rgbaImageData[rgba_idx + 3] = alpha;  // A
             }
         }
-        std::cout << "Converted to RGBA: " << rgba_image.cols() << "x"
-                  << rgba_image.rows() << " (4 channels)\n";
+        blob rgba_image(reinterpret_cast<std::byte*>(rgbaImageData.data()), rgbaImageData.size());
+        std::cout << "Converted to RGBA: " << width << "x" << height << " (4 channels)\n";
 
         // Memory usage comparison
         std::cout << "\nMemory usage comparison:\n";
@@ -426,10 +450,12 @@ void demonstrateBatchConversion() {
                     static_cast<size_t>(img.width) * img.height * 3;
 
                 // Create simulated image data
-                blob<uint8_t> image(img.height, img.width, 3);
+                std::vector<uint8_t> imageData(img.height * img.width * 3);
+                blob image(reinterpret_cast<std::byte*>(imageData.data()), imageData.size());
 
-                // Apply conversion
-                blob<uint8_t> converted = image;  // Copy for conversion
+                // Apply conversion by creating a copy
+                std::vector<uint8_t> convertedData(imageData);
+                blob converted(reinterpret_cast<std::byte*>(convertedData.data()), convertedData.size());
 
                 // Calculate converted size based on format and quality
                 size_t converted_size;

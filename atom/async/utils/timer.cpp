@@ -116,7 +116,7 @@ Timer::Timer() noexcept(false) {
         std::cout << "[DEBUG] Using ASIO mode" << std::endl;
         try {
             m_ioContext = std::make_unique<asio::io_context>();
-            m_work = std::make_unique<asio::io_context::work>(*m_ioContext);
+            m_work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(m_ioContext->get_executor());
             m_asioTimer = std::make_unique<asio::steady_timer>(*m_ioContext);
 
             std::thread([this]() {
@@ -171,7 +171,7 @@ void Timer::cancelAllTasks() noexcept {
             m_ioContext->stop();
             m_ioContext->restart();
             if (!m_stop.load(std::memory_order_acquire)) {
-                m_work = std::make_unique<asio::io_context::work>(*m_ioContext);
+                m_work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(m_ioContext->get_executor());
             }
         }
 #elif defined(ATOM_USE_BOOST_LOCKFREE)

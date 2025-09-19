@@ -57,6 +57,55 @@ TEST_F(ExceptionTest, BasicExceptionHandling) {
     }
 }
 
+TEST_F(ExceptionTest, AtomExceptionHandling) {
+    // Test atom::error::Exception
+    try {
+        THROW_EXCEPTION("Test atom exception with value: ", 42);
+    } catch (const atom::error::Exception& e) {
+        std::string what_str = e.what();
+        EXPECT_TRUE(what_str.find("Test atom exception with value: 42") != std::string::npos);
+        EXPECT_TRUE(what_str.find("File:") != std::string::npos);
+        EXPECT_TRUE(what_str.find("Line:") != std::string::npos);
+        EXPECT_TRUE(what_str.find("Function:") != std::string::npos);
+        EXPECT_TRUE(what_str.find("Thread ID:") != std::string::npos);
+        EXPECT_TRUE(what_str.find("Stack trace:") != std::string::npos);
+    }
+}
+
+TEST_F(ExceptionTest, AtomSpecificExceptions) {
+    // Test RuntimeError
+    try {
+        THROW_RUNTIME_ERROR("Runtime error test");
+    } catch (const atom::error::RuntimeError& e) {
+        std::string what_str = e.what();
+        EXPECT_TRUE(what_str.find("Runtime error test") != std::string::npos);
+    }
+
+    // Test LogicError
+    try {
+        THROW_LOGIC_ERROR("Logic error test");
+    } catch (const atom::error::LogicError& e) {
+        std::string what_str = e.what();
+        EXPECT_TRUE(what_str.find("Logic error test") != std::string::npos);
+    }
+
+    // Test NullPointer
+    try {
+        THROW_NULL_POINTER("Null pointer test");
+    } catch (const atom::error::NullPointer& e) {
+        std::string what_str = e.what();
+        EXPECT_TRUE(what_str.find("Null pointer test") != std::string::npos);
+    }
+
+    // Test NotFound
+    try {
+        THROW_NOT_FOUND("Not found test");
+    } catch (const atom::error::NotFound& e) {
+        std::string what_str = e.what();
+        EXPECT_TRUE(what_str.find("Not found test") != std::string::npos);
+    }
+}
+
 TEST_F(ExceptionTest, NestedExceptions) {
     // Test nested exception handling
     try {
@@ -115,6 +164,30 @@ TEST_F(StackTraceTest, BasicStackTrace) {
         // Note: Actual stack trace testing depends on the implementation
         // This test verifies the exception propagates correctly through the call stack
         SUCCEED();
+    }
+}
+
+TEST_F(StackTraceTest, AtomStackTraceCapture) {
+    // Test atom::error::StackTrace directly
+    atom::error::StackTrace stackTrace;
+    std::string traceStr = stackTrace.toString();
+
+    // Verify that stack trace contains expected elements
+    EXPECT_FALSE(traceStr.empty());
+    EXPECT_TRUE(traceStr.find("Stack trace:") != std::string::npos);
+
+    // Should contain at least one frame
+    EXPECT_TRUE(traceStr.find("[0]") != std::string::npos);
+}
+
+TEST_F(StackTraceTest, StackTraceInException) {
+    // Test stack trace integration with exceptions
+    try {
+        THROW_EXCEPTION("Exception with stack trace");
+    } catch (const atom::error::Exception& e) {
+        std::string what_str = e.what();
+        EXPECT_TRUE(what_str.find("Stack trace:") != std::string::npos);
+        EXPECT_TRUE(what_str.find("[0]") != std::string::npos);
     }
 }
 
@@ -184,6 +257,27 @@ TEST_F(ErrorCodeTest, BasicErrorCodes) {
     EXPECT_EQ(testFunction(404), TestErrorCode::FileNotFound);
     EXPECT_EQ(testFunction(500), TestErrorCode::NetworkError);
     EXPECT_EQ(testFunction(2000000), TestErrorCode::OutOfMemory);
+}
+
+TEST_F(ErrorCodeTest, AtomErrorCodes) {
+    // Test atom error code enums
+    using namespace atom::error;
+
+    // Test FileError enum
+    EXPECT_EQ(static_cast<int>(FileError::None), 0);
+    EXPECT_EQ(static_cast<int>(FileError::NotFound), 100);
+    EXPECT_EQ(static_cast<int>(FileError::OpenError), 101);
+    EXPECT_EQ(static_cast<int>(FileError::AccessDenied), 102);
+
+    // Test DeviceError enum
+    EXPECT_EQ(static_cast<int>(DeviceError::None), 0);
+    EXPECT_EQ(static_cast<int>(DeviceError::NotFound), 201);
+    EXPECT_EQ(static_cast<int>(DeviceError::NotSupported), 202);
+
+    // Test MemoryError enum
+    EXPECT_EQ(static_cast<int>(MemoryError::None), 0);
+    EXPECT_EQ(static_cast<int>(MemoryError::AllocationFailed), 600);
+    EXPECT_EQ(static_cast<int>(MemoryError::OutOfMemory), 601);
 }
 
 TEST_F(ErrorCodeTest, ErrorCodeMapping) {
@@ -257,6 +351,32 @@ TEST_F(ErrorIntegrationTest, CompleteErrorHandling) {
     } catch (const std::invalid_argument& e) {
         EXPECT_STREQ(e.what(), "Invalid argument provided");
     }
+}
+
+TEST_F(ErrorIntegrationTest, AtomFileExceptions) {
+    // Test file-related exceptions
+    EXPECT_THROW(THROW_FILE_NOT_FOUND("test.txt"), atom::error::FileNotFound);
+    EXPECT_THROW(THROW_FILE_NOT_READABLE("test.txt"), atom::error::FileNotReadable);
+    EXPECT_THROW(THROW_FILE_NOT_WRITABLE("test.txt"), atom::error::FileNotWritable);
+    EXPECT_THROW(THROW_FAIL_TO_OPEN_FILE("test.txt"), atom::error::FailToOpenFile);
+    EXPECT_THROW(THROW_FAIL_TO_CLOSE_FILE("test.txt"), atom::error::FailToCloseFile);
+    EXPECT_THROW(THROW_FAIL_TO_CREATE_FILE("test.txt"), atom::error::FailToCreateFile);
+    EXPECT_THROW(THROW_FAIL_TO_DELETE_FILE("test.txt"), atom::error::FailToDeleteFile);
+    EXPECT_THROW(THROW_FAIL_TO_COPY_FILE("test.txt"), atom::error::FailToCopyFile);
+    EXPECT_THROW(THROW_FAIL_TO_MOVE_FILE("test.txt"), atom::error::FailToMoveFile);
+    EXPECT_THROW(THROW_FAIL_TO_READ_FILE("test.txt"), atom::error::FailToReadFile);
+    EXPECT_THROW(THROW_FAIL_TO_WRITE_FILE("test.txt"), atom::error::FailToWriteFile);
+}
+
+TEST_F(ErrorIntegrationTest, AtomSystemExceptions) {
+    // Test system-related exceptions
+    EXPECT_THROW(THROW_SYSTEM_ERROR(1, "System error"), atom::error::SystemErrorException);
+    EXPECT_THROW(THROW_SYSTEM_COLLAPSE("System collapse"), atom::error::SystemCollapse);
+    EXPECT_THROW(THROW_FAIL_TO_LOAD_DLL("test.dll"), atom::error::FailToLoadDll);
+    EXPECT_THROW(THROW_FAIL_TO_UNLOAD_DLL("test.dll"), atom::error::FailToUnloadDll);
+    EXPECT_THROW(THROW_FAIL_TO_LOAD_SYMBOL("symbol"), atom::error::FailToLoadSymbol);
+    EXPECT_THROW(THROW_FAIL_TO_CREATE_PROCESS("process"), atom::error::FailToCreateProcess);
+    EXPECT_THROW(THROW_FAIL_TO_TERMINATE_PROCESS("process"), atom::error::FailToTerminateProcess);
 }
 
 TEST_F(ErrorIntegrationTest, ErrorRecovery) {

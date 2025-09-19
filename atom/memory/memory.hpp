@@ -1,5 +1,5 @@
-#ifndef ATOM_MEMORY_MEMORY_POOL_HPP
-#define ATOM_MEMORY_MEMORY_POOL_HPP
+#ifndef ATOM_MEMORY_MEMORY_HPP
+#define ATOM_MEMORY_MEMORY_HPP
 
 #include <algorithm>
 #include <atomic>
@@ -701,4 +701,4 @@ private:
         tagged_allocations_;  ///< Tagged allocations
 };
 
-#endif  // ATOM_MEMORY_MEMORY_POOL_HPP
+#endif  // ATOM_MEMORY_MEMORY_HPP

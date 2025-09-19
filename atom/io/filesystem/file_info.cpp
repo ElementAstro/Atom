@@ -34,17 +34,30 @@ auto getFileInfo(const fs::path& filePath) -> FileInfo {
 
         FileInfo info;
 
-        if (!fs::exists(filePath)) {
-            spdlog::error("File does not exist: {}", filePath.string());
-            THROW_FAIL_TO_READ_FILE("File does not exist: " +
-                                    filePath.string());
+        // Edge case: Use error_code version to handle permission issues gracefully
+        std::error_code ec;
+        if (!fs::exists(filePath, ec) || ec) {
+            spdlog::error("File does not exist or is inaccessible: {} (error: {})",
+                         filePath.string(), ec ? ec.message() : "unknown");
+            throw std::runtime_error("File does not exist or is inaccessible: " +
+                                    filePath.string() + " (error: " +
+                                    (ec ? ec.message() : "unknown") + ")");
         }
 
-        info.filePath = String(fs::absolute(filePath).string());
+        // Edge case: Handle absolute path conversion errors
+        auto abs_path = fs::absolute(filePath, ec);
+        info.filePath = String(ec ? filePath.string() : abs_path.string());
+
         info.fileName = String(filePath.filename().string());
         info.extension = String(filePath.extension().string());
-        info.fileSize =
-            fs::is_regular_file(filePath) ? fs::file_size(filePath) : 0;
+
+        // Edge case: Handle file size calculation with error checking
+        if (fs::is_regular_file(filePath, ec) && !ec) {
+            auto file_size = fs::file_size(filePath, ec);
+            info.fileSize = ec ? 0 : file_size;
+        } else {
+            info.fileSize = 0; // Directories and special files don't have meaningful size
+        }
 
         if (fs::is_directory(filePath)) {
             info.fileType = "Directory";
@@ -96,7 +109,48 @@ auto getFileInfo(const fs::path& filePath) -> FileInfo {
 
                 info.creationTime = String(convertTime(creationTime));
                 info.lastAccessTime = String(convertTime(accessTime));
-                info.owner = "Owner retrieval not implemented";
+
+                // Get file owner information on Windows
+                auto getOwner = [&filePath]() -> std::string {
+                    try {
+                        PSID pSidOwner = nullptr;
+                        PSECURITY_DESCRIPTOR pSD = nullptr;
+
+                        DWORD dwRtnCode = GetNamedSecurityInfoA(
+                            filePath.string().c_str(),
+                            SE_FILE_OBJECT,
+                            OWNER_SECURITY_INFORMATION,
+                            &pSidOwner,
+                            nullptr,
+                            nullptr,
+                            nullptr,
+                            &pSD);
+
+                        if (dwRtnCode != ERROR_SUCCESS) {
+                            return "Unknown";
+                        }
+
+                        char szAccountName[256];
+                        char szDomainName[256];
+                        DWORD dwAcctName = sizeof(szAccountName);
+                        DWORD dwDomainName = sizeof(szDomainName);
+                        SID_NAME_USE eUse = SidTypeUnknown;
+
+                        if (LookupAccountSidA(nullptr, pSidOwner, szAccountName, &dwAcctName,
+                                            szDomainName, &dwDomainName, &eUse)) {
+                            std::string result = std::string(szDomainName) + "\\" + std::string(szAccountName);
+                            if (pSD) LocalFree(pSD);
+                            return result;
+                        }
+
+                        if (pSD) LocalFree(pSD);
+                        return "Unknown";
+                    } catch (...) {
+                        return "Unknown";
+                    }
+                };
+
+                info.owner = getOwner();
                 spdlog::debug("Retrieved Windows file times successfully");
             } else {
                 spdlog::warn("Failed to get Windows file attributes for: {}",

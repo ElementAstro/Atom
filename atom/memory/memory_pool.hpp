@@ -27,7 +27,7 @@ namespace memory {
  * @tparam BlocksPerChunk Number of blocks per chunk
  */
 template <std::size_t BlockSize = 64, std::size_t BlocksPerChunk = 1024>
-class MemoryPool {
+class FixedBlockPool {
 private:
     struct Block {
         Block* next;
@@ -68,12 +68,12 @@ public:
     static_assert(BlockSize % alignof(std::max_align_t) == 0,
                   "Block size must be aligned to std::max_align_t");
 
-    MemoryPool() = default;
-    ~MemoryPool() = default;
-    MemoryPool(const MemoryPool&) = delete;
-    MemoryPool& operator=(const MemoryPool&) = delete;
-    MemoryPool(MemoryPool&&) noexcept = default;
-    MemoryPool& operator=(MemoryPool&&) noexcept = default;
+    FixedBlockPool() = default;
+    ~FixedBlockPool() = default;
+    FixedBlockPool(const FixedBlockPool&) = delete;
+    FixedBlockPool& operator=(const FixedBlockPool&) = delete;
+    FixedBlockPool(FixedBlockPool&&) noexcept = default;
+    FixedBlockPool& operator=(FixedBlockPool&&) noexcept = default;
 
     /**
      * @brief Allocates a memory block
@@ -147,7 +147,7 @@ public:
 };
 
 /**
- * @brief Generic object pool based on MemoryPool
+ * @brief Generic object pool based on FixedBlockPool
  *
  * Efficiently allocates and recycles objects of a specific type.
  *
@@ -162,7 +162,7 @@ private:
          alignof(std::max_align_t)) *
         alignof(std::max_align_t);
 
-    MemoryPool<block_size, BlocksPerChunk> memory_pool_;
+    FixedBlockPool<block_size, BlocksPerChunk> memory_pool_;
 
 public:
     SimpleObjectPool() = default;
@@ -345,6 +345,10 @@ template <typename T, typename... Args>
                                        Args&&... args) {
     return PoolPtr<T>(pool.allocate(std::forward<Args>(args)...), &pool);
 }
+
+// Backward compatibility alias
+template <std::size_t BlockSize = 64, std::size_t BlocksPerChunk = 1024>
+using MemoryPool [[deprecated("Use FixedBlockPool instead")]] = FixedBlockPool<BlockSize, BlocksPerChunk>;
 
 }  // namespace memory
 }  // namespace atom

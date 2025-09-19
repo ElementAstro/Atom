@@ -29,11 +29,22 @@ set(ATOM_IMAGE_SOURCES
     formats/fits_header.cpp
     formats/fits_utils.cpp
     formats/hdu.cpp
+    formats/advanced_formats.cpp
+
+    # I/O sources
+    io/format_detector.cpp
+    io/image_loader.cpp
+    io/image_saver.cpp
 
     # Processing sources
     processing/image_processor.cpp
     processing/filters.cpp
     processing/transforms.cpp
+    processing/enhancement.cpp
+    # processing/computer_vision.cpp
+    # processing/gpu_acceleration.cpp
+    processing/ml_processing.cpp
+    # processing/realtime.cpp
 )
 
 # Define header files
@@ -55,15 +66,20 @@ set(ATOM_IMAGE_HEADERS
     formats/hdu.hpp
     formats/advanced_formats.hpp
 
+    # I/O headers
+    io/format_detector.hpp
+    io/image_loader.hpp
+    io/image_saver.hpp
+
     # Processing headers
     processing/image_processor.hpp
     processing/filters.hpp
     processing/transforms.hpp
     processing/enhancement.hpp
-    processing/computer_vision.hpp
+    # processing/computer_vision.hpp
     processing/ml_processing.hpp
-    processing/realtime.hpp
-    processing/gpu_acceleration.hpp
+    # processing/realtime.hpp
+    # processing/gpu_acceleration.hpp
 )
 
 # Add OCR sources if Tesseract is available

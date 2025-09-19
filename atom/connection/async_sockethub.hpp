@@ -17,7 +17,7 @@ namespace atom::async::connection {
 class Client;
 struct Message;
 
-enum class LogLevel { DEBUG, INFO, WARNING, ERROR, FATAL };
+enum class LogLevel { DEBUG_LEVEL, INFO_LEVEL, WARNING_LEVEL, ERROR_LEVEL, FATAL_LEVEL };
 
 // Configuration structure for the SocketHub
 struct SocketHubConfig {
@@ -32,7 +32,7 @@ struct SocketHubConfig {
     bool enable_rate_limiting = false;
     int max_connections_per_ip = 10;
     int max_messages_per_minute = 100;
-    LogLevel log_level = LogLevel::INFO;
+    LogLevel log_level = LogLevel::INFO_LEVEL;
 };
 
 // Message structure for more structured data exchange
@@ -123,7 +123,7 @@ public:
 
     // Statistics and monitoring
     SocketHubStats getStatistics() const;
-    void enableLogging(bool enable, LogLevel level = LogLevel::INFO);
+    void enableLogging(bool enable, LogLevel level = LogLevel::INFO_LEVEL);
     void setLogHandler(
         const std::function<void(LogLevel, const std::string&)>& handler);
 
