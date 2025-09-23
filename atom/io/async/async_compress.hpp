@@ -11,7 +11,9 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
+#ifdef ATOM_USE_ASIO
 #include <asio.hpp>
+#endif
 
 namespace fs = std::filesystem;
 #ifdef _WIN32

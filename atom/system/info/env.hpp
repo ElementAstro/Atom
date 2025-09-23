@@ -15,6 +15,7 @@ Description: Environment variable management
 #ifndef ATOM_UTILS_ENV_HPP
 #define ATOM_UTILS_ENV_HPP
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <functional>

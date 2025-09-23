@@ -79,11 +79,16 @@ endif()
 # --- determine if linking 'dl' is required
 # ----------------------------------------------------------
 
-set(LOGURU_USE_FMTLIB On)
+set(LOGURU_USE_FMTLIB Off)
 
 if (WIN32)
-  find_package(dlfcn-win32 REQUIRED)
-  set(CMAKE_DL_LIBS dlfcn-win32::dl)
+  find_package(dlfcn-win32 QUIET)
+  if(dlfcn-win32_FOUND)
+    set(CMAKE_DL_LIBS dlfcn-win32::dl)
+    message(STATUS "dlfcn-win32 found and will be used")
+  else()
+    message(STATUS "dlfcn-win32 not found - some features may be limited")
+  endif()
 endif ()
 
 if (LOGURU_STACKTRACES AND (NOT CMAKE_DL_LIBS))
@@ -115,9 +120,11 @@ if(WIN32)
 target_link_libraries(loguru
   PUBLIC
     Threads::Threads    # pthreads (or equivalent)
-    dlfcn-win32::dl
     dbghelp
 )
+if(dlfcn-win32_FOUND)
+    target_link_libraries(loguru PUBLIC dlfcn-win32::dl)
+endif()
 else()
 target_link_libraries(loguru
   PUBLIC
@@ -360,6 +367,12 @@ if (NOT PROJECT_IS_TOP_LEVEL)
   add_library(atom-log SHARED ${ATOM_LOG_SOURCES} ${ATOM_LOG_HEADERS})
 
   # Link dependencies
+  # Find and link fmt if available (required for spdlog)
+  find_package(fmt QUIET)
+  if(fmt_FOUND)
+    message(STATUS "fmt found - linking to atom-log")
+  endif()
+
   target_link_libraries(atom-log
     PUBLIC
       loguru
@@ -367,6 +380,7 @@ if (NOT PROJECT_IS_TOP_LEVEL)
       atom-utils
       atom-web
       ZLIB::ZLIB
+      $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>
   )
 
   # Include directories

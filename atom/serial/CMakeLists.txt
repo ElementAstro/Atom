@@ -8,6 +8,12 @@ cmake_minimum_required(VERSION 3.21)
 # Define library name
 set(LIB_NAME atom-serial)
 
+# Check for USB support
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(LIBUSB QUIET libusb-1.0)
+endif()
+
 # Sources
 set(SOURCES
     # Core files
@@ -16,10 +22,15 @@ set(SOURCES
 
     # Bluetooth files
     bluetooth/bluetooth_serial.cpp
-
-    # USB files
-    usb/usb.cpp
 )
+
+# Add USB files only if libusb is available
+if(LIBUSB_FOUND)
+    list(APPEND SOURCES usb/usb.cpp)
+    message(STATUS "USB support enabled for atom-serial")
+else()
+    message(STATUS "USB support disabled for atom-serial (libusb not found)")
+endif()
 
 # Add platform-specific sources
 if(APPLE)
@@ -37,8 +48,6 @@ set(HEADERS
     bluetooth_serial_win.hpp
     serial_port_unix.hpp
     serial_port_win.hpp
-    usb.hpp
-
     # Actual implementation headers (in subdirectories)
     core/scanner.hpp
     core/serial_port.hpp
@@ -48,11 +57,14 @@ set(HEADERS
     bluetooth/bluetooth_serial_unix.hpp
     bluetooth/bluetooth_serial_win.hpp
 
-    usb/usb.hpp
-
     platform/serial_port_unix.hpp
     platform/serial_port_win.hpp
 )
+
+# Add USB headers only if libusb is available
+if(LIBUSB_FOUND)
+    list(APPEND HEADERS usb.hpp usb/usb.hpp)
+endif()
 
 # Create library target
 add_library(${LIB_NAME} ${SOURCES} ${HEADERS})
@@ -85,11 +97,9 @@ elseif(APPLE)
 else() # Linux/Unix
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(UDEV REQUIRED libudev)
-    pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
 
     target_include_directories(${LIB_NAME} PUBLIC
         ${UDEV_INCLUDE_DIRS}
-        ${LIBUSB_INCLUDE_DIRS}
     )
 
     target_link_libraries(${LIB_NAME}
@@ -97,8 +107,14 @@ else() # Linux/Unix
         atom-error
         atom-log
         ${UDEV_LIBRARIES}
-        ${LIBUSB_LIBRARIES}
     )
+
+    # Add USB support if available
+    if(LIBUSB_FOUND)
+        target_include_directories(${LIB_NAME} PUBLIC ${LIBUSB_INCLUDE_DIRS})
+        target_link_libraries(${LIB_NAME} PUBLIC ${LIBUSB_LIBRARIES})
+        target_compile_definitions(${LIB_NAME} PUBLIC ATOM_SERIAL_HAS_USB)
+    endif()
 endif()
 
 # Add Bluetooth support if available

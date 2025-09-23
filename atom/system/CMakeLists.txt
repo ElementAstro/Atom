@@ -11,10 +11,12 @@ project(atom-system VERSION 1.0.0 LANGUAGES C CXX)
 
 find_package(PkgConfig REQUIRED)
 
-pkg_check_modules(LIBUSB REQUIRED libusb-1.0)
+pkg_check_modules(LIBUSB QUIET libusb-1.0)
 
 if(LIBUSB_FOUND)
     message(STATUS "Found libusb-1.0: ${LIBUSB_VERSION}")
+else()
+    message(STATUS "libusb-1.0 not found - USB device support will be disabled")
 endif()
 
 # Sources and Headers

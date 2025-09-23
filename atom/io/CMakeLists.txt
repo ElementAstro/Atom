@@ -11,11 +11,6 @@ project(atom-io VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources
 set(SOURCES
-    # Async operations
-    async/async_compress.cpp
-    async/async_glob.cpp
-    async/async_io.cpp
-
     # Compression functionality
     compression/compress.cpp
 
@@ -59,31 +54,82 @@ set(HEADERS
 # Dependencies
 set(LIBS
     loguru
-    MINIZIP::minizip
     ZLIB::ZLIB
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-find_package(TBB REQUIRED)
+# Try to find minizip-ng
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(MINIZIP QUIET minizip-ng)
+    if(MINIZIP_FOUND)
+        list(APPEND LIBS ${MINIZIP_LIBRARIES})
+        message(STATUS "minizip-ng found via pkg-config")
+    endif()
+endif()
+
+# Fallback: try to find minizip via find_package
+if(NOT MINIZIP_FOUND)
+    find_package(minizip-ng QUIET)
+    if(minizip-ng_FOUND)
+        list(APPEND LIBS minizip-ng::minizip-ng)
+        set(MINIZIP_FOUND TRUE)
+        message(STATUS "minizip-ng found via find_package")
+    endif()
+endif()
+
+# If still not found, check if we can build without it
+if(NOT MINIZIP_FOUND)
+    message(STATUS "minizip-ng not found - compression features will be limited")
+    set(ATOM_IO_NO_MINIZIP TRUE)
+endif()
+
+find_package(TBB QUIET)
 if(TBB_FOUND)
     list(APPEND LIBS TBB::tbb)
+    message(STATUS "TBB found and will be used for parallel algorithms")
+else()
+    message(STATUS "TBB not found - parallel algorithms will use standard library")
 endif()
 
 if(WIN32)
     list(APPEND LIBS ws2_32 wsock32)
 endif()
 
+# Check for ASIO support and add async sources if available
+find_package(asio QUIET)
+if(asio_FOUND)
+    # Add async sources when ASIO is available
+    list(APPEND SOURCES
+        async/async_compress.cpp
+        async/async_glob.cpp
+        async/async_io.cpp
+    )
+    message(STATUS "ASIO found - async I/O features enabled")
+else()
+    find_path(ASIO_INCLUDE_DIR NAMES asio.hpp)
+    if(ASIO_INCLUDE_DIR)
+        # Add async sources when ASIO is available
+        list(APPEND SOURCES
+            async/async_compress.cpp
+            async/async_glob.cpp
+            async/async_io.cpp
+        )
+        message(STATUS "ASIO found via include path - async I/O features enabled")
+    else()
+        message(STATUS "ASIO not found - async I/O features disabled")
+    endif()
+endif()
+
 # Build Object Library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
 set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-# Check for ASIO support
-find_package(asio QUIET)
+# Apply ASIO configuration to targets
 if(asio_FOUND)
     target_compile_definitions(${PROJECT_NAME}_object PRIVATE ASIO_STANDALONE ATOM_USE_ASIO)
     target_link_libraries(${PROJECT_NAME}_object PRIVATE asio::asio)
 else()
-    find_path(ASIO_INCLUDE_DIR NAMES asio.hpp)
     if(ASIO_INCLUDE_DIR)
         target_compile_definitions(${PROJECT_NAME}_object PRIVATE ASIO_STANDALONE ATOM_USE_ASIO)
         target_include_directories(${PROJECT_NAME}_object PRIVATE ${ASIO_INCLUDE_DIR})
@@ -104,6 +150,12 @@ if(asio_FOUND)
 elseif(ASIO_INCLUDE_DIR)
     target_compile_definitions(${PROJECT_NAME} PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
     target_include_directories(${PROJECT_NAME} PUBLIC ${ASIO_INCLUDE_DIR})
+endif()
+
+# Apply minizip definitions if not found
+if(ATOM_IO_NO_MINIZIP)
+    target_compile_definitions(${PROJECT_NAME}_object PRIVATE ATOM_IO_NO_MINIZIP)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE ATOM_IO_NO_MINIZIP)
 endif()
 
 # Register as Atom module

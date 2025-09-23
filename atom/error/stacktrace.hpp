@@ -91,8 +91,6 @@ namespace backends {
     class BoostBackend;
 }
 
-namespace atom::error {
-
 /**
  * @brief Enhanced stack trace class with support for multiple backends
  *

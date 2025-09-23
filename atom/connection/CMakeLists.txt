@@ -11,12 +11,6 @@ project(atom-connection VERSION 1.0.0 LANGUAGES C CXX)
 
 # Sources
 set(SOURCES
-    async_fifoclient.cpp
-    async_fifoserver.cpp
-    async_sockethub.cpp
-    async_tcpclient.cpp
-    async_udpclient.cpp
-    async_udpserver.cpp
     fifoclient.cpp
     fifoserver.cpp
     sockethub.cpp
@@ -26,14 +20,24 @@ set(SOURCES
     udpserver.cpp
 )
 
+# Check for ASIO support and add async sources if available
+find_package(asio QUIET)
+if(asio_FOUND)
+    list(APPEND SOURCES
+        async_fifoclient.cpp
+        async_fifoserver.cpp
+        async_sockethub.cpp
+        async_tcpclient.cpp
+        async_udpclient.cpp
+        async_udpserver.cpp
+    )
+    message(STATUS "ASIO found - async connection features enabled")
+else()
+    message(STATUS "ASIO not found - async connection features disabled")
+endif()
+
 # Headers
 set(HEADERS
-    async_fifoclient.hpp
-    async_fifoserver.hpp
-    async_sockethub.hpp
-    async_tcpclient.hpp
-    async_udpclient.hpp
-    async_udpserver.hpp
     fifoclient.hpp
     fifoserver.hpp
     sockethub.hpp
@@ -42,6 +46,18 @@ set(HEADERS
     udpclient.hpp
     udpserver.hpp
 )
+
+# Add async headers if ASIO is available
+if(asio_FOUND)
+    list(APPEND HEADERS
+        async_fifoclient.hpp
+        async_fifoserver.hpp
+        async_sockethub.hpp
+        async_tcpclient.hpp
+        async_udpclient.hpp
+        async_udpserver.hpp
+    )
+endif()
 
 if (ATOM_USE_SSH)
     list(APPEND SOURCES

@@ -22,9 +22,10 @@ Description: Error context system for capturing additional debugging information
 #include <vector>
 #include <thread>
 #include <mutex>
+#include <shared_mutex>
 #include <any>
 
-#include "atom/macro.hpp"
+#include "../macro.hpp"
 #include "error_code.hpp"
 
 namespace atom::error {

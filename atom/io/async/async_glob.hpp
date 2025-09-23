@@ -16,9 +16,12 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
+#ifdef ATOM_USE_ASIO
 #include <asio.hpp>
+#endif
 #include "atom/error/exception.hpp"
 
+#ifdef ATOM_USE_ASIO
 namespace atom::io {
 
 namespace fs = std::filesystem;
@@ -537,3 +540,6 @@ inline AsyncGlob::Task<std::vector<fs::path>> AsyncGlob::glob_async(
 }
 
 }  // namespace atom::io
+#endif // ATOM_USE_ASIO
+
+

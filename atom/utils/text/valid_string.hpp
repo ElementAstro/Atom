@@ -4,7 +4,6 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
-#include <expected>  // C++23 for error handling with result types
 #include <format>    // C++20 string formatting
 #include <optional>
 #include <ranges>           // C++20 ranges library
@@ -17,6 +16,7 @@
 #include <vector>
 
 #include "atom/macro.hpp"
+#include "atom/type/compat.hpp"  // Use compatibility layer for expected
 
 namespace atom::utils {
 
@@ -252,10 +252,10 @@ private:
     QuoteType quoteType_;
 };
 
-// Function declaration using std::expected instead of exceptions
+// Function declaration using atom::type::compat::expected instead of exceptions
 template <StringLike T>
 auto isValidBracket(T&& str, const ValidationOptions& options = {})
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 
 // Enhanced compile-time bracket validator
 template <std::size_t N>
@@ -442,11 +442,11 @@ constexpr auto validateBrackets(const char (&str)[N],
                                          options);
 }
 
-// Implement exception-free validation using std::expected
+// Implement exception-free validation using atom::type::compat::expected
 template <StringLike T>
 constexpr auto validateStringNothrow(
     T&& str, const ValidationOptions& options = {}) noexcept
-    -> std::expected<ValidationResult, std::string> {
+    -> atom::type::compat::expected<ValidationResult, std::string> {
     try {
         if constexpr (std::is_array_v<std::remove_reference_t<T>> &&
                       std::is_same_v<
@@ -471,11 +471,11 @@ constexpr auto validateStringNothrow(
             return isValidBracket(std::forward<T>(str), options);
         }
     } catch (const ValidationException& e) {
-        return std::unexpected(e.what());
+        return atom::type::compat::unexpected<std::string>(e.what());
     } catch (const std::exception& e) {
-        return std::unexpected(std::format("Unexpected error: {}", e.what()));
+        return atom::type::compat::unexpected<std::string>(std::format("Unexpected error: {}", e.what()));
     } catch (...) {
-        return std::unexpected("Unknown error occurred");
+        return atom::type::compat::unexpected<std::string>("Unknown error occurred");
     }
 }
 
@@ -503,31 +503,31 @@ auto validateString(T&& str, const ValidationOptions& options = {}) {
 // String instantiations declaration
 extern template auto isValidBracket<std::string>(std::string&&,
                                                  const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 extern template auto isValidBracket<const std::string&>(
     const std::string&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 extern template auto isValidBracket<std::string_view>(std::string_view&&,
                                                       const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 extern template auto isValidBracket<const std::string_view&>(
     const std::string_view&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 
 // Unicode string support declarations
 #ifdef __cpp_lib_char8_t
 extern template auto isValidBracket<std::u8string>(std::u8string&&,
                                                    const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 extern template auto isValidBracket<const std::u8string&>(
     const std::u8string&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 extern template auto isValidBracket<std::u8string_view>(
     std::u8string_view&&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 extern template auto isValidBracket<const std::u8string_view&>(
     const std::u8string_view&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 #endif
 
 }  // namespace atom::utils

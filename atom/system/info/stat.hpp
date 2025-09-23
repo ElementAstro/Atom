@@ -18,6 +18,7 @@ Description: Python like stat for Windows & Linux
 #include <ctime>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 
 namespace fs = std::filesystem;

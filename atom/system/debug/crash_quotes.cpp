@@ -17,6 +17,7 @@ Description: Quote manager for crash report.
 #include <algorithm>
 #include <cctype>
 #include <fstream>
+#include <iostream>
 #include <random>
 #include <unordered_set>
 
@@ -25,6 +26,10 @@ Description: Quote manager for crash report.
 #include "atom/utils/random.hpp"
 
 #include <spdlog/spdlog.h>
+
+#ifdef DEBUG
+#include "atom/log/loguru.hpp"
+#endif
 
 using json = nlohmann::json;
 

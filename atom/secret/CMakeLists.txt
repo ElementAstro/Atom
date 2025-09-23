@@ -35,9 +35,12 @@ set(LIBS
 )
 
 # Find required packages
-find_package(OpenSSL REQUIRED)
+find_package(OpenSSL QUIET)
 if(OpenSSL_FOUND)
     list(APPEND LIBS OpenSSL::SSL OpenSSL::Crypto)
+    message(STATUS "OpenSSL found - cryptographic features enabled")
+else()
+    message(STATUS "OpenSSL not found - some cryptographic features will be disabled")
 endif()
 
 # Find spdlog

@@ -9,7 +9,12 @@
 cmake_minimum_required(VERSION 3.20)
 project(atom-web VERSION 1.0.0 LANGUAGES C CXX)
 
-find_package(CURL REQUIRED)
+find_package(CURL QUIET)
+if(CURL_FOUND)
+    message(STATUS "CURL found - HTTP client features enabled")
+else()
+    message(STATUS "CURL not found - HTTP client features will be disabled")
+endif()
 
 # Add time subdirectory
 add_subdirectory(address)
@@ -71,8 +76,11 @@ list(APPEND HEADERS ${TIME_HEADERS})
 set(LIBS
     loguru
     ${CMAKE_THREAD_LIBS_INIT}
-    ${CURL_LIBRARIES}
 )
+
+if(CURL_FOUND)
+    list(APPEND LIBS ${CURL_LIBRARIES})
+endif()
 
 if(WIN32)
    list(APPEND LIBS wsock32 ws2_32)
@@ -93,6 +101,10 @@ add_library(${PROJECT_NAME} STATIC
 )
 target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
 target_include_directories(${PROJECT_NAME} PUBLIC .)
+
+if(CURL_FOUND)
+    target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
+endif()
 
 # Set library properties
 set_target_properties(${PROJECT_NAME} PROPERTIES

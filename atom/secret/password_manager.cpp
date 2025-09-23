@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "encryption.hpp"
+#include "serialization.hpp"
 
 namespace atom::secret {
 
@@ -488,12 +489,12 @@ Result<int> PasswordManager::importFromJson(const std::string& json, bool overwr
     std::lock_guard<std::mutex> lock(mutex_);
 
     if (!ensureUnlocked()) {
-        return Result<int>("Password manager is locked");
+        return Result<int>::error("Password manager is locked");
     }
 
     auto entriesResult = JsonSerializer::deserializeEntries(json);
     if (entriesResult.isError()) {
-        return Result<int>("Failed to parse JSON: " + entriesResult.error());
+        return Result<int>::error("Failed to parse JSON: " + entriesResult.error());
     }
 
     const auto& entries = entriesResult.value();

@@ -11,8 +11,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Find OpenSSL package
 find_package(OpenSSL REQUIRED)
 
-# Find TBB package
-find_package(TBB REQUIRED)
+# Find TBB package (optional for now due to vcpkg network issues)
+find_package(TBB QUIET)
 
 # Get dependencies from module_dependencies.cmake
 if(NOT DEFINED ATOM_ALGORITHM_DEPENDS)
@@ -147,7 +147,10 @@ set(HEADERS
 set(LIBS ${ATOM_ALGORITHM_DEPENDS})
 
 # Add OpenSSL to the list of libraries
-list(APPEND LIBS OpenSSL::SSL OpenSSL::Crypto TBB::tbb loguru)
+list(APPEND LIBS OpenSSL::SSL OpenSSL::Crypto loguru)
+if(TBB_FOUND)
+    list(APPEND LIBS TBB::tbb)
+endif()
 
 # Build object library
 add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})

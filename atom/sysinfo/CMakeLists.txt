@@ -177,9 +177,25 @@ set_property(TARGET atom-sysinfo PROPERTY CXX_STANDARD 20)
 set_property(TARGET atom-sysinfo PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # Link required libraries for sysinfo functionality
-find_package(fmt REQUIRED)
-find_package(spdlog REQUIRED)
-target_link_libraries(atom-sysinfo PRIVATE fmt::fmt spdlog::spdlog atom-error)
+find_package(fmt QUIET)
+find_package(spdlog QUIET)
+
+set(SYSINFO_LIBS atom-error)
+if(fmt_FOUND)
+    list(APPEND SYSINFO_LIBS fmt::fmt)
+    message(STATUS "fmt found - enhanced formatting enabled in sysinfo")
+else()
+    message(STATUS "fmt not found - using standard formatting in sysinfo")
+endif()
+
+if(spdlog_FOUND)
+    list(APPEND SYSINFO_LIBS spdlog::spdlog)
+    message(STATUS "spdlog found - enhanced logging enabled in sysinfo")
+else()
+    message(STATUS "spdlog not found - using standard logging in sysinfo")
+endif()
+
+target_link_libraries(atom-sysinfo PRIVATE ${SYSINFO_LIBS})
 
 # Platform-specific libraries
 if(WIN32)

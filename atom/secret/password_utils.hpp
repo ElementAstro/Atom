@@ -44,11 +44,17 @@ public:
     };
 
     /**
+     * @brief Generates a secure password with default options.
+     * @return Result containing the generated password or error message.
+     */
+    static Result<std::string> generatePassword();
+
+    /**
      * @brief Generates a secure password with the specified options.
      * @param options Password generation options.
      * @return Result containing the generated password or error message.
      */
-    static Result<std::string> generatePassword(const GenerationOptions& options = {});
+    static Result<std::string> generatePassword(const GenerationOptions& options);
 
     /**
      * @brief Generates a password based on PasswordManagerSettings.

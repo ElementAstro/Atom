@@ -276,6 +276,13 @@ public:
         return quotes_;
     }
 
+#ifdef DEBUG
+    /**
+     * @brief Displays all quotes to console (debug only).
+     */
+    void displayQuotes() const;
+#endif
+
 private:
     std::vector<Quote> quotes_;
     mutable std::unordered_map<std::string, std::vector<size_t>> authorCache_;

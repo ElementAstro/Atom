@@ -11,6 +11,8 @@
         "fmt",
         "readline",
         "pybind11",
+        "tbb",
+        "minizip-ng",
         {
             "name": "boost",
             "default-features": true

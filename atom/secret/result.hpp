@@ -4,6 +4,18 @@
 #include <stdexcept>
 #include <string>
 #include <variant>
+#include <type_traits>
+
+namespace atom::secret {
+
+// Error wrapper to distinguish from success values
+struct Error {
+    std::string message;
+    explicit Error(const std::string& msg) : message(msg) {}
+    explicit Error(std::string&& msg) : message(std::move(msg)) {}
+};
+
+}
 
 namespace atom::secret {
 
@@ -14,8 +26,8 @@ namespace atom::secret {
 template <typename T>
 class Result {
 private:
-    std::variant<T, std::string>
-        data;  ///< Holds either the success value or an error string.
+    std::variant<T, Error>
+        data;  ///< Holds either the success value or an error.
 
 public:
     /**
@@ -34,7 +46,41 @@ public:
      * @brief Constructs a Result with an error message.
      * @param error The error message string.
      */
-    explicit Result(const std::string& error) : data(error) {}
+    explicit Result(const Error& error) : data(error) {}
+
+    /**
+     * @brief Constructs a Result with an error message (move).
+     * @param error The error message string.
+     */
+    explicit Result(Error&& error) : data(std::move(error)) {}
+
+    // Static factory methods for clarity
+    /**
+     * @brief Creates a successful Result.
+     * @param value The success value.
+     * @return A Result containing the success value.
+     */
+    static Result success(const T& value) {
+        return Result(value);
+    }
+
+    /**
+     * @brief Creates a successful Result (move version).
+     * @param value The success value.
+     * @return A Result containing the success value.
+     */
+    static Result success(T&& value) {
+        return Result(std::move(value));
+    }
+
+    /**
+     * @brief Creates an error Result.
+     * @param error The error message.
+     * @return A Result containing the error.
+     */
+    static Result error(const std::string& error) {
+        return Result(Error(error));
+    }
 
     /**
      * @brief Checks if the result represents success.
@@ -47,7 +93,7 @@ public:
      * @return True if it's an error, false otherwise.
      */
     bool isError() const noexcept {
-        return std::holds_alternative<std::string>(data);
+        return std::holds_alternative<Error>(data);
     }
 
     /**
@@ -59,7 +105,7 @@ public:
         if (isError())
             throw std::runtime_error(
                 "Attempted to access value of an error Result: " +
-                std::get<std::string>(data));
+                std::get<Error>(data).message);
         return std::get<T>(data);
     }
 
@@ -72,7 +118,7 @@ public:
         if (isError())
             throw std::runtime_error(
                 "Attempted to access value of an error Result: " +
-                std::get<std::string>(data));
+                std::get<Error>(data).message);
         return std::move(std::get<T>(data));
     }
 
@@ -85,7 +131,7 @@ public:
         if (isSuccess())
             throw std::runtime_error(
                 "Attempted to access error of a success Result.");
-        return std::get<std::string>(data);
+        return std::get<Error>(data).message;
     }
 };
 

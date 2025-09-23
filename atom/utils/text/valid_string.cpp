@@ -26,11 +26,11 @@ namespace atom::utils {
 // Forward declarations
 template <StringLike T>
 auto parallelValidation(T&& str, const ValidationOptions& options)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 
 template <StringLike T>
 auto validateImpl(T&& str, const ValidationOptions& options)
-    -> std::expected<ValidationResult, std::string>;
+    -> atom::type::compat::expected<ValidationResult, std::string>;
 
 // Use PMR memory resources to improve small object performance
 thread_local std::pmr::monotonic_buffer_resource threadLocalBuffer{4096};
@@ -117,7 +117,7 @@ namespace atom::utils {
 // Parallel processing for large strings
 template <StringLike T>
 auto parallelValidation(T&& str, const ValidationOptions& options)
-    -> std::expected<ValidationResult, std::string> {
+    -> ::atom::type::expected<ValidationResult, std::string> {
     try {
         auto span = getDataSpan(str);
         const size_t length = span.size();
@@ -132,7 +132,7 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
             std::max(2u, std::thread::hardware_concurrency());
         const size_t chunkSize = length / numThreads;
 
-        std::vector<std::expected<ValidationResult, std::string>> results(
+        std::vector<::atom::type::expected<ValidationResult, std::string>> results(
             numThreads);
         std::vector<std::thread> threads;
         std::latch completion_latch(

@@ -14,11 +14,13 @@ Description: Compressor using ZLib and MiniZip-ng
 
 #include "compress.hpp"
 
+#ifndef ATOM_IO_NO_MINIZIP
 #include <minizip-ng/mz.h>
 #include <minizip-ng/mz_compat.h>
 #include <minizip-ng/mz_strm.h>
 #include <minizip-ng/mz_zip.h>
 #include <minizip-ng/mz_zip_rw.h>
+#endif
 #include <zlib.h>
 
 #include <array>
@@ -156,6 +158,7 @@ struct ProgressInfo {
 };
 
 // ZIP file closer (no changes needed)
+#ifndef ATOM_IO_NO_MINIZIP
 struct ZipCloser {
     void operator()(zipFile file) const {
         if (file) {
@@ -172,6 +175,7 @@ struct UnzipCloser {
         }
     }
 };
+#endif
 
 }  // anonymous namespace
 
@@ -432,6 +436,7 @@ CompressionResult decompressFile(
     return result;
 }
 
+#ifndef ATOM_IO_NO_MINIZIP
 CompressionResult compressFolder(std::string_view folder_path_sv,
                                  std::string_view output_path_sv,
                                  const CompressionOptions& options) {
@@ -629,7 +634,9 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
 
     return result;
 }
+#endif // ATOM_IO_NO_MINIZIP
 
+#ifndef ATOM_IO_NO_MINIZIP
 CompressionResult extractZip(std::string_view zip_path_sv,
                              std::string_view output_folder_sv,
                              const DecompressionOptions& options) {
@@ -1342,6 +1349,7 @@ std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
         return std::nullopt;
     }
 }
+#endif // ATOM_IO_NO_MINIZIP
 
 // compressFileInSlices needs careful handling of filenames and manifest
 CompressionResult compressFileInSlices(std::string_view file_path_sv,
@@ -2442,6 +2450,42 @@ decompressData<std::span<const unsigned char>>(
 template std::pair<CompressionResult, Vector<unsigned char>>
 decompressData<std::span<const char>>(const std::span<const char>&, size_t,
                                       const DecompressionOptions&);
+#endif
+
+#ifdef ATOM_IO_NO_MINIZIP
+// Stub implementations when minizip-ng is not available
+CompressionResult extractZip(std::string_view, std::string_view, const DecompressionOptions&) {
+    CompressionResult result;
+    result.success = false;
+    result.error_message = "ZIP support not available - minizip-ng not found";
+    return result;
+}
+
+CompressionResult createZip(std::string_view, std::string_view, const CompressionOptions&) {
+    CompressionResult result;
+    result.success = false;
+    result.error_message = "ZIP support not available - minizip-ng not found";
+    return result;
+}
+
+CompressionResult removeFromZip(std::string_view, std::string_view) {
+    CompressionResult result;
+    result.success = false;
+    result.error_message = "ZIP support not available - minizip-ng not found";
+    return result;
+}
+
+Vector<ZipFileInfo> listZipContents(std::string_view) {
+    return Vector<ZipFileInfo>{};
+}
+
+bool fileExistsInZip(std::string_view, std::string_view) {
+    return false;
+}
+
+std::optional<size_t> getZipSize(std::string_view) {
+    return std::nullopt;
+}
 #endif
 
 }  // namespace atom::io

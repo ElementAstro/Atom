@@ -32,7 +32,7 @@ Result<std::string> JsonSerializer::serializeEntry(const PasswordEntry& entry) {
 
 Result<PasswordEntry> JsonSerializer::deserializeEntry(const std::string& json) {
     if (!SimpleJsonParser::isValidJson(json)) {
-        return Result<PasswordEntry>("Invalid JSON format");
+        return Result<PasswordEntry>::error("Invalid JSON format");
     }
     
     PasswordEntry entry;
@@ -88,7 +88,7 @@ Result<std::string> JsonSerializer::serializeEntries(const std::vector<PasswordE
 
 Result<std::vector<PasswordEntry>> JsonSerializer::deserializeEntries(const std::string& json) {
     if (!SimpleJsonParser::isValidJson(json)) {
-        return Result<std::vector<PasswordEntry>>("Invalid JSON format");
+        return Result<std::vector<PasswordEntry>>::error("Invalid JSON format");
     }
     
     std::vector<PasswordEntry> entries;
@@ -96,7 +96,7 @@ Result<std::vector<PasswordEntry>> JsonSerializer::deserializeEntries(const std:
     // Simple array parsing - find individual objects
     size_t pos = json.find('[');
     if (pos == std::string::npos) {
-        return Result<std::vector<PasswordEntry>>("JSON is not an array");
+        return Result<std::vector<PasswordEntry>>::error("JSON is not an array");
     }
     
     pos++; // Skip opening bracket
@@ -118,7 +118,7 @@ Result<std::vector<PasswordEntry>> JsonSerializer::deserializeEntries(const std:
                 std::string objectJson = json.substr(objectStart, i - objectStart + 1);
                 auto entryResult = deserializeEntry(objectJson);
                 if (entryResult.isError()) {
-                    return Result<std::vector<PasswordEntry>>(
+                    return Result<std::vector<PasswordEntry>>::error(
                         "Failed to deserialize entry: " + entryResult.error());
                 }
                 entries.push_back(std::move(entryResult.value()));
@@ -153,7 +153,7 @@ Result<std::string> JsonSerializer::serializeSettings(const PasswordManagerSetti
 
 Result<PasswordManagerSettings> JsonSerializer::deserializeSettings(const std::string& json) {
     if (!SimpleJsonParser::isValidJson(json)) {
-        return Result<PasswordManagerSettings>("Invalid JSON format");
+        return Result<PasswordManagerSettings>::error("Invalid JSON format");
     }
     
     PasswordManagerSettings settings;

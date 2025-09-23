@@ -195,7 +195,7 @@ std::string JsonFormatter::formatMultiple(const std::vector<std::shared_ptr<Erro
         if (prettyPrint_) {
             std::string contextJson = format(contexts[i]);
             // Add indentation to each line
-            std::regex lineRegex("^", std::regex_constants::multiline);
+            std::regex lineRegex("^");
             contextJson = std::regex_replace(contextJson, lineRegex, indent);
             ss << contextJson;
         } else {

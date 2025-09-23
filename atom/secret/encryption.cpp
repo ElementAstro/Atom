@@ -224,19 +224,19 @@ Result<std::vector<uint8_t>> KeyDerivation::deriveKey(
     size_t keyLength) {
 
     if (password.empty()) {
-        return Result<std::vector<uint8_t>>("Password cannot be empty");
+        return Result<std::vector<uint8_t>>::error("Password cannot be empty");
     }
 
     if (salt.empty()) {
-        return Result<std::vector<uint8_t>>("Salt cannot be empty");
+        return Result<std::vector<uint8_t>>::error("Salt cannot be empty");
     }
 
     if (iterations < 1000) {
-        return Result<std::vector<uint8_t>>("Iteration count too low (minimum 1000)");
+        return Result<std::vector<uint8_t>>::error("Iteration count too low (minimum 1000)");
     }
 
     if (keyLength == 0 || keyLength > 1024) {
-        return Result<std::vector<uint8_t>>("Invalid key length");
+        return Result<std::vector<uint8_t>>::error("Invalid key length");
     }
 
     std::vector<uint8_t> derivedKey(keyLength);
@@ -250,7 +250,7 @@ Result<std::vector<uint8_t>> KeyDerivation::deriveKey(
         derivedKey.data());
 
     if (result != 1) {
-        return Result<std::vector<uint8_t>>("Key derivation failed");
+        return Result<std::vector<uint8_t>>::error("Key derivation failed");
     }
 
     return Result<std::vector<uint8_t>>(std::move(derivedKey));
@@ -258,13 +258,13 @@ Result<std::vector<uint8_t>> KeyDerivation::deriveKey(
 
 Result<std::vector<uint8_t>> KeyDerivation::generateSalt(size_t length) {
     if (length == 0 || length > 1024) {
-        return Result<std::vector<uint8_t>>("Invalid salt length");
+        return Result<std::vector<uint8_t>>::error("Invalid salt length");
     }
 
     std::vector<uint8_t> salt(length);
 
     if (RAND_bytes(salt.data(), static_cast<int>(length)) != 1) {
-        return Result<std::vector<uint8_t>>("Failed to generate random salt");
+        return Result<std::vector<uint8_t>>::error("Failed to generate random salt");
     }
 
     return Result<std::vector<uint8_t>>(std::move(salt));
@@ -272,13 +272,13 @@ Result<std::vector<uint8_t>> KeyDerivation::generateSalt(size_t length) {
 
 Result<std::vector<uint8_t>> KeyDerivation::generateKey(size_t length) {
     if (length == 0 || length > 1024) {
-        return Result<std::vector<uint8_t>>("Invalid key length");
+        return Result<std::vector<uint8_t>>::error("Invalid key length");
     }
 
     std::vector<uint8_t> key(length);
 
     if (RAND_bytes(key.data(), static_cast<int>(length)) != 1) {
-        return Result<std::vector<uint8_t>>("Failed to generate random key");
+        return Result<std::vector<uint8_t>>::error("Failed to generate random key");
     }
 
     return Result<std::vector<uint8_t>>(std::move(key));
@@ -329,7 +329,7 @@ std::vector<uint8_t> EncryptedData::serialize() const {
 
 Result<EncryptedData> EncryptedData::deserialize(const std::vector<uint8_t>& data) {
     if (data.size() < 22) { // Minimum header size
-        return Result<EncryptedData>("Invalid encrypted data format");
+        return Result<EncryptedData>::error("Invalid encrypted data format");
     }
 
     size_t pos = 0;
@@ -337,20 +337,20 @@ Result<EncryptedData> EncryptedData::deserialize(const std::vector<uint8_t>& dat
     // Read version
     uint8_t version = data[pos++];
     if (version != 1) {
-        return Result<EncryptedData>("Unsupported encrypted data version");
+        return Result<EncryptedData>::error("Unsupported encrypted data version");
     }
 
     // Read method
     uint8_t methodByte = data[pos++];
     if (methodByte > 2) {
-        return Result<EncryptedData>("Unknown encryption method");
+        return Result<EncryptedData>::error("Unknown encryption method");
     }
 
     EncryptionOptions::Method method = static_cast<EncryptionOptions::Method>(methodByte);
 
     // Read iterations (4 bytes, big-endian)
     if (pos + 4 > data.size()) {
-        return Result<EncryptedData>("Truncated encrypted data");
+        return Result<EncryptedData>::error("Truncated encrypted data");
     }
 
     uint32_t iterations = (static_cast<uint32_t>(data[pos]) << 24) |
@@ -377,7 +377,7 @@ Result<EncryptedData> EncryptedData::deserialize(const std::vector<uint8_t>& dat
 
     // Validate lengths
     if (pos + saltLen + ivLen + tagLen + cipherLen != data.size()) {
-        return Result<EncryptedData>("Invalid encrypted data lengths");
+        return Result<EncryptedData>::error("Invalid encrypted data lengths");
     }
 
     EncryptedData result;
@@ -409,17 +409,17 @@ Result<EncryptedData> Encryption::encrypt(
     const EncryptionOptions& options) {
 
     if (plaintext.empty()) {
-        return Result<EncryptedData>("Plaintext cannot be empty");
+        return Result<EncryptedData>::error("Plaintext cannot be empty");
     }
 
     if (password.empty()) {
-        return Result<EncryptedData>("Password cannot be empty");
+        return Result<EncryptedData>::error("Password cannot be empty");
     }
 
     // Generate salt
     auto saltResult = KeyDerivation::generateSalt(32);
     if (saltResult.isError()) {
-        return Result<EncryptedData>("Failed to generate salt: " + saltResult.error());
+        return Result<EncryptedData>::error("Failed to generate salt: " + saltResult.error());
     }
 
     // Derive key
@@ -427,7 +427,7 @@ Result<EncryptedData> Encryption::encrypt(
     auto keyResult = KeyDerivation::deriveKey(password, saltResult.value(),
                                              options.keyIterations, keySize);
     if (keyResult.isError()) {
-        return Result<EncryptedData>("Failed to derive key: " + keyResult.error());
+        return Result<EncryptedData>::error("Failed to derive key: " + keyResult.error());
     }
 
     // Encrypt with derived key
@@ -452,11 +452,11 @@ Result<std::string> Encryption::decrypt(
     std::string_view password) {
 
     if (password.empty()) {
-        return Result<std::string>("Password cannot be empty");
+        return Result<std::string>::error("Password cannot be empty");
     }
 
     if (encryptedData.salt.empty()) {
-        return Result<std::string>("Missing salt in encrypted data");
+        return Result<std::string>::error("Missing salt in encrypted data");
     }
 
     // Derive key
@@ -464,7 +464,7 @@ Result<std::string> Encryption::decrypt(
     auto keyResult = KeyDerivation::deriveKey(password, encryptedData.salt,
                                              encryptedData.keyIterations, keySize);
     if (keyResult.isError()) {
-        return Result<std::string>("Failed to derive key: " + keyResult.error());
+        return Result<std::string>::error("Failed to derive key: " + keyResult.error());
     }
 
     // Decrypt with derived key
@@ -482,18 +482,18 @@ Result<EncryptedData> Encryption::encryptWithKey(
     const EncryptionOptions& options) {
 
     if (plaintext.empty()) {
-        return Result<EncryptedData>("Plaintext cannot be empty");
+        return Result<EncryptedData>::error("Plaintext cannot be empty");
     }
 
     if (key.empty()) {
-        return Result<EncryptedData>("Key cannot be empty");
+        return Result<EncryptedData>::error("Key cannot be empty");
     }
 
     // Generate IV
     size_t ivSize = getIvSize(options.encryptionMethod);
     auto ivResult = KeyDerivation::generateKey(ivSize);
     if (ivResult.isError()) {
-        return Result<EncryptedData>("Failed to generate IV: " + ivResult.error());
+        return Result<EncryptedData>::error("Failed to generate IV: " + ivResult.error());
     }
 
     EncryptedData result;
@@ -505,7 +505,7 @@ Result<EncryptedData> Encryption::encryptWithKey(
         case EncryptionOptions::Method::AES_GCM: {
             auto encryptResult = encryptAesGcm(plaintext, key, result.iv);
             if (encryptResult.isError()) {
-                return Result<EncryptedData>("AES-GCM encryption failed: " + encryptResult.error());
+                return Result<EncryptedData>::error("AES-GCM encryption failed: " + encryptResult.error());
             }
             result.ciphertext = std::move(encryptResult.value().first);
             result.tag = std::move(encryptResult.value().second);
@@ -514,16 +514,16 @@ Result<EncryptedData> Encryption::encryptWithKey(
         case EncryptionOptions::Method::AES_CBC: {
             auto encryptResult = encryptAesCbc(plaintext, key, result.iv);
             if (encryptResult.isError()) {
-                return Result<EncryptedData>("AES-CBC encryption failed: " + encryptResult.error());
+                return Result<EncryptedData>::error("AES-CBC encryption failed: " + encryptResult.error());
             }
             result.ciphertext = std::move(encryptResult.value());
             break;
         }
         case EncryptionOptions::Method::CHACHA20_POLY1305: {
-            return Result<EncryptedData>("ChaCha20-Poly1305 not yet implemented");
+            return Result<EncryptedData>::error("ChaCha20-Poly1305 not yet implemented");
         }
         default:
-            return Result<EncryptedData>("Unknown encryption method");
+            return Result<EncryptedData>::error("Unknown encryption method");
     }
 
     return Result<EncryptedData>(std::move(result));
@@ -534,11 +534,11 @@ Result<std::string> Encryption::decryptWithKey(
     const std::vector<uint8_t>& key) {
 
     if (key.empty()) {
-        return Result<std::string>("Key cannot be empty");
+        return Result<std::string>::error("Key cannot be empty");
     }
 
     if (encryptedData.ciphertext.empty()) {
-        return Result<std::string>("Ciphertext cannot be empty");
+        return Result<std::string>::error("Ciphertext cannot be empty");
     }
 
     // Decrypt based on method
@@ -549,9 +549,9 @@ Result<std::string> Encryption::decryptWithKey(
         case EncryptionOptions::Method::AES_CBC:
             return decryptAesCbc(encryptedData.ciphertext, key, encryptedData.iv);
         case EncryptionOptions::Method::CHACHA20_POLY1305:
-            return Result<std::string>("ChaCha20-Poly1305 not yet implemented");
+            return Result<std::string>::error("ChaCha20-Poly1305 not yet implemented");
         default:
-            return Result<std::string>("Unknown encryption method");
+            return Result<std::string>::error("Unknown encryption method");
     }
 }
 
@@ -570,20 +570,20 @@ Encryption::encryptAesGcm(
 
         // Initialize encryption
         if (EVP_EncryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) {
-            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::error(
                 "Failed to initialize AES-GCM encryption");
         }
 
         // Set IV length
         if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN,
                                static_cast<int>(iv.size()), nullptr) != 1) {
-            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::error(
                 "Failed to set IV length");
         }
 
         // Set key and IV
         if (EVP_EncryptInit_ex(ctx, nullptr, nullptr, key.data(), iv.data()) != 1) {
-            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::error(
                 "Failed to set key and IV");
         }
 
@@ -595,14 +595,14 @@ Encryption::encryptAesGcm(
         if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
                              reinterpret_cast<const unsigned char*>(plaintext.data()),
                              static_cast<int>(plaintext.length())) != 1) {
-            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::error(
                 "Failed to encrypt data");
         }
         ciphertext_len = len;
 
         // Finalize encryption
         if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::error(
                 "Failed to finalize encryption");
         }
         ciphertext_len += len;
@@ -611,7 +611,7 @@ Encryption::encryptAesGcm(
         // Get authentication tag
         std::vector<uint8_t> tag(16);
         if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_GET_TAG, 16, tag.data()) != 1) {
-            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+            return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::error(
                 "Failed to get authentication tag");
         }
 
@@ -619,7 +619,7 @@ Encryption::encryptAesGcm(
             std::make_pair(std::move(ciphertext), std::move(tag)));
 
     } catch (const std::exception& e) {
-        return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>(
+        return Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>::error(
             std::string("AES-GCM encryption error: ") + e.what());
     }
 }
@@ -635,18 +635,18 @@ Result<std::string> Encryption::decryptAesGcm(
 
         // Initialize decryption
         if (EVP_DecryptInit_ex(ctx, EVP_aes_256_gcm(), nullptr, nullptr, nullptr) != 1) {
-            return Result<std::string>("Failed to initialize AES-GCM decryption");
+            return Result<std::string>::error("Failed to initialize AES-GCM decryption");
         }
 
         // Set IV length
         if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_IVLEN,
                                static_cast<int>(iv.size()), nullptr) != 1) {
-            return Result<std::string>("Failed to set IV length");
+            return Result<std::string>::error("Failed to set IV length");
         }
 
         // Set key and IV
         if (EVP_DecryptInit_ex(ctx, nullptr, nullptr, key.data(), iv.data()) != 1) {
-            return Result<std::string>("Failed to set key and IV");
+            return Result<std::string>::error("Failed to set key and IV");
         }
 
         // Decrypt
@@ -656,7 +656,7 @@ Result<std::string> Encryption::decryptAesGcm(
 
         if (EVP_DecryptUpdate(ctx, plaintext.data(), &len,
                              ciphertext.data(), static_cast<int>(ciphertext.size())) != 1) {
-            return Result<std::string>("Failed to decrypt data");
+            return Result<std::string>::error("Failed to decrypt data");
         }
         plaintext_len = len;
 
@@ -664,12 +664,12 @@ Result<std::string> Encryption::decryptAesGcm(
         if (EVP_CIPHER_CTX_ctrl(ctx, EVP_CTRL_GCM_SET_TAG,
                                static_cast<int>(tag.size()),
                                const_cast<unsigned char*>(tag.data())) != 1) {
-            return Result<std::string>("Failed to set authentication tag");
+            return Result<std::string>::error("Failed to set authentication tag");
         }
 
         // Finalize decryption (this verifies the tag)
         if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
-            return Result<std::string>("Authentication verification failed");
+            return Result<std::string>::error("Authentication verification failed");
         }
         plaintext_len += len;
 
@@ -677,7 +677,7 @@ Result<std::string> Encryption::decryptAesGcm(
                                               plaintext.begin() + plaintext_len));
 
     } catch (const std::exception& e) {
-        return Result<std::string>(std::string("AES-GCM decryption error: ") + e.what());
+        return Result<std::string>::error(std::string("AES-GCM decryption error: ") + e.what());
     }
 }
 
@@ -691,7 +691,7 @@ Result<std::vector<uint8_t>> Encryption::encryptAesCbc(
 
         // Initialize encryption
         if (EVP_EncryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(), iv.data()) != 1) {
-            return Result<std::vector<uint8_t>>("Failed to initialize AES-CBC encryption");
+            return Result<std::vector<uint8_t>>::error("Failed to initialize AES-CBC encryption");
         }
 
         // Encrypt
@@ -702,13 +702,13 @@ Result<std::vector<uint8_t>> Encryption::encryptAesCbc(
         if (EVP_EncryptUpdate(ctx, ciphertext.data(), &len,
                              reinterpret_cast<const unsigned char*>(plaintext.data()),
                              static_cast<int>(plaintext.length())) != 1) {
-            return Result<std::vector<uint8_t>>("Failed to encrypt data");
+            return Result<std::vector<uint8_t>>::error("Failed to encrypt data");
         }
         ciphertext_len = len;
 
         // Finalize encryption (adds padding)
         if (EVP_EncryptFinal_ex(ctx, ciphertext.data() + len, &len) != 1) {
-            return Result<std::vector<uint8_t>>("Failed to finalize encryption");
+            return Result<std::vector<uint8_t>>::error("Failed to finalize encryption");
         }
         ciphertext_len += len;
         ciphertext.resize(ciphertext_len);
@@ -716,7 +716,7 @@ Result<std::vector<uint8_t>> Encryption::encryptAesCbc(
         return Result<std::vector<uint8_t>>(std::move(ciphertext));
 
     } catch (const std::exception& e) {
-        return Result<std::vector<uint8_t>>(std::string("AES-CBC encryption error: ") + e.what());
+        return Result<std::vector<uint8_t>>::error(std::string("AES-CBC encryption error: ") + e.what());
     }
 }
 
@@ -730,7 +730,7 @@ Result<std::string> Encryption::decryptAesCbc(
 
         // Initialize decryption
         if (EVP_DecryptInit_ex(ctx, EVP_aes_256_cbc(), nullptr, key.data(), iv.data()) != 1) {
-            return Result<std::string>("Failed to initialize AES-CBC decryption");
+            return Result<std::string>::error("Failed to initialize AES-CBC decryption");
         }
 
         // Decrypt
@@ -740,13 +740,13 @@ Result<std::string> Encryption::decryptAesCbc(
 
         if (EVP_DecryptUpdate(ctx, plaintext.data(), &len,
                              ciphertext.data(), static_cast<int>(ciphertext.size())) != 1) {
-            return Result<std::string>("Failed to decrypt data");
+            return Result<std::string>::error("Failed to decrypt data");
         }
         plaintext_len = len;
 
         // Finalize decryption (removes padding)
         if (EVP_DecryptFinal_ex(ctx, plaintext.data() + len, &len) != 1) {
-            return Result<std::string>("Decryption failed or invalid padding");
+            return Result<std::string>::error("Decryption failed or invalid padding");
         }
         plaintext_len += len;
 
@@ -754,7 +754,7 @@ Result<std::string> Encryption::decryptAesCbc(
                                               plaintext.begin() + plaintext_len));
 
     } catch (const std::exception& e) {
-        return Result<std::string>(std::string("AES-CBC decryption error: ") + e.what());
+        return Result<std::string>::error(std::string("AES-CBC decryption error: ") + e.what());
     }
 }
 

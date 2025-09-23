@@ -314,9 +314,7 @@ endif()
 # target_compile_features(test_timer_constructor_only PRIVATE cxx_std_20)
 # target_include_directories(test_timer_constructor_only PRIVATE ${CMAKE_SOURCE_DIR})
 
-# Add basic C++ test (no Atom dependencies)
-add_executable(test_basic_cpp test_basic_cpp.cpp)
-target_compile_features(test_basic_cpp PRIVATE cxx_std_20)
+# Basic C++ test removed during cleanup - test_basic_cpp.cpp was a temporary debugging file
 
 # Add minimal timer test (no Atom dependencies)
 # Temporarily commented out due to missing source files

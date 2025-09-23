@@ -1,5 +1,5 @@
 #include "stacktrace.hpp"
-#include "atom/meta/abi.hpp"
+// #include "../meta/abi.hpp"
 
 #include <iomanip>
 #include <regex>
@@ -8,19 +8,28 @@
 #include <memory>
 #include <mutex>
 #include <atomic>
+#ifndef _WIN32
+#include <cxxabi.h>
+#endif
 #include <cstdlib>
 
 // Platform-specific includes
 #ifdef _WIN32
-// clang-format off
-#include <windows.h>
-#include <dbghelp.h>
-#include <psapi.h>
-// clang-format on
-#if !defined(__MINGW32__) && !defined(__MINGW64__)
-#pragma comment(lib, "dbghelp.lib")
-#pragma comment(lib, "psapi.lib")
-#endif
+// Temporarily disable Windows stacktrace due to header conflicts
+// TODO: Fix Windows stacktrace implementation
+// #ifndef WIN32_LEAN_AND_MEAN
+// #define WIN32_LEAN_AND_MEAN
+// #endif
+// #ifndef NOMINMAX
+// #define NOMINMAX
+// #endif
+// #include <windows.h>
+// #include <dbghelp.h>
+// #include <psapi.h>
+// #if !defined(__MINGW32__) && !defined(__MINGW64__)
+// #pragma comment(lib, "dbghelp.lib")
+// #pragma comment(lib, "psapi.lib")
+// #endif
 #elif defined(__APPLE__) || defined(__linux__)
 #include <cxxabi.h>
 #include <dlfcn.h>
@@ -58,11 +67,12 @@ namespace {
 
     void ensureInitialized() {
         std::call_once(initFlag, []() {
-#ifdef _WIN32
-            SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES |
-                         SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_EXACT_SYMBOLS);
-            SymInitialize(GetCurrentProcess(), nullptr, TRUE);
-#endif
+// Temporarily disable Windows stacktrace due to header conflicts
+// #ifdef _WIN32
+//             SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES |
+//                          SYMOPT_FAIL_CRITICAL_ERRORS | SYMOPT_EXACT_SYMBOLS);
+//             SymInitialize(GetCurrentProcess(), nullptr, TRUE);
+// #endif
             initialized = true;
         });
     }
@@ -116,12 +126,14 @@ std::string demangle(const std::string& mangled) {
     }
 
     // Try using the existing ABI helper first
-    std::string result = meta::DemangleHelper::demangle(mangled);
-    if (result != mangled) {
-        return result;
-    }
+    // std::string result = atom::meta::DemangleHelper::demangle(mangled);
+    // if (result != mangled) {
+    //     return result;
+    // }
+    std::string result = mangled;
 
 #if defined(__GNUC__) || defined(__clang__)
+    #ifndef _WIN32
     // Fallback to direct abi::__cxa_demangle
     int status = 0;
     char* demangled = abi::__cxa_demangle(mangled.c_str(), nullptr, nullptr, &status);
@@ -130,6 +142,7 @@ std::string demangle(const std::string& mangled) {
         free(demangled);
         return result;
     }
+    #endif
 #endif
 
     return mangled;
@@ -208,12 +221,15 @@ namespace backends {
 class BuiltinBackend : public StackTraceBackend {
 public:
     std::vector<StackFrame> capture(const StackTraceConfig& config) override {
+        (void)config; // Suppress unused parameter warning
         ensureInitialized();
         std::vector<StackFrame> frames;
 
-#ifdef _WIN32
-        captureWindows(frames, config);
-#elif defined(__APPLE__) || defined(__linux__)
+// Temporarily disable Windows stacktrace due to header conflicts
+// #ifdef _WIN32
+//         captureWindows(frames, config);
+// #elif defined(__APPLE__) || defined(__linux__)
+#if defined(__APPLE__) || defined(__linux__)
         captureUnix(frames, config);
 #endif
 
@@ -229,74 +245,76 @@ public:
     }
 
 private:
-#ifdef _WIN32
-    void captureWindows(std::vector<StackFrame>& frames, const StackTraceConfig& config) {
-        constexpr int MAX_FRAMES = 256;
-        void* framePtrs[MAX_FRAMES];
-
-        WORD capturedFrames = CaptureStackBackTrace(
-            config.skipFrames,
-            std::min(config.maxDepth, MAX_FRAMES),
-            framePtrs,
-            nullptr
-        );
-
-        frames.reserve(capturedFrames);
-
-        for (WORD i = 0; i < capturedFrames; ++i) {
-            StackFrame frame;
-            frame.address = framePtrs[i];
-            processWindowsFrame(frame);
-            frames.push_back(std::move(frame));
-        }
-    }
-
-    void processWindowsFrame(StackFrame& frame) {
-        uintptr_t address = reinterpret_cast<uintptr_t>(frame.address);
-
-        // Get module information
-        HMODULE module;
-        if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
-                              GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
-                              reinterpret_cast<LPCWSTR>(frame.address), &module)) {
-            wchar_t modulePath[MAX_PATH];
-            if (GetModuleFileNameW(module, modulePath, MAX_PATH) > 0) {
-                char modPathA[MAX_PATH];
-                WideCharToMultiByte(CP_UTF8, 0, modulePath, -1, modPathA, MAX_PATH, nullptr, nullptr);
-                frame.module = modPathA;
-            }
-        }
-
-        // Get symbol information
-        constexpr size_t MAX_SYMBOL_LEN = 1024;
-        auto* symbol = reinterpret_cast<SYMBOL_INFO*>(
-            calloc(sizeof(SYMBOL_INFO) + MAX_SYMBOL_LEN * sizeof(char), 1));
-
-        if (symbol) {
-            symbol->MaxNameLen = MAX_SYMBOL_LEN - 1;
-            symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-
-            DWORD64 displacement = 0;
-            if (SymFromAddr(GetCurrentProcess(), address, &displacement, symbol)) {
-                frame.function = symbol->Name;
-                frame.offset = static_cast<uintptr_t>(displacement);
-            }
-
-            // Get line information
-            IMAGEHLP_LINE64 line;
-            line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
-            DWORD lineDisplacement = 0;
-
-            if (SymGetLineFromAddr64(GetCurrentProcess(), address, &lineDisplacement, &line)) {
-                frame.sourceFile = line.FileName;
-                frame.sourceLine = line.LineNumber;
-            }
-
-            free(symbol);
-        }
-    }
-
-#elif defined(__APPLE__) || defined(__linux__)
+// Temporarily disable Windows stacktrace due to header conflicts
+// #ifdef _WIN32
+//     void captureWindows(std::vector<StackFrame>& frames, const StackTraceConfig& config) {
+//         constexpr int MAX_FRAMES = 256;
+//         void* framePtrs[MAX_FRAMES];
+//
+//         WORD capturedFrames = CaptureStackBackTrace(
+//             config.skipFrames,
+//             std::min(config.maxDepth, MAX_FRAMES),
+//             framePtrs,
+//             nullptr
+//         );
+//
+//         frames.reserve(capturedFrames);
+//
+//         for (WORD i = 0; i < capturedFrames; ++i) {
+//             StackFrame frame;
+//             frame.address = framePtrs[i];
+//             processWindowsFrame(frame);
+//             frames.push_back(std::move(frame));
+//         }
+//     }
+//
+//     void processWindowsFrame(StackFrame& frame) {
+//         uintptr_t address = reinterpret_cast<uintptr_t>(frame.address);
+//
+//         // Get module information
+//         HMODULE module;
+//         if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS |
+//                               GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+//                               reinterpret_cast<LPCWSTR>(frame.address), &module)) {
+//             wchar_t modulePath[MAX_PATH];
+//             if (GetModuleFileNameW(module, modulePath, MAX_PATH) > 0) {
+//                 char modPathA[MAX_PATH];
+//                 WideCharToMultiByte(CP_UTF8, 0, modulePath, -1, modPathA, MAX_PATH, nullptr, nullptr);
+//                 frame.module = modPathA;
+//             }
+//         }
+//
+//         // Get symbol information
+//         constexpr size_t MAX_SYMBOL_LEN = 1024;
+//         auto* symbol = reinterpret_cast<SYMBOL_INFO*>(
+//             calloc(sizeof(SYMBOL_INFO) + MAX_SYMBOL_LEN * sizeof(char), 1));
+//
+//         if (symbol) {
+//             symbol->MaxNameLen = MAX_SYMBOL_LEN - 1;
+//             symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+//
+//             DWORD64 displacement = 0;
+//             if (SymFromAddr(GetCurrentProcess(), address, &displacement, symbol)) {
+//                 frame.function = symbol->Name;
+//                 frame.offset = static_cast<uintptr_t>(displacement);
+//             }
+//
+//             // Get line information
+//             IMAGEHLP_LINE64 line;
+//             line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+//             DWORD lineDisplacement = 0;
+//
+//             if (SymGetLineFromAddr64(GetCurrentProcess(), address, &lineDisplacement, &line)) {
+//                 frame.sourceFile = line.FileName;
+//                 frame.sourceLine = line.LineNumber;
+//             }
+//
+//             free(symbol);
+//         }
+//     }
+//
+// #elif defined(__APPLE__) || defined(__linux__)
+#if defined(__APPLE__) || defined(__linux__)
     void captureUnix(std::vector<StackFrame>& frames, const StackTraceConfig& config) {
         constexpr int MAX_FRAMES = 256;
         void* framePtrs[MAX_FRAMES];

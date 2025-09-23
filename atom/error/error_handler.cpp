@@ -16,6 +16,7 @@ Description: Implementation of thread-safe error handling system
 #include <algorithm>
 #include <iostream>
 #include <sstream>
+#include <exception>
 
 namespace atom::error {
 
@@ -433,8 +434,8 @@ void GlobalErrorHandler::setGlobalHandler(ErrorHandlerCallback handler) {
 }
 
 void GlobalErrorHandler::setUnhandledExceptionHandler() {
-    std::set_terminate([this]() {
-        handleUnhandledException();
+    std::set_terminate([]() {
+        GlobalErrorHandler::getInstance().handleUnhandledException();
         std::abort();
     });
 }

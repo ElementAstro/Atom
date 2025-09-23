@@ -13,7 +13,12 @@ else()
 endif()
 
 # Find and link spdlog
-find_package(spdlog REQUIRED)
+find_package(spdlog QUIET)
+if(spdlog_FOUND)
+    message(STATUS "spdlog found - enhanced logging enabled in shortcut detector")
+else()
+    message(STATUS "spdlog not found - using standard logging in shortcut detector")
+endif()
 
 # Create shared library
 add_library(shortcut_detector SHARED
@@ -34,10 +39,14 @@ target_include_directories(shortcut_detector
 )
 
 # Link against required libraries
+set(SHORTCUT_LIBS psapi)
+if(spdlog_FOUND)
+    list(APPEND SHORTCUT_LIBS spdlog::spdlog)
+endif()
+
 target_link_libraries(shortcut_detector
     PRIVATE
-        psapi
-        spdlog::spdlog
+        ${SHORTCUT_LIBS}
 )
 
 # Create static library version
@@ -59,20 +68,21 @@ target_include_directories(shortcut_detector_static
 
 target_link_libraries(shortcut_detector_static
     PRIVATE
-        psapi
-        spdlog::spdlog
+        ${SHORTCUT_LIBS}
 )
 
 # Create test executable
 add_executable(test_shortcut_detector test_shortcut_detector.cpp)
 
 # Link the test against the static library
+set(TEST_SHORTCUT_LIBS shortcut_detector_static psapi user32)
+if(spdlog_FOUND)
+    list(APPEND TEST_SHORTCUT_LIBS spdlog::spdlog)
+endif()
+
 target_link_libraries(test_shortcut_detector
     PRIVATE
-        shortcut_detector_static
-        psapi
-        user32
-        spdlog::spdlog
+        ${TEST_SHORTCUT_LIBS}
 )
 
 # Set include directories for test

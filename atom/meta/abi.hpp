@@ -20,10 +20,12 @@
 
 #include "atom/containers/high_performance.hpp"
 
-#ifdef _MSC_VER
-#include <dbghelp.h>
-#include <windows.h>
-#pragma comment(lib, "dbghelp.lib")
+#ifdef _WIN32
+    #ifdef _MSC_VER
+    #include <dbghelp.h>
+    #include <windows.h>
+    #pragma comment(lib, "dbghelp.lib")
+    #endif
 #else
 #include <cxxabi.h>
 #include <dlfcn.h>
@@ -253,9 +255,16 @@ private:
         }
 #else
         int status = -1;
+#ifndef _WIN32
         std::unique_ptr<char, void (*)(void*)> demangledName(
             abi::__cxa_demangle(mangled_name.data(), nullptr, nullptr, &status),
             std::free);
+#else
+        // On Windows, demangling is not available with MinGW
+        std::unique_ptr<char, void (*)(void*)> demangledName(
+            nullptr, std::free);
+        status = -1; // Indicate failure
+#endif
 
         if (status == 0 && demangledName) {
             demangled = String(demangledName.get());

@@ -17,11 +17,15 @@ namespace atom::secret {
 // PasswordGenerator Implementation
 // ============================================================================
 
+Result<std::string> PasswordGenerator::generatePassword() {
+    return generatePassword(GenerationOptions{});
+}
+
 Result<std::string> PasswordGenerator::generatePassword(const GenerationOptions& options) {
     // Validate options
     std::string validationError = validateOptions(options);
     if (!validationError.empty()) {
-        return Result<std::string>(validationError);
+        return Result<std::string>::error(validationError);
     }
 
     // Build character set
@@ -337,7 +341,7 @@ Result<bool> PasswordValidator::validatePassword(
     const PasswordManagerSettings& settings) {
 
     if (password.length() < static_cast<size_t>(settings.minPasswordLength)) {
-        return Result<bool>("Password is too short (minimum " +
+        return Result<bool>::error("Password is too short (minimum " +
                            std::to_string(settings.minPasswordLength) + " characters)");
     }
 
