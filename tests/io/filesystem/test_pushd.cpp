@@ -81,67 +81,67 @@ protected:
     std::error_code asyncPushd(const P& path) {
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
-        
+
         dir_stack.asyncPushd(path, [&promise](const std::error_code& ec) {
             promise.set_value(ec);
         });
-        
+
         if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
     }
-    
+
     std::error_code asyncPopd() {
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
-        
+
         dir_stack.asyncPopd([&promise](const std::error_code& ec) {
             promise.set_value(ec);
         });
-        
+
         if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
     }
-    
+
     std::error_code asyncGotoIndex(size_t index) {
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
-        
+
         dir_stack.asyncGotoIndex(index, [&promise](const std::error_code& ec) {
             promise.set_value(ec);
         });
-        
+
         if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
     }
-    
+
     std::error_code asyncSaveStackToFile(const std::string& filename) {
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
-        
+
         dir_stack.asyncSaveStackToFile(filename, [&promise](const std::error_code& ec) {
             promise.set_value(ec);
         });
-        
+
         if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
     }
-    
+
     std::error_code asyncLoadStackFromFile(const std::string& filename) {
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
-        
+
         dir_stack.asyncLoadStackFromFile(filename, [&promise](const std::error_code& ec) {
             promise.set_value(ec);
         });
-        
+
         if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
@@ -623,4 +623,3 @@ TEST_F(DirectoryStackTest, MoveOperations) {
         new_thread.join();
     }
 }
-

@@ -320,4 +320,3 @@ TEST_F(FilePermissionTest, ThreadSafety) {
     // No thread should have encountered a failure
     EXPECT_FALSE(any_failure);
 }
-

@@ -321,12 +321,12 @@ void deleteFile(const fs::path& filePath) {
             spdlog::error("File does not exist: {}", filePath.string());
             throw std::runtime_error("File does not exist: " + filePath.string());
         }
-        
+
         if (!fs::remove(filePath)) {
             spdlog::error("Failed to delete file: {}", filePath.string());
             throw std::runtime_error("Failed to delete file: " + filePath.string());
         }
-        
+
         spdlog::info("Successfully deleted file: {}", filePath.string());
     } catch (const fs::filesystem_error& e) {
         spdlog::error("Filesystem error deleting file {}: {}", filePath.string(), e.what());

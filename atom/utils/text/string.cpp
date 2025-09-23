@@ -503,17 +503,17 @@ auto stod(std::string_view str, std::size_t* idx) -> double {
     try {
         std::size_t pos = 0;
         double result = std::stod(std::string(str), &pos);
-        
+
         // If idx is null, validate that entire string was consumed
         if (idx == nullptr && pos != str.size()) {
             throw std::invalid_argument("Invalid characters found after valid number");
         }
-        
+
         // Set the position if idx is provided
         if (idx != nullptr) {
             *idx = pos;
         }
-        
+
         return result;
     } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(
@@ -532,17 +532,17 @@ auto stof(std::string_view str, std::size_t* idx) -> float {
     try {
         std::size_t pos = 0;
         float result = std::stof(std::string(str), &pos);
-        
+
         // If idx is null, validate that entire string was consumed
         if (idx == nullptr && pos != str.size()) {
             throw std::invalid_argument("Invalid characters found after valid number");
         }
-        
+
         // Set the position if idx is provided
         if (idx != nullptr) {
             *idx = pos;
         }
-        
+
         return result;
     } catch (const std::invalid_argument& e) {
         throw std::invalid_argument(

@@ -821,4 +821,3 @@ TEST_F(AsyncIOTest, TaskFunctionality) {
     EXPECT_TRUE(result.success);
     EXPECT_EQ(result.value, "Task test value");
 }
-

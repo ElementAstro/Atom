@@ -494,4 +494,3 @@ TEST_F(AsyncCompressTest, CompressionPerformance) {
     // Expect reasonable compression ratio for our test data
     EXPECT_GT(compression_ratio, 2.0) << "Compression ratio is lower than expected";
 }
-

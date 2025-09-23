@@ -51,7 +51,7 @@ void demonstrateBasicOperations() {
         std::cout << "Empty check: " << (dataImg.isEmpty() ? "empty" : "not empty") << "\n";
         std::cout << "Width: " << dataImg.getWidth() << "\n";
         std::cout << "Height: " << dataImg.getHeight() << "\n";
-        
+
         // Fill operation
         blob fillBlob;
         fillBlob.fill(std::byte{128});
@@ -142,7 +142,7 @@ void demonstrateSerialization() {
 
         // Create and populate an image blob
         blob originalImg(testData.data(), testData.size());
-        
+
         std::cout << "Original image blob: " << originalImg.getCols() << "x"
                   << originalImg.getRows() << " with " << originalImg.getChannels()
                   << " channels\n";
@@ -179,7 +179,7 @@ void demonstrateSerialization() {
         // Demonstrate compression
         auto compressed = originalImg.compress();
         std::cout << "Compressed size: " << compressed.size() << " bytes\n";
-        
+
         auto decompressed = compressed.decompress();
         std::cout << "Decompressed size: " << decompressed.size() << " bytes\n";
 
