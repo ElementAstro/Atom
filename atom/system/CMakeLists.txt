@@ -6,8 +6,11 @@
 # Author: Max Qian
 # License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(atom-system VERSION 1.0.0 LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 find_package(PkgConfig REQUIRED)
 
@@ -179,37 +182,26 @@ set(LIBS
     ${LIBUSB_LIBRARIES}
 )
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Create library target
+add_library(atom-system STATIC ${SOURCES} ${HEADERS})
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+# Configure module using standardized function
+atom_configure_module(atom-system)
 
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+# Link module-specific dependencies
+target_link_libraries(atom-system PRIVATE ${LIBS})
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(${PROJECT_NAME} PRIVATE pdh wlanapi userenv version)
+    target_link_libraries(atom-system PRIVATE pdh wlanapi userenv version)
 endif()
-
-# Set library properties
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
 
 # Add shortcut subdirectory
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/shortcut/CMakeLists.txt")
     add_subdirectory(shortcut)
 endif()
 
-# Installation
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
+# Install headers
+install(FILES ${HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/system
 )

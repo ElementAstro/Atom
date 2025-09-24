@@ -8,7 +8,7 @@
 
 # Only set project if this is the top-level CMakeLists.txt
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    cmake_minimum_required(VERSION 3.20)
+    cmake_minimum_required(VERSION 3.21)
     project(atom-sysinfo VERSION 1.0.0 LANGUAGES C CXX)
 endif()
 
@@ -16,6 +16,9 @@ endif()
 if(TARGET atom-sysinfo)
     return()
 endif()
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # 添加子模块子目录 - temporarily disabled to fix duplicate target issues
 # add_subdirectory(hardware/memory)
@@ -146,8 +149,8 @@ set(LIBS
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-# Build Object Library
-add_library(atom-sysinfo_object OBJECT
+# Create library target
+add_library(atom-sysinfo STATIC
     ${HARDWARE_SOURCES}
     ${CPU_SOURCES}
     ${STORAGE_SOURCES}
@@ -162,19 +165,12 @@ add_library(atom-sysinfo_object OBJECT
     ${UTILS_HEADERS}
     ${COMPAT_HEADERS}
 )
-set_property(TARGET atom-sysinfo_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-target_link_libraries(atom-sysinfo_object PRIVATE ${LIBS})
-target_include_directories(atom-sysinfo_object PUBLIC . hardware storage network info utils ../.. ../../..)
-set_property(TARGET atom-sysinfo_object PROPERTY CXX_STANDARD 20)
-set_property(TARGET atom-sysinfo_object PROPERTY CXX_STANDARD_REQUIRED ON)
+# Configure module using standardized function
+atom_configure_module(atom-sysinfo)
 
-# Build Static Library
-add_library(atom-sysinfo STATIC $<TARGET_OBJECTS:atom-sysinfo_object>)
+# Link module-specific dependencies
 target_link_libraries(atom-sysinfo PRIVATE ${LIBS})
-target_include_directories(atom-sysinfo PUBLIC . hardware storage network info utils ../.. ../../..)
-set_property(TARGET atom-sysinfo PROPERTY CXX_STANDARD 20)
-set_property(TARGET atom-sysinfo PROPERTY CXX_STANDARD_REQUIRED ON)
 
 # Link required libraries for sysinfo functionality
 find_package(fmt QUIET)
@@ -206,21 +202,14 @@ if(WIN32)
     )
 endif()
 
-# Set library properties
-set_target_properties(atom-sysinfo PROPERTIES
-    VERSION 1.0.0
-    SOVERSION 1
-    OUTPUT_NAME atom-sysinfo
+# Install headers
+install(FILES
+    ${HARDWARE_HEADERS}
+    ${CPU_HEADERS}
+    ${STORAGE_HEADERS}
+    ${NETWORK_HEADERS}
+    ${INFO_HEADERS}
+    ${UTILS_HEADERS}
+    ${COMPAT_HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/sysinfo
 )
-
-# Installation
-install(TARGETS atom-sysinfo
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/atom-sysinfo
-)
-
-# Register this module to the global target list
-get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS atom-sysinfo)
-set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

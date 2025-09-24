@@ -32,6 +32,9 @@ endfunction()
 
 # Function: Scan module dependencies and enable necessary modules
 function(scan_module_dependencies)
+    # Include module dependencies configuration
+    include(${CMAKE_SOURCE_DIR}/cmake/module_dependencies.cmake)
+
     # Find all enabled modules
     set(enabled_modules)
 
@@ -248,6 +251,26 @@ function(process_module_dependencies)
 
         # Set the corresponding build option to ON
         set(ATOM_BUILD_${module_upper} ON CACHE BOOL "Build ${module} module" FORCE)
+    endforeach()
+endfunction()
+
+# Function to automatically resolve dependencies for all enabled modules
+function(atom_resolve_all_dependencies)
+    # Include module dependencies to get the auto-resolve function
+    include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
+
+    # List of all possible modules
+    set(ALL_MODULES
+        ALGORITHM ASYNC COMPONENTS CONNECTION CONTAINERS ERROR IMAGE IO LOG MEMORY
+        META SEARCH SECRET SERIAL SYSINFO SYSTEM TYPE UTILS WEB
+    )
+
+    # For each enabled module, resolve its dependencies
+    foreach(MODULE ${ALL_MODULES})
+        if(ATOM_BUILD_${MODULE})
+            string(TOLOWER ${MODULE} module_lower)
+            atom_auto_resolve_dependencies("atom-${module_lower}")
+        endif()
     endforeach()
 endfunction()
 

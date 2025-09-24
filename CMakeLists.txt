@@ -70,6 +70,9 @@ foreach(MODULE
   option(ATOM_BUILD_${MODULE} "Build ${MODULE} module" ${ATOM_BUILD_ALL})
 endforeach()
 
+# Option to enable automatic dependency resolution
+option(ATOM_AUTO_RESOLVE_DEPS "Automatically enable module dependencies" ON)
+
 # -----------------------------------------------------------------------------
 # C++ Standard
 # -----------------------------------------------------------------------------
@@ -182,6 +185,15 @@ else()
 endif()
 
 # SSH support and Python bindings are now handled by FindDependencies.cmake
+
+# -----------------------------------------------------------------------------
+# Automatic Dependency Resolution
+# -----------------------------------------------------------------------------
+if(ATOM_AUTO_RESOLVE_DEPS)
+    message(STATUS "Automatic dependency resolution enabled")
+    include(cmake/ScanModule.cmake)
+    atom_resolve_all_dependencies()
+endif()
 
 # Skip platform-specific dependencies for now
 # Linux/WSL/Windows platform-specific dependencies

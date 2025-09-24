@@ -1,8 +1,8 @@
 cmake_minimum_required(VERSION 3.20)
-project(
-  atom-containers
-  VERSION 1.0.0
-  LANGUAGES C CXX)
+project(atom-containers VERSION 1.0.0 LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Headers
 set(HEADERS
@@ -13,20 +13,8 @@ set(HEADERS
     lockfree.hpp
 )
 
-# Create header-only library
-add_library(atom-containers INTERFACE)
-target_include_directories(atom-containers INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+# Configure module using standardized function
+atom_configure_module(atom-containers HEADER_ONLY)
 
 # Install headers
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/containers)
-
-# Set target properties
-set_target_properties(atom-containers PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-)
-
-# Register this module to the global target list
-get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS ${PROJECT_NAME})
-set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

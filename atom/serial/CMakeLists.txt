@@ -4,6 +4,10 @@
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.21)
+project(atom-serial VERSION 1.0.0 LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Define library name
 set(LIB_NAME atom-serial)
@@ -69,11 +73,8 @@ endif()
 # Create library target
 add_library(${LIB_NAME} ${SOURCES} ${HEADERS})
 
-# Setup include directories
-target_include_directories(${LIB_NAME} PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include/atom/serial>
-)
+# Configure module using standardized function
+atom_configure_module(${LIB_NAME})
 
 # Set platform-specific dependencies
 if(WIN32)
@@ -131,20 +132,7 @@ elseif(UNIX)
     endif()
 endif()
 
-# Add module to global target list
-get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS ${LIB_NAME})
-set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
-
-# Installation rules
-install(TARGETS ${LIB_NAME}
-    EXPORT ${LIB_NAME}-targets
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-)
-
+# Install headers
 install(FILES ${HEADERS}
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/serial
 )

@@ -7,13 +7,11 @@
 #   Author: Max Qian
 #   License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(atom-component VERSION 1.0.0 LANGUAGES C CXX)
 
-# Set C++20 standard
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Source files
 set(SOURCES
@@ -140,41 +138,21 @@ set(LIBS
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
-# Include directories
-include_directories(.)
-include_directories(../..)  # For atom/ includes
+# Create library target (shared library for components)
+add_library(atom-component SHARED ${SOURCES} ${HEADERS} ${OPTIONAL_SOURCES} ${OPTIONAL_HEADERS})
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS} ${OPTIONAL_SOURCES} ${OPTIONAL_HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Configure module using standardized function
+atom_configure_module(atom-component)
 
-# Build Shared Library
-add_library(${PROJECT_NAME} SHARED $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../..>
-    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-)
+# Link module-specific dependencies
+target_link_libraries(atom-component PRIVATE ${LIBS})
 
 # Set C++20 for the target
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+target_compile_features(atom-component PUBLIC cxx_std_20)
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
-
-# Register as Atom module
-set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})
-
-# Install rules
-install(TARGETS ${PROJECT_NAME}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
-    INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+# Install headers
+install(FILES ${HEADERS} ${OPTIONAL_HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/components
 )
 
 # Export targets (commented out for now due to dependency export issues)

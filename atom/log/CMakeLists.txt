@@ -345,6 +345,9 @@ endif() # LOGURU_INSTALL
 # Only build atom-log if we're not the top-level project (i.e., we're being included by Atom)
 if (NOT PROJECT_IS_TOP_LEVEL)
 
+  # Include standardized module configuration
+  include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
+
   # Define atom-log sources
   set(ATOM_LOG_SOURCES
     async_logger.cpp
@@ -373,6 +376,10 @@ if (NOT PROJECT_IS_TOP_LEVEL)
     message(STATUS "fmt found - linking to atom-log")
   endif()
 
+  # Configure module using standardized function
+  atom_configure_module(atom-log)
+
+  # Link module-specific dependencies
   target_link_libraries(atom-log
     PUBLIC
       loguru
@@ -383,24 +390,10 @@ if (NOT PROJECT_IS_TOP_LEVEL)
       $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>
   )
 
-  # Include directories
-  target_include_directories(atom-log
-    PUBLIC
-      $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-      $<INSTALL_INTERFACE:include/atom/log>
+  # Install headers
+  install(FILES ${ATOM_LOG_HEADERS}
+      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/log
   )
-
-  # Set target properties
-  set_target_properties(atom-log PROPERTIES
-    VERSION 1.0.0
-    SOVERSION 1
-    OUTPUT_NAME atom-log
-  )
-
-  # Add module to global target list
-  get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-  list(APPEND ATOM_MODULE_TARGETS atom-log)
-  set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
 
   message(STATUS "atom-log library configured")
 

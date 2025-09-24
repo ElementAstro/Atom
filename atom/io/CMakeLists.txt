@@ -6,8 +6,11 @@
 # Author: Max Qian
 # License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(atom-io VERSION 1.0.0 LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Sources
 set(SOURCES
@@ -121,52 +124,30 @@ else()
     endif()
 endif()
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Create library target
+add_library(atom-io STATIC ${SOURCES} ${HEADERS})
 
-# Apply ASIO configuration to targets
+# Configure module using standardized function
+atom_configure_module(atom-io)
+
+# Link module-specific dependencies
+target_link_libraries(atom-io PRIVATE ${LIBS} atom-async)
+
+# Apply ASIO configuration
 if(asio_FOUND)
-    target_compile_definitions(${PROJECT_NAME}_object PRIVATE ASIO_STANDALONE ATOM_USE_ASIO)
-    target_link_libraries(${PROJECT_NAME}_object PRIVATE asio::asio)
-else()
-    if(ASIO_INCLUDE_DIR)
-        target_compile_definitions(${PROJECT_NAME}_object PRIVATE ASIO_STANDALONE ATOM_USE_ASIO)
-        target_include_directories(${PROJECT_NAME}_object PRIVATE ${ASIO_INCLUDE_DIR})
-    endif()
-endif()
-
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS} atom-async)
-
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS} atom-async)
-target_include_directories(${PROJECT_NAME} PUBLIC .)
-
-# Apply ASIO definitions to static library as well
-if(asio_FOUND)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
-    target_link_libraries(${PROJECT_NAME} PUBLIC asio::asio)
+    target_compile_definitions(atom-io PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
+    target_link_libraries(atom-io PUBLIC asio::asio)
 elseif(ASIO_INCLUDE_DIR)
-    target_compile_definitions(${PROJECT_NAME} PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
-    target_include_directories(${PROJECT_NAME} PUBLIC ${ASIO_INCLUDE_DIR})
+    target_compile_definitions(atom-io PUBLIC ASIO_STANDALONE ATOM_USE_ASIO)
+    target_include_directories(atom-io PUBLIC ${ASIO_INCLUDE_DIR})
 endif()
 
 # Apply minizip definitions if not found
 if(ATOM_IO_NO_MINIZIP)
-    target_compile_definitions(${PROJECT_NAME}_object PRIVATE ATOM_IO_NO_MINIZIP)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE ATOM_IO_NO_MINIZIP)
+    target_compile_definitions(atom-io PRIVATE ATOM_IO_NO_MINIZIP)
 endif()
 
-# Register as Atom module
-set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS ${PROJECT_NAME})
-
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
-
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+# Install headers
+install(FILES ${HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/io
 )

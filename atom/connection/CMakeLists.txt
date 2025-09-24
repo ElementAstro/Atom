@@ -6,8 +6,11 @@
 # Author: Max Qian
 # License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(atom-connection VERSION 1.0.0 LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Sources
 set(SOURCES
@@ -85,24 +88,16 @@ if (ATOM_USE_SSH)
     list(APPEND LIBS ${LIBSSH_LIBRARIES})
 endif()
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Create library target
+add_library(atom-connection STATIC ${SOURCES} ${HEADERS})
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+# Configure module using standardized function
+atom_configure_module(atom-connection)
 
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${PROJECT_NAME}_object ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+# Link module-specific dependencies
+target_link_libraries(atom-connection PRIVATE ${LIBS})
 
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
-
-# Install rules
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+# Install headers
+install(FILES ${HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection
 )

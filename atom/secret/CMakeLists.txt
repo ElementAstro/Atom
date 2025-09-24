@@ -6,8 +6,11 @@
 # Author: Max Qian
 # License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(atom-secret VERSION 1.0.0 LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Sources and Headers
 set(SOURCES
@@ -49,41 +52,25 @@ if(spdlog_FOUND)
     list(APPEND LIBS spdlog::spdlog)
 endif()
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Create library target
+add_library(atom-secret STATIC ${SOURCES} ${HEADERS})
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+# Configure module using standardized function
+atom_configure_module(atom-secret)
 
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
+# Link module-specific dependencies
+target_link_libraries(atom-secret PRIVATE ${LIBS})
 
+# Platform-specific dependencies
 if (LINUX)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(GLIB REQUIRED glib-2.0)
     pkg_check_modules(LIBSECRET REQUIRED libsecret-1)
-    target_link_libraries(${PROJECT_NAME} PRIVATE ${GLIB_LIBRARIES} ${LIBSECRET_LIBRARIES})
-    target_include_directories(${PROJECT_NAME} PUBLIC ${GLIB_INCLUDE_DIRS} ${LIBSECRET_INCLUDE_DIRS})
+    target_link_libraries(atom-secret PRIVATE ${GLIB_LIBRARIES} ${LIBSECRET_LIBRARIES})
+    target_include_directories(atom-secret PUBLIC ${GLIB_INCLUDE_DIRS} ${LIBSECRET_INCLUDE_DIRS})
 endif()
 
-target_include_directories(${PROJECT_NAME} PUBLIC .)
-
-# Set library properties
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
+# Install headers
+install(FILES ${HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/secret
 )
-
-# Installation
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    PUBLIC_HEADER DESTINATION include/${PROJECT_NAME}
-)
-
-# Register this module to the global target list
-get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS ${PROJECT_NAME})
-set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

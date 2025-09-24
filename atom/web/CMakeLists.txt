@@ -6,8 +6,11 @@
 # Author: Max Qian
 # License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(atom-web VERSION 1.0.0 LANGUAGES C CXX)
+
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 find_package(CURL QUIET)
 if(CURL_FOUND)
@@ -86,39 +89,24 @@ if(WIN32)
    list(APPEND LIBS wsock32 ws2_32)
 endif()
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
-
-# Link with time module
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS} atom-web-time)
-
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC
-    $<TARGET_OBJECTS:${PROJECT_NAME}_object>
+# Create library target (including submodule objects)
+add_library(atom-web STATIC
+    ${SOURCES} ${HEADERS}
     $<TARGET_OBJECTS:atom-web-time>
     $<TARGET_OBJECTS:atom-web-address>
 )
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+
+# Configure module using standardized function
+atom_configure_module(atom-web)
+
+# Link module-specific dependencies
+target_link_libraries(atom-web PRIVATE ${LIBS} atom-web-time)
 
 if(CURL_FOUND)
-    target_include_directories(${PROJECT_NAME} PRIVATE ${CURL_INCLUDE_DIRS})
+    target_include_directories(atom-web PRIVATE ${CURL_INCLUDE_DIRS})
 endif()
 
-# Set library properties
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
+# Install headers
+install(FILES ${HEADERS}
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/web
 )
-
-# Installation
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
-
-# Register this module to the global target list
-get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-list(APPEND ATOM_MODULE_TARGETS ${PROJECT_NAME})
-set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")

@@ -15,6 +15,8 @@
 #include <vector>
 #include <version>  // Check standard library feature support
 
+#include "atom/type/compat.hpp"  // For expected type
+
 #ifdef ATOM_USE_BOOST
 #include <boost/algorithm/string.hpp>
 #include <boost/format.hpp>
@@ -117,7 +119,7 @@ namespace atom::utils {
 // Parallel processing for large strings
 template <StringLike T>
 auto parallelValidation(T&& str, const ValidationOptions& options)
-    -> ::atom::type::expected<ValidationResult, std::string> {
+    -> ::atom::type::compat::expected<ValidationResult, std::string> {
     try {
         auto span = getDataSpan(str);
         const size_t length = span.size();
@@ -132,7 +134,7 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
             std::max(2u, std::thread::hardware_concurrency());
         const size_t chunkSize = length / numThreads;
 
-        std::vector<::atom::type::expected<ValidationResult, std::string>> results(
+        std::vector<::atom::type::compat::expected<ValidationResult, std::string>> results(
             numThreads);
         std::vector<std::thread> threads;
         std::latch completion_latch(

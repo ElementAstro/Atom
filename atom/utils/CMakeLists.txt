@@ -143,7 +143,7 @@ set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
 
 # Configure module with standard dependencies
-atom_configure_module(${PROJECT_NAME})
+atom_configure_module(${PROJECT_NAME} DEPENDENCIES atom-type atom-error)
 
 # Setup module-specific dependencies
 atom_setup_crypto_deps(${PROJECT_NAME})

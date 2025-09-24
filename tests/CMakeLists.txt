@@ -122,3 +122,37 @@ get_property(TARGETS DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY BUILDSYSTEM_
 foreach(TARGET ${TARGETS})
     set_property(TARGET ${TARGET} PROPERTY FOLDER ${TEST_GROUP_NAME})
 endforeach()
+
+# Add custom targets for running tests by category
+add_custom_target(test_all_modules
+    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
+    COMMENT "Running all module tests"
+)
+
+# Add custom target for running tests with specific labels
+add_custom_target(test_core_modules
+    COMMAND ${CMAKE_CTEST_COMMAND} -L "error|log|meta|type|utils" --output-on-failure
+    COMMENT "Running core module tests"
+)
+
+add_custom_target(test_io_modules
+    COMMAND ${CMAKE_CTEST_COMMAND} -L "io|image|serial" --output-on-failure
+    COMMENT "Running I/O module tests"
+)
+
+add_custom_target(test_system_modules
+    COMMAND ${CMAKE_CTEST_COMMAND} -L "system|sysinfo" --output-on-failure
+    COMMENT "Running system module tests"
+)
+
+add_custom_target(test_network_modules
+    COMMAND ${CMAKE_CTEST_COMMAND} -L "web|connection" --output-on-failure
+    COMMENT "Running network module tests"
+)
+
+# Set IDE folders for custom test targets
+set_property(TARGET test_all_modules PROPERTY FOLDER "Tests/Custom")
+set_property(TARGET test_core_modules PROPERTY FOLDER "Tests/Custom")
+set_property(TARGET test_io_modules PROPERTY FOLDER "Tests/Custom")
+set_property(TARGET test_system_modules PROPERTY FOLDER "Tests/Custom")
+set_property(TARGET test_network_modules PROPERTY FOLDER "Tests/Custom")

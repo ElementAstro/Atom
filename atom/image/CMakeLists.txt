@@ -1,10 +1,8 @@
-cmake_minimum_required(VERSION 3.20)
-
+cmake_minimum_required(VERSION 3.21)
 project(atom-image VERSION 1.0.0 LANGUAGES CXX)
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Find required packages
 find_package(loguru QUIET)
@@ -164,31 +162,42 @@ endif()
 # Set compiler flags
 target_compile_features(atom-image-object PUBLIC cxx_std_20)
 
-# Create static library
-add_library(atom-image STATIC $<TARGET_OBJECTS:atom-image-object>)
-target_link_libraries(atom-image PUBLIC atom-image-object)
+# Create library target
+add_library(atom-image STATIC ${ATOM_IMAGE_SOURCES})
 
-# Register as Atom module
-set_property(GLOBAL APPEND PROPERTY ATOM_MODULE_TARGETS atom-image)
+# Configure module using standardized function
+atom_configure_module(atom-image)
 
-# Create shared library if requested
-if(BUILD_SHARED_LIBS)
-    add_library(atom-image-shared SHARED $<TARGET_OBJECTS:atom-image-object>)
-    target_link_libraries(atom-image-shared PUBLIC atom-image-object)
-    set_target_properties(atom-image-shared PROPERTIES OUTPUT_NAME atom-image)
+# Link module-specific dependencies
+if(ATOM_IMAGE_LINK_LIBRARIES)
+    target_link_libraries(atom-image PUBLIC ${ATOM_IMAGE_LINK_LIBRARIES})
 endif()
 
-# Install targets
-install(TARGETS atom-image atom-image-object
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
-    INCLUDES DESTINATION include
-)
+# Link optional dependencies
+if(OpenCV_FOUND)
+    target_link_libraries(atom-image PUBLIC ${OpenCV_LIBS})
+    target_include_directories(atom-image PUBLIC ${OpenCV_INCLUDE_DIRS})
+    target_compile_definitions(atom-image PUBLIC ATOM_IMAGE_HAS_OPENCV)
+endif()
+
+if(CFITSIO_FOUND)
+    target_link_libraries(atom-image PUBLIC ${CFITSIO_LIBRARIES})
+    target_include_directories(atom-image PUBLIC ${CFITSIO_INCLUDE_DIRS})
+    target_compile_definitions(atom-image PUBLIC ATOM_IMAGE_HAS_CFITSIO)
+endif()
+
+if(ATOM_IMAGE_HAS_OCR)
+    target_link_libraries(atom-image PUBLIC ${TESSERACT_LIBRARIES} ${LEPTONICA_LIBRARIES})
+    target_include_directories(atom-image PUBLIC ${TESSERACT_INCLUDE_DIRS} ${LEPTONICA_INCLUDE_DIRS})
+    target_compile_definitions(atom-image PUBLIC ATOM_IMAGE_HAS_OCR)
+endif()
+
+# Set compiler flags
+target_compile_features(atom-image PUBLIC cxx_std_20)
 
 # Install headers
 install(FILES ${ATOM_IMAGE_HEADERS}
-    DESTINATION include/atom/image
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/image
 )
 
 # Note: Export disabled due to dependency issues
