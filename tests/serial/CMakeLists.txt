@@ -1,63 +1,72 @@
-# CMakeLists.txt for Atom Serial Tests
+# CMakeLists.txt Template for Atom Test Modules
 # This project is licensed under the terms of the GPL3 license.
 #
-# Project Name: Atom Serial Tests
-# Description: Test suite for Atom serial module
+# Project Name: Atom-Serial-Tests
+# Description: Test Suite for Atom Serial Module
 # Author: Max Qian
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
 project(atom-serial-tests VERSION 1.0.0 LANGUAGES C CXX)
 
-# Find required packages
+# =============================================================================
+# Find Required Packages
+# =============================================================================
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
-# Ensure the serial module is available
-if(NOT TARGET atom-serial)
-    message(FATAL_ERROR "atom-serial target not found. Make sure ATOM_BUILD_SERIAL is enabled.")
-endif()
-
-# Include test infrastructure
+# =============================================================================
+# Include Test Infrastructure
+# =============================================================================
+# Include the standardized test infrastructure
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests/tests/CMakeLists.txt")
     add_subdirectory("${CMAKE_SOURCE_DIR}/tests/tests" "${CMAKE_CURRENT_BINARY_DIR}/test_infrastructure")
 endif()
 
-# Test source files
-set(TEST_SOURCES
-    test_scanner.cpp
-    test_serial.cpp
-    test_usb.cpp
-)
+# =============================================================================
+# Verify Module Dependencies
+# =============================================================================
+# Ensure the target module is available
+if(NOT TARGET atom-serial)
+    message(FATAL_ERROR "atom-serial target not found. Make sure ATOM_BUILD_SERIAL is enabled.")
+endif()
 
-# Test header files
-set(TEST_HEADERS
-    test_bluetooth_serial.hpp
-    test_serial_port.hpp
-)
+# =============================================================================
+# Test Source Configuration
+# =============================================================================
+# For modules with .cpp test files
+file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 
-# Create test executable
-add_executable(atom_serial_tests ${TEST_SOURCES} ${TEST_HEADERS})
+# Remove build directory files
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/build/.*")
 
-# Link libraries
+# =============================================================================
+# Create Test Executable
+# =============================================================================
+add_executable(atom_serial_tests ${TEST_SOURCES})
+
+# =============================================================================
+# Link Libraries
+# =============================================================================
 target_link_libraries(atom_serial_tests
     PRIVATE
+    # Test infrastructure
+    atom-test-common
+
+    # Module under test and its dependencies
     atom-serial
     atom-error
+
+    # Additional dependencies (serial module specific)
     atom-log
-    GTest::gtest
-    GTest::gtest_main
+
+    # System libraries
     Threads::Threads
 )
 
-# Set include directories
-target_include_directories(atom_serial_tests
-    PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/atom
-    ${CMAKE_SOURCE_DIR}/tests
-)
-
+# =============================================================================
+# Target Configuration
+# =============================================================================
 # Set C++ standard
 target_compile_features(atom_serial_tests PRIVATE cxx_std_20)
 
@@ -68,25 +77,39 @@ else()
     target_compile_options(atom_serial_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Register tests with CTest
+# =============================================================================
+# Test Registration
+# =============================================================================
+enable_testing()
+
 include(GoogleTest)
 gtest_discover_tests(atom_serial_tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     PROPERTIES
     LABELS "serial"
+    TIMEOUT 300
 )
 
-# Add custom target for running only serial tests
+# =============================================================================
+# Custom Test Targets
+# =============================================================================
+# Add custom target for running only this module's tests
 add_custom_target(test_serial
     COMMAND ${CMAKE_CTEST_COMMAND} -L serial --output-on-failure
     DEPENDS atom_serial_tests
     COMMENT "Running serial module tests"
 )
 
-# Set IDE folder
-set_property(TARGET atom_serial_tests PROPERTY FOLDER "Tests/Serial")
-if(TARGET test_serial)
-    set_property(TARGET test_serial PROPERTY FOLDER "Tests/Serial")
-endif()
+# Add performance test target (if applicable)
+add_custom_target(test_serial_performance
+    COMMAND atom_serial_tests --gtest_filter="*Performance*:*Benchmark*"
+    DEPENDS atom_serial_tests
+    COMMENT "Running serial performance tests"
+)
 
-message(STATUS "Serial tests configured")
+# =============================================================================
+# IDE Organization
+# =============================================================================
+set_property(TARGET atom_serial_tests PROPERTY FOLDER "Tests/Serial")
+set_property(TARGET test_serial PROPERTY FOLDER "Tests/Serial")
+set_property(TARGET test_serial_performance PROPERTY FOLDER "Tests/Serial")

@@ -14,6 +14,17 @@ and performance optimization techniques for component systems.
 
 **************************************************/
 
+// Define feature flags before including headers
+#ifndef ENABLE_FASTHASH
+#define ENABLE_FASTHASH 0
+#endif
+#ifndef ENABLE_EVENT_SYSTEM
+#define ENABLE_EVENT_SYSTEM 0
+#endif
+#ifndef ENABLE_HOT_RELOAD
+#define ENABLE_HOT_RELOAD 0
+#endif
+
 #include <algorithm>
 #include <chrono>
 #include <iostream>
@@ -24,9 +35,10 @@ and performance optimization techniques for component systems.
 
 #include "atom/components/component.hpp"
 #include "atom/components/iteration.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
+// ComponentIterator is not available in the current implementation
 
 /**
  * @brief Transform component with SIMD-friendly data layout

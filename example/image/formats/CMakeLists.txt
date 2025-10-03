@@ -12,6 +12,9 @@ set(FORMAT_EXAMPLES
     medical_formats
     scientific_formats
     ser_video
+    basic_ser_operations
+    ser_quality_assessment
+    ser_registration_stacking
 )
 
 # Function to add format example
@@ -24,6 +27,11 @@ function(add_format_example EXAMPLE_NAME)
         target_link_libraries(${EXECUTABLE_NAME} atom)
 
         # Add conditional compilation flags for format support
+        if(ATOM_IMAGE_HAS_OPENCV)
+            target_compile_definitions(${EXECUTABLE_NAME} PRIVATE ATOM_IMAGE_HAS_OPENCV)
+            target_link_libraries(${EXECUTABLE_NAME} ${OpenCV_LIBS})
+        endif()
+
         if(ATOM_IMAGE_HAS_CFITSIO)
             target_compile_definitions(${EXECUTABLE_NAME} PRIVATE ATOM_IMAGE_HAS_CFITSIO)
             target_link_libraries(${EXECUTABLE_NAME} ${CFITSIO_LIBRARIES})

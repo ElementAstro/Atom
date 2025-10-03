@@ -5,8 +5,12 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
+
+// Forward declarations for AwaitableEnhancedFuture classes
+template <typename T>
+void declare_awaitable_enhanced_future(py::module& m, const std::string& type_name);
+void declare_awaitable_enhanced_future_void(py::module& m);
 
 // Template for declaring EnhancedFuture with different return types
 template <typename T>
@@ -55,23 +59,29 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
              Raises:
                  RuntimeError: If the future is cancelled or throws an exception.
              )pbdoc")
-        /*
-        .def("wait_for",
-             &EnhancedFutureT::waitFor,
-             [](EnhancedFutureT& self, int timeout_ms) {
-                 return self.waitFor(std::chrono::milliseconds(timeout_ms));
-             },
-             py::arg("timeout"),
-             R"pbdoc(
-             Waits for the future with a timeout and auto-cancels if not ready.
+        .def(
+            "wait_for",
+            [](EnhancedFutureT& self, int timeout_ms) {
+                return self.waitFor(std::chrono::milliseconds(timeout_ms));
+            },
+            py::arg("timeout"),
+            R"pbdoc(
+            Waits for the future with a timeout.
 
-             Args:
-                 timeout: The timeout duration in milliseconds
+            Args:
+                timeout: The timeout duration in milliseconds
 
-             Returns:
-                 The value if ready, or None if timed out
-             )pbdoc")
-        */
+            Returns:
+                Optional value: The value if ready, or None if timed out
+
+            Examples:
+                >>> future = makeEnhancedFuture(lambda: 42)
+                >>> result = future.wait_for(5000)  # Wait up to 5 seconds
+                >>> if result is not None:
+                ...     print(f"Result: {result}")
+                ... else:
+                ...     print("Timed out")
+            )pbdoc")
         .def("is_ready", &EnhancedFutureT::isReady,
              "Checks if the future is ready")
         .def("get", &EnhancedFutureT::get,
@@ -203,6 +213,98 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
         )pbdoc");
 }
 
+// AwaitableEnhancedFuture template for different return types
+template <typename T>
+void declare_awaitable_enhanced_future(py::module& m, const std::string& type_name) {
+    using namespace atom::async;
+    using AwaitableEnhancedFutureT = AwaitableEnhancedFuture<T>;
+
+    std::string class_name = "AwaitableEnhancedFuture" + type_name;
+
+    py::class_<AwaitableEnhancedFutureT>(m, class_name.c_str(),
+        R"pbdoc(
+        Coroutine-compatible awaitable wrapper for EnhancedFuture.
+
+        This class provides C++20 coroutine support for EnhancedFuture objects,
+        allowing them to be used with async/await syntax in compatible environments.
+        It implements the awaitable protocol for efficient coroutine integration.
+
+        Note: This class is primarily for advanced use cases and coroutine integration.
+        For most Python use cases, use EnhancedFuture directly.
+        )pbdoc")
+        .def(py::init<std::shared_future<T>>(), py::arg("future"),
+             R"pbdoc(
+             Constructs an AwaitableEnhancedFuture from a shared_future.
+
+             Args:
+                 future: The shared_future to wrap for coroutine support.
+             )pbdoc")
+        .def("await_ready", &AwaitableEnhancedFutureT::await_ready,
+             R"pbdoc(
+             Checks if the future is ready without blocking.
+
+             Returns:
+                 bool: True if the future is ready, False otherwise.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc")
+        .def("await_resume", &AwaitableEnhancedFutureT::await_resume,
+             R"pbdoc(
+             Resumes execution and returns the result.
+
+             Returns:
+                 The result of the future operation.
+
+             Raises:
+                 Exception: Any exception that occurred during execution.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc");
+}
+
+// AwaitableEnhancedFuture void specialization
+void declare_awaitable_enhanced_future_void(py::module& m) {
+    using namespace atom::async;
+    using AwaitableEnhancedFutureVoid = AwaitableEnhancedFuture<void>;
+
+    py::class_<AwaitableEnhancedFutureVoid>(m, "AwaitableEnhancedFutureVoid",
+        R"pbdoc(
+        Coroutine-compatible awaitable wrapper for EnhancedFuture<void>.
+
+        This class provides C++20 coroutine support for void EnhancedFuture objects,
+        allowing them to be used with async/await syntax in compatible environments.
+        It implements the awaitable protocol for efficient coroutine integration.
+
+        Note: This class is primarily for advanced use cases and coroutine integration.
+        For most Python use cases, use EnhancedFutureVoid directly.
+        )pbdoc")
+        .def(py::init<std::shared_future<void>>(), py::arg("future"),
+             R"pbdoc(
+             Constructs an AwaitableEnhancedFutureVoid from a shared_future<void>.
+
+             Args:
+                 future: The shared_future<void> to wrap for coroutine support.
+             )pbdoc")
+        .def("await_ready", &AwaitableEnhancedFutureVoid::await_ready,
+             R"pbdoc(
+             Checks if the future is ready without blocking.
+
+             Returns:
+                 bool: True if the future is ready, False otherwise.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc")
+        .def("await_resume", &AwaitableEnhancedFutureVoid::await_resume,
+             R"pbdoc(
+             Resumes execution after the future completes.
+
+             Raises:
+                 Exception: Any exception that occurred during execution.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc");
+}
+
 // Void specialization
 void declare_enhanced_future_void(py::module& m) {
     using namespace atom::async;
@@ -280,7 +382,8 @@ void declare_enhanced_future_void(py::module& m) {
             [](EnhancedFutureVoid& self, py::function func) {
                 return self.then([func]() {
                     py::gil_scoped_acquire acquire;
-                    return func().cast<py::object>();
+                    py::object result = func();
+                    return result.cast<py::object>();
                 });
             },
             py::arg("func"),
@@ -304,7 +407,7 @@ void declare_enhanced_future_void(py::module& m) {
             [](EnhancedFutureVoid& self, py::function callback) {
                 self.onComplete([callback]() {
                     py::gil_scoped_acquire acquire;
-                    callback();
+                    py::object result = callback();
                 });
             },
             py::arg("callback"),
@@ -327,11 +430,14 @@ PYBIND11_MODULE(future, m) {
 
         This module provides enhanced future classes with additional functionality
         beyond standard futures, including chaining operations, callbacks, timeouts,
-        cancellation support, and more.
+        cancellation support, coroutine integration, and more.
 
         Key components:
           - EnhancedFuture: Extended future with additional functionality
+          - AwaitableEnhancedFuture: Coroutine-compatible awaitable wrapper
           - makeEnhancedFuture: Factory function to create enhanced futures
+          - makeOptimizedFuture: Platform-optimized future creation
+          - co_makeEnhancedFuture: Coroutine-based factory functions
           - whenAll: Synchronization for multiple futures
           - parallelProcess: Utility for parallel data processing
 
@@ -346,13 +452,17 @@ PYBIND11_MODULE(future, m) {
             >>> future3 = future1.then(lambda x: x * 2)
             >>>
             >>> # Synchronize multiple futures
-            >>> all_futures = whenAll(future1, future2, future3)
-            >>> results = all_futures.get()  # [10, 20, 20]
+            >>> all_futures = whenAll([future1, future2, future3])
+            >>> results = all_futures  # [10, 20, 20]
             >>>
             >>> # With timeout and callbacks
             >>> future = makeEnhancedFuture(lambda: compute_something())
             >>> future.on_complete(lambda x: print(f"Result: {x}"))
             >>> result = future.wait_for(5000)  # 5 seconds timeout
+            >>>
+            >>> # Coroutine support
+            >>> awaitable = AwaitableEnhancedFutureInt(future1.get_shared_future())
+            >>> # Use with coroutine frameworks
     )pbdoc";
 
     // Register exception translations
@@ -364,15 +474,15 @@ PYBIND11_MODULE(future, m) {
             if (p)
                 std::rethrow_exception(p);
         } catch (const atom::async::InvalidFutureException& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
+            throw py::value_error(e.what());
         } catch (const std::future_error& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
+            throw std::runtime_error(e.what());
         } catch (const std::invalid_argument& e) {
-            PyErr_SetString(PyExc_ValueError, e.what());
+            throw py::value_error(e.what());
         } catch (const std::runtime_error& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
+            throw std::runtime_error(e.what());
         } catch (const std::exception& e) {
-            PyErr_SetString(PyExc_Exception, e.what());
+            throw std::runtime_error(e.what());
         }
     });
 
@@ -384,6 +494,15 @@ PYBIND11_MODULE(future, m) {
     declare_enhanced_future<bool>(m, "Bool");
     declare_enhanced_future<py::object>(m, "Object");
     declare_enhanced_future_void(m);
+
+    // Declare AwaitableEnhancedFuture for different types (coroutine support)
+    declare_awaitable_enhanced_future<int>(m, "Int");
+    declare_awaitable_enhanced_future<float>(m, "Float");
+    declare_awaitable_enhanced_future<double>(m, "Double");
+    declare_awaitable_enhanced_future<std::string>(m, "String");
+    declare_awaitable_enhanced_future<bool>(m, "Bool");
+    declare_awaitable_enhanced_future<py::object>(m, "Object");
+    declare_awaitable_enhanced_future_void(m);
 
     // makeEnhancedFuture factory function
     m.def(
@@ -471,6 +590,87 @@ PYBIND11_MODULE(future, m) {
         },
         py::arg("func"), "Creates an EnhancedFutureVoid from a function");
 
+    // makeOptimizedFuture factory function (platform-optimized)
+    m.def(
+        "makeOptimizedFuture",
+        [](py::function func) {
+            return atom::async::makeOptimizedFuture([func]() -> py::object {
+                py::gil_scoped_acquire acquire;
+                py::object result = func();
+                return result.is_none() ? py::none() : result;
+            });
+        },
+        py::arg("func"),
+        R"pbdoc(
+    Creates a platform-optimized EnhancedFuture from a function.
+
+    This function uses platform-specific optimizations (ASIO thread pool on
+    supported platforms, macOS Grand Central Dispatch, etc.) for better
+    performance compared to the standard makeEnhancedFuture.
+
+    Args:
+        func: The function to execute asynchronously
+
+    Returns:
+        An EnhancedFuture for the result of the function
+
+    Examples:
+        >>> future = makeOptimizedFuture(lambda: expensive_computation())
+        >>> result = future.get()
+    )pbdoc");
+
+    // Coroutine-based factory functions
+    m.def(
+        "co_makeEnhancedFuture",
+        [](py::object value) {
+            // For Python bindings, we simulate coroutine behavior
+            // by creating a ready future with the given value
+            auto promise = std::promise<py::object>();
+            promise.set_value(value);
+            return atom::async::EnhancedFuture<py::object>(promise.get_future().share());
+        },
+        py::arg("value"),
+        R"pbdoc(
+    Creates an EnhancedFuture using coroutine-style syntax with a ready value.
+
+    This function creates a future that is immediately ready with the given value,
+    simulating coroutine behavior for Python integration.
+
+    Args:
+        value: The value to set the future to
+
+    Returns:
+        An EnhancedFuture that is immediately ready with the value
+
+    Examples:
+        >>> future = co_makeEnhancedFuture(42)
+        >>> print(future.is_ready())  # True
+        >>> print(future.get())       # 42
+    )pbdoc");
+
+    m.def(
+        "co_makeEnhancedFutureVoid",
+        []() {
+            // Create a ready void future
+            auto promise = std::promise<void>();
+            promise.set_value();
+            return atom::async::EnhancedFuture<void>(promise.get_future().share());
+        },
+        R"pbdoc(
+    Creates an EnhancedFuture<void> using coroutine-style syntax.
+
+    This function creates a void future that is immediately ready,
+    simulating coroutine behavior for Python integration.
+
+    Returns:
+        An EnhancedFuture<void> that is immediately ready
+
+    Examples:
+        >>> future = co_makeEnhancedFutureVoid()
+        >>> print(future.is_ready())  # True
+        >>> future.get()  # Returns immediately
+    )pbdoc");
+
     // whenAll functions
     m.def(
         "whenAll",
@@ -522,59 +722,84 @@ PYBIND11_MODULE(future, m) {
         >>> results = whenAll([future1, future2])  # [10, 20]
     )pbdoc");
 
-    // parallelProcess function
+    // Enhanced parallelProcess function
     m.def(
         "parallelProcess",
-        [](py::list items, py::function func, size_t chunk_size) {
+        [](py::list items, py::function func, size_t num_tasks) {
             std::vector<py::object> items_vec;
             for (auto item : items) {
                 items_vec.push_back(item.cast<py::object>());
             }
 
-            if (chunk_size == 0) {
-                chunk_size = std::max(
+            if (num_tasks == 0) {
+                // Use platform-specific detection like the C++ version
+                num_tasks = std::max(
                     size_t(1),
                     static_cast<size_t>(std::thread::hardware_concurrency()));
+                if (num_tasks == 0) {
+                    num_tasks = 2;  // Fallback
+                }
             }
 
             std::vector<atom::async::EnhancedFuture<py::object>> futures;
+            size_t total_size = items_vec.size();
 
-            for (size_t i = 0; i < items_vec.size(); i += chunk_size) {
-                size_t end_idx = std::min(i + chunk_size, items_vec.size());
-                std::vector<py::object> chunk(items_vec.begin() + i,
+            if (total_size == 0) {
+                return futures;
+            }
+
+            size_t items_per_task = (total_size + num_tasks - 1) / num_tasks;
+
+            for (size_t i = 0; i < num_tasks && i * items_per_task < total_size; ++i) {
+                size_t start_idx = i * items_per_task;
+                size_t end_idx = std::min(start_idx + items_per_task, total_size);
+
+                std::vector<py::object> chunk(items_vec.begin() + start_idx,
                                               items_vec.begin() + end_idx);
 
-                futures.push_back(atom::async::EnhancedFuture<py::object>(
-                    std::async(std::launch::async,
-                               [func, chunk]() -> py::object {
-                                   py::gil_scoped_acquire acquire;
-                                   py::list results;
-                                   for (auto& item : chunk) {
-                                       results.append(func(item));
-                                   }
-                                   return results;
-                               })
-                        .share()));
+                if (chunk.empty()) {
+                    continue;
+                }
+
+                futures.push_back(atom::async::makeOptimizedFuture(
+                    [func, chunk = std::move(chunk)]() -> py::object {
+                        py::gil_scoped_acquire acquire;
+                        py::list results;
+                        for (const auto& item : chunk) {
+                            py::object result = func(item);
+                            results.append(result);
+                        }
+                        return results;
+                    }));
             }
 
             return futures;
         },
-        py::arg("items"), py::arg("func"), py::arg("chunk_size") = 0,
+        py::arg("items"), py::arg("func"), py::arg("num_tasks") = 0,
         R"pbdoc(
-    Processes items in parallel using multiple threads.
+    Processes items in parallel using multiple threads with platform optimizations.
+
+    This function divides the input items into chunks and processes them in parallel
+    using platform-optimized futures. It automatically determines the optimal number
+    of tasks based on hardware concurrency if not specified.
 
     Args:
         items: List of items to process
         func: Function to apply to each item
-        chunk_size: Size of chunks to process together (0 = auto)
+        num_tasks: Number of parallel tasks to use (0 = auto-detect based on CPU cores)
 
     Returns:
-        List of futures containing the results
+        List of EnhancedFuture objects containing the results for each chunk
 
     Examples:
         >>> items = list(range(100))
-        >>> futures = parallelProcess(items, lambda x: x * x)
-        >>> results = [f.get() for f in futures]
+        >>> futures = parallelProcess(items, lambda x: x * x, 4)
+        >>> # Collect all results
+        >>> all_results = []
+        >>> for future in futures:
+        ...     chunk_results = future.get()
+        ...     all_results.extend(chunk_results)
+        >>> print(len(all_results))  # 100
     )pbdoc");
 
     // Utility functions
@@ -622,6 +847,78 @@ PYBIND11_MODULE(future, m) {
         []() { return std::thread::hardware_concurrency(); },
         "Returns the number of concurrent threads supported by the "
         "implementation");
+
+    // Additional utility functions for creating ready futures
+    m.def(
+        "make_ready_future",
+        [](py::object value) {
+            auto promise = std::promise<py::object>();
+            promise.set_value(value);
+            return atom::async::EnhancedFuture<py::object>(promise.get_future().share());
+        },
+        py::arg("value"),
+        R"pbdoc(
+        Creates an EnhancedFuture that is immediately ready with the given value.
+
+        Args:
+            value: The value to set the future to.
+
+        Returns:
+            EnhancedFuture: A future that is already completed with the value.
+
+        Examples:
+            >>> future = make_ready_future(42)
+            >>> print(future.is_ready())  # True
+            >>> print(future.get())       # 42
+        )pbdoc");
+
+    m.def(
+        "make_ready_future_void",
+        []() {
+            auto promise = std::promise<void>();
+            promise.set_value();
+            return atom::async::EnhancedFuture<void>(promise.get_future().share());
+        },
+        R"pbdoc(
+        Creates an EnhancedFuture<void> that is immediately ready.
+
+        Returns:
+            EnhancedFuture<void>: A future that is already completed.
+
+        Examples:
+            >>> future = make_ready_future_void()
+            >>> print(future.is_ready())  # True
+            >>> future.get()  # Returns immediately
+        )pbdoc");
+
+    m.def(
+        "make_exceptional_future",
+        [](py::object exception) {
+            auto promise = std::promise<py::object>();
+            try {
+                throw py::cast<std::runtime_error>(exception);
+            } catch (...) {
+                promise.set_exception(std::current_exception());
+            }
+            return atom::async::EnhancedFuture<py::object>(promise.get_future().share());
+        },
+        py::arg("exception"),
+        R"pbdoc(
+        Creates an EnhancedFuture that is immediately ready with an exception.
+
+        Args:
+            exception: The exception to set the future to.
+
+        Returns:
+            EnhancedFuture: A future that will throw the exception when accessed.
+
+        Examples:
+            >>> future = make_exceptional_future(RuntimeError("Something went wrong"))
+            >>> try:
+            ...     future.get()
+            ... except RuntimeError as e:
+            ...     print(f"Caught: {e}")
+        )pbdoc");
 
     // Add version information
     m.attr("__version__") = "1.0.0";

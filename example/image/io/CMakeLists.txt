@@ -10,6 +10,8 @@ set(IO_EXAMPLES
     format_conversion
     advanced_io
     caching_prefetching
+    streaming_io_demo
+    memory_mapped_io
 )
 
 # Function to add I/O example

@@ -1,4 +1,5 @@
 {
+    "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
     "name": "atom",
     "version": "1.0.0",
     "description": "The foundational library for all elemental astro projects",
@@ -13,6 +14,7 @@
         "pybind11",
         "tbb",
         "minizip-ng",
+        "opencv",
         {
             "name": "boost",
             "default-features": true

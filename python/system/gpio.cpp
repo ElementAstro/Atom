@@ -53,6 +53,13 @@ PYBIND11_MODULE(gpio, m) {
         .value("DOWN", atom::system::GPIO::PullMode::DOWN, "Pull-down resistor")
         .export_values();
 
+    // Define PwmMode enum
+    py::enum_<atom::system::GPIO::PwmMode>(
+        m, "PwmMode", "PWM (Pulse Width Modulation) operation mode")
+        .value("HARDWARE", atom::system::GPIO::PwmMode::HARDWARE, "Use hardware PWM if available")
+        .value("SOFTWARE", atom::system::GPIO::PwmMode::SOFTWARE, "Use software PWM implementation")
+        .export_values();
+
     // Define GPIO class
     py::class_<atom::system::GPIO>(
         m, "GPIO",
@@ -192,6 +199,98 @@ Returns:
         .def("stop_callbacks", &atom::system::GPIO::stopCallbacks,
              R"(Stops all callbacks on this pin.)")
 
+        // PWM methods
+        .def("set_pwm", &atom::system::GPIO::setPwm,
+             py::arg("frequency"), py::arg("duty_cycle"),
+             py::arg("mode") = atom::system::GPIO::PwmMode::HARDWARE,
+             R"(Sets up PWM (Pulse Width Modulation) on the pin.
+
+Args:
+    frequency: The PWM frequency in hertz.
+    duty_cycle: The duty cycle (0.0 to 1.0).
+    mode: The PWM mode (HARDWARE or SOFTWARE). Default is HARDWARE.
+
+Returns:
+    True if PWM was successfully set up, False otherwise.
+
+Examples:
+    >>> gpio = GPIO("18", GPIO.Direction.OUTPUT)
+    >>> gpio.set_pwm(1000, 0.5)  # 1kHz, 50% duty cycle
+)")
+        .def("update_pwm_duty_cycle", &atom::system::GPIO::updatePwmDutyCycle,
+             py::arg("duty_cycle"),
+             R"(Updates the PWM duty cycle.
+
+Args:
+    duty_cycle: The new duty cycle (0.0 to 1.0).
+
+Returns:
+    True if successful, False otherwise.
+
+Examples:
+    >>> gpio.update_pwm_duty_cycle(0.75)  # Change to 75% duty cycle
+)")
+        .def("stop_pwm", &atom::system::GPIO::stopPwm,
+             R"(Stops PWM operation.
+
+Examples:
+    >>> gpio.stop_pwm()
+)")
+
+        // Button debouncing
+        .def("setup_button_debounce", &atom::system::GPIO::setupButtonDebounce,
+             py::arg("callback"), py::arg("debounce_time_ms") = 50,
+             R"(Implements button debouncing for input pins.
+
+Args:
+    callback: The function to call when a debounced press is detected.
+    debounce_time_ms: The debounce time in milliseconds. Default is 50ms.
+
+Returns:
+    True if debouncing was successfully set up, False otherwise.
+
+Examples:
+    >>> def button_pressed():
+    ...     print("Button pressed!")
+    >>> button_pin = GPIO("17", GPIO.Direction.INPUT)
+    >>> button_pin.setup_button_debounce(button_pressed, 100)
+)")
+
+        // Interrupt counting
+        .def("setup_interrupt_counter", &atom::system::GPIO::setupInterruptCounter,
+             py::arg("edge") = atom::system::GPIO::Edge::RISING,
+             R"(Sets up an interrupt counter for this pin.
+
+Args:
+    edge: The edge to count (RISING, FALLING, or BOTH). Default is RISING.
+
+Returns:
+    True if the counter was successfully set up, False otherwise.
+
+Examples:
+    >>> gpio.setup_interrupt_counter(GPIO.Edge.BOTH)
+)")
+        .def("get_interrupt_count", &atom::system::GPIO::getInterruptCount,
+             py::arg("reset_after_reading") = false,
+             R"(Gets the current interrupt count.
+
+Args:
+    reset_after_reading: Whether to reset the counter after reading. Default is False.
+
+Returns:
+    The number of interrupts counted.
+
+Examples:
+    >>> count = gpio.get_interrupt_count()
+    >>> print(f"Interrupts counted: {count}")
+)")
+        .def("reset_interrupt_count", &atom::system::GPIO::resetInterruptCount,
+             R"(Resets the interrupt counter to zero.
+
+Examples:
+    >>> gpio.reset_interrupt_count()
+)")
+
         // Static methods
         .def_static(
             "notify_on_change", &atom::system::GPIO::notifyOnChange,
@@ -246,6 +345,69 @@ Returns:
 
 Args:
     direction: The direction to set for all pins.
+)");
+
+    // Define ShiftRegister class
+    py::class_<atom::system::GPIO::ShiftRegister>(
+        m, "ShiftRegister",
+        R"(A utility class for managing shift registers (e.g., 74HC595).
+
+This class provides methods to control shift registers for expanding digital outputs.
+
+Args:
+    data_pin: The data pin (DS) number as a string.
+    clock_pin: The clock pin (SH_CP) number as a string.
+    latch_pin: The latch pin (ST_CP) number as a string.
+    num_bits: The number of bits in the shift register chain. Default is 8.
+
+Examples:
+    >>> from atom.system import GPIO
+    >>> shift_reg = GPIO.ShiftRegister("14", "15", "16", 8)
+    >>> shift_reg.shift_out(0b10101010)  # Output pattern
+    >>> shift_reg.set_bit(3, True)      # Set bit 3
+)")
+        .def(py::init<const std::string&, const std::string&, const std::string&, uint8_t>(),
+             py::arg("data_pin"), py::arg("clock_pin"), py::arg("latch_pin"), py::arg("num_bits") = 8,
+             "Constructs a ShiftRegister with specified pins and bit count.")
+        .def("shift_out", &atom::system::GPIO::ShiftRegister::shiftOut,
+             py::arg("data"), py::arg("msb_first") = true,
+             R"(Shifts out data to the register.
+
+Args:
+    data: The data to shift out.
+    msb_first: True for MSB first, False for LSB first. Default is True.
+
+Examples:
+    >>> shift_reg.shift_out(0xFF, True)   # All bits high, MSB first
+    >>> shift_reg.shift_out(0x55, False)  # Alternating pattern, LSB first
+)")
+        .def("set_bit", &atom::system::GPIO::ShiftRegister::setBit,
+             py::arg("position"), py::arg("value"),
+             R"(Sets a single bit in the shift register.
+
+Args:
+    position: The bit position (0-based).
+    value: The value to set (True/False).
+
+Examples:
+    >>> shift_reg.set_bit(0, True)   # Set bit 0
+    >>> shift_reg.set_bit(7, False)  # Clear bit 7
+)")
+        .def("get_state", &atom::system::GPIO::ShiftRegister::getState,
+             R"(Gets the current state of the output register.
+
+Returns:
+    The current register state as an integer.
+
+Examples:
+    >>> state = shift_reg.get_state()
+    >>> print(f"Current state: 0x{state:02X}")
+)")
+        .def("clear", &atom::system::GPIO::ShiftRegister::clear,
+             R"(Clears all bits in the register (sets to 0).
+
+Examples:
+    >>> shift_reg.clear()  # All outputs low
 )");
 
     // Helper functions

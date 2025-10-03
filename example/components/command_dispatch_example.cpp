@@ -23,10 +23,10 @@ error management, preconditions, postconditions, and advanced dispatch features.
 
 #include "atom/components/component.hpp"
 #include "atom/components/dispatch.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 #include "atom/meta/type_caster.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
 
 /**
  * @brief Component demonstrating comprehensive command dispatch

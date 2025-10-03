@@ -6,11 +6,12 @@
 #include <chrono>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
-#include "atom/components/lifecycle.hpp"
-#include "atom/components/var.hpp"
+#include "atom/components/core/registry.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
+#include "atom/components/data/var.hpp"
 
 using namespace atom::components;
+using atom::components::LifecyclePhase;
 
 // Test fixture for comprehensive component testing
 class ComprehensiveComponentTest : public ::testing::Test {

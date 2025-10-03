@@ -5,8 +5,11 @@
 #include <string>
 #include <string_view>
 #include <vector>
+#include <future>
+#include <chrono>
+#include <algorithm>
 
-#include "atom/utils/text/string.hpp"
+#include "atom/utils/string.hpp"
 
 using namespace atom::utils;
 using namespace std::string_literals;
@@ -604,4 +607,200 @@ TEST_F(StringUtilsTest, ToUpper) {
     EXPECT_EQ(toUpper("AbCdEf"), "ABCDEF");
     EXPECT_EQ(toUpper("123!@#"), "123!@#");
     EXPECT_EQ(toUpper("mixed Case 123"), "MIXED CASE 123");
+}
+
+// Test splitTokens function
+TEST_F(StringUtilsTest, SplitTokens) {
+    std::string_view text = "  hello,world; test\tstring  ";
+    std::string_view delims = " ,;\t";
+
+    auto token1 = splitTokens(text, delims);
+    ASSERT_TRUE(token1.has_value());
+    EXPECT_EQ(token1.value(), "hello");
+
+    auto token2 = splitTokens(text, delims);
+    ASSERT_TRUE(token2.has_value());
+    EXPECT_EQ(token2.value(), "world");
+
+    auto token3 = splitTokens(text, delims);
+    ASSERT_TRUE(token3.has_value());
+    EXPECT_EQ(token3.value(), "test");
+
+    auto token4 = splitTokens(text, delims);
+    ASSERT_TRUE(token4.has_value());
+    EXPECT_EQ(token4.value(), "string");
+
+    auto token5 = splitTokens(text, delims);
+    EXPECT_FALSE(token5.has_value());
+
+    // Test with empty string
+    std::string_view empty_text = "";
+    EXPECT_FALSE(splitTokens(empty_text, delims).has_value());
+
+    // Test with only delimiters
+    std::string_view only_delims = " \t,;";
+    EXPECT_FALSE(splitTokens(only_delims, delims).has_value());
+}
+
+// Test stringToWString and wstringToString conversions
+TEST_F(StringUtilsTest, StringWStringConversions) {
+    // Test basic ASCII conversion
+    std::string original = "Hello, world! 123";
+    auto wide = stringToWString(original);
+    auto back = wstringToString(wide);
+    EXPECT_EQ(back, original);
+
+    // Test empty string
+    EXPECT_EQ(wstringToString(stringToWString("")), "");
+
+    // Test string with special characters
+    std::string special = "Special chars: !@#$%^&*()";
+    EXPECT_EQ(wstringToString(stringToWString(special)), special);
+
+    // Test UTF-8 string (if supported)
+    std::string utf8_str = "Hello 世界";
+    auto wide_utf8 = stringToWString(utf8_str);
+    auto back_utf8 = wstringToString(wide_utf8);
+    EXPECT_EQ(back_utf8, utf8_str);
+}
+
+// Test edge cases and error handling
+TEST_F(StringUtilsTest, EdgeCasesAndErrorHandling) {
+    // Test very long strings
+    std::string longString(100000, 'A');
+    EXPECT_NO_THROW(hasUppercase(longString));
+    EXPECT_TRUE(hasUppercase(longString));
+
+    // Test string with only whitespace
+    EXPECT_EQ(trim("   \t\n\r   "), "");
+    EXPECT_EQ(toLower("   \t\n\r   "), "   \t\n\r   ");
+    EXPECT_EQ(toUpper("   \t\n\r   "), "   \t\n\r   ");
+
+    // Test URL encoding/decoding edge cases
+    EXPECT_EQ(urlEncode("%"), "%25");
+    EXPECT_EQ(urlDecode("%25"), "%");
+    EXPECT_THROW(urlDecode("%G"), std::invalid_argument);  // Invalid hex
+    EXPECT_THROW(urlDecode("%1"), std::invalid_argument);  // Incomplete hex
+
+    // Test case conversion with Unicode (basic test)
+    std::string unicode = "Café";
+    EXPECT_NO_THROW(toLower(unicode));
+    EXPECT_NO_THROW(toUpper(unicode));
+}
+
+// Test performance with large data
+TEST_F(StringUtilsTest, PerformanceTest) {
+    // Create large test data
+    std::string largeData(50000, 'A');
+    for (size_t i = 0; i < largeData.size(); i += 100) {
+        largeData[i] = 'a';  // Mix case
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Test case conversion performance
+    auto lower = toLower(largeData);
+    auto upper = toUpper(largeData);
+
+    // Test string replacement performance
+    auto replaced = replaceString(largeData, "A", "B");
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    // Should complete within reasonable time
+    EXPECT_LT(duration.count(), 1000); // 1 second max
+
+    // Verify correctness
+    EXPECT_TRUE(std::all_of(lower.begin(), lower.end(), [](char c) { return std::islower(c) || !std::isalpha(c); }));
+    EXPECT_TRUE(std::all_of(upper.begin(), upper.end(), [](char c) { return std::isupper(c) || !std::isalpha(c); }));
+}
+
+// Test thread safety
+TEST_F(StringUtilsTest, ThreadSafety) {
+    const int numThreads = 4;
+    const int operationsPerThread = 100;
+    std::vector<std::future<bool>> futures;
+
+    for (int t = 0; t < numThreads; ++t) {
+        futures.push_back(std::async(std::launch::async, [operationsPerThread, t]() {
+            for (int i = 0; i < operationsPerThread; ++i) {
+                std::string testStr = "Thread" + std::to_string(t) + "Operation" + std::to_string(i);
+
+                try {
+                    // Test various string operations
+                    auto lower = toLower(testStr);
+                    auto upper = toUpper(testStr);
+                    auto camel = toCamelCase("test_string_" + std::to_string(i));
+                    auto snake = toUnderscore("TestString" + std::to_string(i));
+                    auto encoded = urlEncode(testStr);
+                    auto decoded = urlDecode(encoded);
+
+                    if (decoded != testStr) {
+                        return false;
+                    }
+                } catch (...) {
+                    return false;
+                }
+            }
+            return true;
+        }));
+    }
+
+    // Wait for all threads and check results
+    for (auto& future : futures) {
+        EXPECT_TRUE(future.get());
+    }
+}
+
+// Test boundary conditions
+TEST_F(StringUtilsTest, BoundaryConditions) {
+    // Test with maximum string sizes (within reason)
+    std::string maxString(std::string::max_size() > 1000000 ? 1000000 : std::string::max_size() / 2, 'A');
+    EXPECT_NO_THROW(hasUppercase(maxString));
+
+    // Test with null characters
+    std::string nullString = "Hello\0World";
+    nullString.resize(11); // Ensure null character is included
+    EXPECT_NO_THROW(toLower(nullString));
+    EXPECT_NO_THROW(toUpper(nullString));
+
+    // Test with all possible ASCII characters
+    std::string allAscii;
+    for (int i = 1; i < 128; ++i) {  // Skip null character
+        allAscii += static_cast<char>(i);
+    }
+    EXPECT_NO_THROW(urlEncode(allAscii));
+    EXPECT_NO_THROW(toLower(allAscii));
+    EXPECT_NO_THROW(toUpper(allAscii));
+}
+
+// Test split function with complex delimiters
+TEST_F(StringUtilsTest, SplitComplexDelimiters) {
+    // Test with multi-character delimiter
+    auto result = split("one::two::three", "::");
+    std::vector<std::string> expected = {"one", "two", "three"};
+    std::vector<std::string> actual;
+    for (const auto& part : result) {
+        actual.emplace_back(part);
+    }
+    EXPECT_EQ(actual, expected);
+
+    // Test with overlapping delimiters
+    result = split("a:::b:::c", "::");
+    actual.clear();
+    for (const auto& part : result) {
+        actual.emplace_back(part);
+    }
+    EXPECT_THAT(actual, ElementsAre("a", ":b", ":c"));
+
+    // Test with delimiter at start and end
+    result = split("::start::middle::end::", "::");
+    actual.clear();
+    for (const auto& part : result) {
+        if (!part.empty()) {
+            actual.emplace_back(part);
+        }
+    }
+    EXPECT_THAT(actual, ElementsAre("start", "middle", "end"));
 }

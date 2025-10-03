@@ -1,10 +1,13 @@
 #include <gtest/gtest.h>
 #include <iostream>
 #include <string>
+#include <filesystem>
 
 // Include all test headers
+#include "test_utils.hpp"
 #include "test_image_blob.hpp"
-#include "test_image_processor.hpp"  // Re-enabled - tests restored
+#include "test_image_processor.hpp"
+#include "test_performance.hpp"
 #include "test_hdu.hpp"
 #include "test_ocr.hpp"
 #ifdef ATOM_IMAGE_HAS_OPENCV

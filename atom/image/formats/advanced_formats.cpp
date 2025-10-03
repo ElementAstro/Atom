@@ -451,9 +451,9 @@ std::vector<AnimationFrame> AdvancedFormatProcessor::loadAnimation(const std::st
             }
 
             AnimationFrame animFrame;
-            animFrame.image = blob(frame);
-            animFrame.delayMs = 100; // Default delay
-            animFrame.disposeMethod = "none";
+            animFrame.imageData = blob(frame);
+            animFrame.duration = 100; // Default delay
+            animFrame.disposalMethod = 0;
 
             frames.push_back(animFrame);
             frameIndex++;
@@ -478,11 +478,11 @@ bool AdvancedFormatProcessor::saveAnimation(const std::vector<AnimationFrame>& f
     try {
         // For now, save as video using OpenCV
         if (!frames.empty()) {
-            cv::Mat firstFrame = frames[0].image.to_mat();
+            cv::Mat firstFrame = frames[0].imageData.to_mat();
             cv::Size frameSize(firstFrame.cols, firstFrame.rows);
 
             int fourcc = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
-            double fps = 1000.0 / std::max(1, frames[0].delayMs); // Convert delay to FPS
+            double fps = 1000.0 / std::max(1, frames[0].duration); // Convert delay to FPS
 
             cv::VideoWriter writer(filename, fourcc, fps, frameSize);
             if (!writer.isOpened()) {
@@ -490,7 +490,7 @@ bool AdvancedFormatProcessor::saveAnimation(const std::vector<AnimationFrame>& f
             }
 
             for (const auto& frame : frames) {
-                cv::Mat mat = frame.image.to_mat();
+                cv::Mat mat = frame.imageData.to_mat();
                 writer.write(mat);
             }
 

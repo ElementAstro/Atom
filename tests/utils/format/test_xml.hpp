@@ -8,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include "xml.hpp"
+#include "atom/utils/format/xml.hpp"
 
 using namespace atom::utils;
 using ::testing::HasSubstr;

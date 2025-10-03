@@ -38,6 +38,11 @@ if(ATOM_TEST_BUILD_CONNECTION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/connection
   add_subdirectory(connection)
 endif()
 
+# Error tests
+if(ATOM_TEST_BUILD_ERROR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/error/CMakeLists.txt")
+  add_subdirectory(error)
+endif()
+
 # Extra tests
 if(ATOM_TEST_BUILD_EXTRA AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extra/CMakeLists.txt")
   add_subdirectory(extra)

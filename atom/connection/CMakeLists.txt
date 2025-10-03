@@ -25,7 +25,7 @@ set(SOURCES
 
 # Check for ASIO support and add async sources if available
 find_package(asio QUIET)
-if(asio_FOUND)
+if(Asio_FOUND)
     list(APPEND SOURCES
         async_fifoclient.cpp
         async_fifoserver.cpp

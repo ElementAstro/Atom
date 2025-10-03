@@ -405,6 +405,11 @@ protected:
     virtual std::vector<float> runInference(const std::vector<float>& input,
                                            MLModelType model,
                                            const MLParams& params = {}) const;
+
+private:
+    std::string modelDir_;
+    MLBackend currentBackend_ = MLBackend::AUTO;
+    bool useGPU_ = true;
 };
 
 /**

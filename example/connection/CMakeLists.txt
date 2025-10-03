@@ -39,9 +39,9 @@ foreach(CPP_FILE ${CPP_FILES})
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
 
         # Base dependencies for all connection examples
+        # Link against the unified atom library which handles all transitive dependencies
         target_link_libraries(${EXECUTABLE_NAME}
-            atom-connection
-            atom-error
+            atom
             Threads::Threads
         )
         

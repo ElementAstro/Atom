@@ -169,7 +169,6 @@ bool AsyncFile::validatePermissions(std::string_view path, bool write_access) no
         }
 
         // Check read permissions
-        std::error_code ec;
         auto perms = std::filesystem::status(fs_path, ec).permissions();
         if (ec) {
             return false;

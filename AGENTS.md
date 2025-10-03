@@ -10,7 +10,8 @@
 ## Build, Test, and Development Commands
 - C++ build (Ninja default): `cmake --preset release && cmake --build --preset release -j`
 - C++ tests: `cmake --preset debug && cmake --build --preset debug -j && ctest --preset default --output-on-failure`
-- Cross‑platform scripts: `./build.sh` (Unix) or `build.bat` (Windows)
+- Cross‑platform scripts: `./build.sh` (Unix) or `build.bat` (Windows) - wrapper scripts for backward compatibility
+- Direct script access: `./scripts/build.sh` (Unix) or `scripts\build.bat` (Windows) - actual build scripts
 - Python dev setup: `pip install -e .[dev]`
 - Python tests: `pytest -q` (coverage configured via `pyproject.toml`)
 - Docs: Sphinx `sphinx-build -b html docs docs/_build`; Doxygen `doxygen Doxyfile`

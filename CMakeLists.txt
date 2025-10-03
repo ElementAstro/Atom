@@ -27,7 +27,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(cmake/GitVersion.cmake)
 include(cmake/VersionConfig.cmake)
 include(cmake/PlatformSpecifics.cmake)
-include(cmake/compiler_options.cmake)
+include(cmake/CompilerOptions.cmake)
 include(cmake/module_dependencies.cmake)
 include(cmake/ExamplesBuildOptions.cmake)
 include(cmake/TestsBuildOptions.cmake)
@@ -152,7 +152,7 @@ include_directories(
 add_custom_target(
   AtomCmakeAdditionalFiles
   SOURCES
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/compiler_options.cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompilerOptions.cmake
     ${CMAKE_CURRENT_SOURCE_DIR}/cmake/GitVersion.cmake
 )
 
@@ -214,28 +214,6 @@ endif()
 #   endif()
 # endif()
 
-# include(WSLDetection)
-# detect_wsl(IS_WSL)
-# if(IS_WSL)
-#   message(STATUS "Running in WSL environment")
-#   pkg_check_modules(CURL REQUIRED libcurl)
-#   if(CURL_FOUND)
-#     include_directories(${CURL_INCLUDE_DIRS})
-#     link_directories(${CURL_LIBRARY_DIRS})
-#   else()
-#     message(FATAL_ERROR "curl development files not found. Please install libcurl-dev or equivalent.")
-#   endif()
-# else()
-#   message(STATUS "Not running in WSL environment")
-#   find_package(CURL REQUIRED)
-#   if(CURL_FOUND)
-#     include_directories(${CURL_INCLUDE_DIRS})
-#     message(STATUS "Found CURL: ${CURL_VERSION} (${CURL_INCLUDE_DIRS})")
-#   else()
-#     message(FATAL_ERROR "curl development files not found. Please install libcurl-dev or equivalent.")
-#   endif()
-# endif()
-
 # Skip Boost for now
 # Boost
 # if(ATOM_USE_BOOST)
@@ -287,6 +265,7 @@ if(ATOM_BUILD_PYTHON_BINDINGS)
   add_subdirectory(python)
 endif()
 if(ATOM_BUILD_TESTS)
+  enable_testing()
   add_subdirectory(tests)
 endif()
 

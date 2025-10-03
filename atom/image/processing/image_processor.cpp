@@ -41,8 +41,7 @@ blob ImageProcessor::convertFormat(const blob& input, [[maybe_unused]] ImageForm
             return convertToTIFF(input);
         case ImageFormat::BMP: {
             std::vector<uint8_t> buffer;
-            std::vector<int> params = {cv::IMWRITE_BMP_COMPRESSION, 0};
-            cv::imencode(".bmp", inputMat, buffer, params);
+            cv::imencode(".bmp", inputMat, buffer);
             return blob(buffer.data(), buffer.size());
         }
         case ImageFormat::TGA: {

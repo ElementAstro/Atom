@@ -8,7 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include "lcg.hpp"
+#include "atom/utils/random/lcg.hpp"
 
 namespace atom::utils::tests {
 

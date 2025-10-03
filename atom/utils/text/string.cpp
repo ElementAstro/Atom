@@ -475,7 +475,7 @@ auto wstringToString(std::wstring_view wstr) -> std::string {
                 }
             }
             // Handle 3-byte UTF-8 characters (2048-65535)
-            else if (wc < 0x10000) {
+            else if (static_cast<uint32_t>(wc) < 0x10000) {
                 result.push_back(static_cast<char>(0xE0 | (wc >> 12)));
                 result.push_back(static_cast<char>(0x80 | ((wc >> 6) & 0x3F)));
                 result.push_back(static_cast<char>(0x80 | (wc & 0x3F)));

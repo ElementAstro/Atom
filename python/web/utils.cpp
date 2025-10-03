@@ -175,8 +175,177 @@ Examples:
 )");
 }
 
+/**
+ * @brief Binds DNS resolution functions to Python.
+ *
+ * This function creates Python bindings for DNS-related utilities including
+ * hostname resolution, local IP discovery, and DNS cache management.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindDnsUtilities(py::module_& m) {
+    m.def("set_dns_cache_ttl", &atom::web::setDNSCacheTTL, py::arg("ttl_seconds"),
+          R"(Set the Time-To-Live for DNS cache entries.
+
+Args:
+    ttl_seconds: The TTL duration in seconds.
+
+Examples:
+    >>> from atom.web.utils import set_dns_cache_ttl
+    >>> import datetime
+    >>> set_dns_cache_ttl(datetime.timedelta(minutes=5))
+)");
+
+    m.def("get_ip_addresses", &atom::web::getIPAddresses, py::arg("hostname"),
+          R"(Get IP addresses for a given hostname through DNS resolution.
+
+Args:
+    hostname: The hostname to resolve.
+
+Returns:
+    List[str]: List of IP addresses associated with the hostname.
+
+Examples:
+    >>> from atom.web.utils import get_ip_addresses
+    >>> ips = get_ip_addresses("google.com")
+    >>> print(f"Google IPs: {ips}")
+)");
+
+    m.def("get_local_ip_addresses", &atom::web::getLocalIPAddresses,
+          R"(Get all local IP addresses of the machine.
+
+Returns:
+    List[str]: List of local IP addresses (excluding loopback).
+
+Examples:
+    >>> from atom.web.utils import get_local_ip_addresses
+    >>> local_ips = get_local_ip_addresses()
+    >>> print(f"Local IPs: {local_ips}")
+)");
+
+    m.def("clear_dns_cache_expired_entries", &atom::web::clearDNSCacheExpiredEntries,
+          R"(Clear expired entries from the DNS cache.
+
+This function removes expired DNS cache entries to free memory and ensure
+fresh lookups for expired hostnames.
+
+Examples:
+    >>> from atom.web.utils import clear_dns_cache_expired_entries
+    >>> clear_dns_cache_expired_entries()
+)");
+}
+
+/**
+ * @brief Binds IP validation functions to Python.
+ *
+ * This function creates Python bindings for IP address validation utilities.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindIpValidationUtilities(py::module_& m) {
+    m.def("is_valid_ipv4", &atom::web::isValidIPv4, py::arg("ip_address"),
+          R"(Check if an IP address is a valid IPv4 address.
+
+Args:
+    ip_address: The IP address string to validate.
+
+Returns:
+    bool: True if the address is a valid IPv4 address, False otherwise.
+
+Examples:
+    >>> from atom.web.utils import is_valid_ipv4
+    >>> is_valid_ipv4("192.168.1.1")
+    True
+    >>> is_valid_ipv4("256.1.1.1")
+    False
+)");
+
+    m.def("is_valid_ipv6", &atom::web::isValidIPv6, py::arg("ip_address"),
+          R"(Check if an IP address is a valid IPv6 address.
+
+Args:
+    ip_address: The IP address string to validate.
+
+Returns:
+    bool: True if the address is a valid IPv6 address, False otherwise.
+
+Examples:
+    >>> from atom.web.utils import is_valid_ipv6
+    >>> is_valid_ipv6("2001:db8::1")
+    True
+    >>> is_valid_ipv6("invalid::address")
+    False
+)");
+}
+
+/**
+ * @brief Binds network connectivity functions to Python.
+ *
+ * This function creates Python bindings for network connectivity utilities.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindNetworkConnectivityUtilities(py::module_& m) {
+    m.def("check_internet_connectivity", &atom::web::checkInternetConnectivity,
+          R"(Check if the device has active internet connectivity.
+
+Returns:
+    bool: True if internet is available, False otherwise.
+
+Note:
+    This function tests connectivity by attempting to connect to reliable
+    DNS servers (8.8.8.8, 1.1.1.1, 208.67.222.222) on port 53.
+
+Examples:
+    >>> from atom.web.utils import check_internet_connectivity
+    >>> if check_internet_connectivity():
+    ...     print("Internet connection available")
+    ... else:
+    ...     print("No internet connection")
+)");
+}
+
 PYBIND11_MODULE(utils, m) {
-    m.doc() = "Network utilities module for the atom package";
+    m.doc() = R"pbdoc(
+        Network Utilities Module
+        -----------------------
+
+        This module provides comprehensive network utilities for the atom package,
+        including DNS resolution, IP validation, port management, socket operations,
+        and connectivity testing.
+
+        Key Features:
+        - DNS resolution and caching
+        - IP address validation (IPv4/IPv6)
+        - Port scanning and management
+        - Socket operations and utilities
+        - Network connectivity testing
+        - Process management on ports
+        - Address information utilities
+
+        Categories:
+        - DNS Operations: hostname resolution, local IP discovery, cache management
+        - IP Validation: IPv4/IPv6 address validation and conversion
+        - Port Operations: scanning, process management, availability checking
+        - Socket Operations: creation, binding, connection utilities
+        - Network Testing: connectivity checks and diagnostics
+
+        Examples:
+            >>> from atom.web.utils import *
+            >>>
+            >>> # DNS operations
+            >>> ips = get_ip_addresses("google.com")
+            >>> local_ips = get_local_ip_addresses()
+            >>>
+            >>> # IP validation
+            >>> is_valid = is_valid_ipv4("192.168.1.1")
+            >>>
+            >>> # Port operations
+            >>> port_busy = is_port_in_use(8080)
+            >>>
+            >>> # Network connectivity
+            >>> has_internet = check_internet_connectivity()
+    )pbdoc";
 
     // Register exception translations
     registerExceptionTranslations(m);
@@ -184,11 +353,7 @@ PYBIND11_MODULE(utils, m) {
     // Bind different categories of network utilities
     bindSystemInitialization(m);
     bindPortUtilities(m);
-    bindPortScanning(m);
-    bindDnsAndIpUtilities(m);
-    bindAddressInfoUtilities(m);
-    bindConvenienceUtilities(m);
-
-    // Add module documentation
-    addModuleDocumentation(m);
+    bindDnsUtilities(m);                    // DNS functions
+    bindIpValidationUtilities(m);           // IP validation functions
+    bindNetworkConnectivityUtilities(m);    // Network connectivity functions
 }

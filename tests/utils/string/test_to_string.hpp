@@ -17,7 +17,7 @@
 #include <variant>
 #include <vector>
 
-#include "to_string.hpp"
+#include "atom/utils/text/to_string.hpp"
 
 using namespace atom::utils;
 using ::testing::HasSubstr;
@@ -572,7 +572,4 @@ TEST_F(ToStringTest, RealWorldExample) {
     EXPECT_THAT(result, HasSubstr("absent: nullopt"));
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function removed - this test file is included in the test runner

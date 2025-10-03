@@ -81,6 +81,18 @@ set(LIBS
     ${CMAKE_THREAD_LIBS_INIT}
 )
 
+# Add fmt library for spdlog support
+find_package(fmt QUIET)
+if(fmt_FOUND)
+    list(APPEND LIBS fmt::fmt)
+endif()
+
+# Add spdlog library
+find_package(spdlog QUIET)
+if(spdlog_FOUND)
+    list(APPEND LIBS spdlog::spdlog_header_only)
+endif()
+
 if(CURL_FOUND)
     list(APPEND LIBS ${CURL_LIBRARIES})
 endif()

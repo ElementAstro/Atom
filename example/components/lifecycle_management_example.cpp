@@ -14,6 +14,17 @@ and advanced lifecycle management features.
 
 **************************************************/
 
+// Define feature flags before including headers
+#ifndef ENABLE_FASTHASH
+#define ENABLE_FASTHASH 0
+#endif
+#ifndef ENABLE_EVENT_SYSTEM
+#define ENABLE_EVENT_SYSTEM 0
+#endif
+#ifndef ENABLE_HOT_RELOAD
+#define ENABLE_HOT_RELOAD 0
+#endif
+
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -22,9 +33,10 @@ and advanced lifecycle management features.
 
 #include "atom/components/component.hpp"
 #include "atom/components/lifecycle.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
+// LifecycleManager and LifecyclePhase are in atom::components namespace
 
 /**
  * @brief Service component demonstrating lifecycle hooks
@@ -187,49 +199,56 @@ public:
 void setupLifecycleHooks() {
     std::cout << "\n=== Setting up Lifecycle Hooks ===" << std::endl;
 
-    auto& lifecycle = LifecycleManager::instance();
+    auto& lifecycle = atom::components::LifecycleManager::instance();
 
     // Global hooks that apply to all components
     lifecycle.registerGlobalHook(
-        LifecyclePhase::PreInitialization, [](Component& component, LifecyclePhase phase) {
+        atom::components::LifecyclePhase::PreInitialization, [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase; // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Pre-initialization hook for: "
                       << component.getName() << std::endl;
         });
 
     lifecycle.registerGlobalHook(
-        LifecyclePhase::PostInitialization, [](Component& component, LifecyclePhase phase) {
+        atom::components::LifecyclePhase::PostInitialization, [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase; // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Post-initialization hook for: "
                       << component.getName() << std::endl;
         });
 
     lifecycle.registerGlobalHook(
-        LifecyclePhase::PreActivation, [](Component& component, LifecyclePhase phase) {
+        atom::components::LifecyclePhase::PreActivation, [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase; // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Pre-activation hook for: "
                       << component.getName() << std::endl;
         });
 
     lifecycle.registerGlobalHook(
-        LifecyclePhase::PostActivation, [](Component& component, LifecyclePhase phase) {
+        atom::components::LifecyclePhase::PostActivation, [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase; // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Post-activation hook for: "
                       << component.getName() << std::endl;
         });
 
     // Component-specific hooks
     lifecycle.registerHook(
-        "Database", LifecyclePhase::PostInitialization,
-        [](Component& component, LifecyclePhase phase) {
+        "Database", ac::LifecyclePhase::PostInitialization,
+        [](Component& component, ac::LifecyclePhase phase) {
+            (void)component; (void)phase; // Suppress unused parameter warnings
             std::cout << "  [DATABASE] Database-specific post-init hook"
                       << std::endl;
         });
 
     lifecycle.registerHook(
-        "WebService", LifecyclePhase::PreActivation, [](Component& component, LifecyclePhase phase) {
+        "WebService", ac::LifecyclePhase::PreActivation, [](Component& component, ac::LifecyclePhase phase) {
+            (void)component; (void)phase; // Suppress unused parameter warnings
             std::cout << "  [WEB] Web service pre-activation hook" << std::endl;
         });
 
     lifecycle.registerHook(
-        "Application", LifecyclePhase::PostActivation,
-        [](Component& component, LifecyclePhase phase) {
+        "Application", ac::LifecyclePhase::PostActivation,
+        [](Component& component, ac::LifecyclePhase phase) {
+            (void)component; (void)phase; // Suppress unused parameter warnings
             std::cout
                 << "  [APP] Application post-activation hook - system ready!"
                 << std::endl;

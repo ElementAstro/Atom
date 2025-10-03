@@ -8,7 +8,7 @@ include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 find_package(loguru QUIET)
 
 # Find optional packages
-find_package(OpenCV QUIET)
+find_package(OpenCV REQUIRED)  # Change to REQUIRED for computer vision
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(CFITSIO cfitsio)
@@ -39,10 +39,8 @@ set(ATOM_IMAGE_SOURCES
     processing/filters.cpp
     processing/transforms.cpp
     processing/enhancement.cpp
-    # processing/computer_vision.cpp
-    # processing/gpu_acceleration.cpp
+    processing/computer_vision.cpp  # Uncommented
     processing/ml_processing.cpp
-    # processing/realtime.cpp
 )
 
 # Define header files
@@ -74,10 +72,8 @@ set(ATOM_IMAGE_HEADERS
     processing/filters.hpp
     processing/transforms.hpp
     processing/enhancement.hpp
-    # processing/computer_vision.hpp
+    processing/computer_vision.hpp  # Added
     processing/ml_processing.hpp
-    # processing/realtime.hpp
-    # processing/gpu_acceleration.hpp
 )
 
 # Add OCR sources if Tesseract is available

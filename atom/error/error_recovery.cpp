@@ -38,7 +38,7 @@ bool FixedIntervalRetryPolicy::shouldRetry(std::shared_ptr<ErrorContext> context
     return currentAttempt_ < maxRetries_ && context->canRetry();
 }
 
-std::chrono::milliseconds FixedIntervalRetryPolicy::getRetryDelay(int attemptNumber) {
+std::chrono::milliseconds FixedIntervalRetryPolicy::getRetryDelay([[maybe_unused]] int attemptNumber) {
     return interval_;
 }
 

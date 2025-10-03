@@ -25,7 +25,8 @@ and efficient component allocation/deallocation patterns.
 #include "atom/components/component_pool.hpp"
 #include "atom/components/registry.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
+using atom::components::ComponentPool;
 
 /**
  * @brief Lightweight component for pool testing

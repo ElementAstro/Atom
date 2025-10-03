@@ -1,5 +1,39 @@
-# Error module tests
+# CMakeLists.txt for Atom Error Tests (Custom Configuration)
+# This project is licensed under the terms of the GPL3 license.
+#
+# Project Name: Atom-Error-Tests
+# Description: Test Suite for Atom Error Module
+# Author: Max Qian
+# License: GPL3
 
+cmake_minimum_required(VERSION 3.20)
+project(atom-error-tests VERSION 1.0.0 LANGUAGES C CXX)
+
+# =============================================================================
+# Find Required Packages
+# =============================================================================
+find_package(GTest REQUIRED)
+find_package(Threads REQUIRED)
+
+# =============================================================================
+# Include Test Infrastructure (Optional for Custom Modules)
+# =============================================================================
+# Include the standardized test infrastructure if available
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/tests/CMakeLists.txt")
+    add_subdirectory("${CMAKE_SOURCE_DIR}/tests/tests" "${CMAKE_CURRENT_BINARY_DIR}/test_infrastructure")
+endif()
+
+# =============================================================================
+# Verify Module Dependencies
+# =============================================================================
+# Ensure the target module is available
+if(NOT TARGET atom-error)
+    message(FATAL_ERROR "atom-error target not found. Make sure ATOM_BUILD_ERROR is enabled.")
+endif()
+
+# =============================================================================
+# Test Source Configuration
+# =============================================================================
 # Test sources
 set(TEST_SOURCES
     comprehensive_test.cpp
@@ -9,20 +43,31 @@ set(TEST_SOURCES
     test_enhanced_stacktrace.cpp
 )
 
+# =============================================================================
+# Create Test Executables (Custom Multi-Executable Configuration)
+# =============================================================================
 # Create test executables
 foreach(TEST_SOURCE ${TEST_SOURCES})
     get_filename_component(TEST_NAME ${TEST_SOURCE} NAME_WE)
-    
+
     add_executable(${TEST_NAME} ${TEST_SOURCE})
-    
+
     target_link_libraries(${TEST_NAME}
         PRIVATE
+            # Test infrastructure (if available)
+            $<TARGET_NAME_IF_EXISTS:atom-test-common>
+
+            # Module under test
             atom-error
+
+            # GoogleTest
             GTest::gtest
             GTest::gtest_main
-            ${CMAKE_THREAD_LIBS_INIT}
+
+            # System libraries
+            Threads::Threads
     )
-    
+
     target_include_directories(${TEST_NAME}
         PRIVATE
             ${CMAKE_SOURCE_DIR}

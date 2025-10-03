@@ -388,12 +388,12 @@ public:
                 io_thread_ = std::thread([this]() { io_context_.run(); });
             }
 
-            log(LogLevel::INFO_LEVEL_LEVEL,
+            log(LogLevel::INFO_LEVEL,
                 "SocketHub started on port " + std::to_string(port));
             stats_.start_time = std::chrono::system_clock::now();
 
         } catch (const std::exception& e) {
-            log(LogLevel::ERROR_LEVEL_LEVEL,
+            log(LogLevel::ERROR_LEVEL,
                 "Failed to start SocketHub: " + std::string(e.what()));
             throw;
         }
@@ -421,7 +421,7 @@ public:
                 io_thread_.join();
             }
 
-            log(LogLevel::INFO_LEVEL_LEVEL, "SocketHub stopped.");
+            log(LogLevel::INFO_LEVEL, "SocketHub stopped.");
         }
     }
 
@@ -430,7 +430,7 @@ public:
         try {
             port = acceptor_.local_endpoint().port();
         } catch (...) {
-            log(LogLevel::ERROR_LEVEL_LEVEL, "Could not determine port for restart");
+            log(LogLevel::ERROR_LEVEL, "Could not determine port for restart");
             return;
         }
 
@@ -485,7 +485,7 @@ public:
         stats_.messages_sent += client_copies.size();
         stats_.bytes_sent += message.data.size() * client_copies.size();
 
-        log(LogLevel::DEBUG_LEVEL_LEVEL,
+        log(LogLevel::DEBUG_LEVEL,
             "Broadcasted message of " + std::to_string(message.data.size()) +
                 " bytes to " + std::to_string(client_copies.size()) +
                 " clients");
@@ -512,11 +512,11 @@ public:
             stats_.messages_sent++;
             stats_.bytes_sent += message.data.size();
 
-            log(LogLevel::DEBUG_LEVEL_LEVEL,
+            log(LogLevel::DEBUG_LEVEL,
                 "Sent message of " + std::to_string(message.data.size()) +
                     " bytes to client " + std::to_string(client_id));
         } else {
-            log(LogLevel::WARNING_LEVEL_LEVEL,
+            log(LogLevel::WARNING_LEVEL,
                 "Attempted to send message to non-existent client: " +
                     std::to_string(client_id));
         }

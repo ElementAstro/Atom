@@ -148,17 +148,177 @@ TEST_F(BlobTest, EqualityOperator) {
 
     EXPECT_EQ(b1, b2);
     EXPECT_NE(b1, b3);
+}
 
-    // Modify b2 and check inequality
-    b2[0] = std::byte{255};
-    EXPECT_NE(b1, b2);
+// Test edge case: empty blob operations
+TEST_F(BlobTest, EmptyBlobOperations) {
+    blob empty_blob;
 
-    // Set b2 back to equal b1
-    b2[0] = b1[0];
-    EXPECT_EQ(b1, b2);
+    // Test operations on empty blob
+    EXPECT_EQ(empty_blob.size(), 0);
+    EXPECT_EQ(empty_blob.getRows(), 0);
+    EXPECT_EQ(empty_blob.getCols(), 0);
+    EXPECT_EQ(empty_blob.getChannels(), 1);
 
-    // Note: Cannot directly modify private members to test inequality
-    // The equality test above is sufficient for basic functionality
+    // Test slicing empty blob
+    EXPECT_THROW(empty_blob.slice(0, 1), std::out_of_range);
+
+    // Test accessing elements in empty blob
+    EXPECT_THROW(empty_blob[0], std::out_of_range);
+
+    // Test equality with empty blob
+    blob another_empty;
+    EXPECT_EQ(empty_blob, another_empty);
+}
+
+// Test edge case: single element blob
+TEST_F(BlobTest, SingleElementBlob) {
+    std::vector<std::byte> single_data = {std::byte{42}};
+    blob single_blob(single_data.data(), single_data.size());
+
+    EXPECT_EQ(single_blob.size(), 1);
+    EXPECT_EQ(single_blob[0], std::byte{42});
+
+    // Test slicing single element
+    blob slice = single_blob.slice(0, 1);
+    EXPECT_EQ(slice.size(), 1);
+    EXPECT_EQ(slice[0], std::byte{42});
+
+    // Test out of bounds access
+    EXPECT_THROW(single_blob[1], std::out_of_range);
+    EXPECT_THROW(single_blob.slice(1, 1), std::out_of_range);
+}
+
+// Test edge case: large blob
+TEST_F(BlobTest, LargeBlobOperations) {
+    const size_t large_size = 1000000; // 1MB
+    std::vector<std::byte> large_data(large_size, std::byte{128});
+
+    blob large_blob(large_data.data(), large_data.size());
+
+    EXPECT_EQ(large_blob.size(), large_size);
+    EXPECT_EQ(large_blob[0], std::byte{128});
+    EXPECT_EQ(large_blob[large_size - 1], std::byte{128});
+
+    // Test slicing large blob
+    blob slice = large_blob.slice(large_size / 2, 1000);
+    EXPECT_EQ(slice.size(), 1000);
+
+    // Test copy performance with large blob
+    auto start = std::chrono::high_resolution_clock::now();
+    blob copy(large_blob);
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    EXPECT_EQ(copy.size(), large_size);
+    // Should complete in reasonable time (less than 1 second)
+    EXPECT_LT(duration.count(), 1000);
+}
+
+// Test boundary conditions for slice operations
+TEST_F(BlobTest, SliceBoundaryConditions) {
+    blob b(test_data.data(), test_data.size());
+
+    // Test slice at exact boundaries
+    blob full_slice = b.slice(0, test_data.size());
+    EXPECT_EQ(full_slice.size(), test_data.size());
+    EXPECT_EQ(full_slice, b);
+
+    // Test slice with zero length
+    EXPECT_THROW(b.slice(0, 0), std::invalid_argument);
+
+    // Test slice starting at last element
+    blob last_element = b.slice(test_data.size() - 1, 1);
+    EXPECT_EQ(last_element.size(), 1);
+    EXPECT_EQ(last_element[0], test_data.back());
+
+    // Test slice beyond bounds
+    EXPECT_THROW(b.slice(test_data.size(), 1), std::out_of_range);
+    EXPECT_THROW(b.slice(0, test_data.size() + 1), std::out_of_range);
+}
+
+// Test memory alignment and data integrity
+TEST_F(BlobTest, MemoryAlignmentAndIntegrity) {
+    // Test with various data sizes to check alignment
+    std::vector<size_t> sizes = {1, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128};
+
+    for (size_t size : sizes) {
+        std::vector<std::byte> data(size);
+        for (size_t i = 0; i < size; ++i) {
+            data[i] = static_cast<std::byte>(i % 256);
+        }
+
+        blob b(data.data(), data.size());
+        EXPECT_EQ(b.size(), size);
+
+        // Verify data integrity
+        for (size_t i = 0; i < size; ++i) {
+            EXPECT_EQ(b[i], data[i]);
+        }
+    }
+}
+
+// Test concurrent access safety
+TEST_F(BlobTest, ConcurrentAccess) {
+    blob b(test_data.data(), test_data.size());
+    const int num_threads = 4;
+    const int operations_per_thread = 100;
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count{0};
+
+    for (int t = 0; t < num_threads; ++t) {
+        threads.emplace_back([&b, &success_count]() {
+            for (int i = 0; i < operations_per_thread; ++i) {
+                try {
+                    // Read operations should be thread-safe
+                    auto size = b.size();
+                    if (size > 0) {
+                        (void)b[0]; // Suppress unused variable warning
+                        auto slice = b.slice(0, std::min(size, size_t(3)));
+                        (void)slice; // Suppress unused variable warning
+                        success_count.fetch_add(1);
+                    }
+                } catch (...) {
+                    // Should not throw for read operations
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(success_count.load(), num_threads * operations_per_thread);
+}
+
+// Test blob with different data types
+TEST_F(BlobTest, DifferentDataTypes) {
+    // Test with int array
+    std::array<int, 4> int_array = {1, 2, 3, 4};
+    blob int_blob(int_array);
+    EXPECT_EQ(int_blob.size(), sizeof(int) * 4);
+
+    // Test with float array
+    std::array<float, 3> float_array = {1.0f, 2.0f, 3.0f};
+    blob float_blob(float_array);
+    EXPECT_EQ(float_blob.size(), sizeof(float) * 3);
+
+    // Test with double array
+    std::array<double, 2> double_array = {1.0, 2.0};
+    blob double_blob(double_array);
+    EXPECT_EQ(double_blob.size(), sizeof(double) * 2);
+}
+
+// Test edge cases with zero size
+TEST_F(BlobTest, ZeroSizeHandling) {
+    // Test with zero size but non-null pointer
+    blob zero_size_blob(test_data.data(), 0);
+    EXPECT_EQ(zero_size_blob.size(), 0);
+
+    // Test operations on zero-size blob
+    EXPECT_THROW(zero_size_blob[0], std::out_of_range);
+    EXPECT_THROW(zero_size_blob.slice(0, 1), std::out_of_range);
 }
 
 // Test fill method

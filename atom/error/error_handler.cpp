@@ -250,7 +250,7 @@ void ErrorReporter::aggregateError(std::shared_ptr<ErrorContext> context) {
             auto& errors = aggregatedErrors_[key];
             if (!errors.empty()) {
                 // Create aggregated context or process individually
-                for (auto& error : errors) {
+                for ([[maybe_unused]] auto& error : errors) {
                     // Process aggregated error
                 }
                 errors.clear();

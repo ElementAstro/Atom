@@ -4,6 +4,13 @@
 #include <fstream>
 #include <numeric>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/photo.hpp>
+
+#ifndef SERASTRO_VERSION_MAJOR
+#define SERASTRO_VERSION_MAJOR 1
+#define SERASTRO_VERSION_MINOR 0
+#define SERASTRO_VERSION_PATCH 0
+#endif
 
 namespace serastro {
 namespace utils {

@@ -166,7 +166,11 @@ endif()
 # Python bindings
 if(ATOM_BUILD_PYTHON_BINDINGS)
     atom_find_dependency(Python REQUIRED COMPONENTS Interpreter Development)
-    atom_find_dependency(pybind11 REQUIRED)
+    # Try to find pybind11 directly first
+    find_package(pybind11 CONFIG QUIET)
+    if(NOT pybind11_FOUND)
+        atom_find_dependency(pybind11 REQUIRED)
+    endif()
 endif()
 
 # Testing framework

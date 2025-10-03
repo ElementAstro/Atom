@@ -346,6 +346,11 @@ protected:
      */
     virtual std::array<uint8_t, 3> colorSpaceToRgb(const std::array<double, 3>& values,
                                                    ColorSpace colorSpace) const;
+
+    /**
+     * @brief Helper for HSL to RGB conversion
+     */
+    double hueToRgb(double p, double q, double t) const;
 };
 
 /**

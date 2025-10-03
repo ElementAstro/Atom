@@ -1,12 +1,19 @@
+# CMakeLists.txt for Atom Components Tests (Custom Configuration)
+# This project is licensed under the terms of the GPL3 license.
+#
+# Project Name: Atom-Components-Tests
+# Description: Test Suite for Atom Components Module (Custom Build)
+# Author: Max Qian
+# License: GPL3
+
 cmake_minimum_required(VERSION 3.20)
+project(atom-components-tests VERSION 1.0.0 LANGUAGES C CXX)
 
-project(atom_iocomponent.test)
-
-# Set C++20 standard
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
+# =============================================================================
+# Find Required Packages
+# =============================================================================
 find_package(GTest QUIET)
+find_package(Threads REQUIRED)
 
 if(NOT GTEST_FOUND)
   include(FetchContent)
@@ -21,6 +28,17 @@ else()
   include(GoogleTest)
 endif()
 
+# =============================================================================
+# Include Test Infrastructure (Optional for Custom Modules)
+# =============================================================================
+# Include the standardized test infrastructure if available
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/tests/CMakeLists.txt")
+    add_subdirectory("${CMAKE_SOURCE_DIR}/tests/tests" "${CMAKE_CURRENT_BINARY_DIR}/test_infrastructure")
+endif()
+
+# =============================================================================
+# Custom Dependency Management (Preserved)
+# =============================================================================
 # Add include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 
@@ -55,46 +73,97 @@ if(NOT TARGET atom-component)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/components ${CMAKE_CURRENT_BINARY_DIR}/atom-components)
 endif()
 
+# =============================================================================
+# Test Source Configuration
+# =============================================================================
 # Create comprehensive component tests
 set(TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/simple_test.cpp
     ${PROJECT_SOURCE_DIR}/comprehensive_component_test.cpp
 )
 
-add_executable(${PROJECT_NAME} ${TEST_SOURCES})
+# =============================================================================
+# Create Test Executable
+# =============================================================================
+add_executable(atom_components_tests ${TEST_SOURCES})
 
+# =============================================================================
+# Link Libraries
+# =============================================================================
 # Link with atom-component library and its dependencies
-target_link_libraries(${PROJECT_NAME}
+target_link_libraries(atom_components_tests
     PRIVATE
-    gtest
-    gtest_main
+    # Test infrastructure (if available)
+    $<TARGET_NAME_IF_EXISTS:atom-test-common>
+
+    # Module under test and its dependencies
     atom-component
     atom-error
     atom-utils
+
+    # GoogleTest
+    gtest
+    gtest_main
+
+    # System libraries
+    Threads::Threads
 )
 
+# =============================================================================
+# Target Configuration
+# =============================================================================
 # Set C++20 standard
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+target_compile_features(atom_components_tests PRIVATE cxx_std_20)
 
 # Add compiler flags
 if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+    target_compile_options(atom_components_tests PRIVATE /W4)
 else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(atom_components_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Pass macro definitions for optional features
+# Pass macro definitions for optional features (Custom Configuration)
 if(ATOM_ENABLE_LUA)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE ATOM_ENABLE_LUA=1)
+    target_compile_definitions(atom_components_tests PRIVATE ATOM_ENABLE_LUA=1)
 endif()
 
 if(ATOM_ENABLE_PYTHON)
-    target_compile_definitions(${PROJECT_NAME} PRIVATE ATOM_ENABLE_PYTHON=1)
+    target_compile_definitions(atom_components_tests PRIVATE ATOM_ENABLE_PYTHON=1)
 endif()
 
-# Enable testing
+# =============================================================================
+# Test Registration
+# =============================================================================
 enable_testing()
 
-# Add test discovery
 include(GoogleTest)
-gtest_discover_tests(${PROJECT_NAME})
+gtest_discover_tests(atom_components_tests
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    PROPERTIES
+    LABELS "components"
+    TIMEOUT 300
+)
+
+# =============================================================================
+# Custom Test Targets
+# =============================================================================
+# Add custom target for running only this module's tests
+add_custom_target(test_components
+    COMMAND ${CMAKE_CTEST_COMMAND} -L components --output-on-failure
+    DEPENDS atom_components_tests
+    COMMENT "Running components module tests"
+)
+
+# Add performance test target (if applicable)
+add_custom_target(test_components_performance
+    COMMAND atom_components_tests --gtest_filter="*Performance*:*Benchmark*"
+    DEPENDS atom_components_tests
+    COMMENT "Running components performance tests"
+)
+
+# =============================================================================
+# IDE Organization
+# =============================================================================
+set_property(TARGET atom_components_tests PROPERTY FOLDER "Tests/Components")
+set_property(TARGET test_components PROPERTY FOLDER "Tests/Components")
+set_property(TARGET test_components_performance PROPERTY FOLDER "Tests/Components")

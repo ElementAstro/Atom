@@ -26,9 +26,9 @@ and comprehensive performance analysis with the component system.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 
-using namespace atom::components;
+// Note: Registry is in the global namespace, not atom::components
 
 /**
  * @brief Performance profiler for component operations

@@ -6,13 +6,14 @@
 #include <array>
 #include <chrono>
 #include <numeric>
+#include <random>
 #include <set>
 #include <string>
 #include <thread>
 #include <type_traits>
 #include <vector>
 
-#include "random.hpp"
+#include "atom/utils/random/random.hpp"
 
 using namespace atom::utils;
 using ::testing::AllOf;

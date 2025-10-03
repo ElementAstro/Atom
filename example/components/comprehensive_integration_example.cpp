@@ -23,8 +23,8 @@ serialization, and optional scripting support.
 #include <fstream>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
-#include "atom/components/lifecycle.hpp"
+#include "atom/components/core/registry.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
 #include "atom/components/serialization.hpp"
 
 // Conditional scripting support
@@ -33,7 +33,9 @@ serialization, and optional scripting support.
 #include "atom/components/scripting_api.hpp"
 #endif
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
+using atom::components::LifecycleManager;
+using atom::components::LifecyclePhase;
 
 /**
  * @brief Data processing component with full feature integration

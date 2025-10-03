@@ -125,8 +125,6 @@ Raises:
              "Temporarily disables rate limiting for all functions")
         .def("resume", &atom::async::RateLimiter::resume,
              "Resumes rate limiting after a pause")
-        .def("print_log", &atom::async::RateLimiter::printLog,
-             "Prints the log of requests (for debugging)")
         .def("get_rejected_requests",
              &atom::async::RateLimiter::getRejectedRequests,
              py::arg("function_name"),
@@ -137,7 +135,99 @@ Args:
 
 Returns:
     Number of rejected requests
-)");
+)")
+        .def("reset_function", &atom::async::RateLimiter::resetFunction,
+             py::arg("function_name"),
+             R"pbdoc(
+             Reset the rate limit counter and rejected count for a specific function.
+
+             Args:
+                 function_name: The name of the function to reset
+
+             Examples:
+                 >>> limiter.reset_function("api_call")
+             )pbdoc")
+        .def("reset_all", &atom::async::RateLimiter::resetAll,
+             R"pbdoc(
+             Reset all rate limit counters and rejected counts.
+
+             Examples:
+                 >>> limiter.reset_all()
+             )pbdoc")
+        .def("process_waiters", &atom::async::RateLimiter::processWaiters,
+             R"pbdoc(
+             Process waiting coroutines manually.
+
+             This method can be called to manually process any coroutines
+             that are waiting for rate limit approval.
+
+             Examples:
+                 >>> limiter.process_waiters()
+             )pbdoc")
+        .def(
+            "set_function_limits",
+            [](atom::async::RateLimiter& self, py::list settings_list) {
+                std::vector<std::pair<std::string_view, atom::async::RateLimiter::Settings>> cpp_settings;
+                cpp_settings.reserve(settings_list.size());
+
+                for (auto item : settings_list) {
+                    auto tuple = item.cast<py::tuple>();
+                    if (tuple.size() != 2) {
+                        throw std::invalid_argument("Each item must be a tuple of (function_name, settings)");
+                    }
+
+                    std::string function_name = tuple[0].cast<std::string>();
+                    auto settings = tuple[1].cast<atom::async::RateLimiter::Settings>();
+                    cpp_settings.emplace_back(function_name, settings);
+                }
+
+                self.setFunctionLimits(cpp_settings);
+            },
+            py::arg("settings_list"),
+            R"pbdoc(
+            Set rate limits for multiple functions in batch.
+
+            Args:
+                settings_list: List of tuples containing (function_name, settings)
+
+            Examples:
+                >>> settings = [
+                ...     ("api_call", RateLimiterSettings(10, 60)),
+                ...     ("db_query", RateLimiterSettings(100, 60))
+                ... ]
+                >>> limiter.set_function_limits(settings)
+            )pbdoc")
+        .def(
+            "acquire_batch",
+            [](atom::async::RateLimiter& self, py::list function_names) {
+                std::vector<std::string> cpp_names;
+                cpp_names.reserve(function_names.size());
+
+                for (auto name : function_names) {
+                    cpp_names.push_back(name.cast<std::string>());
+                }
+
+                auto awaiters = self.acquireBatch(cpp_names);
+                py::list py_awaiters;
+                for (auto& awaiter : awaiters) {
+                    py_awaiters.append(std::move(awaiter));
+                }
+                return py_awaiters;
+            },
+            py::arg("function_names"),
+            R"pbdoc(
+            Acquire rate limiters in batch for multiple functions.
+
+            Args:
+                function_names: List of function names
+
+            Returns:
+                List of Awaiter objects
+
+            Examples:
+                >>> awaiters = limiter.acquire_batch(["api_call", "db_query"])
+                >>> # Use awaiters in async context
+            )pbdoc");
 
     // Python包装函数创建Debounce对象的lambda函数
     m.def(
@@ -310,6 +400,185 @@ Examples:
     >>>     # Rate-limited code here
 )");
 
-    // 添加版本信息
+    // Utility functions
+    m.def(
+        "benchmark_rate_limiter",
+        [](size_t num_requests, size_t max_requests_per_second) -> py::dict {
+            using namespace std::chrono;
+
+            py::dict results;
+            atom::async::RateLimiter limiter;
+
+            // Set up rate limit
+            limiter.setFunctionLimit("benchmark_function", max_requests_per_second, std::chrono::seconds(1));
+
+            // Benchmark rate limiting performance
+            auto start = high_resolution_clock::now();
+            size_t successful_requests = 0;
+            size_t rejected_requests = 0;
+
+            for (size_t i = 0; i < num_requests; ++i) {
+                try {
+                    auto awaiter = limiter.acquire("benchmark_function");
+                    if (awaiter.await_ready()) {
+                        awaiter.await_resume();
+                        successful_requests++;
+                    } else {
+                        rejected_requests++;
+                    }
+                } catch (const atom::async::RateLimitExceededException&) {
+                    rejected_requests++;
+                }
+            }
+
+            auto end = high_resolution_clock::now();
+            auto duration = duration_cast<microseconds>(end - start);
+
+            // Calculate statistics
+            double total_time_us = duration.count();
+            double requests_per_second = (num_requests * 1000000.0) / total_time_us;
+            double success_rate = (double)successful_requests / num_requests * 100.0;
+
+            results[py::str("num_requests")] = num_requests;
+            results[py::str("max_requests_per_second")] = max_requests_per_second;
+            results[py::str("successful_requests")] = successful_requests;
+            results[py::str("rejected_requests")] = rejected_requests;
+            results[py::str("total_time_us")] = total_time_us;
+            results[py::str("requests_per_second")] = requests_per_second;
+            results[py::str("success_rate_percent")] = success_rate;
+            results[py::str("actual_rejected")] = limiter.getRejectedRequests("benchmark_function");
+
+            return results;
+        },
+        py::arg("num_requests") = 1000, py::arg("max_requests_per_second") = 100,
+        R"pbdoc(
+        Benchmark rate limiter performance.
+
+        Args:
+            num_requests: Number of requests to test (default: 1000)
+            max_requests_per_second: Rate limit to test (default: 100)
+
+        Returns:
+            dict: Benchmark results with timing and success rate metrics
+
+        Examples:
+            >>> results = benchmark_rate_limiter(5000, 50)
+            >>> print(f"Success rate: {results['success_rate_percent']:.2f}%")
+            >>> print(f"Requests per second: {results['requests_per_second']:.2f}")
+        )pbdoc")
+
+    .def(
+        "create_rate_limited_function",
+        [](py::function func, std::string function_name, size_t max_requests, std::chrono::seconds time_window) -> py::object {
+            // Create a shared rate limiter for this function
+            auto limiter = std::make_shared<atom::async::RateLimiter>();
+            limiter->setFunctionLimit(function_name, max_requests, time_window);
+
+            // Return a wrapped function that applies rate limiting
+            return py::cpp_function([limiter, func, function_name](py::args args, py::kwargs kwargs) -> py::object {
+                try {
+                    auto awaiter = limiter->acquire(function_name);
+                    if (!awaiter.await_ready()) {
+                        // For synchronous usage, we'll just check and proceed or throw
+                        awaiter.await_resume();
+                    }
+
+                    // Call the original function
+                    py::gil_scoped_acquire acquire;
+                    return func(*args, **kwargs);
+                } catch (const atom::async::RateLimitExceededException& e) {
+                    throw py::value_error(e.what());
+                }
+            });
+        },
+        py::arg("func"), py::arg("function_name"), py::arg("max_requests"), py::arg("time_window"),
+        R"pbdoc(
+        Create a rate-limited version of a function.
+
+        Args:
+            func: The function to rate limit
+            function_name: Name identifier for the function
+            max_requests: Maximum number of requests allowed
+            time_window: Time window for the rate limit
+
+        Returns:
+            A rate-limited version of the input function
+
+        Examples:
+            >>> # Create a function that can only be called 5 times per minute
+            >>> limited_func = create_rate_limited_function(
+            ...     lambda x: print(f"Processing {x}"),
+            ...     "process_data",
+            ...     5,
+            ...     60
+            ... )
+            >>> limited_func("test")  # Will work for first 5 calls
+        )pbdoc")
+
+    .def(
+        "create_multi_tier_limiter",
+        [](py::dict tier_settings) -> py::object {
+            auto limiter = std::make_shared<atom::async::RateLimiter>();
+
+            // Set up multiple tiers
+            for (auto item : tier_settings) {
+                std::string tier_name = item.first.cast<std::string>();
+                auto settings = item.second.cast<py::tuple>();
+
+                if (settings.size() != 2) {
+                    throw std::invalid_argument("Each tier setting must be a tuple of (max_requests, time_window)");
+                }
+
+                size_t max_requests = settings[0].cast<size_t>();
+                auto time_window = std::chrono::seconds(settings[1].cast<int>());
+
+                limiter->setFunctionLimit(tier_name, max_requests, time_window);
+            }
+
+            return py::cast(limiter);
+        },
+        py::arg("tier_settings"),
+        R"pbdoc(
+        Create a multi-tier rate limiter with different limits for different tiers.
+
+        Args:
+            tier_settings: Dictionary mapping tier names to (max_requests, time_window_seconds)
+
+        Returns:
+            A configured RateLimiter instance
+
+        Examples:
+            >>> tiers = {
+            ...     "basic": (10, 60),      # 10 requests per minute
+            ...     "premium": (100, 60),   # 100 requests per minute
+            ...     "enterprise": (1000, 60) # 1000 requests per minute
+            ... }
+            >>> limiter = create_multi_tier_limiter(tiers)
+        )pbdoc");
+
+    // Add version and feature information
     m.attr("__version__") = "1.0.0";
+
+#ifdef ATOM_USE_ASIO
+    m.attr("HAS_ASIO") = true;
+#else
+    m.attr("HAS_ASIO") = false;
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    m.attr("HAS_BOOST_LOCKFREE") = true;
+#else
+    m.attr("HAS_BOOST_LOCKFREE") = false;
+#endif
+
+    // Platform information
+#ifdef ATOM_PLATFORM_WINDOWS
+    m.attr("PLATFORM") = "Windows";
+#elif defined(ATOM_PLATFORM_APPLE)
+    m.attr("PLATFORM") = "macOS";
+#elif defined(ATOM_PLATFORM_LINUX)
+    m.attr("PLATFORM") = "Linux";
+#else
+    m.attr("PLATFORM") = "Unknown";
+#endif
 }

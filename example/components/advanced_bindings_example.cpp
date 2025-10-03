@@ -14,6 +14,17 @@ and advanced binding features with the component system.
 
 **************************************************/
 
+// Define feature flags before including headers
+#ifndef ENABLE_FASTHASH
+#define ENABLE_FASTHASH 0
+#endif
+#ifndef ENABLE_EVENT_SYSTEM
+#define ENABLE_EVENT_SYSTEM 0
+#endif
+#ifndef ENABLE_HOT_RELOAD
+#define ENABLE_HOT_RELOAD 0
+#endif
+
 #include <cmath>
 #include <iostream>
 #include <memory>
@@ -23,9 +34,9 @@ and advanced binding features with the component system.
 
 #include "atom/components/advanced_bindings.hpp"
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
 
 /**
  * @brief Math utility class for binding demonstration

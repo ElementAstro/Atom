@@ -333,5 +333,11 @@ template std::future<bool> isPortInUseAsync<uint16_t>(uint16_t);
 template std::optional<int> getProcessIDOnPort<uint16_t>(uint16_t);
 template bool checkAndKillProgramOnPort<uint16_t>(uint16_t);
 
+// int (for test compatibility)
+template bool isPortInUse<int>(int);
+template std::future<bool> isPortInUseAsync<int>(int);
+template std::optional<int> getProcessIDOnPort<int>(int);
+template bool checkAndKillProgramOnPort<int>(int);
+
 
 }  // namespace atom::web

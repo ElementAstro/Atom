@@ -9,7 +9,48 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE(timer, m) {
-    m.doc() = "Timer implementation module for the atom package";
+    m.doc() = R"pbdoc(
+        Timer Implementation Module
+        --------------------------
+
+        This module provides high-performance timer functionality for scheduling
+        and executing tasks with precise timing control and advanced features.
+
+        Features:
+          - High-precision task scheduling with millisecond accuracy
+          - One-time and recurring task execution with customizable intervals
+          - Priority-based task execution for complex scheduling scenarios
+          - Thread-safe timer operations with atomic synchronization
+          - Pause/resume functionality for dynamic timer control
+          - Task cancellation and cleanup mechanisms
+          - Callback system for task execution monitoring
+
+        Timer Types:
+          - Timer: Main timer class for scheduling tasks
+          - TimerTask: Individual task representation with execution parameters
+
+        Execution Strategies:
+          - setTimeout: Schedule one-time task execution after a delay
+          - setInterval: Schedule recurring task execution at intervals
+          - Priority-based scheduling for complex task management
+          - Asynchronous execution with future-based result handling
+
+        Example:
+            >>> from atom.async.timer import Timer, create_timer
+            >>>
+            >>> # Create a timer instance
+            >>> timer = Timer()
+            >>>
+            >>> # Schedule a one-time task
+            >>> def greet(name):
+            ...     print(f"Hello, {name}!")
+            >>> future = timer.set_timeout(greet, 1000, "World")
+            >>>
+            >>> # Schedule a recurring task
+            >>> def heartbeat():
+            ...     print("System is alive")
+            >>> timer.set_interval(heartbeat, 5000, 10, 1)  # Every 5s, 10 times, priority 1
+    )pbdoc";
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -307,5 +348,187 @@ Examples:
     >>> def alert(message):
     ...     print(f"Alert: {message}")
     >>> timer, future = schedule_timeout(alert, 2000, "Time's up!")
-)");
+)")
+
+    .def(
+        "schedule_interval",
+        [](py::function func, unsigned int interval, int repeat_count, int priority, py::args args) {
+            auto timer = std::make_shared<atom::async::Timer>();
+            timer->setInterval([func, args]() { func(*args); }, interval, repeat_count, priority);
+            return timer;
+        },
+        py::arg("func"), py::arg("interval"), py::arg("repeat_count") = -1, py::arg("priority") = 0,
+        R"pbdoc(
+        Create a new Timer and schedule a recurring task.
+
+        Args:
+            func: The function to be executed
+            interval: The interval in milliseconds between executions
+            repeat_count: The number of times to repeat (-1 for infinite)
+            priority: The priority of the task
+            *args: The arguments to be passed to the function
+
+        Returns:
+            A Timer instance with the scheduled task
+
+        Examples:
+            >>> def status_check(service):
+            ...     print(f"Checking {service} status")
+            >>> timer = schedule_interval(status_check, 10000, 5, 1, "database")
+        )pbdoc")
+
+    .def(
+        "benchmark_timer_performance",
+        [](size_t num_tasks, unsigned int delay_ms) -> py::dict {
+            using namespace std::chrono;
+
+            py::dict results;
+            atom::async::Timer timer;
+
+            // Benchmark task scheduling
+            auto start = high_resolution_clock::now();
+
+            std::vector<atom::async::EnhancedFuture<void>> futures;
+            futures.reserve(num_tasks);
+
+            for (size_t i = 0; i < num_tasks; ++i) {
+                auto future = timer.setTimeout([]() {
+                    // Simulate some work
+                    volatile int dummy = 0;
+                    for (int j = 0; j < 50; ++j) {
+                        dummy += j;
+                    }
+                }, delay_ms);
+                futures.push_back(std::move(future));
+            }
+
+            auto scheduling_end = high_resolution_clock::now();
+            auto scheduling_duration = duration_cast<microseconds>(scheduling_end - start);
+
+            // Wait for all tasks to complete
+            for (auto& future : futures) {
+                try {
+                    future.get();
+                } catch (...) {
+                    // Ignore task execution errors for benchmarking
+                }
+            }
+
+            auto completion_end = high_resolution_clock::now();
+            auto total_duration = duration_cast<microseconds>(completion_end - start);
+
+            // Calculate statistics
+            double scheduling_time_us = scheduling_duration.count();
+            double total_time_us = total_duration.count();
+            double tasks_per_second = (num_tasks * 1000000.0) / total_time_us;
+            double avg_scheduling_time = scheduling_time_us / num_tasks;
+
+            results[py::str("num_tasks")] = num_tasks;
+            results[py::str("delay_ms")] = delay_ms;
+            results[py::str("scheduling_time_us")] = scheduling_time_us;
+            results[py::str("total_time_us")] = total_time_us;
+            results[py::str("tasks_per_second")] = tasks_per_second;
+            results[py::str("avg_scheduling_time_us")] = avg_scheduling_time;
+            results[py::str("final_task_count")] = timer.getTaskCount();
+
+            return results;
+        },
+        py::arg("num_tasks") = 1000, py::arg("delay_ms") = 100,
+        R"pbdoc(
+        Benchmark timer performance with multiple tasks.
+
+        Args:
+            num_tasks: Number of tasks to schedule (default: 1000)
+            delay_ms: Delay for each task in milliseconds (default: 100)
+
+        Returns:
+            dict: Benchmark results with timing and throughput metrics
+
+        Examples:
+            >>> results = benchmark_timer_performance(500, 50)
+            >>> print(f"Tasks per second: {results['tasks_per_second']:.2f}")
+            >>> print(f"Avg scheduling time: {results['avg_scheduling_time_us']:.2f} μs")
+        )pbdoc")
+
+    .def(
+        "create_timer_pool",
+        [](size_t pool_size) -> py::list {
+            py::list timers;
+            for (size_t i = 0; i < pool_size; ++i) {
+                timers.append(std::make_unique<atom::async::Timer>());
+            }
+            return timers;
+        },
+        py::arg("pool_size"),
+        R"pbdoc(
+        Create a pool of timer instances for load distribution.
+
+        Args:
+            pool_size: Number of timer instances to create
+
+        Returns:
+            list: List of Timer instances
+
+        Examples:
+            >>> timer_pool = create_timer_pool(4)
+            >>> # Use different timers for different task types
+            >>> timer_pool[0].set_timeout(task1, 1000)
+            >>> timer_pool[1].set_timeout(task2, 2000)
+        )pbdoc")
+
+    .def(
+        "create_scheduled_task_manager",
+        []() -> py::dict {
+            py::dict manager;
+            manager[py::str("timer")] = std::make_unique<atom::async::Timer>();
+            manager[py::str("tasks")] = py::list();
+            manager[py::str("active")] = true;
+
+            return manager;
+        },
+        R"pbdoc(
+        Create a task manager for organizing scheduled tasks.
+
+        Returns:
+            dict: Task manager with timer, task list, and status
+
+        Examples:
+            >>> manager = create_scheduled_task_manager()
+            >>> timer = manager["timer"]
+            >>> tasks = manager["tasks"]
+            >>> timer.set_timeout(lambda: print("Task executed"), 1000)
+        )pbdoc");
+
+    // Add version and feature information
+    m.attr("__version__") = "1.0.0";
+
+    // Feature detection
+    m.attr("HAS_HIGH_PRECISION_TIMING") = true;
+    m.attr("HAS_PRIORITY_SCHEDULING") = true;
+    m.attr("HAS_ASYNC_EXECUTION") = true;
+
+#ifdef ATOM_USE_ASIO
+    m.attr("HAS_ASIO") = true;
+    m.attr("TIMER_BACKEND") = "ASIO";
+#else
+    m.attr("HAS_ASIO") = false;
+    m.attr("TIMER_BACKEND") = "Standard";
+#endif
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    m.attr("HAS_BOOST_LOCKFREE") = true;
+#else
+    m.attr("HAS_BOOST_LOCKFREE") = false;
+#endif
+
+    // Platform information
+#ifdef ATOM_PLATFORM_WINDOWS
+    m.attr("PLATFORM") = "Windows";
+#elif defined(ATOM_PLATFORM_APPLE)
+    m.attr("PLATFORM") = "macOS";
+#elif defined(ATOM_PLATFORM_LINUX)
+    m.attr("PLATFORM") = "Linux";
+#else
+    m.attr("PLATFORM") = "Unknown";
+#endif
 }

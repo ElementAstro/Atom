@@ -15,6 +15,17 @@ position, health, rendering, and AI behavior.
 
 **************************************************/
 
+// Define feature flags before including headers
+#ifndef ENABLE_FASTHASH
+#define ENABLE_FASTHASH 0
+#endif
+#ifndef ENABLE_EVENT_SYSTEM
+#define ENABLE_EVENT_SYSTEM 0
+#endif
+#ifndef ENABLE_HOT_RELOAD
+#define ENABLE_HOT_RELOAD 0
+#endif
+
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -24,10 +35,13 @@ position, health, rendering, and AI behavior.
 #include <random>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 #include "atom/components/lifecycle.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
+// LifecycleManager and LifecyclePhase are in atom::components namespace
+using atom::components::LifecycleManager;
+using atom::components::LifecyclePhase;
 
 /**
  * @brief Position component for game entities

@@ -7,7 +7,7 @@
 #include <thread>
 
 #include "atom/error/exception.hpp"
-#include "time.hpp"
+#include "atom/utils/time/time.hpp"
 
 using namespace atom::utils;
 using ::testing::HasSubstr;
@@ -408,7 +408,4 @@ TEST_F(TimeUtilsTest, TimestampWithMilliseconds) {
     EXPECT_TRUE(std::regex_match(timestamp, patternWithMs));
 }
 
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}
+// Main function removed - this test file is included in the test runner

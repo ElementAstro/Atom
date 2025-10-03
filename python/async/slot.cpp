@@ -9,7 +9,45 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE(slot, m) {
-    m.doc() = "Signal-slot implementation module for the atom package";
+    m.doc() = R"pbdoc(
+        Signal-Slot Implementation Module
+        --------------------------------
+
+        This module provides a comprehensive signal-slot system for implementing
+        the observer pattern with various execution strategies and advanced features.
+
+        Features:
+          - Synchronous and asynchronous signal emission
+          - Thread-safe signal implementations with shared mutex optimization
+          - Automatic connection management with unique IDs
+          - Signal chaining for complex event propagation
+          - Limited signals with emission count restrictions
+          - Coroutine-based signals for cooperative multitasking
+          - Scoped signals with automatic cleanup
+
+        Signal Types:
+          - Signal: Basic synchronous signal-slot implementation
+          - AsyncSignal: Asynchronous signal execution with futures
+          - AutoDisconnectSignal: Signals with unique connection IDs
+          - ChainedSignal: Signals that can trigger other signals
+          - ThreadSafeSignal: Thread-safe signals with parallel execution
+          - LimitedSignal: Signals with emission count limits
+          - CoroutineSignal: Coroutine-based asynchronous signals
+          - ScopedSignal: Signals with automatic slot cleanup
+
+        Example:
+            >>> from atom.async.slot import Signal, AsyncSignal
+            >>>
+            >>> # Basic signal usage
+            >>> signal = Signal()
+            >>> signal.connect(lambda data: print(f"Received: {data}"))
+            >>> signal.emit("Hello, World!")
+            >>>
+            >>> # Asynchronous signal usage
+            >>> async_signal = AsyncSignal()
+            >>> async_signal.connect(lambda data: print(f"Async: {data}"))
+            >>> async_signal.emit("Hello, Async World!")
+    )pbdoc";
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -687,4 +725,234 @@ Examples:
     >>> from atom.async import create_scoped_signal
     >>> signal = create_scoped_signal()
 )");
+
+    // Utility functions for signal management and testing
+    m.def(
+        "benchmark_signal_performance",
+        [](size_t num_slots, size_t num_emissions) -> py::dict {
+            using namespace std::chrono;
+
+            py::dict results;
+            atom::async::Signal<py::object> signal;
+
+            // Connect slots
+            for (size_t i = 0; i < num_slots; ++i) {
+                signal.connect([i](const py::object& /*data*/) {
+                    // Simulate some work
+                    volatile int dummy = 0;
+                    for (int j = 0; j < 100; ++j) {
+                        dummy += j;
+                    }
+                });
+            }
+
+            // Benchmark signal emission
+            auto start = high_resolution_clock::now();
+
+            for (size_t i = 0; i < num_emissions; ++i) {
+                signal.emit(py::cast(i));
+            }
+
+            auto end = high_resolution_clock::now();
+            auto duration = duration_cast<microseconds>(end - start);
+
+            // Calculate statistics
+            double total_time_us = duration.count();
+            double emissions_per_second = (num_emissions * 1000000.0) / total_time_us;
+            double total_slot_calls = num_emissions * num_slots;
+            double slot_calls_per_second = (total_slot_calls * 1000000.0) / total_time_us;
+
+            results[py::str("num_slots")] = num_slots;
+            results[py::str("num_emissions")] = num_emissions;
+            results[py::str("total_time_us")] = total_time_us;
+            results[py::str("emissions_per_second")] = emissions_per_second;
+            results[py::str("total_slot_calls")] = total_slot_calls;
+            results[py::str("slot_calls_per_second")] = slot_calls_per_second;
+            results[py::str("avg_time_per_emission_us")] = total_time_us / num_emissions;
+
+            return results;
+        },
+        py::arg("num_slots") = 10, py::arg("num_emissions") = 1000,
+        R"pbdoc(
+        Benchmark signal performance with multiple slots and emissions.
+
+        Args:
+            num_slots: Number of slots to connect (default: 10)
+            num_emissions: Number of signal emissions to perform (default: 1000)
+
+        Returns:
+            dict: Benchmark results with timing and throughput metrics
+
+        Examples:
+            >>> results = benchmark_signal_performance(5, 500)
+            >>> print(f"Emissions per second: {results['emissions_per_second']:.2f}")
+            >>> print(f"Slot calls per second: {results['slot_calls_per_second']:.2f}")
+        )pbdoc")
+
+    .def(
+        "benchmark_async_signal_performance",
+        [](size_t num_slots, size_t num_emissions) -> py::dict {
+            using namespace std::chrono;
+
+            py::dict results;
+            atom::async::AsyncSignal<py::object> signal;
+
+            // Connect slots
+            for (size_t i = 0; i < num_slots; ++i) {
+                signal.connect([i](const py::object& /*data*/) {
+                    // Simulate some work
+                    std::this_thread::sleep_for(std::chrono::microseconds(10));
+                });
+            }
+
+            // Benchmark async signal emission
+            auto start = high_resolution_clock::now();
+
+            for (size_t i = 0; i < num_emissions; ++i) {
+                signal.emit(py::cast(i));
+            }
+
+            auto end = high_resolution_clock::now();
+            auto duration = duration_cast<microseconds>(end - start);
+
+            // Calculate statistics
+            double total_time_us = duration.count();
+            double emissions_per_second = (num_emissions * 1000000.0) / total_time_us;
+            double total_slot_calls = num_emissions * num_slots;
+            double slot_calls_per_second = (total_slot_calls * 1000000.0) / total_time_us;
+
+            results[py::str("num_slots")] = num_slots;
+            results[py::str("num_emissions")] = num_emissions;
+            results[py::str("total_time_us")] = total_time_us;
+            results[py::str("emissions_per_second")] = emissions_per_second;
+            results[py::str("total_slot_calls")] = total_slot_calls;
+            results[py::str("slot_calls_per_second")] = slot_calls_per_second;
+            results[py::str("avg_time_per_emission_us")] = total_time_us / num_emissions;
+
+            return results;
+        },
+        py::arg("num_slots") = 5, py::arg("num_emissions") = 100,
+        R"pbdoc(
+        Benchmark async signal performance with multiple slots and emissions.
+
+        Args:
+            num_slots: Number of slots to connect (default: 5)
+            num_emissions: Number of signal emissions to perform (default: 100)
+
+        Returns:
+            dict: Benchmark results with timing and throughput metrics
+
+        Examples:
+            >>> results = benchmark_async_signal_performance(3, 50)
+            >>> print(f"Async emissions per second: {results['emissions_per_second']:.2f}")
+        )pbdoc")
+
+    .def(
+        "create_signal_chain",
+        [](py::list signal_names) -> py::dict {
+            py::dict chain;
+            std::vector<std::shared_ptr<atom::async::ChainedSignal<py::object>>> signals;
+
+            // Create signals
+            for (auto name : signal_names) {
+                std::string signal_name = name.cast<std::string>();
+                auto signal = std::make_shared<atom::async::ChainedSignal<py::object>>();
+                signals.push_back(signal);
+                chain[py::str(signal_name)] = signal;
+            }
+
+            // Chain signals together
+            for (size_t i = 0; i < signals.size() - 1; ++i) {
+                signals[i]->addChain(signals[i + 1]);
+            }
+
+            return chain;
+        },
+        py::arg("signal_names"),
+        R"pbdoc(
+        Create a chain of connected signals.
+
+        Args:
+            signal_names: List of signal names for the chain
+
+        Returns:
+            dict: Dictionary mapping signal names to ChainedSignal instances
+
+        Examples:
+            >>> chain = create_signal_chain(["start", "process", "end"])
+            >>> chain["start"].connect(lambda data: print(f"Start: {data}"))
+            >>> chain["process"].connect(lambda data: print(f"Process: {data}"))
+            >>> chain["end"].connect(lambda data: print(f"End: {data}"))
+            >>> chain["start"].emit("data")  # Triggers all three signals
+        )pbdoc")
+
+    .def(
+        "create_signal_hub",
+        [](py::dict signal_configs) -> py::dict {
+            py::dict hub;
+
+            for (auto item : signal_configs) {
+                std::string signal_name = item.first.cast<std::string>();
+                std::string signal_type = item.second.cast<std::string>();
+
+                if (signal_type == "basic") {
+                    hub[py::str(signal_name)] = std::make_unique<atom::async::Signal<py::object>>();
+                } else if (signal_type == "async") {
+                    hub[py::str(signal_name)] = std::make_unique<atom::async::AsyncSignal<py::object>>();
+                } else if (signal_type == "thread_safe") {
+                    hub[py::str(signal_name)] = std::make_unique<atom::async::ThreadSafeSignal<py::object>>();
+                } else if (signal_type == "auto_disconnect") {
+                    hub[py::str(signal_name)] = std::make_unique<atom::async::AutoDisconnectSignal<py::object>>();
+                } else {
+                    // Default to basic signal
+                    hub[py::str(signal_name)] = std::make_unique<atom::async::Signal<py::object>>();
+                }
+            }
+
+            return hub;
+        },
+        py::arg("signal_configs"),
+        R"pbdoc(
+        Create a hub of different signal types.
+
+        Args:
+            signal_configs: Dictionary mapping signal names to signal types
+
+        Returns:
+            dict: Dictionary mapping signal names to signal instances
+
+        Examples:
+            >>> configs = {
+            ...     "user_action": "basic",
+            ...     "data_update": "async",
+            ...     "system_event": "thread_safe"
+            ... }
+            >>> hub = create_signal_hub(configs)
+            >>> hub["user_action"].connect(lambda data: print(f"User: {data}"))
+        )pbdoc");
+
+    // Add version and feature information
+    m.attr("__version__") = "1.0.0";
+
+    // Feature detection
+    m.attr("HAS_ASYNC_SUPPORT") = true;
+    m.attr("HAS_COROUTINE_SUPPORT") = true;
+    m.attr("HAS_THREAD_SAFETY") = true;
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    m.attr("HAS_BOOST_LOCKFREE") = true;
+#else
+    m.attr("HAS_BOOST_LOCKFREE") = false;
+#endif
+
+    // Platform information
+#ifdef ATOM_PLATFORM_WINDOWS
+    m.attr("PLATFORM") = "Windows";
+#elif defined(ATOM_PLATFORM_APPLE)
+    m.attr("PLATFORM") = "macOS";
+#elif defined(ATOM_PLATFORM_LINUX)
+    m.attr("PLATFORM") = "Linux";
+#else
+    m.attr("PLATFORM") = "Unknown";
+#endif
 }

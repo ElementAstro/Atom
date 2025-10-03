@@ -210,7 +210,42 @@ PYBIND11_MODULE(daemon, m) {
         .def("get_restart_count", &atom::async::DaemonGuard::getRestartCount,
              "Gets the number of restart attempts.")
         .def("is_running", &atom::async::DaemonGuard::isRunning,
-             "Checks if the daemon is running.");
+             "Checks if the daemon is running.")
+        .def(
+            "set_pid_file_path",
+            [](atom::async::DaemonGuard& self, const std::string& path) {
+                self.setPidFilePath(std::filesystem::path(path));
+            },
+            py::arg("path"),
+            R"pbdoc(
+            Set the PID file path for the daemon.
+
+            Args:
+                path: Path to the PID file
+
+            Examples:
+                >>> daemon.set_pid_file_path("/var/run/my-daemon.pid")
+            )pbdoc")
+        .def(
+            "get_pid_file_path",
+            [](const atom::async::DaemonGuard& self) -> py::object {
+                auto path = self.getPidFilePath();
+                if (path.has_value()) {
+                    return py::str(path->string());
+                }
+                return py::none();
+            },
+            R"pbdoc(
+            Get the PID file path for the daemon.
+
+            Returns:
+                The PID file path as a string, or None if not set
+
+            Examples:
+                >>> path = daemon.get_pid_file_path()
+                >>> if path:
+                ...     print(f"PID file: {path}")
+            )pbdoc");
 
     // Register utility functions
     m.def("signal_handler", &atom::async::signalHandler, py::arg("signum"),
@@ -261,14 +296,142 @@ PYBIND11_MODULE(daemon, m) {
           )pbdoc");
 
     m.def("get_daemon_restart_interval", &atom::async::getDaemonRestartInterval,
-          "Gets the current daemon restart interval in seconds.");
+          "Gets the current daemon restart interval in seconds.")
+
+    .def(
+        "create_daemon_manager",
+        []() -> py::dict {
+            py::dict manager;
+            manager[py::str("daemon")] = std::make_unique<atom::async::DaemonGuard>();
+            manager[py::str("active")] = false;
+            manager[py::str("restart_count")] = 0;
+            manager[py::str("pid_file")] = py::none();
+
+            return manager;
+        },
+        R"pbdoc(
+        Create a daemon manager for organizing daemon processes.
+
+        Returns:
+            dict: Daemon manager with daemon instance and status information
+
+        Examples:
+            >>> manager = create_daemon_manager()
+            >>> daemon = manager["daemon"]
+            >>> manager["active"] = True
+        )pbdoc")
+
+    .def(
+        "benchmark_daemon_startup",
+        [](py::function main_cb, int num_iterations) -> py::dict {
+            using namespace std::chrono;
+
+            py::dict results;
+            std::vector<double> startup_times;
+            startup_times.reserve(num_iterations);
+
+            for (int i = 0; i < num_iterations; ++i) {
+                atom::async::DaemonGuard daemon;
+
+                auto start = high_resolution_clock::now();
+
+                try {
+                    // Simulate daemon startup
+                    std::vector<std::string> args = {"test-daemon"};
+                    daemon.realStart(1, args, [main_cb](int argc, char** argv) -> int {
+                        py::gil_scoped_acquire acquire;
+                        py::list py_argv;
+                        for (int j = 0; j < argc; j++) {
+                            py_argv.append(py::str(argv[j]));
+                        }
+                        return main_cb(argc, py_argv).cast<int>();
+                    });
+                } catch (...) {
+                    // Ignore errors for benchmarking
+                }
+
+                auto end = high_resolution_clock::now();
+                auto duration = duration_cast<microseconds>(end - start);
+                startup_times.push_back(duration.count());
+            }
+
+            // Calculate statistics
+            double total_time = 0;
+            for (double time : startup_times) {
+                total_time += time;
+            }
+            double avg_time = total_time / num_iterations;
+
+            double min_time = *std::min_element(startup_times.begin(), startup_times.end());
+            double max_time = *std::max_element(startup_times.begin(), startup_times.end());
+
+            results[py::str("num_iterations")] = num_iterations;
+            results[py::str("avg_startup_time_us")] = avg_time;
+            results[py::str("min_startup_time_us")] = min_time;
+            results[py::str("max_startup_time_us")] = max_time;
+            results[py::str("total_time_us")] = total_time;
+
+            return results;
+        },
+        py::arg("main_cb"), py::arg("num_iterations") = 10,
+        R"pbdoc(
+        Benchmark daemon startup performance.
+
+        Args:
+            main_cb: Main callback function for the daemon
+            num_iterations: Number of startup iterations to test (default: 10)
+
+        Returns:
+            dict: Benchmark results with timing statistics
+
+        Examples:
+            >>> def dummy_main(argc, argv):
+            ...     return 0
+            >>> results = benchmark_daemon_startup(dummy_main, 5)
+            >>> print(f"Avg startup time: {results['avg_startup_time_us']:.2f} μs")
+        )pbdoc")
+
+    .def(
+        "create_daemon_pool",
+        [](size_t pool_size) -> py::list {
+            py::list daemons;
+            for (size_t i = 0; i < pool_size; ++i) {
+                daemons.append(std::make_unique<atom::async::DaemonGuard>());
+            }
+            return daemons;
+        },
+        py::arg("pool_size"),
+        R"pbdoc(
+        Create a pool of daemon instances for load distribution.
+
+        Args:
+            pool_size: Number of daemon instances to create
+
+        Returns:
+            list: List of DaemonGuard instances
+
+        Examples:
+            >>> daemon_pool = create_daemon_pool(3)
+            >>> # Use different daemons for different services
+            >>> daemon_pool[0].set_pid_file_path("/var/run/service1.pid")
+            >>> daemon_pool[1].set_pid_file_path("/var/run/service2.pid")
+        )pbdoc");
 
 // Platform-specific information
 #ifdef _WIN32
-    m.attr("PLATFORM") = "windows";
+    m.attr("PLATFORM") = "Windows";
+    m.attr("HAS_FORK") = false;
+    m.attr("HAS_SETSID") = false;
 #else
-    m.attr("PLATFORM") = "unix";
+    m.attr("PLATFORM") = "Unix";
+    m.attr("HAS_FORK") = true;
+    m.attr("HAS_SETSID") = true;
 #endif
+
+    // Feature detection
+    m.attr("HAS_PID_FILES") = true;
+    m.attr("HAS_SIGNAL_HANDLING") = true;
+    m.attr("HAS_PROCESS_MONITORING") = true;
 
     // Add version information
     m.attr("__version__") = "1.0.0";

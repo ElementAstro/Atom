@@ -22,10 +22,11 @@ performance monitoring, and advanced registry features.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/lifecycle.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
+#include "atom/components/core/registry.hpp"
 
-using namespace atom::components;
+// Note: Registry, Component, and LifecycleManager are in the global namespace, not atom::components
+using namespace atom::components;  // For DependencyType and other types that ARE in atom::components
 
 /**
  * @brief Database component that other components depend on

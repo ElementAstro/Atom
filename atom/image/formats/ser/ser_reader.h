@@ -98,7 +98,7 @@ public:
     cv::Mat readFrameWithFactory(size_t frameIndex, const Factory& factory,
                                  const ReadOptions& options = {}) const {
         cv::Mat frame = readFrame(frameIndex, options);
-        factory.createFrame(frame, header_, frameIndex);
+        factory.createFrame(frame, getHeader(), frameIndex);
         return frame;
     }
 

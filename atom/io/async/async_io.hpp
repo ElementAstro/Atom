@@ -15,6 +15,8 @@
 #include <utility>
 #include <vector>
 
+#include "atom/async/core/async.hpp"
+
 #ifdef ATOM_USE_ASIO
 #include <asio.hpp>
 #endif
@@ -300,7 +302,7 @@ public:
      * @param filename Path to the file to read
      * @return Task that completes with file content
      */
-    [[nodiscard]] Task<AsyncResult<std::string>> readFile(
+    [[nodiscard]] atom::async::Task<AsyncResult<std::string>> readFile(
         PathString auto&& filename);
 
     /**
@@ -309,7 +311,7 @@ public:
      * @param content Content to write as byte span
      * @return Task that completes when write operation finishes
      */
-    [[nodiscard]] Task<AsyncResult<void>> writeFile(
+    [[nodiscard]] atom::async::Task<AsyncResult<void>> writeFile(
         PathString auto&& filename, std::span<const char> content);
 
     /**
@@ -344,7 +346,7 @@ public:
      * @param path Path of the directory to list
      * @return Task that completes with directory contents
      */
-    [[nodiscard]] Task<AsyncResult<std::vector<std::filesystem::path>>>
+    [[nodiscard]] atom::async::Task<AsyncResult<std::vector<std::filesystem::path>>>
     listDirectory(PathString auto&& path);
 
     /**
@@ -352,7 +354,7 @@ public:
      * @param filename Path to the file to delete
      * @return Task that completes when deletion finishes
      */
-    [[nodiscard]] Task<AsyncResult<void>> deleteFile(
+    [[nodiscard]] atom::async::Task<AsyncResult<void>> deleteFile(
         PathString auto&& filename);
 
     /**
@@ -360,7 +362,7 @@ public:
      * @param filename Path to the file
      * @return Task that completes with file status
      */
-    [[nodiscard]] Task<AsyncResult<std::filesystem::file_status>> getFileStatus(
+    [[nodiscard]] atom::async::Task<AsyncResult<std::filesystem::file_status>> getFileStatus(
         PathString auto&& filename);
 
     /**
@@ -368,7 +370,7 @@ public:
      * @param filename Path to the file
      * @return Task that completes with existence result
      */
-    [[nodiscard]] Task<AsyncResult<bool>> fileExists(
+    [[nodiscard]] atom::async::Task<AsyncResult<bool>> fileExists(
         PathString auto&& filename);
 
     /**
@@ -377,7 +379,7 @@ public:
      * @param perms New permissions to set
      * @return Task that completes when permission change finishes
      */
-    [[nodiscard]] Task<AsyncResult<void>> changePermissions(
+    [[nodiscard]] atom::async::Task<AsyncResult<void>> changePermissions(
         PathString auto&& filename, std::filesystem::perms perms);
 
     /**
@@ -385,7 +387,7 @@ public:
      * @param path Path of the directory to create
      * @return Task that completes when creation finishes
      */
-    [[nodiscard]] Task<AsyncResult<void>> createDirectory(
+    [[nodiscard]] atom::async::Task<AsyncResult<void>> createDirectory(
         PathString auto&& path);
 
     /**
@@ -393,7 +395,7 @@ public:
      * @param path Path of the directory to remove
      * @return Task that completes when removal finishes
      */
-    [[nodiscard]] Task<AsyncResult<void>> removeDirectory(
+    [[nodiscard]] atom::async::Task<AsyncResult<void>> removeDirectory(
         PathString auto&& path);
 
 private:
@@ -670,7 +672,7 @@ void AsyncFile::asyncExists(T&& filename,
     executeAsync([filename = toString(std::forward<T>(filename)), callback = std::move(callback)]() {
         try {
             bool exists = std::filesystem::exists(filename);
-            callback(AsyncResult<bool>::success_result(exists));
+            callback(AsyncResult<bool>::success_result(std::move(exists)));
         } catch (const std::exception& e) {
             callback(AsyncResult<bool>::error_result(e.what()));
         }
@@ -740,7 +742,7 @@ void AsyncFile::asyncListDirectory(T&& path,
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<std::string>> AsyncFile::readFile(T&& filename) {
+[[nodiscard]] atom::async::Task<AsyncResult<std::string>> AsyncFile::readFile(T&& filename) {
     std::promise<AsyncResult<std::string>> promise;
     auto future = promise.get_future();
 
@@ -752,7 +754,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<void>> AsyncFile::writeFile(T&& filename, std::span<const char> content) {
+[[nodiscard]] atom::async::Task<AsyncResult<void>> AsyncFile::writeFile(T&& filename, std::span<const char> content) {
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
@@ -764,7 +766,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<std::vector<std::filesystem::path>>> AsyncFile::listDirectory(T&& path) {
+[[nodiscard]] atom::async::Task<AsyncResult<std::vector<std::filesystem::path>>> AsyncFile::listDirectory(T&& path) {
     std::promise<AsyncResult<std::vector<std::filesystem::path>>> promise;
     auto future = promise.get_future();
 
@@ -776,7 +778,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<void>> AsyncFile::deleteFile(T&& filename) {
+[[nodiscard]] atom::async::Task<AsyncResult<void>> AsyncFile::deleteFile(T&& filename) {
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
@@ -788,7 +790,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<std::filesystem::file_status>> AsyncFile::getFileStatus(T&& filename) {
+[[nodiscard]] atom::async::Task<AsyncResult<std::filesystem::file_status>> AsyncFile::getFileStatus(T&& filename) {
     std::promise<AsyncResult<std::filesystem::file_status>> promise;
     auto future = promise.get_future();
 
@@ -800,7 +802,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<bool>> AsyncFile::fileExists(T&& filename) {
+[[nodiscard]] atom::async::Task<AsyncResult<bool>> AsyncFile::fileExists(T&& filename) {
     std::promise<AsyncResult<bool>> promise;
     auto future = promise.get_future();
 
@@ -812,7 +814,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<void>> AsyncFile::changePermissions(T&& filename, std::filesystem::perms perms) {
+[[nodiscard]] atom::async::Task<AsyncResult<void>> AsyncFile::changePermissions(T&& filename, std::filesystem::perms perms) {
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
@@ -824,7 +826,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<void>> AsyncFile::createDirectory(T&& path) {
+[[nodiscard]] atom::async::Task<AsyncResult<void>> AsyncFile::createDirectory(T&& path) {
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
@@ -836,7 +838,7 @@ template <PathString T>
 }
 
 template <PathString T>
-[[nodiscard]] Task<AsyncResult<void>> AsyncFile::removeDirectory(T&& path) {
+[[nodiscard]] atom::async::Task<AsyncResult<void>> AsyncFile::removeDirectory(T&& path) {
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 

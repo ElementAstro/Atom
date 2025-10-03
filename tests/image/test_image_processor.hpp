@@ -6,14 +6,13 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 
-#include <filesystem>
-#include <random>
 #include <vector>
+#include <chrono>
+#include <thread>
+#include <atomic>
 
 #include "atom/image/processing/image_processor.hpp"
 #include "atom/image/core/image_blob.hpp"
-
-namespace fs = std::filesystem;
 
 namespace atom::image::test {
 
@@ -529,6 +528,229 @@ TEST_F(ImageProcessorTest, ThreadSafetyTest) {
 
     #else
     GTEST_SKIP() << "OpenCV not available, skipping thread safety tests";
+    #endif
+}
+
+// Test edge case: processing very small images
+TEST_F(ImageProcessorTest, VerySmallImageProcessing) {
+    #if __has_include(<opencv2/core.hpp>)
+    // Create a 1x1 pixel image
+    std::vector<std::byte> tiny_data = {
+        std::byte{255}, std::byte{128}, std::byte{64}  // Single RGB pixel
+    };
+    blob tiny_blob(tiny_data.data(), tiny_data.size(), 1, 1, 3);
+
+    // Test resize on tiny image
+    auto resized = processor->resize(tiny_blob, 4, 4);
+    ASSERT_TRUE(resized.has_value());
+
+    // Test other operations on tiny image
+    auto rotated = processor->rotate(tiny_blob, 90.0);
+    EXPECT_TRUE(rotated.has_value());
+
+    auto filtered = processor->applyFilter(tiny_blob, "gaussian_blur");
+    EXPECT_TRUE(filtered.has_value());
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping tiny image tests";
+    #endif
+}
+
+// Test edge case: processing very large images
+TEST_F(ImageProcessorTest, DISABLED_VeryLargeImageProcessing) {
+    #if __has_include(<opencv2/core.hpp>)
+    // Create a large image (1000x1000)
+    const int large_size = 1000;
+    std::vector<std::byte> large_data(large_size * large_size * 3);
+
+    // Fill with pattern
+    for (int i = 0; i < large_size * large_size * 3; i += 3) {
+        large_data[i] = std::byte{static_cast<uint8_t>(i % 256)};
+        large_data[i + 1] = std::byte{static_cast<uint8_t>((i + 1) % 256)};
+        large_data[i + 2] = std::byte{static_cast<uint8_t>((i + 2) % 256)};
+    }
+
+    blob large_blob(large_data.data(), large_data.size(), large_size, large_size, 3);
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Test resize on large image
+    auto resized = processor->resize(large_blob, large_size / 2, large_size / 2);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    ASSERT_TRUE(resized.has_value());
+
+    // Should complete in reasonable time (less than 10 seconds)
+    EXPECT_LT(duration.count(), 10000);
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping large image tests";
+    #endif
+}
+
+// Test boundary conditions for resize operations
+TEST_F(ImageProcessorTest, ResizeBoundaryConditions) {
+    #if __has_include(<opencv2/core.hpp>)
+    if (!test_blob.has_value()) {
+        GTEST_SKIP() << "Test blob not available";
+    }
+
+    // Test resize to same dimensions
+    auto same_size = processor->resize(test_blob.value(), 8, 8);
+    ASSERT_TRUE(same_size.has_value());
+
+    // Test resize to 1x1
+    auto tiny = processor->resize(test_blob.value(), 1, 1);
+    ASSERT_TRUE(tiny.has_value());
+
+    // Test resize to very large dimensions
+    auto huge = processor->resize(test_blob.value(), 1000, 1000);
+    EXPECT_TRUE(huge.has_value());
+
+    // Test invalid dimensions
+    auto invalid1 = processor->resize(test_blob.value(), 0, 10);
+    EXPECT_FALSE(invalid1.has_value());
+
+    auto invalid2 = processor->resize(test_blob.value(), 10, 0);
+    EXPECT_FALSE(invalid2.has_value());
+
+    auto invalid3 = processor->resize(test_blob.value(), -5, 10);
+    EXPECT_FALSE(invalid3.has_value());
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping resize boundary tests";
+    #endif
+}
+
+// Test rotation with extreme angles
+TEST_F(ImageProcessorTest, RotationExtremeAngles) {
+    #if __has_include(<opencv2/core.hpp>)
+    if (!test_blob.has_value()) {
+        GTEST_SKIP() << "Test blob not available";
+    }
+
+    std::vector<double> extreme_angles = {
+        -720.0, -360.0, -180.0, 0.0, 180.0, 360.0, 720.0, 1080.0
+    };
+
+    for (double angle : extreme_angles) {
+        auto rotated = processor->rotate(test_blob.value(), angle);
+        EXPECT_TRUE(rotated.has_value()) << "Failed at angle: " << angle;
+    }
+
+    // Test very small angle increments
+    for (double angle = 0.0; angle <= 1.0; angle += 0.1) {
+        auto rotated = processor->rotate(test_blob.value(), angle);
+        EXPECT_TRUE(rotated.has_value()) << "Failed at small angle: " << angle;
+    }
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping extreme rotation tests";
+    #endif
+}
+
+// Test filter chaining
+TEST_F(ImageProcessorTest, FilterChaining) {
+    #if __has_include(<opencv2/core.hpp>)
+    if (!test_blob.has_value()) {
+        GTEST_SKIP() << "Test blob not available";
+    }
+
+    // Apply multiple filters in sequence
+    auto step1 = processor->applyFilter(test_blob.value(), "gaussian_blur");
+    ASSERT_TRUE(step1.has_value());
+
+    auto step2 = processor->applyFilter(step1.value(), "sharpen");
+    ASSERT_TRUE(step2.has_value());
+
+    auto step3 = processor->applyFilter(step2.value(), "edge_detect");
+    ASSERT_TRUE(step3.has_value());
+
+    auto final = processor->applyFilter(step3.value(), "emboss");
+    EXPECT_TRUE(final.has_value());
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping filter chaining tests";
+    #endif
+}
+
+// Test error recovery and robustness
+TEST_F(ImageProcessorTest, ErrorRecoveryAndRobustness) {
+    #if __has_include(<opencv2/core.hpp>)
+
+    // Test with empty blob
+    blob empty_blob;
+    auto result1 = processor->resize(empty_blob, 10, 10);
+    EXPECT_FALSE(result1.has_value());
+
+    // Test with corrupted blob data
+    std::vector<std::byte> corrupted_data(100, std::byte{0});
+    blob corrupted_blob(corrupted_data.data(), corrupted_data.size(), 10, 10, 1);
+
+    // Operations should handle corrupted data gracefully
+    auto result2 = processor->resize(corrupted_blob, 5, 5);
+    // May succeed or fail, but should not crash
+
+    // Test with mismatched dimensions
+    std::vector<std::byte> mismatch_data(50, std::byte{128});
+    blob mismatch_blob(mismatch_data.data(), mismatch_data.size(), 10, 10, 3); // Claims 3 channels but data is too small
+
+    auto result3 = processor->applyFilter(mismatch_blob, "gaussian_blur");
+    // Should handle gracefully
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping error recovery tests";
+    #endif
+}
+
+// Test memory usage and cleanup
+TEST_F(ImageProcessorTest, MemoryUsageAndCleanup) {
+    #if __has_include(<opencv2/core.hpp>)
+    if (!test_blob.has_value()) {
+        GTEST_SKIP() << "Test blob not available";
+    }
+
+    // Perform many operations to test memory cleanup
+    for (int i = 0; i < 100; ++i) {
+        auto resized = processor->resize(test_blob.value(), 16 + (i % 10), 16 + (i % 10));
+        if (resized.has_value()) {
+            auto filtered = processor->applyFilter(resized.value(), "gaussian_blur");
+            if (filtered.has_value()) {
+                auto rotated = processor->rotate(filtered.value(), i * 3.6);
+                // Results should be automatically cleaned up
+            }
+        }
+    }
+
+    // Test should complete without memory issues
+    EXPECT_TRUE(true);
+
+    #else
+    GTEST_SKIP() << "OpenCV not available, skipping memory tests";
+    #endif
+}
+
+// Test processor configuration and options
+TEST_F(ImageProcessorTest, ProcessorConfiguration) {
+    // Test creating processor with different configurations
+    auto cpu_processor = atom::image::createOptimalProcessor(false);
+    EXPECT_TRUE(cpu_processor != nullptr);
+
+    auto gpu_processor = atom::image::createOptimalProcessor(true);
+    EXPECT_TRUE(gpu_processor != nullptr);
+
+    // Test that both processors can handle basic operations
+    #if __has_include(<opencv2/core.hpp>)
+    if (test_blob.has_value()) {
+        auto cpu_result = cpu_processor->resize(test_blob.value(), 16, 16);
+        auto gpu_result = gpu_processor->resize(test_blob.value(), 16, 16);
+
+        // Both should succeed (GPU may fall back to CPU if not available)
+        EXPECT_TRUE(cpu_result.has_value());
+        EXPECT_TRUE(gpu_result.has_value());
+    }
     #endif
 }
 

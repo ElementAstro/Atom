@@ -21,8 +21,8 @@ Description: Tests for the ArgumentParser class
 #include <fstream>
 #include <string>
 #include <vector>
-#include "atom/utils/argsview.hpp"
-#include "exception.hpp"
+#include "atom/utils/core/argsview.hpp"
+#include "atom/error/exception.hpp"
 
 namespace atom::utils::test {
 

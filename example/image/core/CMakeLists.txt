@@ -9,6 +9,13 @@ set(CORE_EXAMPLES
     basic_blob_operations
     backend_integration
     memory_management
+    blob_edge_cases
+    fast_blob_performance
+    advanced_memory_management
+    serialization_edge_cases
+    advanced_caching_demo
+    comprehensive_error_handling
+    boundary_conditions_demo
 )
 
 # Function to add core example

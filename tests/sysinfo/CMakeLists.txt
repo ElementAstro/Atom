@@ -1,21 +1,31 @@
-# CMakeLists.txt for Atom-SysInfo Tests
+# CMakeLists.txt for Atom SysInfo Tests (Custom Configuration)
 # This project is licensed under the terms of the GPL3 license.
 #
 # Project Name: Atom-SysInfo-Tests
-# Description: Test Suite for Atom System Information Library
+# Description: Comprehensive Test Suite for Atom System Information Library
 # Author: Max Qian
 # License: GPL3
 
 cmake_minimum_required(VERSION 3.20)
 project(atom-sysinfo-tests VERSION 1.0.0 LANGUAGES C CXX)
 
-# Enforce C++20 for this subtree and all added subdirectories
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-
-# Find required packages
+# =============================================================================
+# Find Required Packages
+# =============================================================================
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
+
+# =============================================================================
+# Include Test Infrastructure (Optional for Custom Modules)
+# =============================================================================
+# Include the standardized test infrastructure if available
+if(EXISTS "${CMAKE_SOURCE_DIR}/tests/tests/CMakeLists.txt")
+    add_subdirectory("${CMAKE_SOURCE_DIR}/tests/tests" "${CMAKE_CURRENT_BINARY_DIR}/test_infrastructure")
+endif()
+
+# =============================================================================
+# Custom Dependency Management (Preserved)
+# =============================================================================
 
 # Include parent directory for sysinfo headers
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../..)
@@ -29,6 +39,9 @@ if(NOT TARGET atom-sysinfo)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/sysinfo ${CMAKE_CURRENT_BINARY_DIR}/atom-sysinfo)
 endif()
 
+# =============================================================================
+# Test Source Configuration
+# =============================================================================
 # Test source files
 set(TEST_SOURCES
     test_sysinfo.cpp
@@ -47,38 +60,65 @@ set(TEST_SOURCES
     wm.cpp
 )
 
-# Test executable
-add_executable(${PROJECT_NAME}
-    ${TEST_SOURCES}
-)
+# =============================================================================
+# Create Test Executable
+# =============================================================================
+add_executable(atom_sysinfo_tests ${TEST_SOURCES})
 
-# Link libraries
-target_link_libraries(${PROJECT_NAME}
+# =============================================================================
+# Link Libraries
+# =============================================================================
+target_link_libraries(atom_sysinfo_tests
     PRIVATE
+    # Test infrastructure (if available)
+    $<TARGET_NAME_IF_EXISTS:atom-test-common>
+
+    # Module under test
     atom-sysinfo
+
+    # GoogleTest
     GTest::GTest
     GTest::Main
+
+    # System libraries
     Threads::Threads
 )
 
+# =============================================================================
+# Target Configuration
+# =============================================================================
 # Set C++ standard
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
+target_compile_features(atom_sysinfo_tests PRIVATE cxx_std_20)
 
 # Test configuration
-set_target_properties(${PROJECT_NAME} PROPERTIES
+set_target_properties(atom_sysinfo_tests PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
 )
 
 # Compiler-specific options
 if(MSVC)
-    target_compile_options(${PROJECT_NAME} PRIVATE /W4)
+    target_compile_options(atom_sysinfo_tests PRIVATE /W4)
 else()
-    target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(atom_sysinfo_tests PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
-# Enable testing
+# =============================================================================
+# Test Registration
+# =============================================================================
 enable_testing()
 
+# Include GoogleTest for standardized test discovery
+include(GoogleTest)
+gtest_discover_tests(atom_sysinfo_tests
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    PROPERTIES
+    LABELS "sysinfo"
+    TIMEOUT 300
+)
+
+# =============================================================================
+# Custom Test Cases (Preserved)
+# =============================================================================
 # Add test cases
 add_test(NAME CPUInfoTests COMMAND ${PROJECT_NAME} --gtest_filter="CPUInfoTest.*:CpuTest.*")
 add_test(NAME MemoryInfoTests COMMAND ${PROJECT_NAME} --gtest_filter="MemoryInfoTest.*:MemoryTest.*")
@@ -230,8 +270,8 @@ add_custom_target(run_quick_tests
 
 # Code coverage (if available)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
-    target_compile_options(${PROJECT_NAME} PRIVATE --coverage)
-    target_link_options(${PROJECT_NAME} PRIVATE --coverage)
+    target_compile_options(atom_sysinfo_tests PRIVATE --coverage)
+    target_link_options(atom_sysinfo_tests PRIVATE --coverage)
 
     add_custom_target(sysinfo_coverage
         COMMAND lcov --directory . --capture --output-file coverage.info

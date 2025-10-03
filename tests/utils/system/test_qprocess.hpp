@@ -6,7 +6,7 @@
 #include <thread>
 #include <vector>
 
-#include "qprocess.hpp"
+#include "atom/utils/process/qprocess.hpp"
 
 using namespace atom::utils;
 using ::testing::HasSubstr;

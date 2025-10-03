@@ -14,6 +14,7 @@ set(PROCESSING_EXAMPLES
     ocr_comprehensive
     realtime_processing
     gpu_acceleration
+    gpu_acceleration_demo
 )
 
 # Function to add processing example

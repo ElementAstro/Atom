@@ -24,7 +24,7 @@ activation, deactivation, and destruction with proper error handling.
 #include "atom/components/lifecycle.hpp"
 #include "atom/components/registry.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace, not atom::components
 
 /**
  * @brief Custom component demonstrating lifecycle management

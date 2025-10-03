@@ -131,10 +131,15 @@ link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../build/atom/type)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../build/atom/log)
 link_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../build/extra)
 
+# Find fmt if not already found
+if(NOT TARGET fmt::fmt)
+    find_package(fmt QUIET)
+endif()
+
 set(LIBS
     atom-error
     loguru
-    ${CMAKE_CURRENT_SOURCE_DIR}/../../libfmt-11.dll
+    $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>
     ${CMAKE_THREAD_LIBS_INIT}
 )
 

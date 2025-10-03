@@ -18,12 +18,12 @@ int main() {
     curl.addHeader("User-Agent", "CurlWrapper/1.0");
 
     // Set an error callback
-    curl.onError([](CURLcode code) {
+    curl.setOnErrorCallback([](CURLcode code) {
         std::cerr << "Error: " << curl_easy_strerror(code) << std::endl;
     });
 
     // Set a response callback
-    curl.onResponse([](const std::string& response) {
+    curl.setOnResponseCallback([](const std::string& response) {
         std::cout << "Response: " << response << std::endl;
     });
 

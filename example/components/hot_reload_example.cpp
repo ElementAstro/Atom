@@ -15,6 +15,17 @@ and updated without stopping the application.
 
 **************************************************/
 
+// Define feature flags before including headers
+#ifndef ENABLE_FASTHASH
+#define ENABLE_FASTHASH 0
+#endif
+#ifndef ENABLE_EVENT_SYSTEM
+#define ENABLE_EVENT_SYSTEM 0
+#endif
+#ifndef ENABLE_HOT_RELOAD
+#define ENABLE_HOT_RELOAD 0
+#endif
+
 #include <chrono>
 #include <iostream>
 #include <memory>
@@ -25,10 +36,11 @@ and updated without stopping the application.
 #include <unordered_map>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 #include "atom/components/lifecycle.hpp"
 
-using namespace atom::components;
+// Note: Registry and Component are in the global namespace
+// LifecycleManager and LifecyclePhase are in atom::components namespace
 
 /**
  * @brief Configuration component that can be hot-reloaded

@@ -1279,6 +1279,73 @@ auto getProcessMemoryUsage(int pid) -> std::size_t {
 #endif
 }
 
+auto getProcessResources(int pid) -> ProcessResource {
+    ProcessResource resources{};
+
+    // Get CPU usage
+    resources.cpuUsage = getProcessCpuUsage(pid);
+
+    // Get memory usage
+    resources.memUsage = getProcessMemoryUsage(pid);
+
+#ifdef _WIN32
+    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    if (hProcess != NULL) {
+        // Get virtual memory usage
+        PROCESS_MEMORY_COUNTERS_EX pmc;
+        if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS *)&pmc, sizeof(pmc))) {
+            resources.vmUsage = pmc.PagefileUsage;
+        }
+
+        // Get I/O statistics
+        IO_COUNTERS ioCounters;
+        if (GetProcessIoCounters(hProcess, &ioCounters)) {
+            resources.ioRead = ioCounters.ReadTransferCount;
+            resources.ioWrite = ioCounters.WriteTransferCount;
+        }
+
+        CloseHandle(hProcess);
+    }
+#elif defined(__linux__)
+    // Get virtual memory usage from /proc/pid/statm
+    std::string statmPath = "/proc/" + std::to_string(pid) + "/statm";
+    std::ifstream statmFile(statmPath);
+    if (statmFile) {
+        std::size_t size, resident, shared, text, lib, data, dt;
+        statmFile >> size >> resident >> shared >> text >> lib >> data >> dt;
+        long pageSize = sysconf(_SC_PAGESIZE);
+        resources.vmUsage = size * pageSize;
+    }
+
+    // Get I/O statistics from /proc/pid/io
+    std::string ioPath = "/proc/" + std::to_string(pid) + "/io";
+    std::ifstream ioFile(ioPath);
+    if (ioFile) {
+        std::string line;
+        while (std::getline(ioFile, line)) {
+            if (line.starts_with("read_bytes: ")) {
+                resources.ioRead = std::stoull(line.substr(12));
+            } else if (line.starts_with("write_bytes: ")) {
+                resources.ioWrite = std::stoull(line.substr(13));
+            }
+        }
+    }
+#elif defined(__APPLE__)
+    // macOS implementation - basic version
+    task_t task;
+    if (task_for_pid(mach_task_self(), pid, &task) == KERN_SUCCESS) {
+        struct task_basic_info info;
+        mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
+        if (task_info(task, TASK_BASIC_INFO, (task_info_t)&info, &count) == KERN_SUCCESS) {
+            resources.vmUsage = info.virtual_size;
+        }
+    }
+    // I/O statistics are not easily available on macOS without additional frameworks
+#endif
+
+    return resources;
+}
+
 auto setProcessPriority(int pid, ProcessPriority priority) -> bool {
 #ifdef _WIN32
     HANDLE hProcess = OpenProcess(PROCESS_SET_INFORMATION, FALSE, pid);
