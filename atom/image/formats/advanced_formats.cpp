@@ -565,4 +565,123 @@ blob AdvancedFormatProcessor::loadHDR(const std::string& filename,
     return blob{};
 }
 
+bool AdvancedFormatProcessor::saveHDR(const blob& /*image*/,
+                                     const std::string& /*filename*/,
+                                     AdvancedFormat /*format*/,
+                                     const std::string& /*compression*/) const {
+    THROW_RUNTIME_ERROR("HDR saving not available in this build");
+}
+
+blob AdvancedFormatProcessor::loadVector(const std::string& /*filename*/,
+                                        int /*width*/, int /*height*/,
+                                        double /*dpi*/) const {
+    THROW_RUNTIME_ERROR("Vector loading not available in this build");
+}
+
+std::pair<blob, std::unordered_map<std::string, std::string>>
+AdvancedFormatProcessor::loadMicroscopy(const std::string& /*filename*/,
+                                        int /*seriesIndex*/, int /*channelIndex*/,
+                                        int /*timeIndex*/, int /*zIndex*/) const {
+    THROW_RUNTIME_ERROR("Microscopy loading not available in this build");
+}
+
+std::pair<blob, std::unordered_map<std::string, std::string>>
+AdvancedFormatProcessor::loadSatellite(const std::string& /*filename*/,
+                                       const std::vector<int>& /*bandIndices*/) const {
+    THROW_RUNTIME_ERROR("Satellite loading not available in this build");
+}
+
+bool AdvancedFormatProcessor::convertFormat(const std::string& /*inputFile*/,
+                                           const std::string& /*outputFile*/,
+                                           AdvancedFormat /*outputFormat*/,
+                                           const std::unordered_map<std::string, std::string>& /*params*/) const {
+    THROW_RUNTIME_ERROR("Format conversion not available in this build");
+}
+
+std::unordered_map<std::string, std::string>
+AdvancedFormatProcessor::getFormatInfo(const std::string& /*filename*/) const {
+    return {};
+}
+
+std::vector<std::string> AdvancedFormatProcessor::getSupportedFormats() const {
+    static const std::vector<std::string> kFormats = {
+        "RAW", "DICOM", "HDR", "VECTOR", "ANIMATION", "WEBP", "AVIF"};
+    return kFormats;
+}
+
+bool AdvancedFormatProcessor::isFormatSupported(AdvancedFormat format) const {
+    switch (format) {
+        case AdvancedFormat::WEBP:
+        case AdvancedFormat::AVIF:
+        case AdvancedFormat::DNG:
+        case AdvancedFormat::DICOM:
+        case AdvancedFormat::OPENEXR:
+            return true;
+        default:
+            return false;
+    }
+}
+
+std::vector<std::string> AdvancedFormatProcessor::getFormatExtensions(
+    AdvancedFormat format) const {
+    switch (format) {
+        case AdvancedFormat::WEBP:
+            return {"webp"};
+        case AdvancedFormat::AVIF:
+            return {"avif", "heif"};
+        case AdvancedFormat::OPENEXR:
+            return {"exr"};
+        case AdvancedFormat::DNG:
+            return {"dng"};
+        case AdvancedFormat::DICOM:
+            return {"dcm"};
+        default:
+            return {};
+    }
+}
+
+int AdvancedFormatProcessor::batchConvert(
+    const std::vector<std::string>& /*inputFiles*/,
+    const std::string& /*outputDir*/, AdvancedFormat /*outputFormat*/,
+    const std::unordered_map<std::string, std::string>& /*params*/,
+    std::function<void(int, int)> /*progressCallback*/) const {
+    THROW_RUNTIME_ERROR("Batch conversion not available in this build");
+}
+
+bool AdvancedFormatProcessor::initializeLibraries() const {
+    return false;
+}
+
+bool AdvancedFormatProcessor::loadFormatLibrary(AdvancedFormat /*format*/) const {
+    return false;
+}
+
+std::string AdvancedFormatProcessor::getFormatName(AdvancedFormat format) const {
+    switch (format) {
+        case AdvancedFormat::WEBP:
+            return "WEBP";
+        case AdvancedFormat::AVIF:
+            return "AVIF";
+        case AdvancedFormat::OPENEXR:
+            return "OPENEXR";
+        case AdvancedFormat::DNG:
+            return "DNG";
+        case AdvancedFormat::DICOM:
+            return "DICOM";
+        default:
+            return "UNKNOWN";
+    }
+}
+
+std::unordered_map<std::string, std::string> AdvancedFormatProcessor::parseFormatParams(
+    const std::unordered_map<std::string, std::string>& params,
+    AdvancedFormat /*format*/) const {
+    return params;
+}
+
+std::unique_ptr<AdvancedFormatProcessor> createOptimalFormatProcessor(
+    bool /*enableAllFormats*/) {
+    return std::make_unique<AdvancedFormatProcessor>();
+}
+
 } // namespace atom::image
