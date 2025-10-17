@@ -152,6 +152,7 @@ void Client::async_subscribe(
             // Store pending operation
             std::lock_guard lock(pending_operations_mutex_);
             pending_operations_[packet_id] = PendingOperation{
+                .message = {},  // Empty message for subscribe operations
                 .timestamp = std::chrono::steady_clock::now(),
                 .retry_count = 0,
                 .callback =
@@ -195,6 +196,7 @@ void Client::async_unsubscribe(
         // Store pending operation
         std::lock_guard lock(pending_operations_mutex_);
         pending_operations_[packet_id] = PendingOperation{
+            .message = {},  // Empty message for unsubscribe operations
             .timestamp = std::chrono::steady_clock::now(),
             .retry_count = 0,
             .callback =

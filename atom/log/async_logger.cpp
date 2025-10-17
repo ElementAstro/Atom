@@ -21,6 +21,7 @@ using C++20/23 Coroutines with optimized performance
 #include <condition_variable>
 #include <coroutine>
 #include <format>
+#include <iostream>
 #include <memory>
 #include <memory_resource>
 #include <mutex>
@@ -45,8 +46,8 @@ namespace atom::log {
 
 using json = nlohmann::json;
 struct LoggerMemoryPool {
-    static constexpr size_t BLOCK_SIZE = 8192;    // 8KB blocks
-    static constexpr size_t MAX_BLOCKS = 2048;    // Max 16MB total
+    static constexpr size_t BLOCK_SIZE = 8192;  // 8KB blocks
+    static constexpr size_t MAX_BLOCKS = 2048;  // Max 16MB total
     static constexpr size_t INITIAL_BLOCKS = 16;  // 预分配块提高启动性能
 
     // 线程安全的单例访问
@@ -76,13 +77,13 @@ struct LoggerMemoryPool {
 
 private:
     // 使用现有的内存池实现
-    atom::memory::MemoryPool<BLOCK_SIZE, MAX_BLOCKS> memory_pool_;
+    atom::memory::FixedBlockPool<BLOCK_SIZE, MAX_BLOCKS> memory_pool_;
 
-    // 适配器：将 MemoryPool 接口转换为 std::pmr::memory_resource
+    // 适配器：将 FixedBlockPool 接口转换为 std::pmr::memory_resource
     class MemoryPoolResource : public std::pmr::memory_resource {
     public:
         explicit MemoryPoolResource(
-            atom::memory::MemoryPool<BLOCK_SIZE, MAX_BLOCKS>& pool)
+            atom::memory::FixedBlockPool<BLOCK_SIZE, MAX_BLOCKS>& pool)
             : pool_(pool) {}
 
     private:
@@ -105,11 +106,12 @@ private:
             pool_.deallocate(ptr);
         }
 
-        bool do_is_equal(const memory_resource& other) const noexcept override {
+        bool do_is_equal(
+            const std::pmr::memory_resource& other) const noexcept override {
             return this == &other;
         }
 
-        atom::memory::MemoryPool<BLOCK_SIZE, MAX_BLOCKS>& pool_;
+        atom::memory::FixedBlockPool<BLOCK_SIZE, MAX_BLOCKS>& pool_;
     };
 
     // 内存资源适配器
@@ -172,7 +174,7 @@ public:
     LockFreeTaskQueue(size_t capacity = 10000)
         : capacity_(capacity),
           current_size_(0),
-          head_(new LogTaskNode(LogLevel::INFO, "",
+          head_(new LogTaskNode(LogLevel::INFO_LEVEL, "",
                                 std::source_location::current(), nullptr)),
           dropped_messages_(0),
           max_size_(0) {
@@ -199,7 +201,7 @@ public:
         if (current >= capacity_) {
             dropped_messages_.fetch_add(1, std::memory_order_relaxed);
             // 对于严重级别的消息，我们始终尝试记录它们，即使队列已满
-            if (level < LogLevel::ERROR) {
+            if (level < LogLevel::ERROR_LEVEL) {
                 return false;  // 队列已满，拒绝消息
             }
             // 否则继续尝试记录严重错误
@@ -716,24 +718,24 @@ private:
             // 基于日志级别使用公共API
             switch (level) {
                 case LogLevel::TRACE:
-                    logger_->trace(String(message), location);
+                    logger_->trace_at(String(message), location);
                     break;
-                case LogLevel::DEBUG:
-                    logger_->debug(String(message), location);
+                case LogLevel::DEBUG_LEVEL:
+                    logger_->debug_at(String(message), location);
                     break;
-                case LogLevel::INFO:
-                    logger_->info(String(message), location);
+                case LogLevel::INFO_LEVEL:
+                    logger_->info_at(String(message), location);
                     break;
-                case LogLevel::WARN:
-                    logger_->warn(String(message), location);
+                case LogLevel::WARN_LEVEL:
+                    logger_->warn_at(String(message), location);
                     break;
-                case LogLevel::ERROR:
-                    logger_->error(String(message), location);
+                case LogLevel::ERROR_LEVEL:
+                    logger_->error_at(String(message), location);
                     break;
-                case LogLevel::CRITICAL:
-                    logger_->critical(String(message), location);
+                case LogLevel::CRITICAL_LEVEL:
+                    logger_->critical_at(String(message), location);
                     break;
-                case LogLevel::OFF:
+                case LogLevel::OFF_LEVEL:
                     // 级别为OFF时不记录
                     break;
             }
@@ -742,10 +744,9 @@ private:
             try {
                 stats_.errors_occurred.fetch_add(1, std::memory_order_relaxed);
                 std::shared_lock read_lock(logger_mutex_);
-                logger_->error(
-                    std::format("Exception during log processing: {}",
-                                e.what()),
-                    std::source_location::current());
+                auto error_msg = std::format(
+                    "Exception during log processing: {}", e.what());
+                logger_->error(error_msg);
             } catch (...) {
                 // 忽略嵌套异常
             }
@@ -754,8 +755,8 @@ private:
             try {
                 stats_.errors_occurred.fetch_add(1, std::memory_order_relaxed);
                 std::shared_lock read_lock(logger_mutex_);
-                logger_->error("Unknown exception during log processing",
-                               std::source_location::current());
+                logger_->error_at("Unknown exception during log processing",
+                                  std::source_location::current());
             } catch (...) {
                 // 忽略嵌套异常
             }

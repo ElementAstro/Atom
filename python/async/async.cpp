@@ -7,6 +7,108 @@
 
 namespace py = pybind11;
 
+// Forward declarations for exception classes
+class TimeoutException;
+
+// Declare TimeoutException
+void declare_timeout_exception(py::module& m) {
+    py::register_exception<TimeoutException>(m, "TimeoutException",
+                                             R"pbdoc(
+        Exception thrown when a timeout occurs during asynchronous operations.
+
+        This exception is raised when an operation exceeds its specified timeout
+        duration, such as waiting for a task to complete or getting a result
+        from a future.
+        )pbdoc");
+}
+
+// Declare platform utilities
+void declare_platform_utilities(py::module& m) {
+    auto platform_module = m.def_submodule("platform",
+                                           R"pbdoc(
+        Platform-specific threading utilities.
+
+        This submodule provides platform-specific functionality for thread
+        priority management, CPU affinity, and other low-level threading
+        operations.
+        )pbdoc");
+
+    // Priority constants
+    auto priority_class =
+        py::class_<atom::platform::Priority>(platform_module, "Priority",
+                                             R"pbdoc(
+        Platform-specific priority constants.
+
+        These constants provide platform-appropriate priority values for
+        different operating systems (Windows, macOS, Linux).
+        )pbdoc");
+
+    priority_class.def_readonly_static(
+        "LOW", &atom::platform::Priority::LOW,
+        "Low priority value for the current platform");
+    priority_class.def_readonly_static(
+        "NORMAL", &atom::platform::Priority::NORMAL,
+        "Normal priority value for the current platform");
+    priority_class.def_readonly_static(
+        "HIGH", &atom::platform::Priority::HIGH,
+        "High priority value for the current platform");
+    priority_class.def_readonly_static(
+        "CRITICAL", &atom::platform::Priority::CRITICAL,
+        "Critical priority value for the current platform");
+
+    // Platform utility functions
+    platform_module.def("yield_thread", &atom::platform::yieldThread,
+                        R"pbdoc(
+        Yields the current thread to allow other threads to run.
+
+        This is a hint to the scheduler that the current thread is willing
+        to give up its remaining time slice.
+        )pbdoc");
+
+    platform_module.def(
+        "sleep_for",
+        [](double seconds) {
+            atom::platform::sleepFor(std::chrono::nanoseconds(
+                static_cast<long long>(seconds * 1e9)));
+        },
+        py::arg("seconds"),
+        R"pbdoc(
+        Sleeps for the specified duration.
+
+        Args:
+            seconds: Duration to sleep in seconds (can be fractional).
+
+        Examples:
+            >>> import atom.async.platform as platform
+            >>> platform.sleep_for(0.1)  # Sleep for 100ms
+        )pbdoc");
+}
+
+// Declare Priority enum for AsyncWorker
+void declare_async_worker_priority(py::module& m) {
+    py::enum_<atom::async::AsyncWorker<int>::Priority>(m, "AsyncWorkerPriority",
+                                                       R"pbdoc(
+        Task priority levels for AsyncWorker.
+
+        Controls the thread priority when executing asynchronous tasks.
+        Higher priority tasks may receive more CPU time and better scheduling.
+
+        Values:
+            LOW: Low priority execution, suitable for background tasks
+            NORMAL: Normal priority execution, default for most tasks
+            HIGH: High priority execution, for important tasks
+            CRITICAL: Critical priority execution, for time-sensitive tasks
+        )pbdoc")
+        .value("LOW", atom::async::AsyncWorker<int>::Priority::LOW,
+               "Low priority execution for background tasks")
+        .value("NORMAL", atom::async::AsyncWorker<int>::Priority::NORMAL,
+               "Normal priority execution, default level")
+        .value("HIGH", atom::async::AsyncWorker<int>::Priority::HIGH,
+               "High priority execution for important tasks")
+        .value("CRITICAL", atom::async::AsyncWorker<int>::Priority::CRITICAL,
+               "Critical priority execution for time-sensitive tasks");
+}
+
 // Helper functions
 template <typename ResultType>
 void declare_async_worker(py::module& m, const std::string& suffix) {
@@ -30,10 +132,18 @@ void declare_async_worker(py::module& m, const std::string& suffix) {
         .def(
             "start_async",
             [](WorkerType& self, py::function func) {
-                self.startAsync([func]() -> ResultType {
-                    py::gil_scoped_acquire acquire;
-                    return func().cast<ResultType>();
-                });
+                if constexpr (std::is_same_v<ResultType, void>) {
+                    self.startAsync([func]() {
+                        py::gil_scoped_acquire acquire;
+                        py::object result = func();
+                    });
+                } else {
+                    self.startAsync([func]() -> ResultType {
+                        py::gil_scoped_acquire acquire;
+                        py::object result = func();
+                        return result.cast<ResultType>();
+                    });
+                }
             },
             py::arg("func"),
             R"pbdoc(
@@ -98,6 +208,43 @@ void declare_async_worker(py::module& m, const std::string& suffix) {
 
              Raises:
                  TimeoutException: If the timeout is reached.
+             )pbdoc")
+        .def(
+            "set_priority",
+            [](WorkerType& self, typename WorkerType::Priority priority) {
+                self.setPriority(priority);
+            },
+            py::arg("priority"),
+            R"pbdoc(
+             Sets the thread priority for this worker.
+
+             Args:
+                 priority: The priority level from AsyncWorkerPriority enum.
+
+             Examples:
+                 >>> worker.set_priority(AsyncWorkerPriority.HIGH)
+             )pbdoc")
+        .def(
+            "set_preferred_cpu",
+            [](WorkerType& self, size_t cpu_id) {
+                self.setPreferredCPU(cpu_id);
+            },
+            py::arg("cpu_id"),
+            R"pbdoc(
+             Sets the preferred CPU core for this worker.
+
+             Args:
+                 cpu_id: The CPU core ID to prefer for execution.
+
+             Examples:
+                 >>> worker.set_preferred_cpu(2)  # Use CPU core 2
+             )pbdoc")
+        .def("is_cancellation_requested", &WorkerType::isCancellationRequested,
+             R"pbdoc(
+             Checks if cancellation has been requested for this worker.
+
+             Returns:
+                 bool: True if cancellation was requested, False otherwise.
              )pbdoc");
 
     // Register callback version separately for non-void types
@@ -158,7 +305,8 @@ void declare_async_worker(py::module& m, const std::string& suffix) {
             [](ManagerType& self, py::function func) {
                 return self.createWorker([func]() -> ResultType {
                     py::gil_scoped_acquire acquire;
-                    return func().cast<ResultType>();
+                    py::object result = func();
+                    return result.cast<ResultType>();
                 });
             },
             py::arg("func"),
@@ -211,8 +359,16 @@ void declare_async_worker(py::module& m, const std::string& suffix) {
              )pbdoc")
         .def("size", &ManagerType::size, "Gets the number of managed workers.")
         .def("prune_completed_workers", &ManagerType::pruneCompletedWorkers,
-             "Removes completed workers from the manager and returns the "
-             "number removed.");
+             R"pbdoc(
+             Removes completed workers from the manager.
+
+             Returns:
+                 int: The number of workers that were removed.
+
+             Examples:
+                 >>> removed_count = manager.prune_completed_workers()
+                 >>> print(f"Removed {removed_count} completed workers")
+             )pbdoc");
 }
 
 // Declare BackoffStrategy enum
@@ -235,10 +391,11 @@ std::function<ResultType()> create_py_function(py::function func) {
     return [func]() -> ResultType {
         py::gil_scoped_acquire acquire;
         if constexpr (std::is_same_v<ResultType, void>) {
-            func();
+            py::object result = func();
             return;
         } else {
-            return func().cast<ResultType>();
+            py::object result = func();
+            return result.cast<ResultType>();
         }
     };
 }
@@ -256,19 +413,19 @@ void declare_async_retry(py::module& m, const std::string& suffix) {
               auto py_callback = [callback](auto result) {
                   py::gil_scoped_acquire acquire;
                   if constexpr (std::is_same_v<ResultType, void>) {
-                      callback();
+                      py::object cb_result = callback();
                   } else {
-                      callback(result);
+                      py::object cb_result = callback(result);
                   }
               };
               auto py_exception_handler =
                   [exception_handler](const std::exception& e) {
                       py::gil_scoped_acquire acquire;
-                      exception_handler(e.what());
+                      py::object eh_result = exception_handler(e.what());
                   };
               auto py_complete_handler = [complete_handler]() {
                   py::gil_scoped_acquire acquire;
-                  complete_handler();
+                  py::object ch_result = complete_handler();
               };
 
               return atom::async::asyncRetry(
@@ -297,13 +454,101 @@ void declare_async_retry(py::module& m, const std::string& suffix) {
               callback: Callback function called on success (default: no-op)
               exception_handler: Handler called when exceptions occur (default: no-op)
               complete_handler: Handler called when all attempts complete (default: no-op)
-              
+
           Returns:
               A future with the result of the async operation
-              
+
           Raises:
               ValueError: If invalid parameters are provided
           )pbdoc");
+}
+
+// Declare Task and TaskPromise classes for coroutine support
+void declare_task_classes(py::module& m) {
+    // Task class template - we'll bind common instantiations
+    py::class_<atom::async::Task<void>>(m, "TaskVoid",
+                                        R"pbdoc(
+        A coroutine task that represents an asynchronous operation returning void.
+
+        This class provides C++20 coroutine support for asynchronous operations
+        that don't return a value. It can be awaited and provides methods to
+        check completion status and handle exceptions.
+        )pbdoc")
+        .def("done", &atom::async::Task<void>::done,
+             R"pbdoc(
+             Checks if the task has completed.
+
+             Returns:
+                 bool: True if the task has finished execution, False otherwise.
+             )pbdoc")
+        .def("get_result", &atom::async::Task<void>::getResult,
+             R"pbdoc(
+             Gets the result of the task (blocks if not complete).
+
+             This method will block until the task completes and then return.
+             If the task threw an exception, it will be re-thrown here.
+
+             Raises:
+                 Exception: Any exception that occurred during task execution.
+             )pbdoc");
+
+    py::class_<atom::async::Task<int>>(m, "TaskInt",
+                                       R"pbdoc(
+        A coroutine task that represents an asynchronous operation returning an integer.
+
+        This class provides C++20 coroutine support for asynchronous operations
+        that return an integer value. It can be awaited and provides methods to
+        check completion status and retrieve the result.
+        )pbdoc")
+        .def("done", &atom::async::Task<int>::done,
+             R"pbdoc(
+             Checks if the task has completed.
+
+             Returns:
+                 bool: True if the task has finished execution, False otherwise.
+             )pbdoc")
+        .def("get_result", &atom::async::Task<int>::getResult,
+             R"pbdoc(
+             Gets the result of the task (blocks if not complete).
+
+             This method will block until the task completes and then return
+             the integer result.
+
+             Returns:
+                 int: The result of the asynchronous operation.
+
+             Raises:
+                 Exception: Any exception that occurred during task execution.
+             )pbdoc");
+
+    py::class_<atom::async::Task<std::string>>(m, "TaskString",
+                                               R"pbdoc(
+        A coroutine task that represents an asynchronous operation returning a string.
+
+        This class provides C++20 coroutine support for asynchronous operations
+        that return a string value. It can be awaited and provides methods to
+        check completion status and retrieve the result.
+        )pbdoc")
+        .def("done", &atom::async::Task<std::string>::done,
+             R"pbdoc(
+             Checks if the task has completed.
+
+             Returns:
+                 bool: True if the task has finished execution, False otherwise.
+             )pbdoc")
+        .def("get_result", &atom::async::Task<std::string>::getResult,
+             R"pbdoc(
+             Gets the result of the task (blocks if not complete).
+
+             This method will block until the task completes and then return
+             the string result.
+
+             Returns:
+                 str: The result of the asynchronous operation.
+
+             Raises:
+                 Exception: Any exception that occurred during task execution.
+             )pbdoc");
 }
 
 PYBIND11_MODULE(async, m) {
@@ -311,58 +556,69 @@ PYBIND11_MODULE(async, m) {
         Asynchronous Task Processing Module
         ----------------------------------
 
-        This module provides tools for executing tasks asynchronously with 
-        features like timeouts, callbacks, and task management.
-        
+        This module provides tools for executing tasks asynchronously with
+        features like timeouts, callbacks, task management, and priority control.
+
         Key components:
-        - AsyncWorker: Manages a single asynchronous task
+        - AsyncWorker: Manages a single asynchronous task with priority and CPU affinity
         - AsyncWorkerManager: Coordinates multiple async workers
+        - AsyncWorkerPriority: Priority levels for task execution
         - Task/Future wrappers: Enhanced futures with additional capabilities
         - Retry mechanisms: Automatic retry with configurable backoff strategies
-        
+
         Example:
-            >>> from atom.async import AsyncWorkerInt, AsyncWorkerManagerInt
-            >>> 
-            >>> # Create a worker and start a task
+            >>> from atom.async import AsyncWorkerInt, AsyncWorkerManagerInt, AsyncWorkerPriority
+            >>>
+            >>> # Create a worker and start a high-priority task
             >>> worker = AsyncWorkerInt()
+            >>> worker.set_priority(AsyncWorkerPriority.HIGH)
+            >>> worker.set_preferred_cpu(2)  # Use CPU core 2
             >>> worker.start_async(lambda: 42)
-            >>> 
+            >>>
             >>> # Get the result (with optional timeout)
             >>> result = worker.get_result(timeout=5000)  # 5 seconds timeout
             >>> print(result)  # Output: 42
-            >>> 
+            >>>
             >>> # Create a worker manager for multiple tasks
             >>> manager = AsyncWorkerManagerInt()
             >>> workers = [
-            >>>     manager.create_worker(lambda: i * 10) 
+            >>>     manager.create_worker(lambda: i * 10)
             >>>     for i in range(5)
             >>> ]
-            >>> 
+            >>>
             >>> # Wait for all tasks to complete
             >>> manager.wait_for_all()
-            >>> 
+            >>>
             >>> # Collect results
             >>> results = [w.get_result() for w in workers]
             >>> print(results)  # Output: [0, 10, 20, 30, 40]
     )pbdoc";
 
     // Register exception translations
-    py::register_exception<TimeoutException>(m, "TimeoutException");
-
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
                 std::rethrow_exception(p);
-        } catch (const TimeoutException& e) {
-            PyErr_SetString(PyExc_TimeoutError, e.what());
         } catch (const std::invalid_argument& e) {
-            PyErr_SetString(PyExc_ValueError, e.what());
+            throw py::value_error(e.what());
         } catch (const std::runtime_error& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
+            throw std::runtime_error(e.what());
         } catch (const std::exception& e) {
-            PyErr_SetString(PyExc_Exception, e.what());
+            throw std::runtime_error(e.what());
         }
     });
+
+    // Declare exception classes
+    declare_timeout_exception(m);
+
+    // Declare platform utilities
+    declare_platform_utilities(m);
+
+    // Declare Task and TaskPromise classes
+    declare_task_classes(m);
+
+    // Register AsyncWorker Priority enum
+    declare_async_worker_priority(m);
 
     // Declare AsyncWorker and AsyncWorkerManager for common types
     declare_async_worker<void>(m, "Void");
@@ -371,8 +627,26 @@ PYBIND11_MODULE(async, m) {
     declare_async_worker<double>(m, "Double");
     declare_async_worker<std::string>(m, "String");
 
+    declare_async_worker_manager<void>(m, "Void");
+    declare_async_worker_manager<bool>(m, "Bool");
+    declare_async_worker_manager<int>(m, "Int");
+    declare_async_worker_manager<double>(m, "Double");
+    declare_async_worker_manager<std::string>(m, "String");
+
     // BackoffStrategy enum
-    declare_backoff_strategy(m);
+    py::enum_<atom::async::BackoffStrategy>(m, "BackoffStrategy",
+                                            R"pbdoc(
+        Backoff strategy for retry operations.
+
+        Defines how delays between retry attempts are calculated.
+        Different strategies provide different patterns of delay growth.
+        )pbdoc")
+        .value("FIXED", atom::async::BackoffStrategy::FIXED,
+               "Fixed delay between retries")
+        .value("LINEAR", atom::async::BackoffStrategy::LINEAR,
+               "Linear increase in delay between retries")
+        .value("EXPONENTIAL", atom::async::BackoffStrategy::EXPONENTIAL,
+               "Exponential increase in delay between retries");
 
     // AsyncRetry functions for different return types
     declare_async_retry<void>(m, "");  // Default no suffix for void type
@@ -417,14 +691,14 @@ PYBIND11_MODULE(async, m) {
         py::arg("future"), py::arg("timeout"),
         R"pbdoc(
           Gets the result of a future with a timeout.
-          
+
           Args:
               future: The future to get the result from
               timeout: The timeout in seconds
-              
+
           Returns:
               The result of the future
-              
+
           Raises:
               TimeoutException: If the timeout is reached
           )pbdoc");

@@ -1,0 +1,383 @@
+name: Atom Components Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'atom/components/**'
+      - 'tests/components/**'
+      - '.github/workflows/tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'atom/components/**'
+      - 'tests/components/**'
+
+env:
+  BUILD_TYPE: Release
+  COVERAGE_BUILD_TYPE: Debug
+
+jobs:
+  # ============================================================================
+  # Basic Tests (Linux, Windows, macOS)
+  # ============================================================================
+  basic-tests:
+    name: Basic Tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - os: ubuntu-latest
+            compiler: gcc
+            version: 11
+          - os: windows-latest
+            compiler: msvc
+            version: 2022
+          - os: macos-latest
+            compiler: clang
+            version: 14
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup C++ (Linux)
+      if: matrix.os == 'ubuntu-latest'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-${{ matrix.version }} g++-${{ matrix.version }} cmake ninja-build
+        sudo update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-${{ matrix.version }} 100
+        sudo update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-${{ matrix.version }} 100
+
+    - name: Setup C++ (Windows)
+      if: matrix.os == 'windows-latest'
+      uses: microsoft/setup-msbuild@v1.1
+
+    - name: Setup C++ (macOS)
+      if: matrix.os == 'macos-latest'
+      run: |
+        brew install cmake ninja
+
+    - name: Cache dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cache/vcpkg
+          build/_deps
+        key: ${{ runner.os }}-deps-${{ hashFiles('**/CMakeLists.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-deps-
+
+    - name: Configure CMake
+      working-directory: tests/components
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=${{ env.BUILD_TYPE }} \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DATOM_ENABLE_TESTS=ON
+
+    - name: Build tests
+      working-directory: tests/components
+      run: cmake --build build --config ${{ env.BUILD_TYPE }} --parallel
+
+    - name: Run tests
+      working-directory: tests/components
+      run: |
+        ctest --test-dir build --output-on-failure --parallel \
+          --output-junit test-results.xml
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      if: always()
+      with:
+        name: test-results-${{ matrix.os }}
+        path: tests/components/test-results.xml
+
+  # ============================================================================
+  # Coverage Analysis (Linux only)
+  # ============================================================================
+  coverage:
+    name: Coverage Analysis
+    runs-on: ubuntu-latest
+    needs: basic-tests
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Install coverage tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-11 g++-11 cmake ninja-build lcov gcov
+
+    - name: Configure CMake with coverage
+      working-directory: tests/components
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=${{ env.COVERAGE_BUILD_TYPE }} \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DENABLE_COVERAGE=ON \
+          -DCMAKE_CXX_FLAGS="--coverage -fprofile-arcs -ftest-coverage"
+
+    - name: Build with coverage
+      working-directory: tests/components
+      run: cmake --build build --parallel
+
+    - name: Run tests with coverage
+      working-directory: tests/components
+      run: |
+        ./build/atom_iocomponent.test
+
+    - name: Generate coverage report
+      working-directory: tests/components
+      run: |
+        lcov --capture --directory build --output-file coverage.info
+        lcov --remove coverage.info '/usr/*' '*/gtest/*' '*/gmock/*' --output-file coverage.info
+        lcov --list coverage.info
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: tests/components/coverage.info
+        flags: components
+        name: atom-components-coverage
+
+    - name: Generate HTML coverage report
+      working-directory: tests/components
+      run: |
+        genhtml coverage.info --output-directory coverage-html
+
+    - name: Upload coverage HTML
+      uses: actions/upload-artifact@v3
+      with:
+        name: coverage-report
+        path: tests/components/coverage-html/
+
+  # ============================================================================
+  # Performance Tests
+  # ============================================================================
+  performance:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    needs: basic-tests
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup performance tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-11 g++-11 cmake ninja-build valgrind
+
+    - name: Configure CMake for performance
+      working-directory: tests/components
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DENABLE_BENCHMARKS=ON \
+          -DCMAKE_CXX_FLAGS="-O3 -DNDEBUG"
+
+    - name: Build performance tests
+      working-directory: tests/components
+      run: cmake --build build --parallel
+
+    - name: Run performance tests
+      working-directory: tests/components
+      run: |
+        ./build/atom_iocomponent.test --gtest_filter="*Performance*:*Benchmark*" \
+          --gtest_output=json:performance-results.json
+
+    - name: Upload performance results
+      uses: actions/upload-artifact@v3
+      with:
+        name: performance-results
+        path: tests/components/performance-results.json
+
+  # ============================================================================
+  # Memory Safety Tests
+  # ============================================================================
+  memory-safety:
+    name: Memory Safety Tests
+    runs-on: ubuntu-latest
+    needs: basic-tests
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup memory safety tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-11 g++-11 cmake ninja-build valgrind
+
+    - name: Configure CMake for memory safety
+      working-directory: tests/components
+      run: |
+        cmake -B build -S . \
+          -DCMAKE_BUILD_TYPE=Debug \
+          -DCMAKE_CXX_STANDARD=20 \
+          -DCMAKE_CXX_FLAGS="-fsanitize=address -fsanitize=undefined -g"
+
+    - name: Build with sanitizers
+      working-directory: tests/components
+      run: cmake --build build --parallel
+
+    - name: Run tests with AddressSanitizer
+      working-directory: tests/components
+      env:
+        ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+        UBSAN_OPTIONS: abort_on_error=1
+      run: ./build/atom_iocomponent.test
+
+    - name: Run tests with Valgrind
+      working-directory: tests/components
+      run: |
+        valgrind --tool=memcheck --leak-check=full --show-leak-kinds=all \
+          --track-origins=yes --verbose --error-exitcode=1 \
+          ./build/atom_iocomponent.test
+
+  # ============================================================================
+  # Static Analysis
+  # ============================================================================
+  static-analysis:
+    name: Static Analysis
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup static analysis tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy cppcheck
+
+    - name: Run clang-tidy
+      working-directory: tests/components
+      run: |
+        find . -name "*.cpp" -not -path "./build/*" | \
+        xargs clang-tidy -checks='-*,readability-*,performance-*,modernize-*' \
+        -- -std=c++20 -I../../
+
+    - name: Run cppcheck
+      working-directory: tests/components
+      run: |
+        cppcheck --enable=all --std=c++20 --suppress=missingInclude \
+          --xml --xml-version=2 . 2> cppcheck-results.xml
+
+    - name: Upload static analysis results
+      uses: actions/upload-artifact@v3
+      with:
+        name: static-analysis-results
+        path: tests/components/cppcheck-results.xml
+
+  # ============================================================================
+  # Documentation Tests
+  # ============================================================================
+  documentation:
+    name: Documentation Tests
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Setup documentation tools
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y doxygen graphviz
+
+    - name: Generate documentation
+      working-directory: tests/components
+      run: |
+        doxygen Doxyfile || echo "Doxygen configuration not found, skipping"
+
+    - name: Check documentation coverage
+      working-directory: tests/components
+      run: |
+        # Check that all public APIs are documented
+        echo "Documentation coverage check would go here"
+
+  # ============================================================================
+  # Integration Tests
+  # ============================================================================
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    needs: [basic-tests, coverage]
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      with:
+        submodules: recursive
+
+    - name: Setup integration environment
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y gcc-11 g++-11 cmake ninja-build
+
+    - name: Build full project
+      run: |
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=20
+        cmake --build build --parallel
+
+    - name: Run integration tests
+      working-directory: tests/components
+      run: |
+        cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+        cmake --build build --parallel
+        ./build/atom_iocomponent.test --gtest_filter="*Integration*"
+
+  # ============================================================================
+  # Results Summary
+  # ============================================================================
+  results:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [basic-tests, coverage, performance, memory-safety, static-analysis]
+    if: always()
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v3
+
+    - name: Generate summary report
+      run: |
+        echo "# Test Results Summary" > summary.md
+        echo "" >> summary.md
+        echo "## Test Status" >> summary.md
+        echo "- Basic Tests: ${{ needs.basic-tests.result }}" >> summary.md
+        echo "- Coverage: ${{ needs.coverage.result }}" >> summary.md
+        echo "- Performance: ${{ needs.performance.result }}" >> summary.md
+        echo "- Memory Safety: ${{ needs.memory-safety.result }}" >> summary.md
+        echo "- Static Analysis: ${{ needs.static-analysis.result }}" >> summary.md
+
+    - name: Comment PR with results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const fs = require('fs');
+          const summary = fs.readFileSync('summary.md', 'utf8');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });

@@ -38,13 +38,9 @@ using UniqueConstructorArguments_t =
  */
 template <typename T, typename... Args>
 auto makeShared(Args&&... args) -> ConstructorArguments_t<T, Args...> {
-    if constexpr (IsConstructible<T, Args...>::value) {
-        return std::make_shared<T>(std::forward<Args>(args)...);
-    } else {
-        static_assert(IsConstructible<T, Args...>::value,
-                      "Arguments do not match any constructor of the type T");
-        return nullptr;
-    }
+    static_assert(IsConstructible<T, Args...>::value,
+                  "Arguments do not match any constructor of the type T");
+    return std::make_shared<T>(std::forward<Args>(args)...);
 }
 
 /**
@@ -53,13 +49,9 @@ auto makeShared(Args&&... args) -> ConstructorArguments_t<T, Args...> {
  */
 template <typename T, typename... Args>
 auto makeUnique(Args&&... args) -> UniqueConstructorArguments_t<T, Args...> {
-    if constexpr (IsConstructible<T, Args...>::value) {
-        return std::make_unique<T>(std::forward<Args>(args)...);
-    } else {
-        static_assert(IsConstructible<T, Args...>::value,
-                      "Arguments do not match any constructor of the type T");
-        return nullptr;
-    }
+    static_assert(IsConstructible<T, Args...>::value,
+                  "Arguments do not match any constructor of the type T");
+    return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
 /**

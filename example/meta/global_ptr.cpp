@@ -216,12 +216,12 @@ void demonstrateWeakPointerHandling() {
 
     // Store a weak pointer directly
     std::weak_ptr<Database> another_weak = weak_db;
-    GlobalSharedPtrManager::getInstance().addWeakPtr("db.weak", another_weak);
+    // Store a copy in a local variable (manager doesn't store weak ptrs
+    // directly)
+    auto shared_from_weak = another_weak.lock();
 
-    // Get shared pointer from stored weak pointer
-    auto shared_from_weak =
-        GlobalSharedPtrManager::getInstance().getSharedPtrFromWeakPtr<Database>(
-            "db.weak");
+    (void)GlobalSharedPtrManager::getInstance();  // keep reference for
+                                                  // consistency
 
     if (shared_from_weak) {
         shared_from_weak->query("SELECT COUNT(*) FROM orders");
@@ -299,9 +299,8 @@ void demonstrateMacroUsage() {
     // Creation with 'this' pointer
     struct ServiceWithThis {
         void setupCache() {
-            // 使用this捕获
             std::shared_ptr<Cache> cache_;
-            if (auto ptr = GetPtrOrCreate<Cache>("cache.service", [this]() {
+            if (auto ptr = GetPtrOrCreate<Cache>("cache.service", []() {
                     return std::make_shared<Cache>(500);
                 })) {
                 cache_ = ptr;
@@ -343,7 +342,8 @@ void demonstrateMacroUsage() {
     // Try again after object is created
     try {
         std::weak_ptr<Database> dbPtr;
-        GET_OR_CREATE_WEAK_PTR(dbPtr, Database, Constants::DATABASE);
+        GET_OR_CREATE_WEAK_PTR(dbPtr, Database, Constants::DATABASE,
+                               "sqlite://memory");
         auto db = dbPtr.lock();
         if (db) {
             db->query("SELECT version()");
@@ -495,9 +495,10 @@ void demonstrateAutomaticCleanup() {
         // Create some weak references
         if (i % 3 == 0) {
             std::weak_ptr<std::string> weak = GetWeakPtr<std::string>(key);
-            // 修复: 使用addWeakPtr而不是addSharedPtr
-            GlobalSharedPtrManager::getInstance().addWeakPtr(
-                "temp.weak." + std::to_string(i), weak);
+            // Manager does not store weak pointers separately; keep local weak
+            // and demonstrate lock()
+            auto locked = weak.lock();
+            (void)locked;
         }
     }
 

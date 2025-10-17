@@ -152,6 +152,13 @@ template <typename T>
 concept CopyAssignable = std::is_copy_assignable_v<T>;
 
 /*!
+ * \brief Concept for move constructible types
+ * \tparam T Type to check
+ */
+template <typename T>
+concept MoveConstructible = std::is_move_constructible_v<T>;
+
+/*!
  * \brief Concept for move assignable types
  * \tparam T Type to check
  */
@@ -303,11 +310,25 @@ concept AnyChar = Char<T> || WChar<T> || Char16<T> || Char32<T>;
  * \tparam T Type to check
  */
 template <typename T>
-concept StringType =
-    std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view> ||
-    std::is_same_v<T, std::wstring> || std::is_same_v<T, std::u8string> ||
-    std::is_same_v<T, std::u16string> || std::is_same_v<T, std::u32string> ||
-    std::is_same_v<T, atom::containers::String>;
+concept StringType = [] {
+    using Decayed = std::remove_cvref_t<T>;
+    using Elem = std::remove_all_extents_t<Decayed>;
+    if constexpr (std::is_same_v<Decayed, std::string> ||
+                  std::is_same_v<Decayed, std::string_view> ||
+                  std::is_same_v<Decayed, std::wstring> ||
+                  std::is_same_v<Decayed, std::u8string> ||
+                  std::is_same_v<Decayed, std::u16string> ||
+                  std::is_same_v<Decayed, std::u32string> ||
+                  std::is_same_v<Decayed, atom::containers::String>) {
+        return true;
+    } else if constexpr (std::is_array_v<Decayed>) {
+        return std::is_same_v<Elem, char> || std::is_same_v<Elem, const char> ||
+               std::is_same_v<Elem, wchar_t> ||
+               std::is_same_v<Elem, const wchar_t>;
+    } else {
+        return false;
+    }
+}();
 
 /*!
  * \brief Concept for built-in types

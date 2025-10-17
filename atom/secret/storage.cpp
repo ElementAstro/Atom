@@ -54,13 +54,10 @@ std::filesystem::path getSecureStorageDirectory(std::string_view appName) {
         storageDir /= appName;
         CoTaskMemFree(path);
     } else {
-        char* appDataPath = nullptr;
-        size_t pathLen;
-        _dupenv_s(&appDataPath, &pathLen, "LOCALAPPDATA");
+        const char* appDataPath = getenv("LOCALAPPDATA");
         if (appDataPath) {
             storageDir = appDataPath;
             storageDir /= appName;
-            free(appDataPath);
         } else {
             storageDir = std::string(".") + std::string(appName);
             spdlog::warn(

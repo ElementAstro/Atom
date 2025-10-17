@@ -1,12 +1,19 @@
 #include "atom/async/promise.hpp"
 
+#include <pybind11/chrono.h>
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
 namespace py = pybind11;
 
-// 用于创建一个已解决的Promise
+// Forward declarations for PromiseAwaiter classes
+template <typename T>
+void declare_promise_awaiter(py::module& m, const std::string& type_name);
+void declare_promise_awaiter_void(py::module& m);
+void declare_promise_void(py::module& m);
+
+// Helper function to create a resolved Promise
 template <typename T>
 auto createResolvedPromise(const T& value) {
     auto promise = std::make_shared<atom::async::Promise<T>>();
@@ -14,7 +21,7 @@ auto createResolvedPromise(const T& value) {
     return promise;
 }
 
-// 用于创建一个已拒绝的Promise
+// Helper function to create a rejected Promise
 template <typename T>
 auto createRejectedPromise(const py::object& reason) {
     auto promise = std::make_shared<atom::async::Promise<T>>();
@@ -23,6 +30,14 @@ auto createRejectedPromise(const py::object& reason) {
     } catch (...) {
         promise->setException(std::current_exception());
     }
+    return promise;
+}
+
+// Helper function to create a cancelled Promise
+template <typename T>
+auto createCancelledPromise() {
+    auto promise = std::make_shared<atom::async::Promise<T>>();
+    promise->cancel();
     return promise;
 }
 
@@ -115,24 +130,323 @@ auto promiseRace(
     return resultPromise;
 }
 
+// PromiseAwaiter template for different return types
+template <typename T>
+void declare_promise_awaiter(py::module& m, const std::string& type_name) {
+    using namespace atom::async;
+    using PromiseAwaiterT = PromiseAwaiter<T>;
+
+    std::string class_name = "PromiseAwaiter" + type_name;
+
+    py::class_<PromiseAwaiterT>(m, class_name.c_str(),
+                                R"pbdoc(
+        Coroutine-compatible awaiter for Promise objects.
+
+        This class provides C++20 coroutine support for Promise objects,
+        allowing them to be used with async/await syntax in compatible environments.
+        It implements the awaitable protocol for efficient coroutine integration.
+
+        Note: This class is primarily for advanced use cases and coroutine integration.
+        For most Python use cases, use Promise directly.
+        )pbdoc")
+        .def(py::init<std::shared_future<T>>(), py::arg("future"),
+             R"pbdoc(
+             Constructs a PromiseAwaiter from a shared_future.
+
+             Args:
+                 future: The shared_future to wrap for coroutine support.
+             )pbdoc")
+        .def("await_ready", &PromiseAwaiterT::await_ready,
+             R"pbdoc(
+             Checks if the promise is ready without blocking.
+
+             Returns:
+                 bool: True if the promise is ready, False otherwise.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc")
+        .def("await_resume", &PromiseAwaiterT::await_resume,
+             R"pbdoc(
+             Resumes execution and returns the result.
+
+             Returns:
+                 The result of the promise operation.
+
+             Raises:
+                 Exception: Any exception that occurred during execution.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc");
+}
+
+// PromiseAwaiter void specialization
+void declare_promise_awaiter_void(py::module& m) {
+    using namespace atom::async;
+    using PromiseAwaiterVoid = PromiseAwaiter<void>;
+
+    py::class_<PromiseAwaiterVoid>(m, "PromiseAwaiterVoid",
+                                   R"pbdoc(
+        Coroutine-compatible awaiter for Promise<void> objects.
+
+        This class provides C++20 coroutine support for void Promise objects,
+        allowing them to be used with async/await syntax in compatible environments.
+        It implements the awaitable protocol for efficient coroutine integration.
+
+        Note: This class is primarily for advanced use cases and coroutine integration.
+        For most Python use cases, use PromiseVoid directly.
+        )pbdoc")
+        .def(py::init<std::shared_future<void>>(), py::arg("future"),
+             R"pbdoc(
+             Constructs a PromiseAwaiterVoid from a shared_future<void>.
+
+             Args:
+                 future: The shared_future<void> to wrap for coroutine support.
+             )pbdoc")
+        .def("await_ready", &PromiseAwaiterVoid::await_ready,
+             R"pbdoc(
+             Checks if the promise is ready without blocking.
+
+             Returns:
+                 bool: True if the promise is ready, False otherwise.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc")
+        .def("await_resume", &PromiseAwaiterVoid::await_resume,
+             R"pbdoc(
+             Resumes execution after the promise completes.
+
+             Raises:
+                 Exception: Any exception that occurred during execution.
+
+             Note: This is part of the coroutine awaitable protocol.
+             )pbdoc");
+}
+
+// Promise<void> specialization
+void declare_promise_void(py::module& m) {
+    using namespace atom::async;
+    using PromiseVoid = Promise<void>;
+
+    py::class_<PromiseVoid, std::shared_ptr<PromiseVoid>>(m, "PromiseVoid",
+                                                          R"pbdoc(
+        A Promise specialization for void operations.
+
+        This class represents a promise that doesn't return a value but signals
+        completion or failure of an asynchronous operation. It provides the same
+        interface as Promise but is optimized for void operations.
+
+        Examples:
+            >>> from atom.async.promise import PromiseVoid
+            >>> def async_task():
+            ...     p = PromiseVoid()
+            ...     # Simulate async operation
+            ...     import threading
+            ...     def resolver():
+            ...         import time
+            ...         time.sleep(1)
+            ...         p.resolve()
+            ...     threading.Thread(target=resolver).start()
+            ...     return p
+            >>> promise = async_task()
+            >>> promise.wait()  # Blocks until resolved
+        )pbdoc")
+        .def(py::init<>(), "Creates a new pending PromiseVoid.")
+        .def("resolve", &PromiseVoid::setValue,
+             R"pbdoc(
+             Resolves the promise (completes the void operation).
+
+             Raises:
+                 RuntimeError: If the promise is already settled.
+             )pbdoc")
+        .def(
+            "reject",
+            [](PromiseVoid& self, py::object reason) {
+                try {
+                    std::string reason_str = reason.cast<std::string>();
+                    throw std::runtime_error(reason_str);
+                } catch (...) {
+                    self.setException(std::current_exception());
+                }
+            },
+            py::arg("reason"),
+            R"pbdoc(
+            Rejects the promise with the given reason.
+
+            Args:
+                reason: The reason for rejection.
+
+            Raises:
+                RuntimeError: If the promise is already settled.
+            )pbdoc")
+        .def(
+            "is_pending",
+            [](const PromiseVoid& self) {
+                return !self.isCancelled() &&
+                       self.getFuture().wait_for(std::chrono::seconds(0)) ==
+                           std::future_status::timeout;
+            },
+            R"pbdoc(
+            Checks if the promise is still pending.
+
+            Returns:
+                bool: True if the promise has not been resolved or rejected yet.
+            )pbdoc")
+        .def(
+            "is_fulfilled",
+            [](const PromiseVoid& self) {
+                if (self.isCancelled())
+                    return false;
+                try {
+                    auto future = self.getFuture();
+                    return future.valid() &&
+                           future.wait_for(std::chrono::seconds(0)) ==
+                               std::future_status::ready;
+                } catch (...) {
+                    return false;
+                }
+            },
+            R"pbdoc(
+            Checks if the promise has been resolved.
+
+            Returns:
+                bool: True if the promise has been resolved.
+            )pbdoc")
+        .def(
+            "is_rejected",
+            [](const PromiseVoid& self) {
+                if (self.isCancelled())
+                    return true;
+                try {
+                    auto future = self.getFuture();
+                    if (future.valid() &&
+                        future.wait_for(std::chrono::seconds(0)) ==
+                            std::future_status::ready) {
+                        try {
+                            future.get();
+                            return false;  // No exception, not rejected
+                        } catch (...) {
+                            return true;  // Has exception, is rejected
+                        }
+                    }
+                    return false;  // Not ready yet, not rejected
+                } catch (...) {
+                    return false;
+                }
+            },
+            R"pbdoc(
+            Checks if the promise has been rejected.
+
+            Returns:
+                bool: True if the promise has been rejected.
+            )pbdoc")
+        .def(
+            "wait",
+            [](PromiseVoid& self, unsigned int timeout_ms) {
+                auto future = self.getFuture();
+                if (timeout_ms == 0) {
+                    future.get();  // Wait indefinitely
+                } else {
+                    auto status =
+                        future.wait_for(std::chrono::milliseconds(timeout_ms));
+                    if (status == std::future_status::ready) {
+                        future.get();
+                    } else if (status == std::future_status::timeout) {
+                        throw std::runtime_error("Promise wait timed out");
+                    } else {
+                        throw std::runtime_error(
+                            "Promise wait failed with unknown status");
+                    }
+                }
+            },
+            py::arg("timeout_ms") = 0,
+            R"pbdoc(
+            Waits for the promise to be settled.
+
+            Args:
+                timeout_ms: Maximum time to wait in milliseconds. 0 means wait indefinitely.
+
+            Raises:
+                Exception: The rejection reason if the promise is rejected.
+                TimeoutError: If the timeout is reached before the promise settles.
+            )pbdoc")
+        .def("cancel", &PromiseVoid::cancel,
+             R"pbdoc(
+             Cancels the promise.
+
+             Returns:
+                 bool: True if the promise was successfully cancelled, False otherwise.
+             )pbdoc")
+        .def("is_cancelled", &PromiseVoid::isCancelled,
+             R"pbdoc(
+             Checks if the promise has been cancelled.
+
+             Returns:
+                 bool: True if the promise has been cancelled, False otherwise.
+             )pbdoc")
+        .def(
+            "on_complete",
+            [](PromiseVoid& self, py::function callback) {
+                self.onComplete([callback]() {
+                    py::gil_scoped_acquire acquire;
+                    callback();
+                });
+            },
+            py::arg("callback"),
+            R"pbdoc(
+            Registers a callback to be called when the promise completes.
+
+            Args:
+                callback: Function to call when the promise resolves.
+            )pbdoc")
+        .def(
+            "run_async",
+            [](PromiseVoid& self, py::function func) {
+                self.runAsync([func]() {
+                    py::gil_scoped_acquire acquire;
+                    func();
+                });
+            },
+            py::arg("func"),
+            R"pbdoc(
+            Runs a function asynchronously and resolves the promise when it completes.
+
+            Args:
+                func: Function to execute asynchronously.
+            )pbdoc");
+}
+
 PYBIND11_MODULE(promise, m) {
     m.doc() =
         "Promise implementation module for asynchronous operations in the atom "
         "package";
 
-    // 注册异常转换
+    // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
                 std::rethrow_exception(p);
+        } catch (const atom::async::PromiseCancelledException& e) {
+            throw py::value_error(e.what());
         } catch (const std::invalid_argument& e) {
-            PyErr_SetString(PyExc_ValueError, e.what());
+            throw py::value_error(e.what());
         } catch (const std::runtime_error& e) {
-            PyErr_SetString(PyExc_RuntimeError, e.what());
+            throw std::runtime_error(e.what());
         } catch (const std::exception& e) {
-            PyErr_SetString(PyExc_Exception, e.what());
+            throw std::runtime_error(e.what());
         }
     });
+
+    // Declare PromiseAwaiter for different types (coroutine support)
+    declare_promise_awaiter<int>(m, "Int");
+    declare_promise_awaiter<float>(m, "Float");
+    declare_promise_awaiter<double>(m, "Double");
+    declare_promise_awaiter<std::string>(m, "String");
+    declare_promise_awaiter<bool>(m, "Bool");
+    declare_promise_awaiter<py::object>(m, "Object");
+    declare_promise_awaiter_void(m);
+
+    // Declare Promise<void> specialization
+    declare_promise_void(m);
 
     // Promise类的绑定
     using PyPromise = std::shared_ptr<atom::async::Promise<py::object>>;
@@ -167,7 +481,7 @@ Examples:
                 try {
                     self.setValue(value);
                 } catch (const std::exception& e) {
-                    throw py::cast<std::string>(e.what());
+                    throw std::runtime_error(e.what());
                 }
             },
             py::arg("value"),
@@ -183,7 +497,8 @@ Raises:
             "reject",
             [](atom::async::Promise<py::object>& self, py::object reason) {
                 try {
-                    throw py::cast<std::string>(reason);
+                    std::string reason_str = reason.cast<std::string>();
+                    throw std::runtime_error(reason_str);
                 } catch (...) {
                     self.setException(std::current_exception());
                 }
@@ -299,35 +614,20 @@ Raises:
                                  on_rejected](py::object value) {
                     py::gil_scoped_acquire acquire;
                     try {
-                        if (!py::isinstance<py::none>(on_fulfilled)) {
-                            py::object result = on_fulfilled(value);
-                            resultPromise->setValue(result);
-                        } else {
-                            resultPromise->setValue(value);
-                        }
+                        py::object result = on_fulfilled(value);
+                        resultPromise->setValue(result);
                     } catch (const py::error_already_set& e) {
                         try {
-                            if (!py::isinstance<py::none>(on_rejected)) {
-                                py::object result =
-                                    on_rejected(py::str(e.what()));
-                                resultPromise->setValue(result);
-                            } else {
-                                throw;
-                            }
+                            py::object result = on_rejected(py::str(e.what()));
+                            resultPromise->setValue(result);
                         } catch (...) {
                             resultPromise->setException(
                                 std::current_exception());
                         }
                     } catch (const std::exception& e) {
                         try {
-                            if (!py::isinstance<py::none>(on_rejected)) {
-                                py::object result =
-                                    on_rejected(py::str(e.what()));
-                                resultPromise->setValue(result);
-                            } else {
-                                resultPromise->setException(
-                                    std::current_exception());
-                            }
+                            py::object result = on_rejected(py::str(e.what()));
+                            resultPromise->setValue(result);
                         } catch (...) {
                             resultPromise->setException(
                                 std::current_exception());
@@ -348,7 +648,7 @@ Returns:
     A new Promise that is resolved/rejected with the return value of the called handler.
 
 Examples:
-    >>> promise.then(lambda value: print(f"Success: {value}"), 
+    >>> promise.then(lambda value: print(f"Success: {value}"),
     ...              lambda reason: print(f"Failed: {reason}"))
 )")
         .def(
@@ -394,9 +694,66 @@ Returns:
 
 Examples:
     >>> promise.catch(lambda reason: print(f"Failed: {reason}"))
+)")
+        .def("cancel", &atom::async::Promise<py::object>::cancel,
+             R"(Cancels the promise.
+
+Returns:
+    bool: True if the promise was successfully cancelled, False otherwise.
+
+Examples:
+    >>> promise = Promise()
+    >>> success = promise.cancel()
+    >>> print(f"Cancelled: {success}")
+)")
+        .def("is_cancelled", &atom::async::Promise<py::object>::isCancelled,
+             R"(Checks if the promise has been cancelled.
+
+Returns:
+    bool: True if the promise has been cancelled, False otherwise.
+
+Examples:
+    >>> promise = Promise()
+    >>> promise.cancel()
+    >>> print(promise.is_cancelled())  # True
+)")
+        .def(
+            "on_complete",
+            [](atom::async::Promise<py::object>& self, py::function callback) {
+                self.onComplete([callback](py::object value) {
+                    py::gil_scoped_acquire acquire;
+                    callback(value);
+                });
+            },
+            py::arg("callback"),
+            R"(Registers a callback to be called when the promise completes.
+
+Args:
+    callback: Function to call when the promise resolves with a value.
+
+Examples:
+    >>> promise.on_complete(lambda value: print(f"Completed with: {value}"))
+)")
+        .def(
+            "run_async",
+            [](atom::async::Promise<py::object>& self, py::function func) {
+                self.runAsync([func]() -> py::object {
+                    py::gil_scoped_acquire acquire;
+                    return func();
+                });
+            },
+            py::arg("func"),
+            R"(Runs a function asynchronously and resolves the promise with its result.
+
+Args:
+    func: Function to execute asynchronously.
+
+Examples:
+    >>> promise = Promise()
+    >>> promise.run_async(lambda: "async result")
 )");
 
-    // 静态Promise方法
+    // Static Promise methods
     m.def(
         "resolve",
         [](py::object value) {
@@ -518,5 +875,63 @@ Examples:
     >>> threading.Thread(target=resolve_p2).start()
     >>> race_promise.wait()
     'p2 done'
+)");
+
+    // Additional utility functions
+    m.def(
+        "make_ready_promise",
+        [](py::object value) {
+            return createResolvedPromise<py::object>(value);
+        },
+        py::arg("value"),
+        R"(Creates a promise that is immediately resolved with the given value.
+
+Args:
+    value: The value to resolve the promise with.
+
+Returns:
+    Promise: A promise that is already resolved.
+
+Examples:
+    >>> promise = make_ready_promise("immediate value")
+    >>> print(promise.is_fulfilled())  # True
+)");
+
+    m.def(
+        "make_cancelled_promise",
+        []() { return createCancelledPromise<py::object>(); },
+        R"(Creates a promise that is immediately cancelled.
+
+Returns:
+    Promise: A promise that is already cancelled.
+
+Examples:
+    >>> promise = make_cancelled_promise()
+    >>> print(promise.is_cancelled())  # True
+)");
+
+    m.def(
+        "make_promise_from_function",
+        [](py::function func) {
+            auto promise = std::make_shared<atom::async::Promise<py::object>>();
+            promise->runAsync([func]() -> py::object {
+                py::gil_scoped_acquire acquire;
+                return func();
+            });
+            return promise;
+        },
+        py::arg("func"),
+        R"(Creates a promise that executes the given function asynchronously.
+
+Args:
+    func: Function to execute asynchronously.
+
+Returns:
+    Promise: A promise that will be resolved with the function's result.
+
+Examples:
+    >>> promise = make_promise_from_function(lambda: "async result")
+    >>> result = promise.wait()
+    >>> print(result)  # "async result"
 )");
 }

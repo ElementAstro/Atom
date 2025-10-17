@@ -2,9 +2,10 @@
 
 #include "atom/extra/inicpp/file.hpp"
 
+#include <fstream>
 #include <sstream>
 #include <string>
-#include <fstream>
+#include "atom/error/exception.hpp"
 
 using namespace inicpp;
 
@@ -45,7 +46,8 @@ TEST(IniFileBaseTest, SetFieldSep) {
 // Test setCommentPrefixes method
 TEST(IniFileBaseTest, SetCommentPrefixes) {
     IniFile iniFile;
-    iniFile.setCommentPrefixes({"//"});
+    std::vector<std::string> prefixes = {"//"};
+    iniFile.setCommentPrefixes(prefixes);
     std::istringstream iss("[section]\nkey=value\n//comment\n");
     iniFile.decode(iss);
     EXPECT_EQ(iniFile["section"]["key"].as<std::string>(), "value");
@@ -74,7 +76,7 @@ TEST(IniFileBaseTest, AllowOverwriteDuplicateFields) {
     IniFile iniFile;
     iniFile.allowOverwriteDuplicateFields(false);
     std::istringstream iss("[section]\nkey=value\nkey=another_value\n");
-    EXPECT_THROW(iniFile.decode(iss), std::logic_error);
+    EXPECT_THROW(iniFile.decode(iss), atom::error::LogicError);
 }
 
 // Test decode method with input stream
@@ -114,7 +116,7 @@ TEST(IniFileBaseTest, EncodeWithOutputStream) {
 
     std::ostringstream oss;
     iniFile.encode(oss);
-    EXPECT_EQ(oss.str(), "[section]\nkey=value\n");
+    EXPECT_EQ(oss.str(), "[section]\nkey=value\n\n");
 }
 
 // Test encode method with string
@@ -124,7 +126,7 @@ TEST(IniFileBaseTest, EncodeWithString) {
     iniFile.decode(iss);
 
     std::string encoded = iniFile.encode();
-    EXPECT_EQ(encoded, "[section]\nkey=value\n");
+    EXPECT_EQ(encoded, "[section]\nkey=value\n\n");
 }
 
 // Test save method
@@ -138,7 +140,7 @@ TEST(IniFileBaseTest, Save) {
     std::ifstream testFile("test.ini");
     std::string content((std::istreambuf_iterator<char>(testFile)),
                         std::istreambuf_iterator<char>());
-    EXPECT_EQ(content, "[section]\nkey=value\n");
+    EXPECT_EQ(content, "[section]\nkey=value\n\n");
 
     std::remove("test.ini");
 }

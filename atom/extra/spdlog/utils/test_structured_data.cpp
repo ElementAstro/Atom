@@ -5,7 +5,6 @@
 #include <string>
 #include "structured_data.h"
 
-
 using modern_log::StructuredData;
 
 TEST(StructuredDataTest, AddAndGetSingleField) {

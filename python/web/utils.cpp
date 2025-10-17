@@ -8,10 +8,15 @@
 
 namespace py = pybind11;
 
-PYBIND11_MODULE(utils, m) {
-    m.doc() = "Network utilities module for the atom package";
-
-    // Register exception translations
+/**
+ * @brief Registers exception translations for the web utilities module.
+ *
+ * This function sets up proper exception handling to translate C++ exceptions
+ * to appropriate Python exceptions for better error reporting.
+ *
+ * @param m The pybind11 module to register exceptions for
+ */
+void registerExceptionTranslations(py::module_& m) {
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
@@ -24,8 +29,17 @@ PYBIND11_MODULE(utils, m) {
             PyErr_SetString(PyExc_Exception, e.what());
         }
     });
+}
 
-    // Windows-specific initialization
+/**
+ * @brief Binds system initialization functions to Python.
+ *
+ * This function creates Python bindings for system-level initialization
+ * functions, particularly Windows-specific networking setup.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindSystemInitialization(py::module_& m) {
     m.def("initialize_windows_socket_api",
           &atom::web::initializeWindowsSocketAPI,
           R"(Initialize networking subsystem (Windows-specific).
@@ -44,8 +58,18 @@ Examples:
     >>> initialize_windows_socket_api()
     True
 )");
+}
 
-    // Port checking functions
+/**
+ * @brief Binds port utility functions to Python.
+ *
+ * This function creates Python bindings for port-related utility functions
+ * including port checking, process management, and async operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindPortUtilities(py::module_& m) {
+    // Basic port checking
     m.def(
         "is_port_in_use", [](int port) { return atom::web::isPortInUse(port); },
         py::arg("port"),
@@ -70,6 +94,7 @@ Examples:
     False  # Port is available
 )");
 
+    // Process management on ports
     m.def(
         "check_and_kill_program_on_port",
         [](int port) { return atom::web::checkAndKillProgramOnPort(port); },
@@ -121,6 +146,7 @@ Examples:
     ...     print("No process is using port 8080")
 )");
 
+    // Async port checking
     m.def(
         "is_port_in_use_async",
         [](int port) {
@@ -147,78 +173,30 @@ Examples:
     >>> is_port_in_use_async(8080)
     False  # Port is available
 )");
+}
 
-    // Port scanning functions
-    m.def("scan_port", &atom::web::scanPort, py::arg("host"), py::arg("port"),
-          py::arg("timeout") = std::chrono::milliseconds(2000),
-          R"(Scan a specific port on a given host to check if it's open.
-
-Args:
-    host: The hostname or IP address to scan.
-    port: The port number to scan (0-65535).
-    timeout: The maximum time to wait for a connection (default: 2000 ms).
-
-Returns:
-    bool: True if the port is open, False otherwise.
-
-Examples:
-    >>> from atom.web.utils import scan_port
-    >>> scan_port("example.com", 80)
-    True  # Port 80 is open on example.com
-    >>> scan_port("example.com", 8080, 1000)  # With 1 second timeout
-    False  # Port 8080 is closed
-)");
-
-    m.def("scan_port_range", &atom::web::scanPortRange, py::arg("host"),
-          py::arg("start_port"), py::arg("end_port"),
-          py::arg("timeout") = std::chrono::milliseconds(1000),
-          R"(Scan a range of ports on a given host to find open ones.
+/**
+ * @brief Binds DNS resolution functions to Python.
+ *
+ * This function creates Python bindings for DNS-related utilities including
+ * hostname resolution, local IP discovery, and DNS cache management.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindDnsUtilities(py::module_& m) {
+    m.def("set_dns_cache_ttl", &atom::web::setDNSCacheTTL,
+          py::arg("ttl_seconds"),
+          R"(Set the Time-To-Live for DNS cache entries.
 
 Args:
-    host: The hostname or IP address to scan.
-    start_port: The beginning of the port range to scan.
-    end_port: The end of the port range to scan.
-    timeout: The maximum time to wait for each connection attempt (default: 1000 ms).
-
-Returns:
-    list[int]: List of open ports.
+    ttl_seconds: The TTL duration in seconds.
 
 Examples:
-    >>> from atom.web.utils import scan_port_range
-    >>> scan_port_range("example.com", 80, 85)
-    [80, 443]  # Only these ports are open in the range
+    >>> from atom.web.utils import set_dns_cache_ttl
+    >>> import datetime
+    >>> set_dns_cache_ttl(datetime.timedelta(minutes=5))
 )");
 
-    m.def(
-        "scan_port_range_async",
-        [](const std::string& host, uint16_t start_port, uint16_t end_port,
-           std::chrono::milliseconds timeout) {
-            auto future = atom::web::scanPortRangeAsync(host, start_port,
-                                                        end_port, timeout);
-            return future.get();  // Wait for the result and return it
-        },
-        py::arg("host"), py::arg("start_port"), py::arg("end_port"),
-        py::arg("timeout") = std::chrono::milliseconds(1000),
-        R"(Asynchronously scan a range of ports on a given host.
-
-This function scans ports in a separate thread for better performance with large port ranges.
-
-Args:
-    host: The hostname or IP address to scan.
-    start_port: The beginning of the port range to scan.
-    end_port: The end of the port range to scan.
-    timeout: The maximum time to wait for each connection attempt (default: 1000 ms).
-
-Returns:
-    list[int]: List of open ports.
-
-Examples:
-    >>> from atom.web.utils import scan_port_range_async
-    >>> scan_port_range_async("example.com", 80, 100)  # Scan ports 80-100
-    [80, 443]  # Only these ports are open in the range
-)");
-
-    // DNS and IP address functions
     m.def("get_ip_addresses", &atom::web::getIPAddresses, py::arg("hostname"),
           R"(Get IP addresses for a given hostname through DNS resolution.
 
@@ -226,218 +204,158 @@ Args:
     hostname: The hostname to resolve.
 
 Returns:
-    list[str]: List of IP addresses.
+    List[str]: List of IP addresses associated with the hostname.
 
 Examples:
     >>> from atom.web.utils import get_ip_addresses
-    >>> get_ip_addresses("example.com")
-    ['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']
+    >>> ips = get_ip_addresses("google.com")
+    >>> print(f"Google IPs: {ips}")
 )");
 
     m.def("get_local_ip_addresses", &atom::web::getLocalIPAddresses,
           R"(Get all local IP addresses of the machine.
 
 Returns:
-    list[str]: List of local IP addresses.
+    List[str]: List of local IP addresses (excluding loopback).
 
 Examples:
     >>> from atom.web.utils import get_local_ip_addresses
-    >>> get_local_ip_addresses()
-    ['192.168.1.5', '127.0.0.1', '::1']
+    >>> local_ips = get_local_ip_addresses()
+    >>> print(f"Local IPs: {local_ips}")
 )");
 
+    m.def("clear_dns_cache_expired_entries",
+          &atom::web::clearDNSCacheExpiredEntries,
+          R"(Clear expired entries from the DNS cache.
+
+This function removes expired DNS cache entries to free memory and ensure
+fresh lookups for expired hostnames.
+
+Examples:
+    >>> from atom.web.utils import clear_dns_cache_expired_entries
+    >>> clear_dns_cache_expired_entries()
+)");
+}
+
+/**
+ * @brief Binds IP validation functions to Python.
+ *
+ * This function creates Python bindings for IP address validation utilities.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindIpValidationUtilities(py::module_& m) {
+    m.def("is_valid_ipv4", &atom::web::isValidIPv4, py::arg("ip_address"),
+          R"(Check if an IP address is a valid IPv4 address.
+
+Args:
+    ip_address: The IP address string to validate.
+
+Returns:
+    bool: True if the address is a valid IPv4 address, False otherwise.
+
+Examples:
+    >>> from atom.web.utils import is_valid_ipv4
+    >>> is_valid_ipv4("192.168.1.1")
+    True
+    >>> is_valid_ipv4("256.1.1.1")
+    False
+)");
+
+    m.def("is_valid_ipv6", &atom::web::isValidIPv6, py::arg("ip_address"),
+          R"(Check if an IP address is a valid IPv6 address.
+
+Args:
+    ip_address: The IP address string to validate.
+
+Returns:
+    bool: True if the address is a valid IPv6 address, False otherwise.
+
+Examples:
+    >>> from atom.web.utils import is_valid_ipv6
+    >>> is_valid_ipv6("2001:db8::1")
+    True
+    >>> is_valid_ipv6("invalid::address")
+    False
+)");
+}
+
+/**
+ * @brief Binds network connectivity functions to Python.
+ *
+ * This function creates Python bindings for network connectivity utilities.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindNetworkConnectivityUtilities(py::module_& m) {
     m.def("check_internet_connectivity", &atom::web::checkInternetConnectivity,
           R"(Check if the device has active internet connectivity.
-
-This function attempts to connect to well-known internet hosts to determine if
-internet connectivity is available.
 
 Returns:
     bool: True if internet is available, False otherwise.
 
+Note:
+    This function tests connectivity by attempting to connect to reliable
+    DNS servers (8.8.8.8, 1.1.1.1, 208.67.222.222) on port 53.
+
 Examples:
     >>> from atom.web.utils import check_internet_connectivity
-    >>> check_internet_connectivity()
-    True  # Internet is available
-)");
-
-    // Address information functions
-    m.def(
-        "addr_info_to_string",
-        [](const std::string& hostname, const std::string& service,
-           bool json_format) {
-            auto addrInfo = atom::web::getAddrInfo(hostname, service);
-            return atom::web::addrInfoToString(addrInfo.get(), json_format);
-        },
-        py::arg("hostname"), py::arg("service"), py::arg("json_format") = false,
-        R"(Convert address information for a hostname and service to a string.
-
-This function retrieves address information for a hostname and service and converts it
-to a human-readable or JSON string representation.
-
-Args:
-    hostname: The hostname to resolve.
-    service: The service to resolve (can be name like "http" or port number like "80").
-    json_format: If True, output in JSON format (default: False).
-
-Returns:
-    str: String representation of the address information.
-
-Raises:
-    RuntimeError: If getaddrinfo fails.
-    ValueError: If hostname or service is empty.
-
-Examples:
-    >>> from atom.web.utils import addr_info_to_string
-    >>> print(addr_info_to_string("example.com", "http"))
-    Family: AF_INET, Type: SOCK_STREAM, Protocol: IPPROTO_TCP, Address: 93.184.216.34:80
-    >>> print(addr_info_to_string("example.com", "80", True))
-    {"family":"AF_INET","type":"SOCK_STREAM","protocol":"IPPROTO_TCP","address":"93.184.216.34:80"}
-)");
-
-    // More advanced address info functions
-    m.def(
-        "compare_addr_info",
-        [](const std::string& hostname1, const std::string& service1,
-           const std::string& hostname2, const std::string& service2) {
-            auto addr1 = atom::web::getAddrInfo(hostname1, service1);
-            auto addr2 = atom::web::getAddrInfo(hostname2, service2);
-            return atom::web::compareAddrInfo(addr1.get(), addr2.get());
-        },
-        py::arg("hostname1"), py::arg("service1"), py::arg("hostname2"),
-        py::arg("service2"),
-        R"(Compare two address information structures for equality.
-
-This function resolves two hostname/service pairs and compares their address information
-structures for equality.
-
-Args:
-    hostname1: The first hostname to resolve.
-    service1: The first service to resolve.
-    hostname2: The second hostname to resolve.
-    service2: The second service to resolve.
-
-Returns:
-    bool: True if the structures are equal, False otherwise.
-
-Raises:
-    RuntimeError: If getaddrinfo fails.
-    ValueError: If any hostname or service is empty.
-
-Examples:
-    >>> from atom.web.utils import compare_addr_info
-    >>> compare_addr_info("example.com", "http", "example.com", "80")
-    True  # These resolve to the same address information
-    >>> compare_addr_info("example.com", "http", "google.com", "http")
-    False  # These resolve to different address information
-)");
-
-    m.def(
-        "filter_addr_info_by_family",
-        [](const std::string& hostname, const std::string& service,
-           int family) {
-            auto addrInfo = atom::web::getAddrInfo(hostname, service);
-            auto filtered = atom::web::filterAddrInfo(addrInfo.get(), family);
-            return atom::web::addrInfoToString(filtered.get());
-        },
-        py::arg("hostname"), py::arg("service"), py::arg("family"),
-        R"(Filter address information by family.
-
-This function retrieves address information for a hostname and service and filters it
-by the specified family (e.g., AF_INET for IPv4, AF_INET6 for IPv6).
-
-Args:
-    hostname: The hostname to resolve.
-    service: The service to resolve.
-    family: The family to filter by (e.g., socket.AF_INET, socket.AF_INET6).
-
-Returns:
-    str: String representation of the filtered address information.
-
-Raises:
-    RuntimeError: If getaddrinfo fails.
-    ValueError: If hostname or service is empty.
-
-Examples:
-    >>> import socket
-    >>> from atom.web.utils import filter_addr_info_by_family
-    >>> filter_addr_info_by_family("example.com", "http", socket.AF_INET)
-    'Family: AF_INET, Type: SOCK_STREAM, Protocol: IPPROTO_TCP, Address: 93.184.216.34:80'
-)");
-
-    // Convenience functions for common network tasks
-    m.def(
-        "is_host_reachable",
-        [](const std::string& host, uint16_t port,
-           std::chrono::milliseconds timeout) {
-            return atom::web::scanPort(host, port, timeout);
-        },
-        py::arg("host"), py::arg("port") = 80,
-        py::arg("timeout") = std::chrono::milliseconds(2000),
-        R"(Check if a host is reachable by attempting to connect to a specific port.
-
-This is a convenience alias for scan_port to provide a more intuitive name for
-checking if a host is reachable.
-
-Args:
-    host: The hostname or IP address to check.
-    port: The port to connect to (default: 80).
-    timeout: The maximum time to wait for a connection (default: 2000 ms).
-
-Returns:
-    bool: True if the host is reachable, False otherwise.
-
-Examples:
-    >>> from atom.web.utils import is_host_reachable
-    >>> is_host_reachable("example.com")
-    True  # Host is reachable via port 80
-    >>> is_host_reachable("example.com", 22, 1000)  # Try SSH port with 1s timeout
-    False  # Host doesn't accept SSH connections
-)");
-
-    m.def(
-        "find_open_port",
-        [](uint16_t start_port, uint16_t end_port) {
-            for (uint16_t port = start_port; port <= end_port; ++port) {
-                if (!atom::web::isPortInUse(port)) {
-                    return static_cast<int>(port);
-                }
-            }
-            return -1;  // No open ports in range
-        },
-        py::arg("start_port") = 8000, py::arg("end_port") = 9000,
-        R"(Find the first available open port in a range.
-
-Args:
-    start_port: The beginning of the port range to check (default: 8000).
-    end_port: The end of the port range to check (default: 9000).
-
-Returns:
-    int: The first open port in the range, or -1 if no ports are available.
-
-Examples:
-    >>> from atom.web.utils import find_open_port
-    >>> port = find_open_port(8000, 8100)
-    >>> if port != -1:
-    ...     print(f"Found open port: {port}")
+    >>> if check_internet_connectivity():
+    ...     print("Internet connection available")
     ... else:
-    ...     print("No open ports available in range")
-    Found open port: 8012
+    ...     print("No internet connection")
 )");
+}
 
-    m.def(
-        "hostname_to_ip", &atom::web::getIPAddresses, py::arg("hostname"),
-        R"(Convert a hostname to its IP addresses (alias for get_ip_addresses).
+PYBIND11_MODULE(utils, m) {
+    m.doc() = R"pbdoc(
+        Network Utilities Module
+        -----------------------
 
-Args:
-    hostname: The hostname to resolve.
+        This module provides comprehensive network utilities for the atom package,
+        including DNS resolution, IP validation, port management, socket operations,
+        and connectivity testing.
 
-Returns:
-    list[str]: List of IP addresses.
+        Key Features:
+        - DNS resolution and caching
+        - IP address validation (IPv4/IPv6)
+        - Port scanning and management
+        - Socket operations and utilities
+        - Network connectivity testing
+        - Process management on ports
+        - Address information utilities
 
-Examples:
-    >>> from atom.web.utils import hostname_to_ip
-    >>> hostname_to_ip("example.com")
-    ['93.184.216.34', '2606:2800:220:1:248:1893:25c8:1946']
-)");
+        Categories:
+        - DNS Operations: hostname resolution, local IP discovery, cache management
+        - IP Validation: IPv4/IPv6 address validation and conversion
+        - Port Operations: scanning, process management, availability checking
+        - Socket Operations: creation, binding, connection utilities
+        - Network Testing: connectivity checks and diagnostics
+
+        Examples:
+            >>> from atom.web.utils import *
+            >>>
+            >>> # DNS operations
+            >>> ips = get_ip_addresses("google.com")
+            >>> local_ips = get_local_ip_addresses()
+            >>>
+            >>> # IP validation
+            >>> is_valid = is_valid_ipv4("192.168.1.1")
+            >>>
+            >>> # Port operations
+            >>> port_busy = is_port_in_use(8080)
+            >>>
+            >>> # Network connectivity
+            >>> has_internet = check_internet_connectivity()
+    )pbdoc";
+
+    // Register exception translations
+    registerExceptionTranslations(m);
+
+    // Bind different categories of network utilities
+    bindSystemInitialization(m);
+    bindPortUtilities(m);
+    bindDnsUtilities(m);                  // DNS functions
+    bindIpValidationUtilities(m);         // IP validation functions
+    bindNetworkConnectivityUtilities(m);  // Network connectivity functions
 }

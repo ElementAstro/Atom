@@ -1,3 +1,13 @@
+/*!
+ * \file facade.hpp
+ * \brief Type-erased facade pattern implementation with proxy support
+ * \author Max Qian <lightapt.com>
+ * \copyright Copyright (C) 2023-2025 Max Qian
+ */
+
+#ifndef ATOM_META_FACADE_HPP
+#define ATOM_META_FACADE_HPP
+
 #include <algorithm>
 #include <bit>
 #include <concepts>
@@ -1089,3 +1099,5 @@ std::ostream& operator<<(std::ostream& os, const proxy<F>& p) {
 }
 
 }  // namespace atom::meta
+
+#endif  // ATOM_META_FACADE_HPP

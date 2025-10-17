@@ -228,7 +228,7 @@ BinaryBuffer PacketCodec::serialize_disconnect(ProtocolVersion version,
 
 Result<PacketHeader> PacketCodec::parse_header(std::span<const uint8_t> data) {
     if (data.size() < 2) {
-        return std::unexpected(ErrorCode::MALFORMED_PACKET);
+        return Result<PacketHeader>::error(ErrorCode::MALFORMED_PACKET);
     }
 
     PacketHeader header;
@@ -242,7 +242,7 @@ Result<PacketHeader> PacketCodec::parse_header(std::span<const uint8_t> data) {
 
     do {
         if (pos >= data.size() || shift >= 28) {
-            return std::unexpected(ErrorCode::MALFORMED_PACKET);
+            return Result<PacketHeader>::error(ErrorCode::MALFORMED_PACKET);
         }
 
         uint8_t byte = data[pos++];
@@ -254,20 +254,20 @@ Result<PacketHeader> PacketCodec::parse_header(std::span<const uint8_t> data) {
     } while (true);
 
     header.remaining_length = remaining_length;
-    return header;
+    return Result<PacketHeader>::success(std::move(header));
 }
 
 Result<ErrorCode> PacketCodec::parse_connack(std::span<const uint8_t> data,
                                              ProtocolVersion version) {
     if (data.size() < 2) {
-        return std::unexpected(ErrorCode::MALFORMED_PACKET);
+        return Result<ErrorCode>::error(ErrorCode::MALFORMED_PACKET);
     }
 
     size_t pos = 0;
 
     // Connect acknowledge flags
     uint8_t flags = data[pos++];
-    bool session_present = (flags & 0x01) != 0;
+    [[maybe_unused]] bool session_present = (flags & 0x01) != 0;
 
     // Return code
     uint8_t return_code = data[pos++];
@@ -279,12 +279,12 @@ Result<ErrorCode> PacketCodec::parse_connack(std::span<const uint8_t> data,
             buffer.write_bytes(data.subspan(pos));
             auto properties_length = buffer.read_variable_int();
             if (!properties_length) {
-                return std::unexpected(properties_length.error());
+                return Result<ErrorCode>::error(properties_length.error());
             }
         }
     }
 
-    return static_cast<ErrorCode>(return_code);
+    return Result<ErrorCode>::success(static_cast<ErrorCode>(return_code));
 }
 
 Result<Message> PacketCodec::parse_publish(const PacketHeader& header,
@@ -299,21 +299,21 @@ Result<Message> PacketCodec::parse_publish(const PacketHeader& header,
     // Topic name
     auto topic_result = buffer.read_string();
     if (!topic_result)
-        return std::unexpected(topic_result.error());
+        return Result<Message>::error(topic_result.error());
     message.topic = *topic_result;
 
     // Packet identifier (for QoS > 0)
     if (message.qos != QoS::AT_MOST_ONCE) {
         auto packet_id_result = buffer.read<uint16_t>();
         if (!packet_id_result)
-            return std::unexpected(packet_id_result.error());
+            return Result<Message>::error(packet_id_result.error());
         message.packet_id = *packet_id_result;
     }
 
     // Properties (MQTT 5.0)
     auto properties_length_result = buffer.read_variable_int();
     if (!properties_length_result)
-        return std::unexpected(properties_length_result.error());
+        return Result<Message>::error(properties_length_result.error());
 
     uint32_t properties_length = *properties_length_result;
     size_t properties_start = buffer.position();
@@ -370,13 +370,14 @@ Result<Message> PacketCodec::parse_publish(const PacketHeader& header,
         message.payload.assign(payload_span.begin(), payload_span.end());
     }
 
-    return message;
+    return Result<Message>::success(std::move(message));
 }
 
 Result<std::vector<ErrorCode>> PacketCodec::parse_suback(
     std::span<const uint8_t> data) {
     if (data.size() < 4) {
-        return std::unexpected(ErrorCode::MALFORMED_PACKET);
+        return Result<std::vector<ErrorCode>>::error(
+            ErrorCode::MALFORMED_PACKET);
     }
 
     BinaryBuffer buffer;
@@ -385,12 +386,13 @@ Result<std::vector<ErrorCode>> PacketCodec::parse_suback(
     // Skip packet identifier
     auto packet_id_result = buffer.read<uint16_t>();
     if (!packet_id_result)
-        return std::unexpected(packet_id_result.error());
+        return Result<std::vector<ErrorCode>>::error(packet_id_result.error());
 
     // Skip properties (MQTT 5.0)
     auto properties_length_result = buffer.read_variable_int();
     if (!properties_length_result)
-        return std::unexpected(properties_length_result.error());
+        return Result<std::vector<ErrorCode>>::error(
+            properties_length_result.error());
 
     uint32_t properties_length = *properties_length_result;
     for (uint32_t i = 0;
@@ -409,7 +411,7 @@ Result<std::vector<ErrorCode>> PacketCodec::parse_suback(
         return_codes.push_back(static_cast<ErrorCode>(*code_result));
     }
 
-    return return_codes;
+    return Result<std::vector<ErrorCode>>::success(std::move(return_codes));
 }
 
 Result<std::vector<ErrorCode>> PacketCodec::parse_unsuback(

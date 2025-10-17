@@ -8,9 +8,12 @@
 
 Date: 2024-2-21
 
-Description: System Information Module - Wifi Information
+Description: System Information Module - Wifi Information (compatibility header)
+
+@deprecated This header location is deprecated. Please use
+"atom/sysinfo/interfaces/wifi.hpp" instead.
 
 **************************************************/
 
-// This is a wrapper include file that redirects to the new wifi module structure
-#include "atom/sysinfo/wifi/wifi.hpp"
+// Forward to the new location
+#include "network/wifi.hpp"

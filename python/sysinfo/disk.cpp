@@ -145,7 +145,7 @@ Examples:
     >>> all_disks = disk.get_disk_info()
     >>> for d in all_disks:
     ...     print(f"{d.path}: {d.usage_percent:.1f}% used")
-    >>> 
+    >>>
     >>> # Get only fixed disks (exclude removable)
     >>> fixed_disks = disk.get_disk_info(include_removable=False)
 )");
@@ -201,7 +201,7 @@ Examples:
     >>> devices = disk.get_storage_devices()
     >>> for device in devices:
     ...     print(f"{device.model} ({device.size_bytes / (1024**3):.1f} GB)
-    >>> 
+    >>>
     >>> # Get only fixed storage devices (exclude removable)
     >>> fixed_devices = disk.get_storage_devices(include_removable=False)
 )");
@@ -235,7 +235,7 @@ Examples:
     >>> # Get all available drives
     >>> drives = disk.get_available_drives()
     >>> print(f"Available drives: {', '.join(drives)}")
-    >>> 
+    >>>
     >>> # Get only fixed drives
     >>> fixed_drives = disk.get_available_drives(include_removable=False)
 )");
@@ -395,19 +395,19 @@ Returns:
 Examples:
     >>> from atom.sysinfo import disk
     >>> import time
-    >>> 
+    >>>
     >>> # Define callback function
     >>> def on_device_inserted(device):
     ...     print(f"New device detected: {device.model}")
     ...     print(f"Path: {device.device_path}")
     ...     print(f"Size: {device.size_bytes / (1024**3):.1f} GB")
-    ... 
+    ...
     >>> # Start monitoring with read-only policy
     >>> future = disk.start_device_monitoring(
-    ...     on_device_inserted, 
+    ...     on_device_inserted,
     ...     disk.SecurityPolicy.READ_ONLY
     ... )
-    >>> 
+    >>>
     >>> # Let it run for a while
     >>> try:
     ...     print("Monitoring for devices. Insert a USB drive...")
@@ -551,11 +551,11 @@ Returns:
 Examples:
     >>> from atom.sysinfo import disk
     >>> import time
-    >>> 
+    >>>
     >>> # Define a callback function
     >>> def on_device_inserted(device):
-    ...     print(f"New device: {device.model} ({device.size_bytes / (1024**3):.1f} GB)  
-    >>> # Use as a context manager 
+    ...     print(f"New device: {device.model} ({device.size_bytes / (1024**3):.1f} GB)
+    >>> # Use as a context manager
     >>> with disk.monitor_devices(on_device_inserted,
                                   disk.SecurityPolicy.READ_ONLY):
     ...     print("Monitoring for devices. Insert a USB drive...")
@@ -563,7 +563,7 @@ Examples:
     ...         time.sleep(30)  # Monitor for 30 seconds
     ...     except KeyboardInterrupt:
     ...         print("Monitoring stopped by user")
-    ... 
+    ...
     >>> print("Monitoring stopped")
 )");
 

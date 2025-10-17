@@ -17,6 +17,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <ostream>
 #include <shared_mutex>
 #include <source_location>
 #include <string>
@@ -26,7 +27,7 @@
 #include <variant>
 #include <vector>
 
-#ifdef _MSC_VER
+#if defined(_WIN32)
 #include <windows.h>
 #else
 #include <dlfcn.h>
@@ -38,6 +39,7 @@
 #include "atom/macro.hpp"
 #include "atom/type/expected.hpp"
 
+#include "atom/meta/func_traits.hpp"
 #ifdef ATOM_USE_BOOST
 #include <boost/any.hpp>
 #include <boost/asio.hpp>
@@ -88,6 +90,11 @@ inline auto to_string(FFIError error) -> std::string {
     const auto index = static_cast<size_t>(error);
     return index < error_strings.size() ? std::string(error_strings[index])
                                         : "Unknown error";
+}
+
+// Stream FFIError for logging/Exception formatting
+inline std::ostream& operator<<(std::ostream& os, FFIError e) {
+    return os << to_string(e);
 }
 
 /**
@@ -314,8 +321,8 @@ public:
      * \param args Function arguments
      * \return Result or error
      */
-    [[nodiscard]] auto call(void* funcPtr, Args... args) const
-        -> FFIResult<ResultType> {
+    [[nodiscard]] auto call(void* funcPtr,
+                            Args... args) const -> FFIResult<ResultType> {
         if (validate_ && !validateArguments(args...)) {
             return type::unexpected(FFIError::InvalidArgument);
         }
@@ -340,10 +347,9 @@ public:
      * \param args Function arguments
      * \return Result or error (including timeout)
      */
-    [[nodiscard]] auto callWithTimeout(void* funcPtr,
-                                       std::chrono::milliseconds timeout,
-                                       Args... args) const
-        -> FFIResult<ResultType> {
+    [[nodiscard]] auto callWithTimeout(
+        void* funcPtr, std::chrono::milliseconds timeout,
+        Args... args) const -> FFIResult<ResultType> {
         if (validate_ && !validateArguments(args...)) {
             return type::unexpected(FFIError::InvalidArgument);
         }
@@ -482,7 +488,7 @@ public:
     [[nodiscard]] auto load(std::string_view path) -> FFIResult<void> {
         unload();
 
-#ifdef _MSC_VER
+#if defined(_WIN32)
         handle_ = LoadLibraryA(path.data());
         if (handle_ == nullptr) {
             return type::unexpected(FFIError::LibraryLoadFailed);
@@ -501,7 +507,7 @@ public:
      */
     void unload() {
         if (handle_ != nullptr) {
-#ifdef _MSC_VER
+#if defined(_WIN32)
             FreeLibrary(static_cast<HMODULE>(handle_));
 #else
             dlclose(handle_);
@@ -535,9 +541,10 @@ public:
             return type::unexpected(FFIError::LibraryLoadFailed);
         }
 
-#ifdef _MSC_VER
-        void* symbol =
+#if defined(_WIN32)
+        FARPROC rawSymbol =
             GetProcAddress(static_cast<HMODULE>(handle_), name.data());
+        void* symbol = reinterpret_cast<void*>(rawSymbol);
 #else
         void* symbol = dlsym(handle_, name.data());
 #endif
@@ -640,7 +647,7 @@ public:
 
         auto symbolResult = handle_.getSymbol(functionName);
         if (!symbolResult) {
-            return type::unexpected(symbolResult.error());
+            return type::unexpected(symbolResult.error().error());
         }
 
         void* symbol = symbolResult.value();
@@ -682,7 +689,7 @@ public:
         if (funcPtr == nullptr) {
             auto symbolResult = handle_.getSymbol(functionName);
             if (!symbolResult) {
-                return type::unexpected(symbolResult.error());
+                return type::unexpected(symbolResult.error().error());
             }
 
             funcPtr = symbolResult.value();
@@ -828,10 +835,10 @@ public:
     void registerCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        using FuncType = std::decay_t<Func>;
-        callbackMap_.emplace(
-            std::string(callbackName),
-            std::make_any<std::function<FuncType>>(std::forward<Func>(func)));
+        // Store the function directly without trying to construct a specific
+        // signature
+        callbackMap_.emplace(std::string(callbackName),
+                             std::any{std::forward<Func>(func)});
     }
 
     /**
@@ -867,14 +874,14 @@ public:
     void registerAsyncCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        using FuncType = std::decay_t<Func>;
-        callbackMap_.emplace(
-            std::string(callbackName),
-            std::make_any<std::function<FuncType>>(
-                [f = std::forward<Func>(func)](auto&&... args) {
-                    return std::async(std::launch::async, f,
-                                      std::forward<decltype(args)>(args)...);
-                }));
+        // Store the async wrapper directly without trying to construct a
+        // specific signature
+        auto asyncWrapper = [func = std::forward<Func>(func)](auto&&... args) {
+            return std::async(std::launch::async, func,
+                              std::forward<decltype(args)>(args)...);
+        };
+
+        callbackMap_.emplace(std::string(callbackName), std::any{asyncWrapper});
     }
 
     /**
@@ -928,7 +935,7 @@ public:
         -> FFIResult<LibraryObject<T>> {
         auto factoryResult = library.getFunction<T*(void)>(factoryFuncName);
         if (!factoryResult) {
-            return type::unexpected(factoryResult.error());
+            return type::unexpected(factoryResult.error().error());
         }
 
         auto factory = *factoryResult;

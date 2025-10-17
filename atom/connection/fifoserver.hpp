@@ -18,11 +18,13 @@ Description: FIFO Server
 #include <concepts>
 #include <functional>
 #include <future>
+
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include "fifoclient.hpp"  // For MessagePriority enum
 
 namespace atom::connection {
 
@@ -39,10 +41,7 @@ concept Messageable = std::convertible_to<T, std::string> || requires(T t) {
  */
 enum class LogLevel { Debug, Info, Warning, Error, None };
 
-/**
- * @brief Enum representing message priority levels
- */
-enum class MessagePriority { Low, Normal, High, Critical };
+// MessagePriority enum is defined in fifoclient.hpp
 
 /**
  * @brief Structure to hold server statistics

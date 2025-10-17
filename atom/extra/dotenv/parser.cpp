@@ -85,7 +85,8 @@ Parser::EnvEntries Parser::parseDetailed(const std::string& content) {
     return result;
 }
 
-std::string Parser::processLine(const std::string& line, size_t line_number) {
+std::string Parser::processLine(const std::string& line,
+                                size_t /*line_number*/) {
     if (isComment(line) || isEmpty(line)) {
         return "";
     }
@@ -116,7 +117,7 @@ std::pair<std::string, std::string> Parser::parseLine(const std::string& line) {
     }
 
     // Validate key format
-    if (key.empty() || !std::isalpha(key[0]) && key[0] != '_') {
+    if (key.empty() || (!std::isalpha(key[0]) && key[0] != '_')) {
         throw ParseException("Invalid variable name: " + key);
     }
 

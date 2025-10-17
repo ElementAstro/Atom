@@ -1,75 +1,39 @@
-cmake_minimum_required(VERSION 3.20)
-project(dotenv-cpp VERSION 1.0.0 LANGUAGES CXX)
-
-# C++20 standard
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Compiler flags
-if(MSVC)
-    add_compile_options(/W4 /WX)
-else()
-    add_compile_options(-Wall -Wextra -Wpedantic -Werror)
-endif()
-
-# Include directories
-include_directories(include)
+# CMakeLists.txt for dotenv library Integrated with main Atom build system
 
 # Source files
-set(SOURCES
-    dotenv.cpp
-    parser.cpp
-    validator.cpp
-    loader.cpp
-)
+set(DOTENV_SOURCES dotenv.cpp parser.cpp validator.cpp loader.cpp)
 
-# Create library
-add_library(dotenv-cpp ${SOURCES})
-
-# Header files for installation
-set(HEADERS
+# Header files
+set(DOTENV_HEADERS
     dotenv.hpp
     parser.hpp
     validator.hpp
     loader.hpp
     exceptions.hpp
-)
+    test_dotenv.hpp
+    test_validator.hpp)
+
+# Create library
+add_library(atom-extra-dotenv ${DOTENV_SOURCES} ${DOTENV_HEADERS})
 
 # Set target properties
-target_include_directories(dotenv-cpp PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:include>
-)
+target_include_directories(atom-extra-dotenv PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
+# Set target properties for consistency
+set_target_properties(
+  atom-extra-dotenv
+  PROPERTIES CXX_STANDARD 20
+             CXX_STANDARD_REQUIRED ON
+             CXX_EXTENSIONS OFF)
 
 # Find required packages
 find_package(Threads REQUIRED)
-target_link_libraries(dotenv-cpp Threads::Threads)
+target_link_libraries(atom-extra-dotenv PUBLIC Threads::Threads)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(dotenv-cpp ws2_32)
+  target_link_libraries(atom-extra-dotenv PUBLIC ws2_32)
 endif()
 
-# Testing
-enable_testing()
-add_subdirectory(tests)
-
-# Examples
-add_subdirectory(examples)
-
-# Installation
-install(TARGETS dotenv-cpp
-    EXPORT dotenv-cpp-targets
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
-)
-
-install(FILES ${HEADERS} DESTINATION include/dotenv)
-
-# Export configuration
-install(EXPORT dotenv-cpp-targets
-    FILE dotenv-cpp-config.cmake
-    DESTINATION lib/cmake/dotenv-cpp
-)
+# Installation rules (optional) install(TARGETS atom-extra-dotenv DESTINATION
+# lib) install(FILES ${DOTENV_HEADERS} DESTINATION include/atom/extra/dotenv)

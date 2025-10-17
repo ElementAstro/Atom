@@ -10,7 +10,10 @@
 #include <boost/asio/awaitable.hpp>
 #include <boost/asio/co_spawn.hpp>
 #include <boost/asio/detached.hpp>
+// Optional experimental features - may not be available in all Boost versions
+#ifdef BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE
 #include <boost/asio/experimental/as_tuple.hpp>
+#endif
 #ifdef USE_SSL
 #include <boost/asio/ssl.hpp>
 #endif
@@ -22,7 +25,10 @@ using error_code = boost::system::error_code;
 #include <asio/awaitable.hpp>
 #include <asio/co_spawn.hpp>
 #include <asio/detached.hpp>
+// Optional experimental features - may not be available in all ASIO versions
+#ifdef ASIO_HAS_EXPERIMENTAL_AS_TUPLE
 #include <asio/experimental/as_tuple.hpp>
+#endif
 #ifdef USE_SSL
 #include <asio/ssl.hpp>
 #endif
@@ -63,6 +69,11 @@ using result_tuple = std::tuple<error_code, T>;
  */
 template <typename AsyncOperation>
 auto as_tuple_awaitable(AsyncOperation&& op) {
+#if defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) || defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)
     return std::forward<AsyncOperation>(op)(
         net::experimental::as_tuple(use_awaitable));
+#else
+    // Fallback implementation without experimental features
+    return std::forward<AsyncOperation>(op)(use_awaitable);
+#endif
 }

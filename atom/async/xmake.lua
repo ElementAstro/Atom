@@ -18,53 +18,48 @@ add_requires("loguru")
 target("atom-async")
     -- Set target kind
     set_kind("static")
-    
-    -- Add source files (explicitly specified)
-    add_files("limiter.cpp", "lock.cpp", "timer.cpp")
-    
-    -- Add header files (explicitly specified)
-    add_headerfiles(
-        "async.hpp",
-        "daemon.hpp", 
-        "eventstack.hpp",
-        "limiter.hpp",
-        "lock.hpp",
-        "message_bus.hpp",
-        "message_queue.hpp", 
-        "pool.hpp",
-        "queue.hpp",
-        "safetype.hpp",
-        "thread_wrapper.hpp",
-        "timer.hpp",
-        "trigger.hpp"
-    )
-    
+
+    -- Add source files from new structure
+    add_files("core/*.cpp")
+    add_files("threading/*.cpp")
+    add_files("sync/*.cpp")
+    add_files("utils/*.cpp")
+
+    -- Add header files from new structure
+    add_headerfiles("*.hpp")  -- Backwards compatibility headers
+    add_headerfiles("core/*.hpp")
+    add_headerfiles("threading/*.hpp")
+    add_headerfiles("messaging/*.hpp")
+    add_headerfiles("execution/*.hpp")
+    add_headerfiles("sync/*.hpp")
+    add_headerfiles("utils/*.hpp")
+
     -- Add include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("loguru")
-    
+
     -- Add dependencies (assuming atom-utils is another xmake target)
     add_deps("atom-utils")
-    
+
     -- Add system libraries
     add_syslinks("pthread")
-    
+
     -- Enable position independent code for static library
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
     add_cflags("-fPIC", {tools = {"gcc", "clang"}})
-    
+
     -- Set target directory
     set_targetdir("$(buildir)/lib")
     set_objectdir("$(buildir)/obj")
-    
+
     -- Set version info
     set_version("1.0.0")
-    
+
     -- Set output name (equivalent to OUTPUT_NAME)
     set_basename("atom-async")
-    
+
     -- Installation rules
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -77,10 +72,17 @@ target("atom-async")
 -- Optional: Create an object library equivalent (if needed elsewhere)
 target("atom-async-object")
     set_kind("object")
-    
+
     -- Add the same source files
-    add_files("limiter.cpp", "lock.cpp", "timer.cpp")
+    add_files("core/*.cpp")
+    add_files("threading/*.cpp")
+    add_files("sync/*.cpp")
+    add_files("utils/*.cpp")
     add_headerfiles(
-        "async.hpp",
-        "daemon.hpp", 
-        "eventstack.hpp",
+        "*.hpp",  -- Backwards compatibility headers
+        "core/*.hpp",
+        "threading/*.hpp",
+        "messaging/*.hpp",
+        "execution/*.hpp",
+        "sync/*.hpp",
+        "utils/*.hpp"

@@ -20,7 +20,6 @@ Description: Enhanced Asynchronous Logger using C++20/23 Coroutines
 
 #include <concepts>
 #include <coroutine>
-#include <expected>
 #include <filesystem>
 #include <format>
 #include <memory>
@@ -28,13 +27,14 @@ Description: Enhanced Asynchronous Logger using C++20/23 Coroutines
 #include <string>
 #include <string_view>
 #include <utility>
+#include "atom/type/compat.hpp"
 
 namespace fs = std::filesystem;
 
 namespace atom::log {
 
 /**
- * @brief Logging error codes for std::expected return types
+ * @brief Logging error codes for expected return types
  */
 enum class LogErrorCode {
     Success,
@@ -83,7 +83,8 @@ class Task {
 public:
     // Promise type that satisfies C++20 coroutine promise concept
     struct promise_type {
-        std::expected<T, LogErrorCode> result{T{}, LogErrorCode::Success};
+        atom::type::expected<T, LogErrorCode> result{T{},
+                                                     LogErrorCode::Success};
 
         Task get_return_object() {
             return Task(
@@ -95,7 +96,7 @@ public:
 
         void return_value(T value) { result = std::move(value); }
 
-        void return_value(std::expected<T, LogErrorCode> value) {
+        void return_value(atom::type::expected<T, LogErrorCode> value) {
             result = std::move(value);
         }
 
@@ -103,11 +104,11 @@ public:
             try {
                 std::rethrow_exception(std::current_exception());
             } catch (const QueueFullException&) {
-                result = std::unexpected(LogErrorCode::QueueFull);
+                result = atom::type::unexpected(LogErrorCode::QueueFull);
             } catch (const ShutdownException&) {
-                result = std::unexpected(LogErrorCode::ShuttingDown);
+                result = atom::type::unexpected(LogErrorCode::ShuttingDown);
             } catch (...) {
-                result = std::unexpected(LogErrorCode::InternalError);
+                result = atom::type::unexpected(LogErrorCode::InternalError);
             }
         }
     };
@@ -144,7 +145,7 @@ public:
         handle_.resume();
     }
 
-    std::expected<T, LogErrorCode> await_resume() const noexcept {
+    atom::type::expected<T, LogErrorCode> await_resume() const noexcept {
         return handle_.promise().result;
     }
 
@@ -155,7 +156,7 @@ private:
 // Specialization for promise_type<void>
 template <>
 struct Task<void>::promise_type {
-    std::expected<void, LogErrorCode> result{};
+    atom::type::expected<void, LogErrorCode> result{};
 
     Task<void> get_return_object() {
         return Task<void>(
@@ -165,26 +166,24 @@ struct Task<void>::promise_type {
     std::suspend_never initial_suspend() noexcept { return {}; }
     std::suspend_never final_suspend() noexcept { return {}; }
 
-    void return_void() {
-        result = std::expected<void, LogErrorCode>{};
-    }
+    void return_void() { result = atom::type::expected<void, LogErrorCode>{}; }
 
     void unhandled_exception() {
         try {
             std::rethrow_exception(std::current_exception());
         } catch (const QueueFullException&) {
-            result = std::unexpected(LogErrorCode::QueueFull);
+            result = atom::type::unexpected(LogErrorCode::QueueFull);
         } catch (const ShutdownException&) {
-            result = std::unexpected(LogErrorCode::ShuttingDown);
+            result = atom::type::unexpected(LogErrorCode::ShuttingDown);
         } catch (...) {
-            result = std::unexpected(LogErrorCode::InternalError);
+            result = atom::type::unexpected(LogErrorCode::InternalError);
         }
     }
 };
 
 // Specialization for Task<void>::await_resume
 template <>
-inline std::expected<void, LogErrorCode> Task<void>::await_resume()
+inline atom::type::expected<void, LogErrorCode> Task<void>::await_resume()
     const noexcept {
     return handle_.promise().result;
 }
@@ -290,11 +289,11 @@ public:
                                        std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::DEBUG, std::move(msg),
+            co_return co_await logAsync(LogLevel::DEBUG_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::DEBUG, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::DEBUG_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -313,11 +312,11 @@ public:
                                       std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::INFO, std::move(msg),
+            co_return co_await logAsync(LogLevel::INFO_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::INFO, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::INFO_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -336,11 +335,11 @@ public:
                                       std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::WARN, std::move(msg),
+            co_return co_await logAsync(LogLevel::WARN_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::WARN, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::WARN_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -359,11 +358,11 @@ public:
                                        std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::ERROR, std::move(msg),
+            co_return co_await logAsync(LogLevel::ERROR_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::ERROR, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::ERROR_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -382,11 +381,11 @@ public:
                                           std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::CRITICAL, std::move(msg),
-                                        location);
+            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL,
+                                        std::move(msg), location);
         } else {
-            co_return co_await logAsync(LogLevel::CRITICAL, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL,
+                                        std::string(format), location);
         }
     }
 

@@ -1,0 +1,37 @@
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+
+# Find required dependencies
+find_dependency(loguru)
+
+# Find optional dependencies
+find_dependency(OpenCV QUIET)
+find_dependency(PkgConfig QUIET)
+
+if(PkgConfig_FOUND)
+    pkg_check_modules(CFITSIO cfitsio QUIET)
+    pkg_check_modules(TESSERACT tesseract QUIET)
+    pkg_check_modules(LEPTONICA lept QUIET)
+endif()
+
+# Include targets
+include("${CMAKE_CURRENT_LIST_DIR}/atom-image-targets.cmake")
+
+# Set component variables
+set(atom-image_FOUND TRUE)
+
+# Check for optional components
+if(OpenCV_FOUND)
+    set(atom-image_OpenCV_FOUND TRUE)
+endif()
+
+if(CFITSIO_FOUND)
+    set(atom-image_CFITSIO_FOUND TRUE)
+endif()
+
+if(TESSERACT_FOUND AND LEPTONICA_FOUND)
+    set(atom-image_OCR_FOUND TRUE)
+endif()
+
+check_required_components(atom-image)

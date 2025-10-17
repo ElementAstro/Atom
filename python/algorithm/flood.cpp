@@ -2,6 +2,7 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <random>
+#include <thread>
 
 #include "atom/algorithm/flood.hpp"
 
@@ -53,7 +54,7 @@ PYBIND11_MODULE(flood_fill, m) {
         --------------------
 
         This module provides various flood fill algorithms for 2D grids:
-        
+
         - **fill_bfs**: Flood fill using Breadth-First Search
         - **fill_dfs**: Flood fill using Depth-First Search
         - **fill_parallel**: Flood fill using multiple threads
@@ -61,14 +62,14 @@ PYBIND11_MODULE(flood_fill, m) {
         Example:
             >>> import numpy as np
             >>> from atom.algorithm.flood_fill import fill_bfs, Connectivity
-            >>> 
+            >>>
             >>> # Create a grid
             >>> grid = np.zeros((10, 10), dtype=np.int32)
             >>> grid[3:7, 3:7] = 1  # Create a square
-            >>> 
+            >>>
             >>> # Fill the square
             >>> filled_grid = fill_bfs(grid, 5, 5, 1, 2, Connectivity.FOUR)
-            >>> 
+            >>>
             >>> # Check result
             >>> assert np.all(filled_grid[3:7, 3:7] == 2)
     )pbdoc";
@@ -176,10 +177,18 @@ PYBIND11_MODULE(flood_fill, m) {
             // Convert numpy array to vector of vectors
             std::vector<std::vector<int>> cpp_grid = numpy_to_vector(grid);
 
+            // Create FloodFillConfig
+            atom::algorithm::FloodFill::FloodFillConfig config;
+            config.connectivity = conn;
+            config.numThreads = num_threads;
+            config.useSIMD = true;
+            config.useBlockProcessing = true;
+            config.blockSize = 32;
+            config.loadBalancingFactor = 1.5f;
+
             // Call C++ function
-            atom::algorithm::FloodFill::fillParallel(cpp_grid, start_x, start_y,
-                                                     target_color, fill_color,
-                                                     conn, num_threads);
+            atom::algorithm::FloodFill::fillParallel(
+                cpp_grid, start_x, start_y, target_color, fill_color, config);
 
             // Convert back to numpy array
             return vector_to_numpy(cpp_grid);
@@ -377,8 +386,15 @@ PYBIND11_MODULE(flood_fill, m) {
 
             // Time Parallel
             double parallel_start = time.attr("time")().cast<double>();
+            atom::algorithm::FloodFill::FloodFillConfig config;
+            config.connectivity = conn;
+            config.numThreads = std::thread::hardware_concurrency();
+            config.useSIMD = true;
+            config.useBlockProcessing = true;
+            config.blockSize = 32;
+            config.loadBalancingFactor = 1.5f;
             atom::algorithm::FloodFill::fillParallel(
-                grid_copy2, start_x, start_y, target_color, fill_color, conn);
+                grid_copy2, start_x, start_y, target_color, fill_color, config);
             double parallel_end = time.attr("time")().cast<double>();
             double parallel_time = parallel_end - parallel_start;
 

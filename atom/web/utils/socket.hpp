@@ -65,8 +65,8 @@ auto setSocketNonBlocking(int sockfd) -> bool;
  * @return bool True if connection succeeded, false otherwise
  */
 auto connectWithTimeout(int sockfd, const struct sockaddr* addr,
-                        socklen_t addrlen, std::chrono::milliseconds timeout)
-    -> bool;
+                        socklen_t addrlen,
+                        std::chrono::milliseconds timeout) -> bool;
 
 }  // namespace atom::web
 

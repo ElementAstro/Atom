@@ -6,7 +6,7 @@
 #include <string>
 #include <vector>
 
-#include "atom/system/crash_quotes.hpp"
+#include "atom/system/debug/crash_quotes.hpp"
 
 using namespace atom::system;
 

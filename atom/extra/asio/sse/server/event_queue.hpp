@@ -5,12 +5,12 @@
  * @brief Thread-safe event queue for broadcasting
  */
 
-#include "../event.hpp"
-#include "event_store.hpp"
 #include <atomic>
 #include <mutex>
 #include <optional>
 #include <queue>
+#include "../event.hpp"
+#include "event_store.hpp"
 
 namespace atom::extra::asio::sse {
 
@@ -33,4 +33,4 @@ private:
     bool persist_events_;
 };
 
-} // namespace sse_server
+}  // namespace atom::extra::asio::sse

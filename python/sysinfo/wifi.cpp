@@ -584,27 +584,27 @@ Returns:
 Examples:
     >>> from atom.sysinfo import wifi
     >>> import time
-    >>> 
+    >>>
     >>> # Simple automatic monitoring for 20 seconds
     >>> with wifi.monitor_network(20, 2) as monitor:
     ...     while monitor.is_active:
     ...         print(f"Monitoring... {monitor.elapsed_time:.1f}s elapsed, "
     ...               f"{monitor.remaining_time:.1f}s remaining")
     ...         monitor.update()  # This will sleep for the interval
-    ... 
+    ...
     >>> # Get results after monitoring completes
     >>> avg_stats = monitor.average_stats
     >>> print(f"Average download: {avg_stats.download_speed:.2f} MB/s")
     >>> print(f"Average upload: {avg_stats.upload_speed:.2f} MB/s")
     >>> print(f"Average latency: {avg_stats.latency:.2f} ms")
-    >>> 
+    >>>
     >>> # Manual updating
     >>> with wifi.monitor_network(30, 5) as monitor:
     ...     # Do other things and manually update periodically
     ...     for i in range(6):
     ...         print(f"Taking measurement {i+1}")
     ...         monitor.update()
-    ... 
+    ...
     >>> print(f"Collected {len(monitor.stats_history)} measurements")
 )");
 
@@ -703,17 +703,17 @@ Examples:
     >>> from atom.sysinfo import wifi
     >>> # Ping a host 5 times
     >>> results, summary = wifi.ping("www.example.com", 5)
-    >>> 
+    >>>
     >>> # Print summary
     >>> print(f"Host: {summary['host']}")
     >>> print(f"Packets: {summary['packets_received']}/{summary['packets_sent']}")
     >>> print(f"Packet loss: {summary['packet_loss']:.1f}%")
-    >>> 
+    >>>
     >>> if summary['packets_received'] > 0:
     ...     print(f"Latency: min={summary['min_latency']:.1f}ms, "
     ...           f"avg={summary['avg_latency']:.1f}ms, "
     ...           f"max={summary['max_latency']:.1f}ms")
-    >>> 
+    >>>
     >>> # Individual results
     >>> for i, result in enumerate(results):
     ...     if result['success']:

@@ -1,5 +1,6 @@
 #include "atom/async/async_executor.hpp"
 
+#include <pybind11/chrono.h>
 #include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -11,54 +12,58 @@ PYBIND11_MODULE(async_executor, m) {
         Advanced Async Task Executor
         ---------------------------
 
-        This module provides a high-performance asynchronous task executor with 
-        thread pooling, priority-based scheduling, and multiple execution strategies.
-        
+        This module provides a high-performance asynchronous task executor with
+        thread pooling, priority-based scheduling, and work-stealing queues.
+
         The module includes:
-          - Thread pool with dynamic resizing
-          - Priority-based task scheduling (LOW, NORMAL, HIGH, CRITICAL)
-          - Various execution strategies (IMMEDIATE, DEFERRED, SCHEDULED)
-          - Task cancellation support
-          - Wait for completion functionality
-          
+          - Thread pool with configurable min/max threads
+          - Priority-based task scheduling (Low, Normal, High, Critical)
+          - Work-stealing queue optimization for load balancing
+          - Task execution monitoring and statistics
+          - Exception handling with source location information
+
         Example:
-            >>> from atom.async.async_executor import AsyncExecutor, ExecutionStrategy, TaskPriority
-            >>> 
-            >>> # Create an executor with 4 threads
-            >>> executor = AsyncExecutor(4)
-            >>> 
-            >>> # Schedule a task for immediate execution with normal priority
-            >>> future = executor.schedule(
-            >>>     ExecutionStrategy.IMMEDIATE, 
-            >>>     TaskPriority.NORMAL,
-            >>>     lambda x: x * 2, 
-            >>>     10
-            >>> )
-            >>> 
-            >>> # Get the result when ready
-            >>> result = future.result()
-            >>> print(result)  # Outputs: 20
+            >>> from atom.async.async_executor import AsyncExecutor, TaskPriority
             >>>
-            >>> # Schedule multiple tasks with different priorities
+            >>> # Create an executor with default configuration
+            >>> executor = AsyncExecutor()
+            >>> executor.start()
+            >>>
+            >>> # Execute a task with normal priority
+            >>> future = executor.execute(lambda: 42, TaskPriority.NORMAL)
+            >>> result = future.get()
+            >>> print(result)  # Outputs: 42
+            >>>
+            >>> # Execute multiple tasks with different priorities
             >>> futures = []
             >>> for i in range(10):
             >>>     priority = TaskPriority.HIGH if i % 2 == 0 else TaskPriority.LOW
-            >>>     futures.append(executor.schedule(
-            >>>         ExecutionStrategy.IMMEDIATE,
-            >>>         priority,
-            >>>         lambda x: x * x,
-            >>>         i
-            >>>     ))
+            >>>     future = executor.execute(lambda x=i: x * x, priority)
+            >>>     futures.append(future)
             >>>
-            >>> # Wait for all tasks to complete
-            >>> executor.wait_for_all()
+            >>> # Collect results
+            >>> results = [f.get() for f in futures]
+            >>> print(results)
+            >>>
+            >>> # Stop the executor
+            >>> executor.stop()
     )pbdoc";
+
+    // Register exception classes
+    py::register_exception<atom::async::ExecutorException>(
+        m, "ExecutorException", PyExc_RuntimeError);
+    py::register_exception<atom::async::TaskException>(m, "TaskException",
+                                                       PyExc_RuntimeError);
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
         try {
             if (p)
                 std::rethrow_exception(p);
+        } catch (const atom::async::TaskException& e) {
+            PyErr_SetString(PyExc_RuntimeError, e.what());
+        } catch (const atom::async::ExecutorException& e) {
+            PyErr_SetString(PyExc_RuntimeError, e.what());
         } catch (const std::invalid_argument& e) {
             PyErr_SetString(PyExc_ValueError, e.what());
         } catch (const std::runtime_error& e) {
@@ -69,33 +74,63 @@ PYBIND11_MODULE(async_executor, m) {
     });
 
     // Define the task priority enum
-    py::enum_<atom::async::AsyncExecutor::Priority>(
-        m, "TaskPriority", "Task priority levels for the async executor")
-        .value(
-            "LOW", atom::async::AsyncExecutor::Priority::Low,
-            "Low priority tasks will be executed after higher priority tasks")
+    py::enum_<atom::async::AsyncExecutor::Priority>(m, "TaskPriority",
+                                                    R"pbdoc(
+        Task priority levels for the async executor.
+
+        Higher priority tasks are executed before lower priority tasks.
+        The numeric values indicate relative priority weights.
+        )pbdoc")
+        .value("LOW", atom::async::AsyncExecutor::Priority::Low,
+               "Low priority tasks (priority weight: 0)")
         .value("NORMAL", atom::async::AsyncExecutor::Priority::Normal,
-               "Normal priority for most tasks")
-        .value(
-            "HIGH", atom::async::AsyncExecutor::Priority::High,
-            "High priority tasks will be executed before lower priority tasks")
+               "Normal priority tasks (priority weight: 50, default)")
+        .value("HIGH", atom::async::AsyncExecutor::Priority::High,
+               "High priority tasks (priority weight: 100)")
         .value("CRITICAL", atom::async::AsyncExecutor::Priority::Critical,
-               "Critical priority tasks are executed first")
+               "Critical priority tasks (priority weight: 200)")
         .export_values();
 
-    // 定义执行策略枚举 - 使用字面量，因为执行策略在代码中未定义
-    // 假设AsyncExecutor有三种执行策略: IMMEDIATE(0), DEFERRED(1), SCHEDULED(2)
-    // 这里我们创建一个临时枚举来绑定这些值
-    enum class ExecutionStrategy { IMMEDIATE = 0, DEFERRED = 1, SCHEDULED = 2 };
-    py::enum_<ExecutionStrategy>(
-        m, "ExecutionStrategy", "Execution strategies for the async executor")
-        .value("IMMEDIATE", ExecutionStrategy::IMMEDIATE,
-               "Execute immediately in the thread pool")
-        .value("DEFERRED", ExecutionStrategy::DEFERRED,
-               "Execute when explicitly requested")
-        .value("SCHEDULED", ExecutionStrategy::SCHEDULED,
-               "Execute at a specified time")
-        .export_values();
+    // Define the Configuration struct
+    py::class_<atom::async::AsyncExecutor::Configuration>(m, "Configuration",
+                                                          R"pbdoc(
+        Configuration options for the AsyncExecutor.
+
+        This struct contains all the configurable parameters for the thread pool
+        and task execution behavior.
+        )pbdoc")
+        .def(py::init<>(), "Create default configuration")
+        .def_readwrite("min_threads",
+                       &atom::async::AsyncExecutor::Configuration::minThreads,
+                       "Minimum number of threads in the pool")
+        .def_readwrite("max_threads",
+                       &atom::async::AsyncExecutor::Configuration::maxThreads,
+                       "Maximum number of threads in the pool")
+        .def_readwrite(
+            "queue_size_per_thread",
+            &atom::async::AsyncExecutor::Configuration::queueSizePerThread,
+            "Queue size per thread for work-stealing")
+        .def_readwrite(
+            "thread_idle_timeout",
+            &atom::async::AsyncExecutor::Configuration::threadIdleTimeout,
+            "Timeout before idle threads are terminated")
+        .def_readwrite("set_priority",
+                       &atom::async::AsyncExecutor::Configuration::setPriority,
+                       "Whether to set thread priority")
+        .def_readwrite(
+            "thread_priority",
+            &atom::async::AsyncExecutor::Configuration::threadPriority,
+            "Thread priority (platform-dependent)")
+        .def_readwrite("pin_threads",
+                       &atom::async::AsyncExecutor::Configuration::pinThreads,
+                       "Whether to pin threads to CPU cores")
+        .def_readwrite(
+            "use_work_stealing",
+            &atom::async::AsyncExecutor::Configuration::useWorkStealing,
+            "Enable work-stealing optimization")
+        .def_readwrite("stat_interval",
+                       &atom::async::AsyncExecutor::Configuration::statInterval,
+                       "Statistics collection interval");
 
     // AsyncExecutor类绑定
     py::class_<atom::async::AsyncExecutor>(
@@ -110,99 +145,380 @@ Args:
 
 Examples:
     >>> executor = AsyncExecutor(4)  # Create an executor with 4 threads
-    >>> 
+    >>>
     >>> # Schedule an immediate task
     >>> future = executor.schedule(
-    >>>     ExecutionStrategy.IMMEDIATE, 
+    >>>     ExecutionStrategy.IMMEDIATE,
     >>>     TaskPriority.NORMAL,
-    >>>     lambda x: x * 2, 
+    >>>     lambda x: x * 2,
     >>>     10
     >>> )
     >>>
     >>> # Wait for the result
     >>> result = future.result()
 )")
-        .def(py::init([](py::object pool_size) {
-            atom::async::AsyncExecutor::Configuration config;
-            if (!pool_size.is_none()) {
-                config.minThreads = pool_size.cast<size_t>();
-                config.maxThreads = pool_size.cast<size_t>();
-            }
-            return std::make_unique<atom::async::AsyncExecutor>(config);
-        }), py::arg("pool_size") = py::none(),
-        "Constructs an AsyncExecutor with a specified thread pool size (default: hardware concurrency)")
+        .def(py::init<>(), "Create executor with default configuration")
+        .def(py::init<const atom::async::AsyncExecutor::Configuration&>(),
+             py::arg("config"), "Create executor with custom configuration")
+        .def("start", &atom::async::AsyncExecutor::start,
+             R"pbdoc(
+             Start the thread pool.
+
+             This must be called before executing any tasks.
+             )pbdoc")
+        .def("stop", &atom::async::AsyncExecutor::stop,
+             R"pbdoc(
+             Stop the thread pool and wait for all threads to finish.
+
+             After calling this, no new tasks can be executed.
+             )pbdoc")
+        .def("is_running", &atom::async::AsyncExecutor::isRunning,
+             R"pbdoc(
+             Check if the executor is currently running.
+
+             Returns:
+                 bool: True if the executor is running, False otherwise.
+             )pbdoc")
         .def(
-            "schedule",
-            [](atom::async::AsyncExecutor& self,
-               ExecutionStrategy strategy,
-               atom::async::AsyncExecutor::Priority priority, py::function func,
-               py::args args) {
-                // 将ExecutionStrategy转换为AsyncExecutor内部使用的类型或直接使用整数值
-                // 并将函数和参数包装为可调用对象
-                return self.execute([func, args]() {
-                    py::gil_scoped_acquire acquire;
-                    return func(*args).cast<py::object>();
-                }, priority);
+            "execute",
+            [](atom::async::AsyncExecutor& self, py::function func,
+               atom::async::AsyncExecutor::Priority priority) {
+                return self.execute(
+                    [func]() -> py::object {
+                        py::gil_scoped_acquire acquire;
+                        return func();
+                    },
+                    priority);
             },
-            py::arg("strategy"), py::arg("priority"), py::arg("func"),
-            R"(Schedule a task for execution with the specified strategy and priority.
+            py::arg("func"),
+            py::arg("priority") = atom::async::AsyncExecutor::Priority::Normal,
+            R"pbdoc(
+            Execute a function asynchronously and return a future.
 
-Args:
-    strategy: Execution strategy (IMMEDIATE, DEFERRED, or SCHEDULED)
-    priority: Task priority (LOW, NORMAL, HIGH, or CRITICAL)
-    func: Function to execute
-    *args: Arguments to pass to the function
+            Args:
+                func: The function to execute
+                priority: Task priority (default: Normal)
 
-Returns:
-    Future object that will contain the result of the task
+            Returns:
+                std::future: A future that will contain the result
 
-Examples:
-    >>> future = executor.schedule(
-    >>>     ExecutionStrategy.IMMEDIATE,
-    >>>     TaskPriority.HIGH,
-    >>>     lambda x, y: x + y,
-    >>>     10, 20
-    >>> )
-    >>> result = future.result()  # This will be 30
-)")
-        .def("execute_deferred_tasks",
-             [](atom::async::AsyncExecutor& self) {
-                 // 这个方法可能需要自定义实现，因为我们无法确定是否有对应的方法
-                 // 假设AsyncExecutor没有这个方法
-                 throw std::runtime_error("Method not implemented");
-             },
-             "Execute all deferred tasks")
-        .def("wait_for_all",
-             [](atom::async::AsyncExecutor& self) {
-                 // 等待所有任务完成的逻辑
-                 // 假设没有直接对应的方法
-                 throw std::runtime_error("Method not implemented");
-             },
-             "Wait for all tasks to complete, including deferred tasks")
-        .def("queue_size",
-             [](const atom::async::AsyncExecutor& self) {
-                 return self.getPendingTaskCount();
-             },
-             "Get the number of tasks waiting in the queue")
-        .def("active_task_count",
-             [](const atom::async::AsyncExecutor& self) {
-                 return self.getActiveThreadCount();
-             },
-             "Get the number of active tasks currently being processed")
-        .def("resize",
-             [](atom::async::AsyncExecutor& self, size_t pool_size) {
-                 // 可能需要自定义实现，假设AsyncExecutor没有直接的resize方法
-                 throw std::runtime_error("Method not implemented");
-             },
-             py::arg("pool_size"),
-             "Resize the thread pool to a specified size");
+            Examples:
+                >>> future = executor.execute(lambda: 42)
+                >>> result = future.get()  # 42
+            )pbdoc")
+        .def(
+            "execute_void",
+            [](atom::async::AsyncExecutor& self, py::function func,
+               atom::async::AsyncExecutor::Priority priority) {
+                self.execute(
+                    [func]() {
+                        py::gil_scoped_acquire acquire;
+                        func();
+                    },
+                    priority);
+            },
+            py::arg("func"),
+            py::arg("priority") = atom::async::AsyncExecutor::Priority::Normal,
+            R"pbdoc(
+            Execute a void function asynchronously.
 
-    // Define a convenience function for getting hardware concurrency
+            Args:
+                func: The function to execute (should not return a value)
+                priority: Task priority (default: Normal)
+
+            Examples:
+                >>> executor.execute_void(lambda: print("Hello World"))
+            )pbdoc")
+        .def("get_active_thread_count",
+             &atom::async::AsyncExecutor::getActiveThreadCount,
+             R"pbdoc(
+             Get the number of currently active threads.
+
+             Returns:
+                 size_t: Number of threads currently executing tasks.
+             )pbdoc")
+        .def("get_pending_task_count",
+             &atom::async::AsyncExecutor::getPendingTaskCount,
+             R"pbdoc(
+             Get the number of tasks waiting to be executed.
+
+             Returns:
+                 size_t: Number of pending tasks in the queue.
+             )pbdoc")
+        .def("get_completed_task_count",
+             &atom::async::AsyncExecutor::getCompletedTaskCount,
+             R"pbdoc(
+             Get the total number of completed tasks.
+
+             Returns:
+                 size_t: Total number of tasks that have been completed.
+             )pbdoc")
+
+        // Static methods for global instance
+        .def_static(
+            "submit",
+            [](py::function func,
+               atom::async::AsyncExecutor::Priority priority) {
+                return atom::async::AsyncExecutor::submit(
+                    [func]() -> py::object {
+                        py::gil_scoped_acquire acquire;
+                        return func();
+                    },
+                    priority);
+            },
+            py::arg("func"),
+            py::arg("priority") = atom::async::AsyncExecutor::Priority::Normal,
+            R"pbdoc(
+            Submit a task to the global executor instance.
+
+            Args:
+                func: The function to execute
+                priority: Task priority (default: Normal)
+
+            Returns:
+                std::future: A future that will contain the result
+
+            Examples:
+                >>> future = AsyncExecutor.submit(lambda: 42)
+                >>> result = future.get()  # 42
+            )pbdoc")
+        .def_static("get_instance", &atom::async::AsyncExecutor::getInstance,
+                    py::return_value_policy::reference,
+                    R"pbdoc(
+            Get the global executor instance.
+
+            Returns:
+                AsyncExecutor: Reference to the global executor instance
+
+            Examples:
+                >>> global_executor = AsyncExecutor.get_instance()
+                >>> global_executor.start()
+            )pbdoc")
+
+        // Enhanced execution methods with better error handling
+        .def(
+            "execute_with_timeout",
+            [](atom::async::AsyncExecutor& self, py::function func,
+               atom::async::AsyncExecutor::Priority priority,
+               std::chrono::milliseconds timeout) {
+                auto future = self.execute(
+                    [func]() -> py::object {
+                        py::gil_scoped_acquire acquire;
+                        return func();
+                    },
+                    priority);
+
+                if (future.wait_for(timeout) == std::future_status::timeout) {
+                    throw py::value_error("Task execution timed out");
+                }
+
+                return future.get();
+            },
+            py::arg("func"),
+            py::arg("priority") = atom::async::AsyncExecutor::Priority::Normal,
+            py::arg("timeout") = std::chrono::milliseconds(5000),
+            R"pbdoc(
+            Execute a function with a timeout.
+
+            Args:
+                func: The function to execute
+                priority: Task priority (default: Normal)
+                timeout: Maximum time to wait for completion (default: 5000ms)
+
+            Returns:
+                The result of the function
+
+            Raises:
+                ValueError: If the task times out
+
+            Examples:
+                >>> result = executor.execute_with_timeout(lambda: slow_function(), timeout=1000)
+            )pbdoc");
+
+    // Utility functions
     m.def(
-        "get_hardware_concurrency",
-        []() { return std::thread::hardware_concurrency(); },
-        "Get the number of hardware threads available on the system");
+         "get_hardware_concurrency",
+         []() -> unsigned int { return std::thread::hardware_concurrency(); },
+         R"pbdoc(
+        Get the number of hardware threads available on the system.
 
-    // Add version information
+        Returns:
+            int: Number of concurrent threads supported by the implementation.
+        )pbdoc")
+
+        .def(
+            "create_default_config",
+            []() -> atom::async::AsyncExecutor::Configuration {
+                return atom::async::AsyncExecutor::Configuration{};
+            },
+            R"pbdoc(
+        Create a default configuration for AsyncExecutor.
+
+        Returns:
+            Configuration: A configuration object with default values
+
+        Examples:
+            >>> config = create_default_config()
+            >>> config.max_threads = 8
+            >>> executor = AsyncExecutor(config)
+        )pbdoc")
+
+        .def(
+            "create_optimized_config",
+            [](size_t thread_count)
+                -> atom::async::AsyncExecutor::Configuration {
+                auto config = atom::async::AsyncExecutor::Configuration{};
+                config.minThreads = std::max<size_t>(2, thread_count / 2);
+                config.maxThreads = thread_count;
+                config.useWorkStealing = true;
+                config.setPriority = true;
+                return config;
+            },
+            py::arg("thread_count") = std::thread::hardware_concurrency(),
+            R"pbdoc(
+        Create an optimized configuration for AsyncExecutor.
+
+        Args:
+            thread_count: Number of threads to use (default: hardware concurrency)
+
+        Returns:
+            Configuration: An optimized configuration object
+
+        Examples:
+            >>> config = create_optimized_config(8)
+            >>> executor = AsyncExecutor(config)
+        )pbdoc")
+
+        .def(
+            "benchmark_executor",
+            [](size_t num_tasks,
+               atom::async::AsyncExecutor::Priority priority) -> py::dict {
+                using namespace std::chrono;
+
+                auto config = atom::async::AsyncExecutor::Configuration{};
+                config.maxThreads = std::thread::hardware_concurrency();
+                atom::async::AsyncExecutor executor(config);
+                executor.start();
+
+                py::dict results;
+                std::vector<std::future<int>> futures;
+
+                auto start_time = high_resolution_clock::now();
+
+                // Submit tasks
+                for (size_t i = 0; i < num_tasks; ++i) {
+                    auto future = executor.execute(
+                        [i]() -> int {
+                            // Simulate some work
+                            std::this_thread::sleep_for(
+                                std::chrono::microseconds(100));
+                            return static_cast<int>(i * i);
+                        },
+                        priority);
+                    futures.push_back(std::move(future));
+                }
+
+                // Wait for all tasks to complete
+                for (auto& future : futures) {
+                    future.get();
+                }
+
+                auto end_time = high_resolution_clock::now();
+                auto total_duration =
+                    duration_cast<milliseconds>(end_time - start_time);
+
+                executor.stop();
+
+                results["num_tasks"] = num_tasks;
+                results["total_time_ms"] = total_duration.count();
+                results["tasks_per_second"] =
+                    (num_tasks * 1000.0) / total_duration.count();
+                results["completed_tasks"] = executor.getCompletedTaskCount();
+
+                return results;
+            },
+            py::arg("num_tasks") = 1000,
+            py::arg("priority") = atom::async::AsyncExecutor::Priority::Normal,
+            R"pbdoc(
+        Benchmark the executor performance.
+
+        Args:
+            num_tasks: Number of tasks to execute (default: 1000)
+            priority: Task priority to use (default: Normal)
+
+        Returns:
+            dict: Benchmark results including timing and throughput
+
+        Examples:
+            >>> results = benchmark_executor(5000, TaskPriority.HIGH)
+            >>> print(f"Tasks per second: {results['tasks_per_second']}")
+        )pbdoc")
+
+        .def(
+            "execute_parallel_tasks",
+            [](py::list tasks,
+               atom::async::AsyncExecutor::Priority priority) -> py::list {
+                auto config = atom::async::AsyncExecutor::Configuration{};
+                atom::async::AsyncExecutor executor(config);
+                executor.start();
+
+                std::vector<std::future<py::object>> futures;
+
+                // Submit all tasks
+                for (auto task : tasks) {
+                    auto func = task.cast<py::function>();
+                    auto future = executor.execute(
+                        [func]() -> py::object {
+                            py::gil_scoped_acquire acquire;
+                            return func();
+                        },
+                        priority);
+                    futures.push_back(std::move(future));
+                }
+
+                // Collect results
+                py::list results;
+                for (auto& future : futures) {
+                    try {
+                        results.append(future.get());
+                    } catch (const std::exception& e) {
+                        results.append(
+                            py::str("Error: " + std::string(e.what())));
+                    }
+                }
+
+                executor.stop();
+                return results;
+            },
+            py::arg("tasks"),
+            py::arg("priority") = atom::async::AsyncExecutor::Priority::Normal,
+            R"pbdoc(
+        Execute multiple tasks in parallel and return results.
+
+        Args:
+            tasks: List of functions to execute
+            priority: Task priority to use (default: Normal)
+
+        Returns:
+            list: Results from all tasks in the same order
+
+        Examples:
+            >>> tasks = [lambda: i*i for i in range(10)]
+            >>> results = execute_parallel_tasks(tasks)
+            >>> print(results)  # [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]
+        )pbdoc");
+
+    // Add version and feature information
     m.attr("__version__") = "1.0.0";
+    m.attr("CACHE_LINE_SIZE") = ATOM_CACHE_LINE_SIZE;
+
+#ifdef ATOM_PLATFORM_WINDOWS
+    m.attr("PLATFORM") = "Windows";
+#elif defined(ATOM_PLATFORM_APPLE)
+    m.attr("PLATFORM") = "macOS";
+#elif defined(ATOM_PLATFORM_LINUX)
+    m.attr("PLATFORM") = "Linux";
+#else
+    m.attr("PLATFORM") = "Unknown";
+#endif
 }

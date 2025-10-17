@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 using json = nlohmann::json;
 
@@ -59,14 +58,14 @@ Args:
 Examples:
     >>> from atom.http import HttpClient, HttpVerb
     >>> import asyncio
-    >>> 
+    >>>
     >>> # Synchronous request
     >>> client = HttpClient()
     >>> response = client.request(HttpVerb.GET, "example.com", "80", "/")
     >>> print(response.body())
-    >>> 
+    >>>
     >>> # JSON request
-    >>> json_response = client.json_request(HttpVerb.POST, "api.example.com", 
+    >>> json_response = client.json_request(HttpVerb.POST, "api.example.com",
     >>>                                    "443", "/data", {"key": "value"})
     >>> print(json_response)
 )")

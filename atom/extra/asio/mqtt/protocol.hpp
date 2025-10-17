@@ -195,7 +195,7 @@ inline void TCPTransport::async_read(
 
 inline void TCPTransport::close() {
     std::error_code ec;
-    auto res = socket_.close(ec);
+    [[maybe_unused]] auto res = socket_.close(ec);
 }
 
 inline bool TCPTransport::is_open() const { return socket_.is_open(); }
@@ -309,7 +309,7 @@ inline void TLSTransport::async_read(
 
 inline void TLSTransport::close() {
     std::error_code ec;
-    auto res = ssl_socket_.lowest_layer().close(ec);
+    [[maybe_unused]] auto res = ssl_socket_.lowest_layer().close(ec);
 }
 
 inline bool TLSTransport::is_open() const {

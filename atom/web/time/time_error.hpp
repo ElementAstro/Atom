@@ -18,7 +18,6 @@ Description: Time Error Definitions
 #include <string>
 #include <system_error>
 
-
 namespace atom::web {
 
 /**

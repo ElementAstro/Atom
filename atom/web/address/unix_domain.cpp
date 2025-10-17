@@ -125,8 +125,8 @@ void UnixDomain::printAddressType() const {
 #endif
 }
 
-auto UnixDomain::isInRange(std::string_view start, std::string_view end)
-    -> bool {
+auto UnixDomain::isInRange(std::string_view start,
+                           std::string_view end) -> bool {
     try {
         if (start.empty() || end.empty()) {
             throw AddressRangeError("Empty range boundaries");

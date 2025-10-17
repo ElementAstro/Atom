@@ -1,7 +1,21 @@
-/*
- * atom/memory/memory_pool.hpp
+/**
+ * @file memory_pool.hpp
+ * @brief Fixed-size block memory pool and simple object pool implementations
  *
- * Copyright (C) 2024 Max Qian <lightapt.com>
+ * This file provides FixedBlockPool and SimpleObjectPool classes for efficient
+ * fixed-size memory allocations. These are simpler and faster than the
+ * variable-size MemoryPool when all allocations are the same size.
+ *
+ * CLASSES PROVIDED:
+ * - FixedBlockPool: Low-level fixed-size block allocator
+ * - SimpleObjectPool: Object-oriented wrapper with RAII smart pointers
+ * - PoolPtr: Smart pointer for automatic object return to pool
+ *
+ * For other memory pool types in atom::memory, see the documentation in
+ * memory.hpp.
+ *
+ * @author Max Qian
+ * @copyright Copyright (C) 2024 Max Qian <lightapt.com>
  */
 
 #pragma once
@@ -23,11 +37,15 @@ namespace memory {
  * blocks. Reduces memory fragmentation and system call overhead for frequent
  * small object operations.
  *
+ * This is a FIXED-SIZE memory pool optimized for uniform allocations.
+ * All allocations return blocks of exactly BlockSize bytes. For variable-size
+ * allocations with growth strategies, see MemoryPool in memory.hpp.
+ *
  * @tparam BlockSize Size of each memory block in bytes
  * @tparam BlocksPerChunk Number of blocks per chunk
  */
 template <std::size_t BlockSize = 64, std::size_t BlocksPerChunk = 1024>
-class MemoryPool {
+class FixedBlockPool {
 private:
     struct Block {
         Block* next;
@@ -68,12 +86,12 @@ public:
     static_assert(BlockSize % alignof(std::max_align_t) == 0,
                   "Block size must be aligned to std::max_align_t");
 
-    MemoryPool() = default;
-    ~MemoryPool() = default;
-    MemoryPool(const MemoryPool&) = delete;
-    MemoryPool& operator=(const MemoryPool&) = delete;
-    MemoryPool(MemoryPool&&) noexcept = default;
-    MemoryPool& operator=(MemoryPool&&) noexcept = default;
+    FixedBlockPool() = default;
+    ~FixedBlockPool() = default;
+    FixedBlockPool(const FixedBlockPool&) = delete;
+    FixedBlockPool& operator=(const FixedBlockPool&) = delete;
+    FixedBlockPool(FixedBlockPool&&) noexcept = default;
+    FixedBlockPool& operator=(FixedBlockPool&&) noexcept = default;
 
     /**
      * @brief Allocates a memory block
@@ -147,7 +165,7 @@ public:
 };
 
 /**
- * @brief Generic object pool based on MemoryPool
+ * @brief Generic object pool based on FixedBlockPool
  *
  * Efficiently allocates and recycles objects of a specific type.
  *
@@ -155,22 +173,22 @@ public:
  * @tparam BlocksPerChunk Number of objects per chunk
  */
 template <typename T, std::size_t BlocksPerChunk = 1024>
-class ObjectPool {
+class SimpleObjectPool {
 private:
     static constexpr std::size_t block_size =
         ((sizeof(T) + alignof(std::max_align_t) - 1) /
          alignof(std::max_align_t)) *
         alignof(std::max_align_t);
 
-    MemoryPool<block_size, BlocksPerChunk> memory_pool_;
+    FixedBlockPool<block_size, BlocksPerChunk> memory_pool_;
 
 public:
-    ObjectPool() = default;
-    ~ObjectPool() = default;
-    ObjectPool(const ObjectPool&) = delete;
-    ObjectPool& operator=(const ObjectPool&) = delete;
-    ObjectPool(ObjectPool&&) noexcept = default;
-    ObjectPool& operator=(ObjectPool&&) noexcept = default;
+    SimpleObjectPool() = default;
+    ~SimpleObjectPool() = default;
+    SimpleObjectPool(const SimpleObjectPool&) = delete;
+    SimpleObjectPool& operator=(const SimpleObjectPool&) = delete;
+    SimpleObjectPool(SimpleObjectPool&&) noexcept = default;
+    SimpleObjectPool& operator=(SimpleObjectPool&&) noexcept = default;
 
     /**
      * @brief Allocates and constructs an object
@@ -223,9 +241,10 @@ public:
 };
 
 /**
- * @brief Smart pointer using ObjectPool for memory management
+ * @brief Smart pointer using SimpleObjectPool for memory management
  *
- * Similar to std::unique_ptr but uses ObjectPool for allocation/deallocation.
+ * Similar to std::unique_ptr but uses SimpleObjectPool for
+ * allocation/deallocation.
  *
  * @tparam T Managed object type
  */
@@ -233,7 +252,7 @@ template <typename T>
 class PoolPtr {
 private:
     T* ptr_ = nullptr;
-    ObjectPool<T>* pool_ = nullptr;
+    SimpleObjectPool<T>* pool_ = nullptr;
 
 public:
     PoolPtr() noexcept = default;
@@ -243,7 +262,7 @@ public:
      * @param ptr Object pointer
      * @param pool Object pool pointer
      */
-    explicit PoolPtr(T* ptr, ObjectPool<T>* pool) noexcept
+    explicit PoolPtr(T* ptr, SimpleObjectPool<T>* pool) noexcept
         : ptr_(ptr), pool_(pool) {}
 
     ~PoolPtr() { reset(); }
@@ -272,7 +291,7 @@ public:
      * @param ptr New object pointer
      * @param pool New object pool pointer
      */
-    void reset(T* ptr = nullptr, ObjectPool<T>* pool = nullptr) noexcept {
+    void reset(T* ptr = nullptr, SimpleObjectPool<T>* pool = nullptr) noexcept {
         if ((ptr_ && pool_)) [[likely]] {
             pool_->deallocate(ptr_);
         }
@@ -332,7 +351,7 @@ public:
 };
 
 /**
- * @brief Creates a PoolPtr from an ObjectPool
+ * @brief Creates a PoolPtr from a SimpleObjectPool
  * @tparam T Object type
  * @tparam Args Constructor argument types
  * @param pool Object pool reference
@@ -340,7 +359,8 @@ public:
  * @return PoolPtr managing the newly created object
  */
 template <typename T, typename... Args>
-[[nodiscard]] PoolPtr<T> make_pool_ptr(ObjectPool<T>& pool, Args&&... args) {
+[[nodiscard]] PoolPtr<T> make_pool_ptr(SimpleObjectPool<T>& pool,
+                                       Args&&... args) {
     return PoolPtr<T>(pool.allocate(std::forward<Args>(args)...), &pool);
 }
 

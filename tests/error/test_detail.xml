@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="8" failures="0" disabled="0" errors="0" time="0.052" timestamp="2025-09-17T03:40:51.843" name="AllTests">
+  <testsuite name="ComprehensiveTest" tests="8" failures="0" disabled="0" skipped="0" errors="0" time="0.044" timestamp="2025-09-17T03:40:51.848">
+    <testcase name="AllExceptionTypes" file="comprehensive_test.cpp" line="37" status="run" result="completed" time="0." timestamp="2025-09-17T03:40:51.850" classname="ComprehensiveTest" />
+    <testcase name="AllFileExceptions" file="comprehensive_test.cpp" line="69" status="run" result="completed" time="0." timestamp="2025-09-17T03:40:51.857" classname="ComprehensiveTest" />
+    <testcase name="AllSystemExceptions" file="comprehensive_test.cpp" line="85" status="run" result="completed" time="0." timestamp="2025-09-17T03:40:51.860" classname="ComprehensiveTest" />
+    <testcase name="AllNetworkExceptions" file="comprehensive_test.cpp" line="97" status="run" result="completed" time="0." timestamp="2025-09-17T03:40:51.864" classname="ComprehensiveTest" />
+    <testcase name="StackTraceIntegration" file="comprehensive_test.cpp" line="106" status="run" result="completed" time="0.006" timestamp="2025-09-17T03:40:51.868" classname="ComprehensiveTest" />
+    <testcase name="ErrorCodeEnums" file="comprehensive_test.cpp" line="129" status="run" result="completed" time="0." timestamp="2025-09-17T03:40:51.879" classname="ComprehensiveTest" />
+    <testcase name="NestedExceptionHandling" file="comprehensive_test.cpp" line="158" status="run" result="completed" time="0.001" timestamp="2025-09-17T03:40:51.883" classname="ComprehensiveTest" />
+    <testcase name="SystemErrorException" file="comprehensive_test.cpp" line="176" status="run" result="completed" time="0.001" timestamp="2025-09-17T03:40:51.889" classname="ComprehensiveTest" />
+  </testsuite>
+</testsuites>

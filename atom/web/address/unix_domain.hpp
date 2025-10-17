@@ -47,8 +47,8 @@ public:
      * otherwise.
      * @override
      */
-    auto isInRange(std::string_view start, std::string_view end)
-        -> bool override;
+    auto isInRange(std::string_view start,
+                   std::string_view end) -> bool override;
 
     /**
      * @brief Converts the Unix domain socket address to its binary
@@ -109,9 +109,8 @@ public:
      * @return True if paths are in the same directory, false otherwise.
      * @override
      */
-    [[nodiscard]] auto isSameSubnet(const Address& other,
-                                    std::string_view mask) const
-        -> bool override;
+    [[nodiscard]] auto isSameSubnet(
+        const Address& other, std::string_view mask) const -> bool override;
 
     /**
      * @brief Converts the Unix domain socket address to its hexadecimal

@@ -235,9 +235,9 @@ TEST_F(StringTest, ReplaceAll) {
     EXPECT_EQ(count, 0);
     EXPECT_EQ(s4.data(), "abc");
 
-    // ReplaceAllParallel (for smaller strings it falls back to replaceAll)
+    // ReplaceAll with multiple occurrences
     String s5("one two one two one");
-    count = s5.replaceAllParallel(String("one"), String("three"));
+    count = s5.replaceAll(String("one"), String("three"));
     EXPECT_EQ(count, 3);
     EXPECT_EQ(s5.data(), "three two three two three");
 }

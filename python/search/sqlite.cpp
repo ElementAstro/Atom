@@ -5,7 +5,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(sqlite, m) {
@@ -254,5 +253,77 @@ Returns:
 
 Returns:
     The number of rows modified
+)")
+        .def("get_total_changes", &SqliteDB::getTotalChanges,
+             R"(Get the total number of rows modified since database opened.
+
+Returns:
+    The total number of rows modified since the database was opened
+
+Raises:
+    RuntimeError: If not connected to database
+)")
+        .def("table_exists", &SqliteDB::tableExists, py::arg("table_name"),
+             R"(Check if a table exists in the database.
+
+Args:
+    table_name: Name of the table to check
+
+Returns:
+    True if the table exists, False otherwise
+
+Examples:
+    >>> if db.table_exists("users"):
+    ...     print("Users table exists")
+)")
+        .def("get_table_schema", &SqliteDB::getTableSchema,
+             py::arg("table_name"),
+             R"(Get the schema information for a table.
+
+Args:
+    table_name: Name of the table to get schema for
+
+Returns:
+    Result set containing column information (name, type, notnull, dflt_value, pk)
+
+Raises:
+    RuntimeError: If table doesn't exist or database error occurs
+
+Examples:
+    >>> schema = db.get_table_schema("users")
+    >>> for row in schema:
+    ...     print(f"Column: {row[1]}, Type: {row[2]}")
+)")
+        .def("vacuum", &SqliteDB::vacuum,
+             R"(Execute VACUUM command to optimize database.
+
+The VACUUM command rebuilds the database file, repacking it into a minimal amount of disk space.
+This can improve performance and reduce file size.
+
+Returns:
+    True if VACUUM was successful
+
+Raises:
+    RuntimeError: If VACUUM operation fails
+
+Examples:
+    >>> if db.vacuum():
+    ...     print("Database optimized successfully")
+)")
+        .def("analyze", &SqliteDB::analyze,
+             R"(Execute ANALYZE command to update query planner statistics.
+
+The ANALYZE command gathers statistics about the content of tables and indices
+to help the query planner make better decisions about query optimization.
+
+Returns:
+    True if ANALYZE was successful
+
+Raises:
+    RuntimeError: If ANALYZE operation fails
+
+Examples:
+    >>> if db.analyze():
+    ...     print("Database statistics updated successfully")
 )");
 }

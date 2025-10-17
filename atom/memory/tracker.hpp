@@ -482,65 +482,32 @@ private:
 #endif
 
 /**
- * @brief Overload global new and delete operators to automatically track memory
+ * @brief Global operator new/delete overloads for memory tracking
+ *
+ * These operators are declared here and defined in tracker.cpp to avoid
+ * ODR (One Definition Rule) violations when the header is included in
+ * multiple translation units.
+ *
+ * The implementations are only compiled when ATOM_MEMORY_TRACKING_ENABLED
+ * is defined.
  */
 #ifdef ATOM_MEMORY_TRACKING_ENABLED
 
 // Basic new/delete
-void* operator new(size_t size) {
-    void* ptr = std::malloc(size);
-    if (!ptr)
-        throw std::bad_alloc();
-    ATOM_TRACK_ALLOC(ptr, size);
-    return ptr;
-}
-
-void operator delete(void* ptr) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new(size_t size);
+void operator delete(void* ptr) noexcept;
 
 // Array versions
-void* operator new[](size_t size) {
-    void* ptr = std::malloc(size);
-    if (!ptr)
-        throw std::bad_alloc();
-    ATOM_TRACK_ALLOC(ptr, size);
-    return ptr;
-}
-
-void operator delete[](void* ptr) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new[](size_t size);
+void operator delete[](void* ptr) noexcept;
 
 // nothrow versions
-void* operator new(size_t size, const std::nothrow_t&) noexcept {
-    void* ptr = std::malloc(size);
-    if (ptr) {
-        ATOM_TRACK_ALLOC(ptr, size);
-    }
-    return ptr;
-}
-
-void operator delete(void* ptr, const std::nothrow_t&) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new(size_t size, const std::nothrow_t&) noexcept;
+void operator delete(void* ptr, const std::nothrow_t&) noexcept;
 
 // Array nothrow versions
-void* operator new[](size_t size, const std::nothrow_t&) noexcept {
-    void* ptr = std::malloc(size);
-    if (ptr) {
-        ATOM_TRACK_ALLOC(ptr, size);
-    }
-    return ptr;
-}
-
-void operator delete[](void* ptr, const std::nothrow_t&) noexcept {
-    ATOM_TRACK_FREE(ptr);
-    std::free(ptr);
-}
+void* operator new[](size_t size, const std::nothrow_t&) noexcept;
+void operator delete[](void* ptr, const std::nothrow_t&) noexcept;
 
 #endif  // ATOM_MEMORY_TRACKING_ENABLED
 

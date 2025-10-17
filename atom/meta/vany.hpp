@@ -102,8 +102,13 @@ public:
                 static_cast<T*>(ptr)->~T();
         },
         [](const void* src, void* dst) {
-            if (src && dst)
-                new (dst) T(*static_cast<const T*>(src));
+            if (src && dst) {
+                if constexpr (std::is_copy_constructible_v<T>) {
+                    new (dst) T(*static_cast<const T*>(src));
+                } else {
+                    throw std::runtime_error("Type is not copy constructible");
+                }
+            }
         },
         [](void* src, void* dst) noexcept {
             if (src && dst)
@@ -224,12 +229,21 @@ public:
     }
 
     /**
+     * @brief Constructor for C-style string literals.
+     * @param str The string literal to store as std::string.
+     * @throws std::bad_alloc If memory allocation fails.
+     */
+    template <size_t N>
+    explicit Any(const char (&str)[N]) : Any(std::string(str)) {}
+
+    /**
      * @brief Constructor from any value.
      * @param value The value to store.
      * @throws std::bad_alloc If memory allocation fails.
      */
     template <typename T, typename = std::enable_if_t<
-                              !std::is_same_v<std::decay_t<T>, Any>>>
+                              !std::is_same_v<std::decay_t<T>, Any> &&
+                              !std::is_array_v<std::remove_reference_t<T>>>>
     explicit Any(T&& value) {
         using ValueType = std::remove_cvref_t<T>;
 

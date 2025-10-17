@@ -1,14 +1,34 @@
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-search
   VERSION 1.0.0
   LANGUAGES C CXX)
 
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
+
 # Sources
-set(SOURCES search.cpp sqlite.cpp)
+set(SOURCES
+    # Core search functionality
+    core/search.cpp
+    # Database backends
+    database/sqlite.cpp)
 
 # Headers
-set(HEADERS cache.hpp search.hpp sqlite.hpp)
+set(HEADERS
+    # Backwards compatibility headers (in root)
+    cache.hpp
+    lru.hpp
+    ttl.hpp
+    mysql.hpp
+    sqlite.hpp
+    search.hpp
+    # Actual implementation headers (in subdirectories)
+    core/search.hpp
+    database/sqlite.hpp
+    cache/cache.hpp
+    cache/lru.hpp
+    cache/ttl.hpp)
 
 # Dependencies
 set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} ${SQLite3_LIBRARIES})
@@ -17,30 +37,22 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(MARIADB libmariadb)
 if(MARIADB_FOUND)
   message(STATUS "Found libmariadb: ${MARIADB_VERSION}")
-  list(APPEND SOURCES mysql.cpp)
-  list(APPEND HEADERS mysql.hpp)
+  list(APPEND SOURCES database/mysql.cpp)
+  list(APPEND HEADERS database/mysql.hpp)
   list(APPEND LIBS ${MARIADB_LIBRARIES})
   include_directories(${MARIADB_INCLUDE_DIRS})
 else()
   message(STATUS "libmariadb not found, mysql support will be disabled.")
 endif()
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Create library target
+add_library(atom-search STATIC ${SOURCES} ${HEADERS})
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
+# Configure module using standardized function
+atom_configure_module(atom-search)
 
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
+# Link module-specific dependencies
+target_link_libraries(atom-search PRIVATE ${LIBS})
 
-set_target_properties(
-  ${PROJECT_NAME}
-  PROPERTIES VERSION ${PROJECT_VERSION}
-             SOVERSION ${PROJECT_VERSION_MAJOR}
-             OUTPUT_NAME ${PROJECT_NAME})
-
-# Install rules
-install(TARGETS ${PROJECT_NAME} ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR})
+# Install headers
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/search)

@@ -67,6 +67,6 @@ private:
     std::unique_ptr<Impl> m_impl;  ///< Pointer to the implementation
 };
 
-}  // namespace atom::connection
+}  // namespace atom::async::connection
 
 #endif  // ATOM_CONNECTION_ASYNC_FIFOCLIENT_HPP

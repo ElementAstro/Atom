@@ -16,7 +16,6 @@ Description: A super enhanced string class.
 #define ATOM_TYPE_STRING_HPP
 
 #include <algorithm>
-#include <execution>
 #include <format>
 #include <functional>
 #include <iostream>
@@ -28,7 +27,7 @@ Description: A super enhanced string class.
 #include <vector>
 
 #ifdef ATOM_USE_SIMD
-#include "../utils/simd_wrapper.hpp"
+#include "../utils/memory/simd_wrapper.hpp"
 #endif
 
 #ifdef ATOM_USE_BOOST
@@ -223,9 +222,8 @@ public:
      * @return Substring
      * @throws StringException if pos is out of range
      */
-    [[nodiscard]] auto substr(size_t pos,
-                              size_t count = std::string::npos) const
-        -> String {
+    [[nodiscard]] auto substr(
+        size_t pos, size_t count = std::string::npos) const -> String {
         try {
             if (pos > m_data_.length()) {
                 throw StringException("Substring position out of range");
@@ -245,10 +243,13 @@ public:
      * @param pos Position to start searching from
      * @return Position of the found substring or NPOS if not found
      */
-    [[nodiscard]] auto find(const String& str, size_t pos = 0) const noexcept
-        -> size_t {
-        if (pos >= m_data_.length() || str.empty()) {
+    [[nodiscard]] auto find(const String& str,
+                            size_t pos = 0) const noexcept -> size_t {
+        if (pos > m_data_.length()) {
             return NPOS;
+        }
+        if (str.empty()) {
+            return pos;  // Empty string is found at the starting position
         }
         return m_data_.find(str.m_data_, pos);
     }
@@ -390,8 +391,10 @@ public:
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_upper_copy(m_data_);
 #else
-            std::transform(std::execution::par_unseq, m_data_.begin(),
-                           m_data_.end(), std::back_inserter(result.m_data_),
+            result.m_data_.resize(m_data_.size());
+            // Use sequential execution to avoid TBB dependency issues
+            std::transform(m_data_.begin(), m_data_.end(),
+                           result.m_data_.begin(),
                            [](unsigned char c) { return std::toupper(c); });
 #endif
             return result;
@@ -413,8 +416,10 @@ public:
 #ifdef ATOM_USE_BOOST
             result.m_data_ = boost::to_lower_copy(m_data_);
 #else
-            std::transform(std::execution::par_unseq, m_data_.begin(),
-                           m_data_.end(), std::back_inserter(result.m_data_),
+            result.m_data_.resize(m_data_.size());
+            // Use sequential execution to avoid TBB dependency issues
+            std::transform(m_data_.begin(), m_data_.end(),
+                           result.m_data_.begin(),
                            [](unsigned char c) { return std::tolower(c); });
 #endif
             return result;
@@ -981,8 +986,8 @@ public:
      * failed
      */
     template <typename... Args>
-    static auto formatSafe(std::string_view format_str, Args&&... args) noexcept
-        -> std::optional<String> {
+    static auto formatSafe(std::string_view format_str,
+                           Args&&... args) noexcept -> std::optional<String> {
         try {
             return String(
                 std::vformat(format_str, std::make_format_args(args...)));
@@ -1070,8 +1075,8 @@ private:
  * @return Concatenated string
  * @throws StringException if memory allocation fails
  */
-[[nodiscard]] inline auto operator+(const String& lhs, const String& rhs)
-    -> String {
+[[nodiscard]] inline auto operator+(const String& lhs,
+                                    const String& rhs) -> String {
     try {
         String result(lhs);
         result += rhs;

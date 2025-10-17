@@ -3,15 +3,16 @@ This module provides functions to generate bar, line, scatter, pie, histogram, a
 Enhanced for flexibility, usability and customization.
 """
 
-import sys
-import json
 import argparse
+import json
 import os
+import sys
+from datetime import datetime
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
-from datetime import datetime
 
 
 def load_data(file_path):
@@ -376,7 +377,7 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
     <div class="container">
         <h1>Performance Test Results</h1>
         <p>Generated on: {now}</p>
-        
+
         <h2>Statistics</h2>
 """
 
@@ -416,17 +417,17 @@ def generate_report(data, metrics, out_dir, style='default', dark_mode=False):
             <h3>{metric} - Bar Chart</h3>
             <img src="charts/{metric}_bar.png" alt="{metric} Bar Chart">
         </div>
-        
+
         <div class="chart">
             <h3>{metric} - Line Chart</h3>
             <img src="charts/{metric}_line.png" alt="{metric} Line Chart">
         </div>
-        
+
         <div class="chart">
             <h3>{metric} - Pie Chart</h3>
             <img src="charts/{metric}_pie.png" alt="{metric} Pie Chart">
         </div>
-        
+
         <div class="chart">
             <h3>{metric} - Histogram</h3>
             <img src="charts/{metric}_histogram.png" alt="{metric} Histogram">

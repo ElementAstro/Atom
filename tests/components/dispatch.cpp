@@ -23,27 +23,28 @@ protected:
 
 // Test the `def` method with a simple function
 TEST_F(CommandDispatcherTest, DefineAndDispatchSimpleFunction) {
-    dispatcher.def(
+    [[maybe_unused]] bool result = dispatcher.def(
         "add", "math", "Adds two numbers",
         std::function<int(int, int)>([](int a, int b) { return a + b; }));
 
-    std::any result = dispatcher.dispatch("add", 3, 4);
-    ASSERT_EQ(std::any_cast<int>(result), 7);
+    std::any dispatchResult = dispatcher.dispatch("add", 3, 4);
+    ASSERT_EQ(std::any_cast<int>(dispatchResult), 7);
 }
 
 // Test dispatching with missing arguments and default values
 TEST_F(CommandDispatcherTest, DispatchWithDefaultArguments) {
-    dispatcher.def("increment", "math", "Increments a number",
-                   std::function<int(int)>([](int a) { return a + 1; }),
-                   std::nullopt, std::nullopt, {atom::meta::Arg("a", 42)});
+    [[maybe_unused]] bool result =
+        dispatcher.def("increment", "math", "Increments a number",
+                       std::function<int(int)>([](int a) { return a + 1; }),
+                       std::nullopt, std::nullopt, {atom::meta::Arg("a", 42)});
 
-    std::any result = dispatcher.dispatch("increment");
-    ASSERT_EQ(std::any_cast<int>(result), 43);
+    std::any dispatchResult = dispatcher.dispatch("increment");
+    ASSERT_EQ(std::any_cast<int>(dispatchResult), 43);
 }
 
 // Test dispatching a command with precondition failure
 TEST_F(CommandDispatcherTest, DispatchWithPreconditionFailure) {
-    dispatcher.def(
+    [[maybe_unused]] bool result = dispatcher.def(
         "alwaysFail", "test", "This should always fail",
         std::function<void()>([]() {}),
         std::optional<std::function<bool()>>([]() { return false; }));
@@ -59,10 +60,10 @@ TEST_F(CommandDispatcherTest, DispatchInvalidCommand) {
 
 // Test alias creation and resolution
 TEST_F(CommandDispatcherTest, AliasCreationAndResolution) {
-    dispatcher.def(
+    [[maybe_unused]] bool defResult = dispatcher.def(
         "hello", "greetings", "Returns a greeting",
         std::function<std::string()>([]() { return "Hello, world!"; }));
-    dispatcher.addAlias("hello", "hi");
+    [[maybe_unused]] bool aliasResult = dispatcher.addAlias("hello", "hi");
 
     std::any result = dispatcher.dispatch("hi");
     ASSERT_EQ(std::any_cast<std::string>(result), "Hello, world!");
@@ -70,12 +71,12 @@ TEST_F(CommandDispatcherTest, AliasCreationAndResolution) {
 
 // Test group management and command listing
 TEST_F(CommandDispatcherTest, GroupManagementAndCommandListing) {
-    dispatcher.def("cmd1", "group1", "Command 1",
-                   std::function<void()>([]() {}));
-    dispatcher.def("cmd2", "group1", "Command 2",
-                   std::function<void()>([]() {}));
-    dispatcher.def("cmd3", "group2", "Command 3",
-                   std::function<void()>([]() {}));
+    [[maybe_unused]] bool r1 = dispatcher.def("cmd1", "group1", "Command 1",
+                                              std::function<void()>([]() {}));
+    [[maybe_unused]] bool r2 = dispatcher.def("cmd2", "group1", "Command 2",
+                                              std::function<void()>([]() {}));
+    [[maybe_unused]] bool r3 = dispatcher.def("cmd3", "group2", "Command 3",
+                                              std::function<void()>([]() {}));
 
     std::vector<std::string> group1Commands =
         dispatcher.getCommandsInGroup("group1");
@@ -101,8 +102,9 @@ TEST_F(CommandDispatcherTest, GroupManagementAndCommandListing) {
 
 // Test removing a command
 TEST_F(CommandDispatcherTest, RemoveCommand) {
-    dispatcher.def("toRemove", "misc", "A command to be removed",
-                   std::function<void()>([]() {}));
+    [[maybe_unused]] bool defResult =
+        dispatcher.def("toRemove", "misc", "A command to be removed",
+                       std::function<void()>([]() {}));
     ASSERT_TRUE(dispatcher.has("toRemove"));
 
     dispatcher.removeCommand("toRemove");
@@ -124,11 +126,13 @@ TEST_F(CommandDispatcherTest, DispatchWithMismatchedArgumentTypes) {
 
 // Test dispatching an overloaded function
 TEST_F(CommandDispatcherTest, DispatchOverloadedFunction) {
-    dispatcher.def("overloaded", "test", "Overloaded function",
-                   std::function<int(int)>([](int a) { return a; }));
-    dispatcher.def("overloaded", "test", "Overloaded function",
-                   std::function<std::string(std::string)>(
-                       [](std::string a) { return a; }));
+    [[maybe_unused]] bool r1 =
+        dispatcher.def("overloaded", "test", "Overloaded function",
+                       std::function<int(int)>([](int a) { return a; }));
+    [[maybe_unused]] bool r2 =
+        dispatcher.def("overloaded", "test", "Overloaded function",
+                       std::function<std::string(std::string)>(
+                           [](std::string a) { return a; }));
 
     std::any intResult = dispatcher.dispatch("overloaded", 42);
     ASSERT_EQ(std::any_cast<int>(intResult), 42);

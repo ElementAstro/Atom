@@ -24,7 +24,7 @@ struct Field {
     using member_type = MemberType;
     const char* name;          ///< The name of the field.
     const char* description;   ///< The description of the field.
-    MemberType T::* member;    ///< Pointer to the member field.
+    MemberType T::*member;     ///< Pointer to the member field.
     bool required;             ///< Indicates if the field is required.
     MemberType default_value;  ///< The default value of the field.
     using Validator =
@@ -40,7 +40,7 @@ struct Field {
      * @param def The default value of the field (default is an empty value).
      * @param v The validator function (default is nullptr).
      */
-    Field(const char* n, const char* desc, MemberType T::* m, bool r = true,
+    Field(const char* n, const char* desc, MemberType T::*m, bool r = true,
           MemberType def = {}, Validator v = nullptr)
         : name(n),
           description(desc),
@@ -62,7 +62,7 @@ struct ComplexField {
     using member_type = MemberType;
     const char* name;          ///< The name of the field.
     const char* description;   ///< The description of the field.
-    MemberType T::* member;    ///< Pointer to the member field.
+    MemberType T::*member;     ///< Pointer to the member field.
     ReflectType reflect_type;  ///< The reflection type.
 
     /**
@@ -72,7 +72,7 @@ struct ComplexField {
      * @param m Pointer to the member field.
      * @param reflect The reflection type.
      */
-    ComplexField(const char* n, const char* desc, MemberType T::* m,
+    ComplexField(const char* n, const char* desc, MemberType T::*m,
                  ReflectType reflect)
         : name(n), description(desc), member(m), reflect_type(reflect) {}
 };
@@ -384,7 +384,7 @@ struct Reflectable {
  */
 template <typename T, typename MemberType>
 auto make_field(const char* name, const char* description,
-                MemberType T::* member, bool required = true,
+                MemberType T::*member, bool required = true,
                 MemberType default_value = {},
                 typename Field<T, MemberType>::Validator validator = nullptr)
     -> Field<T, MemberType> {
@@ -405,7 +405,7 @@ auto make_field(const char* name, const char* description,
  */
 template <typename T, typename MemberType, typename ReflectType>
 auto make_field(const char* name, const char* description,
-                MemberType T::* member, ReflectType reflect_type)
+                MemberType T::*member, ReflectType reflect_type)
     -> ComplexField<T, MemberType, ReflectType> {
     return ComplexField<T, MemberType, ReflectType>(name, description, member,
                                                     reflect_type);

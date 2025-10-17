@@ -245,7 +245,7 @@ template <typename R, typename T, typename... Args>
  * \return Callable that returns member variable reference
  */
 template <typename T, typename M>
-[[nodiscard]] constexpr auto delayMemberVarInvoke(M T::* memberVar, T* obj) {
+[[nodiscard]] constexpr auto delayMemberVarInvoke(M T::*memberVar, T* obj) {
     return [memberVar, obj]() -> M& {
         if (obj == nullptr) [[unlikely]] {
             THROW_INVALID_ARGUMENT(
@@ -291,8 +291,7 @@ template <typename F, typename... Gs>
 [[nodiscard]] constexpr auto compose(F&& f, Gs&&... gs) {
     if constexpr (sizeof...(Gs) == 1) {
         return [f = std::forward<F>(f),
-                g = std::get<0>(std::forward_as_tuple(gs...))](auto&&... args)
-                   -> decltype(g(f(std::forward<decltype(args)>(args)...))) {
+                g = std::get<0>(std::forward_as_tuple(gs...))](auto&&... args) {
             return g(f(std::forward<decltype(args)>(args)...));
         };
     } else {

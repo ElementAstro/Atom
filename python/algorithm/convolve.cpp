@@ -4,6 +4,7 @@
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <thread>
 
 namespace py = pybind11;
 using namespace pybind11::literals;
@@ -140,7 +141,7 @@ PYBIND11_MODULE(convolve, m) {
             return vector2d_to_numpy(result);
         },
         py::arg("input"), py::arg("kernel"),
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Performs 2D convolution of an input with a kernel.
 
@@ -172,7 +173,7 @@ PYBIND11_MODULE(convolve, m) {
             return vector2d_to_numpy(result);
         },
         py::arg("signal"), py::arg("kernel"),
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Performs 2D deconvolution (inverse of convolution).
 
@@ -203,7 +204,7 @@ PYBIND11_MODULE(convolve, m) {
             return complex_vector2d_to_numpy(result);
         },
         py::arg("signal"),
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Computes 2D Discrete Fourier Transform.
 
@@ -231,7 +232,7 @@ PYBIND11_MODULE(convolve, m) {
             return vector2d_to_numpy(result);
         },
         py::arg("spectrum"),
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Computes inverse 2D Discrete Fourier Transform.
 
@@ -317,7 +318,7 @@ PYBIND11_MODULE(convolve, m) {
             return vector2d_to_numpy(result);
         },
         py::arg("input"), py::arg("kernel"),
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Performs 2D convolution using OpenCL acceleration.
 
@@ -342,7 +343,7 @@ PYBIND11_MODULE(convolve, m) {
             return vector2d_to_numpy(result);
         },
         py::arg("signal"), py::arg("kernel"),
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Performs 2D deconvolution using OpenCL acceleration.
 
@@ -381,7 +382,7 @@ PYBIND11_MODULE(convolve, m) {
         "Returns True if SIMD support is available, False otherwise");
 
     // Add information about the number of available threads
-    m.attr("available_threads") = atom::algorithm::availableThreads;
+    m.attr("available_threads") = std::thread::hardware_concurrency();
 
     // Predefined kernels for common operations
     m.def(
@@ -437,7 +438,7 @@ PYBIND11_MODULE(convolve, m) {
             return vector2d_to_numpy(result);
         },
         py::arg("image"), py::arg("kernel_size") = 5, py::arg("sigma") = 1.0,
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Applies Gaussian blur to an image.
 
@@ -487,7 +488,7 @@ PYBIND11_MODULE(convolve, m) {
             return vector2d_to_numpy(magnitude);
         },
         py::arg("image"),
-        py::arg("num_threads") = atom::algorithm::availableThreads,
+        py::arg("num_threads") = std::thread::hardware_concurrency(),
         R"pbdoc(
         Detects edges in an image using Sobel operators.
 

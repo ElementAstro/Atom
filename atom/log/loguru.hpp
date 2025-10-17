@@ -280,8 +280,8 @@ loguru::Verbosity_MAX);
 #define LOGURU_PREDICT_TRUE(x) (__builtin_expect(!!(x), 1))
 #endif
 
-// Max: We use libfmt for now.
-#define LOGURU_USE_FMTLIB 1
+// Max: We disable libfmt for now to avoid compilation conflicts.
+#define LOGURU_USE_FMTLIB 0
 #if LOGURU_USE_FMTLIB
 #if __cplusplus >= 202002L && __has_include(<format>)
 #include <format>

@@ -15,7 +15,6 @@
 #include <sstream>
 #include <string>
 
-
 #include <spdlog/spdlog.h>
 
 namespace atom::web {
@@ -286,8 +285,8 @@ auto IPv4::getBroadcastAddress(std::string_view mask) const -> std::string {
     }
 }
 
-auto IPv4::isSameSubnet(const Address& other, std::string_view mask) const
-    -> bool {
+auto IPv4::isSameSubnet(const Address& other,
+                        std::string_view mask) const -> bool {
     try {
         if (other.getType() != "IPv4") {
             return false;
@@ -343,7 +342,7 @@ auto IPv4::ipToInteger(std::string_view ipAddr) const -> uint32_t {
 auto IPv4::integerToIp(uint32_t ipAddr) const -> std::string {
     try {
         std::array<char, INET_ADDRSTRLEN> buffer{};
-        struct in_addr addr{};
+        struct in_addr addr {};
         addr.s_addr = ipAddr;
 
         if (inet_ntop(AF_INET, &addr, buffer.data(), buffer.size()) ==

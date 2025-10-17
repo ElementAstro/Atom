@@ -23,7 +23,6 @@
 #include <iostream>
 #endif
 
-#include "atom/algorithm/hash.hpp"
 #include "atom/macro.hpp"
 #include "atom/meta/abi.hpp"
 #include "atom/meta/func_traits.hpp"
@@ -199,7 +198,7 @@ auto anyCastVal(const std::any& operand) -> T {
 template <typename T>
 auto anyCastConstRef(const std::any& operand) -> const T& {
     try {
-        return std::any_cast<T>(operand);
+        return std::any_cast<const T&>(operand);
     } catch (const std::bad_any_cast& e) {
         throw ProxyTypeError(
             std::string("Failed to cast to const reference type ") +
@@ -265,7 +264,9 @@ template <typename T>
 bool tryConvertType(std::any& src) {
     const auto& typeInfo = src.type();
 
-    if constexpr (std::is_integral_v<std::decay_t<T>>) {
+    if constexpr (std::is_reference_v<T>) {
+        return false;
+    } else if constexpr (std::is_integral_v<std::decay_t<T>>) {
         if (typeInfo == typeid(int)) {
             src = static_cast<T>(std::any_cast<int>(src));
             return true;
@@ -410,8 +411,9 @@ protected:
             for (const auto& argType : info_.getArgumentTypes()) {
                 combinedTypes += argType;
             }
-            info_.setHash(
-                std::to_string(algorithm::computeHash(combinedTypes)));
+            // Temporary simple hash implementation to avoid include issues
+            std::hash<std::string> hasher;
+            info_.setHash(std::to_string(hasher(combinedTypes)));
         }
     }
 
@@ -517,7 +519,7 @@ protected:
  * @tparam Func Function type to wrap
  */
 template <typename Func>
-class ProxyFunction : protected BaseProxyFunction<Func> {
+class ProxyFunction : public BaseProxyFunction<Func> {
     using Base = BaseProxyFunction<Func>;
     using Traits = typename Base::Traits;
     static constexpr std::size_t ARITY = Base::ARITY;
@@ -527,6 +529,36 @@ public:
         : Base(std::forward<Func>(func), Base::info_) {}
     explicit ProxyFunction(Func&& func, FunctionInfo& info)
         : Base(std::forward<Func>(func), info) {}
+
+    // Copy constructor
+    ProxyFunction(const ProxyFunction& other)
+        : Base(std::decay_t<Func>(other.func_), this->info_) {
+        this->info_ = other.info_;
+    }
+
+    // Move constructor
+    ProxyFunction(ProxyFunction&& other) noexcept
+        : Base(std::move(other.func_), this->info_) {
+        this->info_ = std::move(other.info_);
+    }
+
+    // Copy assignment
+    ProxyFunction& operator=(const ProxyFunction& other) {
+        if (this != &other) {
+            this->func_ = other.func_;
+            this->info_ = other.info_;
+        }
+        return *this;
+    }
+
+    // Move assignment
+    ProxyFunction& operator=(ProxyFunction&& other) noexcept {
+        if (this != &other) {
+            this->func_ = std::move(other.func_);
+            this->info_ = std::move(other.info_);
+        }
+        return *this;
+    }
 
     void setName(std::string_view name) {
         std::unique_lock lock(this->mutex_);

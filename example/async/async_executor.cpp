@@ -74,23 +74,22 @@ long long fibonacciTask(int n) {
 void basicUsageExample() {
     log("\n=== 1. 基本用法示例 ===");
 
-    // 创建异步执行器
-    AsyncExecutor executor(4);  // 4个工作线程
+    // 创建并启动异步执行器
+    AsyncExecutor::Configuration config;
+    config.minThreads = 4;
+    config.maxThreads = 4;
+    AsyncExecutor executor(config);  // 4个工作线程
+    executor.start();
     log("创建了异步执行器，线程数: 4");
 
-    // 使用IMMEDIATE策略执行任务
-    log("使用IMMEDIATE策略提交3个任务");
-    auto future1 =
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::NORMAL, basicTask, 1, 500);
-
-    auto future2 =
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::HIGH, basicTask, 2, 300);
-
-    auto future3 =
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::LOW, basicTask, 3, 100);
+    // 使用execute方法执行任务
+    log("提交3个任务");
+    auto future1 = executor.execute([]() { return basicTask(1, 500); },
+                                    AsyncExecutor::Priority::Normal);
+    auto future2 = executor.execute([]() { return basicTask(2, 300); },
+                                    AsyncExecutor::Priority::High);
+    auto future3 = executor.execute([]() { return basicTask(3, 100); },
+                                    AsyncExecutor::Priority::Low);
 
     // 获取结果
     log("等待结果");
@@ -108,7 +107,10 @@ void basicUsageExample() {
 void priorityTasksExample() {
     log("\n=== 2. 优先级任务示例 ===");
 
-    AsyncExecutor executor(1);  // 只使用1个线程，使优先级效果更明显
+    AsyncExecutor::Configuration config;
+    config.minThreads = 1;
+    config.maxThreads = 1;
+    AsyncExecutor executor(config);  // 只使用1个线程，使优先级效果更明显
     log("创建了异步执行器，线程数: 1");
 
     // 创建多个不同优先级的任务
@@ -118,40 +120,40 @@ void priorityTasksExample() {
     std::vector<std::future<int>> futures;
 
     // 低优先级
-    futures.push_back(
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::LOW, []() {
-                              log("执行低优先级任务");
-                              std::this_thread::sleep_for(100ms);
-                              return 1;
-                          }));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行低优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 1;
+        },
+        AsyncExecutor::Priority::Low));
 
     // 普通优先级
-    futures.push_back(
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::NORMAL, []() {
-                              log("执行普通优先级任务");
-                              std::this_thread::sleep_for(100ms);
-                              return 2;
-                          }));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行普通优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 2;
+        },
+        AsyncExecutor::Priority::Normal));
 
     // 高优先级
-    futures.push_back(
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::HIGH, []() {
-                              log("执行高优先级任务");
-                              std::this_thread::sleep_for(100ms);
-                              return 3;
-                          }));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行高优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 3;
+        },
+        AsyncExecutor::Priority::High));
 
     // 关键优先级
-    futures.push_back(
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::CRITICAL, []() {
-                              log("执行关键优先级任务");
-                              std::this_thread::sleep_for(100ms);
-                              return 4;
-                          }));
+    futures.push_back(executor.execute(
+        []() {
+            log("执行关键优先级任务");
+            std::this_thread::sleep_for(100ms);
+            return 4;
+        },
+        AsyncExecutor::Priority::Critical));
 
     // 等待所有任务完成
     log("等待所有优先级任务完成");
@@ -166,99 +168,94 @@ void priorityTasksExample() {
 void deferredTasksExample() {
     log("\n=== 3. 延迟执行示例 ===");
 
-    AsyncExecutor executor;
-    log("创建了异步执行器");
+    // Use the global instance instead
+    auto& executor = AsyncExecutor::getInstance();
+    log("获取了异步执行器实例");
 
-    // 添加延迟执行任务
-    log("添加3个延迟执行任务");
+    // 执行任务
+    log("提交3个任务");
 
-    auto future1 = executor.schedule(AsyncExecutor::ExecutionStrategy::DEFERRED,
-                                     ExecutorTask::Priority::NORMAL, []() {
-                                         log("执行延迟任务 #1");
-                                         std::this_thread::sleep_for(100ms);
-                                         return "延迟任务1结果";
-                                     });
+    auto future1 = executor.execute(
+        []() {
+            log("执行任务 #1");
+            std::this_thread::sleep_for(100ms);
+            return std::string("任务1结果");
+        },
+        AsyncExecutor::Priority::Normal);
 
-    auto future2 = executor.schedule(AsyncExecutor::ExecutionStrategy::DEFERRED,
-                                     ExecutorTask::Priority::HIGH, []() {
-                                         log("执行延迟任务 #2");
-                                         std::this_thread::sleep_for(150ms);
-                                         return "延迟任务2结果";
-                                     });
+    auto future2 = executor.execute(
+        []() {
+            log("执行任务 #2");
+            std::this_thread::sleep_for(150ms);
+            return std::string("任务2结果");
+        },
+        AsyncExecutor::Priority::High);
 
-    auto future3 = executor.schedule(AsyncExecutor::ExecutionStrategy::DEFERRED,
-                                     ExecutorTask::Priority::LOW, []() {
-                                         log("执行延迟任务 #3");
-                                         std::this_thread::sleep_for(50ms);
-                                         return "延迟任务3结果";
-                                     });
-
-    log("延迟任务已添加但尚未执行");
-    log("队列中任务数: " + std::to_string(executor.queueSize()));
-    log("活动任务数: " + std::to_string(executor.activeTaskCount()));
-
-    std::this_thread::sleep_for(200ms);
-
-    // 执行延迟任务
-    log("现在执行所有延迟任务");
-    executor.executeDeferredTasks();
+    auto future3 = executor.execute(
+        []() {
+            log("执行任务 #3");
+            std::this_thread::sleep_for(50ms);
+            return std::string("任务3结果");
+        },
+        AsyncExecutor::Priority::Low);
 
     // 获取结果
-    log("等待延迟任务结果");
+    log("等待任务结果");
     std::string result1 = future1.get();
     std::string result2 = future2.get();
     std::string result3 = future3.get();
 
-    log("所有延迟任务完成，结果:");
+    log("所有任务完成，结果:");
     log("任务1: " + result1);
     log("任务2: " + result2);
     log("任务3: " + result3);
 }
 
-// 4. 定时任务示例
+// 4. 定时任务示例（使用 Timer 工具）
+#include "atom/async/timer.hpp"
 void scheduledTasksExample() {
     log("\n=== 4. 定时任务示例 ===");
 
-    AsyncExecutor executor;
-    log("创建了异步执行器");
-
-    auto now = std::chrono::system_clock::now();
+    atom::async::Timer timer;
 
     // 创建定时任务
     log("安排3个定时任务");
 
     // 1秒后执行
-    auto future1 =
-        executor.scheduleAt(now + 1s, ExecutorTask::Priority::NORMAL, []() {
+    auto future1 = timer.setTimeout(
+        []() {
             log("执行定时任务 #1 (1秒后)");
-            return "定时任务1结果";
-        });
+            return std::string("定时任务1结果");
+        },
+        1000);
 
     // 2秒后执行
-    auto future2 =
-        executor.scheduleAt(now + 2s, ExecutorTask::Priority::HIGH, []() {
+    auto future2 = timer.setTimeout(
+        []() {
             log("执行定时任务 #2 (2秒后)");
-            return "定时任务2结果";
-        });
+            return std::string("定时任务2结果");
+        },
+        2000);
 
-    // 使用scheduleAfter
-    auto future3 =
-        executor.scheduleAfter(3s, ExecutorTask::Priority::LOW, []() {
+    // 使用setTimeout模拟 scheduleAfter(3s)
+    auto future3 = timer.setTimeout(
+        []() {
             log("执行定时任务 #3 (3秒后)");
-            return "定时任务3结果";
-        });
+            return std::string("定时任务3结果");
+        },
+        3000);
 
     log("已安排所有定时任务");
 
     // 等待结果
     log("等待所有定时任务执行和完成");
-    std::string result1 = future1.get();
+    std::string result1 = future1.wait();
     log("任务1完成: " + result1);
 
-    std::string result2 = future2.get();
+    std::string result2 = future2.wait();
     log("任务2完成: " + result2);
 
-    std::string result3 = future3.get();
+    std::string result3 = future3.wait();
     log("任务3完成: " + result3);
 
     log("所有定时任务已完成");
@@ -268,14 +265,14 @@ void scheduledTasksExample() {
 void errorHandlingExample() {
     log("\n=== 5. 错误处理示例 ===");
 
-    AsyncExecutor executor;
-    log("创建了异步执行器");
+    auto& executor = AsyncExecutor::getInstance();
 
     // 提交一个会抛出异常的任务
     log("提交会抛出异常的任务");
-    auto errorFuture =
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::NORMAL, errorTask);
+    auto errorFuture = executor.execute([]() {
+        errorTask();
+        return 0;  // never reached
+    });
 
     // 使用try-catch处理异常
     try {
@@ -288,13 +285,11 @@ void errorHandlingExample() {
 
     // 测试异常传播
     log("提交一个lambda中抛出异常的任务");
-    auto lambdaErrorFuture =
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::HIGH, []() -> std::string {
-                              log("在lambda中执行抛出异常的任务");
-                              throw std::runtime_error("Lambda错误");
-                              return "不会返回";
-                          });
+    auto lambdaErrorFuture = executor.execute([]() -> std::string {
+        log("在lambda中执行抛出异常的任务");
+        throw std::runtime_error("Lambda错误");
+        return "不会返回";
+    });
 
     try {
         lambdaErrorFuture.get();
@@ -302,17 +297,14 @@ void errorHandlingExample() {
         log("从lambda任务捕获到异常: " + std::string(e.what()));
     }
 
-    // 测试延迟任务中的异常
+    // 测试延迟任务中的异常（使用普通提交模拟延迟行为）
     log("创建一个延迟任务，其中包含异常");
-    auto deferredErrorFuture =
-        executor.schedule(AsyncExecutor::ExecutionStrategy::DEFERRED,
-                          ExecutorTask::Priority::NORMAL, []() {
-                              log("执行延迟任务中的错误代码");
-                              throw std::runtime_error("延迟任务错误");
-                              return 0;
-                          });
-
-    executor.executeDeferredTasks();
+    auto deferredErrorFuture = executor.execute([]() {
+        std::this_thread::sleep_for(50ms);
+        log("执行延迟任务中的错误代码");
+        throw std::runtime_error("延迟任务错误");
+        return 0;
+    });
 
     try {
         deferredErrorFuture.get();
@@ -321,40 +313,26 @@ void errorHandlingExample() {
     }
 }
 
-// 6. 线程池调整大小示例
+// 6. 线程池调整大小示例（基于当前API能力进行简化）
 void resizeExample() {
     log("\n=== 6. 线程池调整大小示例 ===");
 
-    // 创建小的线程池
-    AsyncExecutor executor(2);
-    log("创建了线程池，初始大小: 2");
+    // 使用全局执行器（当前实现不支持动态 resize/查询队列等）
+    auto& executor = AsyncExecutor::getInstance();
 
-    // 检查初始大小
     log("提交多个长时间运行的任务");
-    std::vector<std::future<void>> futures;
+    std::vector<std::future<int>> futures;
 
     for (int i = 0; i < 6; i++) {
-        futures.push_back(
-            executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                              ExecutorTask::Priority::NORMAL, [i]() {
-                                  log("开始执行任务 " + std::to_string(i));
-                                  std::this_thread::sleep_for(500ms);
-                                  log("完成任务 " + std::to_string(i));
-                              }));
+        futures.push_back(executor.execute(
+            [i]() {
+                log("开始执行任务 " + std::to_string(i));
+                std::this_thread::sleep_for(500ms);
+                log("完成任务 " + std::to_string(i));
+                return i;  // 返回一个值以获得 future
+            },
+            AsyncExecutor::Priority::Normal));
     }
-
-    // 给一点时间开始执行
-    std::this_thread::sleep_for(200ms);
-    log("当前活动任务数: " + std::to_string(executor.activeTaskCount()));
-    log("队列中任务数: " + std::to_string(executor.queueSize()));
-
-    // 增加线程池大小
-    log("将线程池大小增加到4");
-    executor.resize(4);
-
-    std::this_thread::sleep_for(200ms);
-    log("调整后活动任务数: " + std::to_string(executor.activeTaskCount()));
-    log("调整后队列中任务数: " + std::to_string(executor.queueSize()));
 
     // 等待所有任务完成
     for (auto& future : futures) {
@@ -362,136 +340,94 @@ void resizeExample() {
     }
     log("所有任务已完成");
 
-    // 减小线程池大小
-    log("将线程池大小减少到1");
-    executor.resize(1);
+    // 提交一个简单任务确认执行器可继续使用
+    auto future = executor.execute(
+        []() {
+            log("在所有任务完成后执行一个确认任务");
+            std::this_thread::sleep_for(100ms);
+            return std::string("完成");
+        },
+        AsyncExecutor::Priority::Normal);
 
-    // 测试线程池大小减少后的行为
-    auto future = executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                                    ExecutorTask::Priority::NORMAL, []() {
-                                        log("在调整大小后的线程池中执行任务");
-                                        std::this_thread::sleep_for(100ms);
-                                        return "完成";
-                                    });
-
-    log("结果: " + std::string(future.get()));
+    log("结果: " + future.get());
 }
 
-// 7. 边界情况和异常场景
+// 7. 边界情况和异常场景（基于现有API进行调整）
 void edgeCasesExample() {
     log("\n=== 7. 边界情况和异常场景 ===");
 
-    // 尝试创建线程数为0的执行器
-    log("尝试创建线程数为0的执行器 (应该失败)");
-    try {
-        AsyncExecutor invalidExecutor(0);
-        log("这行不应该被打印");
-    } catch (const std::exception& e) {
-        log("捕获到异常: " + std::string(e.what()));
-    }
-
-    // 正常创建执行器
-    AsyncExecutor executor(1);
-    log("成功创建了线程数为1的执行器");
-
-    // 尝试不支持的执行策略
-    log("尝试直接使用SCHEDULED策略 (应该失败)");
-    try {
-        executor.schedule(AsyncExecutor::ExecutionStrategy::SCHEDULED,
-                          ExecutorTask::Priority::NORMAL,
-                          []() { return true; });
-        log("这行不应该被打印");
-    } catch (const std::exception& e) {
-        log("捕获到异常: " + std::string(e.what()));
-    }
-
-    // 测试调整大小到0
-    log("尝试将线程池大小调整为0 (应该失败)");
-    try {
-        executor.resize(0);
-        log("这行不应该被打印");
-    } catch (const std::exception& e) {
-        log("捕获到异常: " + std::string(e.what()));
-    }
-
-    // 测试非常远的未来的定时任务
-    log("安排一个10年后执行的任务");
-    auto futureFarAway =
-        executor.scheduleAfter(std::chrono::hours(24 * 365 * 10),  // 10年
-                               ExecutorTask::Priority::LOW, []() {
-                                   log("10年后的任务执行了");
-                                   return true;
-                               });
+    // 使用计时器验证长延迟任务安排
+    atom::async::Timer timer;
+    log("安排一个10年后执行的任务 (不等待)");
+    auto futureFarAway = timer.setTimeout(
+        []() {
+            log("10年后的任务执行了");
+            return true;
+        },
+        static_cast<unsigned int>(24 * 365 * 10ULL * 60ULL * 60ULL * 1000ULL));
 
     log("远期任务已安排 (但不会在本示例中等待)");
 
-    // 测试waitForAll
+    // 测试快速任务并等待
     log("提交几个快速任务然后等待所有完成");
-
+    auto& executor = AsyncExecutor::getInstance();
+    std::vector<std::future<int>> quick;
     for (int i = 0; i < 3; i++) {
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::NORMAL, [i]() {
-                              log("执行快速任务 " + std::to_string(i));
-                              std::this_thread::sleep_for(50ms);
-                          });
+        quick.push_back(executor.execute([i]() {
+            log("执行快速任务 " + std::to_string(i));
+            std::this_thread::sleep_for(50ms);
+            return i;
+        }));
     }
+    for (auto& f : quick)
+        f.wait();
 
-    log("调用waitForAll()");
-    executor.waitForAll();
     log("所有任务已完成");
 }
 
-// 8. 复杂任务组合示例
+// 8. 复杂任务组合示例（用现有API实现）
 void complexTasksExample() {
     log("\n=== 8. 复杂任务组合示例 ===");
 
-    AsyncExecutor executor(4);
-    log("创建了异步执行器，线程数: 4");
-
-    // 模拟一个多阶段处理流程
-    // 1. 初始数据生成 (立即执行)
-    // 2. 数据处理 (延迟执行)
-    // 3. 结果整合 (定时执行)
+    auto& executor = AsyncExecutor::getInstance();
 
     log("开始复杂任务流程");
 
     // 第1阶段：生成数据
     log("阶段1: 生成数据 (立即执行)");
-    auto dataFuture =
-        executor.schedule(AsyncExecutor::ExecutionStrategy::IMMEDIATE,
-                          ExecutorTask::Priority::NORMAL, []() {
-                              log("生成随机数据");
-                              std::vector<int> data;
-                              std::random_device rd;
-                              std::mt19937 gen(rd());
-                              std::uniform_int_distribution<> dis(1, 100);
+    auto dataFuture = executor.execute(
+        []() {
+            log("生成随机数据");
+            std::vector<int> data;
+            std::random_device rd;
+            std::mt19937 gen(rd());
+            std::uniform_int_distribution<> dis(1, 100);
 
-                              for (int i = 0; i < 10; i++) {
-                                  data.push_back(dis(gen));
-                              }
+            for (int i = 0; i < 10; i++) {
+                data.push_back(dis(gen));
+            }
 
-                              std::stringstream ss;
-                              ss << "生成的数据: ";
-                              for (int val : data) {
-                                  ss << val << " ";
-                              }
-                              log(ss.str());
+            std::stringstream ss;
+            ss << "生成的数据: ";
+            for (int val : data) {
+                ss << val << " ";
+            }
+            log(ss.str());
 
-                              return data;
-                          });
+            return data;
+        },
+        AsyncExecutor::Priority::Normal);
 
-    // 第2阶段：处理数据 (延迟执行)
-    log("阶段2: 数据处理 (延迟执行)");
-    auto processingFuture = executor.schedule(
-        AsyncExecutor::ExecutionStrategy::DEFERRED,
-        ExecutorTask::Priority::HIGH, [&dataFuture]() {
-            // 获取第1阶段的数据
+    // 第2阶段：处理数据（在另一个任务中串联）
+    log("阶段2: 数据处理");
+    auto processingFuture = executor.execute(
+        [&dataFuture]() {
             auto data = dataFuture.get();
             log("处理数据");
 
             std::vector<int> processed;
             for (int val : data) {
-                processed.push_back(val * val);  // 简单处理：平方
+                processed.push_back(val * val);
             }
 
             std::stringstream ss;
@@ -502,16 +438,14 @@ void complexTasksExample() {
             log(ss.str());
 
             return processed;
-        });
+        },
+        AsyncExecutor::Priority::High);
 
-    // 第3阶段：结果整合 (定时执行)
+    // 第3阶段：结果整合（用Timer延迟1秒）
     log("阶段3: 结果整合 (定时执行，1秒后)");
-    auto resultFuture = executor.scheduleAfter(
-        1s, ExecutorTask::Priority::CRITICAL, [&processingFuture, &executor]() {
-            // 确保先执行延迟任务
-            executor.executeDeferredTasks();
-
-            // 获取第2阶段的数据
+    atom::async::Timer timer;
+    auto resultFuture = timer.setTimeout(
+        [&processingFuture]() {
             auto processed = processingFuture.get();
             log("整合最终结果");
 
@@ -527,11 +461,12 @@ void complexTasksExample() {
             log(ss.str());
 
             return std::make_pair(sum, product);
-        });
+        },
+        1000);
 
     // 获取最终结果
     log("等待整个流程完成");
-    auto [sum, product] = resultFuture.get();
+    auto [sum, product] = resultFuture.wait();
 
     log("复杂任务流程已完成");
     log("最终总和: " + std::to_string(sum));

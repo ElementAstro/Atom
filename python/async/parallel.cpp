@@ -161,7 +161,42 @@ void sort_fixed(py::list items, py::function comp, size_t num_threads) {
 }
 
 PYBIND11_MODULE(parallel, m) {
-    m.doc() = "Parallel computing module for the atom package";
+    m.doc() = R"pbdoc(
+        High-Performance Parallel Computing Module
+        -----------------------------------------
+
+        This module provides high-performance parallel algorithms and SIMD-optimized
+        operations for efficient computation on multi-core systems.
+
+        Features:
+          - Parallel implementations of map, filter, reduce, sort algorithms
+          - SIMD-optimized vector operations (AVX, AVX2, AVX512, NEON)
+          - Thread configuration and affinity control
+          - Platform-specific optimizations for Windows, macOS, and Linux
+          - C++20 coroutine support for asynchronous parallel operations
+          - NumPy integration for high-performance array operations
+
+        The module includes:
+          - Parallel: Main parallel algorithms class
+          - SimdOps: SIMD-optimized operations
+          - ThreadConfig: Thread configuration and optimization
+          - Task: C++20 coroutine task support
+
+        Example:
+            >>> from atom.async.parallel import Parallel, SimdOps
+            >>> import numpy as np
+            >>>
+            >>> # Parallel map operation
+            >>> result = Parallel.map([1, 2, 3, 4], lambda x: x * x, num_threads=4)
+            >>> print(result)  # [1, 4, 9, 16]
+            >>>
+            >>> # SIMD vector addition
+            >>> a = np.array([1.0, 2.0, 3.0, 4.0])
+            >>> b = np.array([5.0, 6.0, 7.0, 8.0])
+            >>> result = np.zeros_like(a)
+            >>> SimdOps.add(a, b, result)
+            >>> print(result)  # [6.0, 8.0, 10.0, 12.0]
+    )pbdoc";
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -176,6 +211,70 @@ PYBIND11_MODULE(parallel, m) {
             PyErr_SetString(PyExc_Exception, e.what());
         }
     });
+
+    // Define ThreadConfig Priority enum
+    py::enum_<atom::async::Parallel::ThreadConfig::Priority>(m,
+                                                             "ThreadPriority",
+                                                             R"pbdoc(
+        Thread priority levels for parallel operations.
+
+        Different priority levels affect how the operating system schedules
+        the threads used in parallel computations.
+        )pbdoc")
+        .value("LOWEST", atom::async::Parallel::ThreadConfig::Priority::Lowest,
+               "Lowest thread priority")
+        .value("LOW", atom::async::Parallel::ThreadConfig::Priority::Low,
+               "Low thread priority")
+        .value("NORMAL", atom::async::Parallel::ThreadConfig::Priority::Normal,
+               "Normal thread priority (default)")
+        .value("HIGH", atom::async::Parallel::ThreadConfig::Priority::High,
+               "High thread priority")
+        .value("HIGHEST",
+               atom::async::Parallel::ThreadConfig::Priority::Highest,
+               "Highest thread priority")
+        .export_values();
+
+    // ThreadConfig class binding
+    py::class_<atom::async::Parallel::ThreadConfig>(m, "ThreadConfig",
+                                                    R"pbdoc(
+        Thread configuration and optimization utilities.
+
+        This class provides platform-specific thread optimization functions
+        for setting CPU affinity and thread priority to improve performance
+        in parallel computations.
+        )pbdoc")
+        .def_static("set_thread_affinity",
+                    &atom::async::Parallel::ThreadConfig::setThreadAffinity,
+                    py::arg("cpu_id"),
+                    R"pbdoc(
+            Set the CPU affinity for the current thread.
+
+            Args:
+                cpu_id: CPU core ID to bind the thread to
+
+            Returns:
+                bool: True if successful, False otherwise
+
+            Examples:
+                >>> ThreadConfig.set_thread_affinity(0)  # Bind to CPU core 0
+                True
+            )pbdoc")
+        .def_static("set_thread_priority",
+                    &atom::async::Parallel::ThreadConfig::setThreadPriority,
+                    py::arg("priority"),
+                    R"pbdoc(
+            Set the priority for the current thread.
+
+            Args:
+                priority: Thread priority level
+
+            Returns:
+                bool: True if successful, False otherwise
+
+            Examples:
+                >>> ThreadConfig.set_thread_priority(ThreadPriority.HIGH)
+                True
+            )pbdoc");
 
     // Parallel class binding
     py::class_<atom::async::Parallel>(
@@ -260,16 +359,13 @@ Examples:
     >>> Parallel.reduce([1, 2, 3, 4], 0, lambda acc, x: acc + x)
     10
 )")
-        .def_static("sort",
-                    &sort_fixed,
-                    py::arg("items"),
-                    py::arg("comp") = py::cpp_function(
-                        [](const py::object& a, const py::object& b) {
-                            return py::bool_(PyObject_RichCompareBool(
-                                                 a.ptr(), b.ptr(), Py_LT) == 1);
-                        }),
-                    py::arg("num_threads") = 0,
-                    R"(Sorts a sequence in parallel.
+        .def_static(
+            "sort",
+            [](py::list items, py::function comp, size_t num_threads) {
+                sort_fixed(items, comp, num_threads);
+            },
+            py::arg("items"), py::arg("comp"), py::arg("num_threads") = 0,
+            R"(Sorts a sequence in parallel.
 
 Args:
     items: A sequence of elements (sorted in-place).
@@ -382,4 +478,196 @@ Examples:
                     py::arg("b"))
         .def_static("dot_product", &simd_dot_product<int64_t>, py::arg("a"),
                     py::arg("b"));
+
+    // Utility functions
+    m.def(
+         "hardware_concurrency",
+         []() { return std::thread::hardware_concurrency(); },
+         R"pbdoc(
+        Get the number of hardware threads available.
+
+        Returns:
+            Number of concurrent threads supported by the implementation
+
+        Examples:
+            >>> from atom.async.parallel import hardware_concurrency
+            >>> print(f"Available threads: {hardware_concurrency()}")
+        )pbdoc")
+
+        .def(
+            "benchmark_parallel_operations",
+            [](size_t data_size, size_t num_threads) -> py::dict {
+                using namespace std::chrono;
+
+                py::dict results;
+
+                // Generate test data
+                std::vector<int> data(data_size);
+                std::iota(data.begin(), data.end(), 1);
+
+                // Benchmark parallel map
+                auto start = high_resolution_clock::now();
+                auto map_result = atom::async::Parallel::map(
+                    data.begin(), data.end(), [](int x) { return x * x; },
+                    num_threads);
+                auto end = high_resolution_clock::now();
+                auto map_duration = duration_cast<microseconds>(end - start);
+
+                results[py::str("map_time_us")] = map_duration.count();
+                results[py::str("map_throughput")] =
+                    (data_size * 1000000.0) / map_duration.count();
+
+                // Benchmark parallel filter
+                start = high_resolution_clock::now();
+                auto filter_result = atom::async::Parallel::filter(
+                    data.begin(), data.end(), [](int x) { return x % 2 == 0; },
+                    num_threads);
+                end = high_resolution_clock::now();
+                auto filter_duration = duration_cast<microseconds>(end - start);
+
+                results[py::str("filter_time_us")] = filter_duration.count();
+                results[py::str("filter_throughput")] =
+                    (data_size * 1000000.0) / filter_duration.count();
+                results[py::str("filtered_count")] = filter_result.size();
+
+                // Benchmark parallel reduce
+                start = high_resolution_clock::now();
+                auto reduce_result = atom::async::Parallel::reduce(
+                    data.begin(), data.end(), 0,
+                    [](int acc, int x) { return acc + x; }, num_threads);
+                end = high_resolution_clock::now();
+                auto reduce_duration = duration_cast<microseconds>(end - start);
+
+                results[py::str("reduce_time_us")] = reduce_duration.count();
+                results[py::str("reduce_throughput")] =
+                    (data_size * 1000000.0) / reduce_duration.count();
+                results[py::str("reduce_result")] = reduce_result;
+
+                results[py::str("data_size")] = data_size;
+                results[py::str("num_threads")] = num_threads;
+
+                return results;
+            },
+            py::arg("data_size") = 1000000,
+            py::arg("num_threads") = std::thread::hardware_concurrency(),
+            R"pbdoc(
+        Benchmark parallel operations performance.
+
+        Args:
+            data_size: Size of test data (default: 1,000,000)
+            num_threads: Number of threads to use (default: hardware concurrency)
+
+        Returns:
+            dict: Benchmark results with timing and throughput metrics
+
+        Examples:
+            >>> results = benchmark_parallel_operations(100000, 4)
+            >>> print(f"Map throughput: {results['map_throughput']:.2f} ops/sec")
+        )pbdoc")
+
+        .def(
+            "parallel_matrix_multiply",
+            [](py::array_t<double> a, py::array_t<double> b,
+               size_t num_threads) -> py::array_t<double> {
+                py::buffer_info a_info = a.request();
+                py::buffer_info b_info = b.request();
+
+                if (a_info.ndim != 2 || b_info.ndim != 2) {
+                    throw std::invalid_argument("Input arrays must be 2D");
+                }
+
+                size_t rows_a = a_info.shape[0];
+                size_t cols_a = a_info.shape[1];
+                size_t rows_b = b_info.shape[0];
+                size_t cols_b = b_info.shape[1];
+
+                if (cols_a != rows_b) {
+                    throw std::invalid_argument(
+                        "Matrix dimensions don't match for multiplication");
+                }
+
+                auto result = py::array_t<double>({rows_a, cols_b});
+                py::buffer_info result_info = result.request();
+
+                double* a_ptr = static_cast<double*>(a_info.ptr);
+                double* b_ptr = static_cast<double*>(b_info.ptr);
+                double* result_ptr = static_cast<double*>(result_info.ptr);
+
+                // Parallel matrix multiplication
+                atom::async::Parallel::for_each(
+                    std::views::iota(0UL, rows_a).begin(),
+                    std::views::iota(0UL, rows_a).end(),
+                    [=](size_t i) {
+                        for (size_t j = 0; j < cols_b; ++j) {
+                            double sum = 0.0;
+                            for (size_t k = 0; k < cols_a; ++k) {
+                                sum += a_ptr[i * cols_a + k] *
+                                       b_ptr[k * cols_b + j];
+                            }
+                            result_ptr[i * cols_b + j] = sum;
+                        }
+                    },
+                    num_threads);
+
+                return result;
+            },
+            py::arg("a"), py::arg("b"),
+            py::arg("num_threads") = std::thread::hardware_concurrency(),
+            R"pbdoc(
+        Perform parallel matrix multiplication.
+
+        Args:
+            a: First matrix (2D numpy array)
+            b: Second matrix (2D numpy array)
+            num_threads: Number of threads to use (default: hardware concurrency)
+
+        Returns:
+            numpy.ndarray: Result of matrix multiplication
+
+        Examples:
+            >>> import numpy as np
+            >>> a = np.random.rand(100, 50)
+            >>> b = np.random.rand(50, 75)
+            >>> result = parallel_matrix_multiply(a, b, 4)
+            >>> print(result.shape)  # (100, 75)
+        )pbdoc");
+
+    // Add version and feature information
+    m.attr("__version__") = "1.0.0";
+
+    // SIMD feature detection
+#ifdef ATOM_SIMD_AVX512
+    m.attr("HAS_AVX512") = true;
+#else
+    m.attr("HAS_AVX512") = false;
+#endif
+
+#ifdef ATOM_SIMD_AVX2
+    m.attr("HAS_AVX2") = true;
+#else
+    m.attr("HAS_AVX2") = false;
+#endif
+
+#ifdef ATOM_SIMD_AVX
+    m.attr("HAS_AVX") = true;
+#else
+    m.attr("HAS_AVX") = false;
+#endif
+
+#ifdef ATOM_SIMD_NEON
+    m.attr("HAS_NEON") = true;
+#else
+    m.attr("HAS_NEON") = false;
+#endif
+
+    // Platform detection
+#ifdef ATOM_PLATFORM_WINDOWS
+    m.attr("PLATFORM") = "Windows";
+#elif defined(ATOM_PLATFORM_APPLE)
+    m.attr("PLATFORM") = "macOS";
+#elif defined(ATOM_PLATFORM_LINUX)
+    m.attr("PLATFORM") = "Linux";
+#else
+    m.attr("PLATFORM") = "Unknown";
+#endif
 }

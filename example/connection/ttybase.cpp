@@ -43,7 +43,7 @@ public:
     void exampleReceiveData(size_t size) {
         std::vector<uint8_t> buffer(size);
         uint32_t nbytesRead = 0;
-        auto response = read(buffer.data(), size, 5, nbytesRead);
+        auto response = read(std::span<uint8_t>(buffer), 5, nbytesRead);
         if (response == TTYResponse::OK) {
             std::string receivedData(buffer.begin(),
                                      buffer.begin() + nbytesRead);

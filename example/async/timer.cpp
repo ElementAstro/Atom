@@ -80,15 +80,58 @@ int main() {
     SECTION("1. 基本用法");
     {
         // 创建一个定时器
+        std::cout << "[MAIN DEBUG] About to create Timer object..."
+                  << std::endl;
         atom::async::Timer timer;
+        std::cout << "[MAIN DEBUG] Timer object created successfully!"
+                  << std::endl;
 
         // 设置一个简单的定时任务（1000毫秒后执行一次）
-        LOG("设置一个1000ms延时的任务");
-        timer.setTimeout(simpleTask, 1000);
+        std::cout << "[MAIN DEBUG] About to LOG message..." << std::endl;
+        std::cout << "Setting up a 1000ms delay task"
+                  << std::endl;  // Replace Chinese with ASCII
+        std::cout << "[MAIN DEBUG] LOG message completed!" << std::endl;
+        std::cout << "[MAIN DEBUG] About to enter try block..." << std::endl;
+        try {
+            std::cout << "[MAIN DEBUG] Inside try block!" << std::endl;
+            // Debug: Check the delay value before calling setTimeout
+            unsigned int delay = 1000;
+            std::cout << "[EXAMPLE DEBUG] About to call setTimeout with delay: "
+                      << delay << std::endl;
+            std::cout << "[EXAMPLE DEBUG] Timer object address: " << &timer
+                      << std::endl;
+            std::cout << "[EXAMPLE DEBUG] simpleTask function address: "
+                      << reinterpret_cast<void*>(simpleTask) << std::endl;
+
+            // Try calling setTimeout step by step
+            std::cout << "[EXAMPLE DEBUG] Calling setTimeout now..."
+                      << std::endl;
+            auto future = timer.setTimeout(simpleTask, delay);
+            std::cout << "[EXAMPLE DEBUG] setTimeout returned successfully!"
+                      << std::endl;
+
+            LOG("setTimeout调用成功");
+
+            // Wait for the task to complete
+            std::cout << "[EXAMPLE DEBUG] Waiting for task to complete..."
+                      << std::endl;
+            future.wait();
+            std::cout << "[EXAMPLE DEBUG] Task completed!" << std::endl;
+        } catch (const std::exception& e) {
+            std::cout << "[EXAMPLE DEBUG] Exception caught: " << e.what()
+                      << std::endl;
+            LOG("setTimeout调用失败: " + std::string(e.what()));
+            throw;
+        }
 
         // 设置一个带参数的定时任务（800毫秒后执行一次）
         LOG("设置一个800ms延时的带参数任务");
-        timer.setTimeout(parameterizedTask, 800, "你好", 42);
+        std::cout << "[MAIN DEBUG] About to call parameterized setTimeout with "
+                     "delay=800"
+                  << std::endl;
+        (void)timer.setTimeout(parameterizedTask, 800, "你好", 42);
+        std::cout << "[MAIN DEBUG] Parameterized setTimeout completed"
+                  << std::endl;
 
         // 等待任务完成
         LOG("等待任务完成...");
@@ -109,7 +152,7 @@ int main() {
 
         // 设置一个简单任务
         LOG("设置带有回调的任务");
-        timer.setTimeout(simpleTask, 500);
+        (void)timer.setTimeout(simpleTask, 500);
 
         // 等待任务完成
         std::this_thread::sleep_for(600ms);
@@ -282,7 +325,7 @@ int main() {
         try {
             // 尝试设置nullptr作为函数
             std::function<void()> nullFunc = nullptr;
-            timer.setTimeout(nullFunc, 100);
+            (void)timer.setTimeout(nullFunc, 100);
         } catch (const std::exception& e) {
             LOG("捕获到异常: " + std::string(e.what()));
         }
@@ -312,10 +355,10 @@ int main() {
         LOG("设置多个不同类型的任务");
 
         // 简单的延迟任务
-        timer.setTimeout(simpleTask, 100);
+        (void)timer.setTimeout(simpleTask, 100);
 
         // 带参数的任务
-        timer.setTimeout(parameterizedTask, 150, "参数化任务", 123);
+        (void)timer.setTimeout(parameterizedTask, 150, "参数化任务", 123);
 
         // 带返回值的任务
         auto future = timer.setTimeout(taskWithReturn, 200, 30, 12);
@@ -342,18 +385,18 @@ int main() {
 
         // 设置最小延迟的任务
         LOG("设置1毫秒延迟的任务");
-        timer.setTimeout(
+        (void)timer.setTimeout(
             []() { LOG("最小延迟任务执行 @ " + getCurrentTimeStr()); }, 1);
 
         // 设置较长延迟的任务
         LOG("设置较长延迟(2秒)的任务");
-        timer.setTimeout(
+        (void)timer.setTimeout(
             []() { LOG("较长延迟任务执行 @ " + getCurrentTimeStr()); }, 2000);
 
         // 设置任务数量限制测试
         LOG("设置大量短期任务");
         for (int i = 0; i < 20; ++i) {
-            timer.setTimeout(
+            (void)timer.setTimeout(
                 [i]() { LOG("短期任务 #" + std::to_string(i) + " 执行"); },
                 100 + i * 10);
         }

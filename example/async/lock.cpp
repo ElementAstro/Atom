@@ -6,6 +6,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <type_traits>
 #include <vector>
 
 #include "atom/async/lock.hpp"
@@ -320,10 +321,17 @@ void compare_lock_types() {
 
         for (int i = 0; i < threads_count; ++i) {
             threads.emplace_back([&lock, &counter, iterations]() {
+                using LockType = std::decay_t<decltype(lock)>;
                 for (int j = 0; j < iterations; ++j) {
-                    auto ticket = lock.lock();
-                    counter.value++;
-                    lock.unlock(ticket);
+                    if constexpr (std::is_same_v<LockType,
+                                                 atom::async::TicketSpinlock>) {
+                        auto ticket = lock.lock();
+                        counter.value++;
+                        lock.unlock(ticket);
+                    } else {
+                        atom::async::ScopedLock<LockType> guard(lock);
+                        counter.value++;
+                    }
                 }
             });
         }

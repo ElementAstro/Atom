@@ -7,10 +7,15 @@
 namespace py = pybind11;
 using namespace atom::algorithm;
 
-PYBIND11_MODULE(rust_numeric, m) {
-    m.doc() = "Rust-like numeric types and utilities for Python";
-
-    // Bind ErrorKind enum
+/**
+ * @brief Binds the ErrorKind enumeration to Python.
+ *
+ * This function creates Python bindings for the ErrorKind enum which represents
+ * different types of errors that can occur during numeric operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindErrorKind(py::module_& m) {
     py::enum_<ErrorKind>(m, "ErrorKind", "Error kinds for numeric operations")
         .value("ParseIntError", ErrorKind::ParseIntError,
                "Error parsing integer")
@@ -23,124 +28,126 @@ PYBIND11_MODULE(rust_numeric, m) {
                "Numeric underflow")
         .value("InvalidOperation", ErrorKind::InvalidOperation,
                "Invalid operation");
+}
 
-    // Bind Error class
+/**
+ * @brief Binds the Error class to Python.
+ *
+ * This function creates Python bindings for the Error class which encapsulates
+ * error information including the error kind and descriptive message.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindError(py::module_& m) {
     py::class_<Error>(m, "Error", "Error type for numeric operations")
-        .def(py::init<ErrorKind, const std::string &>(), py::arg("kind"),
+        .def(py::init<ErrorKind, const std::string&>(), py::arg("kind"),
              py::arg("message"),
              "Create a new Error with the given kind and message")
         .def("kind", &Error::kind, "Get the error kind")
         .def("message", &Error::message, "Get the error message")
         .def("to_string", &Error::to_string, "Get the error as a string")
         .def("__str__", &Error::to_string);
+}
 
-    // Bind Result template for different numeric types
-    // I8 Result
-    py::class_<Result<i8>>(m, "I8Result", "Result type for i8 operations")
-        .def(py::init<i8>(), py::arg("value"),
+/**
+ * @brief Template function to bind Result types for different numeric types.
+ *
+ * This function creates Python bindings for Result<T> types which provide
+ * Rust-like error handling for numeric operations.
+ *
+ * @tparam T The numeric type (i8, i32, i64, f32, f64)
+ * @param m The pybind11 module to bind to
+ * @param name The Python class name for this Result type
+ * @param doc The documentation string for this Result type
+ */
+template <typename T>
+void bindResultType(py::module_& m, const char* name, const char* doc) {
+    py::class_<Result<T>>(m, name, doc)
+        .def(py::init<T>(), py::arg("value"),
              "Create a new Result with a value")
         .def(py::init<Error>(), py::arg("error"),
              "Create a new Result with an error")
-        .def("is_ok", &Result<i8>::is_ok, "Check if the result is Ok")
-        .def("is_err", &Result<i8>::is_err, "Check if the result is Error")
-        .def("unwrap", &Result<i8>::unwrap, "Get the value, throws if Error")
-        .def("unwrap_or", &Result<i8>::unwrap_or, py::arg("default_value"),
+        .def("is_ok", &Result<T>::is_ok, "Check if the result is Ok")
+        .def("is_err", &Result<T>::is_err, "Check if the result is Error")
+        .def("unwrap", &Result<T>::unwrap, "Get the value, throws if Error")
+        .def("unwrap_or", &Result<T>::unwrap_or, py::arg("default_value"),
              "Get the value or a default value if Error")
-        .def("unwrap_err", &Result<i8>::unwrap_err,
+        .def("unwrap_err", &Result<T>::unwrap_err,
              "Get the error, throws if Ok");
+}
 
-    // I32 Result
-    py::class_<Result<i32>>(m, "I32Result", "Result type for i32 operations")
-        .def(py::init<i32>(), py::arg("value"),
-             "Create a new Result with a value")
-        .def(py::init<Error>(), py::arg("error"),
-             "Create a new Result with an error")
-        .def("is_ok", &Result<i32>::is_ok, "Check if the result is Ok")
-        .def("is_err", &Result<i32>::is_err, "Check if the result is Error")
-        .def("unwrap", &Result<i32>::unwrap, "Get the value, throws if Error")
-        .def("unwrap_or", &Result<i32>::unwrap_or, py::arg("default_value"),
-             "Get the value or a default value if Error")
-        .def("unwrap_err", &Result<i32>::unwrap_err,
-             "Get the error, throws if Ok");
+/**
+ * @brief Binds all Result types to Python.
+ *
+ * This function creates Python bindings for Result types for all supported
+ * numeric types (i8, i32, i64, f32, f64).
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindResultTypes(py::module_& m) {
+    bindResultType<i8>(m, "I8Result", "Result type for i8 operations");
+    bindResultType<i32>(m, "I32Result", "Result type for i32 operations");
+    bindResultType<i64>(m, "I64Result", "Result type for i64 operations");
+    bindResultType<f32>(m, "F32Result", "Result type for f32 operations");
+    bindResultType<f64>(m, "F64Result", "Result type for f64 operations");
+}
 
-    // I64 Result
-    py::class_<Result<i64>>(m, "I64Result", "Result type for i64 operations")
-        .def(py::init<i64>(), py::arg("value"),
-             "Create a new Result with a value")
-        .def(py::init<Error>(), py::arg("error"),
-             "Create a new Result with an error")
-        .def("is_ok", &Result<i64>::is_ok, "Check if the result is Ok")
-        .def("is_err", &Result<i64>::is_err, "Check if the result is Error")
-        .def("unwrap", &Result<i64>::unwrap, "Get the value, throws if Error")
-        .def("unwrap_or", &Result<i64>::unwrap_or, py::arg("default_value"),
-             "Get the value or a default value if Error")
-        .def("unwrap_err", &Result<i64>::unwrap_err,
-             "Get the error, throws if Ok");
-
-    // F32 Result
-    py::class_<Result<f32>>(m, "F32Result", "Result type for f32 operations")
-        .def(py::init<f32>(), py::arg("value"),
-             "Create a new Result with a value")
-        .def(py::init<Error>(), py::arg("error"),
-             "Create a new Result with an error")
-        .def("is_ok", &Result<f32>::is_ok, "Check if the result is Ok")
-        .def("is_err", &Result<f32>::is_err, "Check if the result is Error")
-        .def("unwrap", &Result<f32>::unwrap, "Get the value, throws if Error")
-        .def("unwrap_or", &Result<f32>::unwrap_or, py::arg("default_value"),
-             "Get the value or a default value if Error")
-        .def("unwrap_err", &Result<f32>::unwrap_err,
-             "Get the error, throws if Ok");
-
-    // F64 Result
-    py::class_<Result<f64>>(m, "F64Result", "Result type for f64 operations")
-        .def(py::init<f64>(), py::arg("value"),
-             "Create a new Result with a value")
-        .def(py::init<Error>(), py::arg("error"),
-             "Create a new Result with an error")
-        .def("is_ok", &Result<f64>::is_ok, "Check if the result is Ok")
-        .def("is_err", &Result<f64>::is_err, "Check if the result is Error")
-        .def("unwrap", &Result<f64>::unwrap, "Get the value, throws if Error")
-        .def("unwrap_or", &Result<f64>::unwrap_or, py::arg("default_value"),
-             "Get the value or a default value if Error")
-        .def("unwrap_err", &Result<f64>::unwrap_err,
-             "Get the error, throws if Ok");
-
-    // Option template for different numeric types
-    py::class_<Option<i32>>(m, "I32Option", "Option type for i32")
+/**
+ * @brief Template function to bind Option types for different numeric types.
+ *
+ * This function creates Python bindings for Option<T> types which provide
+ * Rust-like optional value handling for numeric operations.
+ *
+ * @tparam T The numeric type (i32, f64, etc.)
+ * @param m The pybind11 module to bind to
+ * @param name The Python class name for this Option type
+ * @param doc The documentation string for this Option type
+ */
+template <typename T>
+void bindOptionType(py::module_& m, const char* name, const char* doc) {
+    py::class_<Option<T>>(m, name, doc)
         .def(py::init<>(), "Create a None option")
-        .def(py::init<i32>(), py::arg("value"),
-             "Create a Some option with value")
-        .def("is_some", &Option<i32>::is_some, "Check if option has a value")
-        .def("is_none", &Option<i32>::is_none, "Check if option has no value")
-        .def("unwrap", &Option<i32>::unwrap, "Get the value, throws if None")
-        .def("unwrap_or", &Option<i32>::unwrap_or, py::arg("default"),
+        .def(py::init<T>(), py::arg("value"), "Create a Some option with value")
+        .def("is_some", &Option<T>::is_some, "Check if option has a value")
+        .def("is_none", &Option<T>::is_none, "Check if option has no value")
+        .def("unwrap", &Option<T>::unwrap, "Get the value, throws if None")
+        .def("unwrap_or", &Option<T>::unwrap_or, py::arg("default"),
              "Get the value or a default if None")
-        .def_static("some", &Option<i32>::some, py::arg("value"),
+        .def_static("some", &Option<T>::some, py::arg("value"),
                     "Create a Some option with value")
-        .def_static("none", &Option<i32>::none, "Create a None option");
+        .def_static("none", &Option<T>::none, "Create a None option");
+}
 
-    // Option template for different numeric types
-    py::class_<Option<f64>>(m, "F64Option", "Option type for f64")
-        .def(py::init<>(), "Create a None option")
-        .def(py::init<f64>(), py::arg("value"),
-             "Create a Some option with value")
-        .def("is_some", &Option<f64>::is_some, "Check if option has a value")
-        .def("is_none", &Option<f64>::is_none, "Check if option has no value")
-        .def("unwrap", &Option<f64>::unwrap, "Get the value, throws if None")
-        .def("unwrap_or", &Option<f64>::unwrap_or, py::arg("default"),
-             "Get the value or a default if None")
-        .def_static("some", &Option<f64>::some, py::arg("value"),
-                    "Create a Some option with value")
-        .def_static("none", &Option<f64>::none, "Create a None option");
+/**
+ * @brief Binds all Option types to Python.
+ *
+ * This function creates Python bindings for Option types for commonly used
+ * numeric types (i32, f64).
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindOptionTypes(py::module_& m) {
+    bindOptionType<i32>(m, "I32Option", "Option type for i32");
+    bindOptionType<f64>(m, "F64Option", "Option type for f64");
+}
 
-    // Bind Range template
+/**
+ * @brief Binds Range types and helper functions to Python.
+ *
+ * This function creates Python bindings for Range<int> type and associated
+ * helper functions for creating ranges.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindRangeTypes(py::module_& m) {
+    // Bind Range template for integers
     py::class_<Range<int>>(m, "IntRange", "Range of integers")
         .def(py::init<int, int, bool>(), py::arg("start"), py::arg("end"),
              py::arg("inclusive") = false,
              "Create a range from start to end (exclusive or inclusive)")
         .def(
             "__iter__",
-            [](Range<int> &r) { return py::make_iterator(r.begin(), r.end()); })
+            [](Range<int>& r) { return py::make_iterator(r.begin(), r.end()); })
         .def("contains", &Range<int>::contains, py::arg("value"),
              "Check if value is in range")
         .def("__contains__", &Range<int>::contains, py::arg("value"),
@@ -149,13 +156,22 @@ PYBIND11_MODULE(rust_numeric, m) {
         .def("__len__", &Range<int>::len, "Support for len() function")
         .def("is_empty", &Range<int>::is_empty, "Check if range is empty");
 
-    // Helper functions for ranges
+    // Helper functions for creating ranges
     m.def("range", &range<int>, py::arg("start"), py::arg("end"),
           "Create a range from start to end (exclusive)");
     m.def("range_inclusive", &range_inclusive<int>, py::arg("start"),
           py::arg("end"), "Create a range from start to end (inclusive)");
+}
 
-    // Bind integer classes
+/**
+ * @brief Binds the I8 integer utility class to Python.
+ *
+ * This function creates Python bindings for the I8 class which provides
+ * utilities for 8-bit signed integer operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindI8Type(py::module_& m) {
     py::class_<I8>(m, "I8", "8-bit signed integer utilities")
         .def_readonly_static("MIN", &I8::MIN, "Minimum value")
         .def_readonly_static("MAX", &I8::MAX, "Maximum value")
@@ -183,8 +199,17 @@ PYBIND11_MODULE(rust_numeric, m) {
                     "Count the number of zeros in the binary representation")
         .def_static("to_string", &I8::to_string, py::arg("value"),
                     py::arg("base") = 10, "Convert to string with given base");
+}
 
-    // I32 class
+/**
+ * @brief Binds the I32 integer utility class to Python.
+ *
+ * This function creates Python bindings for the I32 class which provides
+ * utilities for 32-bit signed integer operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindI32Type(py::module_& m) {
     py::class_<I32>(m, "I32", "32-bit signed integer utilities")
         .def_readonly_static("MIN", &I32::MIN, "Minimum value")
         .def_readonly_static("MAX", &I32::MAX, "Maximum value")
@@ -220,8 +245,17 @@ PYBIND11_MODULE(rust_numeric, m) {
         .def_static("random", &I32::random, py::arg("min") = I32::MIN,
                     py::arg("max") = I32::MAX,
                     "Generate a random i32 in the given range");
+}
 
-    // I64 class
+/**
+ * @brief Binds the I64 integer utility class to Python.
+ *
+ * This function creates Python bindings for the I64 class which provides
+ * utilities for 64-bit signed integer operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindI64Type(py::module_& m) {
     py::class_<I64>(m, "I64", "64-bit signed integer utilities")
         .def_readonly_static("MIN", &I64::MIN, "Minimum value")
         .def_readonly_static("MAX", &I64::MAX, "Maximum value")
@@ -249,8 +283,17 @@ PYBIND11_MODULE(rust_numeric, m) {
                     "Count the number of zeros in the binary representation")
         .def_static("to_string", &I64::to_string, py::arg("value"),
                     py::arg("base") = 10, "Convert to string with given base");
+}
 
-    // U32 class
+/**
+ * @brief Binds the U32 integer utility class to Python.
+ *
+ * This function creates Python bindings for the U32 class which provides
+ * utilities for 32-bit unsigned integer operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindU32Type(py::module_& m) {
     py::class_<U32>(m, "U32", "32-bit unsigned integer utilities")
         .def_readonly_static("MIN", &U32::MIN, "Minimum value")
         .def_readonly_static("MAX", &U32::MAX, "Maximum value")
@@ -270,8 +313,17 @@ PYBIND11_MODULE(rust_numeric, m) {
                     py::arg("b"), "Subtract with wrapping")
         .def_static("to_string", &U32::to_string, py::arg("value"),
                     py::arg("base") = 10, "Convert to string with given base");
+}
 
-    // U64 class
+/**
+ * @brief Binds the U64 integer utility class to Python.
+ *
+ * This function creates Python bindings for the U64 class which provides
+ * utilities for 64-bit unsigned integer operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindU64Type(py::module_& m) {
     py::class_<U64>(m, "U64", "64-bit unsigned integer utilities")
         .def_readonly_static("MIN", &U64::MIN, "Minimum value")
         .def_readonly_static("MAX", &U64::MAX, "Maximum value")
@@ -291,8 +343,17 @@ PYBIND11_MODULE(rust_numeric, m) {
                     py::arg("b"), "Subtract with wrapping")
         .def_static("to_string", &U64::to_string, py::arg("value"),
                     py::arg("base") = 10, "Convert to string with given base");
+}
 
-    // F32 class
+/**
+ * @brief Binds the F32 floating-point utility class to Python.
+ *
+ * This function creates Python bindings for the F32 class which provides
+ * utilities for 32-bit floating-point operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindF32Type(py::module_& m) {
     py::class_<F32>(m, "F32", "32-bit floating point utilities")
         .def_readonly_static("MIN", &F32::MIN, "Minimum finite value")
         .def_readonly_static("MAX", &F32::MAX, "Maximum finite value")
@@ -320,8 +381,17 @@ PYBIND11_MODULE(rust_numeric, m) {
         .def_static("to_string", &F32::to_string, py::arg("value"),
                     py::arg("precision") = 6,
                     "Convert to string with given precision");
+}
 
-    // F64 class
+/**
+ * @brief Binds the F64 floating-point utility class to Python.
+ *
+ * This function creates Python bindings for the F64 class which provides
+ * utilities for 64-bit floating-point operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindF64Type(py::module_& m) {
     py::class_<F64>(m, "F64", "64-bit floating point utilities")
         .def_readonly_static("MIN", &F64::MIN, "Minimum finite value")
         .def_readonly_static("MAX", &F64::MAX, "Maximum finite value")
@@ -352,13 +422,60 @@ PYBIND11_MODULE(rust_numeric, m) {
         .def_static("to_exp_string", &F64::to_exp_string, py::arg("value"),
                     py::arg("precision") = 6,
                     "Convert to exponential string with given precision");
+}
 
-    // Add usage examples
+/**
+ * @brief Binds all floating-point utility classes to Python.
+ *
+ * This function creates Python bindings for all floating-point utility classes
+ * (F32, F64) which provide Rust-like floating-point operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindFloatTypes(py::module_& m) {
+    bindF32Type(m);
+    bindF64Type(m);
+}
+
+/**
+ * @brief Binds all integer utility classes to Python.
+ *
+ * This function creates Python bindings for all integer utility classes
+ * (I8, I32, I64, U32, U64) which provide Rust-like integer operations.
+ *
+ * @param m The pybind11 module to bind to
+ */
+void bindIntegerTypes(py::module_& m) {
+    bindI8Type(m);
+    bindI32Type(m);
+    bindI64Type(m);
+    bindU32Type(m);
+    bindU64Type(m);
+}
+
+/**
+ * @brief Adds comprehensive module documentation and usage examples.
+ *
+ * This function sets the module's __doc__ attribute with detailed documentation
+ * including usage examples, demonstrating the Rust-like numeric operations.
+ *
+ * @param m The pybind11 module to add documentation to
+ */
+void addModuleDocumentation(py::module_& m) {
     m.attr("__doc__") = R"(
     Rust-like numeric types and utilities for Python
 
-    This module provides Rust-inspired numeric types and operations with 
+    This module provides Rust-inspired numeric types and operations with
     controlled overflow behavior, checked arithmetic, and error handling patterns.
+
+    Key Features:
+    - Result<T> types for error handling without exceptions
+    - Option<T> types for optional values
+    - Checked arithmetic operations that detect overflow
+    - Saturating arithmetic that clamps to min/max values
+    - Wrapping arithmetic with defined overflow behavior
+    - Range types for iteration
+    - Comprehensive numeric utility classes (I8, I32, I64, U32, U64, F32, F64)
 
     Examples:
         >>> from atom.algorithm.rust_numeric import I32, F64
@@ -369,7 +486,7 @@ PYBIND11_MODULE(rust_numeric, m) {
         >>> else:
         >>>     print(result.unwrap_err())
         123
-        
+
         >>> # Check for overflow when adding
         >>> option = I32.checked_add(2147483647, 1)  # MAX_INT32 + 1
         >>> if option.is_some():
@@ -377,12 +494,12 @@ PYBIND11_MODULE(rust_numeric, m) {
         >>> else:
         >>>     print("Overflow occurred")
         Overflow occurred
-        
+
         >>> # Saturating operations (clamping to min/max)
         >>> saturated = I32.saturating_add(2147483647, 1000)
         >>> print(saturated)
         2147483647
-        
+
         >>> # Working with ranges
         >>> from atom.algorithm.rust_numeric import range, range_inclusive
         >>> r = range(1, 5)  # 1, 2, 3, 4
@@ -392,5 +509,38 @@ PYBIND11_MODULE(rust_numeric, m) {
         2
         3
         4
+
+        >>> # Floating-point operations
+        >>> from atom.algorithm.rust_numeric import F64
+        >>> print(F64.PI)
+        3.141592653589793
+        >>> print(F64.is_nan(float('nan')))
+        True
     )";
+}
+
+PYBIND11_MODULE(rust_numeric, m) {
+    m.doc() = "Rust-like numeric types and utilities for Python";
+
+    // Bind core error types
+    bindErrorKind(m);
+    bindError(m);
+
+    // Bind Result types for different numeric types
+    bindResultTypes(m);
+
+    // Bind Option types for different numeric types
+    bindOptionTypes(m);
+
+    // Bind Range types and helper functions
+    bindRangeTypes(m);
+
+    // Bind integer utility classes
+    bindIntegerTypes(m);
+
+    // Bind floating-point utility classes
+    bindFloatTypes(m);
+
+    // Add module documentation and examples
+    addModuleDocumentation(m);
 }

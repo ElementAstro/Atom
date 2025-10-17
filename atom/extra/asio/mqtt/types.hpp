@@ -2,7 +2,6 @@
 
 #include <chrono>
 #include <cstdint>
-#include <expected>
 #include <functional>
 #include <optional>
 #include <string>
@@ -153,11 +152,51 @@ struct ClientStats {
 };
 
 /**
- * @brief Result type alias for operations that may fail with an ErrorCode.
+ * @brief Simple result type for operations that may fail with an ErrorCode.
  * @tparam T The value type on success.
  */
 template <typename T>
-using Result = std::expected<T, ErrorCode>;
+class Result {
+public:
+    // Success constructors
+    static Result success(const T& value) {
+        Result r;
+        r.value_ = value;
+        r.has_value_ = true;
+        return r;
+    }
+
+    static Result success(T&& value) {
+        Result r;
+        r.value_ = std::move(value);
+        r.has_value_ = true;
+        return r;
+    }
+
+    // Error constructor
+    static Result error(const ErrorCode& error) {
+        Result r;
+        r.error_ = error;
+        r.has_value_ = false;
+        return r;
+    }
+
+    bool has_value() const { return has_value_; }
+    explicit operator bool() const { return has_value_; }
+
+    const T& value() const { return value_; }
+    T& value() { return value_; }
+    const T& operator*() const { return value_; }
+    T& operator*() { return value_; }
+
+    const ErrorCode& error() const { return error_; }
+
+private:
+    Result() = default;
+    T value_{};
+    ErrorCode error_{};
+    bool has_value_ = false;
+};
 
 /**
  * @brief Callback type for handling received messages.

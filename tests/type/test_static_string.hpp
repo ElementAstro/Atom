@@ -634,29 +634,27 @@ TEST_F(StaticStringTest, ParallelOperations) {
 
 // Constexpr feature test - these must be at namespace scope, not in a function
 namespace {
-    // Test that StaticString can be used in constexpr contexts
-    constexpr StaticString<5> constexpr_str = "Hello";
-    static_assert(constexpr_str.size() == 5, "Constexpr size check failed");
-    static_assert(constexpr_str.capacity() == 5,
-                  "Constexpr capacity check failed");
+// Test that StaticString can be used in constexpr contexts
+constexpr StaticString<5> constexpr_str = "Hello";
+static_assert(constexpr_str.size() == 5, "Constexpr size check failed");
+static_assert(constexpr_str.capacity() == 5, "Constexpr capacity check failed");
 
-    // Test constexpr operations with a function at namespace scope
-    constexpr StaticString<10> get_static_string() {
-        StaticString<10> str = "Hello";
-        return str;
-    }
-
-    constexpr auto str = get_static_string();
-    static_assert(str.size() == 5,
-                  "Constexpr function return size check failed");
+// Test constexpr operations with a function at namespace scope
+constexpr StaticString<10> get_static_string() {
+    StaticString<10> str = "Hello";
+    return str;
 }
+
+constexpr auto str = get_static_string();
+static_assert(str.size() == 5, "Constexpr function return size check failed");
+}  // namespace
 
 // Runtime validation of constexpr features
 TEST_F(StaticStringTest, ConstexprUsage) {
     // Verify the constexpr values at runtime
     verifyStringEquals(constexpr_str, "Hello");
     verifyStringEquals(str, "Hello");
-    
+
     // Additional runtime checks can go here
     EXPECT_EQ(constexpr_str.size(), 5);
     EXPECT_EQ(str.size(), 5);

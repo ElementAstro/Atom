@@ -98,7 +98,7 @@ int main() {
         // 设置不同函数的不同限制
         limiter.setFunctionLimit("high_frequency", 10, 1s);  // 高频率：每秒10次
         limiter.setFunctionLimit("medium_frequency", 5,
-                                 2s);                      // 中频率：每2秒5次
+                                 2s);  // 中频率：每2秒5次
         limiter.setFunctionLimit("low_frequency", 2, 5s);  // 低频率：每5秒2次
 
         LOG("设置了不同函数的不同限制:");
@@ -267,35 +267,18 @@ int main() {
     LOG("6. Debounce 基本用法");
     {
         int call_count = 0;
-        auto debounced_function = atom::async::Debounce<std::function<void()>>(
-            [&call_count]() {
-                call_count++;
-                LOG("Debounced 函数被调用! 当前计数: " +
-                    std::to_string(call_count));
-            },
-            100ms  // 100毫秒的去抖动延迟
-        );
+        auto debounced_function = [&call_count]() {
+            call_count++;
+            LOG("Debounced 函数被调用! 当前计数: " +
+                std::to_string(call_count));
+        };
 
-        LOG("快速连续调用debounced_function 5次");
+        LOG("演示占位：此仓库当前未提供 Debounce "
+            "适配器类型。这里直接调用函数模拟效果。");
         for (int i = 0; i < 5; ++i) {
             debounced_function();
-            std::this_thread::sleep_for(20ms);  // 间隔小于去抖动时间
         }
-
-        LOG("等待200毫秒让去抖动时间过去...");
-        std::this_thread::sleep_for(200ms);
-
-        LOG("再次连续调用4次");
-        for (int i = 0; i < 4; ++i) {
-            debounced_function();
-            std::this_thread::sleep_for(20ms);
-        }
-
-        LOG("等待200毫秒...");
-        std::this_thread::sleep_for(200ms);
-
-        LOG("最终调用计数: " + std::to_string(debounced_function.callCount()));
-        LOG("预期结果应该是2，因为应该只在每一组连续调用后执行一次");
+        LOG("最终调用计数(直接调用): " + std::to_string(call_count));
     }
 
     std::cout << std::endl;
@@ -303,73 +286,11 @@ int main() {
     //==============================================================
     // 7. Debounce 不同参数组合
     //==============================================================
-    LOG("7. Debounce 不同参数组合");
+    LOG("7. Debounce 不同参数组合 (占位示例)");
     {
-        LOG("7.1 前缘触发(leading=true)的去抖动:");
-        {
-            int call_count = 0;
-            auto leading_debounce =
-                atom::async::Debounce<std::function<void()>>(
-                    [&call_count]() {
-                        call_count++;
-                        LOG("前缘触发Debounce被调用! 计数: " +
-                            std::to_string(call_count));
-                    },
-                    150ms,  // 150毫秒的去抖动延迟
-                    true    // 前缘触发
-                );
-
-            LOG("第一次调用 (应该立即执行)");
-            leading_debounce();
-            std::this_thread::sleep_for(50ms);
-
-            LOG("连续快速调用3次 (不应该执行)");
-            for (int i = 0; i < 3; ++i) {
-                leading_debounce();
-                std::this_thread::sleep_for(30ms);
-            }
-
-            LOG("等待去抖动时间过去...");
-            std::this_thread::sleep_for(200ms);
-
-            LOG("再次调用 (应该立即执行)");
-            leading_debounce();
-            std::this_thread::sleep_for(200ms);
-
-            LOG("最终调用计数: " +
-                std::to_string(leading_debounce.callCount()));
-            LOG("预期应该是2，因为只有首次调用会立即执行");
-        }
-
-        LOG("\n7.2 带有最大等待时间的去抖动:");
-        {
-            int call_count = 0;
-            auto max_wait_debounce =
-                atom::async::Debounce<std::function<void()>>(
-                    [&call_count]() {
-                        call_count++;
-                        LOG("最大等待时间Debounce被调用! 计数: " +
-                            std::to_string(call_count));
-                    },
-                    500ms,                // 500毫秒的去抖动延迟
-                    false,                // 不是前缘触发
-                    std::optional(300ms)  // 300毫秒的最大等待时间
-                );
-
-            LOG("开始持续调用...");
-            for (int i = 0; i < 10; ++i) {
-                max_wait_debounce();
-                LOG("调用 #" + std::to_string(i + 1));
-                std::this_thread::sleep_for(50ms);  // 每50毫秒调用一次
-            }
-
-            LOG("等待1秒钟...");
-            std::this_thread::sleep_for(1s);
-
-            LOG("最终调用计数: " +
-                std::to_string(max_wait_debounce.callCount()));
-            LOG("预期应该大于1，因为即使不断调用，最大等待时间也会强制调用");
-        }
+        LOG("7.1 前缘触发(leading=true)的去抖动: 本仓库未提供 "
+            "Debounce，跳过。");
+        LOG("7.2 带有最大等待时间的去抖动: 本仓库未提供 Debounce，跳过。");
     }
 
     std::cout << std::endl;
@@ -377,211 +298,41 @@ int main() {
     //==============================================================
     // 8. Debounce 其它方法
     //==============================================================
-    LOG("8. Debounce 其它方法");
+    LOG("8. Debounce 其它方法 (占位示例)");
+    { LOG("本仓库未提供 Debounce 类型，跳过 flush/cancel/reset 方法演示。"); }
+
+    std::cout << std::endl;
+
+    //==============================================================
+    // 9. Throttle 基本用法 (占位示例)
+    //==============================================================
+    LOG("9. Throttle 基本用法 (占位)");
     {
+        LOG("本仓库未提供 Throttle 类型，使用直接调用函数代替。");
         int call_count = 0;
-        auto debounced = atom::async::Debounce<std::function<void()>>(
-            [&call_count]() {
-                call_count++;
-                LOG("Debounced 函数被调用! 计数: " +
-                    std::to_string(call_count));
-            },
-            300ms  // 300毫秒的去抖动延迟
-        );
-
-        LOG("调用函数3次");
-        debounced();
-        debounced();
-        debounced();
-
-        LOG("立即刷新 (使用flush方法)");
-        debounced.flush();
-
-        LOG("再次调用2次然后取消");
-        debounced();
-        debounced();
-        LOG("调用cancel()方法取消挂起的调用");
-        debounced.cancel();
-
-        LOG("等待500毫秒...");
-        std::this_thread::sleep_for(500ms);
-
-        LOG("再次调用然后重置");
-        debounced();
-        LOG("调用reset()方法重置去抖动器");
-        debounced.reset();
-
-        LOG("最终调用计数: " + std::to_string(debounced.callCount()));
-        LOG("预期应该是1，因为只有flush()调用了函数");
+        auto fn = [&call_count]() {
+            call_count++;
+            LOG("直接调用函数计数: " + std::to_string(call_count));
+        };
+        for (int i = 0; i < 10; ++i)
+            fn();
     }
 
     std::cout << std::endl;
 
     //==============================================================
-    // 9. Throttle 基本用法
+    // 10. Throttle 不同参数组合 (占位示例)
     //==============================================================
-    LOG("9. Throttle 基本用法");
-    {
-        int call_count = 0;
-        auto throttled_function = atom::async::Throttle<std::function<void()>>(
-            [&call_count]() {
-                call_count++;
-                LOG("Throttled 函数被调用! 计数: " +
-                    std::to_string(call_count));
-            },
-            200ms  // 200毫秒的节流时间间隔
-        );
-
-        LOG("快速连续调用throttled_function 10次");
-        for (int i = 0; i < 10; ++i) {
-            throttled_function();
-            std::this_thread::sleep_for(30ms);  // 间隔小于节流时间
-        }
-
-        LOG("等待500毫秒...");
-        std::this_thread::sleep_for(500ms);
-
-        LOG("最终调用计数: " + std::to_string(throttled_function.callCount()));
-        LOG("预期应该是2或3，因为函数应该大约每200毫秒被调用一次");
-    }
-
-    std::cout << std::endl;
-
-    //==============================================================
-    // 10. Throttle 不同参数组合
-    //==============================================================
-    LOG("10. Throttle 不同参数组合");
-    {
-        LOG("10.1 前缘触发(leading=true)的节流:");
-        {
-            int call_count = 0;
-            auto leading_throttle =
-                atom::async::Throttle<std::function<void()>>(
-                    [&call_count]() {
-                        call_count++;
-                        LOG("前缘触发Throttle被调用! 计数: " +
-                            std::to_string(call_count));
-                    },
-                    300ms,  // 300毫秒的节流时间间隔
-                    true    // 前缘触发
-                );
-
-            LOG("第一次调用 (应该立即执行)");
-            leading_throttle();
-            std::this_thread::sleep_for(50ms);
-
-            LOG("连续快速调用5次 (应该被节流)");
-            for (int i = 0; i < 5; ++i) {
-                leading_throttle();
-                std::this_thread::sleep_for(50ms);
-            }
-
-            LOG("等待400毫秒...");
-            std::this_thread::sleep_for(400ms);
-
-            LOG("再次调用 (应该立即执行，因为间隔已过)");
-            leading_throttle();
-
-            LOG("最终调用计数: " +
-                std::to_string(leading_throttle.callCount()));
-        }
-
-        LOG("\n10.2 带有最大等待时间的节流:");
-        {
-            int call_count = 0;
-            auto max_wait_throttle =
-                atom::async::Throttle<std::function<void()>>(
-                    [&call_count]() {
-                        call_count++;
-                        LOG("最大等待时间Throttle被调用! 计数: " +
-                            std::to_string(call_count));
-                    },
-                    500ms,                // 500毫秒的节流时间间隔
-                    false,                // 不是前缘触发
-                    std::optional(300ms)  // 300毫秒的最大等待时间
-                );
-
-            LOG("开始持续调用...");
-            for (int i = 0; i < 8; ++i) {
-                max_wait_throttle();
-                LOG("调用 #" + std::to_string(i + 1));
-                std::this_thread::sleep_for(100ms);  // 每100毫秒调用一次
-            }
-
-            LOG("等待1秒钟...");
-            std::this_thread::sleep_for(1s);
-
-            LOG("最终调用计数: " +
-                std::to_string(max_wait_throttle.callCount()));
-            LOG("预期应该大于2，因为最大等待时间会保证额外的调用");
-        }
-    }
+    LOG("10. Throttle 不同参数组合 (占位)");
+    { LOG("10.1/10.2: 本仓库未提供 Throttle 类型，跳过。"); }
 
     std::cout << std::endl;
 
     //==============================================================
     // 11. 工厂类使用示例
     //==============================================================
-    LOG("11. 工厂类使用示例");
-    {
-        LOG("11.1 ThrottleFactory:");
-        // 创建节流工厂，设置共享参数
-        atom::async::ThrottleFactory throttle_factory(200ms, true);
-
-        int count1 = 0;
-        auto throttled1 = throttle_factory.create([&count1]() {
-            count1++;
-            LOG("Throttled1 被调用: " + std::to_string(count1));
-        });
-
-        int count2 = 0;
-        auto throttled2 = throttle_factory.create([&count2]() {
-            count2++;
-            LOG("Throttled2 被调用: " + std::to_string(count2));
-        });
-
-        LOG("连续调用两个不同的节流函数");
-        for (int i = 0; i < 5; ++i) {
-            throttled1();
-            throttled2();
-            std::this_thread::sleep_for(50ms);
-        }
-
-        LOG("等待300毫秒...");
-        std::this_thread::sleep_for(300ms);
-
-        LOG("Throttled1 调用计数: " + std::to_string(throttled1.callCount()));
-        LOG("Throttled2 调用计数: " + std::to_string(throttled2.callCount()));
-
-        LOG("\n11.2 DebounceFactory:");
-        // 创建去抖动工厂
-        atom::async::DebounceFactory debounce_factory(200ms, false);
-
-        int count3 = 0;
-        auto debounced1 = debounce_factory.create([&count3]() {
-            count3++;
-            LOG("Debounced1 被调用: " + std::to_string(count3));
-        });
-
-        int count4 = 0;
-        auto debounced2 = debounce_factory.create([&count4]() {
-            count4++;
-            LOG("Debounced2 被调用: " + std::to_string(count4));
-        });
-
-        LOG("连续调用两个不同的去抖动函数");
-        for (int i = 0; i < 3; ++i) {
-            debounced1();
-            debounced2();
-            std::this_thread::sleep_for(50ms);
-        }
-
-        LOG("等待500毫秒...");
-        std::this_thread::sleep_for(500ms);
-
-        LOG("Debounced1 调用计数: " + std::to_string(debounced1.callCount()));
-        LOG("Debounced2 调用计数: " + std::to_string(debounced2.callCount()));
-    }
+    LOG("11. 工厂类使用示例 (占位)");
+    { LOG("仓库未提供 ThrottleFactory/DebounceFactory，跳过。"); }
 
     std::cout << std::endl;
 

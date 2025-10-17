@@ -174,7 +174,7 @@ public:
     template <std::integral T>
     [[nodiscard]] Result<T> read() {
         if (position_ + sizeof(T) > data_.size()) {
-            return std::unexpected(ErrorCode::MALFORMED_PACKET);
+            return Result<T>::error(ErrorCode::MALFORMED_PACKET);
         }
 
         T value{0};
@@ -186,7 +186,7 @@ public:
                 value = (value << 8) | data_[position_++];
             }
         }
-        return value;
+        return Result<T>::success(value);
     }
 
     /**
@@ -196,17 +196,17 @@ public:
     [[nodiscard]] Result<std::string> read_string() {
         auto length_result = read<uint16_t>();
         if (!length_result)
-            return std::unexpected(length_result.error());
+            return Result<std::string>::error(length_result.error());
 
         uint16_t length = *length_result;
         if (position_ + length > data_.size()) {
-            return std::unexpected(ErrorCode::MALFORMED_PACKET);
+            return Result<std::string>::error(ErrorCode::MALFORMED_PACKET);
         }
 
         std::string str(data_.begin() + position_,
                         data_.begin() + position_ + length);
         position_ += length;
-        return str;
+        return Result<std::string>::success(std::move(str));
     }
 
     /**
@@ -219,7 +219,7 @@ public:
 
         do {
             if (position_ >= data_.size() || shift >= 28) {
-                return std::unexpected(ErrorCode::MALFORMED_PACKET);
+                return Result<uint32_t>::error(ErrorCode::MALFORMED_PACKET);
             }
 
             uint8_t byte = data_[position_++];
@@ -230,7 +230,7 @@ public:
             shift += 7;
         } while (true);
 
-        return value;
+        return Result<uint32_t>::success(value);
     }
 
     /**

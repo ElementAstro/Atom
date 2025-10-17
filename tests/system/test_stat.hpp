@@ -6,11 +6,7 @@
 #include <memory>
 #include <string>
 #include <thread>
-
-
 #include "atom/system/stat.hpp"
-
-#include "atom/system/stat.cpp"
 
 using namespace atom::system;
 using namespace std::chrono_literals;

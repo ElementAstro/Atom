@@ -3,7 +3,6 @@
 #include <string>
 #include "context.h"
 
-
 using modern_log::LogContext;
 
 TEST(LogContextTest, DefaultIsEmpty) {

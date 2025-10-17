@@ -26,8 +26,7 @@
 namespace atom {
 
 #ifdef ATOM_USE_BOOST
-using string_type =
-    std::string;
+using string_type = std::string;
 template <typename T>
 using optional_type = boost::optional<T>;
 template <typename... Args>

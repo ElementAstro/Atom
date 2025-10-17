@@ -14,7 +14,6 @@
 #include "metrics.hpp"
 #include "server_config.hpp"
 
-
 #include <chrono>
 #include <memory>
 #include <string>

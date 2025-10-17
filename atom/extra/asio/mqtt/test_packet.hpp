@@ -9,7 +9,6 @@
 #include "packet.hpp"
 #include "types.hpp"
 
-
 using namespace mqtt;
 
 TEST(PacketTypeTest, EnumValues) {

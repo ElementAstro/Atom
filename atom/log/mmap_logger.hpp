@@ -16,25 +16,20 @@ Description: Memory-mapped File Logger for Atom with C++20 Features
 #ifndef ATOM_LOG_MMAP_LOGGER_HPP
 #define ATOM_LOG_MMAP_LOGGER_HPP
 
+#include "async_logger.hpp"
 #include "atomlog.hpp"
 
 #include <concepts>
-#include <expected>
 #include <filesystem>
 #include <memory>
 #include <source_location>
 #include <span>
 #include <string_view>
+#include "atom/type/compat.hpp"
 
 namespace fs = std::filesystem;
 
 namespace atom::log {
-
-// Concept for valid log message arguments
-template <typename T>
-concept Loggable = requires(T t) {
-    { std::format("{}", t) } -> std::convertible_to<std::string>;
-};
 
 /**
  * @brief Custom exception class hierarchy for MmapLogger
@@ -62,7 +57,7 @@ class ConfigException : public LoggerException {
     using LoggerException::LoggerException;
 };
 
-// Error code enumeration for use with std::expected
+// Error code enumeration for use with atom::type::expected
 enum class LoggerErrorCode {
     Success,
     FileOpenError,
@@ -179,7 +174,8 @@ public:
                const std::source_location& location =
                    std::source_location::current()) {
         log(LogLevel::TRACE, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -194,8 +190,9 @@ public:
     void debug(const String& format, Args&&... args,
                const std::source_location& location =
                    std::source_location::current()) {
-        log(LogLevel::DEBUG, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+        log(LogLevel::DEBUG_LEVEL, Category::General,
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -210,8 +207,9 @@ public:
     void info(const String& format, Args&&... args,
               const std::source_location& location =
                   std::source_location::current()) {
-        log(LogLevel::INFO, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+        log(LogLevel::INFO_LEVEL, Category::General,
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -226,8 +224,9 @@ public:
     void warn(const String& format, Args&&... args,
               const std::source_location& location =
                   std::source_location::current()) {
-        log(LogLevel::WARN, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+        log(LogLevel::WARN_LEVEL, Category::General,
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -242,8 +241,9 @@ public:
     void error(const String& format, Args&&... args,
                const std::source_location& location =
                    std::source_location::current()) {
-        log(LogLevel::ERROR, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+        log(LogLevel::ERROR_LEVEL, Category::General,
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -258,8 +258,9 @@ public:
     void critical(const String& format, Args&&... args,
                   const std::source_location& location =
                       std::source_location::current()) {
-        log(LogLevel::CRITICAL, Category::General,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+        log(LogLevel::CRITICAL_LEVEL, Category::General,
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -278,7 +279,8 @@ public:
                          const std::source_location& location =
                              std::source_location::current()) {
         log(level, category,
-            std::format(format.c_str(), std::forward<Args>(args)...), location);
+            std::vformat(format.c_str(), std::make_format_args(args...)),
+            location);
     }
 
     /**
@@ -303,7 +305,7 @@ public:
      * @brief Forces log buffer flush to disk.
      * @return std::expected with void or error code
      */
-    [[nodiscard]] std::expected<void, LoggerErrorCode> flush() noexcept;
+    [[nodiscard]] atom::type::expected<void, LoggerErrorCode> flush() noexcept;
 
     /**
      * @brief Sets category filter to only log specific categories

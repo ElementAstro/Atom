@@ -103,7 +103,7 @@ void Perf::PerfThreadLocal::startNested(std::uint64_t t0) {
     stack.push_back(t0);
 }
 
-void Perf::PerfThreadLocal::endNested(std::uint64_t t1) {
+void Perf::PerfThreadLocal::endNested(std::uint64_t /*t1*/) {
     if (!stack.empty()) {
         stack.pop_back();
     }
@@ -340,7 +340,7 @@ void Perf::PerfGather::exportToJSON(const std::string& filename) {
     }
 }
 
-static std::string formatDuration(std::chrono::nanoseconds duration_ns) {
+[[maybe_unused]] static std::string formatDuration(std::chrono::nanoseconds duration_ns) {
     std::ostringstream oss;
     oss << duration_ns.count() << " ns";
 

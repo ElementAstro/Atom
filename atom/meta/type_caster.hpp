@@ -255,8 +255,8 @@ public:
      * \throws std::invalid_argument if the enum value is invalid.
      */
     template <typename EnumType>
-    auto enumToString(EnumType value, const std::string& enum_name)
-        -> std::string {
+    auto enumToString(EnumType value,
+                      const std::string& enum_name) -> std::string {
         std::shared_lock enumLock(enum_mutex_);
         const auto& enumMap = getEnumMap<EnumType>(enum_name);
         for (const auto& [key, enumValue] : enumMap) {

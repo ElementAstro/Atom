@@ -1,9 +1,39 @@
 #pragma once
 
-#include <expected>
 #include <string>
 #include <system_error>
 
+// Temporarily disable std::expected usage until compiler support is stable
+// #include <expected>
+
+// Simple Result type as a replacement for std::expected
+#include <variant>
+
+namespace modern_log {
+template <typename T, typename E>
+class Result {
+private:
+    std::variant<T, E> data_;
+
+public:
+    Result(const T& value) : data_(value) {}
+    Result(T&& value) : data_(std::move(value)) {}
+    Result(const E& error) : data_(error) {}
+    Result(E&& error) : data_(std::move(error)) {}
+
+    bool has_value() const { return std::holds_alternative<T>(data_); }
+    operator bool() const { return has_value(); }
+
+    const T& value() const { return std::get<T>(data_); }
+    T& value() { return std::get<T>(data_); }
+
+    const E& error() const { return std::get<E>(data_); }
+    E& error() { return std::get<E>(data_); }
+
+    const T& operator*() const { return value(); }
+    T& operator*() { return value(); }
+};
+}  // namespace modern_log
 
 namespace modern_log {
 
@@ -113,8 +143,7 @@ inline std::error_code make_error_code(LogError e) {
  *
  * @tparam T The type of the expected result value.
  */
-template <typename T>
-using Result = std::expected<T, LogError>;
+// Note: Result template is now defined above as a class template
 
 }  // namespace modern_log
 

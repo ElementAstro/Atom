@@ -144,9 +144,8 @@ template <std::size_t Alignment, typename PointerType>
  * \return The aligned value
  */
 template <Alignable ValueType, std::integral AlignmentType>
-[[nodiscard]] constexpr auto alignUp(ValueType value,
-                                     AlignmentType alignment) noexcept
-    -> ValueType {
+[[nodiscard]] constexpr auto alignUp(
+    ValueType value, AlignmentType alignment) noexcept -> ValueType {
     assert((alignment & (alignment - 1)) == 0 &&
            "Alignment must be power of 2");
     return (value + static_cast<ValueType>(alignment - 1)) &
@@ -162,9 +161,8 @@ template <Alignable ValueType, std::integral AlignmentType>
  * \return The aligned pointer
  */
 template <typename PointerType, std::integral AlignmentType>
-[[nodiscard]] constexpr auto alignUp(PointerType* pointer,
-                                     AlignmentType alignment) noexcept
-    -> PointerType* {
+[[nodiscard]] constexpr auto alignUp(
+    PointerType* pointer, AlignmentType alignment) noexcept -> PointerType* {
     return reinterpret_cast<PointerType*>(
         alignUp(reinterpret_cast<std::size_t>(pointer), alignment));
 }
@@ -206,9 +204,8 @@ template <std::size_t Alignment, typename PointerType>
  * \return The aligned value
  */
 template <Alignable ValueType, std::integral AlignmentType>
-[[nodiscard]] constexpr auto alignDown(ValueType value,
-                                       AlignmentType alignment) noexcept
-    -> ValueType {
+[[nodiscard]] constexpr auto alignDown(
+    ValueType value, AlignmentType alignment) noexcept -> ValueType {
     assert((alignment & (alignment - 1)) == 0 &&
            "Alignment must be power of 2");
     return value & ~static_cast<ValueType>(alignment - 1);
@@ -223,9 +220,8 @@ template <Alignable ValueType, std::integral AlignmentType>
  * \return The aligned pointer
  */
 template <typename PointerType, std::integral AlignmentType>
-[[nodiscard]] constexpr auto alignDown(PointerType* pointer,
-                                       AlignmentType alignment) noexcept
-    -> PointerType* {
+[[nodiscard]] constexpr auto alignDown(
+    PointerType* pointer, AlignmentType alignment) noexcept -> PointerType* {
     return reinterpret_cast<PointerType*>(
         alignDown(reinterpret_cast<std::size_t>(pointer), alignment));
 }
@@ -420,9 +416,8 @@ template <typename PointerType, typename ValueType>
  * \return The original value pointed to by pointer
  */
 template <typename PointerType, typename ValueType>
-[[nodiscard]] ATOM_INLINE auto fetchAdd(PointerType* pointer,
-                                        ValueType value) noexcept
-    -> PointerType {
+[[nodiscard]] ATOM_INLINE auto fetchAdd(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer += value;
     return originalValue;
@@ -452,9 +447,8 @@ atomicFetchAdd(std::atomic<T>* pointer, T value,
  * \return The original value pointed to by pointer
  */
 template <typename PointerType, typename ValueType>
-[[nodiscard]] ATOM_INLINE auto fetchSub(PointerType* pointer,
-                                        ValueType value) noexcept
-    -> PointerType {
+[[nodiscard]] ATOM_INLINE auto fetchSub(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer -= value;
     return originalValue;
@@ -485,9 +479,8 @@ atomicFetchSub(std::atomic<T>* pointer, T value,
  */
 template <typename PointerType, typename ValueType>
     requires BitwiseOperatable<PointerType>
-[[nodiscard]] ATOM_INLINE auto fetchAnd(PointerType* pointer,
-                                        ValueType value) noexcept
-    -> PointerType {
+[[nodiscard]] ATOM_INLINE auto fetchAnd(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer &= static_cast<PointerType>(value);
     return originalValue;
@@ -519,9 +512,8 @@ atomicFetchAnd(std::atomic<T>* pointer, T value,
  */
 template <typename PointerType, typename ValueType>
     requires BitwiseOperatable<PointerType>
-[[nodiscard]] ATOM_INLINE auto fetchOr(PointerType* pointer,
-                                       ValueType value) noexcept
-    -> PointerType {
+[[nodiscard]] ATOM_INLINE auto fetchOr(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer |= static_cast<PointerType>(value);
     return originalValue;
@@ -553,9 +545,8 @@ atomicFetchOr(std::atomic<T>* pointer, T value,
  */
 template <typename PointerType, typename ValueType>
     requires BitwiseOperatable<PointerType>
-[[nodiscard]] ATOM_INLINE auto fetchXor(PointerType* pointer,
-                                        ValueType value) noexcept
-    -> PointerType {
+[[nodiscard]] ATOM_INLINE auto fetchXor(
+    PointerType* pointer, ValueType value) noexcept -> PointerType {
     PointerType originalValue = *pointer;
     *pointer ^= static_cast<PointerType>(value);
     return originalValue;

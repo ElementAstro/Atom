@@ -6,9 +6,9 @@
 #include <thread>
 #include <vector>
 
-// Define necessary feature flags
-#define ATOM_USE_BOOST_LOCKFREE
-#define ATOM_USE_BOOST_LOCKS
+// Define necessary feature flags (disable Boost by default to avoid dependency)
+// #define ATOM_USE_BOOST_LOCKFREE
+// #define ATOM_USE_BOOST_LOCKS
 
 #include "atom/async/generator.hpp"
 

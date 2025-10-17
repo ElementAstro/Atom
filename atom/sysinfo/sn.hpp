@@ -1,61 +1,20 @@
-#ifndef ATOM_SYSINFO_SN_HPP
-#define ATOM_SYSINFO_SN_HPP
-
-#include <string>
-#include <vector>
-
 /**
- * @brief Hardware information class that provides access to system hardware
- * serial numbers
+ * @file sn.hpp
+ * @brief System serial number information functionality (compatibility header)
  *
- * This class uses the PIMPL idiom to hide platform-specific implementation
- * details. It supports both Windows (via WMI) and Linux (via filesystem)
- * platforms.
+ * This file serves as a compatibility header that includes the reorganized
+ * serial number system. It maintains backward compatibility with existing code
+ * that includes this header.
+ *
+ * @deprecated This header location is deprecated. Please use
+ * "atom/sysinfo/interfaces/sn.hpp" instead.
+ * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
-class HardwareInfo {
-public:
-    HardwareInfo();
-    ~HardwareInfo();
 
-    // Copy constructor
-    HardwareInfo(const HardwareInfo& other);
+#ifndef ATOM_SYSINFO_SN_COMPAT_HPP
+#define ATOM_SYSINFO_SN_COMPAT_HPP
 
-    // Copy assignment operator
-    HardwareInfo& operator=(const HardwareInfo& other);
+// Forward to the new location
+#include "info/sn.hpp"
 
-    // Move constructor
-    HardwareInfo(HardwareInfo&& other) noexcept;
-
-    // Move assignment operator
-    HardwareInfo& operator=(HardwareInfo&& other) noexcept;
-
-    /**
-     * @brief Get BIOS serial number
-     * @return BIOS serial number as string
-     */
-    auto getBiosSerialNumber() -> std::string;
-
-    /**
-     * @brief Get motherboard serial number
-     * @return Motherboard serial number as string
-     */
-    auto getMotherboardSerialNumber() -> std::string;
-
-    /**
-     * @brief Get CPU serial number
-     * @return CPU serial number as string
-     */
-    auto getCpuSerialNumber() -> std::string;
-
-    /**
-     * @brief Get disk serial numbers
-     * @return Vector of disk serial numbers
-     */
-    auto getDiskSerialNumbers() -> std::vector<std::string>;
-
-private:
-    class Impl;
-    Impl* impl_;
-};
-
-#endif  // ATOM_SYSINFO_SN_HPP
+#endif  // ATOM_SYSINFO_SN_COMPAT_HPP

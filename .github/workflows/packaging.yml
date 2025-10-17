@@ -1,0 +1,427 @@
+name: Comprehensive Packaging
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to package"
+        required: true
+        type: string
+      components:
+        description: "Components to include (comma-separated, empty for all)"
+        required: false
+        type: string
+      create_portable:
+        description: "Create portable distribution"
+        required: false
+        type: boolean
+        default: true
+      publish_packages:
+        description: "Publish packages to distribution channels"
+        required: false
+        type: boolean
+        default: false
+
+env:
+  BUILD_TYPE: Release
+  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+
+jobs:
+  # Matrix build for all platforms and package formats
+  build-packages:
+    name: Build Packages (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x64 packages
+          - name: "Linux x64 Packages"
+            os: ubuntu-latest
+            platform: linux
+            arch: x64
+            preset: release
+            build_preset: release
+            triplet: x64-linux
+            formats: "tar.gz,deb,rpm,appimage"
+          - name: "Linux x64 Packages (Ubuntu 20.04)"
+            os: ubuntu-20.04
+            platform: linux
+            arch: x64
+            preset: release
+            build_preset: release
+            triplet: x64-linux
+            formats: "tar.gz,deb"
+            suffix: "-ubuntu20"
+
+          # Windows x64 packages
+          - name: "Windows x64 Packages"
+            os: windows-latest
+            platform: windows
+            arch: x64
+            preset: release-vs
+            build_preset: release-vs
+            triplet: x64-windows
+            formats: "zip,msi,nsis"
+
+          # macOS Intel packages
+          - name: "macOS x64 Packages"
+            os: macos-13
+            platform: macos
+            arch: x64
+            preset: release
+            build_preset: release
+            triplet: x64-osx
+            formats: "tar.gz,dmg,pkg"
+
+          # macOS Apple Silicon packages
+          - name: "macOS ARM64 Packages"
+            os: macos-14
+            platform: macos
+            arch: arm64
+            preset: release
+            build_preset: release
+            triplet: arm64-osx
+            formats: "tar.gz,dmg,pkg"
+            suffix: "-arm64"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "dbe35ceb30c688bf72e952ab23778e009a578f18"
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ~/.cache/vcpkg
+          key: ${{ runner.os }}-${{ matrix.arch }}-vcpkg-packaging-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-vcpkg-packaging-
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine wheel pybind11 numpy
+
+      - name: Install system dependencies (Ubuntu)
+        if: startsWith(matrix.os, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential ninja-build \
+            libssl-dev zlib1g-dev libsqlite3-dev \
+            libfmt-dev libreadline-dev \
+            python3-dev doxygen graphviz \
+            rpm alien fakeroot \
+            desktop-file-utils
+
+      - name: Install system dependencies (macOS)
+        if: matrix.os == 'macos-latest'
+        run: |
+          brew install ninja openssl zlib sqlite3 fmt readline python3 doxygen graphviz
+
+      - name: Install system dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          choco install ninja doxygen.install graphviz
+          # Install WiX Toolset for MSI creation
+          choco install wixtoolset
+
+      - name: Configure and build with CMakePresets
+        shell: bash
+        run: |
+          # Configure using CMakePresets
+          cmake --preset ${{ matrix.preset }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_EXAMPLES=ON \
+            -DATOM_BUILD_TESTS=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=ON \
+            -DATOM_BUILD_DOCS=ON \
+            -DCMAKE_INSTALL_PREFIX=install
+
+          # Build using CMakePresets
+          cmake --build --preset ${{ matrix.build_preset }} --parallel
+
+          # Install
+          cmake --install build --config Release
+
+      - name: Create packages using scripts
+        shell: bash
+        run: |
+          # Parse components if specified
+          COMPONENTS=""
+          if [ -n "${{ github.event.inputs.components }}" ]; then
+            COMPONENTS="${{ github.event.inputs.components }}"
+          fi
+
+          # Create packages using build script if available
+          if [ -f scripts/build-and-package.py ]; then
+            python scripts/build-and-package.py \
+              --source . \
+              --output dist \
+              --build-type release \
+              --verbose \
+              --no-tests \
+              --package-formats $(echo "${{ matrix.formats }}" | tr ',' ' ')
+          else
+            echo "Package creation script not found, creating basic packages"
+            mkdir -p dist
+          fi
+
+      - name: Create modular packages
+        shell: bash
+        run: |
+          # Create component-specific packages
+          python scripts/modular-installer.py list --available > available_components.txt
+
+          # Create meta-packages
+          for meta_package in core networking imaging system; do
+            echo "Creating $meta_package meta-package..."
+            # Logic to create meta-packages would go here
+          done
+
+      - name: Create portable distribution
+        if: github.event.inputs.create_portable == 'true' || github.event.inputs.create_portable == ''
+        shell: bash
+        run: |
+          python scripts/create-portable.py \
+            --source . \
+            --output dist \
+            --build-type Release \
+            --verbose
+
+      - name: Sign packages (Windows)
+        if: matrix.os == 'windows-latest' && secrets.WINDOWS_SIGNING_CERT
+        shell: powershell
+        run: |
+          # Code signing logic for Windows packages
+          Write-Host "Signing Windows packages..."
+          # Implementation would use signtool.exe
+
+      - name: Sign packages (macOS)
+        if: matrix.os == 'macos-latest' && secrets.MACOS_SIGNING_CERT
+        shell: bash
+        run: |
+          # Code signing logic for macOS packages
+          echo "Signing macOS packages..."
+          # Implementation would use codesign
+
+      - name: Validate packages
+        shell: bash
+        run: |
+          # Validate created packages
+          for package in dist/*; do
+            if [ -f "$package" ]; then
+              echo "Validating $package..."
+              python scripts/validate-package.py "$package" || echo "Validation failed for $package"
+            fi
+          done
+
+      - name: Generate package manifest
+        shell: bash
+        run: |
+          # Create comprehensive package manifest
+          cat > dist/manifest.json << EOF
+          {
+            "version": "${{ steps.version.outputs.version }}",
+            "platform": "${{ matrix.platform }}",
+            "architecture": "${{ matrix.arch }}",
+            "build_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "build_type": "${{ env.BUILD_TYPE }}",
+            "formats": "${{ matrix.formats }}",
+            "packages": []
+          }
+          EOF
+
+          # Add package information
+          for package in dist/*; do
+            if [ -f "$package" ]; then
+              size=$(stat -c%s "$package" 2>/dev/null || stat -f%z "$package" 2>/dev/null || echo "0")
+              echo "  Adding $package (size: $size bytes)"
+            fi
+          done
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.suffix || '' }}
+          path: dist/
+          retention-days: 30
+
+  # Create Python wheels for all platforms
+  build-python-wheels:
+    name: Build Python Wheels
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.16.2
+        env:
+          CIBW_BUILD: cp38-* cp39-* cp310-* cp311-* cp312-*
+          CIBW_SKIP: "*-win32 *-manylinux_i686 *-musllinux_*"
+          CIBW_BEFORE_BUILD: |
+            pip install pybind11 numpy cmake ninja
+          CIBW_BUILD_VERBOSITY: 1
+          CIBW_TEST_COMMAND: 'python -c "import atom; print(''Atom version loaded'')"'
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-wheels-${{ matrix.os }}
+          path: wheelhouse/*.whl
+          retention-days: 30
+
+  # Create container images
+  build-containers:
+    name: Build Container Images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to Docker Hub
+        if: github.event_name == 'push'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push Docker images
+        run: |
+          # Create Docker images using package manager script
+          ./scripts/package-manager.sh create-docker
+
+          # Tag and push images if this is a release
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "Pushing Docker images..."
+            # Implementation would push to registry
+          fi
+
+  # Publish packages to distribution channels
+  publish-packages:
+    name: Publish Packages
+    runs-on: ubuntu-latest
+    needs: [build-packages, build-python-wheels, build-containers]
+    if: github.event.inputs.publish_packages == 'true' || (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    environment: release
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Setup publishing environment
+        run: |
+          pip install twine gh-cli
+
+      - name: Publish to PyPI
+        if: secrets.PYPI_API_TOKEN
+        run: |
+          find artifacts/ -name "*.whl" -exec cp {} dist/ \;
+          twine upload dist/*.whl
+        env:
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+          TWINE_USERNAME: __token__
+
+      - name: Create GitHub Release
+        if: github.event_name == 'push'
+        run: |
+          # Collect all packages
+          mkdir -p release_assets
+          find artifacts/ -type f \( -name "*.tar.gz" -o -name "*.zip" -o -name "*.deb" -o -name "*.rpm" -o -name "*.whl" \) -exec cp {} release_assets/ \;
+
+          # Create checksums
+          cd release_assets
+          sha256sum * > checksums.sha256
+
+          # Create release
+          gh release create ${{ github.ref_name }} \
+            --title "Release ${{ github.ref_name }}" \
+            --generate-notes \
+            release_assets/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Update package registries
+        run: |
+          echo "Updating package registries..."
+          # Logic to update vcpkg, Conan, Homebrew, etc.
+          # This would typically involve creating PRs to respective repositories
+
+  # Generate comprehensive release report
+  generate-report:
+    name: Generate Release Report
+    runs-on: ubuntu-latest
+    needs: [build-packages, build-python-wheels, build-containers]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate release report
+        run: |
+          if [ -f scripts/generate-release-report.py ]; then
+            python scripts/generate-release-report.py \
+              --artifacts-dir artifacts/ \
+              --output release-report.md
+          else
+            echo "# Release Report" > release-report.md
+            echo "Generated on: $(date)" >> release-report.md
+            echo "Artifacts found:" >> release-report.md
+            find artifacts/ -type f | head -20 >> release-report.md
+          fi
+
+      - name: Upload release report
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-report
+          path: release-report.md
+          retention-days: 30

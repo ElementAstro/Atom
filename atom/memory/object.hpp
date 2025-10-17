@@ -1,18 +1,35 @@
-/*
- * object_pool.hpp
+/**
+ * @file object.hpp
+ * @brief Advanced object pool implementation with extensive features
  *
- * Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * This file provides the ObjectPool class, which is an ADVANCED object pool
+ * with priority-based allocation, batch operations, validation, statistics,
+ * timeouts, and auto-cleanup capabilities.
+ *
+ * FEATURES:
+ * - Priority-based object allocation
+ * - Batch acquire/release operations
+ * - Object validation and health checks
+ * - Detailed statistics and monitoring
+ * - Timeout support for blocking operations
+ * - Automatic cleanup of idle objects
+ * - Optional Boost integration (enable with ATOM_USE_BOOST)
+ * - Thread-safe with shared_mutex
+ *
+ * COMPARISON WITH OTHER POOLS:
+ * - Use ObjectPool when you need advanced features like priorities, validation,
+ * statistics
+ * - Use SimpleObjectPool (memory_pool.hpp) for simpler object pooling with RAII
+ * - Use FixedBlockPool (memory_pool.hpp) for low-level fixed-size allocations
+ * - Use MemoryPool (memory.hpp) for variable-size allocations with PMR support
+ *
+ * For a complete overview of memory pool types, see documentation in
+ * memory.hpp.
+ *
+ * @author Max Qian
+ * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>
+ * @date 2024-04-05
  */
-
-/*************************************************
-
-Date: 2024-04-05
-
-Description: An enhanced implementation of object pool with
-automatic object release, better exception handling, and additional
-functionalities. Optional Boost support can be enabled with ATOM_USE_BOOST.
-
-**************************************************/
 
 #ifndef ATOM_MEMORY_OBJECT_POOL_HPP
 #define ATOM_MEMORY_OBJECT_POOL_HPP
@@ -142,13 +159,11 @@ public:
         prefill(initial_size);
     }
 
-    // Disable copy and assignment
-    ObjectPool(const ObjectPool&) = default;
-    ObjectPool& operator=(const ObjectPool&) = default;
-
-    // Allow move operations
-    ObjectPool(ObjectPool&&) noexcept = default;
-    ObjectPool& operator=(ObjectPool&&) noexcept = default;
+    // Disable copy and move operations
+    ObjectPool(const ObjectPool&) = delete;
+    ObjectPool& operator=(const ObjectPool&) = delete;
+    ObjectPool(ObjectPool&&) = delete;
+    ObjectPool& operator=(ObjectPool&&) = delete;
 
     /**
      * @brief Destructor - ensures all objects are properly cleaned up
@@ -630,7 +645,7 @@ private:
      * @param lock The unique lock that is already held.
      * @return A shared pointer to the acquired object.
      */
-    std::shared_ptr<T> acquireImpl(std::unique_lock<std::mutex>& lock) {
+    std::shared_ptr<T> acquireImpl(std::unique_lock<std::shared_mutex>& lock) {
         std::shared_ptr<T> obj;
 
 #ifdef ATOM_USE_BOOST
@@ -794,8 +809,7 @@ private:
     // Core pool data
     size_t max_size_;
     size_t available_;
-    mutable std::shared_mutex
-        mutex_;  // Shared mutex for better read concurrency
+    mutable std::shared_mutex mutex_;
     std::condition_variable_any cv_;
     std::vector<std::shared_ptr<T>> pool_;
     std::vector<

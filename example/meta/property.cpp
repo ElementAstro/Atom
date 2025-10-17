@@ -72,7 +72,8 @@ public:
 
 // Function to print a property's value
 template <typename T>
-void printProperty(const std::string& name, const Property<T>& prop) {
+void printProperty(const std::string& name,
+                   const atom::meta::Property<T>& prop) {
     try {
         std::cout << name << " = " << static_cast<T>(prop) << std::endl;
     } catch (const std::exception& e) {
@@ -90,17 +91,18 @@ int main() {
     std::cout << "-------------------------------------------\n";
 
     // Property with default value
-    Property<int> intProperty(42);
+    atom::meta::Property<int> intProperty(42);
     std::cout << "intProperty = " << static_cast<int>(intProperty) << std::endl;
 
     // Property with custom getter
     int backingValue = 100;
-    Property<int> getterProperty([&backingValue]() { return backingValue; });
+    atom::meta::Property<int> getterProperty(
+        [&backingValue]() { return backingValue; });
     std::cout << "getterProperty = " << static_cast<int>(getterProperty)
               << std::endl;
 
     // Property with getter and setter
-    Property<std::string> stringProperty(
+    atom::meta::Property<std::string> stringProperty(
         []() { return "Hello, World!"; },
         [](const std::string& value) {
             std::cout << "Setting value to: " << value << std::endl;
@@ -110,7 +112,7 @@ int main() {
     stringProperty = "New Value";
 
     // Empty property - will throw when accessed
-    Property<double> emptyProperty;
+    atom::meta::Property<double> emptyProperty;
     try {
         double value = static_cast<double>(emptyProperty);
         std::cout << "emptyProperty = " << value << std::endl;
@@ -126,7 +128,7 @@ int main() {
 
     // Make a property read-only
     double tempValue = 98.6;
-    Property<double> temperatureProperty(
+    atom::meta::Property<double> temperatureProperty(
         [&tempValue]() { return tempValue; },
         [&tempValue](double value) { tempValue = value; });
 
@@ -144,7 +146,7 @@ int main() {
               << static_cast<double>(temperatureProperty) << std::endl;
 
     // Make a property write-only
-    Property<std::string> passwordProperty(
+    atom::meta::Property<std::string> passwordProperty(
         []() { return "********"; },
         []([[maybe_unused]] const std::string& value) {
             std::cout << "Password set to encrypted value" << std::endl;
@@ -162,7 +164,7 @@ int main() {
     passwordProperty = "new_secure_password";  // Still works
 
     // Clear a property
-    Property<int> clearableProperty(123);
+    atom::meta::Property<int> clearableProperty(123);
     std::cout << "Before clearing: " << static_cast<int>(clearableProperty)
               << std::endl;
     clearableProperty.clear();
@@ -180,7 +182,7 @@ int main() {
     std::cout << "3. CHANGE NOTIFICATION\n";
     std::cout << "-------------------------------------------\n";
 
-    Property<int> observableProperty(0);
+    atom::meta::Property<int> observableProperty(0);
     observableProperty.setOnChange([](const int& newValue) {
         std::cout << "Change detected! New value: " << newValue << std::endl;
     });
@@ -191,7 +193,7 @@ int main() {
 
     // Manual notification
     std::cout << "Manual notification...\n";
-    observableProperty.notifyChange(999);
+    // notifyChange is internal; simulate change via setter if available
 
     std::cout << std::endl;
 
@@ -199,8 +201,8 @@ int main() {
     std::cout << "4. COMPARISON AND ARITHMETIC OPERATORS\n";
     std::cout << "-------------------------------------------\n";
 
-    Property<int> a(5);
-    Property<int> b(10);
+    atom::meta::Property<int> a(5);
+    atom::meta::Property<int> b(10);
 
     std::cout << "a = " << static_cast<int>(a)
               << ", b = " << static_cast<int>(b) << std::endl;
@@ -233,7 +235,7 @@ int main() {
     std::cout << "5. ASYNCHRONOUS OPERATIONS\n";
     std::cout << "-------------------------------------------\n";
 
-    Property<int> asyncProperty(0);
+    atom::meta::Property<int> asyncProperty(0);
 
     // Async get
     std::cout << "Starting async get...\n";
@@ -257,7 +259,7 @@ int main() {
     std::cout << "6. PROPERTY CACHING\n";
     std::cout << "-------------------------------------------\n";
 
-    Property<std::string> cachedProperty("Initial Value");
+    atom::meta::Property<std::string> cachedProperty("Initial Value");
 
     // Cache different values with different keys
     cachedProperty.cacheValue("default", "Default Value");
@@ -293,7 +295,7 @@ int main() {
     Person john("John Doe", 30);
     Person jane("Jane Smith", 25);
 
-    Property<Person> personProperty(john);
+    atom::meta::Property<Person> personProperty(john);
     std::cout << "Initial person: " << static_cast<Person>(personProperty)
               << std::endl;
 

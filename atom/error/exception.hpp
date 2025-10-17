@@ -16,11 +16,12 @@ Description: Better Exception Library
 #define ATOM_ERROR_EXCEPTION_HPP
 
 #include <exception>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <thread>
 
-#include "atom/macro.hpp"
+#include "../macro.hpp"
 #include "stacktrace.hpp"
 
 namespace atom::error {
@@ -41,10 +42,21 @@ public:
     Exception(const char *file, int line, const char *func, Args &&...args)
         : file_(file), line_(line), func_(func) {
         std::ostringstream oss;
-        ((oss << std::forward<Args>(args)), ...);
+        (print_one(oss, std::forward<Args>(args)), ...);
         message_ = oss.str();
     }
 
+private:
+    template <typename T>
+    static void print_one(std::ostream &os, T &&arg) {
+        if constexpr (requires(std::ostream &s, T a) { s << a; }) {
+            os << std::forward<T>(arg);
+        } else {
+            os << "[unprintable]";
+        }
+    }
+
+public:
     template <typename... Args>
     static void rethrowNested(Args &&...args) {
         try {

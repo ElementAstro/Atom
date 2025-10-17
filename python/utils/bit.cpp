@@ -285,74 +285,254 @@ PYBIND11_MODULE(bit, m) {
     // Add SIMD-optimized functions when available
 #ifdef ATOM_SIMD_SUPPORT
     m.def(
-        "count_bits_parallel", &atom::utils::countBitsParallel, py::arg("data"),
-        py::arg("size"),
+        "count_bits_parallel",
+        [](py::buffer b) -> uint64_t {
+            py::buffer_info info = b.request();
+            if (info.format != py::format_descriptor<uint8_t>::format()) {
+                throw std::runtime_error("Buffer must contain uint8 data");
+            }
+            auto* data = static_cast<const uint8_t*>(info.ptr);
+            return atom::utils::countBitsParallel(data, info.size);
+        },
+        py::arg("buffer"),
         R"(Counts set bits in a large array using SIMD instructions for performance.
 
 Args:
-    data: Pointer to the data array (as bytes).
-    size: Size of the array in bytes.
+    buffer: Buffer containing uint8 data (bytes, bytearray, or numpy array).
 
 Returns:
     Total count of set bits.
 
 Raises:
-    RuntimeError: If bit counting fails.
+    RuntimeError: If bit counting fails or buffer format is invalid.
 
 Examples:
     >>> from atom.utils import bit
-    >>> import array
-    >>> data = array.array('B', [0xFF, 0x0F, 0xF0, 0x00])
-    >>> bit.count_bits_parallel(data.buffer_info()[0], len(data))  # Returns 20
+    >>> data = bytearray([0xFF, 0x0F, 0xF0, 0x00])
+    >>> bit.count_bits_parallel(data)  # Returns 20
+    >>>
+    >>> # With numpy array
+    >>> import numpy as np
+    >>> arr = np.array([255, 15, 240, 0], dtype=np.uint8)
+    >>> bit.count_bits_parallel(arr)  # Returns 20
+)");
+#else
+    m.def(
+        "count_bits_parallel",
+        [](py::buffer b) -> uint64_t {
+            py::buffer_info info = b.request();
+            if (info.format != py::format_descriptor<uint8_t>::format()) {
+                throw std::runtime_error("Buffer must contain uint8 data");
+            }
+            auto* data = static_cast<const uint8_t*>(info.ptr);
+            uint64_t count = 0;
+            for (size_t i = 0; i < info.size; ++i) {
+                count += std::popcount(data[i]);
+            }
+            return count;
+        },
+        py::arg("buffer"),
+        R"(Counts set bits in a large array (fallback implementation without SIMD).
+
+Args:
+    buffer: Buffer containing uint8 data (bytes, bytearray, or numpy array).
+
+Returns:
+    Total count of set bits.
+
+Raises:
+    RuntimeError: If buffer format is invalid.
+
+Examples:
+    >>> from atom.utils import bit
+    >>> data = bytearray([0xFF, 0x0F, 0xF0, 0x00])
+    >>> bit.count_bits_parallel(data)  # Returns 20
 )");
 #endif
+
+    // Add convenience functions for common operations
+    m.def(
+        "count_set_bits",
+        [](uint64_t value) -> uint32_t {
+            return atom::utils::countBytes(value);
+        },
+        py::arg("value"),
+        R"(Convenience function to count set bits in a 64-bit value.
+
+          Args:
+              value: The value whose set bits are to be counted.
+
+          Returns:
+              The number of set bits in the value.
+
+          Examples:
+              >>> from atom.utils import bit
+              >>> bit.count_set_bits(15)  # Returns 4
+              >>> bit.count_set_bits(0xFF)  # Returns 8
+          )");
+
+    m.def(
+        "create_bitmask",
+        [](int bits) -> uint64_t {
+            return atom::utils::createMask<uint64_t>(bits);
+        },
+        py::arg("bits"),
+        R"(Convenience function to create a 64-bit bitmask.
+
+          Args:
+              bits: The number of bits to set to 1.
+
+          Returns:
+              The bitmask with the specified number of bits set to 1.
+
+          Examples:
+              >>> from atom.utils import bit
+              >>> hex(bit.create_bitmask(8))  # Returns '0xff'
+              >>> hex(bit.create_bitmask(16))  # Returns '0xffff'
+          )");
+
+    m.def(
+        "reverse_byte",
+        [](uint8_t value) -> uint8_t {
+            return atom::utils::reverseBits(value);
+        },
+        py::arg("value"),
+        R"(Convenience function to reverse bits in a byte.
+
+          Args:
+              value: The byte value whose bits are to be reversed.
+
+          Returns:
+              The value with its bits reversed.
+
+          Examples:
+              >>> from atom.utils import bit
+              >>> hex(bit.reverse_byte(0x01))  # Returns '0x80'
+              >>> hex(bit.reverse_byte(0x0F))  # Returns '0xf0'
+          )");
+
+    m.def(
+        "hamming_distance",
+        [](uint64_t a, uint64_t b) -> uint32_t {
+            return atom::utils::countBytes(a ^ b);
+        },
+        py::arg("a"), py::arg("b"),
+        R"(Calculate the Hamming distance between two values.
+
+          The Hamming distance is the number of positions at which
+          the corresponding bits are different.
+
+          Args:
+              a: First value.
+              b: Second value.
+
+          Returns:
+              The Hamming distance between the two values.
+
+          Examples:
+              >>> from atom.utils import bit
+              >>> bit.hamming_distance(0b1010, 0b1100)  # Returns 2
+              >>> bit.hamming_distance(0xFF, 0x00)  # Returns 8
+          )");
+
+    m.def(
+        "is_power_of_two",
+        [](uint64_t value) -> bool {
+            return value != 0 && (value & (value - 1)) == 0;
+        },
+        py::arg("value"),
+        R"(Check if a value is a power of two.
+
+          Args:
+              value: The value to check.
+
+          Returns:
+              True if the value is a power of two, False otherwise.
+
+          Examples:
+              >>> from atom.utils import bit
+              >>> bit.is_power_of_two(8)   # Returns True
+              >>> bit.is_power_of_two(10)  # Returns False
+              >>> bit.is_power_of_two(0)   # Returns False
+          )");
+
+    m.def(
+        "next_power_of_two",
+        [](uint64_t value) -> uint64_t {
+            if (value == 0)
+                return 1;
+            if ((value & (value - 1)) == 0)
+                return value;  // Already power of 2
+
+            value--;
+            value |= value >> 1;
+            value |= value >> 2;
+            value |= value >> 4;
+            value |= value >> 8;
+            value |= value >> 16;
+            value |= value >> 32;
+            return value + 1;
+        },
+        py::arg("value"),
+        R"(Find the next power of two greater than or equal to the given value.
+
+          Args:
+              value: The input value.
+
+          Returns:
+              The next power of two >= value.
+
+          Examples:
+              >>> from atom.utils import bit
+              >>> bit.next_power_of_two(10)  # Returns 16
+              >>> bit.next_power_of_two(8)   # Returns 8
+              >>> bit.next_power_of_two(0)   # Returns 1
+          )");
 
     // Add functions for parallel bit operations
     m.def(
         "parallel_bit_operation",
-        [](py::buffer b, const std::string& operation) {
+        [](py::buffer b, const std::string& operation) -> py::list {
             py::buffer_info info = b.request();
-            if (info.format != py::format_descriptor<uint8_t>::format() &&
-                info.format != py::format_descriptor<uint32_t>::format() &&
-                info.format != py::format_descriptor<uint64_t>::format()) {
-                throw std::runtime_error(
-                    "Unsupported buffer format. Use uint8, uint32, or uint64 "
-                    "arrays.");
+            if (info.format != py::format_descriptor<uint8_t>::format()) {
+                throw std::runtime_error("Buffer must contain uint8 data");
             }
 
-            std::vector<uint8_t> result(info.size);
+            auto* data = static_cast<const uint8_t*>(info.ptr);
+            std::span<const uint8_t> span(data, info.size);
+            py::list result;
 
-            if (info.format == py::format_descriptor<uint8_t>::format()) {
-                auto* data = static_cast<uint8_t*>(info.ptr);
-                std::span<const uint8_t> span(data, info.size);
-
-                if (operation == "count") {
-                    result = atom::utils::parallelBitOp(
-                        span, [](uint8_t x) { return std::popcount(x); });
-                } else if (operation == "reverse") {
-                    result = atom::utils::parallelBitOp(span, [](uint8_t x) {
-                        return atom::utils::reverseBits(x);
-                    });
-                } else {
-                    throw std::invalid_argument(
-                        "Unknown operation. Supported operations: 'count', "
-                        "'reverse'");
+            if (operation == "count") {
+                auto counts = atom::utils::parallelBitOp(
+                    span,
+                    [](uint8_t x) -> uint8_t { return std::popcount(x); });
+                for (auto count : counts) {
+                    result.append(count);
                 }
+            } else if (operation == "reverse") {
+                auto reversed = atom::utils::parallelBitOp(span, [](uint8_t x) {
+                    return atom::utils::reverseBits(x);
+                });
+                for (auto rev : reversed) {
+                    result.append(rev);
+                }
+            } else {
+                throw std::invalid_argument(
+                    "Unknown operation. Supported operations: 'count', "
+                    "'reverse'");
             }
-            // Similar blocks for uint32_t and uint64_t would be added here
 
-            return py::bytes(reinterpret_cast<char*>(result.data()),
-                             result.size());
+            return result;
         },
         py::arg("buffer"), py::arg("operation"),
         R"(Performs parallel bit operations on a buffer of data.
 
 Args:
-    buffer: Input buffer (accepts uint8, uint32, or uint64 arrays).
+    buffer: Input buffer containing uint8 data.
     operation: Operation to perform ('count', 'reverse').
 
 Returns:
-    Bytes object containing the result.
+    List containing the results for each byte.
 
 Raises:
     ValueError: If the operation is not supported.
@@ -360,8 +540,8 @@ Raises:
 
 Examples:
     >>> from atom.utils import bit
-    >>> import array
-    >>> data = array.array('B', [0xFF, 0x0F, 0xF0, 0x00])
-    >>> result = bit.parallel_bit_operation(data, "count")
+    >>> data = bytearray([0xFF, 0x0F, 0xF0, 0x00])
+    >>> bit.parallel_bit_operation(data, "count")  # [8, 4, 4, 0]
+    >>> bit.parallel_bit_operation(data, "reverse")  # [255, 240, 15, 0]
 )");
 }

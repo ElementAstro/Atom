@@ -9,6 +9,9 @@
 cmake_minimum_required(VERSION 3.20)
 project(atom-meta VERSION 1.0.0 LANGUAGES C CXX)
 
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
+
 # Sources
 set(SOURCES
     global_ptr.cpp
@@ -19,28 +22,12 @@ set(HEADERS
     global_ptr.hpp
 )
 
-# Dependencies
-set(LIBS
-)
+# Create library using object library pattern for better build performance
+add_library(atom-meta_object OBJECT ${SOURCES} ${HEADERS})
+set_property(TARGET atom-meta_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-# Build Object Library
-add_library(${PROJECT_NAME}_object OBJECT ${SOURCES} ${HEADERS})
-set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
+# Create static library from object library
+add_library(atom-meta STATIC $<TARGET_OBJECTS:atom-meta_object>)
 
-target_link_libraries(${PROJECT_NAME}_object PRIVATE ${LIBS})
-
-# Build Static Library
-add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
-target_link_libraries(${PROJECT_NAME} PRIVATE ${LIBS})
-target_include_directories(${PROJECT_NAME} PUBLIC .)
-
-set_target_properties(${PROJECT_NAME} PROPERTIES
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-    OUTPUT_NAME ${PROJECT_NAME}
-)
-
-# Install rules
-install(TARGETS ${PROJECT_NAME}
-    ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-)
+# Configure module with standardized settings
+atom_configure_module(atom-meta)

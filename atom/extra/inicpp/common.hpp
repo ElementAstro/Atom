@@ -199,8 +199,8 @@ struct StringInsensitiveLess {
      * @param rhs The right-hand side string view.
      * @return True if lhs is less than rhs, false otherwise.
      */
-    auto operator()(std::string_view lhs, std::string_view rhs) const noexcept
-        -> bool {
+    auto operator()(std::string_view lhs,
+                    std::string_view rhs) const noexcept -> bool {
         return std::ranges::lexicographical_compare(
             lhs, rhs, [](unsigned char a, unsigned char b) noexcept {
                 return std::tolower(a) < std::tolower(b);

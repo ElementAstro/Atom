@@ -489,11 +489,10 @@ int main() {
 
     // Basic error transformation
     auto basic_error = atom::type::make_unexpected<std::string>("Basic error");
-    auto transformed_error =
-        atom::type::expected<int>(basic_error)
-            .transform_error([](const std::string& err) {
-                return atom::type::Error<std::string>("Transformed: " + err);
-            });
+    auto transformed_error = atom::type::expected<int>(basic_error)
+                                 .transform_error([](const std::string& err) {
+                                     return "Transformed: " + err;
+                                 });
 
     std::cout << "Basic error transformation:" << std::endl;
     std::cout << "  Original error: " << basic_error.error() << std::endl;
@@ -502,11 +501,10 @@ int main() {
 
     // Transforming to a different error type
     auto string_error = atom::type::make_unexpected<std::string>("Code 404");
-    auto code_error =
-        atom::type::expected<int>(string_error)
-            .transform_error([](const std::string& err) {
-                return atom::type::Error<std::string>("HTTP " + err);
-            });
+    auto code_error = atom::type::expected<int>(string_error)
+                          .transform_error([](const std::string& err) {
+                              return "HTTP " + err;
+                          });
 
     std::cout << "\nTransforming to a different error type:" << std::endl;
     std::cout << "  Original error: " << string_error.error() << std::endl;
@@ -520,8 +518,7 @@ int main() {
     auto simplified_error =
         atom::type::expected<User, DatabaseError>(db_error_exp)
             .transform_error([](const DatabaseError& err) {
-                return atom::type::Error<std::string>(
-                    "DB-" + std::to_string(err.code) + ": " + err.message);
+                return "DB-" + std::to_string(err.code) + ": " + err.message;
             });
 
     std::cout << "\nTransforming complex error type:" << std::endl;
@@ -532,11 +529,8 @@ int main() {
 
     // No transformation for success case
     auto success_case = atom::type::make_expected(123);
-    auto after_transform =
-        success_case.transform_error([](const std::string& err) {
-            return atom::type::Error<std::string>("This won't be called: " +
-                                                  err);
-        });
+    auto after_transform = success_case.transform_error(
+        [](const std::string& err) { return "This won't be called: " + err; });
 
     std::cout << "\nNo transformation for success case:" << std::endl;
     std::cout << "  Original value: " << success_case.value() << std::endl;
@@ -549,15 +543,14 @@ int main() {
     printHeader("8. COMBINING AND CHAINING DIFFERENT OPERATIONS");
 
     // Combining map and transform_error
-    auto combined_ops =
-        atom::type::expected<int>(
-            atom::type::Error<std::string>("Initial error"))
-            .map([](int value) {
-                return value * 2;  // Never called due to error
-            })
-            .transform_error([](const std::string& err) {
-                return atom::type::Error<std::string>("Error occurred: " + err);
-            });
+    auto combined_ops = atom::type::expected<int>(
+                            atom::type::Error<std::string>("Initial error"))
+                            .map([](int value) {
+                                return value * 2;  // Never called due to error
+                            })
+                            .transform_error([](const std::string& err) {
+                                return "Error occurred: " + err;
+                            });
 
     std::cout << "Combining map and transform_error:" << std::endl;
     std::cout << "  Final error: " << combined_ops.error().error() << std::endl;
@@ -585,9 +578,8 @@ int main() {
             .map([](const std::string& content) {
                 return "File size: " + std::to_string(content.size());
             })
-            .transform_error([](const std::string& err) {
-                return atom::type::Error<std::string>("File error: " + err);
-            });
+            .transform_error(
+                [](const std::string& err) { return "File error: " + err; });
 
     std::cout << "\nFile processing with error handling:" << std::endl;
     if (file_process.has_value()) {
@@ -613,14 +605,13 @@ int main() {
     std::cout << "  " << calculation.value() << std::endl;
 
     // Division by zero error handling
-    auto division_error =
-        divideNumbers(5.0, 0.0)
-            .map([](double result) {
-                return result * 2;  // Never called
-            })
-            .transform_error([](const std::string& err) {
-                return atom::type::Error<std::string>("Math error: " + err);
-            });
+    auto division_error = divideNumbers(5.0, 0.0)
+                              .map([](double result) {
+                                  return result * 2;  // Never called
+                              })
+                              .transform_error([](const std::string& err) {
+                                  return "Math error: " + err;
+                              });
 
     std::cout << "\nDivision by zero error handling:" << std::endl;
     std::cout << "  " << division_error.error().error() << std::endl;
@@ -715,6 +706,90 @@ int main() {
     std::cout << "  user1 == user2: " << (users_equal ? "true" : "false")
               << std::endl;
     std::cout << "  user1 != user3: " << (users_different ? "true" : "false")
+              << std::endl;
+
+    // 11. Advanced Error Handling Patterns
+    printHeader("Advanced Error Handling Patterns");
+
+    // Error accumulation pattern
+    std::vector<atom::type::expected<int, std::string>> results;
+    results.push_back(atom::type::make_expected(10));
+    results.push_back(atom::type::Error<std::string>("Error 1"));
+    results.push_back(atom::type::make_expected(20));
+    results.push_back(atom::type::Error<std::string>("Error 2"));
+
+    std::vector<std::string> errors;
+    std::vector<int> values;
+
+    for (const auto& result : results) {
+        if (result.has_value()) {
+            values.push_back(result.value());
+        } else {
+            errors.push_back(result.error().error());
+        }
+    }
+
+    std::cout << "Accumulated values: ";
+    for (int val : values) {
+        std::cout << val << " ";
+    }
+    std::cout << std::endl;
+
+    std::cout << "Accumulated errors: ";
+    for (const auto& err : errors) {
+        std::cout << err << " ";
+    }
+    std::cout << std::endl;
+
+    // 12. Performance Considerations
+    printHeader("Performance Considerations");
+
+    // Demonstrate move semantics
+    auto create_large_vector =
+        []() -> atom::type::expected<std::vector<int>, std::string> {
+        std::vector<int> large_vec(10000);
+        std::iota(large_vec.begin(), large_vec.end(), 1);
+        return std::move(large_vec);  // Move to avoid copy
+    };
+
+    auto large_result = create_large_vector();
+    if (large_result) {
+        std::cout << "Created large vector with " << large_result->size()
+                  << " elements (moved, not copied)" << std::endl;
+        std::cout << "First 5 elements: ";
+        for (size_t i = 0; i < 5; ++i) {
+            std::cout << (*large_result)[i] << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // 13. Exception Safety
+    printHeader("Exception Safety");
+
+    // Demonstrate exception-safe operations
+    auto exception_safe_operation = [](bool should_throw)
+        -> atom::type::expected<std::string, std::string> {
+        try {
+            if (should_throw) {
+                throw std::runtime_error("Simulated exception");
+            }
+            return std::string("Success");
+        } catch (const std::exception& e) {
+            return atom::type::Error<std::string>("Exception caught: " +
+                                                  std::string(e.what()));
+        }
+    };
+
+    auto safe_result1 = exception_safe_operation(false);
+    auto safe_result2 = exception_safe_operation(true);
+
+    std::cout << "Safe operation (no exception): "
+              << (safe_result1 ? safe_result1.value()
+                               : safe_result1.error().error())
+              << std::endl;
+    std::cout << "Safe operation (with exception): "
+              << (safe_result2 ? safe_result2.value()
+                               : safe_result2.error().error())
               << std::endl;
 
     std::cout << "\n==================================================="

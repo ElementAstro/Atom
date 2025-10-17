@@ -1,6 +1,10 @@
 #include "atom/algorithm/math.hpp"
+#include "atom/algorithm/math/gpu_math.hpp"
+#include "atom/algorithm/math/numerical.hpp"
+#include "atom/algorithm/math/statistics.hpp"
 #include "atom/error/exception.hpp"
 
+#include <pybind11/functional.h>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
@@ -750,4 +754,284 @@ PYBIND11_MODULE(math, m) {
         >>> euler_totient(7)
         6  # 1, 2, 3, 4, 5, 6 are relatively prime to 7 (which is prime)
     )pbdoc");
+
+    // Statistics module bindings
+    py::class_<atom::algorithm::StatisticsD>(m, "StatisticsDouble", R"pbdoc(
+        Statistical functions for double precision floating point data.
+
+        Provides comprehensive statistical analysis including descriptive statistics,
+        correlation analysis, and probability distributions.
+    )pbdoc")
+        .def_static(
+            "mean",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::mean(data);
+            },
+            py::arg("data"), "Calculate arithmetic mean of dataset.")
+
+        .def_static(
+            "median",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::median(data);
+            },
+            py::arg("data"), "Calculate median of dataset.")
+
+        .def_static(
+            "mode",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::mode(data);
+            },
+            py::arg("data"), "Calculate mode (most frequent value) of dataset.")
+
+        .def_static(
+            "variance",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::variance(data);
+            },
+            py::arg("data"), "Calculate variance of dataset.")
+
+        .def_static(
+            "standard_deviation",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::standardDeviation(data);
+            },
+            py::arg("data"), "Calculate standard deviation of dataset.")
+
+        .def_static(
+            "skewness",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::skewness(data);
+            },
+            py::arg("data"), "Calculate skewness of dataset.")
+
+        .def_static(
+            "kurtosis",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::kurtosis(data);
+            },
+            py::arg("data"), "Calculate kurtosis of dataset.")
+
+        .def_static(
+            "correlation",
+            [](const std::vector<double>& x, const std::vector<double>& y) {
+                return atom::algorithm::StatisticsD::correlation(x, y);
+            },
+            py::arg("x"), py::arg("y"),
+            "Calculate Pearson correlation coefficient.")
+
+        .def_static(
+            "covariance",
+            [](const std::vector<double>& x, const std::vector<double>& y) {
+                return atom::algorithm::StatisticsD::covariance(x, y);
+            },
+            py::arg("x"), py::arg("y"),
+            "Calculate covariance between two datasets.")
+
+        .def_static(
+            "z_scores",
+            [](const std::vector<double>& data) {
+                return atom::algorithm::StatisticsD::zScores(data);
+            },
+            py::arg("data"), "Calculate z-scores for dataset.")
+
+        .def_static(
+            "percentile",
+            [](std::vector<double> data, double p) {
+                return atom::algorithm::StatisticsD::percentile(std::move(data),
+                                                                p);
+            },
+            py::arg("data"), py::arg("percentile"),
+            "Calculate percentile of dataset.")
+
+        .def_static(
+            "interquartile_range",
+            [](std::vector<double> data) {
+                return atom::algorithm::StatisticsD::interquartileRange(
+                    std::move(data));
+            },
+            py::arg("data"), "Calculate interquartile range (Q3 - Q1).")
+
+        .def_static(
+            "detect_outliers",
+            [](std::vector<double> data, double multiplier = 1.5) {
+                return atom::algorithm::StatisticsD::detectOutliers(
+                    std::move(data), multiplier);
+            },
+            py::arg("data"), py::arg("multiplier") = 1.5,
+            "Detect outliers using IQR method.");
+
+    py::class_<atom::algorithm::StatisticsF>(m, "StatisticsFloat", R"pbdoc(
+        Statistical functions for single precision floating point data.
+
+        Same functionality as StatisticsDouble but optimized for float precision.
+    )pbdoc")
+        .def_static(
+            "mean",
+            [](const std::vector<float>& data) {
+                return atom::algorithm::StatisticsF::mean(data);
+            },
+            py::arg("data"), "Calculate arithmetic mean of dataset.")
+
+        .def_static(
+            "median",
+            [](const std::vector<float>& data) {
+                return atom::algorithm::StatisticsF::median(data);
+            },
+            py::arg("data"), "Calculate median of dataset.")
+
+        .def_static(
+            "variance",
+            [](const std::vector<float>& data) {
+                return atom::algorithm::StatisticsF::variance(data);
+            },
+            py::arg("data"), "Calculate variance of dataset.")
+
+        .def_static(
+            "standard_deviation",
+            [](const std::vector<float>& data) {
+                return atom::algorithm::StatisticsF::standardDeviation(data);
+            },
+            py::arg("data"), "Calculate standard deviation of dataset.")
+
+        .def_static(
+            "correlation",
+            [](const std::vector<float>& x, const std::vector<float>& y) {
+                return atom::algorithm::StatisticsF::correlation(x, y);
+            },
+            py::arg("x"), py::arg("y"),
+            "Calculate Pearson correlation coefficient.");
+
+    // Numerical Methods bindings
+    py::class_<atom::algorithm::NumericalMethodsD>(m, "NumericalMethodsDouble",
+                                                   R"pbdoc(
+        Numerical methods for solving equations and optimization using double precision.
+
+        Provides root finding, numerical integration, differentiation, and equation solving.
+    )pbdoc")
+        .def_static(
+            "newton_raphson",
+            [](const std::function<double(double)>& f,
+               const std::function<double(double)>& df, double initial_guess,
+               double tolerance = 1e-10, size_t max_iterations = 100) {
+                return atom::algorithm::NumericalMethodsD::newtonRaphson(
+                    f, df, initial_guess, tolerance, max_iterations);
+            },
+            py::arg("function"), py::arg("derivative"),
+            py::arg("initial_guess"), py::arg("tolerance") = 1e-10,
+            py::arg("max_iterations") = 100,
+            "Find root using Newton-Raphson method.")
+
+        .def_static(
+            "bisection",
+            [](const std::function<double(double)>& f, double a, double b,
+               double tolerance = 1e-10, size_t max_iterations = 100) {
+                return atom::algorithm::NumericalMethodsD::bisection(
+                    f, a, b, tolerance, max_iterations);
+            },
+            py::arg("function"), py::arg("a"), py::arg("b"),
+            py::arg("tolerance") = 1e-10, py::arg("max_iterations") = 100,
+            "Find root using bisection method.")
+
+        .def_static(
+            "secant",
+            [](const std::function<double(double)>& f, double x0, double x1,
+               double tolerance = 1e-10, size_t max_iterations = 100) {
+                return atom::algorithm::NumericalMethodsD::secant(
+                    f, x0, x1, tolerance, max_iterations);
+            },
+            py::arg("function"), py::arg("x0"), py::arg("x1"),
+            py::arg("tolerance") = 1e-10, py::arg("max_iterations") = 100,
+            "Find root using secant method.")
+
+        .def_static(
+            "trapezoidal_rule",
+            [](const std::function<double(double)>& f, double a, double b,
+               size_t n = 1000) {
+                return atom::algorithm::NumericalMethodsD::trapezoidalRule(
+                    f, a, b, n);
+            },
+            py::arg("function"), py::arg("a"), py::arg("b"),
+            py::arg("n") = 1000,
+            "Numerical integration using trapezoidal rule.")
+
+        .def_static(
+            "simpsons_rule",
+            [](const std::function<double(double)>& f, double a, double b,
+               size_t n = 1000) {
+                return atom::algorithm::NumericalMethodsD::simpsonsRule(f, a, b,
+                                                                        n);
+            },
+            py::arg("function"), py::arg("a"), py::arg("b"),
+            py::arg("n") = 1000, "Numerical integration using Simpson's rule.")
+
+        .def_static(
+            "central_difference",
+            [](const std::function<double(double)>& f, double x,
+               double h = 1e-8) {
+                return atom::algorithm::NumericalMethodsD::centralDifference(
+                    f, x, h);
+            },
+            py::arg("function"), py::arg("x"), py::arg("h") = 1e-8,
+            "Numerical differentiation using central difference.")
+
+        .def_static(
+            "forward_difference",
+            [](const std::function<double(double)>& f, double x,
+               double h = 1e-8) {
+                return atom::algorithm::NumericalMethodsD::forwardDifference(
+                    f, x, h);
+            },
+            py::arg("function"), py::arg("x"), py::arg("h") = 1e-8,
+            "Numerical differentiation using forward difference.");
+
+    py::class_<atom::algorithm::NumericalMethodsF>(m, "NumericalMethodsFloat",
+                                                   R"pbdoc(
+        Numerical methods for solving equations and optimization using single precision.
+
+        Same functionality as NumericalMethodsDouble but optimized for float precision.
+    )pbdoc")
+        .def_static(
+            "newton_raphson",
+            [](const std::function<float(float)>& f,
+               const std::function<float(float)>& df, float initial_guess,
+               float tolerance = 1e-6f, size_t max_iterations = 100) {
+                return atom::algorithm::NumericalMethodsF::newtonRaphson(
+                    f, df, initial_guess, tolerance, max_iterations);
+            },
+            py::arg("function"), py::arg("derivative"),
+            py::arg("initial_guess"), py::arg("tolerance") = 1e-6f,
+            py::arg("max_iterations") = 100,
+            "Find root using Newton-Raphson method.")
+
+        .def_static(
+            "bisection",
+            [](const std::function<float(float)>& f, float a, float b,
+               float tolerance = 1e-6f, size_t max_iterations = 100) {
+                return atom::algorithm::NumericalMethodsF::bisection(
+                    f, a, b, tolerance, max_iterations);
+            },
+            py::arg("function"), py::arg("a"), py::arg("b"),
+            py::arg("tolerance") = 1e-6f, py::arg("max_iterations") = 100,
+            "Find root using bisection method.")
+
+        .def_static(
+            "trapezoidal_rule",
+            [](const std::function<float(float)>& f, float a, float b,
+               size_t n = 1000) {
+                return atom::algorithm::NumericalMethodsF::trapezoidalRule(
+                    f, a, b, n);
+            },
+            py::arg("function"), py::arg("a"), py::arg("b"),
+            py::arg("n") = 1000,
+            "Numerical integration using trapezoidal rule.")
+
+        .def_static(
+            "simpsons_rule",
+            [](const std::function<float(float)>& f, float a, float b,
+               size_t n = 1000) {
+                return atom::algorithm::NumericalMethodsF::simpsonsRule(f, a, b,
+                                                                        n);
+            },
+            py::arg("function"), py::arg("a"), py::arg("b"),
+            py::arg("n") = 1000, "Numerical integration using Simpson's rule.");
 }

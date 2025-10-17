@@ -950,5 +950,4 @@ int main() {
                       << sharedObj->operator()(value) << std::endl;
         }
     };
-
 }

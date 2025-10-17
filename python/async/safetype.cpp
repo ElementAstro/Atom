@@ -30,8 +30,41 @@ struct hash<py::object> {
 }  // namespace std
 
 PYBIND11_MODULE(safetype, m) {
-    m.doc() =
-        "Lock-free data structures implementation module for the atom package";
+    m.doc() = R"pbdoc(
+        Thread-Safe and Lock-Free Data Structures Module
+        -----------------------------------------------
+
+        This module provides high-performance thread-safe and lock-free data structures
+        for concurrent programming with advanced synchronization features.
+
+        Features:
+          - Lock-free data structures (stack, hash table, list)
+          - Thread-safe data structures (vector, SafeType wrapper)
+          - High-performance concurrent access patterns
+          - Memory-efficient implementations with atomic operations
+          - Python integration with proper exception handling
+
+        The module includes:
+          - LockFreeStack: Lock-free stack for concurrent push/pop operations
+          - LockFreeHashTable: Lock-free hash table for concurrent key-value storage
+          - LockFreeList: Lock-free linked list for concurrent operations
+          - ThreadSafeVector: Thread-safe dynamic array with mutex protection
+          - SafeType: Thread-safe wrapper for any type with read-write locks
+
+        Example:
+            >>> from atom.async.safetype import LockFreeStack, SafeType
+            >>>
+            >>> # Lock-free stack usage
+            >>> stack = LockFreeStack()
+            >>> stack.push("item1")
+            >>> stack.push("item2")
+            >>> item = stack.pop()  # Returns "item2"
+            >>>
+            >>> # Thread-safe type wrapper
+            >>> safe_counter = SafeType(0)
+            >>> safe_counter.modify(lambda x: x + 1)
+            >>> value = safe_counter.get()  # Returns 1
+    )pbdoc";
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -492,6 +525,157 @@ Returns:
             py::keep_alive<0, 1>(),
             "Support for iteration over list elements.");
 
+    // SafeType class binding - Thread-safe wrapper for any type
+    py::class_<atom::async::SafeType<py::object>>(m, "SafeType",
+                                                  R"pbdoc(
+        Thread-safe wrapper for any type with read-write lock protection.
+
+        SafeType provides thread-safe access to any wrapped value using shared_mutex
+        for optimal read performance. Multiple readers can access the value concurrently,
+        but writers have exclusive access.
+
+        Examples:
+            >>> from atom.async.safetype import SafeType
+            >>> safe_counter = SafeType(0)
+            >>> safe_counter.set(42)
+            >>> value = safe_counter.get()  # Returns 42
+            >>>
+            >>> # Modify with a function
+            >>> safe_counter.modify(lambda x: x + 1)
+            >>> print(safe_counter.get())  # Returns 43
+            >>>
+            >>> # Read-only access with a function
+            >>> result = safe_counter.read(lambda x: x * 2)
+            >>> print(result)  # Returns 86 (43 * 2)
+        )pbdoc")
+        .def(py::init<>(),
+             R"pbdoc(
+             Create a SafeType with default-constructed value.
+
+             Examples:
+                 >>> safe_value = SafeType()  # Contains None
+             )pbdoc")
+        .def(py::init<const py::object&>(), py::arg("value"),
+             R"pbdoc(
+             Create a SafeType with an initial value.
+
+             Args:
+                 value: Initial value to store
+
+             Examples:
+                 >>> safe_string = SafeType("hello")
+                 >>> safe_list = SafeType([1, 2, 3])
+             )pbdoc")
+        .def("get", &atom::async::SafeType<py::object>::get,
+             R"pbdoc(
+             Get a copy of the current value (thread-safe read).
+
+             Returns:
+                 Copy of the current value
+
+             Examples:
+                 >>> safe_value = SafeType(42)
+                 >>> current = safe_value.get()
+                 >>> print(current)  # 42
+             )pbdoc")
+        .def("set",
+             static_cast<void (atom::async::SafeType<py::object>::*)(
+                 const py::object&)>(&atom::async::SafeType<py::object>::set),
+             py::arg("value"),
+             R"pbdoc(
+             Set a new value (thread-safe write).
+
+             Args:
+                 value: New value to store
+
+             Examples:
+                 >>> safe_value = SafeType(0)
+                 >>> safe_value.set(100)
+                 >>> print(safe_value.get())  # 100
+             )pbdoc")
+        .def(
+            "modify",
+            [](atom::async::SafeType<py::object>& self,
+               py::function func) -> py::object {
+                return self.modify([func](py::object& value) -> py::object {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        return func(value);
+                    } catch (const py::error_already_set& e) {
+                        throw;
+                    }
+                });
+            },
+            py::arg("func"),
+            R"pbdoc(
+             Modify the value using a function (thread-safe write).
+
+             Args:
+                 func: Function that takes the current value and returns a new result
+
+             Returns:
+                 Result of the function (if any)
+
+             Examples:
+                 >>> safe_counter = SafeType(10)
+                 >>> safe_counter.modify(lambda x: x + 5)  # Increments by 5
+                 >>> print(safe_counter.get())  # 15
+                 >>>
+                 >>> # Function with return value
+                 >>> result = safe_counter.modify(lambda x: x * 2)
+                 >>> print(result)  # Returns 30, value becomes 30
+             )pbdoc")
+        .def(
+            "read",
+            [](const atom::async::SafeType<py::object>& self,
+               py::function func) -> py::object {
+                return self.read([func](const py::object& value) -> py::object {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        return func(value);
+                    } catch (const py::error_already_set& e) {
+                        throw;
+                    }
+                });
+            },
+            py::arg("func"),
+            R"pbdoc(
+             Read the value using a function (thread-safe read-only access).
+
+             Args:
+                 func: Function that takes the current value and returns a result
+
+             Returns:
+                 Result of the function
+
+             Examples:
+                 >>> safe_list = SafeType([1, 2, 3, 4, 5])
+                 >>> length = safe_list.read(lambda x: len(x))
+                 >>> print(length)  # 5
+                 >>>
+                 >>> # Complex read operation
+                 >>> sum_even = safe_list.read(lambda x: sum(i for i in x if i % 2 == 0))
+                 >>> print(sum_even)  # 6 (2 + 4)
+             )pbdoc")
+        .def(
+            "swap",
+            [](atom::async::SafeType<py::object>& self,
+               atom::async::SafeType<py::object>& other) { self.swap(other); },
+            py::arg("other"),
+            R"pbdoc(
+             Swap values with another SafeType (thread-safe).
+
+             Args:
+                 other: Another SafeType to swap values with
+
+             Examples:
+                 >>> safe1 = SafeType("hello")
+                 >>> safe2 = SafeType("world")
+                 >>> safe1.swap(safe2)
+                 >>> print(safe1.get())  # "world"
+                 >>> print(safe2.get())  # "hello"
+             )pbdoc");
+
     // Factory functions
     m.def(
         "create_lock_free_stack",
@@ -558,21 +742,21 @@ Examples:
 )");
 
     m.def(
-        "create_lock_free_list",
-        [](const py::list& items) {
-            auto list_ptr =  // Renamed to avoid conflict with std::list
-                std::make_shared<atom::async::LockFreeList<py::object>>();
-            // Add items in reverse order to maintain original list order when
-            // pushing to front
-            for (ssize_t i = static_cast<ssize_t>(items.size()) - 1; i >= 0;
-                 --i) {
-                list_ptr->pushFront(
-                    items[i].cast<py::object>());  // items[i] is py::handle
-            }
-            return list_ptr;
-        },
-        py::arg("items") = py::list(),
-        R"(Create a new LockFreeList with initial elements.
+         "create_lock_free_list",
+         [](const py::list& items) {
+             auto list_ptr =  // Renamed to avoid conflict with std::list
+                 std::make_shared<atom::async::LockFreeList<py::object>>();
+             // Add items in reverse order to maintain original list order when
+             // pushing to front
+             for (ssize_t i = static_cast<ssize_t>(items.size()) - 1; i >= 0;
+                  --i) {
+                 list_ptr->pushFront(
+                     items[i].cast<py::object>());  // items[i] is py::handle
+             }
+             return list_ptr;
+         },
+         py::arg("items") = py::list(),
+         R"(Create a new LockFreeList with initial elements.
 
 Args:
     items: Initial items to add to the list (optional).
@@ -586,5 +770,198 @@ Examples:
     >>> lst.size()
     3
     >>> lst.front() # Should be item3
-)");
+)")
+
+        .def(
+            "create_safe_type",
+            [](py::object initial_value) {
+                return std::make_shared<atom::async::SafeType<py::object>>(
+                    initial_value);
+            },
+            py::arg("initial_value") = py::none(),
+            R"pbdoc(
+        Create a new SafeType with an initial value.
+
+        Args:
+            initial_value: Initial value to store (default: None)
+
+        Returns:
+            A new SafeType instance
+
+        Examples:
+            >>> from atom.async.safetype import create_safe_type
+            >>> safe_counter = create_safe_type(0)
+            >>> safe_list = create_safe_type([1, 2, 3])
+        )pbdoc");
+
+    // Utility functions for performance testing and benchmarking
+    m.def(
+         "benchmark_lock_free_stack",
+         [](size_t num_operations, size_t num_threads) -> py::dict {
+             using namespace std::chrono;
+
+             py::dict results;
+             auto stack =
+                 std::make_shared<atom::async::LockFreeStack<py::object>>();
+
+             // Benchmark push operations
+             auto start = high_resolution_clock::now();
+
+             for (size_t i = 0; i < num_operations; ++i) {
+                 stack->push(py::cast(i));
+             }
+
+             auto end = high_resolution_clock::now();
+             auto push_duration = duration_cast<microseconds>(end - start);
+
+             // Benchmark pop operations
+             start = high_resolution_clock::now();
+             size_t successful_pops = 0;
+
+             for (size_t i = 0; i < num_operations; ++i) {
+                 auto result = stack->pop();
+                 if (result.has_value()) {
+                     successful_pops++;
+                 }
+             }
+
+             end = high_resolution_clock::now();
+             auto pop_duration = duration_cast<microseconds>(end - start);
+
+             // Calculate statistics
+             double push_ops_per_second =
+                 (num_operations * 1000000.0) / push_duration.count();
+             double pop_ops_per_second =
+                 (num_operations * 1000000.0) / pop_duration.count();
+
+             results[py::str("num_operations")] = num_operations;
+             results[py::str("num_threads")] = num_threads;
+             results[py::str("push_time_us")] = push_duration.count();
+             results[py::str("pop_time_us")] = pop_duration.count();
+             results[py::str("push_ops_per_second")] = push_ops_per_second;
+             results[py::str("pop_ops_per_second")] = pop_ops_per_second;
+             results[py::str("successful_pops")] = successful_pops;
+             results[py::str("final_stack_size")] = stack->size();
+
+             return results;
+         },
+         py::arg("num_operations") = 10000, py::arg("num_threads") = 1,
+         R"pbdoc(
+        Benchmark lock-free stack performance.
+
+        Args:
+            num_operations: Number of push/pop operations to perform (default: 10,000)
+            num_threads: Number of threads to simulate (default: 1)
+
+        Returns:
+            dict: Benchmark results with timing and throughput metrics
+
+        Examples:
+            >>> results = benchmark_lock_free_stack(5000, 4)
+            >>> print(f"Push ops/sec: {results['push_ops_per_second']:.2f}")
+            >>> print(f"Pop ops/sec: {results['pop_ops_per_second']:.2f}")
+        )pbdoc")
+
+        .def(
+            "benchmark_safe_type",
+            [](size_t num_operations) -> py::dict {
+                using namespace std::chrono;
+
+                py::dict results;
+                atom::async::SafeType<py::object> safe_value(py::cast(0));
+
+                // Benchmark read operations
+                auto start = high_resolution_clock::now();
+
+                for (size_t i = 0; i < num_operations; ++i) {
+                    volatile auto value = safe_value.get();
+                    (void)value;  // Suppress unused variable warning
+                }
+
+                auto end = high_resolution_clock::now();
+                auto read_duration = duration_cast<microseconds>(end - start);
+
+                // Benchmark write operations
+                start = high_resolution_clock::now();
+
+                for (size_t i = 0; i < num_operations; ++i) {
+                    safe_value.set(py::cast(i));
+                }
+
+                end = high_resolution_clock::now();
+                auto write_duration = duration_cast<microseconds>(end - start);
+
+                // Benchmark modify operations
+                start = high_resolution_clock::now();
+
+                for (size_t i = 0; i < num_operations; ++i) {
+                    safe_value.modify([](py::object& value) {
+                        auto int_val = value.cast<int>();
+                        value = py::cast(int_val + 1);
+                    });
+                }
+
+                end = high_resolution_clock::now();
+                auto modify_duration = duration_cast<microseconds>(end - start);
+
+                // Calculate statistics
+                double read_ops_per_second =
+                    (num_operations * 1000000.0) / read_duration.count();
+                double write_ops_per_second =
+                    (num_operations * 1000000.0) / write_duration.count();
+                double modify_ops_per_second =
+                    (num_operations * 1000000.0) / modify_duration.count();
+
+                results[py::str("num_operations")] = num_operations;
+                results[py::str("read_time_us")] = read_duration.count();
+                results[py::str("write_time_us")] = write_duration.count();
+                results[py::str("modify_time_us")] = modify_duration.count();
+                results[py::str("read_ops_per_second")] = read_ops_per_second;
+                results[py::str("write_ops_per_second")] = write_ops_per_second;
+                results[py::str("modify_ops_per_second")] =
+                    modify_ops_per_second;
+                results[py::str("final_value")] = safe_value.get();
+
+                return results;
+            },
+            py::arg("num_operations") = 10000,
+            R"pbdoc(
+        Benchmark SafeType performance for read, write, and modify operations.
+
+        Args:
+            num_operations: Number of operations to perform (default: 10,000)
+
+        Returns:
+            dict: Benchmark results with timing and throughput metrics
+
+        Examples:
+            >>> results = benchmark_safe_type(5000)
+            >>> print(f"Read ops/sec: {results['read_ops_per_second']:.2f}")
+            >>> print(f"Write ops/sec: {results['write_ops_per_second']:.2f}")
+            >>> print(f"Modify ops/sec: {results['modify_ops_per_second']:.2f}")
+        )pbdoc");
+
+    // Add version and feature information
+    m.attr("__version__") = "1.0.0";
+
+    // Feature detection
+    m.attr("HAS_LOCK_FREE_SUPPORT") = true;
+    m.attr("HAS_SHARED_MUTEX") = true;
+
+#ifdef ATOM_USE_BOOST_LOCKFREE
+    m.attr("HAS_BOOST_LOCKFREE") = true;
+#else
+    m.attr("HAS_BOOST_LOCKFREE") = false;
+#endif
+
+    // Platform information
+#ifdef ATOM_PLATFORM_WINDOWS
+    m.attr("PLATFORM") = "Windows";
+#elif defined(ATOM_PLATFORM_APPLE)
+    m.attr("PLATFORM") = "macOS";
+#elif defined(ATOM_PLATFORM_LINUX)
+    m.attr("PLATFORM") = "Linux";
+#else
+    m.attr("PLATFORM") = "Unknown";
+#endif
 }

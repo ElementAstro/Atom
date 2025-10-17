@@ -28,7 +28,6 @@
 #include <spdlog/spdlog.h>
 #include "atom/error/exception.hpp"
 
-
 class TTYBase::Impl {
 public:
     explicit Impl(std::string_view driverName)
@@ -41,7 +40,7 @@ public:
         try {
             stopAsyncOperations();
             if (m_PortFD != -1) {
-                disconnect();
+                (void)disconnect();
             }
         } catch (...) {
             // Silently catch any exceptions in destructor

@@ -1,4 +1,4 @@
-#include "../atom/async/safetype.hpp"
+#include "atom/async/safetype.hpp"
 #include <atomic>
 #include <chrono>
 #include <functional>

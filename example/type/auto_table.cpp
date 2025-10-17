@@ -133,8 +133,8 @@ int main() {
     std::vector<std::pair<std::string, std::string>> batch_items = {
         {"grape", "Small purple fruit"},
         {"orange", "Citrus fruit"},
-        {"apple",
-         "Updated apple description"}  // This will update existing entry
+        {"apple", "Updated apple description"}
+        // This will update existing entry
     };
 
     string_table.insertBatch(batch_items);

@@ -388,12 +388,12 @@ public:
                 io_thread_ = std::thread([this]() { io_context_.run(); });
             }
 
-            log(LogLevel::INFO,
+            log(LogLevel::INFO_LEVEL,
                 "SocketHub started on port " + std::to_string(port));
             stats_.start_time = std::chrono::system_clock::now();
 
         } catch (const std::exception& e) {
-            log(LogLevel::ERROR,
+            log(LogLevel::ERROR_LEVEL,
                 "Failed to start SocketHub: " + std::string(e.what()));
             throw;
         }
@@ -421,7 +421,7 @@ public:
                 io_thread_.join();
             }
 
-            log(LogLevel::INFO, "SocketHub stopped.");
+            log(LogLevel::INFO_LEVEL, "SocketHub stopped.");
         }
     }
 
@@ -430,7 +430,7 @@ public:
         try {
             port = acceptor_.local_endpoint().port();
         } catch (...) {
-            log(LogLevel::ERROR, "Could not determine port for restart");
+            log(LogLevel::ERROR_LEVEL, "Could not determine port for restart");
             return;
         }
 
@@ -485,7 +485,7 @@ public:
         stats_.messages_sent += client_copies.size();
         stats_.bytes_sent += message.data.size() * client_copies.size();
 
-        log(LogLevel::DEBUG,
+        log(LogLevel::DEBUG_LEVEL,
             "Broadcasted message of " + std::to_string(message.data.size()) +
                 " bytes to " + std::to_string(client_copies.size()) +
                 " clients");
@@ -512,11 +512,11 @@ public:
             stats_.messages_sent++;
             stats_.bytes_sent += message.data.size();
 
-            log(LogLevel::DEBUG,
+            log(LogLevel::DEBUG_LEVEL,
                 "Sent message of " + std::to_string(message.data.size()) +
                     " bytes to client " + std::to_string(client_id));
         } else {
-            log(LogLevel::WARNING,
+            log(LogLevel::WARNING_LEVEL,
                 "Attempted to send message to non-existent client: " +
                     std::to_string(client_id));
         }
@@ -549,15 +549,15 @@ public:
             // Remove from rate limiter
             rate_limiter_.releaseConnection(client->getRemoteAddress());
 
-            log(LogLevel::INFO, "Client " + std::to_string(client_id) +
-                                    " disconnected. Reason: " + reason);
+            log(LogLevel::INFO_LEVEL, "Client " + std::to_string(client_id) +
+                                          " disconnected. Reason: " + reason);
         }
     }
 
     void createGroup(const std::string& group_name) {
         std::lock_guard<std::mutex> lock(group_mutex_);
         groups_[group_name] = std::unordered_set<size_t>();
-        log(LogLevel::INFO, "Created group: " + group_name);
+        log(LogLevel::INFO_LEVEL, "Created group: " + group_name);
     }
 
     void addClientToGroup(size_t client_id, const std::string& group_name) {
@@ -568,9 +568,9 @@ public:
         }
 
         if (!client_exists) {
-            log(LogLevel::WARNING, "Cannot add non-existent client " +
-                                       std::to_string(client_id) +
-                                       " to group " + group_name);
+            log(LogLevel::WARNING_LEVEL, "Cannot add non-existent client " +
+                                             std::to_string(client_id) +
+                                             " to group " + group_name);
             return;
         }
 
@@ -579,13 +579,14 @@ public:
         if (it == groups_.end()) {
             // Create the group if it doesn't exist
             groups_[group_name] = std::unordered_set<size_t>{client_id};
-            log(LogLevel::INFO, "Created group " + group_name +
-                                    " and added client " +
-                                    std::to_string(client_id));
+            log(LogLevel::INFO_LEVEL, "Created group " + group_name +
+                                          " and added client " +
+                                          std::to_string(client_id));
         } else {
             it->second.insert(client_id);
-            log(LogLevel::INFO, "Added client " + std::to_string(client_id) +
-                                    " to group " + group_name);
+            log(LogLevel::INFO_LEVEL, "Added client " +
+                                          std::to_string(client_id) +
+                                          " to group " + group_name);
         }
     }
 
@@ -595,8 +596,9 @@ public:
         auto it = groups_.find(group_name);
         if (it != groups_.end()) {
             it->second.erase(client_id);
-            log(LogLevel::INFO, "Removed client " + std::to_string(client_id) +
-                                    " from group " + group_name);
+            log(LogLevel::INFO_LEVEL, "Removed client " +
+                                          std::to_string(client_id) +
+                                          " from group " + group_name);
         }
     }
 
@@ -615,22 +617,22 @@ public:
             sendMessageToClient(client_id, message);
         }
 
-        log(LogLevel::DEBUG, "Broadcasted message to group " + group_name +
-                                 " (" + std::to_string(client_ids.size()) +
-                                 " clients)");
+        log(LogLevel::DEBUG_LEVEL,
+            "Broadcasted message to group " + group_name + " (" +
+                std::to_string(client_ids.size()) + " clients)");
     }
 
     void setAuthenticator(
         const std::function<bool(const std::string&, const std::string&)>&
             authenticator) {
         authenticator_ = authenticator;
-        log(LogLevel::INFO, "Custom authenticator set");
+        log(LogLevel::INFO_LEVEL, "Custom authenticator set");
     }
 
     void requireAuthentication(bool require) {
         require_authentication_ = require;
-        log(LogLevel::INFO, "Authentication requirement set to: " +
-                                std::string(require ? "true" : "false"));
+        log(LogLevel::INFO_LEVEL, "Authentication requirement set to: " +
+                                      std::string(require ? "true" : "false"));
     }
 
     void setClientMetadata(size_t client_id, const std::string& key,
@@ -646,8 +648,9 @@ public:
 
         if (client) {
             client->setMetadata(key, value);
-            log(LogLevel::DEBUG, "Set metadata '" + key + "' for client " +
-                                     std::to_string(client_id));
+            log(LogLevel::DEBUG_LEVEL, "Set metadata '" + key +
+                                           "' for client " +
+                                           std::to_string(client_id));
         }
     }
 
@@ -747,9 +750,9 @@ private:
                 ssl_context_.use_tmp_dh_file(config_.ssl_dh_file);
             }
 
-            log(LogLevel::INFO, "SSL configured successfully");
+            log(LogLevel::INFO_LEVEL, "SSL configured successfully");
         } catch (const std::exception& e) {
-            log(LogLevel::ERROR,
+            log(LogLevel::ERROR_LEVEL,
                 "SSL configuration error: " + std::string(e.what()));
             throw;
         }
@@ -776,7 +779,7 @@ private:
                     // Apply rate limiting if enabled
                     if (config_.enable_rate_limiting &&
                         !rate_limiter_.canConnect(remote_address)) {
-                        log(LogLevel::WARNING,
+                        log(LogLevel::WARNING_LEVEL,
                             "Rate limit exceeded for IP: " + remote_address);
                         socket->close();
                     } else {
@@ -808,7 +811,7 @@ private:
                     // Apply rate limiting if enabled
                     if (config_.enable_rate_limiting &&
                         !rate_limiter_.canConnect(remote_address)) {
-                        log(LogLevel::WARNING,
+                        log(LogLevel::WARNING_LEVEL,
                             "Rate limit exceeded for IP: " + remote_address);
                         socket->close();
                     } else {
@@ -824,7 +827,7 @@ private:
                                 if (!handshake_ec) {
                                     handleNewSslConnection(ssl_socket);
                                 } else {
-                                    log(LogLevel::ERROR,
+                                    log(LogLevel::ERROR_LEVEL,
                                         "SSL handshake failed: " +
                                             handshake_ec.message() + " from " +
                                             remote_address);
@@ -872,7 +875,7 @@ private:
                     std::string client_ip = this->getClientIp(client_id);
                     if (config_.enable_rate_limiting &&
                         !rate_limiter_.canSendMessage(client_ip)) {
-                        log(LogLevel::WARNING,
+                        log(LogLevel::WARNING_LEVEL,
                             "Message rate limit exceeded for client " +
                                 std::to_string(client_id) + " (" + client_ip +
                                 ")");
@@ -899,7 +902,7 @@ private:
             // Notify connect handlers
             notifyConnect(client_id, remote_address);
 
-            log(LogLevel::INFO,
+            log(LogLevel::INFO_LEVEL,
                 "New client connected: " + std::to_string(client_id) +
                     " from " + remote_address);
 
@@ -934,7 +937,7 @@ private:
                     std::string client_ip = this->getClientIp(client_id);
                     if (config_.enable_rate_limiting &&
                         !rate_limiter_.canSendMessage(client_ip)) {
-                        log(LogLevel::WARNING,
+                        log(LogLevel::WARNING_LEVEL,
                             "Message rate limit exceeded for client " +
                                 std::to_string(client_id) + " (" + client_ip +
                                 ")");
@@ -957,7 +960,7 @@ private:
             }
 
             notifyConnect(client_id, remote_address);
-            log(LogLevel::INFO,
+            log(LogLevel::INFO_LEVEL,
                 "New SSL client connected: " + std::to_string(client_id) +
                     " from " + remote_address);
 
@@ -1014,7 +1017,7 @@ private:
     }
 
     void handleError(const std::string& error_message, size_t client_id) {
-        log(LogLevel::ERROR,
+        log(LogLevel::ERROR_LEVEL,
             error_message + " (client: " + std::to_string(client_id) + ")");
 
         std::vector<std::function<void(const std::string&, size_t)>>
@@ -1073,19 +1076,19 @@ private:
             // Default log to console
             std::string level_str;
             switch (level) {
-                case LogLevel::DEBUG:
+                case LogLevel::DEBUG_LEVEL:
                     level_str = "DEBUG";
                     break;
-                case LogLevel::INFO:
+                case LogLevel::INFO_LEVEL:
                     level_str = "INFO";
                     break;
-                case LogLevel::WARNING:
+                case LogLevel::WARNING_LEVEL:
                     level_str = "WARNING";
                     break;
-                case LogLevel::ERROR:
+                case LogLevel::ERROR_LEVEL:
                     level_str = "ERROR";
                     break;
-                case LogLevel::FATAL:
+                case LogLevel::FATAL_LEVEL:
                     level_str = "FATAL";
                     break;
             }
@@ -1133,9 +1136,9 @@ private:
         }
 
         if (!timeout_clients.empty()) {
-            log(LogLevel::INFO, "Disconnected " +
-                                    std::to_string(timeout_clients.size()) +
-                                    " clients due to timeout");
+            log(LogLevel::INFO_LEVEL,
+                "Disconnected " + std::to_string(timeout_clients.size()) +
+                    " clients due to timeout");
         }
     }
 
@@ -1167,7 +1170,7 @@ private:
     std::function<bool(const std::string&, const std::string&)> authenticator_;
     bool require_authentication_;
     bool logging_enabled_ = true;
-    LogLevel log_level_ = LogLevel::INFO;
+    LogLevel log_level_ = LogLevel::INFO_LEVEL;
     std::function<void(LogLevel, const std::string&)> log_handler_;
     SocketHubStats stats_;
 };

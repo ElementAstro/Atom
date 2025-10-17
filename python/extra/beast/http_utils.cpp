@@ -131,7 +131,7 @@ Args:
     params: A dictionary where keys are parameter names and values are parameter values.
 
 Returns:
-    The formatted query string (e.g., "key1=value1&key2=value2"). 
+    The formatted query string (e.g., "key1=value1&key2=value2").
     Does not include the leading '?'.
 
 Examples:
