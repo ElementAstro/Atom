@@ -403,6 +403,8 @@ coverage/
 
 # Test artifacts and temporary test files
 test_*.dat
+test_*.cpp
+test_*.c
 *.test
 test_output/
 test_results/
