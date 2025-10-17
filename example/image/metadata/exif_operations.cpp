@@ -11,6 +11,7 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <cmath>
 
 #ifdef HAVE_OPENCV
 #include <opencv2/opencv.hpp>
@@ -158,7 +159,7 @@ int main() {
     double f_number = std::stod(exif_data["FNumber"].substr(0, exif_data["FNumber"].find('/'))) / 10.0;
     
     // Calculate exposure value (EV)
-    double ev = log2((f_number * f_number) / exposure_time);
+    double ev = std::log2((f_number * f_number) / exposure_time);
     
     std::cout << "   Exposure analysis:\n";
     std::cout << "   - Exposure time: " << exposure_time << " seconds\n";

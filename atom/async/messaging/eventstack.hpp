@@ -293,7 +293,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto countEvents(Func&& predicate) const -> size_t;
 
     /**
@@ -306,7 +306,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto findEvent(Func&& predicate) const -> std::optional<T>;
 
     /**
@@ -318,7 +318,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto anyEvent(Func&& predicate) const -> bool;
 
     /**
@@ -330,7 +330,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func&, const T&> &&
-                 std::same_as<std::invoke_result_t<Func&, const T&>, bool>
+                     std::same_as<std::invoke_result_t<Func&, const T&>, bool>
     [[nodiscard]] auto allEvents(Func&& predicate) const -> bool;
 
     /**
@@ -627,8 +627,7 @@ void EventStack<T>::filterEvents(Func&& filterFunc) {
 
 template <typename T>
     requires std::copyable<T> && std::movable<T>
-                             auto EventStack<T>::serializeStack() const
-             -> std::string
+             auto EventStack<T>::serializeStack() const -> std::string
                  requires Serializable<T>
 {
     try {
@@ -742,8 +741,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                          std::same_as<std::invoke_result_t<Func&, const T&>,
-                                       bool>
+                              std::same_as<
+                                  std::invoke_result_t<Func&, const T&>, bool>
 auto EventStack<T>::countEvents(Func&& predicate) const -> size_t {
     try {
         std::shared_lock lock(mtx_);
@@ -768,8 +767,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                          std::same_as<std::invoke_result_t<Func&, const T&>,
-                                       bool>
+                              std::same_as<
+                                  std::invoke_result_t<Func&, const T&>, bool>
 auto EventStack<T>::findEvent(Func&& predicate) const -> std::optional<T> {
     try {
         std::shared_lock lock(mtx_);
@@ -789,8 +788,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                          std::same_as<std::invoke_result_t<Func&, const T&>,
-                                       bool>
+                              std::same_as<
+                                  std::invoke_result_t<Func&, const T&>, bool>
 auto EventStack<T>::anyEvent(Func&& predicate) const -> bool {
     try {
         std::shared_lock lock(mtx_);
@@ -815,8 +814,8 @@ template <typename T>
     requires std::copyable<T> && std::movable<T>
                              template <typename Func>
                  requires std::invocable<Func&, const T&> &&
-                          std::same_as<std::invoke_result_t<Func&, const T&>,
-                                       bool>
+                              std::same_as<
+                                  std::invoke_result_t<Func&, const T&>, bool>
 auto EventStack<T>::allEvents(Func&& predicate) const -> bool {
     try {
         std::shared_lock lock(mtx_);
@@ -925,18 +924,18 @@ void EventStack<T>::transformEvents(Func&& transformFunc) {
 #else
         std::unique_lock lock(mtx_);
         if constexpr (std::is_same_v<T, bool>) {
-            // 对于bool类型进行特殊处理
+            // Special handling for bool type to avoid vector<bool> proxy issues
             for (typename std::vector<T>::reference event_ref : events_) {
-                bool val = event_ref;  // 将proxy转换为bool
-                transformFunc(val);    // 调用用户函数
-                event_ref = val;       // 将修改后的值赋回去
+                bool val = event_ref;  // Convert proxy to bool
+                transformFunc(val);    // Call user function
+                event_ref = val;       // Assign modified value back
             }
         } else {
-            // TODO: Fix this
-            /*
-            Parallel::for_each(events_.begin(), events_.end(),
-                               std::forward<Func>(transformFunc));
-            */
+            // Use standard algorithm for non-bool types
+            // Note: Using std::for_each instead of parallel execution to avoid
+            // potential race conditions when transformFunc modifies elements
+            std::for_each(events_.begin(), events_.end(),
+                          std::forward<Func>(transformFunc));
         }
 #endif
     } catch (const std::exception& e) {

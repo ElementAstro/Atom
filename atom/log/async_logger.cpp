@@ -77,13 +77,13 @@ struct LoggerMemoryPool {
 
 private:
     // 使用现有的内存池实现
-    atom::memory::MemoryPool<BLOCK_SIZE, MAX_BLOCKS> memory_pool_;
+    atom::memory::FixedBlockPool<BLOCK_SIZE, MAX_BLOCKS> memory_pool_;
 
-    // 适配器：将 MemoryPool 接口转换为 std::pmr::memory_resource
+    // 适配器：将 FixedBlockPool 接口转换为 std::pmr::memory_resource
     class MemoryPoolResource : public std::pmr::memory_resource {
     public:
         explicit MemoryPoolResource(
-            atom::memory::MemoryPool<BLOCK_SIZE, MAX_BLOCKS>& pool)
+            atom::memory::FixedBlockPool<BLOCK_SIZE, MAX_BLOCKS>& pool)
             : pool_(pool) {}
 
     private:
@@ -106,11 +106,11 @@ private:
             pool_.deallocate(ptr);
         }
 
-        bool do_is_equal(const memory_resource& other) const noexcept override {
+        bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override {
             return this == &other;
         }
 
-        atom::memory::MemoryPool<BLOCK_SIZE, MAX_BLOCKS>& pool_;
+        atom::memory::FixedBlockPool<BLOCK_SIZE, MAX_BLOCKS>& pool_;
     };
 
     // 内存资源适配器

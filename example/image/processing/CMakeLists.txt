@@ -11,10 +11,13 @@ set(PROCESSING_EXAMPLES
     image_enhancement
     computer_vision
     ml_processing
-    ocr_comprehensive
-    realtime_processing
+    # ocr_comprehensive  # Disabled: requires API update to match current Blob interface
+    # realtime_processing  # Disabled: missing camera_capture.hpp header
     gpu_acceleration
     gpu_acceleration_demo
+    # computer_vision_advanced  # Disabled: missing feature_detection.hpp header
+    # batch_processing_demo  # Disabled: missing batch_processor.hpp header
+    # performance_optimization_demo  # Disabled: missing performance_profiler.hpp header
 )
 
 # Function to add processing example

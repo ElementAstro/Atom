@@ -10,8 +10,8 @@ set(IO_EXAMPLES
     format_conversion
     advanced_io
     caching_prefetching
-    streaming_io_demo
-    memory_mapped_io
+    # streaming_io_demo  # Disabled: missing streaming_reader.hpp header
+    # memory_mapped_io  # Disabled: missing memory_mapped_file.hpp header
 )
 
 # Function to add I/O example

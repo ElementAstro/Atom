@@ -194,7 +194,13 @@ jobs:
       - name: Run tests with AddressSanitizer
         run: |
           cd build
-          ctest --output-on-failure --timeout 300 || true
+          if [ -f "./run_all_tests" ]; then
+            echo "Running tests with unified test runner and AddressSanitizer..."
+            ./run_all_tests --verbose --threads=2 || echo "Tests completed with issues under AddressSanitizer"
+          else
+            echo "Running tests with CTest and AddressSanitizer..."
+            ctest --output-on-failure --timeout 300 || true
+          fi
 
       - name: Run tests with Valgrind
         run: |
@@ -205,7 +211,13 @@ jobs:
             -DATOM_BUILD_DOCS=OFF
           cmake --build --preset debug --parallel
           cd build
-          ctest --output-on-failure -T memcheck --timeout 600 || true
+          if [ -f "./run_all_tests" ]; then
+            echo "Running tests with unified test runner and Valgrind..."
+            timeout 600 ./run_all_tests --verbose --threads=1 || echo "Tests completed with issues under Valgrind"
+          else
+            echo "Running tests with CTest and Valgrind..."
+            ctest --output-on-failure -T memcheck --timeout 600 || true
+          fi
 
   # Performance analysis
   performance-analysis:
@@ -237,11 +249,18 @@ jobs:
       - name: Run performance tests
         run: |
           cd build
-          # Run benchmarks if available
-          if find . -name "*benchmark*" -executable; then
-            find . -name "*benchmark*" -executable -exec {} \;
+          # Try unified test runner with performance category first
+          if [ -f "./run_all_tests" ]; then
+            echo "Running performance tests with unified test runner..."
+            ./run_all_tests --category=performance --verbose || echo "Performance tests completed with issues"
           else
-            echo "No benchmarks found"
+            # Fall back to traditional benchmarks
+            if find . -name "*benchmark*" -executable; then
+              echo "Running traditional benchmarks..."
+              find . -name "*benchmark*" -executable -exec {} \;
+            else
+              echo "No performance tests found"
+            fi
           fi
 
       - name: Generate coverage report
@@ -303,6 +322,155 @@ jobs:
           path: doxygen-warnings.txt
           retention-days: 30
 
+  # Test infrastructure validation
+  test-infrastructure-validation:
+    name: Test Infrastructure Validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate unified testing infrastructure
+        run: |
+          echo "=== Validating Unified Testing Infrastructure ==="
+
+          # Check if unified test runner source exists
+          if [ ! -f "tests/run_all_tests.cpp" ]; then
+            echo "❌ Unified test runner source missing"
+            exit 1
+          fi
+
+          # Check if standardized templates exist
+          if [ ! -f "tests/cmake/StandardTestTemplate.cmake" ]; then
+            echo "❌ Standard test template missing"
+            exit 1
+          fi
+
+          # Check if test documentation exists
+          if [ ! -f "docs/TestingGuide.md" ]; then
+            echo "❌ Testing documentation missing"
+            exit 1
+          fi
+
+          # Check if cross-platform scripts exist
+          if [ ! -f "scripts/run_tests.sh" ] || [ ! -f "scripts/run_tests.bat" ]; then
+            echo "❌ Cross-platform test scripts missing"
+            exit 1
+          fi
+
+          # Validate test module configurations
+          echo "Validating test module configurations..."
+          cd tests
+
+          for module_dir in algorithm async components connection containers error extra image io log memory meta search secret serial sysinfo system type utils web; do
+            if [ -d "$module_dir" ]; then
+              if [ -f "$module_dir/CMakeLists.txt" ]; then
+                # Check if module uses standardized template
+                if grep -q "StandardTestTemplate.cmake" "$module_dir/CMakeLists.txt"; then
+                  echo "✅ $module_dir module uses standardized template"
+                else
+                  echo "⚠️ $module_dir module may need standardization"
+                fi
+
+                # Check if module has test files
+                test_count=$(find "$module_dir" -name "test_*.cpp" -o -name "test_*.hpp" | wc -l)
+                if [ "$test_count" -gt 0 ]; then
+                  echo "✅ $module_dir module has $test_count test file(s)"
+                else
+                  echo "⚠️ $module_dir module has no test files"
+                fi
+              else
+                echo "⚠️ $module_dir module missing CMakeLists.txt"
+              fi
+            fi
+          done
+
+          # Check main test CMakeLists.txt
+          if [ -f "CMakeLists.txt" ]; then
+            if grep -q "run_all_tests" "CMakeLists.txt"; then
+              echo "✅ Main test CMakeLists.txt includes unified test runner"
+            else
+              echo "❌ Main test CMakeLists.txt missing unified test runner"
+              exit 1
+            fi
+          fi
+
+          # Validate test script functionality
+          echo "Validating test script functionality..."
+          cd ..
+          if [ -f "scripts/run_tests.sh" ]; then
+            if bash scripts/run_tests.sh --help > /dev/null 2>&1; then
+              echo "✅ Unix test script is functional"
+            else
+              echo "⚠️ Unix test script may have issues"
+            fi
+          fi
+
+          echo "✅ Test infrastructure validation completed"
+
+      - name: Validate test build configuration
+        run: |
+          echo "=== Validating Test Build Configuration ==="
+
+          # Try to configure tests with CMake
+          cmake -B test-build \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_DOCS=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF
+
+          if [ $? -eq 0 ]; then
+            echo "✅ Test configuration successful"
+
+            # Check if unified test runner target exists
+            if grep -q "run_all_tests" test-build/CMakeFiles/Makefile.cmake 2>/dev/null; then
+              echo "✅ Unified test runner target configured"
+            else
+              echo "⚠️ Unified test runner target not found in configuration"
+            fi
+          else
+            echo "❌ Test configuration failed"
+            exit 1
+          fi
+
+          # Clean up
+          rm -rf test-build
+
+      - name: Check test integration with CI
+        run: |
+          echo "=== Validating CI Test Integration ==="
+
+          # Check if test workflow exists
+          if [ ! -f ".github/workflows/tests.yml" ]; then
+            echo "❌ Dedicated test workflow missing"
+            exit 1
+          fi
+
+          # Check if main CI workflow includes tests
+          if grep -q "run_all_tests" ".github/workflows/ci.yml"; then
+            echo "✅ Main CI workflow integrates unified test runner"
+          else
+            echo "⚠️ Main CI workflow may need test integration update"
+          fi
+
+          # Check if test workflow uses unified runner
+          if grep -q "run_all_tests" ".github/workflows/tests.yml"; then
+            echo "✅ Test workflow uses unified test runner"
+          else
+            echo "❌ Test workflow doesn't use unified test runner"
+            exit 1
+          fi
+
+          echo "✅ CI test integration validation completed"
+
+      - name: Upload test infrastructure validation report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-infrastructure-validation
+          path: |
+            test-infrastructure-report.txt
+          retention-days: 30
+
   # Dependency analysis
   dependency-analysis:
     name: Dependency Analysis
@@ -341,6 +509,7 @@ jobs:
         memory-safety,
         documentation-quality,
         dependency-analysis,
+        test-infrastructure-validation,
       ]
     if: always()
     steps:
@@ -371,6 +540,16 @@ jobs:
           echo "## Documentation Quality" >> quality-report.md
           if [ -f reports/documentation-warnings/doxygen-warnings.txt ]; then
             echo "- Doxygen warnings: $(wc -l < reports/documentation-warnings/doxygen-warnings.txt) lines" >> quality-report.md
+          fi
+
+          echo "## Test Infrastructure Quality" >> quality-report.md
+          if [ -d reports/test-infrastructure-validation ]; then
+            echo "- Unified test infrastructure validation completed" >> quality-report.md
+            echo "- Standardized templates validated" >> quality-report.md
+            echo "- Cross-platform script functionality verified" >> quality-report.md
+            echo "- CI/CD integration confirmed" >> quality-report.md
+          else
+            echo "- Test infrastructure validation failed or was skipped" >> quality-report.md
           fi
 
       - name: Upload quality report

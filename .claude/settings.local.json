@@ -24,7 +24,14 @@
       "Bash(timeout:*)",
       "Bash(./cmake-release/example/components/components_comprehensive_integration_example.exe:*)",
       "Bash(ldd:*)",
-      "Bash(PATH:*)"
+      "Bash(PATH:*)",
+      "Bash(chmod:*)",
+      "Bash(for:*)",
+      "Bash(do if [ -f \"$file\" ])",
+      "Bash(then echo \"✅ $file exists\")",
+      "Bash(else echo \"❌ $file missing\")",
+      "Bash(fi:*)",
+      "Bash(done)"
     ],
     "deny": [],
     "ask": []

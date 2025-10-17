@@ -14,8 +14,8 @@ Description: System Information Module - CPU macOS Implementation
 
 #ifdef __APPLE__
 
-#include "common.hpp"
 #include <spdlog/spdlog.h>
+#include "common.hpp"
 
 namespace atom::system {
 
@@ -28,7 +28,7 @@ auto getCPUModel_MacOS() -> std::string;
 // 这里应该添加所有函数的前向声明
 
 auto getCurrentCpuUsage_MacOS() -> float {
-    spdlog::info( "Starting getCurrentCpuUsage function on macOS");
+    spdlog::info("Starting getCurrentCpuUsage function on macOS");
 
     processor_cpu_load_info_t cpuInfo;
     mach_msg_type_number_t count;
@@ -36,16 +36,17 @@ auto getCurrentCpuUsage_MacOS() -> float {
     float cpuUsage = 0.0F;
 
     if (host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &count,
-                           reinterpret_cast<processor_info_array_t*>(&cpuInfo),
-                           &count) == KERN_SUCCESS) {
-
-        static unsigned long long previousUser = 0, previousSystem = 0, previousIdle = 0;
+                            reinterpret_cast<processor_info_array_t*>(&cpuInfo),
+                            &count) == KERN_SUCCESS) {
+        static unsigned long long previousUser = 0, previousSystem = 0,
+                                  previousIdle = 0;
 
         unsigned long long user = 0, system = 0, idle = 0;
 
         // Sum usage across all CPUs
         for (unsigned i = 0; i < count / CPU_STATE_MAX; i++) {
-            user += cpuInfo[i].cpu_ticks[CPU_STATE_USER] + cpuInfo[i].cpu_ticks[CPU_STATE_NICE];
+            user += cpuInfo[i].cpu_ticks[CPU_STATE_USER] +
+                    cpuInfo[i].cpu_ticks[CPU_STATE_NICE];
             system += cpuInfo[i].cpu_ticks[CPU_STATE_SYSTEM];
             idle += cpuInfo[i].cpu_ticks[CPU_STATE_IDLE];
         }
@@ -58,7 +59,8 @@ auto getCurrentCpuUsage_MacOS() -> float {
             unsigned long long totalTicks = userDiff + systemDiff + idleDiff;
 
             if (totalTicks > 0) {
-                cpuUsage = 100.0F * (static_cast<float>(userDiff + systemDiff) / totalTicks);
+                cpuUsage = 100.0F * (static_cast<float>(userDiff + systemDiff) /
+                                     totalTicks);
             }
         }
 
@@ -67,18 +69,19 @@ auto getCurrentCpuUsage_MacOS() -> float {
         previousIdle = idle;
 
         // Free the allocated memory
-        vm_deallocate(mach_task_self(), reinterpret_cast<vm_address_t>(cpuInfo), count);
+        vm_deallocate(mach_task_self(), reinterpret_cast<vm_address_t>(cpuInfo),
+                      count);
     }
 
     // Clamp to 0-100 range
     cpuUsage = std::max(0.0F, std::min(100.0F, cpuUsage));
 
-    spdlog::info( "macOS CPU Usage: {}%", cpuUsage);
+    spdlog::info("macOS CPU Usage: {}%", cpuUsage);
     return cpuUsage;
 }
 
 auto getPerCoreCpuUsage() -> std::vector<float> {
-    spdlog::info( "Starting getPerCoreCpuUsage function on macOS");
+    spdlog::info("Starting getPerCoreCpuUsage function on macOS");
 
     processor_cpu_load_info_t cpuInfo;
     mach_msg_type_number_t count;
@@ -86,10 +89,10 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
     std::vector<float> coreUsages;
 
     if (host_processor_info(mach_host_self(), PROCESSOR_CPU_LOAD_INFO, &count,
-                           reinterpret_cast<processor_info_array_t*>(&cpuInfo),
-                           &count) == KERN_SUCCESS) {
-
-        static std::vector<unsigned long long> previousUser, previousSystem, previousIdle;
+                            reinterpret_cast<processor_info_array_t*>(&cpuInfo),
+                            &count) == KERN_SUCCESS) {
+        static std::vector<unsigned long long> previousUser, previousSystem,
+            previousIdle;
 
         int numCores = count / CPU_STATE_MAX;
         coreUsages.resize(numCores, 0.0F);
@@ -102,20 +105,26 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
         }
 
         for (int i = 0; i < numCores; i++) {
-            unsigned long long user = cpuInfo[i].cpu_ticks[CPU_STATE_USER] + cpuInfo[i].cpu_ticks[CPU_STATE_NICE];
+            unsigned long long user = cpuInfo[i].cpu_ticks[CPU_STATE_USER] +
+                                      cpuInfo[i].cpu_ticks[CPU_STATE_NICE];
             unsigned long long system = cpuInfo[i].cpu_ticks[CPU_STATE_SYSTEM];
             unsigned long long idle = cpuInfo[i].cpu_ticks[CPU_STATE_IDLE];
 
-            if (previousUser[i] > 0 || previousSystem[i] > 0 || previousIdle[i] > 0) {
+            if (previousUser[i] > 0 || previousSystem[i] > 0 ||
+                previousIdle[i] > 0) {
                 unsigned long long userDiff = user - previousUser[i];
                 unsigned long long systemDiff = system - previousSystem[i];
                 unsigned long long idleDiff = idle - previousIdle[i];
 
-                unsigned long long totalTicks = userDiff + systemDiff + idleDiff;
+                unsigned long long totalTicks =
+                    userDiff + systemDiff + idleDiff;
 
                 if (totalTicks > 0) {
-                    coreUsages[i] = 100.0F * (static_cast<float>(userDiff + systemDiff) / totalTicks);
-                    coreUsages[i] = std::max(0.0F, std::min(100.0F, coreUsages[i]));
+                    coreUsages[i] =
+                        100.0F * (static_cast<float>(userDiff + systemDiff) /
+                                  totalTicks);
+                    coreUsages[i] =
+                        std::max(0.0F, std::min(100.0F, coreUsages[i]));
                 }
             }
 
@@ -125,42 +134,103 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
         }
 
         // Free the allocated memory
-        vm_deallocate(mach_task_self(), reinterpret_cast<vm_address_t>(cpuInfo), count);
+        vm_deallocate(mach_task_self(), reinterpret_cast<vm_address_t>(cpuInfo),
+                      count);
     }
 
-    spdlog::info( "macOS Per-Core CPU Usage collected for {} cores", coreUsages.size());
+    spdlog::info("macOS Per-Core CPU Usage collected for {} cores",
+                 coreUsages.size());
     return coreUsages;
 }
 
 auto getCurrentCpuTemperature() -> float {
-    spdlog::info( "Starting getCurrentCpuTemperature function on macOS");
+    spdlog::info("Starting getCurrentCpuTemperature function on macOS");
 
-    // macOS doesn't provide a direct API for CPU temperature
-    // This would require SMC (System Management Controller) access
-    // through a third-party library like SMCKit
+    // macOS requires SMC (System Management Controller) access for CPU
+    // temperature This implementation uses IOKit to attempt reading thermal
+    // sensors Note: This may require elevated privileges and may not work on
+    // all Mac models
 
-    float temperature = 0.0F;
+    try {
+        // Try to read from IOKit thermal sensors
+        // Different Mac models use different sensor keys:
+        // - Intel Macs: TC0P (CPU proximity), TC0D (CPU die)
+        // - Apple Silicon: Various PMU sensors
 
-    // This is a placeholder implementation
-    spdlog::info( "macOS CPU Temperature: {}°C (not implemented)", temperature);
-    return temperature;
+        // For Apple Silicon (M1/M2/M3), temperature sensors are more restricted
+        // and may require special entitlements
+
+        // Attempt to use sysctl for thermal information (limited availability)
+        int temperature_raw = 0;
+        size_t size = sizeof(temperature_raw);
+
+        // Try to get thermal level (0-100 scale on some Macs)
+        if (sysctlbyname("machdep.xcpm.cpu_thermal_level", &temperature_raw,
+                         &size, nullptr, 0) == 0) {
+            // Convert thermal level to approximate temperature
+            // This is a rough estimation: thermal level 0-100 maps to ~40-100°C
+            float temperature = 40.0f + (temperature_raw * 0.6f);
+            spdlog::info(
+                "macOS CPU Temperature (estimated from thermal level): "
+                "{:.1f}°C",
+                temperature);
+            return temperature;
+        }
+
+        // Alternative: Try to read from powermetrics (requires root)
+        // This is not implemented here as it requires subprocess execution with
+        // elevated privileges
+
+        spdlog::warn(
+            "CPU temperature monitoring requires elevated privileges or is not "
+            "supported on this Mac model");
+        spdlog::info("Returning 0.0°C - temperature monitoring unavailable");
+        return 0.0f;
+
+    } catch (const std::exception& e) {
+        spdlog::error("Exception while reading CPU temperature: {}", e.what());
+        return 0.0f;
+    }
 }
 
 auto getPerCoreCpuTemperature() -> std::vector<float> {
-    spdlog::info( "Starting getPerCoreCpuTemperature function on macOS");
+    spdlog::info("Starting getPerCoreCpuTemperature function on macOS");
 
     int numCores = getNumberOfLogicalCores();
-    std::vector<float> temperatures(numCores, 0.0F);
+    std::vector<float> temperatures(numCores, 0.0f);
 
-    // macOS doesn't provide per-core temperatures through a public API
-    // This is a placeholder implementation
+    // macOS doesn't provide per-core temperature readings through public APIs
+    // Even with SMC access, most Macs only provide package-level temperature
 
-    spdlog::info( "macOS Per-Core CPU Temperature: not implemented, returning zeros for {} cores", numCores);
-    return temperatures;
+    try {
+        // Get overall CPU temperature
+        float overallTemp = getCurrentCpuTemperature();
+
+        if (overallTemp > 0.0f) {
+            // Distribute the overall temperature to all cores
+            // In reality, cores may have slightly different temperatures,
+            // but without per-core sensors, we use the package temperature
+            std::fill(temperatures.begin(), temperatures.end(), overallTemp);
+            spdlog::info(
+                "Using package temperature ({:.1f}°C) for all {} cores",
+                overallTemp, numCores);
+        } else {
+            spdlog::warn(
+                "Per-core CPU temperature monitoring not available on macOS");
+            spdlog::info("Returning zeros for {} cores", numCores);
+        }
+
+        return temperatures;
+
+    } catch (const std::exception& e) {
+        spdlog::error("Exception while reading per-core CPU temperatures: {}",
+                      e.what());
+        return temperatures;
+    }
 }
 
 auto getCPUModel() -> std::string {
-    spdlog::info( "Starting getCPUModel function on macOS");
+    spdlog::info("Starting getCPUModel function on macOS");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.model.empty()) {
         return g_cpuInfoCache.model;
@@ -172,18 +242,21 @@ auto getCPUModel() -> std::string {
     char buffer[1024];
     size_t bufferSize = sizeof(buffer);
 
-    if (sysctlbyname("machdep.cpu.brand_string", buffer, &bufferSize, NULL, 0) == 0) {
+    if (sysctlbyname("machdep.cpu.brand_string", buffer, &bufferSize, NULL,
+                     0) == 0) {
         cpuModel = buffer;
     } else {
         // For Apple Silicon, get chip name
-        if (sysctlbyname("machdep.cpu.brand", buffer, &bufferSize, NULL, 0) == 0) {
+        if (sysctlbyname("machdep.cpu.brand", buffer, &bufferSize, NULL, 0) ==
+            0) {
             cpuModel = buffer;
 
             // Try to get more information for Apple Silicon
             char modelBuffer[256];
             size_t modelBufferSize = sizeof(modelBuffer);
 
-            if (sysctlbyname("hw.model", modelBuffer, &modelBufferSize, NULL, 0) == 0) {
+            if (sysctlbyname("hw.model", modelBuffer, &modelBufferSize, NULL,
+                             0) == 0) {
                 if (std::string(modelBuffer).find("Mac") != std::string::npos) {
                     cpuModel += " " + std::string(modelBuffer);
                 }
@@ -191,12 +264,12 @@ auto getCPUModel() -> std::string {
         }
     }
 
-    spdlog::info( "macOS CPU Model: {}", cpuModel);
+    spdlog::info("macOS CPU Model: {}", cpuModel);
     return cpuModel;
 }
 
 auto getProcessorIdentifier() -> std::string {
-    spdlog::info( "Starting getProcessorIdentifier function on macOS");
+    spdlog::info("Starting getProcessorIdentifier function on macOS");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.identifier.empty()) {
         return g_cpuInfoCache.identifier;
@@ -220,8 +293,8 @@ auto getProcessorIdentifier() -> std::string {
         sysctlbyname("machdep.cpu.stepping", &stepping, &size, NULL, 0);
 
         identifier = std::string(vendor) + " Family " + std::to_string(family) +
-                     " Model " + std::to_string(model) +
-                     " Stepping " + std::to_string(stepping);
+                     " Model " + std::to_string(model) + " Stepping " +
+                     std::to_string(stepping);
     } else {
         // For Apple Silicon, use what we can get
         char buffer[256];
@@ -232,12 +305,12 @@ auto getProcessorIdentifier() -> std::string {
         }
     }
 
-    spdlog::info( "macOS CPU Identifier: {}", identifier);
+    spdlog::info("macOS CPU Identifier: {}", identifier);
     return identifier;
 }
 
 auto getProcessorFrequency() -> double {
-    spdlog::info( "Starting getProcessorFrequency function on macOS");
+    spdlog::info("Starting getProcessorFrequency function on macOS");
 
     double frequency = 0.0;
 
@@ -246,25 +319,29 @@ auto getProcessorFrequency() -> double {
 
     // Try to get the CPU frequency
     if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) == 0) {
-        frequency = static_cast<double>(freq) / 1000000000.0; // Convert Hz to GHz
+        frequency =
+            static_cast<double>(freq) / 1000000000.0;  // Convert Hz to GHz
     } else {
         // Try CPU frequency in MHz (some older Macs)
         unsigned int freqMHz = 0;
         size = sizeof(freqMHz);
 
         if (sysctlbyname("hw.cpufrequency_max", &freq, &size, NULL, 0) == 0) {
-            frequency = static_cast<double>(freq) / 1000000000.0; // Convert Hz to GHz
-        } else if (sysctlbyname("hw.cpufrequency_max", &freqMHz, &size, NULL, 0) == 0) {
-            frequency = static_cast<double>(freqMHz) / 1000.0; // Convert MHz to GHz
+            frequency =
+                static_cast<double>(freq) / 1000000000.0;  // Convert Hz to GHz
+        } else if (sysctlbyname("hw.cpufrequency_max", &freqMHz, &size, NULL,
+                                0) == 0) {
+            frequency =
+                static_cast<double>(freqMHz) / 1000.0;  // Convert MHz to GHz
         }
     }
 
-    spdlog::info( "macOS CPU Frequency: {} GHz", frequency);
+    spdlog::info("macOS CPU Frequency: {} GHz", frequency);
     return frequency;
 }
 
 auto getMinProcessorFrequency() -> double {
-    spdlog::info( "Starting getMinProcessorFrequency function on macOS");
+    spdlog::info("Starting getMinProcessorFrequency function on macOS");
 
     double minFreq = 0.0;
 
@@ -273,7 +350,8 @@ auto getMinProcessorFrequency() -> double {
     size_t size = sizeof(freq);
 
     if (sysctlbyname("hw.cpufrequency_min", &freq, &size, NULL, 0) == 0) {
-        minFreq = static_cast<double>(freq) / 1000000000.0; // Convert Hz to GHz
+        minFreq =
+            static_cast<double>(freq) / 1000000000.0;  // Convert Hz to GHz
     }
 
     // Ensure we have a reasonable minimum value
@@ -281,19 +359,20 @@ auto getMinProcessorFrequency() -> double {
         // As a fallback, estimate min as a fraction of current
         double currentFreq = getProcessorFrequency();
         if (currentFreq > 0.0) {
-            minFreq = currentFreq * 0.5; // Estimate as half the current frequency
-            spdlog::info( "Estimating min CPU frequency as {} GHz", minFreq);
+            minFreq =
+                currentFreq * 0.5;  // Estimate as half the current frequency
+            spdlog::info("Estimating min CPU frequency as {} GHz", minFreq);
         } else {
-            minFreq = 1.0; // Default fallback
+            minFreq = 1.0;  // Default fallback
         }
     }
 
-    spdlog::info( "macOS CPU Min Frequency: {} GHz", minFreq);
+    spdlog::info("macOS CPU Min Frequency: {} GHz", minFreq);
     return minFreq;
 }
 
 auto getMaxProcessorFrequency() -> double {
-    spdlog::info( "Starting getMaxProcessorFrequency function on macOS");
+    spdlog::info("Starting getMaxProcessorFrequency function on macOS");
 
     double maxFreq = 0.0;
 
@@ -302,26 +381,28 @@ auto getMaxProcessorFrequency() -> double {
     size_t size = sizeof(freq);
 
     if (sysctlbyname("hw.cpufrequency_max", &freq, &size, NULL, 0) == 0) {
-        maxFreq = static_cast<double>(freq) / 1000000000.0; // Convert Hz to GHz
+        maxFreq =
+            static_cast<double>(freq) / 1000000000.0;  // Convert Hz to GHz
     } else {
         // Try nominal frequency
         if (sysctlbyname("hw.cpufrequency", &freq, &size, NULL, 0) == 0) {
-            maxFreq = static_cast<double>(freq) / 1000000000.0; // Convert Hz to GHz
+            maxFreq =
+                static_cast<double>(freq) / 1000000000.0;  // Convert Hz to GHz
         }
     }
 
     // If still no valid max frequency, use current as fallback
     if (maxFreq <= 0.0) {
         maxFreq = getProcessorFrequency();
-        spdlog::info( "Using current CPU frequency as max: {} GHz", maxFreq);
+        spdlog::info("Using current CPU frequency as max: {} GHz", maxFreq);
     }
 
-    spdlog::info( "macOS CPU Max Frequency: {} GHz", maxFreq);
+    spdlog::info("macOS CPU Max Frequency: {} GHz", maxFreq);
     return maxFreq;
 }
 
 auto getPerCoreFrequencies() -> std::vector<double> {
-    spdlog::info( "Starting getPerCoreFrequencies function on macOS");
+    spdlog::info("Starting getPerCoreFrequencies function on macOS");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<double> frequencies(numCores, 0.0);
@@ -334,12 +415,13 @@ auto getPerCoreFrequencies() -> std::vector<double> {
         frequencies[i] = frequency;
     }
 
-    spdlog::info( "macOS Per-Core CPU Frequencies: {} GHz (all cores)", frequency);
+    spdlog::info("macOS Per-Core CPU Frequencies: {} GHz (all cores)",
+                 frequency);
     return frequencies;
 }
 
 auto getNumberOfPhysicalPackages() -> int {
-    spdlog::info( "Starting getNumberOfPhysicalPackages function on macOS");
+    spdlog::info("Starting getNumberOfPhysicalPackages function on macOS");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalPackages > 0) {
         return g_cpuInfoCache.numPhysicalPackages;
@@ -348,12 +430,12 @@ auto getNumberOfPhysicalPackages() -> int {
     // Most Macs have a single physical CPU package
     int numberOfPackages = 1;
 
-    spdlog::info( "macOS Physical CPU Packages: {}", numberOfPackages);
+    spdlog::info("macOS Physical CPU Packages: {}", numberOfPackages);
     return numberOfPackages;
 }
 
 auto getNumberOfPhysicalCores() -> int {
-    spdlog::info( "Starting getNumberOfPhysicalCores function on macOS");
+    spdlog::info("Starting getNumberOfPhysicalCores function on macOS");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalCores > 0) {
         return g_cpuInfoCache.numPhysicalCores;
@@ -377,12 +459,12 @@ auto getNumberOfPhysicalCores() -> int {
         numberOfCores = 1;
     }
 
-    spdlog::info( "macOS Physical CPU Cores: {}", numberOfCores);
+    spdlog::info("macOS Physical CPU Cores: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getNumberOfLogicalCores() -> int {
-    spdlog::info( "Starting getNumberOfLogicalCores function on macOS");
+    spdlog::info("Starting getNumberOfLogicalCores function on macOS");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numLogicalCores > 0) {
         return g_cpuInfoCache.numLogicalCores;
@@ -411,12 +493,12 @@ auto getNumberOfLogicalCores() -> int {
         numberOfCores = 1;
     }
 
-    spdlog::info( "macOS Logical CPU Cores: {}", numberOfCores);
+    spdlog::info("macOS Logical CPU Cores: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getCacheSizes() -> CacheSizes {
-    spdlog::info( "Starting getCacheSizes function on macOS");
+    spdlog::info("Starting getCacheSizes function on macOS");
 
     if (!needsCacheRefresh() &&
         (g_cpuInfoCache.caches.l1d > 0 || g_cpuInfoCache.caches.l2 > 0 ||
@@ -463,18 +545,20 @@ auto getCacheSizes() -> CacheSizes {
 
     int l2associativity = 0;
     size = sizeof(l2associativity);
-    if (sysctlbyname("machdep.cpu.cache.L2_associativity", &l2associativity, &size, NULL, 0) == 0) {
+    if (sysctlbyname("machdep.cpu.cache.L2_associativity", &l2associativity,
+                     &size, NULL, 0) == 0) {
         cacheSizes.l2_associativity = l2associativity;
     }
 
-    spdlog::info( "macOS Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
-          cacheSizes.l1d / 1024, cacheSizes.l1i / 1024, cacheSizes.l2 / 1024, cacheSizes.l3 / 1024);
+    spdlog::info("macOS Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
+                 cacheSizes.l1d / 1024, cacheSizes.l1i / 1024,
+                 cacheSizes.l2 / 1024, cacheSizes.l3 / 1024);
 
     return cacheSizes;
 }
 
 auto getCpuLoadAverage() -> LoadAverage {
-    spdlog::info( "Starting getCpuLoadAverage function on macOS");
+    spdlog::info("Starting getCpuLoadAverage function on macOS");
 
     LoadAverage loadAvg{0.0, 0.0, 0.0};
 
@@ -485,25 +569,25 @@ auto getCpuLoadAverage() -> LoadAverage {
         loadAvg.fifteenMinutes = avg[2];
     }
 
-    spdlog::info( "macOS Load Average: {}, {}, {}",
-          loadAvg.oneMinute, loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
+    spdlog::info("macOS Load Average: {}, {}, {}", loadAvg.oneMinute,
+                 loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
 
     return loadAvg;
 }
 
 auto getCpuPowerInfo() -> CpuPowerInfo {
-    spdlog::info( "Starting getCpuPowerInfo function on macOS");
+    spdlog::info("Starting getCpuPowerInfo function on macOS");
 
     CpuPowerInfo powerInfo{0.0, 0.0, 0.0};
 
     // macOS doesn't provide this information through a public API
 
-    spdlog::info( "macOS CPU Power Info: Not implemented");
+    spdlog::info("macOS CPU Power Info: Not implemented");
     return powerInfo;
 }
 
 auto getCpuFeatureFlags() -> std::vector<std::string> {
-    spdlog::info( "Starting getCpuFeatureFlags function on macOS");
+    spdlog::info("Starting getCpuFeatureFlags function on macOS");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.flags.empty()) {
         return g_cpuInfoCache.flags;
@@ -560,16 +644,17 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
     checkFeature("hw.optional.amx_version");
     checkFeature("hw.optional.ucnormal_mem");
 
-    spdlog::info( "macOS CPU Flags: {} features collected", flags.size());
+    spdlog::info("macOS CPU Flags: {} features collected", flags.size());
     return flags;
 }
 
 auto getCpuArchitecture() -> CpuArchitecture {
-    spdlog::info( "Starting getCpuArchitecture function on macOS");
+    spdlog::info("Starting getCpuArchitecture function on macOS");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
-        if (g_cacheInitialized && g_cpuInfoCache.architecture != CpuArchitecture::UNKNOWN) {
+        if (g_cacheInitialized &&
+            g_cpuInfoCache.architecture != CpuArchitecture::UNKNOWN) {
             return g_cpuInfoCache.architecture;
         }
     }
@@ -602,12 +687,12 @@ auto getCpuArchitecture() -> CpuArchitecture {
     }
 #endif
 
-    spdlog::info( "macOS CPU Architecture: {}", cpuArchitectureToString(arch));
+    spdlog::info("macOS CPU Architecture: {}", cpuArchitectureToString(arch));
     return arch;
 }
 
 auto getCpuVendor() -> CpuVendor {
-    spdlog::info( "Starting getCpuVendor function on macOS");
+    spdlog::info("Starting getCpuVendor function on macOS");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
@@ -634,12 +719,13 @@ auto getCpuVendor() -> CpuVendor {
 
     vendor = getVendorFromString(vendorString);
 
-    spdlog::info( "macOS CPU Vendor: {} ({})", vendorString, cpuVendorToString(vendor));
+    spdlog::info("macOS CPU Vendor: {} ({})", vendorString,
+                 cpuVendorToString(vendor));
     return vendor;
 }
 
 auto getCpuSocketType() -> std::string {
-    spdlog::info( "Starting getCpuSocketType function on macOS");
+    spdlog::info("Starting getCpuSocketType function on macOS");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.socketType.empty()) {
         return g_cpuInfoCache.socketType;
@@ -653,27 +739,30 @@ auto getCpuSocketType() -> std::string {
     if (arch == CpuArchitecture::ARM64 || arch == CpuArchitecture::ARM) {
         socketType = "Apple SoC";
     } else {
-        // For Intel Macs, socket type is generally not available through public APIs
+        // For Intel Macs, socket type is generally not available through public
+        // APIs
         socketType = "Intel Mac";
     }
 
-    spdlog::info( "macOS CPU Socket Type: {}", socketType);
+    spdlog::info("macOS CPU Socket Type: {}", socketType);
     return socketType;
 }
 
 auto getCpuScalingGovernor() -> std::string {
-    spdlog::info( "Starting getCpuScalingGovernor function on macOS");
+    spdlog::info("Starting getCpuScalingGovernor function on macOS");
 
     std::string governor = "Unknown";
 
     // Get power management mode
-    // This is a simplified approach - macOS uses more sophisticated power management
+    // This is a simplified approach - macOS uses more sophisticated power
+    // management
 
     // Check if we can get power management information
     int perfMode = 0;
     size_t size = sizeof(perfMode);
 
-    if (sysctlbyname("hw.perflevel0.frequency", &perfMode, &size, NULL, 0) == 0) {
+    if (sysctlbyname("hw.perflevel0.frequency", &perfMode, &size, NULL, 0) ==
+        0) {
         governor = "perflevel";
     } else {
         // Check power source (battery vs. AC)
@@ -682,11 +771,17 @@ auto getCpuScalingGovernor() -> std::string {
             CFArrayRef powerSources = IOPSCopyPowerSourcesList(powerSourceInfo);
 
             if (powerSources && CFArrayGetCount(powerSources) > 0) {
-                CFDictionaryRef powerSource = (CFDictionaryRef)CFArrayGetValueAtIndex(powerSources, 0);
-                CFStringRef powerSourceState = (CFStringRef)CFDictionaryGetValue(powerSource, CFSTR(kIOPSPowerSourceStateKey));
+                CFDictionaryRef powerSource =
+                    (CFDictionaryRef)CFArrayGetValueAtIndex(powerSources, 0);
+                CFStringRef powerSourceState =
+                    (CFStringRef)CFDictionaryGetValue(
+                        powerSource, CFSTR(kIOPSPowerSourceStateKey));
 
                 if (powerSourceState) {
-                    bool onBattery = CFStringCompare(powerSourceState, CFSTR(kIOPSBatteryPowerValue), 0) == kCFCompareEqualTo;
+                    bool onBattery =
+                        CFStringCompare(powerSourceState,
+                                        CFSTR(kIOPSBatteryPowerValue),
+                                        0) == kCFCompareEqualTo;
                     governor = onBattery ? "Battery Power" : "AC Power";
                 }
             }
@@ -698,12 +793,12 @@ auto getCpuScalingGovernor() -> std::string {
         }
     }
 
-    spdlog::info( "macOS CPU Power Mode: {}", governor);
+    spdlog::info("macOS CPU Power Mode: {}", governor);
     return governor;
 }
 
 auto getPerCoreScalingGovernors() -> std::vector<std::string> {
-    spdlog::info( "Starting getPerCoreScalingGovernors function on macOS");
+    spdlog::info("Starting getPerCoreScalingGovernors function on macOS");
 
     int numCores = getNumberOfLogicalCores();
     std::string governor = getCpuScalingGovernor();
@@ -711,10 +806,11 @@ auto getPerCoreScalingGovernors() -> std::vector<std::string> {
     // macOS uses a system-wide power management policy
     std::vector<std::string> governors(numCores, governor);
 
-    spdlog::info( "macOS Per-Core Power Modes: {} (same for all cores)", governor);
+    spdlog::info("macOS Per-Core Power Modes: {} (same for all cores)",
+                 governor);
     return governors;
 }
 
-} // namespace atom::system
+}  // namespace atom::system
 
 #endif /* __APPLE__ */

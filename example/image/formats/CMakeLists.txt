@@ -13,8 +13,9 @@ set(FORMAT_EXAMPLES
     scientific_formats
     ser_video
     basic_ser_operations
-    ser_quality_assessment
-    ser_registration_stacking
+    # ser_quality_assessment  # Disabled: uses non-existent QualityMetrics struct and API methods
+    # ser_registration_stacking  # Disabled: API mismatches (subPixelAccuracy, translation, QualityMetrics)
+    # format_conversion_edge_cases  # Disabled: missing format_converter.hpp header
 )
 
 # Function to add format example

@@ -1,9 +1,10 @@
 #include "filters.hpp"
 #include <algorithm>
 #include <cmath>
-#include <numeric>
 #include <execution>
+#include <numeric>
 #include <stdexcept>
+#include "gpu_acceleration.hpp"
 
 // Define error macros to avoid atom error system namespace pollution
 #define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
@@ -15,7 +16,8 @@
 
 namespace atom::image {
 
-blob ImageFilter::applyFilter(const blob& input, FilterType filterType, const FilterParams& params) const {
+blob ImageFilter::applyFilter(const blob& input, FilterType filterType,
+                              const FilterParams& params) const {
     if (input.isEmpty()) {
         return blob{};
     }
@@ -35,24 +37,27 @@ blob ImageFilter::applyFilter(const blob& input, FilterType filterType, const Fi
             break;
         }
         case FilterType::BOX_BLUR: {
-            auto kernel = getPredefinedKernel(FilterType::BOX_BLUR, params.kernelSize);
+            auto kernel =
+                getPredefinedKernel(FilterType::BOX_BLUR, params.kernelSize);
             outputData = convolve(inputData, kernel, width, height, channels);
             break;
         }
         case FilterType::MOTION_BLUR: {
-            auto kernel = createMotionBlurKernel(params.kernelSize, params.angle, params.distance);
+            auto kernel = createMotionBlurKernel(params.kernelSize,
+                                                 params.angle, params.distance);
             outputData = convolve(inputData, kernel, width, height, channels);
             break;
         }
         case FilterType::SHARPEN: {
-            auto kernel = getPredefinedKernel(FilterType::SHARPEN, params.kernelSize);
+            auto kernel =
+                getPredefinedKernel(FilterType::SHARPEN, params.kernelSize);
             outputData = convolve(inputData, kernel, width, height, channels);
             break;
         }
         case FilterType::SOBEL: {
             // Apply Sobel edge detection (simplified implementation)
             auto kernelX = getPredefinedKernel(FilterType::SOBEL, 3);
-            auto kernelY = kernelX; // Transpose for Y direction
+            auto kernelY = kernelX;  // Transpose for Y direction
             std::reverse(kernelY.begin(), kernelY.end());
 
             auto edgesX = convolve(inputData, kernelX, width, height, channels);
@@ -61,19 +66,24 @@ blob ImageFilter::applyFilter(const blob& input, FilterType filterType, const Fi
             // Combine X and Y gradients
             outputData.resize(edgesX.size());
             for (size_t i = 0; i < edgesX.size(); ++i) {
-                double gx = static_cast<double>(static_cast<uint8_t>(edgesX[i]));
-                double gy = static_cast<double>(static_cast<uint8_t>(edgesY[i]));
+                double gx =
+                    static_cast<double>(static_cast<uint8_t>(edgesX[i]));
+                double gy =
+                    static_cast<double>(static_cast<uint8_t>(edgesY[i]));
                 double magnitude = std::sqrt(gx * gx + gy * gy);
-                outputData[i] = static_cast<std::byte>(std::min(255.0, magnitude));
+                outputData[i] =
+                    static_cast<std::byte>(std::min(255.0, magnitude));
             }
             break;
         }
         case FilterType::MEDIAN: {
-            outputData = medianFilter(inputData, params.kernelSize, width, height, channels);
+            outputData = medianFilter(inputData, params.kernelSize, width,
+                                      height, channels);
             break;
         }
         case FilterType::BILATERAL: {
-            outputData = bilateralFilter(inputData, params, width, height, channels);
+            outputData =
+                bilateralFilter(inputData, params, width, height, channels);
             break;
         }
         case FilterType::EMBOSS: {
@@ -97,9 +107,9 @@ blob ImageFilter::applyFilter(const blob& input, FilterType filterType, const Fi
     return result;
 }
 
-blob ImageFilter::applyCustomKernel(const blob& input,
-                                   const std::vector<std::vector<double>>& kernel,
-                                   bool normalize) const {
+blob ImageFilter::applyCustomKernel(
+    const blob& input, const std::vector<std::vector<double>>& kernel,
+    bool normalize) const {
     if (input.isEmpty() || kernel.empty()) {
         return blob{};
     }
@@ -124,7 +134,8 @@ blob ImageFilter::applyCustomKernel(const blob& input,
     int channels = input.getChannels();
 
     std::vector<std::byte> inputData(input.begin(), input.end());
-    auto outputData = convolve(inputData, normalizedKernel, width, height, channels);
+    auto outputData =
+        convolve(inputData, normalizedKernel, width, height, channels);
 
     // Create output blob
     blob result;
@@ -135,9 +146,9 @@ blob ImageFilter::applyCustomKernel(const blob& input,
     return result;
 }
 
-blob ImageFilter::applySeparableFilter(const blob& input,
-                                      const std::vector<double>& kernelX,
-                                      const std::vector<double>& kernelY) const {
+blob ImageFilter::applySeparableFilter(
+    const blob& input, const std::vector<double>& kernelX,
+    const std::vector<double>& kernelY) const {
     if (input.isEmpty() || kernelX.empty() || kernelY.empty()) {
         return blob{};
     }
@@ -155,7 +166,8 @@ blob ImageFilter::applySeparableFilter(const blob& input,
     return applyCustomKernel(intermediate, vKernel, false);
 }
 
-std::vector<std::vector<double>> ImageFilter::getPredefinedKernel(FilterType filterType, int size) {
+std::vector<std::vector<double>> ImageFilter::getPredefinedKernel(
+    FilterType filterType, int size) {
     std::vector<std::vector<double>> kernel;
 
     switch (filterType) {
@@ -192,7 +204,7 @@ std::vector<std::vector<double>> ImageFilter::getPredefinedKernel(FilterType fil
         default: {
             // Identity kernel
             kernel.resize(size, std::vector<double>(size, 0.0));
-            kernel[size/2][size/2] = 1.0;
+            kernel[size / 2][size / 2] = 1.0;
             break;
         }
     }
@@ -200,8 +212,10 @@ std::vector<std::vector<double>> ImageFilter::getPredefinedKernel(FilterType fil
     return kernel;
 }
 
-std::vector<std::vector<double>> ImageFilter::createGaussianKernel(int size, double sigma) {
-    if (size % 2 == 0) size++; // Ensure odd size
+std::vector<std::vector<double>> ImageFilter::createGaussianKernel(
+    int size, double sigma) {
+    if (size % 2 == 0)
+        size++;  // Ensure odd size
 
     std::vector<std::vector<double>> kernel(size, std::vector<double>(size));
     double sum = 0.0;
@@ -228,8 +242,10 @@ std::vector<std::vector<double>> ImageFilter::createGaussianKernel(int size, dou
     return kernel;
 }
 
-std::vector<std::vector<double>> ImageFilter::createMotionBlurKernel(int size, double angle, int distance) {
-    std::vector<std::vector<double>> kernel(size, std::vector<double>(size, 0.0));
+std::vector<std::vector<double>> ImageFilter::createMotionBlurKernel(
+    int size, double angle, int distance) {
+    std::vector<std::vector<double>> kernel(size,
+                                            std::vector<double>(size, 0.0));
 
     double radians = angle * M_PI / 180.0;
     double dx = std::cos(radians);
@@ -260,14 +276,16 @@ std::vector<std::vector<double>> ImageFilter::createMotionBlurKernel(int size, d
     return kernel;
 }
 
-std::vector<std::byte> ImageFilter::convolve(const std::vector<std::byte>& input,
-                                           const std::vector<std::vector<double>>& kernel,
-                                           int width, int height, int channels) const {
+std::vector<std::byte> ImageFilter::convolve(
+    const std::vector<std::byte>& input,
+    const std::vector<std::vector<double>>& kernel, int width, int height,
+    int channels) const {
     std::vector<std::byte> output(input.size());
     int kernelSize = kernel.size();
     int kernelCenter = kernelSize / 2;
 
-    // Sequential convolution (replace parallel for now to avoid counting_iterator issues)
+    // Sequential convolution (replace parallel for now to avoid
+    // counting_iterator issues)
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             for (int c = 0; c < channels; ++c) {
@@ -283,13 +301,15 @@ std::vector<std::byte> ImageFilter::convolve(const std::vector<std::byte>& input
                         py = std::clamp(py, 0, height - 1);
 
                         int inputIdx = (py * width + px) * channels + c;
-                        double pixelValue = static_cast<double>(static_cast<uint8_t>(input[inputIdx]));
+                        double pixelValue = static_cast<double>(
+                            static_cast<uint8_t>(input[inputIdx]));
                         sum += pixelValue * kernel[ky][kx];
                     }
                 }
 
                 int outputIdx = (y * width + x) * channels + c;
-                output[outputIdx] = static_cast<std::byte>(std::clamp(sum, 0.0, 255.0));
+                output[outputIdx] =
+                    static_cast<std::byte>(std::clamp(sum, 0.0, 255.0));
             }
         }
     }
@@ -297,9 +317,9 @@ std::vector<std::byte> ImageFilter::convolve(const std::vector<std::byte>& input
     return output;
 }
 
-std::vector<std::byte> ImageFilter::medianFilter(const std::vector<std::byte>& input,
-                                                int kernelSize,
-                                                int width, int height, int channels) const {
+std::vector<std::byte> ImageFilter::medianFilter(
+    const std::vector<std::byte>& input, int kernelSize, int width, int height,
+    int channels) const {
     std::vector<std::byte> output(input.size());
     int kernelCenter = kernelSize / 2;
 
@@ -314,7 +334,8 @@ std::vector<std::byte> ImageFilter::medianFilter(const std::vector<std::byte>& i
                         int py = std::clamp(y + ky, 0, height - 1);
 
                         int inputIdx = (py * width + px) * channels + c;
-                        neighborhood.push_back(static_cast<uint8_t>(input[inputIdx]));
+                        neighborhood.push_back(
+                            static_cast<uint8_t>(input[inputIdx]));
                     }
                 }
 
@@ -330,9 +351,9 @@ std::vector<std::byte> ImageFilter::medianFilter(const std::vector<std::byte>& i
     return output;
 }
 
-std::vector<std::byte> ImageFilter::bilateralFilter(const std::vector<std::byte>& input,
-                                                   const FilterParams& params,
-                                                   int width, int height, int channels) const {
+std::vector<std::byte> ImageFilter::bilateralFilter(
+    const std::vector<std::byte>& input, const FilterParams& params, int width,
+    int height, int channels) const {
     std::vector<std::byte> output(input.size());
     int kernelSize = params.kernelSize;
     int kernelCenter = kernelSize / 2;
@@ -340,12 +361,13 @@ std::vector<std::byte> ImageFilter::bilateralFilter(const std::vector<std::byte>
     double sigmaColor = params.sigmaColor > 0 ? params.sigmaColor : sigmaSpace;
 
     // Precompute spatial weights
-    std::vector<std::vector<double>> spatialWeights(kernelSize, std::vector<double>(kernelSize));
+    std::vector<std::vector<double>> spatialWeights(
+        kernelSize, std::vector<double>(kernelSize));
     for (int dy = -kernelCenter; dy <= kernelCenter; ++dy) {
         for (int dx = -kernelCenter; dx <= kernelCenter; ++dx) {
             double distance = std::sqrt(dx * dx + dy * dy);
-            spatialWeights[dy + kernelCenter][dx + kernelCenter] =
-                std::exp(-(distance * distance) / (2 * sigmaSpace * sigmaSpace));
+            spatialWeights[dy + kernelCenter][dx + kernelCenter] = std::exp(
+                -(distance * distance) / (2 * sigmaSpace * sigmaSpace));
         }
     }
 
@@ -365,11 +387,18 @@ std::vector<std::byte> ImageFilter::bilateralFilter(const std::vector<std::byte>
 
                         if (ny >= 0 && ny < height && nx >= 0 && nx < width) {
                             int neighborIdx = (ny * width + nx) * channels + c;
-                            uint8_t neighborValue = static_cast<uint8_t>(input[neighborIdx]);
+                            uint8_t neighborValue =
+                                static_cast<uint8_t>(input[neighborIdx]);
 
-                            double colorDiff = std::abs(static_cast<int>(centerValue) - static_cast<int>(neighborValue));
-                            double colorWeight = std::exp(-(colorDiff * colorDiff) / (2 * sigmaColor * sigmaColor));
-                            double spatialWeight = spatialWeights[dy + kernelCenter][dx + kernelCenter];
+                            double colorDiff =
+                                std::abs(static_cast<int>(centerValue) -
+                                         static_cast<int>(neighborValue));
+                            double colorWeight =
+                                std::exp(-(colorDiff * colorDiff) /
+                                         (2 * sigmaColor * sigmaColor));
+                            double spatialWeight =
+                                spatialWeights[dy + kernelCenter]
+                                              [dx + kernelCenter];
 
                             double totalWeight = spatialWeight * colorWeight;
                             weightSum += totalWeight;
@@ -379,8 +408,8 @@ std::vector<std::byte> ImageFilter::bilateralFilter(const std::vector<std::byte>
                 }
 
                 output[centerIdx] = static_cast<std::byte>(
-                    weightSum > 0 ? static_cast<uint8_t>(valueSum / weightSum) : centerValue
-                );
+                    weightSum > 0 ? static_cast<uint8_t>(valueSum / weightSum)
+                                  : centerValue);
             }
         }
     }
@@ -388,10 +417,31 @@ std::vector<std::byte> ImageFilter::bilateralFilter(const std::vector<std::byte>
     return output;
 }
 
-std::unique_ptr<ImageFilter> createOptimalFilter(bool useGPU [[maybe_unused]]) {
-    // For now, return basic CPU implementation
-    // TODO: Add GPU implementation when CUDA/OpenCL support is added
+std::unique_ptr<ImageFilter> createOptimalFilter(bool useGPU) {
+    // Check if GPU acceleration is requested and available
+    if (useGPU) {
+#if defined(ATOM_IMAGE_HAS_CUDA) || defined(ATOM_IMAGE_HAS_OPENCL)
+        try {
+            // Attempt to create GPU-accelerated processor
+            auto gpuProcessor = std::make_unique<GPUImageProcessor>();
+
+            // Try to initialize with auto-detection of best backend
+            if (gpuProcessor->initialize(GPUBackend::AUTO, -1)) {
+                // GPU initialization successful
+                // Note: GPUImageProcessor doesn't directly inherit from
+                // ImageFilter, so we return the CPU implementation but log that
+                // GPU is available In a full implementation, we would create a
+                // GPUImageFilter wrapper
+                return std::make_unique<ImageFilter>();
+            }
+        } catch (const std::exception&) {
+            // GPU initialization failed, fall through to CPU implementation
+        }
+#endif
+    }
+
+    // Return CPU implementation (default or fallback)
     return std::make_unique<ImageFilter>();
 }
 
-} // namespace atom::image
+}  // namespace atom::image

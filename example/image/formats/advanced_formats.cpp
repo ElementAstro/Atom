@@ -38,6 +38,9 @@ struct FormatInfo {
     bool supports_metadata;
     vector<string> color_spaces;
 
+    // Default constructor
+    FormatInfo() = default;
+
     FormatInfo(const string& n, const string& ext, bool comp, bool trans, bool anim, bool meta)
         : name(n), extension(ext), supports_compression(comp), supports_transparency(trans),
           supports_animation(anim), supports_metadata(meta) {}

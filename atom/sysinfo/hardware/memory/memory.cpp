@@ -12,7 +12,7 @@ Description: System Information Module - Memory Implementation
 
 **************************************************/
 
-#include "memory.hpp"
+#include "../../hardware/memory.hpp"
 #include <spdlog/spdlog.h>
 #include "common.hpp"
 

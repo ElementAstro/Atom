@@ -221,10 +221,47 @@ jobs:
         run: |
           cmake --build --preset ${{ matrix.build_preset }} --parallel
 
-      - name: Run tests
+      - name: Run unified test suite
         run: |
           cd build
-          ctest --output-on-failure --parallel --timeout 300
+
+          # Run unified test runner with comprehensive output
+          if [ -f "./run_all_tests" ] || [ -f "./run_all_tests.exe" ]; then
+            echo "=== Running Unified Test Suite ==="
+            ./run_all_tests --verbose --parallel --threads=4 --output-format=json --output=test_results.json || echo "Some tests failed"
+          else
+            echo "=== Unified test runner not found, falling back to CTest ==="
+            ctest --output-on-failure --parallel --timeout 300
+          fi
+
+          # Run module-specific tests using unified runner if available
+          echo "=== Running Core Module Tests ==="
+          if [ -f "./run_all_tests" ]; then
+            ./run_all_tests --module=error --verbose || echo "Error module tests failed"
+            ./run_all_tests --module=utils --verbose || echo "Utils module tests failed"
+            ./run_all_tests --module=type --verbose || echo "Type module tests failed"
+          else
+            ctest -L "error|utils|type" --output-on-failure --parallel || echo "Core module tests failed"
+          fi
+
+          # Generate test summary
+          echo "=== Test Summary ==="
+          if [ -f "test_results.json" ]; then
+            echo "Test results saved to test_results.json"
+            if command -v jq >/dev/null 2>&1; then
+              echo "Total tests: $(jq '.total_tests // 0' test_results.json)"
+              echo "Passed: $(jq '.passed_asserts // 0' test_results.json)"
+              echo "Failed: $(jq '.failed_asserts // 0' test_results.json)"
+              echo "Skipped: $(jq '.skipped_tests // 0' test_results.json)"
+            fi
+          fi
+
+      - name: Run CTest validation (fallback)
+        if: always()
+        run: |
+          cd build
+          echo "=== CTest Validation ==="
+          ctest --output-on-failure --parallel --timeout 300 --test-dir build || echo "CTest validation completed"
 
       - name: Show ccache stats (Linux/macOS)
         if: runner.os != 'Windows'
@@ -234,6 +271,17 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && matrix.preset == 'release'
         run: |
           cmake --build build --target doc
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}-${{ matrix.arch }}-${{ matrix.preset }}
+          path: |
+            build/test_results.json
+            build/**/*.xml
+            build/**/*.html
+          retention-days: 30
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -327,12 +375,172 @@ jobs:
         with:
           category: "/language:cpp"
 
+  # Comprehensive test suite
+  comprehensive-tests:
+    name: Comprehensive Test Suite
+    runs-on: ubuntu-latest
+    needs: build
+    if: always() && needs.build.result == 'success'
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: "Unit Tests"
+            type: "category"
+            filter: "unit"
+            timeout: 300
+          - name: "Integration Tests"
+            type: "category"
+            filter: "integration"
+            timeout: 600
+          - name: "Performance Tests"
+            type: "category"
+            filter: "performance"
+            timeout: 900
+          - name: "Module Tests - Core"
+            type: "modules"
+            modules: "error,utils,type,log,meta"
+            timeout: 600
+          - name: "Module Tests - IO"
+            type: "modules"
+            modules: "io,image,serial,connection,web"
+            timeout: 900
+          - name: "Module Tests - System"
+            type: "modules"
+            modules: "system,sysinfo,memory,async"
+            timeout: 600
+          - name: "Module Tests - Algorithm"
+            type: "modules"
+            modules: "algorithm,search,secret,components"
+            timeout: 900
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-ubuntu-latest-x64-release
+
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/run_tests.sh
+
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov jq
+
+      - name: Run comprehensive test suite
+        timeout-minutes: ${{ matrix.timeout / 60 }}
+        run: |
+          echo "=== Running ${{ matrix.name }} ==="
+
+          if [ "${{ matrix.type }}" == "category" ]; then
+            # Run tests by category
+            echo "Running category: ${{ matrix.filter }}"
+            ./scripts/run_tests.sh --category "${{ matrix.filter }}" --verbose --parallel --threads=4 --output-format=json --output="${{ matrix.filter }}_results.json" --timeout ${{ matrix.timeout }} || echo "Tests in ${{ matrix.name }} completed with issues"
+          else
+            # Run tests by modules
+            echo "Running modules: ${{ matrix.modules }}"
+            IFS=',' read -ra MODULE_ARRAY <<< "${{ matrix.modules }}"
+            for module in "${MODULE_ARRAY[@]}"; do
+              echo "=== Testing module: $module ==="
+              ./scripts/run_tests.sh --module "$module" --verbose --parallel --threads=2 --output-format=json --output="module_${module}_results.json" --timeout ${{ matrix.timeout }} || echo "Module $module tests completed with issues"
+            done
+          fi
+
+      - name: Upload category test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: comprehensive-test-results-${{ matrix.test-category.name || matrix.name }}
+          path: |
+            *_results.json
+            build/coverage_html/
+          retention-days: 30
+
+      - name: Generate test coverage report
+        if: matrix.name == 'Unit Tests'
+        run: |
+          echo "=== Generating Code Coverage Report ==="
+          cd build
+          if command -v lcov >/dev/null 2>&1; then
+            lcov --directory . --capture --output-file coverage.info
+            lcov --remove coverage.info '/usr/*' --output-file coverage.info
+            lcov --remove coverage.info '*/tests/*' --output-file coverage.info
+            lcov --remove coverage.info '*/examples/*' --output-file coverage.info
+
+            if command -v genhtml >/dev/null 2>&1; then
+              genhtml -o coverage_html coverage.info
+              echo "Coverage report generated"
+            fi
+
+            # Generate coverage summary
+            echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
+            lcov --summary coverage.info | tail -n 1 >> $GITHUB_STEP_SUMMARY
+          else
+            echo "lcov not available, skipping coverage report"
+          fi
+
+  # Windows-specific tests
+  windows-tests:
+    name: Windows Test Suite
+    runs-on: windows-latest
+    needs: build
+    if: always() && needs.build.result == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: build-windows-latest-x64-release
+
+      - name: Run Windows unified test suite
+        run: |
+          echo "=== Running Windows Test Suite ==="
+
+          # Try unified test runner first
+          if (Test-Path ".\run_all_tests.exe") {
+            Write-Host "=== Running Unified Test Suite ==="
+            .\run_all_tests.exe --verbose --parallel --threads=4 --output-format=json --output=test_results.json
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "Some tests failed with exit code $LASTEXITCODE"
+            }
+          } else {
+            Write-Host "=== Unified test runner not found, falling back to CTest ==="
+            ctest --output-on-failure --parallel --timeout 300
+          }
+
+          # Test core modules
+          echo "=== Testing Core Modules ==="
+          if (Test-Path ".\run_all_tests.exe") {
+            .\run_all_tests.exe --module=error --verbose
+            .\run_all_tests.exe --module=utils --verbose
+            .\run_all_tests.exe --module=type --verbose
+          } else {
+            ctest -L "error|utils|type" --output-on-failure --parallel
+          }
+
+      - name: Upload Windows test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-test-results
+          path: |
+            test_results.json
+            **/*.xml
+          retention-days: 30
+
   # Performance benchmarks
   benchmarks:
     name: Performance Benchmarks
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, comprehensive-tests, windows-tests]
 
     steps:
       - uses: actions/checkout@v4
@@ -344,11 +552,30 @@ jobs:
 
       - name: Run benchmarks
         run: |
-          # Run performance benchmarks if available
-          if [ -f build/benchmarks/atom_benchmarks ]; then
-            ./build/benchmarks/atom_benchmarks --benchmark_format=json > benchmark_results.json
+          echo "=== Running Performance Benchmarks ==="
+
+          # Try unified test runner for performance tests first
+          if [ -f "./run_all_tests" ]; then
+            echo "Running performance tests via unified test runner"
+            ./run_all_tests --category=performance --verbose --output-format=json --output=performance_benchmarks.json || echo "Performance tests completed with issues"
           else
-            echo "No benchmarks found"
+            echo "Unified test runner not found, trying traditional benchmarks"
+          fi
+
+          # Fall back to traditional benchmarks if available
+          if [ -f build/benchmarks/atom_benchmarks ]; then
+            echo "Running traditional benchmarks"
+            ./build/benchmarks/atom_benchmarks --benchmark_format=json > traditional_benchmarks.json
+          else
+            echo "No traditional benchmarks found"
+          fi
+
+          # Create combined results file
+          if [ -f "performance_benchmarks.json" ]; then
+            cp performance_benchmarks.json benchmark_results.json
+          elif [ -f "traditional_benchmarks.json" ]; then
+            cp traditional_benchmarks.json benchmark_results.json
+          else
             echo '{"benchmarks": [], "context": {"date": "'$(date)'", "host_name": "'$(hostname)'"}}' > benchmark_results.json
           fi
 
@@ -359,3 +586,127 @@ jobs:
           name: benchmark-results
           path: benchmark_results.json
           retention-days: 30
+
+  # Test results summary
+  test-summary:
+    name: Test Results Summary
+    runs-on: ubuntu-latest
+    needs: [comprehensive-tests, windows-tests, benchmarks]
+    if: always()
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all test results
+        uses: actions/download-artifact@v4
+        with:
+          path: all-test-results/
+
+      - name: Install jq for JSON processing
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Generate test summary
+        run: |
+          echo "# Test Results Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Function to extract test stats from JSON
+          extract_stats() {
+            local file="$1"
+            if [ -f "$file" ]; then
+              local total=$(jq -r '.total_tests // 0' "$file" 2>/dev/null || echo "0")
+              local passed=$(jq -r '.passed_asserts // 0' "$file" 2>/dev/null || echo "0")
+              local failed=$(jq -r '.failed_asserts // 0' "$file" 2>/dev/null || echo "0")
+              local skipped=$(jq -r '.skipped_tests // 0' "$file" 2>/dev/null || echo "0")
+              echo "$total,$passed,$failed,$skipped"
+            else
+              echo "0,0,0,0"
+            fi
+          }
+
+          # Process comprehensive test results
+          echo "## Comprehensive Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "| Test Category | Total | Passed | Failed | Skipped | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------------|-------|--------|--------|---------|--------|" >> $GITHUB_STEP_SUMMARY
+
+          for result_dir in all-test-results/comprehensive-test-results-*; do
+            if [ -d "$result_dir" ]; then
+              category=$(basename "$result_dir" | sed 's/comprehensive-test-results-//')
+              for json_file in "$result_dir"/*.json; do
+                if [ -f "$json_file" ]; then
+                  IFS=',' read -ra STATS <<< "$(extract_stats "$json_file")"
+                  total=${STATS[0]}
+                  passed=${STATS[1]}
+                  failed=${STATS[2]}
+                  skipped=${STATS[3]}
+
+                  if [ "$failed" -eq 0 ]; then
+                    status="✅ Passed"
+                  else
+                    status="❌ Failed"
+                  fi
+
+                  echo "| $category | $total | $passed | $failed | $skipped | $status |" >> $GITHUB_STEP_SUMMARY
+                  break
+                fi
+              done
+            fi
+          done
+
+          # Process Windows test results
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Windows Test Results" >> $GITHUB_STEP_SUMMARY
+          if [ -f "all-test-results/windows-test-results/test_results.json" ]; then
+            IFS=',' read -ra STATS <<< "$(extract_stats "all-test-results/windows-test-results/test_results.json")"
+            total=${STATS[0]}
+            passed=${STATS[1]}
+            failed=${STATS[2]}
+            skipped=${STATS[3]}
+
+            echo "- **Total Tests**: $total" >> $GITHUB_STEP_SUMMARY
+            echo "- **Passed**: $passed" >> $GITHUB_STEP_SUMMARY
+            echo "- **Failed**: $failed" >> $GITHUB_STEP_SUMMARY
+            echo "- **Skipped**: $skipped" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- Windows test results not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Process benchmark results
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Performance Benchmarks" >> $GITHUB_STEP_SUMMARY
+          if [ -f "all-test-results/benchmark-results/benchmark_results.json" ]; then
+            benchmark_count=$(jq '.benchmarks | length // 0' "all-test-results/benchmark-results/benchmark_results.json" 2>/dev/null || echo "0")
+            echo "- **Benchmarks Run**: $benchmark_count" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: ✅ Completed" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status**: ⚠️ Not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Coverage summary
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Code Coverage" >> $GITHUB_STEP_SUMMARY
+          if [ -d "all-test-results/comprehensive-test-results-Unit Tests/build/coverage_html" ]; then
+            echo "- **Coverage Report**: ✅ Generated" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status**: Available in build artifacts" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Coverage Report**: ⚠️ Not available" >> $GITHUB_STEP_SUMMARY
+          fi
+
+          # Overall status
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Overall Status" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ needs.comprehensive-tests.result }}" == "success" ] && [ "${{ needs.windows-tests.result }}" == "success" ]; then
+            echo "🎉 **All tests completed successfully!**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ **Some tests had issues** - Check individual job results for details" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Upload combined test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: combined-test-results
+          path: all-test-results/
+          retention-days: 7

@@ -161,3 +161,70 @@ set_property(TARGET test_core_modules PROPERTY FOLDER "Tests/Custom")
 set_property(TARGET test_io_modules PROPERTY FOLDER "Tests/Custom")
 set_property(TARGET test_system_modules PROPERTY FOLDER "Tests/Custom")
 set_property(TARGET test_network_modules PROPERTY FOLDER "Tests/Custom")
+
+# =============================================================================
+# Unified Test Runner
+# =============================================================================
+# Build the unified test runner executable
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/run_all_tests.cpp")
+    add_executable(run_all_tests run_all_tests.cpp)
+
+    target_link_libraries(run_all_tests
+        PRIVATE
+            # Atom test framework
+            atom-test-common
+
+            # Core modules needed for testing
+            atom-error
+            atom-utils
+
+            # GoogleTest
+            GTest::gtest
+            GTest::gtest_main
+
+            # System libraries
+            Threads::Threads
+    )
+
+    target_include_directories(run_all_tests
+        PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_SOURCE_DIR}/atom
+            ${CMAKE_SOURCE_DIR}/tests
+    )
+
+    target_compile_features(run_all_tests PRIVATE cxx_std_20)
+
+    # Add compiler flags
+    if(MSVC)
+        target_compile_options(run_all_tests PRIVATE /W4)
+    else()
+        target_compile_options(run_all_tests PRIVATE -Wall -Wextra -Wpedantic)
+    endif()
+
+    # Platform-specific libraries
+    if(WIN32)
+        target_link_libraries(run_all_tests PRIVATE ws2_32 wsock32)
+    endif()
+
+    # Add test to CTest
+    add_test(NAME unified_test_runner COMMAND run_all_tests --list)
+    set_tests_properties(unified_test_runner PROPERTIES
+        LABELS "unified;infrastructure"
+        TIMEOUT 60
+    )
+
+    # Set IDE folder
+    set_property(TARGET run_all_tests PROPERTY FOLDER "Tests/Infrastructure")
+
+    # Custom target for running tests through unified runner
+    add_custom_target(test_unified
+        COMMAND run_all_tests --verbose
+        DEPENDS run_all_tests
+        COMMENT "Running all tests through unified test runner"
+    )
+
+    set_property(TARGET test_unified PROPERTY FOLDER "Tests/Infrastructure")
+
+    message(STATUS "Unified test runner configured")
+endif()

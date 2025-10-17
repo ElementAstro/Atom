@@ -30,7 +30,6 @@ concept PathLike = std::convertible_to<T, std::filesystem::path>;
 
 class DirectoryStack {
 public:
-
     template <typename T>
     class [[nodiscard]] Task {
     public:
@@ -50,7 +49,6 @@ public:
                 exception_ = std::current_exception();
             }
             void return_value(T value) { result_ = std::move(value); }
-
         };
 
         explicit Task(std::coroutine_handle<promise_type> h) : coro_(h) {}
@@ -77,20 +75,35 @@ public:
             struct Awaiter {
                 std::coroutine_handle<promise_type> coro;
 
-                bool await_ready() const noexcept { return false; }
+                bool await_ready() const noexcept {
+                    // Check if coroutine is already done
+                    return coro.done();
+                }
+
                 auto await_resume() -> T {
                     if (coro.promise().exception_) {
                         std::rethrow_exception(coro.promise().exception_);
                     }
                     return std::move(coro.promise().result_);
                 }
+
                 void await_suspend(std::coroutine_handle<> h) const {
-                    auto resume_coro = coro;
-                    auto resume_awaiting = h;
-                    // For now, execute synchronously
-                    // TODO: Add proper executor support for coroutines
-                    resume_coro.resume();
-                    resume_awaiting.resume();
+                    // Execute the coroutine synchronously for now
+                    // In a full implementation, this would schedule the
+                    // coroutine on an executor (thread pool, event loop, etc.)
+                    // and resume the awaiting coroutine when complete
+
+                    // Resume the task coroutine
+                    if (!coro.done()) {
+                        coro.resume();
+                    }
+
+                    // Resume the awaiting coroutine
+                    // Note: In an async executor, this would be scheduled
+                    // rather than immediate
+                    if (!h.done()) {
+                        h.resume();
+                    }
                 }
             };
             return Awaiter{coro_};
@@ -274,7 +287,6 @@ public:
         auto final_suspend() noexcept -> std::suspend_always { return {}; }
         void unhandled_exception() { exception_ = std::current_exception(); }
         void return_void() {}
-
     };
 
     explicit Task(std::coroutine_handle<promise_type> h) : coro_(h) {}
@@ -301,19 +313,34 @@ public:
         struct Awaiter {
             std::coroutine_handle<promise_type> coro;
 
-            bool await_ready() const noexcept { return false; }
+            bool await_ready() const noexcept {
+                // Check if coroutine is already done
+                return coro.done();
+            }
+
             void await_resume() {
                 if (coro.promise().exception_) {
                     std::rethrow_exception(coro.promise().exception_);
                 }
             }
+
             void await_suspend(std::coroutine_handle<> h) const {
-                auto resume_coro = coro;
-                auto resume_awaiting = h;
-                // For now, execute synchronously
-                // TODO: Add proper executor support for coroutines
-                resume_coro.resume();
-                resume_awaiting.resume();
+                // Execute the coroutine synchronously for now
+                // In a full implementation, this would schedule the coroutine
+                // on an executor (thread pool, event loop, etc.)
+                // and resume the awaiting coroutine when complete
+
+                // Resume the task coroutine
+                if (!coro.done()) {
+                    coro.resume();
+                }
+
+                // Resume the awaiting coroutine
+                // Note: In an async executor, this would be scheduled rather
+                // than immediate
+                if (!h.done()) {
+                    h.resume();
+                }
             }
         };
         return Awaiter{coro_};
