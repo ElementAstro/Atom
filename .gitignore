@@ -449,5 +449,16 @@ secrets/
 *.pfx
 
 # -----------------------------------------------------------------------------
+# Vendored Dependencies (managed via package manager)
+# -----------------------------------------------------------------------------
+
+# nlohmann JSON library (use system package or vcpkg)
+nlohmann/
+
+# Temporary documentation files
+*SUMMARY.md
+*_SUMMARY.md
+
+# -----------------------------------------------------------------------------
 # End of .gitignore
 # -----------------------------------------------------------------------------
