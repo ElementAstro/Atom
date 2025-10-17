@@ -436,9 +436,9 @@ TEST_F(ArgsTest, SpecialCharacterKeys) {
 
 TEST_F(ArgsTest, UnicodeKeys) {
     // Test Unicode keys
-    args.set("键", 1);  // Chinese
+    args.set("键", 1);    // Chinese
     args.set("ключ", 2);  // Russian
-    args.set("🔑", 3);  // Emoji
+    args.set("🔑", 3);    // Emoji
     args.set("café", 4);  // Accented characters
 
     EXPECT_EQ(args.get<int>("键"), 1);
@@ -491,10 +491,14 @@ TEST_F(ArgsTest, ExtremeValues) {
 
     EXPECT_EQ(args.get<int>("max_int"), std::numeric_limits<int>::max());
     EXPECT_EQ(args.get<int>("min_int"), std::numeric_limits<int>::min());
-    EXPECT_EQ(args.get<double>("max_double"), std::numeric_limits<double>::max());
-    EXPECT_EQ(args.get<double>("min_double"), std::numeric_limits<double>::lowest());
-    EXPECT_EQ(args.get<double>("infinity"), std::numeric_limits<double>::infinity());
-    EXPECT_EQ(args.get<double>("neg_infinity"), -std::numeric_limits<double>::infinity());
+    EXPECT_EQ(args.get<double>("max_double"),
+              std::numeric_limits<double>::max());
+    EXPECT_EQ(args.get<double>("min_double"),
+              std::numeric_limits<double>::lowest());
+    EXPECT_EQ(args.get<double>("infinity"),
+              std::numeric_limits<double>::infinity());
+    EXPECT_EQ(args.get<double>("neg_infinity"),
+              -std::numeric_limits<double>::infinity());
 }
 
 TEST_F(ArgsTest, OverwriteValues) {
@@ -612,7 +616,8 @@ TEST_F(ArgsTest, MemoryStressTest) {
     for (int i = 0; i < iterations; ++i) {
         // Add many items
         for (int j = 0; j < 100; ++j) {
-            args.set("key_" + std::to_string(i) + "_" + std::to_string(j), i * j);
+            args.set("key_" + std::to_string(i) + "_" + std::to_string(j),
+                     i * j);
         }
 
         // Remove half of them
@@ -685,8 +690,8 @@ TEST_F(ArgsTest, ValidatorChaining) {
         }
     });
 
-    // If the implementation supports multiple validators, this would add another
-    // For now, this will replace the first validator
+    // If the implementation supports multiple validators, this would add
+    // another For now, this will replace the first validator
     args.setValidator("test_key", [&validator2_called](const any_type& val) {
         validator2_called = true;
         try {

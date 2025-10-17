@@ -90,7 +90,7 @@ TEST_F(GPUAccelerationTest, ProcessorInitialization) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     EXPECT_TRUE(gpuAvailable);
     EXPECT_NE(gpuProcessor, nullptr);
 }
@@ -100,9 +100,9 @@ TEST_F(GPUAccelerationTest, ImageUpload) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto buffer = gpuProcessor->uploadImage(gradient_image);
-    
+
     EXPECT_NE(buffer, nullptr);
     EXPECT_TRUE(buffer->isValid());
     EXPECT_GT(buffer->getSize(), 0);
@@ -113,10 +113,10 @@ TEST_F(GPUAccelerationTest, ImageUploadEmpty) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     blob empty_image;
     auto buffer = gpuProcessor->uploadImage(empty_image);
-    
+
     // Should handle empty image gracefully
     EXPECT_TRUE(buffer == nullptr || !buffer->isValid());
 }
@@ -126,12 +126,12 @@ TEST_F(GPUAccelerationTest, ImageDownload) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto buffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(buffer, nullptr);
-    
+
     auto downloaded = gpuProcessor->downloadImage(*buffer, 128, 128, 3);
-    
+
     EXPECT_FALSE(downloaded.isEmpty());
     EXPECT_EQ(downloaded.size(), gradient_image.size());
 }
@@ -141,12 +141,12 @@ TEST_F(GPUAccelerationTest, GaussianBlur) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     auto outputBuffer = gpuProcessor->gaussianBlur(*inputBuffer, 1.0f, 5, 128, 128, 3);
-    
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -156,12 +156,12 @@ TEST_F(GPUAccelerationTest, ImageResize) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     auto outputBuffer = gpuProcessor->resize(*inputBuffer, 128, 128, 64, 64, 3, "linear");
-    
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -171,12 +171,12 @@ TEST_F(GPUAccelerationTest, ColorSpaceConversion) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     auto outputBuffer = gpuProcessor->convertColorSpace(*inputBuffer, "RGB", "GRAY", 128, 128);
-    
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -186,12 +186,12 @@ TEST_F(GPUAccelerationTest, HistogramEqualization) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     auto outputBuffer = gpuProcessor->equalizeHistogram(*inputBuffer, 128, 128, 3);
-    
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -201,12 +201,12 @@ TEST_F(GPUAccelerationTest, EdgeDetection) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(checkerboard_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     auto outputBuffer = gpuProcessor->detectEdges(*inputBuffer, "sobel", 50.0f, 150.0f, 128, 128);
-    
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -216,13 +216,13 @@ TEST_F(GPUAccelerationTest, MorphologicalOperations) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(checkerboard_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     std::vector<std::vector<int>> structElement = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
     auto outputBuffer = gpuProcessor->morphological(*inputBuffer, "erode", structElement, 128, 128, 3);
-    
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -232,18 +232,18 @@ TEST_F(GPUAccelerationTest, Convolution) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     std::vector<std::vector<float>> kernel = {
         {0.0f, -1.0f, 0.0f},
         {-1.0f, 5.0f, -1.0f},
         {0.0f, -1.0f, 0.0f}
     };
-    
+
     auto outputBuffer = gpuProcessor->convolve(*inputBuffer, kernel, 128, 128, 3);
-    
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -492,4 +492,3 @@ TEST_F(GPUAccelerationTest, RoundTripConsistency) {
 }
 
 } // namespace atom::image::test
-

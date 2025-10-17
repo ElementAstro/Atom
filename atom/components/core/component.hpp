@@ -15,9 +15,9 @@ Description: Basic Component Definition
 #ifndef ATOM_COMPONENT_HPP
 #define ATOM_COMPONENT_HPP
 
+#include "../data/var.hpp"
 #include "../lifecycle/dispatch.hpp"
 #include "module_macro.hpp"
-#include "../data/var.hpp"
 
 #include "atom/memory/memory_pool.hpp"
 #include "atom/memory/object.hpp"
@@ -562,7 +562,7 @@ public:
      * @param description Command description, empty by default.
      */
     template <typename Class, typename VarType>
-    void def(std::string_view name, VarType Class::* var,
+    void def(std::string_view name, VarType Class::*var,
              std::string_view group = "", std::string_view description = "");
 
     /**
@@ -614,7 +614,7 @@ public:
     template <typename MemberType, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(std::string_view name, MemberType Class::* var,
+    void def(std::string_view name, MemberType Class::*var,
              const InstanceType& instance, std::string_view group = "",
              std::string_view description = "");
 
@@ -632,7 +632,7 @@ public:
     template <typename MemberType, typename Class, typename InstanceType>
         requires Pointer<InstanceType> || SmartPointer<InstanceType> ||
                  std::is_same_v<InstanceType, PointerSentinel<Class>>
-    void def(std::string_view name, const MemberType Class::* var,
+    void def(std::string_view name, const MemberType Class::*var,
              const InstanceType& instance, std::string_view group = "",
              std::string_view description = "");
 
@@ -786,14 +786,22 @@ public:
 
 // 定义条件检查宏
 #define CONDITION_EQ std::equality_comparable<T>
-#define CONDITION_LT \
-    requires(T a, T b) { {a < b}->std::convertible_to<bool>; }
-#define CONDITION_GT \
-    requires(T a, T b) { {a > b}->std::convertible_to<bool>; }
-#define CONDITION_LE \
-    requires(T a, T b) { {a <= b}->std::convertible_to<bool>; }
-#define CONDITION_GE \
-    requires(T a, T b) { {a >= b}->std::convertible_to<bool>; }
+#define CONDITION_LT                            \
+    requires(T a, T b) {                        \
+        { a < b } -> std::convertible_to<bool>; \
+    }
+#define CONDITION_GT                            \
+    requires(T a, T b) {                        \
+        { a > b } -> std::convertible_to<bool>; \
+    }
+#define CONDITION_LE                             \
+    requires(T a, T b) {                         \
+        { a <= b } -> std::convertible_to<bool>; \
+    }
+#define CONDITION_GE                             \
+    requires(T a, T b) {                         \
+        { a >= b } -> std::convertible_to<bool>; \
+    }
 
 // 注册操作符的通用宏
 #define REGISTER_OPERATOR(type_name, name, op, condition, description) \
@@ -887,8 +895,8 @@ public:
      * @return Command execution result
      */
     template <typename... Args>
-    [[gnu::hot]] auto fastDispatch(std::string_view name, Args&&... args)
-        -> std::any {
+    [[gnu::hot]] auto fastDispatch(std::string_view name,
+                                   Args&&... args) -> std::any {
         // Skip timing for maximum performance in hot paths
         try {
             auto result = m_CommandDispatcher_->dispatch(

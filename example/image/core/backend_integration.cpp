@@ -173,7 +173,7 @@ void demonstrateStbImageBackend() {
         // Create a blob that could be saved using stb_image
         const int width = 128, height = 128, channels = 3;
         std::vector<uint8_t> img_data(width * height * channels);
-        
+
         // Fill with a simple pattern
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
@@ -183,7 +183,7 @@ void demonstrateStbImageBackend() {
                 img_data[pixel_idx + 2] = static_cast<uint8_t>((x + y) % 256);
             }
         }
-        
+
         blob img(reinterpret_cast<std::byte*>(img_data.data()), img_data.size());
 
         std::cout << "Created blob suitable for stb_image: " << width << "x" << height << "\n";

@@ -1,12 +1,12 @@
 #include "atom/extra/beast/http.hpp"
 
 #include <gtest/gtest.h>
+#include <atomic>
 #include <boost/asio/dispatch.hpp>
 #include <boost/asio/strand.hpp>
 #include <boost/beast/core.hpp>
 #include <boost/beast/http.hpp>
 #include <boost/beast/version.hpp>
-#include <atomic>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -94,7 +94,8 @@ protected:
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
 
                     // Timeout after 1 second
-                    if (std::chrono::steady_clock::now() - start_time > std::chrono::seconds(1)) {
+                    if (std::chrono::steady_clock::now() - start_time >
+                        std::chrono::seconds(1)) {
                         break;
                     }
                 }
@@ -108,7 +109,8 @@ protected:
                     beast::flat_buffer buffer;
                     http::request<http::string_body> req;
 
-                    // Note: Socket timeout handling will be done at higher level
+                    // Note: Socket timeout handling will be done at higher
+                    // level
 
                     beast::error_code read_ec;
                     http::read(socket, buffer, req, read_ec);
@@ -117,51 +119,55 @@ protected:
                         continue;
                     }
 
-                http::response<http::string_body> res{http::status::ok,
-                                                      req.version()};
-                res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
-                res.set(http::field::content_type, "text/plain");
+                    http::response<http::string_body> res{http::status::ok,
+                                                          req.version()};
+                    res.set(http::field::server, BOOST_BEAST_VERSION_STRING);
+                    res.set(http::field::content_type, "text/plain");
 
-                // Mock different endpoints
-                if (req.target() == "/get") {
-                    res.body() = "GET response";
-                } else if (req.target() == "/post") {
-                    res.body() = "POST response: " + req.body();
-                } else if (req.target() == "/json") {
-                    res.set(http::field::content_type, "application/json");
-                    res.body() =
-                        "{\"status\":\"success\",\"message\":\"JSON "
-                        "response\"}";
-                } else if (req.target() == "/upload") {
-                    res.body() = "File uploaded successfully";
-                } else if (req.target() == "/download") {
-                    res.body() = "This is content for download test";
-                } else if (req.target() == "/retry") {
-                    // Use a more robust counter that works across multiple requests
-                    static std::atomic<int> retry_count{0};
-                    int current_count = retry_count.fetch_add(1);
+                    // Mock different endpoints
+                    if (req.target() == "/get") {
+                        res.body() = "GET response";
+                    } else if (req.target() == "/post") {
+                        res.body() = "POST response: " + req.body();
+                    } else if (req.target() == "/json") {
+                        res.set(http::field::content_type, "application/json");
+                        res.body() =
+                            "{\"status\":\"success\",\"message\":\"JSON "
+                            "response\"}";
+                    } else if (req.target() == "/upload") {
+                        res.body() = "File uploaded successfully";
+                    } else if (req.target() == "/download") {
+                        res.body() = "This is content for download test";
+                    } else if (req.target() == "/retry") {
+                        // Use a more robust counter that works across multiple
+                        // requests
+                        static std::atomic<int> retry_count{0};
+                        int current_count = retry_count.fetch_add(1);
 
-                    // Fail the first 2 attempts (attempts 0 and 1), succeed on attempt 2
-                    if (current_count < 2) {
-                        res.result(http::status::service_unavailable);
-                        res.body() = "Service temporarily unavailable";
+                        // Fail the first 2 attempts (attempts 0 and 1), succeed
+                        // on attempt 2
+                        if (current_count < 2) {
+                            res.result(http::status::service_unavailable);
+                            res.body() = "Service temporarily unavailable";
+                        } else {
+                            res.result(http::status::ok);
+                            res.body() = "Success after retries";
+                            // Reset counter for next test run
+                            retry_count.store(0);
+                        }
+                    } else if (req.target() == "/timeout") {
+                        // Simulate timeout with delay longer than client
+                        // timeout (1 second)
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(1500));
+                        res.body() = "Response after delay";
+                    } else if (req.target() == "/error") {
+                        res.result(http::status::internal_server_error);
+                        res.body() = "Internal server error";
                     } else {
-                        res.result(http::status::ok);
-                        res.body() = "Success after retries";
-                        // Reset counter for next test run
-                        retry_count.store(0);
+                        res.result(http::status::not_found);
+                        res.body() = "Not found";
                     }
-                } else if (req.target() == "/timeout") {
-                    // Simulate timeout with delay longer than client timeout (1 second)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(1500));
-                    res.body() = "Response after delay";
-                } else if (req.target() == "/error") {
-                    res.result(http::status::internal_server_error);
-                    res.body() = "Internal server error";
-                } else {
-                    res.result(http::status::not_found);
-                    res.body() = "Not found";
-                }
 
                     res.prepare_payload();
                     http::write(socket, res);
@@ -174,7 +180,8 @@ protected:
                 } catch (const std::exception& e) {
                     // Handle request processing errors gracefully
                     if (server_running_) {
-                        std::cerr << "Request processing error: " << e.what() << std::endl;
+                        std::cerr << "Request processing error: " << e.what()
+                                  << std::endl;
                     }
                 }
             }

@@ -98,7 +98,7 @@ int main() {
         // 设置不同函数的不同限制
         limiter.setFunctionLimit("high_frequency", 10, 1s);  // 高频率：每秒10次
         limiter.setFunctionLimit("medium_frequency", 5,
-                                 2s);                      // 中频率：每2秒5次
+                                 2s);  // 中频率：每2秒5次
         limiter.setFunctionLimit("low_frequency", 2, 5s);  // 低频率：每5秒2次
 
         LOG("设置了不同函数的不同限制:");
@@ -299,9 +299,7 @@ int main() {
     // 8. Debounce 其它方法
     //==============================================================
     LOG("8. Debounce 其它方法 (占位示例)");
-    {
-        LOG("本仓库未提供 Debounce 类型，跳过 flush/cancel/reset 方法演示。");
-    }
+    { LOG("本仓库未提供 Debounce 类型，跳过 flush/cancel/reset 方法演示。"); }
 
     std::cout << std::endl;
 
@@ -326,9 +324,7 @@ int main() {
     // 10. Throttle 不同参数组合 (占位示例)
     //==============================================================
     LOG("10. Throttle 不同参数组合 (占位)");
-    {
-        LOG("10.1/10.2: 本仓库未提供 Throttle 类型，跳过。");
-    }
+    { LOG("10.1/10.2: 本仓库未提供 Throttle 类型，跳过。"); }
 
     std::cout << std::endl;
 
@@ -336,9 +332,7 @@ int main() {
     // 11. 工厂类使用示例
     //==============================================================
     LOG("11. 工厂类使用示例 (占位)");
-    {
-        LOG("仓库未提供 ThrottleFactory/DebounceFactory，跳过。");
-    }
+    { LOG("仓库未提供 ThrottleFactory/DebounceFactory，跳过。"); }
 
     std::cout << std::endl;
 

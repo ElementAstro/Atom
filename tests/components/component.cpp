@@ -313,13 +313,15 @@ TEST_F(ComponentTest, CommandVoidReturn) {
 // Test command with multiple parameters
 TEST_F(ComponentTest, CommandMultipleParams) {
     component->def("multiParam", [](int a, int b, int c) { return a + b + c; });
-    auto result = std::any_cast<int>(component->dispatch("multiParam", 1, 2, 3));
+    auto result =
+        std::any_cast<int>(component->dispatch("multiParam", 1, 2, 3));
     EXPECT_EQ(result, 6);
 }
 
 // Test dispatch non-existent command
 TEST_F(ComponentTest, DispatchNonExistentCommand) {
-    EXPECT_THROW(component->dispatch("nonexistent"), atom::error::InvalidArgument);
+    EXPECT_THROW(component->dispatch("nonexistent"),
+                 atom::error::InvalidArgument);
 }
 
 // Test has with non-existent command
@@ -425,9 +427,8 @@ TEST_F(ComponentTest, CommandTimeout) {
 
 // Test command with exception
 TEST_F(ComponentTest, CommandWithException) {
-    component->def("throwingCommand", []() -> int {
-        throw std::runtime_error("Test exception");
-    });
+    component->def("throwingCommand",
+                   []() -> int { throw std::runtime_error("Test exception"); });
 
     EXPECT_THROW(component->dispatch("throwingCommand"), std::runtime_error);
 }
@@ -436,7 +437,8 @@ TEST_F(ComponentTest, CommandWithException) {
 TEST_F(ComponentTest, RunCommandEmptyArgs) {
     component->def("noArgs", []() { return 42; });
     std::vector<std::any> emptyArgs;
-    auto result = std::any_cast<int>(component->runCommand("noArgs", emptyArgs));
+    auto result =
+        std::any_cast<int>(component->runCommand("noArgs", emptyArgs));
     EXPECT_EQ(result, 42);
 }
 
@@ -447,7 +449,8 @@ TEST_F(ComponentTest, RunCommandWrongArgCount) {
 
     // Should throw or handle gracefully
     try {
-        [[maybe_unused]] auto result = component->runCommand("oneArg", wrongArgs);
+        [[maybe_unused]] auto result =
+            component->runCommand("oneArg", wrongArgs);
         // If it doesn't throw, that's also acceptable behavior
     } catch (const std::exception&) {
         // Expected exception
@@ -538,8 +541,8 @@ TEST_F(ComponentTest, ConcurrentVariableAccess) {
         thread.join();
     }
 
-    // Due to race conditions, the final value may not be exactly numThreads * incrementsPerThread
-    // But it should be > 0
+    // Due to race conditions, the final value may not be exactly numThreads *
+    // incrementsPerThread But it should be > 0
     auto var = component->getVariable<int>("counter");
     EXPECT_GT(var->get(), 0);
 }
@@ -557,7 +560,8 @@ TEST_F(ComponentTest, ConcurrentCommandDispatch) {
 
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([this]() {
-            auto result = std::any_cast<int>(component->dispatch("concurrentCmd"));
+            auto result =
+                std::any_cast<int>(component->dispatch("concurrentCmd"));
             EXPECT_EQ(result, 42);
         });
     }
@@ -626,10 +630,13 @@ TEST_F(AdvancedComponentTest, ComponentCommandSystem) {
     bool commandExecuted = false;
 
     // Define a simple command
-    component_->def("testCommand", [&commandExecuted]() {
-        commandExecuted = true;
-        return 42;
-    }, "test", "A test command");
+    component_->def(
+        "testCommand",
+        [&commandExecuted]() {
+            commandExecuted = true;
+            return 42;
+        },
+        "test", "A test command");
 
     // Test command existence
     EXPECT_TRUE(component_->has("testCommand"));
@@ -639,9 +646,9 @@ TEST_F(AdvancedComponentTest, ComponentCommandSystem) {
     EXPECT_TRUE(commandExecuted);
 
     // Test command with parameters
-    component_->def("addCommand", [](int a, int b) {
-        return a + b;
-    }, "math", "Addition command");
+    component_->def(
+        "addCommand", [](int a, int b) { return a + b; }, "math",
+        "Addition command");
 
     auto addResult = component_->dispatch("addCommand", 10, 20);
     EXPECT_EQ(std::any_cast<int>(addResult), 30);
@@ -650,8 +657,10 @@ TEST_F(AdvancedComponentTest, ComponentCommandSystem) {
 TEST_F(AdvancedComponentTest, ComponentVariableManagement) {
     // Test adding variables
     component_->addVariable<int>("testInt", 42, "Test integer variable");
-    component_->addVariable<std::string>("testString", "Hello", "Test string variable");
-    component_->addVariable<double>("testDouble", 3.14159, "Test double variable");
+    component_->addVariable<std::string>("testString", "Hello",
+                                         "Test string variable");
+    component_->addVariable<double>("testDouble", 3.14159,
+                                    "Test double variable");
 
     // Test getting variables
     auto intVar = component_->getVariable<int>("testInt");
@@ -681,15 +690,15 @@ TEST_F(AdvancedComponentTest, ComponentErrorHandling) {
     EXPECT_THROW(component_->dispatch("nonExistentCommand"), std::exception);
 
     // Test invalid command arguments
-    component_->def("strictCommand", [](int required) {
-        return required * 2;
-    });
+    component_->def("strictCommand", [](int required) { return required * 2; });
 
     std::vector<std::any> wrongArgs = {"string_instead_of_int"};
-    EXPECT_THROW({
-        auto result = component_->runCommand("strictCommand", wrongArgs);
-        (void)result; // Suppress unused variable warning
-    }, std::exception);
+    EXPECT_THROW(
+        {
+            auto result = component_->runCommand("strictCommand", wrongArgs);
+            (void)result;  // Suppress unused variable warning
+        },
+        std::exception);
 }
 
 // ============================================================================
@@ -698,10 +707,9 @@ TEST_F(AdvancedComponentTest, ComponentErrorHandling) {
 
 TEST_F(AdvancedComponentTest, RegistryBasicOperations) {
     // Test component registration
-    registry_->addInitializer("TestComponent1",
-        [](Component& comp) {
-            comp.addVariable<int>("initialized", 1);
-        },
+    registry_->addInitializer(
+        "TestComponent1",
+        [](Component& comp) { comp.addVariable<int>("initialized", 1); },
         []() { /* cleanup */ });
 
     auto component1 = registry_->getComponent("TestComponent1");
@@ -720,7 +728,8 @@ TEST_F(AdvancedComponentTest, RegistryDependencyManagement) {
     registry_->addDependency("ComponentB", "ComponentA");
 
     // Test circular dependency detection
-    EXPECT_THROW(registry_->addDependency("ComponentA", "ComponentC"), std::exception);
+    EXPECT_THROW(registry_->addDependency("ComponentA", "ComponentC"),
+                 std::exception);
 }
 
 // ============================================================================
@@ -731,14 +740,17 @@ TEST_F(AdvancedComponentTest, LifecycleHooks) {
     bool hookExecuted = false;
 
     // Register a lifecycle hook
-    lifecycleManager_->registerHook("AdvancedTestComponent", atom::components::LifecyclePhase::PostInitialization,
+    lifecycleManager_->registerHook(
+        "AdvancedTestComponent",
+        atom::components::LifecyclePhase::PostInitialization,
         [&hookExecuted](Component&, atom::components::LifecyclePhase) {
             hookExecuted = true;
             return true;
         });
 
     // Execute the lifecycle phase
-    bool result = lifecycleManager_->executePhase(*component_, atom::components::LifecyclePhase::PostInitialization);
+    bool result = lifecycleManager_->executePhase(
+        *component_, atom::components::LifecyclePhase::PostInitialization);
     EXPECT_TRUE(result);
     EXPECT_TRUE(hookExecuted);
 }
@@ -747,21 +759,25 @@ TEST_F(AdvancedComponentTest, GlobalLifecycleHooks) {
     int globalHookCount = 0;
 
     // Register global hooks for different phases
-    lifecycleManager_->registerGlobalHook(atom::components::LifecyclePhase::PreInitialization,
+    lifecycleManager_->registerGlobalHook(
+        atom::components::LifecyclePhase::PreInitialization,
         [&globalHookCount](Component&, atom::components::LifecyclePhase) {
             globalHookCount++;
             return true;
         });
 
-    lifecycleManager_->registerGlobalHook(atom::components::LifecyclePhase::PostInitialization,
+    lifecycleManager_->registerGlobalHook(
+        atom::components::LifecyclePhase::PostInitialization,
         [&globalHookCount](Component&, atom::components::LifecyclePhase) {
             globalHookCount++;
             return true;
         });
 
     // Execute different phases
-    lifecycleManager_->executePhase(*component_, atom::components::LifecyclePhase::PreInitialization);
-    lifecycleManager_->executePhase(*component_, atom::components::LifecyclePhase::PostInitialization);
+    lifecycleManager_->executePhase(
+        *component_, atom::components::LifecyclePhase::PreInitialization);
+    lifecycleManager_->executePhase(
+        *component_, atom::components::LifecyclePhase::PostInitialization);
 
     EXPECT_EQ(globalHookCount, 2);
 }
@@ -803,10 +819,13 @@ TEST_F(AdvancedComponentTest, VariableManagerStringOptions) {
     variableManager_->setStringOptions("optionVar", options);
 
     // Valid option
-    EXPECT_NO_THROW(variableManager_->setValue("optionVar", std::string("option2")));
+    EXPECT_NO_THROW(
+        variableManager_->setValue("optionVar", std::string("option2")));
 
     // Invalid option
-    EXPECT_THROW(variableManager_->setValue("optionVar", std::string("invalidOption")), std::exception);
+    EXPECT_THROW(
+        variableManager_->setValue("optionVar", std::string("invalidOption")),
+        std::exception);
 }
 
 // ============================================================================
@@ -830,10 +849,11 @@ TEST_F(AdvancedComponentTest, ComponentPerformanceBasic) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time (adjust threshold as needed)
-    EXPECT_LT(duration.count(), 1000); // Less than 1 second
+    EXPECT_LT(duration.count(), 1000);  // Less than 1 second
 
     // Verify all variables and commands were added
     EXPECT_EQ(component_->getVariableNames().size(), numVariables);
@@ -851,7 +871,8 @@ TEST_F(AdvancedComponentTest, ConcurrentAccess) {
         threads.emplace_back([this, t, operationsPerThread, &successCount]() {
             for (int i = 0; i < operationsPerThread; ++i) {
                 try {
-                    std::string varName = "thread" + std::to_string(t) + "_var" + std::to_string(i);
+                    std::string varName = "thread" + std::to_string(t) +
+                                          "_var" + std::to_string(i);
                     component_->addVariable<int>(varName, t * 1000 + i);
 
                     auto var = component_->getVariable<int>(varName);

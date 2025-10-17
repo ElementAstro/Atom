@@ -74,10 +74,9 @@ Examples:
     >>> from atom.extra.boost import locale
     >>> locale.LocaleWrapper.to_utf8("Hello", "ISO-8859-1")
 )")
-        .def_static(
-            "from_utf8", &atom::extra::boost::LocaleWrapper::fromUtf8,
-            py::arg("str"), py::arg("to_charset"),
-            R"(Converts a UTF-8 encoded string to another character set.
+        .def_static("from_utf8", &atom::extra::boost::LocaleWrapper::fromUtf8,
+                    py::arg("str"), py::arg("to_charset"),
+                    R"(Converts a UTF-8 encoded string to another character set.
 
 Args:
     str: The UTF-8 encoded string to convert.

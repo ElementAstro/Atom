@@ -2,9 +2,9 @@
 #include "atom/extra/curl/request.hpp"
 #include "atom/extra/curl/response.hpp"
 
+#include <pybind11/chrono.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/chrono.h>
 
 namespace py = pybind11;
 
@@ -16,19 +16,19 @@ with support for connection pooling, caching, rate limiting, and more.
 
 Examples:
     >>> from atom.extra.curl import session
-    >>> 
+    >>>
     >>> # Create a session
     >>> s = session.Session()
-    >>> 
+    >>>
     >>> # Perform GET request
     >>> response = s.get("https://httpbin.org/get")
     >>> print(response.status_code())
     >>> print(response.body())
-    >>> 
+    >>>
     >>> # Perform POST request
     >>> response = s.post("https://httpbin.org/post", '{"key": "value"}')
     >>> print(response.body())
-    >>> 
+    >>>
     >>> # Use request builder
     >>> request = session.Request()
     >>> request.method(session.Request.Method.GET)
@@ -52,17 +52,25 @@ Examples:
     });
 
     // Request::Method enum
-    py::enum_<atom::extra::curl::Request::Method>(m, "Method",
-                                                  R"(HTTP request method enumeration.
+    py::enum_<atom::extra::curl::Request::Method>(
+        m, "Method",
+        R"(HTTP request method enumeration.
 
 Defines the standard HTTP methods for requests.)")
-        .value("GET", atom::extra::curl::Request::Method::GET, "HTTP GET method")
-        .value("POST", atom::extra::curl::Request::Method::POST, "HTTP POST method")
-        .value("PUT", atom::extra::curl::Request::Method::PUT, "HTTP PUT method")
-        .value("DELETE", atom::extra::curl::Request::Method::DELETE, "HTTP DELETE method")
-        .value("PATCH", atom::extra::curl::Request::Method::PATCH, "HTTP PATCH method")
-        .value("HEAD", atom::extra::curl::Request::Method::HEAD, "HTTP HEAD method")
-        .value("OPTIONS", atom::extra::curl::Request::Method::OPTIONS, "HTTP OPTIONS method")
+        .value("GET", atom::extra::curl::Request::Method::GET,
+               "HTTP GET method")
+        .value("POST", atom::extra::curl::Request::Method::POST,
+               "HTTP POST method")
+        .value("PUT", atom::extra::curl::Request::Method::PUT,
+               "HTTP PUT method")
+        .value("DELETE", atom::extra::curl::Request::Method::DELETE,
+               "HTTP DELETE method")
+        .value("PATCH", atom::extra::curl::Request::Method::PATCH,
+               "HTTP PATCH method")
+        .value("HEAD", atom::extra::curl::Request::Method::HEAD,
+               "HTTP HEAD method")
+        .value("OPTIONS", atom::extra::curl::Request::Method::OPTIONS,
+               "HTTP OPTIONS method")
         .export_values();
 
     // Request class binding
@@ -83,8 +91,7 @@ Examples:
     >>> request.timeout(30)
 )")
         .def(py::init<>(), "Create a new HTTP request")
-        .def("method", &atom::extra::curl::Request::method,
-             py::arg("method"),
+        .def("method", &atom::extra::curl::Request::method, py::arg("method"),
              R"(Set the HTTP method for the request.
 
 Args:
@@ -93,8 +100,7 @@ Args:
 Returns:
     Reference to this Request object for method chaining.
 )")
-        .def("url", &atom::extra::curl::Request::url,
-             py::arg("url"),
+        .def("url", &atom::extra::curl::Request::url, py::arg("url"),
              R"(Set the URL for the request.
 
 Args:
@@ -103,8 +109,8 @@ Args:
 Returns:
     Reference to this Request object for method chaining.
 )")
-        .def("header", &atom::extra::curl::Request::header,
-             py::arg("name"), py::arg("value"),
+        .def("header", &atom::extra::curl::Request::header, py::arg("name"),
+             py::arg("value"),
              R"(Set a header for the request.
 
 Args:
@@ -118,8 +124,7 @@ Examples:
     >>> request.header("Content-Type", "application/json")
     >>> request.header("User-Agent", "MyApp/1.0")
 )")
-        .def("body", &atom::extra::curl::Request::body,
-             py::arg("body"),
+        .def("body", &atom::extra::curl::Request::body, py::arg("body"),
              R"(Set the body for the request.
 
 Args:
@@ -189,8 +194,7 @@ Args:
 Returns:
     Reference to this Request object for method chaining.
 )")
-        .def("proxy", &atom::extra::curl::Request::proxy,
-             py::arg("proxy_url"),
+        .def("proxy", &atom::extra::curl::Request::proxy, py::arg("proxy_url"),
              R"(Set proxy server.
 
 Args:
@@ -230,8 +234,8 @@ Args:
 Returns:
     Reference to this Request object for method chaining.
 )")
-        .def("cookie", &atom::extra::curl::Request::cookie,
-             py::arg("name"), py::arg("value"),
+        .def("cookie", &atom::extra::curl::Request::cookie, py::arg("name"),
+             py::arg("value"),
              R"(Add a cookie to the request.
 
 Args:
@@ -374,8 +378,9 @@ Returns:
 )");
 
     // Session class binding
-    py::class_<atom::extra::curl::Session>(m, "Session",
-                                           R"(HTTP session class for performing requests.
+    py::class_<atom::extra::curl::Session>(
+        m, "Session",
+        R"(HTTP session class for performing requests.
 
 This class provides a high-level interface for making HTTP requests,
 handling cookies, caching, rate limiting, and more.
@@ -409,7 +414,8 @@ Raises:
     RuntimeError: If the request fails.
 )")
         .def("get",
-             py::overload_cast<std::string_view>(&atom::extra::curl::Session::get),
+             py::overload_cast<std::string_view>(
+                 &atom::extra::curl::Session::get),
              py::arg("url"),
              R"(Perform a GET request.
 
@@ -423,7 +429,8 @@ Raises:
     RuntimeError: If the request fails.
 )")
         .def("get",
-             py::overload_cast<std::string_view, const std::map<std::string, std::string>&>(
+             py::overload_cast<std::string_view,
+                               const std::map<std::string, std::string>&>(
                  &atom::extra::curl::Session::get),
              py::arg("url"), py::arg("params"),
              R"(Perform a GET request with query parameters.
@@ -438,9 +445,8 @@ Returns:
 Raises:
     RuntimeError: If the request fails.
 )")
-        .def("post", &atom::extra::curl::Session::post,
-             py::arg("url"), py::arg("body"),
-             py::arg("content_type") = "application/json",
+        .def("post", &atom::extra::curl::Session::post, py::arg("url"),
+             py::arg("body"), py::arg("content_type") = "application/json",
              R"(Perform a POST request.
 
 Args:
@@ -482,9 +488,8 @@ Returns:
 Raises:
     RuntimeError: If the request fails.
 )")
-        .def("put", &atom::extra::curl::Session::put,
-             py::arg("url"), py::arg("body"),
-             py::arg("content_type") = "application/json",
+        .def("put", &atom::extra::curl::Session::put, py::arg("url"),
+             py::arg("body"), py::arg("content_type") = "application/json",
              R"(Perform a PUT request.
 
 Args:
@@ -498,8 +503,7 @@ Returns:
 Raises:
     RuntimeError: If the request fails.
 )")
-        .def("del", &atom::extra::curl::Session::del,
-             py::arg("url"),
+        .def("del", &atom::extra::curl::Session::del, py::arg("url"),
              R"(Perform a DELETE request.
 
 Args:
@@ -511,9 +515,8 @@ Returns:
 Raises:
     RuntimeError: If the request fails.
 )")
-        .def("patch", &atom::extra::curl::Session::patch,
-             py::arg("url"), py::arg("body"),
-             py::arg("content_type") = "application/json",
+        .def("patch", &atom::extra::curl::Session::patch, py::arg("url"),
+             py::arg("body"), py::arg("content_type") = "application/json",
              R"(Perform a PATCH request.
 
 Args:
@@ -527,8 +530,7 @@ Returns:
 Raises:
     RuntimeError: If the request fails.
 )")
-        .def("head", &atom::extra::curl::Session::head,
-             py::arg("url"),
+        .def("head", &atom::extra::curl::Session::head, py::arg("url"),
              R"(Perform a HEAD request.
 
 Args:
@@ -540,8 +542,7 @@ Returns:
 Raises:
     RuntimeError: If the request fails.
 )")
-        .def("options", &atom::extra::curl::Session::options,
-             py::arg("url"),
+        .def("options", &atom::extra::curl::Session::options, py::arg("url"),
              R"(Perform an OPTIONS request.
 
 Args:

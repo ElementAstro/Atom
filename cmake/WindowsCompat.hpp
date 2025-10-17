@@ -38,12 +38,12 @@
 // Suppress common warnings
 #ifdef _MSC_VER
 #pragma warning(push)
-#pragma warning(disable: 4996) // deprecated functions
-#pragma warning(disable: 4100) // unreferenced formal parameter  
-#pragma warning(disable: 4127) // conditional expression is constant
-#pragma warning(disable: 4201) // nameless struct/union
-#pragma warning(disable: 4244) // conversion possible loss of data
-#pragma warning(disable: 4245) // signed/unsigned mismatch
+#pragma warning(disable : 4996)  // deprecated functions
+#pragma warning(disable : 4100)  // unreferenced formal parameter
+#pragma warning(disable : 4127)  // conditional expression is constant
+#pragma warning(disable : 4201)  // nameless struct/union
+#pragma warning(disable : 4244)  // conversion possible loss of data
+#pragma warning(disable : 4245)  // signed/unsigned mismatch
 #endif
 
 // CRITICAL: Include winsock2.h before windows.h to prevent ASIO conflicts
@@ -54,8 +54,8 @@
 #endif
 
 // Include Windows headers in correct order
-#include <windef.h>
 #include <winbase.h>
+#include <windef.h>
 #include <windows.h>
 
 // Restore warnings
@@ -63,4 +63,4 @@
 #pragma warning(pop)
 #endif
 
-#endif // _WIN32
+#endif  // _WIN32

@@ -22,6 +22,7 @@ The project uses CMake as the primary build system with enhanced build scripts:
 ### Build System Features
 
 The enhanced build scripts support:
+
 - Multiple build types (debug, release, relwithdebinfo)
 - Parallel compilation with automatic CPU detection
 - System dependency installation
@@ -32,6 +33,7 @@ The enhanced build scripts support:
 ### Module-Based Building
 
 You can selectively build modules using CMake options:
+
 - `ATOM_BUILD_ALGORITHM=ON/OFF` - Algorithm and mathematical operations
 - `ATOM_BUILD_IMAGE=ON/OFF` - Image processing and computer vision
 - `ATOM_BUILD_ASYNC=ON/OFF` - Asynchronous operations
@@ -74,6 +76,7 @@ Atom is organized into modular components under `atom/`:
 ### Python Bindings
 
 Python bindings are available for most modules using pybind11:
+
 - Enable with `--python` flag or `ATOM_BUILD_PYTHON_BINDINGS=ON`
 - Bindings are located in `python/` directory
 - Each module has corresponding Python binding files
@@ -107,18 +110,21 @@ Atom uses a comprehensive error handling system centered in the `error` module. 
 ## Common Development Tasks
 
 ### Building a Single Module
+
 ```bash
 cmake -B build -DATOM_BUILD_ALGORITHM=ON -DATOM_BUILD_TESTS=ON
 cmake --build build
 ```
 
 ### Running Specific Tests
+
 ```bash
 cd build
 ctest -R "algorithm_*" --output-on-failure
 ```
 
 ### Building with All Features
+
 ```bash
 ./scripts/build.sh --release --python --examples --tests --docs --package
 ```

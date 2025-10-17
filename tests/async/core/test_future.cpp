@@ -3,7 +3,6 @@
 #include <future>
 #include <thread>
 
-
 #include "atom/async/future.hpp"
 
 using namespace atom::async;

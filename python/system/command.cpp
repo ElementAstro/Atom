@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(command, m) {
@@ -362,10 +361,9 @@ Examples:
     Output: /usr/bin, Status: 0
 )");
 
-    m.def(
-        "get_processes_by_substring", &atom::system::getProcessesBySubstring,
-        py::arg("substring"),
-        R"(Get a list of running processes containing the specified substring.
+    m.def("get_processes_by_substring", &atom::system::getProcessesBySubstring,
+          py::arg("substring"),
+          R"(Get a list of running processes containing the specified substring.
 
 Args:
     substring: The substring to search for in process names.

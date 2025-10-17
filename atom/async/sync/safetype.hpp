@@ -852,9 +852,9 @@ namespace sync {
 /**
  * @brief Thread-safe wrapper for any type T
  *
- * SafeType provides thread-safe access to a value of type T using a shared_mutex
- * for reader-writer synchronization. Multiple readers can access the value
- * concurrently, but writers have exclusive access.
+ * SafeType provides thread-safe access to a value of type T using a
+ * shared_mutex for reader-writer synchronization. Multiple readers can access
+ * the value concurrently, but writers have exclusive access.
  *
  * @tparam T The type to wrap
  */

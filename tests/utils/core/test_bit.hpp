@@ -45,9 +45,9 @@ TEST_F(BitManipulationTest, CreateMask) {
     EXPECT_EQ(createMask<uint32_t>(16), 0x0000FFFF);
 
     // Edge cases
-    EXPECT_EQ(createMask<uint8_t>(0), 0x00);      // No bits set
-    EXPECT_EQ(createMask<uint8_t>(8), 0xFF);      // All bits set
-    EXPECT_EQ(createMask<uint16_t>(16), 0xFFFF);  // All bits set
+    EXPECT_EQ(createMask<uint8_t>(0), 0x00);          // No bits set
+    EXPECT_EQ(createMask<uint8_t>(8), 0xFF);          // All bits set
+    EXPECT_EQ(createMask<uint16_t>(16), 0xFFFF);      // All bits set
     EXPECT_EQ(createMask<uint32_t>(32), 0xFFFFFFFF);  // All bits set
 
     // Test with different types
@@ -65,14 +65,14 @@ TEST_F(BitManipulationTest, CreateMaskErrorHandling) {
 TEST_F(BitManipulationTest, CreateMaskBoundaryConditions) {
     // Test boundary conditions for different types
     EXPECT_EQ(createMask<uint8_t>(7), 0x7F);
-    EXPECT_EQ(createMask<uint8_t>(9), 0xFF);   // Should cap at max value
-    EXPECT_EQ(createMask<uint8_t>(100), 0xFF); // Should cap at max value
+    EXPECT_EQ(createMask<uint8_t>(9), 0xFF);    // Should cap at max value
+    EXPECT_EQ(createMask<uint8_t>(100), 0xFF);  // Should cap at max value
 
     EXPECT_EQ(createMask<uint16_t>(15), 0x7FFF);
-    EXPECT_EQ(createMask<uint16_t>(17), 0xFFFF); // Should cap at max value
+    EXPECT_EQ(createMask<uint16_t>(17), 0xFFFF);  // Should cap at max value
 
     EXPECT_EQ(createMask<uint32_t>(31), 0x7FFFFFFF);
-    EXPECT_EQ(createMask<uint32_t>(33), 0xFFFFFFFF); // Should cap at max value
+    EXPECT_EQ(createMask<uint32_t>(33), 0xFFFFFFFF);  // Should cap at max value
 }
 
 // Test countBytes function
@@ -159,7 +159,7 @@ TEST_F(BitManipulationTest, NextPowerOfTwo) {
 // Test setBit function
 TEST_F(BitManipulationTest, SetBit) {
     uint8_t value = 0x00;
-    
+
     // Set individual bits
     EXPECT_EQ(setBit(value, 0), 0x01);
     EXPECT_EQ(setBit(value, 1), 0x02);
@@ -171,14 +171,14 @@ TEST_F(BitManipulationTest, SetBit) {
     EXPECT_EQ(setBit(value, 0), 0x01);
 
     // Set multiple bits
-    value = 0x05; // 0101
-    EXPECT_EQ(setBit(value, 1), 0x07); // 0111
+    value = 0x05;                       // 0101
+    EXPECT_EQ(setBit(value, 1), 0x07);  // 0111
 }
 
 // Test clearBit function
 TEST_F(BitManipulationTest, ClearBit) {
     uint8_t value = 0xFF;
-    
+
     // Clear individual bits
     EXPECT_EQ(clearBit(value, 0), 0xFE);
     EXPECT_EQ(clearBit(value, 1), 0xFD);
@@ -189,14 +189,14 @@ TEST_F(BitManipulationTest, ClearBit) {
     EXPECT_EQ(clearBit(value, 0), 0xFE);
 
     // Clear multiple bits
-    value = 0x07; // 0111
-    EXPECT_EQ(clearBit(value, 1), 0x05); // 0101
+    value = 0x07;                         // 0111
+    EXPECT_EQ(clearBit(value, 1), 0x05);  // 0101
 }
 
 // Test toggleBit function
 TEST_F(BitManipulationTest, ToggleBit) {
     uint8_t value = 0x00;
-    
+
     // Toggle bits from 0
     EXPECT_EQ(toggleBit(value, 0), 0x01);
     EXPECT_EQ(toggleBit(value, 1), 0x02);
@@ -210,15 +210,16 @@ TEST_F(BitManipulationTest, ToggleBit) {
     EXPECT_EQ(toggleBit(value, 7), 0x00);
 
     // Toggle multiple times
-    value = 0x05; // 0101
-    EXPECT_EQ(toggleBit(value, 1), 0x07); // 0111
-    EXPECT_EQ(toggleBit(toggleBit(value, 1), 1), value); // Should return to original
+    value = 0x05;                          // 0101
+    EXPECT_EQ(toggleBit(value, 1), 0x07);  // 0111
+    EXPECT_EQ(toggleBit(toggleBit(value, 1), 1),
+              value);  // Should return to original
 }
 
 // Test getBit function
 TEST_F(BitManipulationTest, GetBit) {
-    uint8_t value = 0x55; // 01010101
-    
+    uint8_t value = 0x55;  // 01010101
+
     // Test individual bits
     EXPECT_TRUE(getBit(value, 0));
     EXPECT_FALSE(getBit(value, 1));
@@ -289,15 +290,15 @@ TEST_F(BitManipulationTest, BitPositionErrorHandling) {
 // Test rotateLeft function
 TEST_F(BitManipulationTest, RotateLeft) {
     // Test 8-bit rotation
-    uint8_t val8 = 0x81; // 10000001
-    EXPECT_EQ(rotateLeft(val8, 1), 0x03); // 00000011
-    EXPECT_EQ(rotateLeft(val8, 2), 0x06); // 00000110
-    EXPECT_EQ(rotateLeft(val8, 8), val8); // Full rotation returns original
+    uint8_t val8 = 0x81;                   // 10000001
+    EXPECT_EQ(rotateLeft(val8, 1), 0x03);  // 00000011
+    EXPECT_EQ(rotateLeft(val8, 2), 0x06);  // 00000110
+    EXPECT_EQ(rotateLeft(val8, 8), val8);  // Full rotation returns original
 
     // Test 16-bit rotation
     uint16_t val16 = 0x8001;
     EXPECT_EQ(rotateLeft(val16, 1), 0x0003);
-    EXPECT_EQ(rotateLeft(val16, 16), val16); // Full rotation returns original
+    EXPECT_EQ(rotateLeft(val16, 16), val16);  // Full rotation returns original
 
     // Test rotation by 0
     EXPECT_EQ(rotateLeft(val8, 0), val8);
@@ -307,15 +308,15 @@ TEST_F(BitManipulationTest, RotateLeft) {
 // Test rotateRight function
 TEST_F(BitManipulationTest, RotateRight) {
     // Test 8-bit rotation
-    uint8_t val8 = 0x81; // 10000001
-    EXPECT_EQ(rotateRight(val8, 1), 0xC0); // 11000000
-    EXPECT_EQ(rotateRight(val8, 2), 0x60); // 01100000
-    EXPECT_EQ(rotateRight(val8, 8), val8); // Full rotation returns original
+    uint8_t val8 = 0x81;                    // 10000001
+    EXPECT_EQ(rotateRight(val8, 1), 0xC0);  // 11000000
+    EXPECT_EQ(rotateRight(val8, 2), 0x60);  // 01100000
+    EXPECT_EQ(rotateRight(val8, 8), val8);  // Full rotation returns original
 
     // Test 16-bit rotation
     uint16_t val16 = 0x8001;
     EXPECT_EQ(rotateRight(val16, 1), 0xC000);
-    EXPECT_EQ(rotateRight(val16, 16), val16); // Full rotation returns original
+    EXPECT_EQ(rotateRight(val16, 16), val16);  // Full rotation returns original
 
     // Test rotation by 0
     EXPECT_EQ(rotateRight(val8, 0), val8);
@@ -344,18 +345,18 @@ TEST_F(BitManipulationTest, ReverseBits) {
 
 // Test extractBits function
 TEST_F(BitManipulationTest, ExtractBits) {
-    uint8_t value = 0xAB; // 10101011
+    uint8_t value = 0xAB;  // 10101011
 
     // Extract single bits
-    EXPECT_EQ(extractBits(value, 0, 1), 0x01); // Bit 0
-    EXPECT_EQ(extractBits(value, 1, 1), 0x01); // Bit 1
-    EXPECT_EQ(extractBits(value, 2, 1), 0x00); // Bit 2
-    EXPECT_EQ(extractBits(value, 7, 1), 0x01); // Bit 7
+    EXPECT_EQ(extractBits(value, 0, 1), 0x01);  // Bit 0
+    EXPECT_EQ(extractBits(value, 1, 1), 0x01);  // Bit 1
+    EXPECT_EQ(extractBits(value, 2, 1), 0x00);  // Bit 2
+    EXPECT_EQ(extractBits(value, 7, 1), 0x01);  // Bit 7
 
     // Extract multiple bits
-    EXPECT_EQ(extractBits(value, 0, 4), 0x0B); // Lower 4 bits
-    EXPECT_EQ(extractBits(value, 4, 4), 0x0A); // Upper 4 bits
-    EXPECT_EQ(extractBits(value, 2, 3), 0x02); // Bits 2-4
+    EXPECT_EQ(extractBits(value, 0, 4), 0x0B);  // Lower 4 bits
+    EXPECT_EQ(extractBits(value, 4, 4), 0x0A);  // Upper 4 bits
+    EXPECT_EQ(extractBits(value, 2, 3), 0x02);  // Bits 2-4
 
     // Extract all bits
     EXPECT_EQ(extractBits(value, 0, 8), value);
@@ -375,8 +376,8 @@ TEST_F(BitManipulationTest, InsertBits) {
     EXPECT_EQ(insertBits(target, 0x0F, 4, 4), 0xF0);
 
     // Insert into existing value
-    target = 0xAA; // 10101010
-    EXPECT_EQ(insertBits(target, 0x05, 1, 3), 0xAA); // Should replace bits 1-3
+    target = 0xAA;                                    // 10101010
+    EXPECT_EQ(insertBits(target, 0x05, 1, 3), 0xAA);  // Should replace bits 1-3
 }
 
 // Test performance with large datasets
@@ -399,11 +400,12 @@ TEST_F(BitManipulationTest, PerformanceTest) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
     // Should complete within reasonable time
-    EXPECT_LT(duration.count(), 10000); // 10ms max
-    EXPECT_GT(totalBits, 0); // Should have counted some bits
+    EXPECT_LT(duration.count(), 10000);  // 10ms max
+    EXPECT_GT(totalBits, 0);             // Should have counted some bits
 }
 
 // Test thread safety
@@ -413,23 +415,25 @@ TEST_F(BitManipulationTest, ThreadSafety) {
     std::vector<std::future<bool>> futures;
 
     for (int t = 0; t < numThreads; ++t) {
-        futures.push_back(std::async(std::launch::async, [operationsPerThread]() {
-            for (int i = 0; i < operationsPerThread; ++i) {
-                uint32_t value = generateRandom<uint32_t>();
+        futures.push_back(
+            std::async(std::launch::async, [operationsPerThread]() {
+                for (int i = 0; i < operationsPerThread; ++i) {
+                    uint32_t value = generateRandom<uint32_t>();
 
-                // Perform various operations
-                uint32_t bits = countBytes(value);
-                bool isPow2 = isPowerOfTwo(value);
-                uint32_t nextPow2 = nextPowerOfTwo(value);
-                uint32_t mask = createMask<uint32_t>(bits % 32);
+                    // Perform various operations
+                    uint32_t bits = countBytes(value);
+                    bool isPow2 = isPowerOfTwo(value);
+                    uint32_t nextPow2 = nextPowerOfTwo(value);
+                    uint32_t mask = createMask<uint32_t>(bits % 32);
 
-                // Basic sanity checks
-                if (bits > 32 || (isPow2 && value == 0) || nextPow2 < value) {
-                    return false;
+                    // Basic sanity checks
+                    if (bits > 32 || (isPow2 && value == 0) ||
+                        nextPow2 < value) {
+                        return false;
+                    }
                 }
-            }
-            return true;
-        }));
+                return true;
+            }));
     }
 
     // Wait for all threads and check results

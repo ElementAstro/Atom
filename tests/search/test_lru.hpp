@@ -517,7 +517,8 @@ TEST_F(ThreadSafeLRUCacheTest, ConcurrentReadWrite) {
         threads.emplace_back([this, i, &writeCount, &stopFlag]() {
             int count = 0;
             while (!stopFlag.load() && count < 50) {
-                std::string key = "writer" + std::to_string(i) + "_" + std::to_string(count);
+                std::string key =
+                    "writer" + std::to_string(i) + "_" + std::to_string(count);
                 cache->put(key, count);
                 writeCount++;
                 count++;
@@ -546,7 +547,8 @@ TEST_F(ThreadSafeLRUCacheTest, ConcurrentEviction) {
     for (int i = 0; i < 5; ++i) {
         threads.emplace_back([this, i, &evictionCount]() {
             for (int j = 0; j < 10; ++j) {
-                std::string key = "evict_thread" + std::to_string(i) + "_" + std::to_string(j);
+                std::string key = "evict_thread" + std::to_string(i) + "_" +
+                                  std::to_string(j);
                 size_t sizeBefore = cache->size();
                 cache->put(key, i * 10 + j);
                 size_t sizeAfter = cache->size();
@@ -563,11 +565,12 @@ TEST_F(ThreadSafeLRUCacheTest, ConcurrentEviction) {
         thread.join();
     }
 
-    EXPECT_GT(evictionCount, 0); // Should have had evictions
+    EXPECT_GT(evictionCount, 0);  // Should have had evictions
 }
 
 TEST_F(ThreadSafeLRUCacheTest, PerformanceUnderLoad) {
-    auto largeCache = std::make_unique<ThreadSafeLRUCache<std::string, int>>(1000);
+    auto largeCache =
+        std::make_unique<ThreadSafeLRUCache<std::string, int>>(1000);
 
     auto start = std::chrono::high_resolution_clock::now();
 
@@ -582,19 +585,21 @@ TEST_F(ThreadSafeLRUCacheTest, PerformanceUnderLoad) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    EXPECT_EQ(largeCache->size(), 1000); // Should be at capacity
-    EXPECT_LT(duration.count(), 5000); // Should complete within 5 seconds
+    EXPECT_EQ(largeCache->size(), 1000);  // Should be at capacity
+    EXPECT_LT(duration.count(), 5000);    // Should complete within 5 seconds
 }
 
 TEST_F(ThreadSafeLRUCacheTest, MemoryUsageWithLargeValues) {
-    auto stringCache = std::make_unique<ThreadSafeLRUCache<std::string, std::string>>(100);
+    auto stringCache =
+        std::make_unique<ThreadSafeLRUCache<std::string, std::string>>(100);
 
     // Add large string values
     for (int i = 0; i < 100; ++i) {
         std::string key = "large_key_" + std::to_string(i);
-        std::string value(10000, 'A' + (i % 26)); // 10KB strings
+        std::string value(10000, 'A' + (i % 26));  // 10KB strings
         stringCache->put(key, value);
     }
 

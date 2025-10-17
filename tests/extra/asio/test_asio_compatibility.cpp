@@ -1,15 +1,15 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 // Temporarily disable this test due to ASIO compatibility issues
 #if 0
 #include "atom/extra/asio/asio_compatibility.hpp"
 
 #include <chrono>
+#include <future>
 #include <memory>
 #include <string>
 #include <thread>
-#include <future>
 
 using namespace testing;
 
@@ -343,4 +343,4 @@ TEST_F(AsioCompatibilityTest, CompatibilityMacros) {
 
 } // namespace atom::extra::asio::test
 
-#endif // Temporarily disabled ASIO compatibility tests
+#endif  // Temporarily disabled ASIO compatibility tests

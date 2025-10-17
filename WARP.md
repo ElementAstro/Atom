@@ -9,6 +9,7 @@ The **Atom** library is a modular C++20/C++23 foundational library for astronomi
 ### Module Structure & Dependencies
 
 Each module follows this standardized pattern:
+
 ```
 atom/<module>/
 ├── CMakeLists.txt           # Module build config with dependency checks
@@ -32,6 +33,7 @@ Build order: `atom-error` → `atom-log` → `atom-meta`/`atom-utils` → specia
 ### Component Architecture Pattern
 
 The library uses a sophisticated component registry system for dependency injection and lifecycle management:
+
 - **Registry Pattern**: Central `Registry` class manages all components with thread-safe operations
 - **Lifecycle Management**: `LifecycleManager` handles component initialization order and dependency resolution
 - **Dependency Injection**: Components can declare required/optional dependencies that are auto-resolved
@@ -40,6 +42,7 @@ The library uses a sophisticated component registry system for dependency inject
 ## Build Commands
 
 ### CMake (Primary)
+
 ```bash
 # Configure with preset (recommended)
 cmake --preset release
@@ -57,6 +60,7 @@ cmake --build build --parallel 8             # Parallel build
 ```
 
 ### Cross-Platform Scripts (Recommended)
+
 ```bash
 # Unix/Linux/macOS - Enhanced build script
 ./build.sh --release --tests --examples --jobs 8
@@ -69,6 +73,7 @@ build.bat --debug --run-tests --docs
 ```
 
 ### XMake (Alternative)
+
 ```bash
 xmake f --build_examples=y --build_tests=y --python=y
 xmake build
@@ -77,6 +82,7 @@ xmake install  # Install built libraries
 ```
 
 ### Python Development
+
 ```bash
 pip install -e .[dev]
 pytest -q  # Run Python tests
@@ -85,6 +91,7 @@ pytest -q  # Run Python tests
 ## Module-Specific Development
 
 ### Adding New Modules
+
 1. Create module directory under `atom/`
 2. Add dependency entry in `cmake/module_dependencies.cmake`
 3. Update `ATOM_MODULE_BUILD_ORDER`
@@ -92,7 +99,9 @@ pytest -q  # Run Python tests
 5. Add example in `example/` if public-facing
 
 ### Dependency Management
+
 Dependencies are auto-resolved via CMake. Each module's `CMakeLists.txt` includes:
+
 ```cmake
 foreach(dep ${ATOM_<MODULE>_DEPENDS})
   string(REPLACE "atom-" "ATOM_BUILD_" dep_var_name ${dep})
@@ -103,6 +112,7 @@ endforeach()
 ## Testing
 
 ### C++ Tests
+
 ```bash
 # Debug build with tests
 cmake --preset debug && cmake --build --preset debug -j
@@ -119,11 +129,13 @@ xmake test
 ```
 
 ### Test Organization
+
 - **Unit Tests**: `tests/<module>/test_*.hpp` with GoogleTest framework
 - **Integration Tests**: Uses `atom/tests/test.hpp` custom registration system
 - **Examples**: `example/<module>/*.cpp` - one executable per file
 
 ### Test Registration Pattern
+
 ```cpp
 // Custom test registration in atom/tests/test.hpp
 ATOM_INLINE void registerTest(std::string name, std::function<void()> func,
@@ -136,23 +148,30 @@ ATOM_INLINE void registerTest(std::string name, std::function<void()> func,
 ## Key Development Patterns
 
 ### Platform Detection
+
 Use macros from `atom/macro.hpp`:
+
 - `ATOM_PLATFORM_WINDOWS/LINUX/APPLE` for platform detection
 - `ATOM_USE_BOOST*` flags for Boost integration
 - Prefer existing macros over raw `#ifdef`
 
 ### Error Handling
+
 All modules depend on `atom-error`:
+
 - Use `Result<T>` types from `atom-error`, not raw exceptions
 - Follow RAII principles with smart pointers
 
 ### Logging
+
 Use `atom-log` structured logging instead of `std::cout`
 
 ### Async Operations
+
 `atom-async` provides async primitives - don't reinvent async functionality
 
 ### Module Integration Points
+
 - **Error Handling**: `atom-error` - use result types
 - **Logging**: `atom-log` - structured logging
 - **Async Operations**: `atom-async` - async primitives
@@ -161,6 +180,7 @@ Use `atom-log` structured logging instead of `std::cout`
 ## Build Configuration
 
 ### Key Build Options
+
 - `ATOM_BUILD_EXAMPLES=ON` - Build example applications
 - `ATOM_BUILD_TESTS=ON` - Build test suite
 - `ATOM_BUILD_PYTHON_BINDINGS=ON` - Enable Python bindings
@@ -168,6 +188,7 @@ Use `atom-log` structured logging instead of `std::cout`
 - Individual module flags: `ATOM_BUILD_<MODULE>=ON`
 
 ### Build System Features
+
 - **Ninja Generator**: Automatically used if available for faster builds
 - **Parallel Builds**: Scripts auto-detect CPU cores
 - **Cross-Platform**: Windows (MSVC), Linux (GCC), macOS (Clang)
@@ -176,11 +197,13 @@ Use `atom-log` structured logging instead of `std::cout`
 ## Code Standards
 
 ### Language Requirements
+
 - **C++20 minimum**, C++23 preferred (auto-detected based on compiler)
 - Extensive use of concepts, ranges, source_location
 - Template-heavy design with meta-programming in `atom/meta/`
 
 ### Naming Conventions (per STYLE_OF_CODE.md)
+
 - **Variables/Functions**: camelCase
 - **Classes/Namespaces**: PascalCase
 - **Constants**: UPPER_SNAKE_CASE
@@ -188,18 +211,21 @@ Use `atom-log` structured logging instead of `std::cout`
 - **Class members**: m_prefix for private variables
 
 ### Documentation
+
 - Prefer Doxygen format: `@brief`, `@param`, `@return`
 - Comments should explain purpose and context
 
 ## File Structure Patterns
 
 ### Important Files
+
 - **Version Info**: `cmake/version_info.h.in` → `build/atom_version_info.h`
 - **Platform Config**: `cmake/PlatformSpecifics.cmake`
 - **Compiler Options**: `cmake/compiler_options.cmake`
 - **External Deps**: `vcpkg.json` and XMake `add_requires()`
 
 ### Python Bindings
+
 - Located in `python/` with pybind11
 - Auto-detects module types from directory structure
 - Each module gets its own Python binding file
@@ -207,24 +233,28 @@ Use `atom-log` structured logging instead of `std::cout`
 ## Common Development Tasks
 
 ### Documentation Generation
+
 ```bash
 doxygen Doxyfile  # C++ docs
 sphinx-build -b html docs docs/_build  # Python docs
 ```
 
 ### Code Formatting
+
 ```bash
 clang-format -i **/*.cpp **/*.hpp  # Use .clang-format config
 pre-commit run -a  # Python formatting (Black, isort, Ruff, MyPy)
 ```
 
 ### Package Management & Installation
+
 - **C++ Dependencies**: Via vcpkg/Conan (currently disabled by default)
 - **Python Dependencies**: Via pip/conda
 - **Modular Installation**: `scripts/modular-installer.py` for component-wise installation
 - **System Dependencies**: `./build.sh --install-deps` auto-installs required packages
 
 ### Modular Installation System
+
 ```bash
 # Install specific components with dependency resolution
 python scripts/modular-installer.py install core networking

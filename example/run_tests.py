@@ -24,10 +24,10 @@ Examples:
 """
 
 import argparse
+import json
+import os
 import subprocess
 import sys
-import os
-import json
 import time
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple

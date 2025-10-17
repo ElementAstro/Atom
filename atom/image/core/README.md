@@ -147,10 +147,12 @@ try {
 ## Dependencies
 
 ### Required
+
 - atom-error: Error handling framework
 - Standard C++20 library
 
 ### Optional
+
 - OpenCV: Advanced image operations
 - CImg: Alternative image processing backend
 - stb_image: Lightweight image I/O

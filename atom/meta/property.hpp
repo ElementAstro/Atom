@@ -257,8 +257,8 @@ public:
      * @param prop The Property object to output.
      * @return std::ostream& The output stream.
      */
-    friend auto operator<<(std::ostream& outputStream, const Property& prop)
-        -> std::ostream& {
+    friend auto operator<<(std::ostream& outputStream,
+                           const Property& prop) -> std::ostream& {
         try {
             outputStream << static_cast<T>(prop);
         } catch (const std::exception&) {

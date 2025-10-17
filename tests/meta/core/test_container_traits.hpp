@@ -5,9 +5,11 @@
 #include <gtest/gtest.h>
 #include "atom/meta/container_traits.hpp"
 
+#include <algorithm>
 #include <array>
 #include <deque>
 #include <forward_list>
+#include <functional>
 #include <list>
 #include <map>
 #include <queue>
@@ -17,8 +19,6 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
-#include <algorithm>
-#include <functional>
 
 namespace atom::test {
 
@@ -89,7 +89,8 @@ TEST_F(ContainerTraitsTest, VectorTraits) {
 
     // Type checks
     static_assert(std::is_same_v<VectorTraits::value_type, int>);
-    static_assert(std::is_same_v<VectorTraits::container_type, std::vector<int>>);
+    static_assert(
+        std::is_same_v<VectorTraits::container_type, std::vector<int>>);
 }
 
 // Test std::deque traits
@@ -161,7 +162,8 @@ TEST_F(ContainerTraitsTest, ListTraits) {
 
 // Test std::forward_list traits
 TEST_F(ContainerTraitsTest, ForwardListTraits) {
-    using ForwardListTraits = atom::meta::ContainerTraits<std::forward_list<int>>;
+    using ForwardListTraits =
+        atom::meta::ContainerTraits<std::forward_list<int>>;
 
     // Container category
     EXPECT_TRUE(ForwardListTraits::is_sequence_container);
@@ -285,7 +287,8 @@ TEST_F(ContainerTraitsTest, MapTraits) {
 
     // Access operations - map has operator[]
     EXPECT_TRUE(MapTraits::has_subscript);
-    EXPECT_FALSE(MapTraits::has_at);  // This might be incorrect, map does have at()
+    EXPECT_FALSE(
+        MapTraits::has_at);  // This might be incorrect, map does have at()
 
     // Key-value properties
     EXPECT_TRUE(MapTraits::has_key_type);
@@ -302,12 +305,14 @@ TEST_F(ContainerTraitsTest, MapTraits) {
     // Type checks
     static_assert(std::is_same_v<MapTraits::key_type, int>);
     static_assert(std::is_same_v<MapTraits::mapped_type, std::string>);
-    static_assert(std::is_same_v<MapTraits::value_type, std::pair<const int, std::string>>);
+    static_assert(std::is_same_v<MapTraits::value_type,
+                                 std::pair<const int, std::string>>);
 }
 
 // Test std::multimap traits
 TEST_F(ContainerTraitsTest, MultimapTraits) {
-    using MultimapTraits = atom::meta::ContainerTraits<std::multimap<std::string, int>>;
+    using MultimapTraits =
+        atom::meta::ContainerTraits<std::multimap<std::string, int>>;
 
     // Container category
     EXPECT_TRUE(MultimapTraits::is_associative_container);
@@ -359,7 +364,8 @@ TEST_F(ContainerTraitsTest, SetTraits) {
 
 // Test std::multiset traits
 TEST_F(ContainerTraitsTest, MultisetTraits) {
-    using MultisetTraits = atom::meta::ContainerTraits<std::multiset<std::string>>;
+    using MultisetTraits =
+        atom::meta::ContainerTraits<std::multiset<std::string>>;
 
     // Container category
     EXPECT_TRUE(MultisetTraits::is_associative_container);
@@ -375,7 +381,8 @@ TEST_F(ContainerTraitsTest, MultisetTraits) {
 
 // Test std::unordered_map traits
 TEST_F(ContainerTraitsTest, UnorderedMapTraits) {
-    using UnorderedMapTraits = atom::meta::ContainerTraits<std::unordered_map<int, std::string>>;
+    using UnorderedMapTraits =
+        atom::meta::ContainerTraits<std::unordered_map<int, std::string>>;
 
     // Container category
     EXPECT_FALSE(UnorderedMapTraits::is_sequence_container);
@@ -402,7 +409,8 @@ TEST_F(ContainerTraitsTest, UnorderedMapTraits) {
     // Key-value properties
     EXPECT_TRUE(UnorderedMapTraits::has_key_type);
     EXPECT_TRUE(UnorderedMapTraits::has_mapped_type);
-    EXPECT_FALSE(UnorderedMapTraits::is_sorted);  // unordered containers are not sorted
+    EXPECT_FALSE(
+        UnorderedMapTraits::is_sorted);  // unordered containers are not sorted
     EXPECT_TRUE(UnorderedMapTraits::is_unique);
 
     // Type checks
@@ -412,7 +420,8 @@ TEST_F(ContainerTraitsTest, UnorderedMapTraits) {
 
 // Test std::unordered_multimap traits
 TEST_F(ContainerTraitsTest, UnorderedMultimapTraits) {
-    using UnorderedMultimapTraits = atom::meta::ContainerTraits<std::unordered_multimap<std::string, int>>;
+    using UnorderedMultimapTraits =
+        atom::meta::ContainerTraits<std::unordered_multimap<std::string, int>>;
 
     // Container category
     EXPECT_TRUE(UnorderedMultimapTraits::is_unordered_associative_container);
@@ -421,7 +430,8 @@ TEST_F(ContainerTraitsTest, UnorderedMultimapTraits) {
     EXPECT_TRUE(UnorderedMultimapTraits::has_key_type);
     EXPECT_TRUE(UnorderedMultimapTraits::has_mapped_type);
     EXPECT_FALSE(UnorderedMultimapTraits::is_sorted);
-    EXPECT_FALSE(UnorderedMultimapTraits::is_unique);  // multimap allows duplicates
+    EXPECT_FALSE(
+        UnorderedMultimapTraits::is_unique);  // multimap allows duplicates
 
     // Access operations - unordered_multimap doesn't have operator[]
     EXPECT_FALSE(UnorderedMultimapTraits::has_subscript);
@@ -429,7 +439,8 @@ TEST_F(ContainerTraitsTest, UnorderedMultimapTraits) {
 
 // Test std::unordered_set traits
 TEST_F(ContainerTraitsTest, UnorderedSetTraits) {
-    using UnorderedSetTraits = atom::meta::ContainerTraits<std::unordered_set<int>>;
+    using UnorderedSetTraits =
+        atom::meta::ContainerTraits<std::unordered_set<int>>;
 
     // Container category
     EXPECT_TRUE(UnorderedSetTraits::is_unordered_associative_container);
@@ -451,7 +462,8 @@ TEST_F(ContainerTraitsTest, UnorderedSetTraits) {
 
 // Test std::unordered_multiset traits
 TEST_F(ContainerTraitsTest, UnorderedMultisetTraits) {
-    using UnorderedMultisetTraits = atom::meta::ContainerTraits<std::unordered_multiset<std::string>>;
+    using UnorderedMultisetTraits =
+        atom::meta::ContainerTraits<std::unordered_multiset<std::string>>;
 
     // Container category
     EXPECT_TRUE(UnorderedMultisetTraits::is_unordered_associative_container);
@@ -460,7 +472,8 @@ TEST_F(ContainerTraitsTest, UnorderedMultisetTraits) {
     EXPECT_TRUE(UnorderedMultisetTraits::has_key_type);
     EXPECT_FALSE(UnorderedMultisetTraits::has_mapped_type);
     EXPECT_FALSE(UnorderedMultisetTraits::is_sorted);
-    EXPECT_FALSE(UnorderedMultisetTraits::is_unique);  // multiset allows duplicates
+    EXPECT_FALSE(
+        UnorderedMultisetTraits::is_unique);  // multiset allows duplicates
 }
 
 // ===== CONTAINER ADAPTER TESTS =====
@@ -485,7 +498,7 @@ TEST_F(ContainerTraitsTest, StackTraits) {
     EXPECT_FALSE(StackTraits::has_push_front);
     EXPECT_TRUE(StackTraits::has_push_back);  // push() is considered push_back
     EXPECT_FALSE(StackTraits::has_pop_front);
-    EXPECT_TRUE(StackTraits::has_pop_back);   // pop() is considered pop_back
+    EXPECT_TRUE(StackTraits::has_pop_back);  // pop() is considered pop_back
 
     // Operations not supported by adapters
     EXPECT_FALSE(StackTraits::has_clear);
@@ -521,14 +534,15 @@ TEST_F(ContainerTraitsTest, QueueTraits) {
 
 // Test std::priority_queue traits
 TEST_F(ContainerTraitsTest, PriorityQueueTraits) {
-    using PriorityQueueTraits = atom::meta::ContainerTraits<std::priority_queue<int>>;
+    using PriorityQueueTraits =
+        atom::meta::ContainerTraits<std::priority_queue<int>>;
 
     // Container category
     EXPECT_TRUE(PriorityQueueTraits::is_container_adapter);
 
     // Container operations - priority_queue only supports top, push, pop
     EXPECT_FALSE(PriorityQueueTraits::has_front);
-    EXPECT_TRUE(PriorityQueueTraits::has_back);   // top() is considered back
+    EXPECT_TRUE(PriorityQueueTraits::has_back);  // top() is considered back
     EXPECT_TRUE(PriorityQueueTraits::has_push_back);  // push()
     EXPECT_TRUE(PriorityQueueTraits::has_pop_back);   // pop()
 
@@ -543,27 +557,35 @@ TEST_F(ContainerTraitsTest, PriorityQueueTraits) {
 
 // Test const container traits
 TEST_F(ContainerTraitsTest, ConstContainerTraits) {
-    using ConstVectorTraits = atom::meta::ContainerTraits<const std::vector<int>>;
+    using ConstVectorTraits =
+        atom::meta::ContainerTraits<const std::vector<int>>;
     using VectorTraits = atom::meta::ContainerTraits<std::vector<int>>;
 
     // Const containers should have the same traits as non-const
-    EXPECT_EQ(ConstVectorTraits::is_sequence_container, VectorTraits::is_sequence_container);
-    EXPECT_EQ(ConstVectorTraits::has_random_access, VectorTraits::has_random_access);
+    EXPECT_EQ(ConstVectorTraits::is_sequence_container,
+              VectorTraits::is_sequence_container);
+    EXPECT_EQ(ConstVectorTraits::has_random_access,
+              VectorTraits::has_random_access);
     EXPECT_EQ(ConstVectorTraits::has_push_back, VectorTraits::has_push_back);
 }
 
 // Test reference container traits
 TEST_F(ContainerTraitsTest, ReferenceContainerTraits) {
     using VectorRefTraits = atom::meta::ContainerTraits<std::vector<int>&>;
-    using VectorRValueRefTraits = atom::meta::ContainerTraits<std::vector<int>&&>;
+    using VectorRValueRefTraits =
+        atom::meta::ContainerTraits<std::vector<int>&&>;
     using VectorTraits = atom::meta::ContainerTraits<std::vector<int>>;
 
     // Reference containers should have the same traits as non-reference
-    EXPECT_EQ(VectorRefTraits::is_sequence_container, VectorTraits::is_sequence_container);
-    EXPECT_EQ(VectorRefTraits::has_random_access, VectorTraits::has_random_access);
+    EXPECT_EQ(VectorRefTraits::is_sequence_container,
+              VectorTraits::is_sequence_container);
+    EXPECT_EQ(VectorRefTraits::has_random_access,
+              VectorTraits::has_random_access);
 
-    EXPECT_EQ(VectorRValueRefTraits::is_sequence_container, VectorTraits::is_sequence_container);
-    EXPECT_EQ(VectorRValueRefTraits::has_random_access, VectorTraits::has_random_access);
+    EXPECT_EQ(VectorRValueRefTraits::is_sequence_container,
+              VectorTraits::is_sequence_container);
+    EXPECT_EQ(VectorRValueRefTraits::has_random_access,
+              VectorTraits::has_random_access);
 }
 
 // ===== VARIABLE TEMPLATE TESTS =====
@@ -579,8 +601,10 @@ TEST_F(ContainerTraitsTest, VariableTemplates) {
     EXPECT_FALSE(atom::meta::is_associative_container_v<std::vector<int>>);
 
     // Unordered associative container checks
-    EXPECT_TRUE(atom::meta::is_unordered_associative_container_v<std::unordered_map<int, int>>);
-    EXPECT_FALSE(atom::meta::is_unordered_associative_container_v<std::map<int, int>>);
+    EXPECT_TRUE(atom::meta::is_unordered_associative_container_v<
+                std::unordered_map<int, int>>);
+    EXPECT_FALSE(
+        atom::meta::is_unordered_associative_container_v<std::map<int, int>>);
 
     // Container adapter checks
     EXPECT_TRUE(atom::meta::is_container_adapter_v<std::stack<int>>);
@@ -591,7 +615,8 @@ TEST_F(ContainerTraitsTest, VariableTemplates) {
     EXPECT_FALSE(atom::meta::has_random_access_v<std::list<int>>);
 
     EXPECT_TRUE(atom::meta::has_bidirectional_access_v<std::list<int>>);
-    EXPECT_FALSE(atom::meta::has_bidirectional_access_v<std::forward_list<int>>);
+    EXPECT_FALSE(
+        atom::meta::has_bidirectional_access_v<std::forward_list<int>>);
 
     EXPECT_TRUE(atom::meta::has_forward_access_v<std::forward_list<int>>);
     EXPECT_FALSE(atom::meta::has_forward_access_v<std::vector<int>>);
@@ -632,49 +657,65 @@ TEST_F(ContainerTraitsTest, VariableTemplates) {
 TEST_F(ContainerTraitsTest, GetIteratorCategory) {
     // Random access containers
     auto vectorCategory = atom::meta::get_iterator_category<std::vector<int>>();
-    static_assert(std::is_same_v<decltype(vectorCategory), std::random_access_iterator_tag>);
+    static_assert(std::is_same_v<decltype(vectorCategory),
+                                 std::random_access_iterator_tag>);
 
-    auto arrayCategory = atom::meta::get_iterator_category<std::array<int, 5>>();
-    static_assert(std::is_same_v<decltype(arrayCategory), std::random_access_iterator_tag>);
+    auto arrayCategory =
+        atom::meta::get_iterator_category<std::array<int, 5>>();
+    static_assert(std::is_same_v<decltype(arrayCategory),
+                                 std::random_access_iterator_tag>);
 
     // Bidirectional containers
     auto listCategory = atom::meta::get_iterator_category<std::list<int>>();
-    static_assert(std::is_same_v<decltype(listCategory), std::bidirectional_iterator_tag>);
+    static_assert(std::is_same_v<decltype(listCategory),
+                                 std::bidirectional_iterator_tag>);
 
     auto mapCategory = atom::meta::get_iterator_category<std::map<int, int>>();
-    static_assert(std::is_same_v<decltype(mapCategory), std::bidirectional_iterator_tag>);
+    static_assert(
+        std::is_same_v<decltype(mapCategory), std::bidirectional_iterator_tag>);
 
     // Forward containers
-    auto forwardListCategory = atom::meta::get_iterator_category<std::forward_list<int>>();
-    static_assert(std::is_same_v<decltype(forwardListCategory), std::forward_iterator_tag>);
+    auto forwardListCategory =
+        atom::meta::get_iterator_category<std::forward_list<int>>();
+    static_assert(std::is_same_v<decltype(forwardListCategory),
+                                 std::forward_iterator_tag>);
 
-    auto unorderedMapCategory = atom::meta::get_iterator_category<std::unordered_map<int, int>>();
-    static_assert(std::is_same_v<decltype(unorderedMapCategory), std::forward_iterator_tag>);
+    auto unorderedMapCategory =
+        atom::meta::get_iterator_category<std::unordered_map<int, int>>();
+    static_assert(std::is_same_v<decltype(unorderedMapCategory),
+                                 std::forward_iterator_tag>);
 
     // Container adapters (input iterator as fallback)
     auto stackCategory = atom::meta::get_iterator_category<std::stack<int>>();
-    static_assert(std::is_same_v<decltype(stackCategory), std::input_iterator_tag>);
+    static_assert(
+        std::is_same_v<decltype(stackCategory), std::input_iterator_tag>);
 }
 
 // Test utility functions
 TEST_F(ContainerTraitsTest, UtilityFunctions) {
     // Test supports_efficient_random_access
-    EXPECT_TRUE(atom::meta::supports_efficient_random_access<std::vector<int>>());
-    EXPECT_TRUE(atom::meta::supports_efficient_random_access<std::array<int, 5>>());
-    EXPECT_FALSE(atom::meta::supports_efficient_random_access<std::list<int>>());
-    EXPECT_FALSE(atom::meta::supports_efficient_random_access<std::map<int, int>>());
+    EXPECT_TRUE(
+        atom::meta::supports_efficient_random_access<std::vector<int>>());
+    EXPECT_TRUE(
+        atom::meta::supports_efficient_random_access<std::array<int, 5>>());
+    EXPECT_FALSE(
+        atom::meta::supports_efficient_random_access<std::list<int>>());
+    EXPECT_FALSE(
+        atom::meta::supports_efficient_random_access<std::map<int, int>>());
 
     // Test can_grow_dynamically
     EXPECT_TRUE(atom::meta::can_grow_dynamically<std::vector<int>>());
     EXPECT_TRUE(atom::meta::can_grow_dynamically<std::list<int>>());
     EXPECT_TRUE(atom::meta::can_grow_dynamically<std::map<int, int>>());
     EXPECT_FALSE(atom::meta::can_grow_dynamically<std::array<int, 5>>());
-    EXPECT_FALSE(atom::meta::can_grow_dynamically<std::stack<int>>());  // Adapters don't directly support growth
+    EXPECT_FALSE(atom::meta::can_grow_dynamically<
+                 std::stack<int>>());  // Adapters don't directly support growth
 
     // Test supports_key_lookup
     EXPECT_TRUE(atom::meta::supports_key_lookup<std::map<int, int>>());
     EXPECT_TRUE(atom::meta::supports_key_lookup<std::set<int>>());
-    EXPECT_TRUE(atom::meta::supports_key_lookup<std::unordered_map<int, int>>());
+    EXPECT_TRUE(
+        atom::meta::supports_key_lookup<std::unordered_map<int, int>>());
     EXPECT_FALSE(atom::meta::supports_key_lookup<std::vector<int>>());
     EXPECT_FALSE(atom::meta::supports_key_lookup<std::list<int>>());
 }
@@ -695,8 +736,8 @@ TEST_F(ContainerTraitsTest, ContainerPipe) {
     EXPECT_EQ(result, expected);
 
     // Test filter operation
-    auto filtered = atom::meta::make_container_pipe(numbers)
-                      .filter([](int x) { return x % 2 == 0; });
+    auto filtered = atom::meta::make_container_pipe(numbers).filter(
+        [](int x) { return x % 2 == 0; });
     auto filteredResult = filtered.get();
 
     std::vector<int> expectedFiltered = {2, 4};
@@ -704,8 +745,8 @@ TEST_F(ContainerTraitsTest, ContainerPipe) {
 
     // Test chaining operations
     auto chained = atom::meta::make_container_pipe(numbers)
-                     .filter([](int x) { return x > 2; })
-                     .transform([](int x) { return x * 3; });
+                       .filter([](int x) { return x > 2; })
+                       .transform([](int x) { return x * 3; });
     auto chainedResult = chained.get();
 
     std::vector<int> expectedChained = {9, 12, 15};  // (3, 4, 5) * 3
@@ -717,16 +758,16 @@ TEST_F(ContainerTraitsTest, ContainerPipeWithDifferentTypes) {
     // Test with list
     std::list<std::string> words = {"hello", "world", "test"};
 
-    auto lengthPipe = atom::meta::make_container_pipe(words)
-                        .transform([](const std::string& s) { return s.length(); });
+    auto lengthPipe = atom::meta::make_container_pipe(words).transform(
+        [](const std::string& s) { return s.length(); });
     auto lengths = lengthPipe.get();
 
     std::vector<size_t> expectedLengths = {5, 5, 4};
     EXPECT_EQ(lengths, expectedLengths);
 
     // Test filter with strings
-    auto longWords = atom::meta::make_container_pipe(words)
-                       .filter([](const std::string& s) { return s.length() > 4; });
+    auto longWords = atom::meta::make_container_pipe(words).filter(
+        [](const std::string& s) { return s.length() > 4; });
     auto longWordsResult = longWords.get();
 
     std::list<std::string> expectedLongWords = {"hello", "world"};
@@ -753,17 +794,23 @@ TEST_F(ContainerTraitsTest, EmptyContainerTests) {
 TEST_F(ContainerTraitsTest, SingleElementContainerTests) {
     std::vector<int> singleElement = {42};
 
-    auto transformed = atom::meta::make_container_pipe(singleElement)
-                         .transform([](int x) { return x / 2; });
+    auto transformed =
+        atom::meta::make_container_pipe(singleElement).transform([](int x) {
+            return x / 2;
+        });
     std::vector<int> expected = {21};
     EXPECT_EQ(transformed.get(), expected);
 
-    auto filtered = atom::meta::make_container_pipe(singleElement)
-                      .filter([](int x) { return x > 50; });
+    auto filtered =
+        atom::meta::make_container_pipe(singleElement).filter([](int x) {
+            return x > 50;
+        });
     EXPECT_TRUE(filtered.get().empty());
 
-    auto notFiltered = atom::meta::make_container_pipe(singleElement)
-                         .filter([](int x) { return x > 10; });
+    auto notFiltered =
+        atom::meta::make_container_pipe(singleElement).filter([](int x) {
+            return x > 10;
+        });
     EXPECT_EQ(notFiltered.get(), singleElement);
 }
 
@@ -777,19 +824,22 @@ TEST_F(ContainerTraitsTest, ComplexTypeTests) {
     EXPECT_TRUE(ComplexMapTraits::has_mapped_type);
 
     static_assert(std::is_same_v<ComplexMapTraits::key_type, std::string>);
-    static_assert(std::is_same_v<ComplexMapTraits::mapped_type, std::vector<int>>);
+    static_assert(
+        std::is_same_v<ComplexMapTraits::mapped_type, std::vector<int>>);
 }
 
 // Test operation detection
 TEST_F(ContainerTraitsTest, OperationDetection) {
     // Test container_supports_operation (basic test since it's a SFINAE helper)
     using VectorSupportsOp = atom::meta::container_supports_operation<
-        std::vector<int>,
-        void(typename atom::meta::ContainerTraits<std::vector<int>>::value_type)>;
+        std::vector<int>, void(typename atom::meta::ContainerTraits<
+                               std::vector<int>>::value_type)>;
 
-    // This tests the SFINAE mechanism - exact test depends on the specific operation signature
-    // The test mainly ensures the template compiles correctly
-    static_assert(std::is_same_v<decltype(VectorSupportsOp::value), const bool>);
+    // This tests the SFINAE mechanism - exact test depends on the specific
+    // operation signature The test mainly ensures the template compiles
+    // correctly
+    static_assert(
+        std::is_same_v<decltype(VectorSupportsOp::value), const bool>);
 }
 
 }  // namespace atom::test

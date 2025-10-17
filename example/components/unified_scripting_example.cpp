@@ -20,10 +20,10 @@ and unified scripting features that work across multiple scripting engines.
 #include <string>
 #include <vector>
 
+#include <any>
 #include "atom/components/component.hpp"
 #include "atom/components/core/registry.hpp"
 #include "atom/components/scripting/scripting_api.hpp"
-#include <any>
 
 // Conditional includes for scripting engines
 #if ATOM_ENABLE_LUA
@@ -211,7 +211,8 @@ public:
                       << " engine:" << std::endl;
             auto result = pair.second->executeScript(script, context);
             if (result.success) {
-                std::cout << "  Result: " << result.returnValue.get<std::string>() << std::endl;
+                std::cout << "  Result: "
+                          << result.returnValue.get<std::string>() << std::endl;
             } else {
                 std::cout << "  Error: " << result.errorMessage << std::endl;
             }
@@ -227,12 +228,14 @@ public:
                       << std::endl;
             std::cout << "  Scripts executed: " << stats.scriptsExecuted
                       << std::endl;
-            std::cout << "  Errors encountered: " << stats.errorsEncountered << std::endl;
+            std::cout << "  Errors encountered: " << stats.errorsEncountered
+                      << std::endl;
             std::cout << "  Total time: " << stats.totalExecutionTime.count()
                       << " ms" << std::endl;
             std::cout << "  Average time: "
-                      << (stats.totalExecutionTime.count() / std::max(1ULL, stats.scriptsExecuted)) << " μs"
-                      << std::endl;
+                      << (stats.totalExecutionTime.count() /
+                          std::max(1ULL, stats.scriptsExecuted))
+                      << " μs" << std::endl;
         }
     }
 
@@ -279,16 +282,19 @@ void setupUnifiedScriptingManager(
         "level_up",
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
             auto result = component->runCommand("levelUp", {});
-            return ScriptValue(static_cast<int64_t>(std::stoi(std::any_cast<std::string>(result))));
+            return ScriptValue(static_cast<int64_t>(
+                std::stoi(std::any_cast<std::string>(result))));
         });
 
     manager.registerUniversalFunction(
         "gain_exp",
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
             if (args.size() >= 1 && args[0].holds<double>()) {
-                std::vector<std::any> expArgs = {std::any(std::to_string(args[0].get<double>()))};
+                std::vector<std::any> expArgs = {
+                    std::any(std::to_string(args[0].get<double>()))};
                 auto result = component->runCommand("gainExperience", expArgs);
-                return ScriptValue(std::stod(std::any_cast<std::string>(result)));
+                return ScriptValue(
+                    std::stod(std::any_cast<std::string>(result)));
             }
             return ScriptValue(0.0);
         });
@@ -297,7 +303,8 @@ void setupUnifiedScriptingManager(
         "learn_skill",
         [component](const std::vector<ScriptValue>& args) -> ScriptValue {
             if (args.size() >= 1 && args[0].holds<std::string>()) {
-                std::vector<std::any> skillArgs = {std::any(args[0].get<std::string>())};
+                std::vector<std::any> skillArgs = {
+                    std::any(args[0].get<std::string>())};
                 auto result = component->runCommand("learnSkill", skillArgs);
                 return ScriptValue(std::any_cast<std::string>(result) == "1");
             }
@@ -318,9 +325,9 @@ void setupUnifiedScriptingManager(
                 args[1].holds<double>()) {
                 std::vector<std::any> actionArgs = {
                     std::any(args[0].get<std::string>()),
-                    std::any(std::to_string(args[1].get<double>()))
-                };
-                auto result = component->runCommand("performAction", actionArgs);
+                    std::any(std::to_string(args[1].get<double>()))};
+                auto result =
+                    component->runCommand("performAction", actionArgs);
                 return ScriptValue(std::any_cast<std::string>(result));
             }
             return ScriptValue("Invalid arguments");
@@ -379,7 +386,8 @@ void demonstrateLanguageSpecificFeatures(UnifiedScriptingManager& manager) {
                                              "lua_tables");
 
     if (luaResult.success) {
-        std::cout << "Lua result: " << luaResult.returnValue.get<std::string>() << std::endl;
+        std::cout << "Lua result: " << luaResult.returnValue.get<std::string>()
+                  << std::endl;
     } else {
         std::cout << "Lua error: " << luaResult.errorMessage << std::endl;
     }
@@ -405,7 +413,8 @@ f"Total stats: {total_stats}, Skills: {len(skills)}"
                                                 "python_comprehension");
 
     if (pythonResult.success) {
-        std::cout << "Python result: " << pythonResult.returnValue.get<std::string>() << std::endl;
+        std::cout << "Python result: "
+                  << pythonResult.returnValue.get<std::string>() << std::endl;
     } else {
         std::cout << "Python error: " << pythonResult.errorMessage << std::endl;
     }
@@ -450,7 +459,8 @@ f"Int: {test_int}, Double: {test_double:.2f}, String: {test_string}, Bool: {test
         if (!testScript.empty()) {
             auto result = engine->executeScript(testScript, "value_conversion");
             if (result.success) {
-                std::cout << "   Result: " << result.returnValue.get<std::string>() << std::endl;
+                std::cout << "   Result: "
+                          << result.returnValue.get<std::string>() << std::endl;
             } else {
                 std::cout << "   Error: " << result.errorMessage << std::endl;
             }
@@ -510,7 +520,9 @@ sum(i * i for i in range(1, 1001))
                   << "%" << std::endl;
         std::cout << "   Total time: " << stats.totalExecutionTime.count()
                   << " μs" << std::endl;
-        std::cout << "   Average time: " << (stats.totalExecutionTime.count() / std::max(1ULL, stats.scriptsExecuted))
+        std::cout << "   Average time: "
+                  << (stats.totalExecutionTime.count() /
+                      std::max(1ULL, stats.scriptsExecuted))
                   << " μs" << std::endl;
     }
 }

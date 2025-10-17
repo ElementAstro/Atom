@@ -7,16 +7,16 @@
 #define ATOM_EXTRA_UV_CORO_HPP
 
 #include <uv.h>
+#include <chrono>
 #include <coroutine>
 #include <exception>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
-#include <chrono>
 #ifdef _WIN32
-#include <io.h>
 #include <fcntl.h>
+#include <io.h>
 #else
 #include <fcntl.h>
 #include <unistd.h>
@@ -304,13 +304,13 @@ public:
     void run_once() { uv_run(loop_, UV_RUN_ONCE); }
 
     void stop() { uv_stop(loop_); }
-    
-    template<typename T>
+
+    template <typename T>
     void schedule(Task<T> task) {
         // Start the task - this will begin execution
         // Since our Task uses suspend_never for initial_suspend,
         // the task will start immediately
-        (void)task; // Task will run to completion or suspend
+        (void)task;  // Task will run to completion or suspend
     }
 
 private:
@@ -1060,9 +1060,11 @@ inline TimeoutAwaiter timeout(uint64_t timeout_ms) {
     return TimeoutAwaiter(get_scheduler().get_loop(), timeout_ms);
 }
 
-template<typename Rep, typename Period>
-inline TimeoutAwaiter timeout(const std::chrono::duration<Rep, Period>& timeout) {
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count();
+template <typename Rep, typename Period>
+inline TimeoutAwaiter timeout(
+    const std::chrono::duration<Rep, Period>& timeout) {
+    auto ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(timeout).count();
     return TimeoutAwaiter(get_scheduler().get_loop(), ms);
 }
 
@@ -1070,9 +1072,7 @@ inline TcpConnectAwaiter tcp_connect(const std::string& host, int port) {
     return TcpConnectAwaiter(get_scheduler().get_loop(), host, port);
 }
 
-inline TcpReadAwaiter tcp_read(uv_tcp_t* tcp) {
-    return TcpReadAwaiter(tcp);
-}
+inline TcpReadAwaiter tcp_read(uv_tcp_t* tcp) { return TcpReadAwaiter(tcp); }
 
 inline TcpWriteAwaiter tcp_write(uv_tcp_t* tcp, const std::string& data) {
     return TcpWriteAwaiter(tcp, data);
@@ -1109,9 +1109,9 @@ class UdpSendPlaceholder {
 public:
     bool await_ready() const { return true; }
     void await_suspend(std::coroutine_handle<>) {}
-    UdpSendResult await_resume() { 
+    UdpSendResult await_resume() {
         // Placeholder - always succeeds
-        return UdpSendResult{10}; 
+        return UdpSendResult{10};
     }
 };
 
@@ -1119,22 +1119,27 @@ class UdpReceivePlaceholder {
 public:
     bool await_ready() const { return true; }
     void await_suspend(std::coroutine_handle<>) {}
-    UdpReceiveResult await_resume() { 
+    UdpReceiveResult await_resume() {
         // Placeholder - throw timeout to simulate no server
         throw UvError(UV_ETIMEDOUT);
     }
 };
 
-inline UdpSendPlaceholder udp_send(const std::string& host, int port, const std::string& message) {
+inline UdpSendPlaceholder udp_send(const std::string& host, int port,
+                                   const std::string& message) {
     // Placeholder implementation
-    (void)host; (void)port; (void)message;
+    (void)host;
+    (void)port;
+    (void)message;
     return UdpSendPlaceholder{};
 }
 
-template<typename Rep, typename Period>
-inline UdpReceivePlaceholder udp_receive(int port, const std::chrono::duration<Rep, Period>& timeout) {
+template <typename Rep, typename Period>
+inline UdpReceivePlaceholder udp_receive(
+    int port, const std::chrono::duration<Rep, Period>& timeout) {
     // Placeholder implementation
-    (void)port; (void)timeout;
+    (void)port;
+    (void)timeout;
     return UdpReceivePlaceholder{};
 }
 
@@ -1153,14 +1158,14 @@ struct ProcessResult {
 class ProcessPlaceholder {
 public:
     ProcessPlaceholder(const ProcessOptions& opts) : options(opts) {}
-    
+
     bool await_ready() const { return true; }
     void await_suspend(std::coroutine_handle<>) {}
-    ProcessResult await_resume() { 
+    ProcessResult await_resume() {
         // Placeholder - always succeeds with fake output
         return ProcessResult{0, "Hello from subprocess!", ""};
     }
-    
+
 private:
     ProcessOptions options;
 };

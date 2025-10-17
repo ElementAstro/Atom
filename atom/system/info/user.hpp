@@ -108,8 +108,8 @@ ATOM_NODISCARD auto getAllEnvironmentVariables()
  * @return true if the environment variable was set successfully.
  * @return false if the environment variable could not be set.
  */
-auto setEnvironmentVariable(const std::string& name, const std::string& value)
-    -> bool;
+auto setEnvironmentVariable(const std::string& name,
+                            const std::string& value) -> bool;
 
 /**
  * @brief Get the system uptime in seconds.

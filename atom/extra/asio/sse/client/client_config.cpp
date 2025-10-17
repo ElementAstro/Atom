@@ -102,4 +102,4 @@ void ClientConfig::save_to_file(const std::string& filename) const {
     }
 }
 
-}  // namespace sse
+}  // namespace atom::extra::asio::sse

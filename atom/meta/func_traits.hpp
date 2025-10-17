@@ -93,7 +93,8 @@ struct FunctionTraits<Return(Args..., ...)>
 
 // Variadic function pointer types
 template <typename Return, typename... Args>
-struct FunctionTraits<Return (*)(Args..., ...)> : FunctionTraitsBase<Return, Args...> {
+struct FunctionTraits<Return (*)(Args..., ...)>
+    : FunctionTraitsBase<Return, Args...> {
     static constexpr bool is_variadic = true;
 };
 
@@ -269,7 +270,6 @@ struct FunctionTraits<Return (Class::*)(Args...) noexcept>
     : MemberFunctionTraitsBase<Return, Class, Args...> {
     static constexpr bool is_noexcept = true;
 };
-
 
 // noexcept qualified rvalue reference and const volatile variants
 template <typename Return, typename Class, typename... Args>
@@ -502,10 +502,10 @@ public:
  */
 template <Callable T>
 function_pipe(T) -> function_pipe<typename FunctionTraits<T>::return_type(
-    typename std::tuple_element<
-        0, typename FunctionTraits<T>::argument_types>::type,
-    typename std::tuple_element<
-        1, typename FunctionTraits<T>::argument_types>::type)>;
+                     typename std::tuple_element<
+                         0, typename FunctionTraits<T>::argument_types>::type,
+                     typename std::tuple_element<
+                         1, typename FunctionTraits<T>::argument_types>::type)>;
 
 /**
  * \brief Primary template to detect non-static member function

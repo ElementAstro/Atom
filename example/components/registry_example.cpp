@@ -26,13 +26,13 @@ advanced registry features.
 #define ENABLE_HOT_RELOAD 0
 #endif
 
+#include <any>
 #include <chrono>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
-#include <any>
 
 #include "atom/components/component.hpp"
 #include "atom/components/core/registry.hpp"
@@ -54,50 +54,72 @@ public:
         addVariable<std::string>("status", "created");
         addVariable<bool>("active", false);
         addVariable<double>("version", 1.0);
-        addVariable<std::vector<std::string>>("tags", std::vector<std::string>{"registry", "example"});
+        addVariable<std::vector<std::string>>(
+            "tags", std::vector<std::string>{"registry", "example"});
 
         // Add commands for demonstration
-        def("increment", [this]() -> int {
-            auto counter = getVariable<int>("counter");
-            if (counter) {
-                int newValue = counter->get() + 1;
-                setValue("counter", newValue);
-                return newValue;
-            }
-            return 0;
-        }, "operations", "Increment the counter");
+        def(
+            "increment",
+            [this]() -> int {
+                auto counter = getVariable<int>("counter");
+                if (counter) {
+                    int newValue = counter->get() + 1;
+                    setValue("counter", newValue);
+                    return newValue;
+                }
+                return 0;
+            },
+            "operations", "Increment the counter");
 
-        def("setStatus", [this](const std::string& status) {
-            setValue("status", status);
-            std::cout << "  [" << getName() << "] Status set to: " << status << std::endl;
-        }, "operations", "Set component status");
+        def(
+            "setStatus",
+            [this](const std::string& status) {
+                setValue("status", status);
+                std::cout << "  [" << getName() << "] Status set to: " << status
+                          << std::endl;
+            },
+            "operations", "Set component status");
 
-        def("getInfo", [this]() -> std::string {
-            auto counter = getVariable<int>("counter");
-            auto status = getVariable<std::string>("status");
-            auto version = getVariable<double>("version");
+        def(
+            "getInfo",
+            [this]() -> std::string {
+                auto counter = getVariable<int>("counter");
+                auto status = getVariable<std::string>("status");
+                auto version = getVariable<double>("version");
 
-            std::string info = "Component: " + std::string(getName());
-            if (counter) info += ", Counter: " + std::to_string(counter->get());
-            if (status) info += ", Status: " + status->get();
-            if (version) info += ", Version: " + std::to_string(version->get());
+                std::string info = "Component: " + std::string(getName());
+                if (counter)
+                    info += ", Counter: " + std::to_string(counter->get());
+                if (status)
+                    info += ", Status: " + status->get();
+                if (version)
+                    info += ", Version: " + std::to_string(version->get());
 
-            return info;
-        }, "diagnostics", "Get component information");
+                return info;
+            },
+            "diagnostics", "Get component information");
 
-        def("activate", [this]() -> bool {
-            setValue("active", true);
-            setValue("status", std::string("active"));
-            std::cout << "  [" << getName() << "] Component activated" << std::endl;
-            return true;
-        }, "lifecycle", "Activate the component");
+        def(
+            "activate",
+            [this]() -> bool {
+                setValue("active", true);
+                setValue("status", std::string("active"));
+                std::cout << "  [" << getName() << "] Component activated"
+                          << std::endl;
+                return true;
+            },
+            "lifecycle", "Activate the component");
 
-        def("deactivate", [this]() -> bool {
-            setValue("active", false);
-            setValue("status", std::string("inactive"));
-            std::cout << "  [" << getName() << "] Component deactivated" << std::endl;
-            return true;
-        }, "lifecycle", "Deactivate the component");
+        def(
+            "deactivate",
+            [this]() -> bool {
+                setValue("active", false);
+                setValue("status", std::string("inactive"));
+                std::cout << "  [" << getName() << "] Component deactivated"
+                          << std::endl;
+                return true;
+            },
+            "lifecycle", "Deactivate the component");
     }
 
     bool initialize() override {
@@ -112,7 +134,8 @@ public:
  */
 class ServiceComponent : public RegistryComponent {
 public:
-    explicit ServiceComponent(const std::string& name) : RegistryComponent(name) {
+    explicit ServiceComponent(const std::string& name)
+        : RegistryComponent(name) {
         std::cout << "ServiceComponent '" << name << "' created" << std::endl;
 
         // Add service-specific variables
@@ -121,35 +144,48 @@ public:
         addVariable<bool>("running", false);
 
         // Add service commands
-        def("start", [this]() -> bool {
-            setValue("running", true);
-            setValue("status", std::string("running"));
-            std::cout << "  [" << getName() << "] Service started" << std::endl;
-            return true;
-        }, "service", "Start the service");
+        def(
+            "start",
+            [this]() -> bool {
+                setValue("running", true);
+                setValue("status", std::string("running"));
+                std::cout << "  [" << getName() << "] Service started"
+                          << std::endl;
+                return true;
+            },
+            "service", "Start the service");
 
-        def("stop", [this]() -> bool {
-            setValue("running", false);
-            setValue("status", std::string("stopped"));
-            std::cout << "  [" << getName() << "] Service stopped" << std::endl;
-            return true;
-        }, "service", "Stop the service");
+        def(
+            "stop",
+            [this]() -> bool {
+                setValue("running", false);
+                setValue("status", std::string("stopped"));
+                std::cout << "  [" << getName() << "] Service stopped"
+                          << std::endl;
+                return true;
+            },
+            "service", "Stop the service");
 
-        def("getServiceInfo", [this]() -> std::string {
-            auto port = getVariable<int>("port");
-            auto host = getVariable<std::string>("host");
-            auto running = getVariable<bool>("running");
+        def(
+            "getServiceInfo",
+            [this]() -> std::string {
+                auto port = getVariable<int>("port");
+                auto host = getVariable<std::string>("host");
+                auto running = getVariable<bool>("running");
 
-            std::string info = "Service: " + std::string(getName());
-            if (host && port) {
-                info += " @ " + host->get() + ":" + std::to_string(port->get());
-            }
-            if (running) {
-                info += " (Running: " + std::string(running->get() ? "Yes" : "No") + ")";
-            }
+                std::string info = "Service: " + std::string(getName());
+                if (host && port) {
+                    info +=
+                        " @ " + host->get() + ":" + std::to_string(port->get());
+                }
+                if (running) {
+                    info += " (Running: " +
+                            std::string(running->get() ? "Yes" : "No") + ")";
+                }
 
-            return info;
-        }, "diagnostics", "Get service information");
+                return info;
+            },
+            "diagnostics", "Get service information");
     }
 };
 
@@ -164,9 +200,12 @@ void demonstrateBasicRegistry() {
     auto comp1 = registry.createComponent<RegistryComponent>("Component1");
     auto comp2 = registry.createComponent<RegistryComponent>("Component2");
     auto service1 = registry.createComponent<ServiceComponent>("WebService");
-    auto service2 = registry.createComponent<ServiceComponent>("DatabaseService");
+    auto service2 =
+        registry.createComponent<ServiceComponent>("DatabaseService");
 
-    std::cout << "   Created components: Component1, Component2, WebService, DatabaseService" << std::endl;
+    std::cout << "   Created components: Component1, Component2, WebService, "
+                 "DatabaseService"
+              << std::endl;
 
     std::cout << "\n2. Initializing components..." << std::endl;
 
@@ -186,12 +225,14 @@ void demonstrateBasicRegistry() {
         // Use component commands
         auto result1 = retrieved1->runCommand("increment", {});
         auto result2 = retrieved1->runCommand("increment", {});
-        std::cout << "   Component1 increment results: " << std::any_cast<int>(result1)
-                  << ", " << std::any_cast<int>(result2) << std::endl;
+        std::cout << "   Component1 increment results: "
+                  << std::any_cast<int>(result1) << ", "
+                  << std::any_cast<int>(result2) << std::endl;
 
         // Set status
         std::vector<std::any> statusArgs = {std::any(std::string("testing"))};
-        [[maybe_unused]] auto statusResult = retrieved1->runCommand("setStatus", statusArgs);
+        [[maybe_unused]] auto statusResult =
+            retrieved1->runCommand("setStatus", statusArgs);
 
         // Get component info
         auto info1 = retrieved1->runCommand("getInfo", {});
@@ -200,9 +241,11 @@ void demonstrateBasicRegistry() {
         std::cout << "   " << std::any_cast<std::string>(info2) << std::endl;
 
         // Use service commands
-        [[maybe_unused]] auto startResult = retrievedService->runCommand("start", {});
+        [[maybe_unused]] auto startResult =
+            retrievedService->runCommand("start", {});
         auto serviceInfo = retrievedService->runCommand("getServiceInfo", {});
-        std::cout << "   " << std::any_cast<std::string>(serviceInfo) << std::endl;
+        std::cout << "   " << std::any_cast<std::string>(serviceInfo)
+                  << std::endl;
     }
 
     std::cout << "\n4. Listing all components..." << std::endl;
@@ -219,7 +262,8 @@ void demonstrateBasicRegistry() {
     for (const auto& comp : allComponents) {
         if (comp) {
             std::cout << "     - " << comp->getName()
-                      << " (State: " << static_cast<int>(comp->getState()) << ")" << std::endl;
+                      << " (State: " << static_cast<int>(comp->getState())
+                      << ")" << std::endl;
         }
     }
 }
@@ -239,10 +283,12 @@ void demonstrateAdvancedRegistry() {
     try {
         auto removedComponent = registry.getComponent("Component2");
         if (removedComponent) {
-            std::cout << "   ERROR: Component2 still exists after removal!" << std::endl;
+            std::cout << "   ERROR: Component2 still exists after removal!"
+                      << std::endl;
         }
     } catch (const std::exception& e) {
-        std::cout << "   Component2 correctly removed: " << e.what() << std::endl;
+        std::cout << "   Component2 correctly removed: " << e.what()
+                  << std::endl;
     }
 
     // Show remaining components
@@ -253,17 +299,21 @@ void demonstrateAdvancedRegistry() {
     }
     std::cout << std::endl;
 
-    std::cout << "\n6. Component initialization with custom initializers..." << std::endl;
+    std::cout << "\n6. Component initialization with custom initializers..."
+              << std::endl;
 
     // Add custom initializer
     registry.addInitializer("CustomComponent", [](Component& comp) {
-        std::cout << "   Custom initializer for " << comp.getName() << std::endl;
+        std::cout << "   Custom initializer for " << comp.getName()
+                  << std::endl;
         comp.addVariable<std::string>("custom_property", "initialized_value");
-        comp.addVariable<int>("init_timestamp", static_cast<int>(std::time(nullptr)));
+        comp.addVariable<int>("init_timestamp",
+                              static_cast<int>(std::time(nullptr)));
     });
 
     // Create component with custom initializer
-    auto customComp = registry.createComponent<RegistryComponent>("CustomComponent");
+    auto customComp =
+        registry.createComponent<RegistryComponent>("CustomComponent");
 
     // Verify custom initialization
     auto customProp = customComp->getVariable<std::string>("custom_property");
@@ -280,14 +330,18 @@ void demonstrateAdvancedRegistry() {
     if (comp1) {
         // Execute multiple commands to generate statistics
         for (int i = 0; i < 5; ++i) {
-            [[maybe_unused]] auto incResult = comp1->runCommand("increment", {});
+            [[maybe_unused]] auto incResult =
+                comp1->runCommand("increment", {});
         }
 
         const auto& stats = comp1->getPerformanceStats();
         std::cout << "   Component1 performance stats:" << std::endl;
-        std::cout << "     Command calls: " << stats.commandCallCount.load() << std::endl;
-        std::cout << "     Command errors: " << stats.commandErrorCount.load() << std::endl;
-        std::cout << "     Avg execution time: " << stats.getAvgExecutionTime().count() << "μs" << std::endl;
+        std::cout << "     Command calls: " << stats.commandCallCount.load()
+                  << std::endl;
+        std::cout << "     Command errors: " << stats.commandErrorCount.load()
+                  << std::endl;
+        std::cout << "     Avg execution time: "
+                  << stats.getAvgExecutionTime().count() << "μs" << std::endl;
     }
 }
 
@@ -301,19 +355,25 @@ void demonstrateErrorHandling() {
     // Test retrieving non-existent component
     try {
         auto nonExistent = registry.getComponent("NonExistentComponent");
-        std::cout << "   ERROR: Should not have found NonExistentComponent!" << std::endl;
+        std::cout << "   ERROR: Should not have found NonExistentComponent!"
+                  << std::endl;
     } catch (const std::exception& e) {
-        std::cout << "   Correctly handled non-existent component: " << e.what() << std::endl;
+        std::cout << "   Correctly handled non-existent component: " << e.what()
+                  << std::endl;
     }
 
     // Test invalid command execution
     auto comp1 = registry.getComponent("Component1");
     if (comp1) {
         try {
-            [[maybe_unused]] auto result = comp1->runCommand("nonexistent_command", {});
-            std::cout << "   ERROR: Should not have executed non-existent command!" << std::endl;
+            [[maybe_unused]] auto result =
+                comp1->runCommand("nonexistent_command", {});
+            std::cout
+                << "   ERROR: Should not have executed non-existent command!"
+                << std::endl;
         } catch (const std::exception& e) {
-            std::cout << "   Correctly handled invalid command: " << e.what() << std::endl;
+            std::cout << "   Correctly handled invalid command: " << e.what()
+                      << std::endl;
         }
     }
 
@@ -321,14 +381,16 @@ void demonstrateErrorHandling() {
 
     // Clean up remaining components
     auto allNames = registry.getAllComponentNames();
-    std::cout << "   Cleaning up " << allNames.size() << " components..." << std::endl;
+    std::cout << "   Cleaning up " << allNames.size() << " components..."
+              << std::endl;
 
     for (const auto& name : allNames) {
         try {
             registry.removeComponent(name);
             std::cout << "     Removed: " << name << std::endl;
         } catch (const std::exception& e) {
-            std::cout << "     Failed to remove " << name << ": " << e.what() << std::endl;
+            std::cout << "     Failed to remove " << name << ": " << e.what()
+                      << std::endl;
         }
     }
 
@@ -337,14 +399,16 @@ void demonstrateErrorHandling() {
 }
 
 int main() {
-    std::cout << "=== Comprehensive Atom Component Registry Example ===" << std::endl;
+    std::cout << "=== Comprehensive Atom Component Registry Example ==="
+              << std::endl;
 
     try {
         demonstrateBasicRegistry();
         demonstrateAdvancedRegistry();
         demonstrateErrorHandling();
 
-        std::cout << "\n=== All Registry Examples Completed Successfully! ===" << std::endl;
+        std::cout << "\n=== All Registry Examples Completed Successfully! ==="
+                  << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error in registry examples: " << e.what() << std::endl;

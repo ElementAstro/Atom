@@ -395,8 +395,8 @@ constexpr auto isNegative(const std::array<char, N>& arr) -> bool {
 }
 
 template <size_t N>
-constexpr auto arrayToInt(const std::array<char, N>& arr, int base = BASE_10)
-    -> int {
+constexpr auto arrayToInt(const std::array<char, N>& arr,
+                          int base = BASE_10) -> int {
     int result = 0;
     const char* begin = arr.data();
     const char* end = arr.data() + arr.size();
@@ -411,8 +411,8 @@ constexpr auto absoluteValue(const std::array<char, N>& arr) -> int {
 }
 
 template <size_t N>
-auto convertBase(const std::array<char, N>& arr, int from_base, int to_base)
-    -> std::string {
+auto convertBase(const std::array<char, N>& arr, int from_base,
+                 int to_base) -> std::string {
     int value = arrayToInt(arr, from_base);
     std::string result;
 

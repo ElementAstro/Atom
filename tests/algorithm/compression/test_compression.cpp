@@ -373,7 +373,6 @@ TEST_F(HuffmanTest, InputValidation) {
                  atom::algorithm::HuffmanException);
 }
 
-
 // ============================================================================
 // General Compression Tests
 // ============================================================================
@@ -420,17 +419,20 @@ TEST_F(GeneralCompressionTest, CompressionAlgorithmComparison) {
     auto binary_tree = atom::algorithm::createHuffmanTree(binary_frequencies);
     std::unordered_map<unsigned char, std::string> binary_codes;
     atom::algorithm::generateHuffmanCodes(binary_tree.get(), "", binary_codes);
-    auto binary_compressed = atom::algorithm::compressData(binary_data, binary_codes);
+    auto binary_compressed =
+        atom::algorithm::compressData(binary_data, binary_codes);
 
     // Both should successfully compress
     EXPECT_FALSE(huffman_compressed.empty());
     EXPECT_FALSE(binary_compressed.empty());
 
     // Text data should compress better than random binary data
-    double text_compression_ratio = static_cast<double>(huffman_compressed.size()) /
-                                   static_cast<double>(text_bytes.size() * 8);
-    double binary_compression_ratio = static_cast<double>(binary_compressed.size()) /
-                                      static_cast<double>(binary_data.size() * 8);
+    double text_compression_ratio =
+        static_cast<double>(huffman_compressed.size()) /
+        static_cast<double>(text_bytes.size() * 8);
+    double binary_compression_ratio =
+        static_cast<double>(binary_compressed.size()) /
+        static_cast<double>(binary_data.size() * 8);
 
     EXPECT_LT(text_compression_ratio, binary_compression_ratio);
 }
@@ -659,7 +661,8 @@ TEST_F(CompressionIntegrationTest, MultipleDataFormatCompression) {
 
     // Test with vector input
     std::vector<unsigned char> vector_data(data.begin(), data.end());
-    auto compressed_from_vector = atom::algorithm::compressData(vector_data, codes);
+    auto compressed_from_vector =
+        atom::algorithm::compressData(vector_data, codes);
 
     // Both should produce same result
     EXPECT_EQ(compressed_from_string, compressed_from_vector);

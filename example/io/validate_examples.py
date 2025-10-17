@@ -5,8 +5,8 @@ This script validates the structure and content of the I/O examples
 """
 
 import os
-import sys
 import re
+import sys
 from pathlib import Path
 
 

@@ -277,8 +277,8 @@ private:
      * @return The result of the command execution.
      */
     template <typename ArgsType>
-    auto dispatchHelper(const std::string& name, const ArgsType& args)
-        -> std::any;
+    auto dispatchHelper(const std::string& name,
+                        const ArgsType& args) -> std::any;
 
     auto dispatchHelper(const std::string& name,
                         const std::vector<std::any>& args) -> std::any;
@@ -309,8 +309,8 @@ private:
      * @return A vector of completed arguments.
      */
     template <typename ArgsType>
-    auto completeArgs(const Command& cmd, const ArgsType& args)
-        -> std::vector<std::any>;
+    auto completeArgs(const Command& cmd,
+                      const ArgsType& args) -> std::vector<std::any>;
 
     /**
      * @brief Checks the precondition of a command.
@@ -356,10 +356,9 @@ private:
      * @param args The arguments for the command.
      * @return The result of the command execution.
      */
-    static auto executeWithoutTimeout(const Command& cmd,
-                                      const std::string& name,
-                                      const std::vector<std::any>& args)
-        -> std::any;
+    static auto executeWithoutTimeout(
+        const Command& cmd, const std::string& name,
+        const std::vector<std::any>& args) -> std::any;
 
     /**
      * @brief Executes the functions of a command.
@@ -507,8 +506,9 @@ template <typename Ret, typename... Args>
                 std::move(precondition),
                 std::move(postcondition)};
 
-    // Build a runtime-matching signature based only on argument types (no return type)
-    // and using raw type_info names to match dispatch-time construction.
+    // Build a runtime-matching signature based only on argument types (no
+    // return type) and using raw type_info names to match dispatch-time
+    // construction.
     std::string signature = "(";
     // Use fold expression to append each Args typeid name
     ((signature += std::string(typeid(Args).name()) + ","), ...);
@@ -516,7 +516,8 @@ template <typename Ret, typename... Args>
         signature.pop_back();
     }
     signature += ")";
-    spdlog::info("Computed registration signature for '{}' as '{}'", nameStr, signature);
+    spdlog::info("Computed registration signature for '{}' as '{}'", nameStr,
+                 signature);
 
     // Thread-safe operation
     {
@@ -531,7 +532,8 @@ template <typename Ret, typename... Args>
             }
         }
 
-        spdlog::info("Registering command '{}' with signature '{}'", nameStr, signature);
+        spdlog::info("Registering command '{}' with signature '{}'", nameStr,
+                     signature);
         commands_[nameStr][signature] = std::move(cmd);
         groupMap_[nameStr] = groupStr;
     }
@@ -576,7 +578,8 @@ auto CommandDispatcher::dispatchHelper(const std::string& name,
     }
     signature += ")";
 
-    spdlog::info("Dispatch lookup for '{}' with signature '{}'", name, signature);
+    spdlog::info("Dispatch lookup for '{}' with signature '{}'", name,
+                 signature);
     // Lock for thread safety during command lookup
     std::shared_lock lock(mutex_);
 
@@ -598,11 +601,13 @@ auto CommandDispatcher::dispatchHelper(const std::string& name,
 
     // Validate arguments if this is a vector of anys
     if constexpr (std::is_same_v<ArgsType, std::vector<std::any>>) {
-        // Basic validation of argument count - only when we have explicit arg metadata.
-        // If argTypes is empty (common when registering without Arg info), skip this check.
+        // Basic validation of argument count - only when we have explicit arg
+        // metadata. If argTypes is empty (common when registering without Arg
+        // info), skip this check.
         if (!cmd.argTypes.empty() && args.size() > cmd.argTypes.size()) {
             THROW_INVALID_ARGUMENT(
-                "Too many arguments for command {}: expected at most {}, got {}",
+                "Too many arguments for command {}: expected at most {}, got "
+                "{}",
                 name, cmd.argTypes.size(), args.size());
         }
     }

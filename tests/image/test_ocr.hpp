@@ -1,7 +1,7 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
@@ -9,9 +9,9 @@
 #include <vector>
 
 #ifdef ATOM_IMAGE_HAS_OCR
-#include "atom/image/processing/ocr/ocr.hpp"
-#include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/opencv.hpp>
+#include "atom/image/processing/ocr/ocr.hpp"
 #endif
 
 namespace fs = std::filesystem;
@@ -19,40 +19,41 @@ namespace fs = std::filesystem;
 class OCRTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        #ifdef ATOM_IMAGE_HAS_OCR
+#ifdef ATOM_IMAGE_HAS_OCR
         // Create test configuration
         config.language = "eng";
         config.enableDeskew = true;
-        config.enablePerspectiveCorrection = false; // Disable for simpler tests
+        config.enablePerspectiveCorrection =
+            false;  // Disable for simpler tests
         config.enableNoiseRemoval = true;
-        config.enableTextDetection = false; // Use simple OCR for tests
-        config.enableSpellCheck = false; // Disable for predictable results
-        config.cacheResults = false; // Disable caching for tests
+        config.enableTextDetection = false;  // Use simple OCR for tests
+        config.enableSpellCheck = false;     // Disable for predictable results
+        config.cacheResults = false;         // Disable caching for tests
 
         // Create test images
         createTestImages();
 
         // Create test dictionary file
         createTestDictionary();
-        #endif
+#endif
     }
 
     void TearDown() override {
-        #ifdef ATOM_IMAGE_HAS_OCR
+#ifdef ATOM_IMAGE_HAS_OCR
         // Clean up test files
         for (const auto& path : test_files) {
             std::remove(path.c_str());
         }
         std::remove(test_dict_path.c_str());
-        #endif
+#endif
     }
 
-    #ifdef ATOM_IMAGE_HAS_OCR
+#ifdef ATOM_IMAGE_HAS_OCR
     void createTestImages() {
         // Create simple text image
         cv::Mat simple_text(100, 300, CV_8UC3, cv::Scalar(255, 255, 255));
         cv::putText(simple_text, "Hello World", cv::Point(10, 50),
-                   cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 0), 2);
+                    cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 0), 2);
 
         simple_text_path = "test_simple_text.png";
         cv::imwrite(simple_text_path, simple_text);
@@ -61,7 +62,7 @@ protected:
         // Create noisy text image
         cv::Mat noisy_text(100, 300, CV_8UC3, cv::Scalar(255, 255, 255));
         cv::putText(noisy_text, "Noisy Text", cv::Point(10, 50),
-                   cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 0), 2);
+                    cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 0), 2);
 
         // Add noise
         cv::Mat noise(noisy_text.size(), CV_8UC3);
@@ -75,12 +76,13 @@ protected:
         // Create rotated text image
         cv::Mat rotated_text(150, 300, CV_8UC3, cv::Scalar(255, 255, 255));
         cv::putText(rotated_text, "Rotated", cv::Point(50, 75),
-                   cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 0), 2);
+                    cv::FONT_HERSHEY_SIMPLEX, 1, cv::Scalar(0, 0, 0), 2);
 
         // Rotate the image
         cv::Point2f center(rotated_text.cols / 2.0f, rotated_text.rows / 2.0f);
         cv::Mat rotation_matrix = cv::getRotationMatrix2D(center, 15, 1.0);
-        cv::warpAffine(rotated_text, rotated_text, rotation_matrix, rotated_text.size());
+        cv::warpAffine(rotated_text, rotated_text, rotation_matrix,
+                       rotated_text.size());
 
         rotated_text_path = "test_rotated_text.png";
         cv::imwrite(rotated_text_path, rotated_text);
@@ -114,7 +116,7 @@ protected:
     std::string empty_image_path;
     std::string test_dict_path;
     std::vector<std::string> test_files;
-    #endif
+#endif
 };
 
 #ifdef ATOM_IMAGE_HAS_OCR
@@ -152,7 +154,7 @@ TEST_F(OCRTest, ProgressReporter) {
 
 // Test OCR cache functionality
 TEST_F(OCRTest, OCRCache) {
-    OCRCache cache("test_cache", 1024 * 1024); // 1MB cache
+    OCRCache cache("test_cache", 1024 * 1024);  // 1MB cache
 
     // Load test image
     cv::Mat test_image = cv::imread(simple_text_path);
@@ -187,8 +189,8 @@ TEST_F(OCRTest, SpellChecker) {
     EXPECT_TRUE(checker.isCorrect("test"));
 
     // Test incorrect words
-    EXPECT_FALSE(checker.isCorrect("helo")); // Missing 'l'
-    EXPECT_FALSE(checker.isCorrect("wrold")); // Transposed letters
+    EXPECT_FALSE(checker.isCorrect("helo"));   // Missing 'l'
+    EXPECT_FALSE(checker.isCorrect("wrold"));  // Transposed letters
     EXPECT_FALSE(checker.isCorrect("unknown"));
 
     // Test suggestions
@@ -215,17 +217,15 @@ TEST_F(OCRTest, SpellChecker) {
 // Test enhanced OCR processor initialization
 TEST_F(OCRTest, OCRProcessorInitialization) {
     // Test with valid configuration
-    EXPECT_NO_THROW({
-        EnhancedOCRProcessor processor(config);
-    });
+    EXPECT_NO_THROW({ EnhancedOCRProcessor processor(config); });
 
     // Test with invalid language (should throw)
     OCRConfig invalid_config = config;
     invalid_config.language = "invalid_language_code";
 
-    EXPECT_THROW({
-        EnhancedOCRProcessor processor(invalid_config);
-    }, std::runtime_error);
+    EXPECT_THROW(
+        { EnhancedOCRProcessor processor(invalid_config); },
+        std::runtime_error);
 }
 
 // Test basic OCR processing
@@ -246,7 +246,8 @@ TEST_F(OCRTest, BasicOCRProcessing) {
 
     // The text should contain "Hello" and "World" (case insensitive)
     std::string lower_text = result.text;
-    std::transform(lower_text.begin(), lower_text.end(), lower_text.begin(), ::tolower);
+    std::transform(lower_text.begin(), lower_text.end(), lower_text.begin(),
+                   ::tolower);
     EXPECT_NE(lower_text.find("hello"), std::string::npos);
     EXPECT_NE(lower_text.find("world"), std::string::npos);
 }
@@ -310,7 +311,8 @@ TEST_F(OCRTest, LanguageDetection) {
     ASSERT_FALSE(test_image.empty());
 
     std::string detected_language;
-    bool detection_success = processor.detectLanguage(test_image, detected_language);
+    bool detection_success =
+        processor.detectLanguage(test_image, detected_language);
 
     // Should detect some language (even if it's just the default)
     EXPECT_TRUE(detection_success);
@@ -336,7 +338,7 @@ TEST_F(OCRTest, DeskewFunctionality) {
     cv::Mat diff;
     cv::absdiff(rotated_image, deskewed, diff);
     cv::Scalar mean_diff = cv::mean(diff);
-    EXPECT_GT(mean_diff[0], 0); // Should have some difference
+    EXPECT_GT(mean_diff[0], 0);  // Should have some difference
 }
 
 // Test batch processing
@@ -351,8 +353,8 @@ TEST_F(OCRTest, BatchProcessing) {
 
     // Remove any empty images
     images.erase(std::remove_if(images.begin(), images.end(),
-                               [](const cv::Mat& img) { return img.empty(); }),
-                images.end());
+                                [](const cv::Mat& img) { return img.empty(); }),
+                 images.end());
 
     ASSERT_FALSE(images.empty());
 
@@ -384,10 +386,11 @@ TEST_F(OCRTest, DISABLED_PerformanceTest) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    std::cout << "Processed " << iterations << " images in "
-              << duration.count() << " ms" << std::endl;
+    std::cout << "Processed " << iterations << " images in " << duration.count()
+              << " ms" << std::endl;
     std::cout << "Average: " << (duration.count() / iterations)
               << " ms per image" << std::endl;
 }
@@ -396,7 +399,8 @@ TEST_F(OCRTest, DISABLED_PerformanceTest) {
 
 // Placeholder test when OCR is not available
 TEST_F(OCRTest, OCRNotAvailable) {
-    GTEST_SKIP() << "OCR functionality not available (missing Tesseract/OpenCV)";
+    GTEST_SKIP()
+        << "OCR functionality not available (missing Tesseract/OpenCV)";
 }
 
 #endif

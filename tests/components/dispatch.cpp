@@ -33,9 +33,10 @@ TEST_F(CommandDispatcherTest, DefineAndDispatchSimpleFunction) {
 
 // Test dispatching with missing arguments and default values
 TEST_F(CommandDispatcherTest, DispatchWithDefaultArguments) {
-    [[maybe_unused]] bool result = dispatcher.def("increment", "math", "Increments a number",
-                   std::function<int(int)>([](int a) { return a + 1; }),
-                   std::nullopt, std::nullopt, {atom::meta::Arg("a", 42)});
+    [[maybe_unused]] bool result =
+        dispatcher.def("increment", "math", "Increments a number",
+                       std::function<int(int)>([](int a) { return a + 1; }),
+                       std::nullopt, std::nullopt, {atom::meta::Arg("a", 42)});
 
     std::any dispatchResult = dispatcher.dispatch("increment");
     ASSERT_EQ(std::any_cast<int>(dispatchResult), 43);
@@ -71,11 +72,11 @@ TEST_F(CommandDispatcherTest, AliasCreationAndResolution) {
 // Test group management and command listing
 TEST_F(CommandDispatcherTest, GroupManagementAndCommandListing) {
     [[maybe_unused]] bool r1 = dispatcher.def("cmd1", "group1", "Command 1",
-                   std::function<void()>([]() {}));
+                                              std::function<void()>([]() {}));
     [[maybe_unused]] bool r2 = dispatcher.def("cmd2", "group1", "Command 2",
-                   std::function<void()>([]() {}));
+                                              std::function<void()>([]() {}));
     [[maybe_unused]] bool r3 = dispatcher.def("cmd3", "group2", "Command 3",
-                   std::function<void()>([]() {}));
+                                              std::function<void()>([]() {}));
 
     std::vector<std::string> group1Commands =
         dispatcher.getCommandsInGroup("group1");
@@ -101,8 +102,9 @@ TEST_F(CommandDispatcherTest, GroupManagementAndCommandListing) {
 
 // Test removing a command
 TEST_F(CommandDispatcherTest, RemoveCommand) {
-    [[maybe_unused]] bool defResult = dispatcher.def("toRemove", "misc", "A command to be removed",
-                   std::function<void()>([]() {}));
+    [[maybe_unused]] bool defResult =
+        dispatcher.def("toRemove", "misc", "A command to be removed",
+                       std::function<void()>([]() {}));
     ASSERT_TRUE(dispatcher.has("toRemove"));
 
     dispatcher.removeCommand("toRemove");
@@ -124,11 +126,13 @@ TEST_F(CommandDispatcherTest, DispatchWithMismatchedArgumentTypes) {
 
 // Test dispatching an overloaded function
 TEST_F(CommandDispatcherTest, DispatchOverloadedFunction) {
-    [[maybe_unused]] bool r1 = dispatcher.def("overloaded", "test", "Overloaded function",
-                   std::function<int(int)>([](int a) { return a; }));
-    [[maybe_unused]] bool r2 = dispatcher.def("overloaded", "test", "Overloaded function",
-                   std::function<std::string(std::string)>(
-                       [](std::string a) { return a; }));
+    [[maybe_unused]] bool r1 =
+        dispatcher.def("overloaded", "test", "Overloaded function",
+                       std::function<int(int)>([](int a) { return a; }));
+    [[maybe_unused]] bool r2 =
+        dispatcher.def("overloaded", "test", "Overloaded function",
+                       std::function<std::string(std::string)>(
+                           [](std::string a) { return a; }));
 
     std::any intResult = dispatcher.dispatch("overloaded", 42);
     ASSERT_EQ(std::any_cast<int>(intResult), 42);

@@ -15,12 +15,12 @@ Write-Host "=== ATOM EXAMPLE SIMPLE TEST SUITE ===" -ForegroundColor Green
 Write-Host "Timeout: $TimeoutSeconds seconds`n" -ForegroundColor Cyan
 
 # Add Atom DLL directories to PATH
-$atomDllDirs = Get-ChildItem -Recurse build/atom -Filter "*.dll" | 
+$atomDllDirs = Get-ChildItem -Recurse build/atom -Filter "*.dll" |
     Select-Object -ExpandProperty DirectoryName -Unique
 $env:PATH = ($atomDllDirs -join ";") + ";" + $env:PATH
 
 # Get all example executables
-$exes = Get-ChildItem -Recurse build/example -Filter *.exe | 
+$exes = Get-ChildItem -Recurse build/example -Filter *.exe |
     Where-Object { $_.Directory.Name -notmatch "CMakeFiles|CompilerId" } |
     Sort-Object Directory, Name
 
@@ -40,9 +40,9 @@ foreach ($exe in $exes) {
     $testNumber++
     $moduleName = $exe.Directory.Name
     $exeName = $exe.Name
-    
+
     Write-Host "[$testNumber/$($exes.Count)] $moduleName/$exeName" -NoNewline
-    
+
     try {
         # Start process with timeout
         $psi = New-Object System.Diagnostics.ProcessStartInfo
@@ -52,13 +52,13 @@ foreach ($exe in $exes) {
         $psi.RedirectStandardError = $true
         $psi.UseShellExecute = $false
         $psi.CreateNoWindow = $true
-        
+
         $process = New-Object System.Diagnostics.Process
         $process.StartInfo = $psi
         $process.Start() | Out-Null
-        
+
         $finished = $process.WaitForExit($TimeoutSeconds * 1000)
-        
+
         if ($finished) {
             if ($process.ExitCode -eq 0) {
                 Write-Host " ✓ PASSED" -ForegroundColor Green
@@ -72,9 +72,9 @@ foreach ($exe in $exes) {
             $timeout++
             $process.Kill()
         }
-        
+
         $process.Dispose()
-        
+
     } catch {
         Write-Host " ✗ CRASHED: $($_.Exception.Message)" -ForegroundColor Red
         $crashed++
@@ -93,4 +93,3 @@ if ($failed -gt 0 -or $timeout -gt 0 -or $crashed -gt 0) {
 } else {
     exit 0
 }
-

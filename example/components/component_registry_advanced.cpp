@@ -22,11 +22,13 @@ performance monitoring, and advanced registry features.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/lifecycle/lifecycle.hpp"
 #include "atom/components/core/registry.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
 
-// Note: Registry, Component, and LifecycleManager are in the global namespace, not atom::components
-using namespace atom::components;  // For DependencyType and other types that ARE in atom::components
+// Note: Registry, Component, and LifecycleManager are in the global namespace,
+// not atom::components
+using namespace atom::components;  // For DependencyType and other types that
+                                   // ARE in atom::components
 
 /**
  * @brief Database component that other components depend on
@@ -113,7 +115,9 @@ public:
             if (dbComponent) {
                 // Note: executeCommand is not available in Component base class
                 // Commenting out for compilation
-                // auto result = dbComponent->getCommandDispatcher()->execute("isConnected", {});
+                // auto result =
+                // dbComponent->getCommandDispatcher()->execute("isConnected",
+                // {});
                 std::cout << "  [LOG] Database dependency available"
                           << std::endl;
             }
@@ -147,9 +151,11 @@ public:
             try {
                 auto logger = registry.getComponent("Logger");
                 if (logger) {
-                    // Note: executeCommand is not available in Component base class
-                    // logger->executeCommand("log", {"Application started"});
-                    std::cout << "  [APP] Logger available for startup logging" << std::endl;
+                    // Note: executeCommand is not available in Component base
+                    // class logger->executeCommand("log", {"Application
+                    // started"});
+                    std::cout << "  [APP] Logger available for startup logging"
+                              << std::endl;
                 }
             } catch (const std::exception& e) {
                 std::cout << "  [APP] Logger not available: " << e.what()
@@ -168,9 +174,11 @@ public:
             try {
                 auto logger = registry.getComponent("Logger");
                 if (logger) {
-                    // Note: executeCommand is not available in Component base class
-                    // logger->executeCommand("log", {"Application stopped"});
-                    std::cout << "  [APP] Logger available for shutdown logging" << std::endl;
+                    // Note: executeCommand is not available in Component base
+                    // class logger->executeCommand("log", {"Application
+                    // stopped"});
+                    std::cout << "  [APP] Logger available for shutdown logging"
+                              << std::endl;
                 }
             } catch (const std::exception& e) {
                 std::cout << "  [APP] Logger not available: " << e.what()
@@ -334,7 +342,8 @@ void demonstrateComponentUsage() {
                 // logger->executeCommand("log", {"Processing user request"});
                 // logger->executeCommand("log", {"Database query executed"});
                 // logger->executeCommand("log", {"Response sent to client"});
-                std::cout << "  [DEMO] Logger component available for logging" << std::endl;
+                std::cout << "  [DEMO] Logger component available for logging"
+                          << std::endl;
             }
 
             // Stop the application
@@ -365,8 +374,7 @@ void demonstrateComponentInfo() {
                           << static_cast<int>(component->getState())
                           << std::endl;
                 // Note: getTypeName() is not available in Component base class
-                std::cout << "    Type: " << component->getName()
-                          << std::endl;
+                std::cout << "    Type: " << component->getName() << std::endl;
 
                 // Get performance stats if available
                 const auto& stats = component->getPerformanceStats();
@@ -398,8 +406,8 @@ void demonstrateCleanup() {
             auto component = registry.getComponent(componentName);
             if (component) {
                 std::cout << "  Cleaning up: " << componentName << std::endl;
-                // Note: cleanup() is not a virtual method in Component base class
-                // component->cleanup();
+                // Note: cleanup() is not a virtual method in Component base
+                // class component->cleanup();
                 std::cout << "  Component cleanup completed" << std::endl;
             }
         } catch (const std::exception& e) {

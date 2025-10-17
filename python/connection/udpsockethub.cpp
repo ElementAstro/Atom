@@ -64,26 +64,26 @@ Classes:
 
 Quick Start Example:
     >>> from atom.connection.udpsockethub import UdpSocketHub, UdpError
-    >>> 
+    >>>
     >>> # Create UDP socket hub
     >>> hub = UdpSocketHub()
-    >>> 
+    >>>
     >>> # Set up message handler
     >>> def on_message(message, ip, port):
     ...     print(f"Received from {ip}:{port}: {message}")
-    >>> 
+    >>>
     >>> hub.add_message_handler(on_message)
-    >>> 
+    >>>
     >>> # Start listening on port
     >>> result = hub.start(8080)
     >>> if result.has_value():
     ...     print("UDP hub started on port 8080")
-    ...     
+    ...
     ...     # Send message to another endpoint
     ...     send_result = hub.send_to("Hello, UDP!", "192.168.1.100", 8081)
     ...     if send_result.has_value():
     ...         print("Message sent successfully")
-    >>> 
+    >>>
     >>> hub.stop()
 
 Advanced Features:
@@ -109,15 +109,15 @@ addresses and ports.
 
 Examples:
     >>> from atom.connection.udpsockethub import UdpSocketHub
-    >>> 
+    >>>
     >>> # Create hub and set up handler
     >>> hub = UdpSocketHub()
-    >>> 
+    >>>
     >>> def message_handler(msg, ip, port):
     ...     print(f"Got message '{msg}' from {ip}:{port}")
-    >>> 
+    >>>
     >>> hub.add_message_handler(message_handler)
-    >>> 
+    >>>
     >>> # Start listening and send messages
     >>> if hub.start(8080).has_value():
     ...     hub.send_to("Hello!", "127.0.0.1", 8081)
@@ -129,7 +129,7 @@ Examples:
 Examples:
     >>> hub = UdpSocketHub()
 )")
-        .def("start", 
+        .def("start",
              [](atom::connection::UdpSocketHub& self, std::uint16_t port) {
                  auto result = self.start(port);
                  if (!result.has_value()) {
@@ -166,8 +166,8 @@ Examples:
 )")
         .def("add_message_handler",
              [](atom::connection::UdpSocketHub& self, py::object handler) {
-                 self.addMessageHandler([handler](const std::string& message, 
-                                                  const std::string& ip, 
+                 self.addMessageHandler([handler](const std::string& message,
+                                                  const std::string& ip,
                                                   int port) mutable {
                      try {
                          py::gil_scoped_acquire acquire;

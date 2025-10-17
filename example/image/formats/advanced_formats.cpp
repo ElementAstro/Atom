@@ -16,12 +16,12 @@
  * - Format-specific features
  */
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <map>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -41,9 +41,14 @@ struct FormatInfo {
     // Default constructor
     FormatInfo() = default;
 
-    FormatInfo(const string& n, const string& ext, bool comp, bool trans, bool anim, bool meta)
-        : name(n), extension(ext), supports_compression(comp), supports_transparency(trans),
-          supports_animation(anim), supports_metadata(meta) {}
+    FormatInfo(const string& n, const string& ext, bool comp, bool trans,
+               bool anim, bool meta)
+        : name(n),
+          extension(ext),
+          supports_compression(comp),
+          supports_transparency(trans),
+          supports_animation(anim),
+          supports_metadata(meta) {}
 };
 
 /**
@@ -69,14 +74,16 @@ public:
         // Add color space support
         formats_["JPEG"].color_spaces = {"RGB", "YCbCr", "CMYK", "Grayscale"};
         formats_["PNG"].color_spaces = {"RGB", "RGBA", "Grayscale", "Palette"};
-        formats_["TIFF"].color_spaces = {"RGB", "RGBA", "CMYK", "LAB", "Grayscale"};
+        formats_["TIFF"].color_spaces = {"RGB", "RGBA", "CMYK", "LAB",
+                                         "Grayscale"};
         formats_["WebP"].color_spaces = {"RGB", "RGBA"};
         formats_["HEIF"].color_spaces = {"RGB", "RGBA", "YUV"};
         formats_["AVIF"].color_spaces = {"RGB", "RGBA", "YUV"};
         formats_["JXL"].color_spaces = {"RGB", "RGBA", "XYB", "Grayscale"};
     }
 
-    void registerFormat(const string& name, const string& ext, bool comp, bool trans, bool anim, bool meta) {
+    void registerFormat(const string& name, const string& ext, bool comp,
+                        bool trans, bool anim, bool meta) {
         formats_.emplace(name, FormatInfo(name, ext, comp, trans, anim, meta));
     }
 
@@ -98,10 +105,14 @@ public:
         for (const auto& pair : formats_) {
             const auto& format = pair.second;
             cout << format.name << " (" << format.extension << "):" << endl;
-            cout << "  Compression: " << (format.supports_compression ? "Yes" : "No") << endl;
-            cout << "  Transparency: " << (format.supports_transparency ? "Yes" : "No") << endl;
-            cout << "  Animation: " << (format.supports_animation ? "Yes" : "No") << endl;
-            cout << "  Metadata: " << (format.supports_metadata ? "Yes" : "No") << endl;
+            cout << "  Compression: "
+                 << (format.supports_compression ? "Yes" : "No") << endl;
+            cout << "  Transparency: "
+                 << (format.supports_transparency ? "Yes" : "No") << endl;
+            cout << "  Animation: "
+                 << (format.supports_animation ? "Yes" : "No") << endl;
+            cout << "  Metadata: " << (format.supports_metadata ? "Yes" : "No")
+                 << endl;
             cout << "  Color spaces: ";
             for (const auto& cs : format.color_spaces) {
                 cout << cs << " ";
@@ -125,15 +136,18 @@ public:
      * @brief Convert between formats
      */
     bool convertFormat(const string& input_path, const string& output_path,
-                      const string& target_format, const map<string, string>& options = {}) {
-        cout << "Converting " << input_path << " to " << target_format << " format..." << endl;
+                       const string& target_format,
+                       const map<string, string>& options = {}) {
+        cout << "Converting " << input_path << " to " << target_format
+             << " format..." << endl;
 
         // Get source format from extension
         string source_ext = fs::path(input_path).extension().string();
         string source_format = detectFormatFromExtension(source_ext);
 
         if (source_format.empty()) {
-            cout << "  Error: Unknown source format for extension " << source_ext << endl;
+            cout << "  Error: Unknown source format for extension "
+                 << source_ext << endl;
             return false;
         }
 
@@ -145,7 +159,8 @@ public:
             return false;
         }
 
-        cout << "  Source: " << source_info->name << " -> Target: " << target_info->name << endl;
+        cout << "  Source: " << source_info->name
+             << " -> Target: " << target_info->name << endl;
 
         // Check compatibility
         checkCompatibility(*source_info, *target_info);
@@ -161,9 +176,11 @@ public:
     /**
      * @brief Batch convert multiple files
      */
-    void batchConvert(const vector<string>& input_paths, const string& target_format,
-                     const string& output_dir, const map<string, string>& options = {}) {
-        cout << "\nBatch converting " << input_paths.size() << " files to " << target_format << "..." << endl;
+    void batchConvert(const vector<string>& input_paths,
+                      const string& target_format, const string& output_dir,
+                      const map<string, string>& options = {}) {
+        cout << "\nBatch converting " << input_paths.size() << " files to "
+             << target_format << "..." << endl;
 
         int successful = 0;
         int failed = 0;
@@ -171,16 +188,19 @@ public:
         for (const auto& input_path : input_paths) {
             string filename = fs::path(input_path).stem().string();
             const FormatInfo* target_info = registry_.getFormat(target_format);
-            string output_path = output_dir + "/" + filename + target_info->extension;
+            string output_path =
+                output_dir + "/" + filename + target_info->extension;
 
-            if (convertFormat(input_path, output_path, target_format, options)) {
+            if (convertFormat(input_path, output_path, target_format,
+                              options)) {
                 successful++;
             } else {
                 failed++;
             }
         }
 
-        cout << "Batch conversion completed: " << successful << " successful, " << failed << " failed" << endl;
+        cout << "Batch conversion completed: " << successful << " successful, "
+             << failed << " failed" << endl;
     }
 
 private:
@@ -194,15 +214,18 @@ private:
         return "";
     }
 
-    void checkCompatibility(const FormatInfo& source, const FormatInfo& target) {
+    void checkCompatibility(const FormatInfo& source,
+                            const FormatInfo& target) {
         cout << "  Checking compatibility..." << endl;
 
         if (source.supports_transparency && !target.supports_transparency) {
-            cout << "    Warning: Target format doesn't support transparency" << endl;
+            cout << "    Warning: Target format doesn't support transparency"
+                 << endl;
         }
 
         if (source.supports_animation && !target.supports_animation) {
-            cout << "    Warning: Target format doesn't support animation" << endl;
+            cout << "    Warning: Target format doesn't support animation"
+                 << endl;
         }
 
         if (source.supports_metadata && !target.supports_metadata) {
@@ -218,15 +241,18 @@ private:
                     break;
                 }
             }
-            if (color_space_compatible) break;
+            if (color_space_compatible)
+                break;
         }
 
         if (!color_space_compatible) {
-            cout << "    Warning: Color space conversion may be required" << endl;
+            cout << "    Warning: Color space conversion may be required"
+                 << endl;
         }
     }
 
-    void applyConversionOptions(const FormatInfo& target, const map<string, string>& options) {
+    void applyConversionOptions(const FormatInfo& target,
+                                const map<string, string>& options) {
         cout << "  Applying conversion options..." << endl;
 
         for (const auto& option : options) {
@@ -235,16 +261,22 @@ private:
             if (option.first == "quality" && target.supports_compression) {
                 int quality = stoi(option.second);
                 if (quality < 1 || quality > 100) {
-                    cout << "      Warning: Quality should be between 1-100" << endl;
+                    cout << "      Warning: Quality should be between 1-100"
+                         << endl;
                 }
             }
 
             if (option.first == "compression" && !target.supports_compression) {
-                cout << "      Warning: Target format doesn't support compression" << endl;
+                cout << "      Warning: Target format doesn't support "
+                        "compression"
+                     << endl;
             }
 
-            if (option.first == "preserve_transparency" && !target.supports_transparency) {
-                cout << "      Warning: Target format doesn't support transparency" << endl;
+            if (option.first == "preserve_transparency" &&
+                !target.supports_transparency) {
+                cout << "      Warning: Target format doesn't support "
+                        "transparency"
+                     << endl;
             }
         }
     }
@@ -258,8 +290,10 @@ public:
     /**
      * @brief Analyze format characteristics
      */
-    static void analyzeFormat(const string& format_name, FormatRegistry& registry) {
-        cout << "\nAnalyzing " << format_name << " format characteristics..." << endl;
+    static void analyzeFormat(const string& format_name,
+                              FormatRegistry& registry) {
+        cout << "\nAnalyzing " << format_name << " format characteristics..."
+             << endl;
 
         const FormatInfo* info = registry.getFormat(format_name);
         if (!info) {
@@ -272,10 +306,18 @@ public:
 
         // Analyze capabilities
         cout << "  Capabilities:" << endl;
-        cout << "    Compression: " << (info->supports_compression ? "Supported" : "Not supported") << endl;
-        cout << "    Transparency: " << (info->supports_transparency ? "Supported" : "Not supported") << endl;
-        cout << "    Animation: " << (info->supports_animation ? "Supported" : "Not supported") << endl;
-        cout << "    Metadata: " << (info->supports_metadata ? "Supported" : "Not supported") << endl;
+        cout << "    Compression: "
+             << (info->supports_compression ? "Supported" : "Not supported")
+             << endl;
+        cout << "    Transparency: "
+             << (info->supports_transparency ? "Supported" : "Not supported")
+             << endl;
+        cout << "    Animation: "
+             << (info->supports_animation ? "Supported" : "Not supported")
+             << endl;
+        cout << "    Metadata: "
+             << (info->supports_metadata ? "Supported" : "Not supported")
+             << endl;
 
         // Analyze use cases
         cout << "  Recommended use cases:" << endl;
@@ -303,37 +345,60 @@ public:
 
 private:
     static string getEncodingSpeed(const FormatInfo& info) {
-        if (info.name == "BMP") return "Very Fast";
-        if (info.name == "JPEG") return "Fast";
-        if (info.name == "PNG") return "Medium";
-        if (info.name == "TIFF") return "Medium";
-        if (info.name == "WebP") return "Medium";
-        if (info.name == "HEIF") return "Slow";
-        if (info.name == "AVIF") return "Very Slow";
-        if (info.name == "JXL") return "Slow";
+        if (info.name == "BMP")
+            return "Very Fast";
+        if (info.name == "JPEG")
+            return "Fast";
+        if (info.name == "PNG")
+            return "Medium";
+        if (info.name == "TIFF")
+            return "Medium";
+        if (info.name == "WebP")
+            return "Medium";
+        if (info.name == "HEIF")
+            return "Slow";
+        if (info.name == "AVIF")
+            return "Very Slow";
+        if (info.name == "JXL")
+            return "Slow";
         return "Unknown";
     }
 
     static string getDecodingSpeed(const FormatInfo& info) {
-        if (info.name == "BMP") return "Very Fast";
-        if (info.name == "JPEG") return "Very Fast";
-        if (info.name == "PNG") return "Fast";
-        if (info.name == "TIFF") return "Fast";
-        if (info.name == "WebP") return "Fast";
-        if (info.name == "HEIF") return "Medium";
-        if (info.name == "AVIF") return "Medium";
-        if (info.name == "JXL") return "Fast";
+        if (info.name == "BMP")
+            return "Very Fast";
+        if (info.name == "JPEG")
+            return "Very Fast";
+        if (info.name == "PNG")
+            return "Fast";
+        if (info.name == "TIFF")
+            return "Fast";
+        if (info.name == "WebP")
+            return "Fast";
+        if (info.name == "HEIF")
+            return "Medium";
+        if (info.name == "AVIF")
+            return "Medium";
+        if (info.name == "JXL")
+            return "Fast";
         return "Unknown";
     }
 
     static string getCompressionRatio(const FormatInfo& info) {
-        if (!info.supports_compression) return "None";
-        if (info.name == "JPEG") return "High (lossy)";
-        if (info.name == "PNG") return "Medium (lossless)";
-        if (info.name == "WebP") return "High (lossy/lossless)";
-        if (info.name == "HEIF") return "Very High (lossy)";
-        if (info.name == "AVIF") return "Very High (lossy)";
-        if (info.name == "JXL") return "Excellent (lossy/lossless)";
+        if (!info.supports_compression)
+            return "None";
+        if (info.name == "JPEG")
+            return "High (lossy)";
+        if (info.name == "PNG")
+            return "Medium (lossless)";
+        if (info.name == "WebP")
+            return "High (lossy/lossless)";
+        if (info.name == "HEIF")
+            return "Very High (lossy)";
+        if (info.name == "AVIF")
+            return "Very High (lossy)";
+        if (info.name == "JXL")
+            return "Excellent (lossy/lossless)";
         return "Variable";
     }
 };
@@ -361,25 +426,17 @@ void demonstrateAdvancedFormats() {
 
     // Single file conversion
     map<string, string> jpeg_options = {
-        {"quality", "85"},
-        {"progressive", "true"},
-        {"optimize", "true"}
-    };
+        {"quality", "85"}, {"progressive", "true"}, {"optimize", "true"}};
     converter.convertFormat("sample.png", "sample.jpg", "JPEG", jpeg_options);
 
-    map<string, string> webp_options = {
-        {"quality", "90"},
-        {"lossless", "false"},
-        {"preserve_transparency", "true"}
-    };
+    map<string, string> webp_options = {{"quality", "90"},
+                                        {"lossless", "false"},
+                                        {"preserve_transparency", "true"}};
     converter.convertFormat("sample.png", "sample.webp", "WebP", webp_options);
 
     // Batch conversion
     vector<string> batch_files = {"image1.jpg", "image2.png", "image3.bmp"};
-    map<string, string> avif_options = {
-        {"quality", "75"},
-        {"speed", "6"}
-    };
+    map<string, string> avif_options = {{"quality", "75"}, {"speed", "6"}};
     converter.batchConvert(batch_files, "AVIF", "output", avif_options);
 }
 

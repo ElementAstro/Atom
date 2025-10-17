@@ -3,12 +3,12 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <string>
 #include <memory>
+#include <string>
 
-#include "atom/web/address.hpp"
-#include "atom/log/loguru.hpp"
 #include <spdlog/spdlog.h>
+#include "atom/log/loguru.hpp"
+#include "atom/web/address.hpp"
 
 using namespace atom::web;
 using ::testing::HasSubstr;
@@ -109,7 +109,8 @@ TEST_F(UnixDomainTest, CompareBroadcastAddressBehaviorWithOtherTypes) {
     IPv4 ipv4("192.168.1.1");
     IPv6 ipv6("2001:db8::1");
 
-    // For Unix domain sockets, getBroadcastAddress should return an empty string
+    // For Unix domain sockets, getBroadcastAddress should return an empty
+    // string
     EXPECT_TRUE(unixDomain.getBroadcastAddress("255.255.255.0").empty());
 
     // For IPv4, getBroadcastAddress should return a valid address
@@ -120,7 +121,7 @@ TEST_F(UnixDomainTest, CompareBroadcastAddressBehaviorWithOtherTypes) {
     // (not testing exact result here since it's complex)
     EXPECT_NO_THROW({
         auto ipv6Result = ipv6.getBroadcastAddress("ffff:ffff:ffff:ffff::");
-        (void)ipv6Result; // Suppress unused variable warning
+        (void)ipv6Result;  // Suppress unused variable warning
     });
 }
 
@@ -137,7 +138,7 @@ TEST_F(UnixDomainTest, GetBroadcastAddressWithFactoryMethod) {
 
 // Edge case: Test getBroadcastAddress with extremely short path
 TEST_F(UnixDomainTest, GetBroadcastAddressWithShortPath) {
-    UnixDomain unixDomain("/a"); // Shortest valid path
+    UnixDomain unixDomain("/a");  // Shortest valid path
     EXPECT_TRUE(unixDomain.getBroadcastAddress("255.255.255.0").empty());
 }
 
@@ -236,7 +237,8 @@ TEST_F(IPv4Test, RangeChecking) {
     EXPECT_FALSE(ipv4.isInRange("192.168.2.1", "192.168.2.200"));
 
     // Invalid range (start > end) should throw
-    EXPECT_THROW(ipv4.isInRange("192.168.1.200", "192.168.1.1"), AddressRangeError);
+    EXPECT_THROW(ipv4.isInRange("192.168.1.200", "192.168.1.1"),
+                 AddressRangeError);
 }
 
 TEST_F(IPv4Test, Equality) {
@@ -328,9 +330,10 @@ TEST_F(IPv6Test, ConstructorAndParsing) {
     ASSERT_NO_THROW(IPv6("::ffff:192.168.1.1"));  // IPv4-mapped
 
     // Invalid IPv6 addresses should throw
-    EXPECT_THROW(IPv6("invalid::address::too::many::colons"), InvalidAddressFormat);
+    EXPECT_THROW(IPv6("invalid::address::too::many::colons"),
+                 InvalidAddressFormat);
     EXPECT_THROW(IPv6("2001:db8::1::2"), InvalidAddressFormat);  // Double ::
-    EXPECT_THROW(IPv6("gggg::1"), InvalidAddressFormat);  // Invalid hex
+    EXPECT_THROW(IPv6("gggg::1"), InvalidAddressFormat);         // Invalid hex
     EXPECT_THROW(IPv6(""), InvalidAddressFormat);
 }
 
@@ -384,14 +387,16 @@ TEST_F(IPv6Test, RangeChecking) {
     // Valid ranges
     EXPECT_TRUE(ipv6.isInRange("2001:db8::1", "2001:db8::200"));
     EXPECT_TRUE(ipv6.isInRange("2001:db8::100", "2001:db8::100"));
-    EXPECT_TRUE(ipv6.isInRange("::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"));
+    EXPECT_TRUE(
+        ipv6.isInRange("::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"));
 
     // Invalid ranges
     EXPECT_FALSE(ipv6.isInRange("2001:db8::101", "2001:db8::200"));
     EXPECT_FALSE(ipv6.isInRange("2001:db9::1", "2001:db9::200"));
 
     // Invalid range (start > end) should throw
-    EXPECT_THROW(ipv6.isInRange("2001:db8::200", "2001:db8::1"), AddressRangeError);
+    EXPECT_THROW(ipv6.isInRange("2001:db8::200", "2001:db8::1"),
+                 AddressRangeError);
 }
 
 TEST_F(IPv6Test, Equality) {
@@ -763,14 +768,9 @@ protected:
 
 TEST_F(CrossPlatformTest, IPv4Consistency) {
     // Test that IPv4 addresses work consistently across platforms
-    std::vector<std::string> testAddresses = {
-        "0.0.0.0",
-        "127.0.0.1",
-        "192.168.1.1",
-        "255.255.255.255",
-        "10.0.0.1",
-        "172.16.0.1"
-    };
+    std::vector<std::string> testAddresses = {"0.0.0.0",     "127.0.0.1",
+                                              "192.168.1.1", "255.255.255.255",
+                                              "10.0.0.1",    "172.16.0.1"};
 
     for (const auto& addrStr : testAddresses) {
         IPv4 ipv4(addrStr);
@@ -787,13 +787,8 @@ TEST_F(CrossPlatformTest, IPv4Consistency) {
 
 TEST_F(CrossPlatformTest, IPv6Consistency) {
     // Test that IPv6 addresses work consistently across platforms
-    std::vector<std::string> testAddresses = {
-        "::",
-        "::1",
-        "2001:db8::1",
-        "fe80::1",
-        "::ffff:192.168.1.1"
-    };
+    std::vector<std::string> testAddresses = {"::", "::1", "2001:db8::1",
+                                              "fe80::1", "::ffff:192.168.1.1"};
 
     for (const auto& addrStr : testAddresses) {
         IPv6 ipv6(addrStr);
@@ -811,19 +806,14 @@ TEST_F(CrossPlatformTest, IPv6Consistency) {
 TEST_F(CrossPlatformTest, UnixDomainPlatformSpecific) {
 #ifdef _WIN32
     // Windows named pipes
-    std::vector<std::string> testPaths = {
-        "\\\\.\\pipe\\test",
-        "\\\\.\\pipe\\long\\path\\test",
-        "\\\\.\\pipe\\test_with_underscores"
-    };
+    std::vector<std::string> testPaths = {"\\\\.\\pipe\\test",
+                                          "\\\\.\\pipe\\long\\path\\test",
+                                          "\\\\.\\pipe\\test_with_underscores"};
 #else
     // Unix domain sockets
     std::vector<std::string> testPaths = {
-        "/tmp/test.sock",
-        "/var/run/test.sock",
-        "./relative.sock",
-        "/tmp/test_with_underscores.sock"
-    };
+        "/tmp/test.sock", "/var/run/test.sock", "./relative.sock",
+        "/tmp/test_with_underscores.sock"};
 #endif
 
     for (const auto& pathStr : testPaths) {
@@ -850,7 +840,8 @@ TEST_F(AddressPerformanceTest, IPv4CreationPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time
     EXPECT_LT(duration.count(), 5000);  // Less than 5 seconds
@@ -864,20 +855,19 @@ TEST_F(AddressPerformanceTest, IPv6CreationPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time
     EXPECT_LT(duration.count(), 5000);  // Less than 5 seconds
 }
 
 TEST_F(AddressPerformanceTest, FactoryPerformance) {
-    std::vector<std::string> addresses = {
-        "192.168.1.1",
-        "2001:db8::1",
+    std::vector<std::string> addresses = {"192.168.1.1", "2001:db8::1",
 #ifdef _WIN32
-        "\\\\.\\pipe\\test"
+                                          "\\\\.\\pipe\\test"
 #else
-        "/tmp/test.sock"
+                                          "/tmp/test.sock"
 #endif
     };
 
@@ -891,7 +881,8 @@ TEST_F(AddressPerformanceTest, FactoryPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time
     EXPECT_LT(duration.count(), 10000);  // Less than 10 seconds
@@ -900,9 +891,7 @@ TEST_F(AddressPerformanceTest, FactoryPerformance) {
 // Extended Error Handling Tests
 class AddressErrorHandlingTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        spdlog::set_level(spdlog::level::off);
-    }
+    void SetUp() override { spdlog::set_level(spdlog::level::off); }
 };
 
 TEST_F(AddressErrorHandlingTest, IPv4MalformedAddresses) {
@@ -944,26 +933,26 @@ TEST_F(AddressErrorHandlingTest, IPv4MalformedAddresses) {
 TEST_F(AddressErrorHandlingTest, IPv6MalformedAddresses) {
     // Test various malformed IPv6 addresses
     std::vector<std::string> malformedAddresses = {
-        ":::",                              // Too many colons
-        "2001:db8::1::2",                  // Double compression
-        "gggg::1",                         // Invalid hex
+        ":::",                            // Too many colons
+        "2001:db8::1::2",                 // Double compression
+        "gggg::1",                        // Invalid hex
         "2001:db8:85a3::8a2e::370:7334",  // Multiple compressions
-        "2001:db8:85a3:0000:0000:8a2e:0370:7334:extra", // Too many groups
-        "2001:db8:85a3:0000:0000:8a2e:0370:", // Trailing colon
-        ":2001:db8:85a3:0000:0000:8a2e:0370:7334", // Leading colon (invalid)
-        "2001::db8::1",                    // Multiple double colons
-        "12345::1",                        // Group too long
-        "2001:db8::1 extra",               // Extra text
-        " 2001:db8::1",                    // Leading space
-        "2001:db8::1 ",                    // Trailing space
-        "\t2001:db8::1",                   // Tab character
-        "2001:db8::1\n",                   // Newline character
-        "2001:db8::1/129",                 // Invalid prefix length
-        "http://[2001:db8::1]",            // URL format
-        "2001:db8::1:80",                  // Invalid port format
-        "[2001:db8::1]",                   // Brackets without port
-        "2001:db8::1%",                    // Invalid zone ID
-        "2001:db8::1%invalid_zone"        // Invalid zone ID
+        "2001:db8:85a3:0000:0000:8a2e:0370:7334:extra",  // Too many groups
+        "2001:db8:85a3:0000:0000:8a2e:0370:",            // Trailing colon
+        ":2001:db8:85a3:0000:0000:8a2e:0370:7334",  // Leading colon (invalid)
+        "2001::db8::1",                             // Multiple double colons
+        "12345::1",                                 // Group too long
+        "2001:db8::1 extra",                        // Extra text
+        " 2001:db8::1",                             // Leading space
+        "2001:db8::1 ",                             // Trailing space
+        "\t2001:db8::1",                            // Tab character
+        "2001:db8::1\n",                            // Newline character
+        "2001:db8::1/129",                          // Invalid prefix length
+        "http://[2001:db8::1]",                     // URL format
+        "2001:db8::1:80",                           // Invalid port format
+        "[2001:db8::1]",                            // Brackets without port
+        "2001:db8::1%",                             // Invalid zone ID
+        "2001:db8::1%invalid_zone"                  // Invalid zone ID
     };
 
     for (const auto& addr : malformedAddresses) {
@@ -978,25 +967,26 @@ TEST_F(AddressErrorHandlingTest, IPv6MalformedAddresses) {
 
 TEST_F(AddressErrorHandlingTest, UnixDomainInvalidPaths) {
     std::vector<std::string> invalidPaths = {
-        "",                    // Empty path
-        " ",                   // Space only
-        "\t",                  // Tab only
-        "\n",                  // Newline only
+        "",    // Empty path
+        " ",   // Space only
+        "\t",  // Tab only
+        "\n",  // Newline only
 #ifdef _WIN32
-        "invalid\\path",       // Invalid Windows path
-        "C:\\",                // Drive root (not a pipe)
-        "\\\\server\\share",   // UNC path (not a pipe)
-        "\\\\.\\",             // Incomplete pipe path
-        "\\\\.\\pipe\\",       // Pipe path without name
+        "invalid\\path",      // Invalid Windows path
+        "C:\\",               // Drive root (not a pipe)
+        "\\\\server\\share",  // UNC path (not a pipe)
+        "\\\\.\\",            // Incomplete pipe path
+        "\\\\.\\pipe\\",      // Pipe path without name
 #else
-        std::string(1000, 'a'), // Extremely long path
-        "/\0hidden",           // Null character in path
-        "/tmp/\xff\xfe",       // Invalid UTF-8 characters
+        std::string(1000, 'a'),  // Extremely long path
+        "/\0hidden",             // Null character in path
+        "/tmp/\xff\xfe",         // Invalid UTF-8 characters
 #endif
     };
 
     for (const auto& path : invalidPaths) {
-        if (!path.empty()) {  // Skip empty path test for constructor (already tested)
+        if (!path.empty()) {  // Skip empty path test for constructor (already
+                              // tested)
             EXPECT_THROW(UnixDomain(path), InvalidAddressFormat)
                 << "Should throw for invalid path: " << path;
         }
@@ -1012,34 +1002,46 @@ TEST_F(AddressErrorHandlingTest, IPv4RangeBoundaryErrors) {
     IPv4 ipv4("192.168.1.100");
 
     // Test invalid range parameters
-    EXPECT_THROW(ipv4.isInRange("invalid", "192.168.1.200"), InvalidAddressFormat);
-    EXPECT_THROW(ipv4.isInRange("192.168.1.1", "invalid"), InvalidAddressFormat);
+    EXPECT_THROW(ipv4.isInRange("invalid", "192.168.1.200"),
+                 InvalidAddressFormat);
+    EXPECT_THROW(ipv4.isInRange("192.168.1.1", "invalid"),
+                 InvalidAddressFormat);
     EXPECT_THROW(ipv4.isInRange("invalid", "invalid"), InvalidAddressFormat);
 
     // Test reversed range (start > end)
-    EXPECT_THROW(ipv4.isInRange("192.168.1.200", "192.168.1.1"), AddressRangeError);
-    EXPECT_THROW(ipv4.isInRange("255.255.255.255", "0.0.0.0"), AddressRangeError);
+    EXPECT_THROW(ipv4.isInRange("192.168.1.200", "192.168.1.1"),
+                 AddressRangeError);
+    EXPECT_THROW(ipv4.isInRange("255.255.255.255", "0.0.0.0"),
+                 AddressRangeError);
 
     // Test edge cases
-    EXPECT_TRUE(ipv4.isInRange("192.168.1.100", "192.168.1.100"));  // Same address
-    EXPECT_TRUE(ipv4.isInRange("0.0.0.0", "255.255.255.255"));      // Full range
+    EXPECT_TRUE(
+        ipv4.isInRange("192.168.1.100", "192.168.1.100"));      // Same address
+    EXPECT_TRUE(ipv4.isInRange("0.0.0.0", "255.255.255.255"));  // Full range
 }
 
 TEST_F(AddressErrorHandlingTest, IPv6RangeBoundaryErrors) {
     IPv6 ipv6("2001:db8::100");
 
     // Test invalid range parameters
-    EXPECT_THROW(ipv6.isInRange("invalid", "2001:db8::200"), InvalidAddressFormat);
-    EXPECT_THROW(ipv6.isInRange("2001:db8::1", "invalid"), InvalidAddressFormat);
+    EXPECT_THROW(ipv6.isInRange("invalid", "2001:db8::200"),
+                 InvalidAddressFormat);
+    EXPECT_THROW(ipv6.isInRange("2001:db8::1", "invalid"),
+                 InvalidAddressFormat);
     EXPECT_THROW(ipv6.isInRange("invalid", "invalid"), InvalidAddressFormat);
 
     // Test reversed range (start > end)
-    EXPECT_THROW(ipv6.isInRange("2001:db8::200", "2001:db8::1"), AddressRangeError);
-    EXPECT_THROW(ipv6.isInRange("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "::"), AddressRangeError);
+    EXPECT_THROW(ipv6.isInRange("2001:db8::200", "2001:db8::1"),
+                 AddressRangeError);
+    EXPECT_THROW(
+        ipv6.isInRange("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "::"),
+        AddressRangeError);
 
     // Test edge cases
-    EXPECT_TRUE(ipv6.isInRange("2001:db8::100", "2001:db8::100"));  // Same address
-    EXPECT_TRUE(ipv6.isInRange("::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"));  // Full range
+    EXPECT_TRUE(
+        ipv6.isInRange("2001:db8::100", "2001:db8::100"));  // Same address
+    EXPECT_TRUE(ipv6.isInRange(
+        "::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"));  // Full range
 }
 
 // Network Calculation Error Tests
@@ -1063,9 +1065,10 @@ TEST_F(AddressErrorHandlingTest, NetworkCalculationErrors) {
         EXPECT_NO_THROW({
             std::string network = ipv4.getNetworkAddress(mask);
             std::string broadcast = ipv4.getBroadcastAddress(mask);
-            // These might return empty strings or default values for invalid masks
-            // The important thing is they don't crash
-        }) << "Network calculations should not crash for invalid mask: " << mask;
+            // These might return empty strings or default values for invalid
+            // masks The important thing is they don't crash
+        }) << "Network calculations should not crash for invalid mask: "
+           << mask;
     }
 }
 
@@ -1078,25 +1081,24 @@ TEST_F(AddressErrorHandlingTest, IPv6NetworkCalculationErrors) {
         "invalid",
         "gggg:ffff:ffff:ffff::",
         "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff",  // Too many groups
-        "192.168.1.1",  // IPv4 mask for IPv6
+        "192.168.1.1",                                   // IPv4 mask for IPv6
     };
 
     for (const auto& mask : invalidMasks) {
         EXPECT_NO_THROW({
             std::string network = ipv6.getNetworkAddress(mask);
             std::string broadcast = ipv6.getBroadcastAddress(mask);
-            // These might return empty strings or default values for invalid masks
-            // The important thing is they don't crash
-        }) << "IPv6 network calculations should not crash for invalid mask: " << mask;
+            // These might return empty strings or default values for invalid
+            // masks The important thing is they don't crash
+        }) << "IPv6 network calculations should not crash for invalid mask: "
+           << mask;
     }
 }
 
 // Concurrent Access and Thread Safety Tests
 class AddressConcurrencyTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        spdlog::set_level(spdlog::level::off);
-    }
+    void SetUp() override { spdlog::set_level(spdlog::level::off); }
 };
 
 TEST_F(AddressConcurrencyTest, ConcurrentIPv4Operations) {
@@ -1129,7 +1131,8 @@ TEST_F(AddressConcurrencyTest, ConcurrentIPv4Operations) {
                 bool equal = ipv4.isEqual(other);
 
                 if (!type.empty() && !addr.empty() && !binary.empty() &&
-                    !hex.empty() && !network.empty() && !broadcast.empty() && equal) {
+                    !hex.empty() && !network.empty() && !broadcast.empty() &&
+                    equal) {
                     successCount++;
                 } else {
                     errorCount++;
@@ -1168,7 +1171,8 @@ TEST_F(AddressConcurrencyTest, ConcurrentIPv6Operations) {
 
                 // Network calculations
                 auto network = ipv6.getNetworkAddress("ffff:ffff:ffff:ffff::");
-                auto broadcast = ipv6.getBroadcastAddress("ffff:ffff:ffff:ffff::");
+                auto broadcast =
+                    ipv6.getBroadcastAddress("ffff:ffff:ffff:ffff::");
 
                 // Range checking
                 bool inRange = ipv6.isInRange("2001:db8::1", "2001:db8::ffff");
@@ -1204,13 +1208,11 @@ TEST_F(AddressConcurrencyTest, ConcurrentFactoryOperations) {
     std::atomic<int> successCount{0};
     std::atomic<int> errorCount{0};
 
-    std::vector<std::string> testAddresses = {
-        "192.168.1.1",
-        "2001:db8::1",
+    std::vector<std::string> testAddresses = {"192.168.1.1", "2001:db8::1",
 #ifdef _WIN32
-        "\\\\.\\pipe\\test"
+                                              "\\\\.\\pipe\\test"
 #else
-        "/tmp/test.sock"
+                                              "/tmp/test.sock"
 #endif
     };
 
@@ -1251,13 +1253,12 @@ TEST_F(AddressConcurrencyTest, ConcurrentFactoryOperations) {
 // Memory Management and Resource Tests
 class AddressResourceTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        spdlog::set_level(spdlog::level::off);
-    }
+    void SetUp() override { spdlog::set_level(spdlog::level::off); }
 };
 
 TEST_F(AddressResourceTest, MemoryLeakPrevention) {
-    // Test that creating and destroying many addresses doesn't cause memory leaks
+    // Test that creating and destroying many addresses doesn't cause memory
+    // leaks
     for (int i = 0; i < 1000; ++i) {
         // IPv4 addresses
         {
@@ -1267,7 +1268,10 @@ TEST_F(AddressResourceTest, MemoryLeakPrevention) {
             auto network = ipv4.getNetworkAddress("255.255.255.0");
             auto broadcast = ipv4.getBroadcastAddress("255.255.255.0");
             // Use values to avoid unused variable warnings
-            (void)binary; (void)hex; (void)network; (void)broadcast;
+            (void)binary;
+            (void)hex;
+            (void)network;
+            (void)broadcast;
         }
 
         // IPv6 addresses
@@ -1278,7 +1282,10 @@ TEST_F(AddressResourceTest, MemoryLeakPrevention) {
             auto network = ipv6.getNetworkAddress("ffff:ffff:ffff:ffff::");
             auto broadcast = ipv6.getBroadcastAddress("ffff:ffff:ffff:ffff::");
             // Use values to avoid unused variable warnings
-            (void)binary; (void)hex; (void)network; (void)broadcast;
+            (void)binary;
+            (void)hex;
+            (void)network;
+            (void)broadcast;
         }
 
         // Unix domain addresses
@@ -1291,13 +1298,16 @@ TEST_F(AddressResourceTest, MemoryLeakPrevention) {
             auto binary = unixDomain.toBinary();
             auto hex = unixDomain.toHex();
             // Use values to avoid unused variable warnings
-            (void)binary; (void)hex;
+            (void)binary;
+            (void)hex;
         }
 
         // Factory-created addresses
         {
-            auto addr1 = Address::createFromString("192.168.1." + std::to_string(i % 255 + 1));
-            auto addr2 = Address::createFromString("2001:db8::" + std::to_string(i));
+            auto addr1 = Address::createFromString("192.168.1." +
+                                                   std::to_string(i % 255 + 1));
+            auto addr2 =
+                Address::createFromString("2001:db8::" + std::to_string(i));
             if (addr1) {
                 auto binary = addr1->toBinary();
                 (void)binary;
@@ -1308,7 +1318,8 @@ TEST_F(AddressResourceTest, MemoryLeakPrevention) {
             }
         }
     }
-    SUCCEED();  // If we reach here without crashes, memory management is likely correct
+    SUCCEED();  // If we reach here without crashes, memory management is likely
+                // correct
 }
 
 TEST_F(AddressResourceTest, LargeStringHandling) {
@@ -1325,32 +1336,31 @@ TEST_F(AddressResourceTest, LargeStringHandling) {
 // Extended Cross-Platform Tests
 class ExtendedCrossPlatformTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        spdlog::set_level(spdlog::level::off);
-    }
+    void SetUp() override { spdlog::set_level(spdlog::level::off); }
 };
 
 TEST_F(ExtendedCrossPlatformTest, IPv4EdgeCasesAllPlatforms) {
     // Test IPv4 addresses that might behave differently on different platforms
     std::vector<std::pair<std::string, bool>> testCases = {
-        {"0.0.0.0", true},           // Any address
-        {"127.0.0.1", true},         // Loopback
-        {"255.255.255.255", true},   // Broadcast
-        {"169.254.1.1", true},       // Link-local
-        {"224.0.0.1", true},         // Multicast
-        {"239.255.255.255", true},   // Multicast boundary
-        {"240.0.0.1", true},         // Class E (experimental)
-        {"10.0.0.0", true},          // Private Class A start
-        {"10.255.255.255", true},    // Private Class A end
-        {"172.16.0.0", true},        // Private Class B start
-        {"172.31.255.255", true},    // Private Class B end
-        {"192.168.0.0", true},       // Private Class C start
-        {"192.168.255.255", true},   // Private Class C end
+        {"0.0.0.0", true},          // Any address
+        {"127.0.0.1", true},        // Loopback
+        {"255.255.255.255", true},  // Broadcast
+        {"169.254.1.1", true},      // Link-local
+        {"224.0.0.1", true},        // Multicast
+        {"239.255.255.255", true},  // Multicast boundary
+        {"240.0.0.1", true},        // Class E (experimental)
+        {"10.0.0.0", true},         // Private Class A start
+        {"10.255.255.255", true},   // Private Class A end
+        {"172.16.0.0", true},       // Private Class B start
+        {"172.31.255.255", true},   // Private Class B end
+        {"192.168.0.0", true},      // Private Class C start
+        {"192.168.255.255", true},  // Private Class C end
     };
 
     for (const auto& [addrStr, shouldBeValid] : testCases) {
         if (shouldBeValid) {
-            EXPECT_NO_THROW(IPv4(addrStr)) << "Should be valid on all platforms: " << addrStr;
+            EXPECT_NO_THROW(IPv4(addrStr))
+                << "Should be valid on all platforms: " << addrStr;
 
             IPv4 ipv4(addrStr);
             EXPECT_EQ(ipv4.getAddress(), addrStr);
@@ -1376,26 +1386,27 @@ TEST_F(ExtendedCrossPlatformTest, IPv4EdgeCasesAllPlatforms) {
 TEST_F(ExtendedCrossPlatformTest, IPv6EdgeCasesAllPlatforms) {
     // Test IPv6 addresses that might behave differently on different platforms
     std::vector<std::pair<std::string, bool>> testCases = {
-        {"::", true},                                    // Unspecified
-        {"::1", true},                                   // Loopback
-        {"::ffff:0:0", true},                           // IPv4-mapped prefix
-        {"::ffff:192.168.1.1", true},                   // IPv4-mapped
-        {"2001:db8::", true},                           // Documentation prefix
-        {"fe80::", true},                               // Link-local prefix
-        {"fe80::1", true},                              // Link-local
-        {"ff00::", true},                               // Multicast prefix
-        {"ff02::1", true},                              // All nodes multicast
-        {"ff02::2", true},                              // All routers multicast
-        {"2001::", true},                               // Global unicast
-        {"fc00::", true},                               // Unique local prefix
-        {"fd00::", true},                               // Unique local
-        {"2001:db8:85a3::8a2e:370:7334", true},        // Full format
-        {"2001:db8:85a3:0:0:8a2e:370:7334", true},     // Zero compression
+        {"::", true},                               // Unspecified
+        {"::1", true},                              // Loopback
+        {"::ffff:0:0", true},                       // IPv4-mapped prefix
+        {"::ffff:192.168.1.1", true},               // IPv4-mapped
+        {"2001:db8::", true},                       // Documentation prefix
+        {"fe80::", true},                           // Link-local prefix
+        {"fe80::1", true},                          // Link-local
+        {"ff00::", true},                           // Multicast prefix
+        {"ff02::1", true},                          // All nodes multicast
+        {"ff02::2", true},                          // All routers multicast
+        {"2001::", true},                           // Global unicast
+        {"fc00::", true},                           // Unique local prefix
+        {"fd00::", true},                           // Unique local
+        {"2001:db8:85a3::8a2e:370:7334", true},     // Full format
+        {"2001:db8:85a3:0:0:8a2e:370:7334", true},  // Zero compression
     };
 
     for (const auto& [addrStr, shouldBeValid] : testCases) {
         if (shouldBeValid) {
-            EXPECT_NO_THROW(IPv6(addrStr)) << "Should be valid on all platforms: " << addrStr;
+            EXPECT_NO_THROW(IPv6(addrStr))
+                << "Should be valid on all platforms: " << addrStr;
 
             IPv6 ipv6(addrStr);
             EXPECT_EQ(ipv6.getAddress(), addrStr);
@@ -1421,9 +1432,7 @@ TEST_F(ExtendedCrossPlatformTest, IPv6EdgeCasesAllPlatforms) {
 // Stress and Robustness Tests
 class AddressStressTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        spdlog::set_level(spdlog::level::off);
-    }
+    void SetUp() override { spdlog::set_level(spdlog::level::off); }
 };
 
 TEST_F(AddressStressTest, HighVolumeOperations) {
@@ -1436,7 +1445,8 @@ TEST_F(AddressStressTest, HighVolumeOperations) {
         try {
             if (i % 3 == 0) {
                 // IPv4 operations
-                IPv4 ipv4("192.168." + std::to_string(i % 256) + "." + std::to_string((i + 1) % 256));
+                IPv4 ipv4("192.168." + std::to_string(i % 256) + "." +
+                          std::to_string((i + 1) % 256));
                 auto binary = ipv4.toBinary();
                 auto hex = ipv4.toHex();
                 auto network = ipv4.getNetworkAddress("255.255.255.0");
@@ -1477,8 +1487,9 @@ TEST_F(AddressStressTest, HighVolumeOperations) {
         }
     }
 
-    EXPECT_GT(successCount.load(), numOperations * 0.9);  // At least 90% success
-    EXPECT_LT(errorCount.load(), numOperations * 0.1);    // Less than 10% errors
+    EXPECT_GT(successCount.load(),
+              numOperations * 0.9);                     // At least 90% success
+    EXPECT_LT(errorCount.load(), numOperations * 0.1);  // Less than 10% errors
 }
 
 TEST_F(AddressStressTest, RapidCreationDestruction) {
@@ -1487,12 +1498,16 @@ TEST_F(AddressStressTest, RapidCreationDestruction) {
         // Create multiple addresses in quick succession
         std::vector<std::unique_ptr<Address>> addresses;
 
-        addresses.push_back(Address::createFromString("192.168.1." + std::to_string(i % 255 + 1)));
-        addresses.push_back(Address::createFromString("2001:db8::" + std::to_string(i)));
+        addresses.push_back(Address::createFromString(
+            "192.168.1." + std::to_string(i % 255 + 1)));
+        addresses.push_back(
+            Address::createFromString("2001:db8::" + std::to_string(i)));
 #ifdef _WIN32
-        addresses.push_back(Address::createFromString("\\\\.\\pipe\\test" + std::to_string(i)));
+        addresses.push_back(
+            Address::createFromString("\\\\.\\pipe\\test" + std::to_string(i)));
 #else
-        addresses.push_back(Address::createFromString("/tmp/test" + std::to_string(i) + ".sock"));
+        addresses.push_back(Address::createFromString(
+            "/tmp/test" + std::to_string(i) + ".sock"));
 #endif
 
         // Perform operations on them
@@ -1503,7 +1518,10 @@ TEST_F(AddressStressTest, RapidCreationDestruction) {
                 auto binary = addr->toBinary();
                 auto hex = addr->toHex();
                 // Use the values to avoid unused variable warnings
-                (void)type; (void)address; (void)binary; (void)hex;
+                (void)type;
+                (void)address;
+                (void)binary;
+                (void)hex;
             }
         }
 
@@ -1515,9 +1533,7 @@ TEST_F(AddressStressTest, RapidCreationDestruction) {
 // Comprehensive Integration Tests
 class AddressIntegrationTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        spdlog::set_level(spdlog::level::off);
-    }
+    void SetUp() override { spdlog::set_level(spdlog::level::off); }
 };
 
 TEST_F(AddressIntegrationTest, MixedAddressTypeOperations) {
@@ -1561,16 +1577,11 @@ TEST_F(AddressIntegrationTest, MixedAddressTypeOperations) {
 TEST_F(AddressIntegrationTest, FactoryAndPolymorphism) {
     // Test factory method with polymorphic behavior
     std::vector<std::string> testAddresses = {
-        "192.168.1.1",
-        "10.0.0.1",
-        "2001:db8::1",
-        "::1",
+        "192.168.1.1",        "10.0.0.1",          "2001:db8::1", "::1",
 #ifdef _WIN32
-        "\\\\.\\pipe\\test1",
-        "\\\\.\\pipe\\test2"
+        "\\\\.\\pipe\\test1", "\\\\.\\pipe\\test2"
 #else
-        "/tmp/test1.sock",
-        "/tmp/test2.sock"
+        "/tmp/test1.sock", "/tmp/test2.sock"
 #endif
     };
 

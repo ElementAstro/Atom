@@ -34,14 +34,16 @@ auto getFileInfo(const fs::path& filePath) -> FileInfo {
 
         FileInfo info;
 
-        // Edge case: Use error_code version to handle permission issues gracefully
+        // Edge case: Use error_code version to handle permission issues
+        // gracefully
         std::error_code ec;
         if (!fs::exists(filePath, ec) || ec) {
-            spdlog::error("File does not exist or is inaccessible: {} (error: {})",
-                         filePath.string(), ec ? ec.message() : "unknown");
-            throw std::runtime_error("File does not exist or is inaccessible: " +
-                                    filePath.string() + " (error: " +
-                                    (ec ? ec.message() : "unknown") + ")");
+            spdlog::error(
+                "File does not exist or is inaccessible: {} (error: {})",
+                filePath.string(), ec ? ec.message() : "unknown");
+            throw std::runtime_error(
+                "File does not exist or is inaccessible: " + filePath.string() +
+                " (error: " + (ec ? ec.message() : "unknown") + ")");
         }
 
         // Edge case: Handle absolute path conversion errors
@@ -56,7 +58,8 @@ auto getFileInfo(const fs::path& filePath) -> FileInfo {
             auto file_size = fs::file_size(filePath, ec);
             info.fileSize = ec ? 0 : file_size;
         } else {
-            info.fileSize = 0; // Directories and special files don't have meaningful size
+            info.fileSize =
+                0;  // Directories and special files don't have meaningful size
         }
 
         if (fs::is_directory(filePath)) {
@@ -117,14 +120,9 @@ auto getFileInfo(const fs::path& filePath) -> FileInfo {
                         PSECURITY_DESCRIPTOR pSD = nullptr;
 
                         DWORD dwRtnCode = GetNamedSecurityInfoA(
-                            filePath.string().c_str(),
-                            SE_FILE_OBJECT,
-                            OWNER_SECURITY_INFORMATION,
-                            &pSidOwner,
-                            nullptr,
-                            nullptr,
-                            nullptr,
-                            &pSD);
+                            filePath.string().c_str(), SE_FILE_OBJECT,
+                            OWNER_SECURITY_INFORMATION, &pSidOwner, nullptr,
+                            nullptr, nullptr, &pSD);
 
                         if (dwRtnCode != ERROR_SUCCESS) {
                             return "Unknown";
@@ -136,14 +134,19 @@ auto getFileInfo(const fs::path& filePath) -> FileInfo {
                         DWORD dwDomainName = sizeof(szDomainName);
                         SID_NAME_USE eUse = SidTypeUnknown;
 
-                        if (LookupAccountSidA(nullptr, pSidOwner, szAccountName, &dwAcctName,
-                                            szDomainName, &dwDomainName, &eUse)) {
-                            std::string result = std::string(szDomainName) + "\\" + std::string(szAccountName);
-                            if (pSD) LocalFree(pSD);
+                        if (LookupAccountSidA(nullptr, pSidOwner, szAccountName,
+                                              &dwAcctName, szDomainName,
+                                              &dwDomainName, &eUse)) {
+                            std::string result = std::string(szDomainName) +
+                                                 "\\" +
+                                                 std::string(szAccountName);
+                            if (pSD)
+                                LocalFree(pSD);
                             return result;
                         }
 
-                        if (pSD) LocalFree(pSD);
+                        if (pSD)
+                            LocalFree(pSD);
                         return "Unknown";
                     } catch (...) {
                         return "Unknown";
@@ -319,20 +322,24 @@ void deleteFile(const fs::path& filePath) {
     try {
         if (!fs::exists(filePath)) {
             spdlog::error("File does not exist: {}", filePath.string());
-            throw std::runtime_error("File does not exist: " + filePath.string());
+            throw std::runtime_error("File does not exist: " +
+                                     filePath.string());
         }
 
         if (!fs::remove(filePath)) {
             spdlog::error("Failed to delete file: {}", filePath.string());
-            throw std::runtime_error("Failed to delete file: " + filePath.string());
+            throw std::runtime_error("Failed to delete file: " +
+                                     filePath.string());
         }
 
         spdlog::info("Successfully deleted file: {}", filePath.string());
     } catch (const fs::filesystem_error& e) {
-        spdlog::error("Filesystem error deleting file {}: {}", filePath.string(), e.what());
-        throw std::runtime_error("Failed to delete file '" + filePath.string() + "': " + e.what());
+        spdlog::error("Filesystem error deleting file {}: {}",
+                      filePath.string(), e.what());
+        throw std::runtime_error("Failed to delete file '" + filePath.string() +
+                                 "': " + e.what());
     } catch (...) {
-        throw; // Re-throw any existing runtime_error or other exceptions
+        throw;  // Re-throw any existing runtime_error or other exceptions
     }
 }
 

@@ -7,7 +7,6 @@
 #include <vector>
 #include "types.hpp"
 
-
 using namespace mqtt;
 
 TEST(ProtocolVersionTest, EnumValues) {

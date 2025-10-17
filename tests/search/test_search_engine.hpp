@@ -2,14 +2,14 @@
 #define ATOM_SEARCH_TEST_SEARCH_ENGINE_HPP
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
+#include <map>
 #include <memory>
 #include <set>
-#include <map>
-#include <algorithm>
+#include <thread>
+#include <vector>
 
 // Note: These tests are designed for when the full implementation is available
 // Currently using mock implementation due to linking issues
@@ -77,7 +77,8 @@ private:
     }
 
 public:
-    explicit MockSearchEngine(unsigned maxThreads = 0) : maxThreads_(maxThreads) {}
+    explicit MockSearchEngine(unsigned maxThreads = 0)
+        : maxThreads_(maxThreads) {}
 
     void addDocument(const MockDocument& doc) {
         if (documents_.count(doc.getId())) {
@@ -101,7 +102,8 @@ public:
         auto doc = it->second;
         for (const auto& tag : doc->getTags()) {
             auto& tagDocs = tagIndex_[tag];
-            tagDocs.erase(std::remove(tagDocs.begin(), tagDocs.end(), docId), tagDocs.end());
+            tagDocs.erase(std::remove(tagDocs.begin(), tagDocs.end(), docId),
+                          tagDocs.end());
             if (tagDocs.empty()) {
                 tagIndex_.erase(tag);
             }
@@ -128,7 +130,8 @@ public:
         addDocument(doc);
     }
 
-    std::vector<std::shared_ptr<MockDocument>> searchByTag(const std::string& tag) {
+    std::vector<std::shared_ptr<MockDocument>> searchByTag(
+        const std::string& tag) {
         std::vector<std::shared_ptr<MockDocument>> results;
         auto it = tagIndex_.find(tag);
         if (it != tagIndex_.end()) {
@@ -141,7 +144,8 @@ public:
         return results;
     }
 
-    std::vector<std::shared_ptr<MockDocument>> fuzzySearchByTag(const std::string& tag, int tolerance) {
+    std::vector<std::shared_ptr<MockDocument>> fuzzySearchByTag(
+        const std::string& tag, int tolerance) {
         if (tolerance < 0) {
             throw std::invalid_argument("Tolerance cannot be negative");
         }
@@ -159,8 +163,10 @@ public:
         return results;
     }
 
-    std::vector<std::shared_ptr<MockDocument>> searchByTags(const std::vector<std::string>& tags) {
-        if (tags.empty()) return {};
+    std::vector<std::shared_ptr<MockDocument>> searchByTags(
+        const std::vector<std::string>& tags) {
+        if (tags.empty())
+            return {};
 
         std::set<std::string> resultIds;
         bool first = true;
@@ -179,9 +185,10 @@ public:
                 first = false;
             } else {
                 std::set<std::string> intersection;
-                std::set_intersection(resultIds.begin(), resultIds.end(),
-                                    tagResults.begin(), tagResults.end(),
-                                    std::inserter(intersection, intersection.begin()));
+                std::set_intersection(
+                    resultIds.begin(), resultIds.end(), tagResults.begin(),
+                    tagResults.end(),
+                    std::inserter(intersection, intersection.begin()));
                 resultIds = intersection;
             }
         }
@@ -195,7 +202,8 @@ public:
         return results;
     }
 
-    std::vector<std::shared_ptr<MockDocument>> searchByContent(const std::string& query) {
+    std::vector<std::shared_ptr<MockDocument>> searchByContent(
+        const std::string& query) {
         auto tokens = tokenize(query);
         std::map<std::string, double> scores;
 
@@ -203,7 +211,7 @@ public:
             auto it = contentIndex_.find(token);
             if (it != contentIndex_.end()) {
                 for (const auto& docId : it->second) {
-                    scores[docId] += 1.0; // Simple scoring
+                    scores[docId] += 1.0;  // Simple scoring
                 }
             }
         }
@@ -217,7 +225,8 @@ public:
         return results;
     }
 
-    std::vector<std::shared_ptr<MockDocument>> booleanSearch(const std::string& query) {
+    std::vector<std::shared_ptr<MockDocument>> booleanSearch(
+        const std::string& query) {
         // Simple boolean search implementation
         if (query.find(" AND ") != std::string::npos) {
             auto pos = query.find(" AND ");
@@ -241,7 +250,8 @@ public:
         return searchByContent(query);
     }
 
-    std::vector<std::string> autoComplete(const std::string& prefix, size_t maxResults = 0) {
+    std::vector<std::string> autoComplete(const std::string& prefix,
+                                          size_t maxResults = 0) {
         std::vector<std::string> suggestions;
         for (const auto& [tag, _] : tagIndex_) {
             if (tag.substr(0, prefix.length()) == prefix) {
@@ -276,20 +286,21 @@ public:
     }
 
 private:
-    int levenshteinDistance(const std::string& s1, const std::string& s2) const {
+    int levenshteinDistance(const std::string& s1,
+                            const std::string& s2) const {
         const size_t len1 = s1.size(), len2 = s2.size();
         std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
 
-        for (size_t i = 1; i <= len1; ++i) d[i][0] = i;
-        for (size_t i = 1; i <= len2; ++i) d[0][i] = i;
+        for (size_t i = 1; i <= len1; ++i)
+            d[i][0] = i;
+        for (size_t i = 1; i <= len2; ++i)
+            d[0][i] = i;
 
         for (size_t i = 1; i <= len1; ++i) {
             for (size_t j = 1; j <= len2; ++j) {
-                d[i][j] = std::min({
-                    d[i - 1][j] + 1,
-                    d[i][j - 1] + 1,
-                    d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)
-                });
+                d[i][j] = std::min(
+                    {d[i - 1][j] + 1, d[i][j - 1] + 1,
+                     d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
             }
         }
         return d[len1][len2];
@@ -304,15 +315,19 @@ protected:
         engine = std::make_unique<MockSearchEngine>();
 
         // Add some initial test documents
-        engine->addDocument(MockDocument("1", "Hello world programming", {"greeting", "world", "programming"}));
-        engine->addDocument(MockDocument("2", "Goodbye world", {"farewell", "world"}));
-        engine->addDocument(MockDocument("3", "Programming tutorial", {"programming", "tutorial", "education"}));
-        engine->addDocument(MockDocument("4", "Advanced programming concepts", {"programming", "advanced", "concepts"}));
+        engine->addDocument(MockDocument("1", "Hello world programming",
+                                         {"greeting", "world", "programming"}));
+        engine->addDocument(
+            MockDocument("2", "Goodbye world", {"farewell", "world"}));
+        engine->addDocument(
+            MockDocument("3", "Programming tutorial",
+                         {"programming", "tutorial", "education"}));
+        engine->addDocument(
+            MockDocument("4", "Advanced programming concepts",
+                         {"programming", "advanced", "concepts"}));
     }
 
-    void TearDown() override {
-        engine.reset();
-    }
+    void TearDown() override { engine.reset(); }
 };
 
 // Basic Document Management Tests
@@ -326,7 +341,7 @@ TEST_F(SearchEngineTest, AddDocument) {
 TEST_F(SearchEngineTest, AddDuplicateDocument) {
     MockDocument duplicateDoc("1", "Duplicate content", {"duplicate"});
     EXPECT_THROW(engine->addDocument(duplicateDoc), std::invalid_argument);
-    EXPECT_EQ(engine->getDocumentCount(), 4); // Should remain unchanged
+    EXPECT_EQ(engine->getDocumentCount(), 4);  // Should remain unchanged
 }
 
 TEST_F(SearchEngineTest, RemoveDocument) {
@@ -338,7 +353,7 @@ TEST_F(SearchEngineTest, RemoveDocument) {
 
 TEST_F(SearchEngineTest, RemoveNonexistentDocument) {
     EXPECT_THROW(engine->removeDocument("nonexistent"), std::runtime_error);
-    EXPECT_EQ(engine->getDocumentCount(), 4); // Should remain unchanged
+    EXPECT_EQ(engine->getDocumentCount(), 4);  // Should remain unchanged
 }
 
 TEST_F(SearchEngineTest, UpdateDocument) {
@@ -359,7 +374,7 @@ TEST_F(SearchEngineTest, UpdateNonexistentDocument) {
 // Search Functionality Tests
 TEST_F(SearchEngineTest, SearchByTag) {
     auto results = engine->searchByTag("programming");
-    EXPECT_EQ(results.size(), 3); // Documents 1, 3, 4 have "programming" tag
+    EXPECT_EQ(results.size(), 3);  // Documents 1, 3, 4 have "programming" tag
 
     std::set<std::string> resultIds;
     for (const auto& doc : results) {
@@ -377,7 +392,7 @@ TEST_F(SearchEngineTest, SearchByNonexistentTag) {
 
 TEST_F(SearchEngineTest, SearchByTags) {
     auto results = engine->searchByTags({"programming", "advanced"});
-    EXPECT_EQ(results.size(), 1); // Only document 4 has both tags
+    EXPECT_EQ(results.size(), 1);  // Only document 4 has both tags
     EXPECT_EQ(results[0]->getId(), "4");
 }
 
@@ -393,7 +408,8 @@ TEST_F(SearchEngineTest, SearchByEmptyTags) {
 
 TEST_F(SearchEngineTest, SearchByContent) {
     auto results = engine->searchByContent("programming");
-    EXPECT_GE(results.size(), 1); // Should find documents containing "programming"
+    EXPECT_GE(results.size(),
+              1);  // Should find documents containing "programming"
 
     // Verify results contain the search term
     bool found = false;
@@ -408,17 +424,20 @@ TEST_F(SearchEngineTest, SearchByContent) {
 
 TEST_F(SearchEngineTest, SearchByContentMultipleTerms) {
     auto results = engine->searchByContent("Hello world");
-    EXPECT_GE(results.size(), 1); // Should find documents containing these terms
+    EXPECT_GE(results.size(),
+              1);  // Should find documents containing these terms
 }
 
 TEST_F(SearchEngineTest, BooleanSearchAND) {
     auto results = engine->booleanSearch("Hello AND world");
-    EXPECT_GE(results.size(), 1); // Should find documents containing both terms
+    EXPECT_GE(results.size(),
+              1);  // Should find documents containing both terms
 
     // Verify results contain both terms
     for (const auto& doc : results) {
         std::string content = doc->getContent();
-        std::transform(content.begin(), content.end(), content.begin(), ::tolower);
+        std::transform(content.begin(), content.end(), content.begin(),
+                       ::tolower);
         EXPECT_TRUE(content.find("hello") != std::string::npos);
         EXPECT_TRUE(content.find("world") != std::string::npos);
     }
@@ -426,33 +445,37 @@ TEST_F(SearchEngineTest, BooleanSearchAND) {
 
 TEST_F(SearchEngineTest, BooleanSearchSingleTerm) {
     auto results = engine->booleanSearch("programming");
-    EXPECT_GE(results.size(), 1); // Should work like regular content search
+    EXPECT_GE(results.size(), 1);  // Should work like regular content search
 }
 
 // Fuzzy Search Tests
 TEST_F(SearchEngineTest, FuzzySearchExactMatch) {
     auto results = engine->fuzzySearchByTag("programming", 0);
-    EXPECT_EQ(results.size(), 3); // Should match exactly like regular tag search
+    EXPECT_EQ(results.size(),
+              3);  // Should match exactly like regular tag search
 }
 
 TEST_F(SearchEngineTest, FuzzySearchWithTolerance) {
-    auto results = engine->fuzzySearchByTag("programing", 1); // Missing 'm'
-    EXPECT_GE(results.size(), 1); // Should find "programming" with tolerance 1
+    auto results = engine->fuzzySearchByTag("programing", 1);  // Missing 'm'
+    EXPECT_GE(results.size(), 1);  // Should find "programming" with tolerance 1
 }
 
 TEST_F(SearchEngineTest, FuzzySearchNegativeTolerance) {
-    EXPECT_THROW(engine->fuzzySearchByTag("programming", -1), std::invalid_argument);
+    EXPECT_THROW(engine->fuzzySearchByTag("programming", -1),
+                 std::invalid_argument);
 }
 
 TEST_F(SearchEngineTest, FuzzySearchHighTolerance) {
-    auto results = engine->fuzzySearchByTag("xyz", 10); // Very different, high tolerance
-    EXPECT_GE(results.size(), 0); // Should not crash, may or may not find results
+    auto results =
+        engine->fuzzySearchByTag("xyz", 10);  // Very different, high tolerance
+    EXPECT_GE(results.size(),
+              0);  // Should not crash, may or may not find results
 }
 
 // Autocomplete Tests
 TEST_F(SearchEngineTest, AutoComplete) {
     auto suggestions = engine->autoComplete("prog");
-    EXPECT_GE(suggestions.size(), 1); // Should suggest "programming"
+    EXPECT_GE(suggestions.size(), 1);  // Should suggest "programming"
 
     bool foundProgramming = false;
     for (const auto& suggestion : suggestions) {
@@ -465,7 +488,7 @@ TEST_F(SearchEngineTest, AutoComplete) {
 }
 
 TEST_F(SearchEngineTest, AutoCompleteWithLimit) {
-    auto suggestions = engine->autoComplete("", 2); // Empty prefix, limit 2
+    auto suggestions = engine->autoComplete("", 2);  // Empty prefix, limit 2
     EXPECT_LE(suggestions.size(), 2);
 }
 
@@ -507,24 +530,25 @@ TEST_F(SearchEngineTest, BulkDocumentAddition) {
 
     for (int i = 100; i < 1100; ++i) {
         MockDocument doc(std::to_string(i),
-                        "Bulk document content " + std::to_string(i),
-                        {"bulk", "doc" + std::to_string(i % 10)});
+                         "Bulk document content " + std::to_string(i),
+                         {"bulk", "doc" + std::to_string(i % 10)});
         engine->addDocument(doc);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    EXPECT_EQ(engine->getDocumentCount(), 1004); // 4 initial + 1000 new
-    EXPECT_LT(duration.count(), 5000); // Should complete within 5 seconds
+    EXPECT_EQ(engine->getDocumentCount(), 1004);  // 4 initial + 1000 new
+    EXPECT_LT(duration.count(), 5000);  // Should complete within 5 seconds
 }
 
 TEST_F(SearchEngineTest, SearchPerformance) {
     // Add many documents first
     for (int i = 100; i < 1100; ++i) {
-        MockDocument doc(std::to_string(i),
-                        "Performance test document " + std::to_string(i),
-                        {"performance", "test", "doc" + std::to_string(i % 10)});
+        MockDocument doc(
+            std::to_string(i), "Performance test document " + std::to_string(i),
+            {"performance", "test", "doc" + std::to_string(i % 10)});
         engine->addDocument(doc);
     }
 
@@ -537,9 +561,11 @@ TEST_F(SearchEngineTest, SearchPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    EXPECT_LT(duration.count(), 1000); // 100 searches should complete within 1 second
+    EXPECT_LT(duration.count(),
+              1000);  // 100 searches should complete within 1 second
 }
 
 // Concurrency Tests
@@ -567,7 +593,7 @@ TEST_F(SearchEngineTest, ConcurrentSearches) {
         thread.join();
     }
 
-    EXPECT_GT(successCount, 500); // Most searches should succeed
+    EXPECT_GT(successCount, 500);  // Most searches should succeed
 }
 
 TEST_F(SearchEngineTest, ConcurrentDocumentOperations) {
@@ -579,9 +605,12 @@ TEST_F(SearchEngineTest, ConcurrentDocumentOperations) {
         threads.emplace_back([this, i, &addCount]() {
             try {
                 for (int j = 0; j < 20; ++j) {
-                    MockDocument doc("thread" + std::to_string(i) + "_doc" + std::to_string(j),
-                                   "Concurrent document " + std::to_string(i) + " " + std::to_string(j),
-                                   {"concurrent", "thread" + std::to_string(i)});
+                    MockDocument doc(
+                        "thread" + std::to_string(i) + "_doc" +
+                            std::to_string(j),
+                        "Concurrent document " + std::to_string(i) + " " +
+                            std::to_string(j),
+                        {"concurrent", "thread" + std::to_string(i)});
                     engine->addDocument(doc);
                     addCount++;
                 }
@@ -595,8 +624,9 @@ TEST_F(SearchEngineTest, ConcurrentDocumentOperations) {
         thread.join();
     }
 
-    EXPECT_GT(addCount, 50); // Most additions should succeed
-    EXPECT_GT(engine->getDocumentCount(), 4); // Should have more than initial documents
+    EXPECT_GT(addCount, 50);  // Most additions should succeed
+    EXPECT_GT(engine->getDocumentCount(),
+              4);  // Should have more than initial documents
 }
 
 // Advanced Features Tests
@@ -607,8 +637,8 @@ TEST_F(SearchEngineTest, ThreadedSearchEngine) {
     // Add documents
     for (int i = 0; i < 100; ++i) {
         MockDocument doc("threaded_" + std::to_string(i),
-                        "Threaded document content " + std::to_string(i),
-                        {"threaded", "parallel"});
+                         "Threaded document content " + std::to_string(i),
+                         {"threaded", "parallel"});
         threadedEngine->addDocument(doc);
     }
 
@@ -621,9 +651,12 @@ TEST_F(SearchEngineTest, ThreadedSearchEngine) {
 
 TEST_F(SearchEngineTest, ComplexBooleanQueries) {
     // Add more complex documents for testing
-    engine->addDocument(MockDocument("complex1", "machine learning algorithms", {"ml", "algorithms", "ai"}));
-    engine->addDocument(MockDocument("complex2", "deep learning neural networks", {"dl", "neural", "ai"}));
-    engine->addDocument(MockDocument("complex3", "artificial intelligence overview", {"ai", "overview"}));
+    engine->addDocument(MockDocument("complex1", "machine learning algorithms",
+                                     {"ml", "algorithms", "ai"}));
+    engine->addDocument(MockDocument(
+        "complex2", "deep learning neural networks", {"dl", "neural", "ai"}));
+    engine->addDocument(MockDocument(
+        "complex3", "artificial intelligence overview", {"ai", "overview"}));
 
     // Test complex boolean search
     auto results = engine->booleanSearch("learning AND algorithms");
@@ -632,7 +665,8 @@ TEST_F(SearchEngineTest, ComplexBooleanQueries) {
     // Verify results contain both terms
     for (const auto& doc : results) {
         std::string content = doc->getContent();
-        std::transform(content.begin(), content.end(), content.begin(), ::tolower);
+        std::transform(content.begin(), content.end(), content.begin(),
+                       ::tolower);
         EXPECT_TRUE(content.find("learning") != std::string::npos);
         EXPECT_TRUE(content.find("algorithms") != std::string::npos);
     }
@@ -640,9 +674,12 @@ TEST_F(SearchEngineTest, ComplexBooleanQueries) {
 
 TEST_F(SearchEngineTest, RankingAndScoring) {
     // Add documents with varying relevance
-    engine->addDocument(MockDocument("rank1", "programming programming programming", {"programming"}));
-    engine->addDocument(MockDocument("rank2", "programming tutorial", {"programming", "tutorial"}));
-    engine->addDocument(MockDocument("rank3", "basic programming", {"programming", "basic"}));
+    engine->addDocument(MockDocument(
+        "rank1", "programming programming programming", {"programming"}));
+    engine->addDocument(MockDocument("rank2", "programming tutorial",
+                                     {"programming", "tutorial"}));
+    engine->addDocument(
+        MockDocument("rank3", "basic programming", {"programming", "basic"}));
 
     auto results = engine->searchByContent("programming");
     EXPECT_GE(results.size(), 3);
@@ -680,7 +717,8 @@ TEST_F(SearchEngineTest, VeryLongSearchQueries) {
 }
 
 TEST_F(SearchEngineTest, SpecialCharactersInSearch) {
-    engine->addDocument(MockDocument("special", "Special chars: !@#$%^&*()", {"special", "chars"}));
+    engine->addDocument(MockDocument("special", "Special chars: !@#$%^&*()",
+                                     {"special", "chars"}));
 
     auto results = engine->searchByContent("Special chars");
     EXPECT_GE(results.size(), 1);
@@ -690,7 +728,8 @@ TEST_F(SearchEngineTest, SpecialCharactersInSearch) {
 }
 
 TEST_F(SearchEngineTest, UnicodeSupport) {
-    engine->addDocument(MockDocument("unicode", "Unicode test: 你好世界 🌍", {"unicode", "test"}));
+    engine->addDocument(MockDocument("unicode", "Unicode test: 你好世界 🌍",
+                                     {"unicode", "test"}));
 
     auto results = engine->searchByContent("Unicode");
     EXPECT_GE(results.size(), 1);
@@ -708,25 +747,29 @@ TEST_F(SearchEngineTest, StressTestManyDocuments) {
     // Add many documents
     for (int i = 0; i < numDocs; ++i) {
         MockDocument doc("stress_" + std::to_string(i),
-                        "Stress test document number " + std::to_string(i),
-                        {"stress", "test", "doc" + std::to_string(i % 100)});
+                         "Stress test document number " + std::to_string(i),
+                         {"stress", "test", "doc" + std::to_string(i % 100)});
         engine->addDocument(doc);
     }
 
     auto addEnd = std::chrono::high_resolution_clock::now();
-    auto addDuration = std::chrono::duration_cast<std::chrono::milliseconds>(addEnd - start);
+    auto addDuration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(addEnd - start);
 
-    EXPECT_EQ(engine->getDocumentCount(), numDocs + 4); // +4 for initial documents
-    EXPECT_LT(addDuration.count(), 30000); // Should complete within 30 seconds
+    EXPECT_EQ(engine->getDocumentCount(),
+              numDocs + 4);                 // +4 for initial documents
+    EXPECT_LT(addDuration.count(), 30000);  // Should complete within 30 seconds
 
     // Test search performance with many documents
     auto searchStart = std::chrono::high_resolution_clock::now();
     auto results = engine->searchByTag("stress");
     auto searchEnd = std::chrono::high_resolution_clock::now();
-    auto searchDuration = std::chrono::duration_cast<std::chrono::milliseconds>(searchEnd - searchStart);
+    auto searchDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        searchEnd - searchStart);
 
     EXPECT_EQ(results.size(), numDocs);
-    EXPECT_LT(searchDuration.count(), 1000); // Search should be fast even with many documents
+    EXPECT_LT(searchDuration.count(),
+              1000);  // Search should be fast even with many documents
 }
 
 TEST_F(SearchEngineTest, StressTestConcurrentOperations) {
@@ -757,9 +800,10 @@ TEST_F(SearchEngineTest, StressTestConcurrentOperations) {
             int docCount = 0;
             while (!stopFlag.load() && docCount < 100) {
                 try {
-                    MockDocument doc("stress_writer_" + std::to_string(i) + "_" + std::to_string(docCount),
-                                   "Stress writer document",
-                                   {"stress", "writer"});
+                    MockDocument doc("stress_writer_" + std::to_string(i) +
+                                         "_" + std::to_string(docCount),
+                                     "Stress writer document",
+                                     {"stress", "writer"});
                     engine->addDocument(doc);
                     operationCount++;
                     docCount++;
@@ -779,7 +823,7 @@ TEST_F(SearchEngineTest, StressTestConcurrentOperations) {
         thread.join();
     }
 
-    EXPECT_GT(operationCount, 100); // Should have performed many operations
+    EXPECT_GT(operationCount, 100);  // Should have performed many operations
 }
 
 // Memory and Resource Management Tests
@@ -787,11 +831,12 @@ TEST_F(SearchEngineTest, MemoryUsageWithLargeDocuments) {
     // Add documents with large content
     for (int i = 0; i < 100; ++i) {
         std::string largeContent(10000, 'A' + (i % 26));
-        MockDocument doc("large_" + std::to_string(i), largeContent, {"large", "memory"});
+        MockDocument doc("large_" + std::to_string(i), largeContent,
+                         {"large", "memory"});
         engine->addDocument(doc);
     }
 
-    EXPECT_EQ(engine->getDocumentCount(), 104); // 4 initial + 100 large
+    EXPECT_EQ(engine->getDocumentCount(), 104);  // 4 initial + 100 large
 
     // Test search still works
     auto results = engine->searchByTag("large");
@@ -806,8 +851,8 @@ TEST_F(SearchEngineTest, ResourceCleanupAfterClear) {
     // Add many documents
     for (int i = 0; i < 1000; ++i) {
         MockDocument doc("cleanup_" + std::to_string(i),
-                        "Cleanup test document " + std::to_string(i),
-                        {"cleanup", "test"});
+                         "Cleanup test document " + std::to_string(i),
+                         {"cleanup", "test"});
         engine->addDocument(doc);
     }
 

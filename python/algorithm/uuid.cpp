@@ -25,18 +25,18 @@ PYBIND11_MODULE(uuid, m) {
 
         Examples:
             >>> from atom.algorithm.uuid import UUID
-            >>> 
+            >>>
             >>> # Generate different types of UUIDs
             >>> time_uuid = UUID.generate_time_based()
             >>> random_uuid = UUID.generate_random()
-            >>> 
+            >>>
             >>> # Parse UUID from string
             >>> uuid_obj = UUID.from_string("550e8400-e29b-41d4-a716-446655440000")
-            >>> 
+            >>>
             >>> # Convert to different formats
             >>> uuid_str = uuid_obj.to_string()
             >>> uuid_bytes = uuid_obj.to_bytes()
-            >>> 
+            >>>
             >>> # Validate UUID strings
             >>> is_valid = UUID.is_valid("550e8400-e29b-41d4-a716-446655440000")
     )pbdoc";
@@ -58,229 +58,229 @@ PYBIND11_MODULE(uuid, m) {
     // UUID class bindings
     py::class_<atom::algorithm::UUID>(m, "UUID", R"pbdoc(
         High-performance UUID class for generating and manipulating UUIDs.
-        
+
         This class provides efficient UUID operations with support for all
         standard UUID versions and formats.
     )pbdoc")
         .def(py::init<>(), "Create a nil UUID (all zeros).")
-        
+
         .def(py::init<const std::array<uint8_t, 16>&>(), py::arg("bytes"),
              "Create UUID from 16-byte array.")
-        
+
         .def_static("generate_random", &atom::algorithm::UUID::generateRandom,
                    R"pbdoc(
                    Generate a random UUID (version 4).
-                   
+
                    Returns:
                        A new random UUID
-                       
+
                    Examples:
                        >>> uuid = UUID.generate_random()
                    )pbdoc")
-        
+
         .def_static("generate_time_based", [](const std::array<uint8_t, 6>& node_id) {
             return atom::algorithm::UUID::generateTimeBased(node_id);
         }, py::arg("node_id"),
         R"pbdoc(
         Generate a time-based UUID (version 1).
-        
+
         Args:
             node_id: 6-byte node identifier (MAC address or random)
-            
+
         Returns:
             A new time-based UUID
-            
+
         Examples:
             >>> node_id = UUID.generate_random_node_id()
             >>> uuid = UUID.generate_time_based(node_id)
         )pbdoc")
-        
+
         .def_static("generate_name_based_md5", &atom::algorithm::UUID::generateNameBasedMD5,
                    py::arg("namespace_uuid"), py::arg("name"),
                    R"pbdoc(
                    Generate a name-based UUID using MD5 (version 3).
-                   
+
                    Args:
                        namespace_uuid: The namespace UUID
                        name: The name string
-                       
+
                    Returns:
                        A new name-based UUID
                    )pbdoc")
-        
+
         .def_static("generate_name_based_sha1", &atom::algorithm::UUID::generateNameBasedSHA1,
                    py::arg("namespace_uuid"), py::arg("name"),
                    R"pbdoc(
                    Generate a name-based UUID using SHA-1 (version 5).
-                   
+
                    Args:
                        namespace_uuid: The namespace UUID
                        name: The name string
-                       
+
                    Returns:
                        A new name-based UUID
                    )pbdoc")
-        
+
         .def_static("from_string", &atom::algorithm::UUID::fromString,
                    py::arg("uuid_string"),
                    R"pbdoc(
                    Parse UUID from string representation.
-                   
+
                    Args:
                        uuid_string: UUID string (with or without hyphens)
-                       
+
                    Returns:
                        Parsed UUID object
-                       
+
                    Raises:
                        ValueError: If the string is not a valid UUID
-                       
+
                    Examples:
                        >>> uuid = UUID.from_string("550e8400-e29b-41d4-a716-446655440000")
                    )pbdoc")
-        
+
         .def_static("is_valid", &atom::algorithm::UUID::isValid,
                    py::arg("uuid_string"),
                    R"pbdoc(
                    Check if a string is a valid UUID format.
-                   
+
                    Args:
                        uuid_string: String to validate
-                       
+
                    Returns:
                        True if valid UUID format, False otherwise
-                       
+
                    Examples:
                        >>> is_valid = UUID.is_valid("550e8400-e29b-41d4-a716-446655440000")
                    )pbdoc")
-        
+
         .def_static("generate_random_node_id", &atom::algorithm::UUID::generateRandomNodeId,
                    R"pbdoc(
                    Generate a random 6-byte node ID for time-based UUIDs.
-                   
+
                    Returns:
                        6-byte array suitable for use as node ID
-                       
+
                    Examples:
                        >>> node_id = UUID.generate_random_node_id()
                    )pbdoc")
-        
+
         .def("to_string", [](const atom::algorithm::UUID& self, bool with_hyphens) {
             return self.toString(with_hyphens);
         }, py::arg("with_hyphens") = true,
         R"pbdoc(
         Convert UUID to string representation.
-        
+
         Args:
             with_hyphens: Whether to include hyphens in the output
-            
+
         Returns:
             String representation of the UUID
-            
+
         Examples:
             >>> uuid_str = uuid.to_string()  # With hyphens
             >>> uuid_str_compact = uuid.to_string(False)  # Without hyphens
         )pbdoc")
-        
+
         .def("to_bytes", &atom::algorithm::UUID::toBytes,
              R"pbdoc(
              Convert UUID to 16-byte array.
-             
+
              Returns:
                  16-byte array representation of the UUID
              )pbdoc")
-        
+
         .def("get_version", &atom::algorithm::UUID::getVersion,
              R"pbdoc(
              Get the version number of the UUID.
-             
+
              Returns:
                  Version number (1-5)
              )pbdoc")
-        
+
         .def("get_variant", &atom::algorithm::UUID::getVariant,
              R"pbdoc(
              Get the variant of the UUID.
-             
+
              Returns:
                  Variant identifier
              )pbdoc")
-        
+
         .def("is_nil", &atom::algorithm::UUID::isNil,
              R"pbdoc(
              Check if this is a nil UUID (all zeros).
-             
+
              Returns:
                  True if nil UUID, False otherwise
              )pbdoc")
-        
+
         .def("get_timestamp", &atom::algorithm::UUID::getTimestamp,
              R"pbdoc(
              Extract timestamp from time-based UUID (version 1).
-             
+
              Returns:
                  Timestamp as system clock time point
-                 
+
              Raises:
                  ValueError: If UUID is not version 1
              )pbdoc")
-        
+
         .def("get_node_id", &atom::algorithm::UUID::getNodeId,
              R"pbdoc(
              Extract node ID from time-based UUID (version 1).
-             
+
              Returns:
                  6-byte node ID array
-                 
+
              Raises:
                  ValueError: If UUID is not version 1
              )pbdoc")
-        
+
         .def("get_clock_sequence", &atom::algorithm::UUID::getClockSequence,
              R"pbdoc(
              Extract clock sequence from time-based UUID (version 1).
-             
+
              Returns:
                  Clock sequence value
-                 
+
              Raises:
                  ValueError: If UUID is not version 1
              )pbdoc")
-        
+
         // Comparison operators
         .def("__eq__", [](const atom::algorithm::UUID& self, const atom::algorithm::UUID& other) {
             return self == other;
         }, "Equality comparison")
-        
+
         .def("__ne__", [](const atom::algorithm::UUID& self, const atom::algorithm::UUID& other) {
             return self != other;
         }, "Inequality comparison")
-        
+
         .def("__lt__", [](const atom::algorithm::UUID& self, const atom::algorithm::UUID& other) {
             return self < other;
         }, "Less than comparison")
-        
+
         .def("__le__", [](const atom::algorithm::UUID& self, const atom::algorithm::UUID& other) {
             return self <= other;
         }, "Less than or equal comparison")
-        
+
         .def("__gt__", [](const atom::algorithm::UUID& self, const atom::algorithm::UUID& other) {
             return self > other;
         }, "Greater than comparison")
-        
+
         .def("__ge__", [](const atom::algorithm::UUID& self, const atom::algorithm::UUID& other) {
             return self >= other;
         }, "Greater than or equal comparison")
-        
+
         // Python special methods
         .def("__str__", [](const atom::algorithm::UUID& self) {
             return self.toString();
         }, "String representation")
-        
+
         .def("__repr__", [](const atom::algorithm::UUID& self) {
             return "UUID('" + self.toString() + "')";
         }, "Representation string")
-        
+
         .def("__hash__", [](const atom::algorithm::UUID& self) {
             return self.hash();
         }, "Hash value for use in dictionaries");
@@ -289,22 +289,22 @@ PYBIND11_MODULE(uuid, m) {
     m.def("generate_uuid_batch", [](size_t count) {
         std::vector<atom::algorithm::UUID> batch;
         batch.reserve(count);
-        
+
         for (size_t i = 0; i < count; ++i) {
             batch.push_back(atom::algorithm::UUID::generateRandom());
         }
-        
+
         return batch;
     }, py::arg("count"),
     R"pbdoc(
     Generate a batch of random UUIDs efficiently.
-    
+
     Args:
         count: Number of UUIDs to generate
-        
+
     Returns:
         List of UUID objects
-        
+
     Examples:
         >>> uuids = generate_uuid_batch(1000)
     )pbdoc");

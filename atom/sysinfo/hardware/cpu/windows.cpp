@@ -15,8 +15,8 @@ Description: System Information Module - CPU Windows Implementation
 #include <thread>
 #ifdef _WIN32
 
-#include "common.hpp"
 #include <spdlog/spdlog.h>
+#include "common.hpp"
 
 #include <powersetting.h>
 #include <powrprof.h>  // Add this header for PowerGetActiveScheme
@@ -36,7 +36,7 @@ auto getCPUModel_Windows() -> std::string;
 // 这里应该添加所有函数的前向声明
 
 auto getCurrentCpuUsage_Windows() -> float {
-    spdlog::info( "Starting getCurrentCpuUsage function on Windows");
+    spdlog::info("Starting getCurrentCpuUsage function on Windows");
 
     static PDH_HQUERY cpuQuery = nullptr;
     static PDH_HCOUNTER cpuTotal = nullptr;
@@ -65,12 +65,12 @@ auto getCurrentCpuUsage_Windows() -> float {
     // Clamp the value between 0 and 100
     cpuUsage = std::max(0.0F, std::min(100.0F, cpuUsage));
 
-    spdlog::info( "Windows CPU Usage: {}%", cpuUsage);
+    spdlog::info("Windows CPU Usage: {}%", cpuUsage);
     return cpuUsage;
 }
 
 auto getPerCoreCpuUsage() -> std::vector<float> {
-    spdlog::info( "Starting getPerCoreCpuUsage function on Windows");
+    spdlog::info("Starting getPerCoreCpuUsage function on Windows");
 
     static PDH_HQUERY cpuQuery = nullptr;
     static std::vector<PDH_HCOUNTER> cpuCounters;
@@ -109,7 +109,7 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
         coreUsages[i] = std::max(0.0F, std::min(100.0F, coreUsages[i]));
     }
 
-    spdlog::info( "Windows Per-Core CPU Usage collected for {} cores", numCores);
+    spdlog::info("Windows Per-Core CPU Usage collected for {} cores", numCores);
     return coreUsages;
 }
 
@@ -141,26 +141,29 @@ auto getCurrentCpuTemperature() -> float {
                             IID_IWbemLocator, (LPVOID *)&pLoc);
 
     if (FAILED(hres)) {
-        spdlog::error("Failed to create IWbemLocator object. Error code: {}", hres);
+        spdlog::error("Failed to create IWbemLocator object. Error code: {}",
+                      hres);
         CoUninitialize();
         return temperature;
     }
 
     // Connect to WMI through the IWbemLocator::ConnectServer method
     IWbemServices *pSvc = nullptr;
-    hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\WMI"), nullptr, nullptr, 0,
-                               0, 0, 0, &pSvc);
+    hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\WMI"), nullptr, nullptr, 0, 0, 0,
+                               0, &pSvc);
 
     if (FAILED(hres)) {
-        spdlog::warn("Could not connect to WMI namespace ROOT\\WMI. Error code: {}", hres);
+        spdlog::warn(
+            "Could not connect to WMI namespace ROOT\\WMI. Error code: {}",
+            hres);
         pLoc->Release();
         CoUninitialize();
         return temperature;
     }
 
     // Set security levels on the proxy
-    hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE,
-                             nullptr, RPC_C_AUTHN_LEVEL_CALL,
+    hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE, nullptr,
+                             RPC_C_AUTHN_LEVEL_CALL,
                              RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
 
     if (FAILED(hres)) {
@@ -174,8 +177,7 @@ auto getCurrentCpuTemperature() -> float {
     // Query for thermal zone temperature
     IEnumWbemClassObject *pEnumerator = nullptr;
     hres = pSvc->ExecQuery(
-        bstr_t("WQL"),
-        bstr_t("SELECT * FROM MSAcpi_ThermalZoneTemperature"),
+        bstr_t("WQL"), bstr_t("SELECT * FROM MSAcpi_ThermalZoneTemperature"),
         WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
         &pEnumerator);
 
@@ -203,7 +205,9 @@ auto getCurrentCpuTemperature() -> float {
             if (SUCCEEDED(hr) && vtProp.vt == VT_I4) {
                 // Temperature is in tenths of Kelvin, convert to Celsius
                 temperature = (vtProp.lVal / 10.0f) - 273.15f;
-                spdlog::info("Windows CPU Temperature: {}°C (from thermal zone)", temperature);
+                spdlog::info(
+                    "Windows CPU Temperature: {}°C (from thermal zone)",
+                    temperature);
             } else {
                 spdlog::warn("Failed to retrieve CurrentTemperature property");
             }
@@ -239,15 +243,20 @@ auto getPerCoreCpuTemperature() -> std::vector<float> {
     float overallTemp = getCurrentCpuTemperature();
     std::fill(temperatures.begin(), temperatures.end(), overallTemp);
 
-    spdlog::info("Windows Per-Core CPU Temperature: Using overall temperature ({} °C) for {} cores",
-                 overallTemp, numCores);
-    spdlog::debug("Note: Windows does not provide native per-core temperature APIs. Consider using hardware monitoring libraries for detailed per-core data.");
+    spdlog::info(
+        "Windows Per-Core CPU Temperature: Using overall temperature ({} °C) "
+        "for {} cores",
+        overallTemp, numCores);
+    spdlog::debug(
+        "Note: Windows does not provide native per-core temperature APIs. "
+        "Consider using hardware monitoring libraries for detailed per-core "
+        "data.");
 
     return temperatures;
 }
 
 auto getCPUModel() -> std::string {
-    spdlog::info( "Starting getCPUModel function on Windows");
+    spdlog::info("Starting getCPUModel function on Windows");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.model.empty()) {
         return g_cpuInfoCache.model;
@@ -275,12 +284,12 @@ auto getCPUModel() -> std::string {
     cpuModel.erase(0, cpuModel.find_first_not_of(" \t\n\r\f\v"));
     cpuModel.erase(cpuModel.find_last_not_of(" \t\n\r\f\v") + 1);
 
-    spdlog::info( "Windows CPU Model: {}", cpuModel);
+    spdlog::info("Windows CPU Model: {}", cpuModel);
     return cpuModel;
 }
 
 auto getProcessorIdentifier() -> std::string {
-    spdlog::info( "Starting getProcessorIdentifier function on Windows");
+    spdlog::info("Starting getProcessorIdentifier function on Windows");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.identifier.empty()) {
         return g_cpuInfoCache.identifier;
@@ -318,12 +327,12 @@ auto getProcessorIdentifier() -> std::string {
                  " Model " + std::to_string(model) + " Stepping " +
                  std::to_string(stepping);
 
-    spdlog::info( "Windows CPU Identifier: {}", identifier);
+    spdlog::info("Windows CPU Identifier: {}", identifier);
     return identifier;
 }
 
 auto getProcessorFrequency() -> double {
-    spdlog::info( "Starting getProcessorFrequency function on Windows");
+    spdlog::info("Starting getProcessorFrequency function on Windows");
 
     DWORD bufSize = sizeof(DWORD);
     DWORD mhz = 0;
@@ -334,16 +343,16 @@ auto getProcessorFrequency() -> double {
                     "~MHz", RRF_RT_REG_DWORD, nullptr, &mhz,
                     &bufSize) == ERROR_SUCCESS) {
         double frequency = static_cast<double>(mhz) / 1000.0;
-        spdlog::info( "Windows CPU Frequency: {} GHz", frequency);
+        spdlog::info("Windows CPU Frequency: {} GHz", frequency);
         return frequency;
     }
 
-    spdlog::info( "Failed to get Windows CPU Frequency");
+    spdlog::info("Failed to get Windows CPU Frequency");
     return 0.0;
 }
 
 auto getMinProcessorFrequency() -> double {
-    spdlog::info( "Starting getMinProcessorFrequency function on Windows");
+    spdlog::info("Starting getMinProcessorFrequency function on Windows");
 
     // Windows doesn't provide a direct API for minimum CPU frequency
     // This would require reading from the registry or using WMI
@@ -359,12 +368,12 @@ auto getMinProcessorFrequency() -> double {
         minFreq = currentFreq * 0.5;  // Estimate as half the current frequency
     }
 
-    spdlog::info( "Windows CPU Min Frequency: {} GHz (estimated)", minFreq);
+    spdlog::info("Windows CPU Min Frequency: {} GHz (estimated)", minFreq);
     return minFreq;
 }
 
 auto getMaxProcessorFrequency() -> double {
-    spdlog::info( "Starting getMaxProcessorFrequency function on Windows");
+    spdlog::info("Starting getMaxProcessorFrequency function on Windows");
 
     DWORD bufSize = sizeof(DWORD);
     DWORD mhz = 0;
@@ -375,16 +384,16 @@ auto getMaxProcessorFrequency() -> double {
                     "~MHz", RRF_RT_REG_DWORD, nullptr, &mhz,
                     &bufSize) == ERROR_SUCCESS) {
         double frequency = static_cast<double>(mhz) / 1000.0;
-        spdlog::info( "Windows CPU Max Frequency: {} GHz", frequency);
+        spdlog::info("Windows CPU Max Frequency: {} GHz", frequency);
         return frequency;
     }
 
-    spdlog::info( "Failed to get Windows CPU Max Frequency");
+    spdlog::info("Failed to get Windows CPU Max Frequency");
     return getProcessorFrequency();  // Fallback to current frequency
 }
 
 auto getPerCoreFrequencies() -> std::vector<double> {
-    spdlog::info( "Starting getPerCoreFrequencies function on Windows");
+    spdlog::info("Starting getPerCoreFrequencies function on Windows");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<double> frequencies(numCores, 0.0);
@@ -398,13 +407,13 @@ auto getPerCoreFrequencies() -> std::vector<double> {
         frequencies[i] = frequency;
     }
 
-    spdlog::info( "Windows Per-Core CPU Frequencies: {} GHz (all cores)",
-          frequency);
+    spdlog::info("Windows Per-Core CPU Frequencies: {} GHz (all cores)",
+                 frequency);
     return frequencies;
 }
 
 auto getNumberOfPhysicalPackages() -> int {
-    spdlog::info( "Starting getNumberOfPhysicalPackages function on Windows");
+    spdlog::info("Starting getNumberOfPhysicalPackages function on Windows");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalPackages > 0) {
         return g_cpuInfoCache.numPhysicalPackages;
@@ -418,12 +427,12 @@ auto getNumberOfPhysicalPackages() -> int {
     // Most desktop/laptop systems have 1 physical package
     numberOfPackages = 1;
 
-    spdlog::info( "Windows Physical CPU Packages: {}", numberOfPackages);
+    spdlog::info("Windows Physical CPU Packages: {}", numberOfPackages);
     return numberOfPackages;
 }
 
 auto getNumberOfPhysicalCores() -> int {
-    spdlog::info( "Starting getNumberOfPhysicalCores function on Windows");
+    spdlog::info("Starting getNumberOfPhysicalCores function on Windows");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalCores > 0) {
         return g_cpuInfoCache.numPhysicalCores;
@@ -453,12 +462,12 @@ auto getNumberOfPhysicalCores() -> int {
     // Ensure we have at least 1 core
     numberOfCores = std::max(1, numberOfCores);
 
-    spdlog::info( "Windows Physical CPU Cores: {}", numberOfCores);
+    spdlog::info("Windows Physical CPU Cores: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getNumberOfLogicalCores() -> int {
-    spdlog::info( "Starting getNumberOfLogicalCores function on Windows");
+    spdlog::info("Starting getNumberOfLogicalCores function on Windows");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numLogicalCores > 0) {
         return g_cpuInfoCache.numLogicalCores;
@@ -469,12 +478,12 @@ auto getNumberOfLogicalCores() -> int {
 
     int numberOfCores = sysInfo.dwNumberOfProcessors;
 
-    spdlog::info( "Windows Logical CPU Cores: {}", numberOfCores);
+    spdlog::info("Windows Logical CPU Cores: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getCacheSizes() -> CacheSizes {
-    spdlog::info( "Starting getCacheSizes function on Windows");
+    spdlog::info("Starting getCacheSizes function on Windows");
 
     if (!needsCacheRefresh() &&
         (g_cpuInfoCache.caches.l1d > 0 || g_cpuInfoCache.caches.l2 > 0 ||
@@ -533,15 +542,15 @@ auto getCacheSizes() -> CacheSizes {
         }
     }
 
-    spdlog::info( "Windows Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
-          cacheSizes.l1d / 1024, cacheSizes.l1i / 1024, cacheSizes.l2 / 1024,
-          cacheSizes.l3 / 1024);
+    spdlog::info("Windows Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
+                 cacheSizes.l1d / 1024, cacheSizes.l1i / 1024,
+                 cacheSizes.l2 / 1024, cacheSizes.l3 / 1024);
 
     return cacheSizes;
 }
 
 auto getCpuLoadAverage() -> LoadAverage {
-    spdlog::info( "Starting getCpuLoadAverage function on Windows");
+    spdlog::info("Starting getCpuLoadAverage function on Windows");
 
     LoadAverage loadAvg{0.0, 0.0, 0.0};
 
@@ -559,14 +568,14 @@ auto getCpuLoadAverage() -> LoadAverage {
     loadAvg.fifteenMinutes = load;
 
     spdlog::info(
-          "Windows Load Average (approximated from CPU usage): {}, {}, {}",
-          loadAvg.oneMinute, loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
+        "Windows Load Average (approximated from CPU usage): {}, {}, {}",
+        loadAvg.oneMinute, loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
 
     return loadAvg;
 }
 
 auto getCpuPowerInfo() -> CpuPowerInfo {
-    spdlog::info( "Starting getCpuPowerInfo function on Windows");
+    spdlog::info("Starting getCpuPowerInfo function on Windows");
 
     CpuPowerInfo powerInfo{0.0, 0.0, 0.0};
 
@@ -578,15 +587,15 @@ auto getCpuPowerInfo() -> CpuPowerInfo {
     // based on the processor model
 
     spdlog::info(
-          "Windows CPU Power Info: currentWatts={}, maxTDP={}, energyImpact={} "
-          "(placeholder values)",
-          powerInfo.currentWatts, powerInfo.maxTDP, powerInfo.energyImpact);
+        "Windows CPU Power Info: currentWatts={}, maxTDP={}, energyImpact={} "
+        "(placeholder values)",
+        powerInfo.currentWatts, powerInfo.maxTDP, powerInfo.energyImpact);
 
     return powerInfo;
 }
 
 auto getCpuFeatureFlags() -> std::vector<std::string> {
-    spdlog::info( "Starting getCpuFeatureFlags function on Windows");
+    spdlog::info("Starting getCpuFeatureFlags function on Windows");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.flags.empty()) {
         return g_cpuInfoCache.flags;
@@ -767,13 +776,13 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
     if (cpuInfo[2] & (1 << 6))
         flags.push_back("avx512vbmi2");
 
-    spdlog::info( "Windows CPU Flags: {} features collected", flags.size());
+    spdlog::info("Windows CPU Flags: {} features collected", flags.size());
 
     return flags;
 }
 
 auto getCpuArchitecture() -> CpuArchitecture {
-    spdlog::info( "Starting getCpuArchitecture function on Windows");
+    spdlog::info("Starting getCpuArchitecture function on Windows");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
@@ -806,12 +815,12 @@ auto getCpuArchitecture() -> CpuArchitecture {
             break;
     }
 
-    spdlog::info( "Windows CPU Architecture: {}", cpuArchitectureToString(arch));
+    spdlog::info("Windows CPU Architecture: {}", cpuArchitectureToString(arch));
     return arch;
 }
 
 auto getCpuVendor() -> CpuVendor {
-    spdlog::info( "Starting getCpuVendor function on Windows");
+    spdlog::info("Starting getCpuVendor function on Windows");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
@@ -835,8 +844,8 @@ auto getCpuVendor() -> CpuVendor {
     vendorString = vendorID;
     vendor = getVendorFromString(vendorString);
 
-    spdlog::info( "Windows CPU Vendor: {} ({})", vendorString,
-          cpuVendorToString(vendor));
+    spdlog::info("Windows CPU Vendor: {} ({})", vendorString,
+                 cpuVendorToString(vendor));
     return vendor;
 }
 
@@ -867,8 +876,8 @@ auto getCpuSocketType() -> std::string {
 
         if (SUCCEEDED(hres)) {
             CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE,
-                             nullptr, RPC_C_AUTHN_LEVEL_CALL,
-                             RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+                              nullptr, RPC_C_AUTHN_LEVEL_CALL,
+                              RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
 
             IEnumWbemClassObject *pEnumerator = nullptr;
             hres = pSvc->ExecQuery(
@@ -881,16 +890,23 @@ auto getCpuSocketType() -> std::string {
                 IWbemClassObject *pclsObj = nullptr;
                 ULONG uReturn = 0;
 
-                if (pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn) == S_OK && uReturn != 0) {
+                if (pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn) ==
+                        S_OK &&
+                    uReturn != 0) {
                     VARIANT vtProp;
                     VariantInit(&vtProp);
 
-                    if (pclsObj->Get(L"SocketDesignation", 0, &vtProp, 0, 0) == S_OK) {
+                    if (pclsObj->Get(L"SocketDesignation", 0, &vtProp, 0, 0) ==
+                        S_OK) {
                         if (vtProp.vt == VT_BSTR && vtProp.bstrVal != nullptr) {
-                            int size = WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, -1, nullptr, 0, nullptr, nullptr);
+                            int size = WideCharToMultiByte(
+                                CP_UTF8, 0, vtProp.bstrVal, -1, nullptr, 0,
+                                nullptr, nullptr);
                             if (size > 0) {
                                 std::vector<char> buffer(size);
-                                WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, -1, buffer.data(), size, nullptr, nullptr);
+                                WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal,
+                                                    -1, buffer.data(), size,
+                                                    nullptr, nullptr);
                                 socketType = buffer.data();
                             }
                         }
@@ -916,14 +932,19 @@ auto getCpuSocketType() -> std::string {
         std::string model = getCPUModel();
 
         if (model.find("Intel") != std::string::npos) {
-            if (model.find("Core i9") != std::string::npos || model.find("Core i7") != std::string::npos ||
-                model.find("Core i5") != std::string::npos || model.find("Core i3") != std::string::npos) {
-                if (model.find("12th Gen") != std::string::npos || model.find("13th Gen") != std::string::npos ||
+            if (model.find("Core i9") != std::string::npos ||
+                model.find("Core i7") != std::string::npos ||
+                model.find("Core i5") != std::string::npos ||
+                model.find("Core i3") != std::string::npos) {
+                if (model.find("12th Gen") != std::string::npos ||
+                    model.find("13th Gen") != std::string::npos ||
                     model.find("14th Gen") != std::string::npos) {
                     socketType = "LGA1700";
-                } else if (model.find("10th Gen") != std::string::npos || model.find("11th Gen") != std::string::npos) {
+                } else if (model.find("10th Gen") != std::string::npos ||
+                           model.find("11th Gen") != std::string::npos) {
                     socketType = "LGA1200";
-                } else if (model.find("8th Gen") != std::string::npos || model.find("9th Gen") != std::string::npos) {
+                } else if (model.find("8th Gen") != std::string::npos ||
+                           model.find("9th Gen") != std::string::npos) {
                     socketType = "LGA1151";
                 }
             } else if (model.find("Xeon") != std::string::npos) {
@@ -933,7 +954,8 @@ auto getCpuSocketType() -> std::string {
             if (model.find("Ryzen") != std::string::npos) {
                 if (model.find("7000") != std::string::npos) {
                     socketType = "AM5";
-                } else if (model.find("5000") != std::string::npos || model.find("3000") != std::string::npos) {
+                } else if (model.find("5000") != std::string::npos ||
+                           model.find("3000") != std::string::npos) {
                     socketType = "AM4";
                 }
             } else if (model.find("EPYC") != std::string::npos) {
@@ -953,11 +975,11 @@ auto getCpuSocketType() -> std::string {
 }
 
 auto getCpuScalingGovernor() -> std::string {
-    spdlog::info( "Starting getCpuScalingGovernor function on Windows");
+    spdlog::info("Starting getCpuScalingGovernor function on Windows");
 
     std::string governor = "Unknown";
 
-    GUID* activePlanGuid = NULL;
+    GUID *activePlanGuid = NULL;
     if (PowerGetActiveScheme(NULL, &activePlanGuid) == ERROR_SUCCESS) {
         // First, get the required buffer size
         DWORD bufferSize = 0;
@@ -992,12 +1014,12 @@ auto getCpuScalingGovernor() -> std::string {
         LocalFree(activePlanGuid);
     }
 
-    spdlog::info( "Windows Power Plan: {}", governor);
+    spdlog::info("Windows Power Plan: {}", governor);
     return governor;
 }
 
 auto getPerCoreScalingGovernors() -> std::vector<std::string> {
-    spdlog::info( "Starting getPerCoreScalingGovernors function on Windows");
+    spdlog::info("Starting getPerCoreScalingGovernors function on Windows");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<std::string> governors(numCores);
@@ -1010,15 +1032,13 @@ auto getPerCoreScalingGovernors() -> std::vector<std::string> {
         governors[i] = governor;
     }
 
-    spdlog::info( "Windows Per-Core Power Plans: {} (same for all cores)",
-          governor);
+    spdlog::info("Windows Per-Core Power Plans: {} (same for all cores)",
+                 governor);
     return governors;
 }
 
 // Wrapper function for getCurrentCpuUsage (the only one missing)
-auto getCurrentCpuUsage() -> float {
-    return getCurrentCpuUsage_Windows();
-}
+auto getCurrentCpuUsage() -> float { return getCurrentCpuUsage_Windows(); }
 
 }  // namespace atom::system
 

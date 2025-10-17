@@ -195,8 +195,8 @@ auto KMP::search(std::string_view text) const -> std::vector<int> {
     return occurrences;
 }
 
-auto KMP::searchParallel(std::string_view text, size_t chunk_size) const
-    -> std::vector<int> {
+auto KMP::searchParallel(std::string_view text,
+                         size_t chunk_size) const -> std::vector<int> {
     if (text.empty() || pattern_.empty() || text.length() < pattern_.length()) {
         return {};
     }

@@ -42,9 +42,9 @@ int main() {
             // Create a logging context
             LogContext ctx;
             ctx.with_field("user_id", "12345")
-               .with_field("session_id", "abc-def-ghi")
-               .with_field("request_id", "req-789")
-               .with_field("operation", "user_login");
+                .with_field("session_id", "abc-def-ghi")
+                .with_field("request_id", "req-789")
+                .with_field("operation", "user_login");
 
             // Log with context
             logger.log_with_context(Level::info, ctx, "User login attempt");
@@ -53,7 +53,7 @@ int main() {
 
             // Add more context and log
             ctx.with_field("ip_address", "192.168.1.100")
-               .with_field("user_agent", "Mozilla/5.0");
+                .with_field("user_agent", "Mozilla/5.0");
             logger.log_with_context(Level::debug, ctx,
                                     "Login details captured");
 
@@ -115,12 +115,14 @@ int main() {
             for (int i = 0; i < 5; ++i) {
                 LogContext ctx;
                 ctx.with_field("batch_id", "batch_001")
-                   .with_field("item_number", std::to_string(i));
-                
-                logger.log_with_context(Level::info, ctx, "Batch message {}", i);
+                    .with_field("item_number", std::to_string(i));
+
+                logger.log_with_context(Level::info, ctx, "Batch message {}",
+                                        i);
             }
 
-            std::cout << "Batch-style logging of 5 entries completed" << std::endl;
+            std::cout << "Batch-style logging of 5 entries completed"
+                      << std::endl;
         }
 
         // 6. Range logging
@@ -137,10 +139,11 @@ int main() {
                                               "log.txt"};
             logger.log_range(Level::debug, "Processing files", files);
 
-            // Log range items manually since custom formatter may not be supported
+            // Log range items manually since custom formatter may not be
+            // supported
             std::vector<std::pair<std::string, int>> items = {
                 {"apple", 5}, {"banana", 3}, {"orange", 8}};
-            
+
             for (const auto& item : items) {
                 logger.info("Inventory item logged");
             }
@@ -167,8 +170,9 @@ int main() {
             } catch (const std::exception& e) {
                 LogContext ctx;
                 ctx.with_field("function", "process_data")
-                   .with_field("parameter", "invalid_value");
-                logger.log_exception(Level::error, e, "Parameter validation failed");
+                    .with_field("parameter", "invalid_value");
+                logger.log_exception(Level::error, e,
+                                     "Parameter validation failed");
             }
 
             std::cout << "Exception logging completed" << std::endl;
@@ -227,11 +231,16 @@ int main() {
             // Get and display statistics
             const auto& stats = logger.get_stats();
             std::cout << "Logger Statistics:" << std::endl;
-            std::cout << "  Total logs: " << stats.total_logs.load() << std::endl;
-            std::cout << "  Filtered logs: " << stats.filtered_logs.load() << std::endl;
-            std::cout << "  Sampled logs: " << stats.sampled_logs.load() << std::endl;
-            std::cout << "  Failed logs: " << stats.failed_logs.load() << std::endl;
-            std::cout << "  Logs per second: " << stats.get_logs_per_second() << std::endl;
+            std::cout << "  Total logs: " << stats.total_logs.load()
+                      << std::endl;
+            std::cout << "  Filtered logs: " << stats.filtered_logs.load()
+                      << std::endl;
+            std::cout << "  Sampled logs: " << stats.sampled_logs.load()
+                      << std::endl;
+            std::cout << "  Failed logs: " << stats.failed_logs.load()
+                      << std::endl;
+            std::cout << "  Logs per second: " << stats.get_logs_per_second()
+                      << std::endl;
         }
 
         // 10. Using convenience macros

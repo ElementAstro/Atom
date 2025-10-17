@@ -85,7 +85,8 @@ Parser::EnvEntries Parser::parseDetailed(const std::string& content) {
     return result;
 }
 
-std::string Parser::processLine(const std::string& line, size_t /*line_number*/) {
+std::string Parser::processLine(const std::string& line,
+                                size_t /*line_number*/) {
     if (isComment(line) || isEmpty(line)) {
         return "";
     }

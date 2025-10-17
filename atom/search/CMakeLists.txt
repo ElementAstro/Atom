@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
-project(atom-search VERSION 1.0.0 LANGUAGES C CXX)
+project(
+  atom-search
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
@@ -8,10 +11,8 @@ include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 set(SOURCES
     # Core search functionality
     core/search.cpp
-
     # Database backends
-    database/sqlite.cpp
-)
+    database/sqlite.cpp)
 
 # Headers
 set(HEADERS
@@ -22,16 +23,12 @@ set(HEADERS
     mysql.hpp
     sqlite.hpp
     search.hpp
-
     # Actual implementation headers (in subdirectories)
     core/search.hpp
-
     database/sqlite.hpp
-
     cache/cache.hpp
     cache/lru.hpp
-    cache/ttl.hpp
-)
+    cache/ttl.hpp)
 
 # Dependencies
 set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} ${SQLite3_LIBRARIES})
@@ -58,6 +55,4 @@ atom_configure_module(atom-search)
 target_link_libraries(atom-search PRIVATE ${LIBS})
 
 # Install headers
-install(FILES ${HEADERS}
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/search
-)
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/search)

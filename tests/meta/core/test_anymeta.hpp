@@ -32,7 +32,8 @@ private:
 
 public:
     TestClass() : value_(0), name_("default") {}
-    TestClass(int value, const std::string& name) : value_(value), name_(name) {}
+    TestClass(int value, const std::string& name)
+        : value_(value), name_(name) {}
 
     int getValue() const { return value_; }
     void setValue(int value) { value_ = value; }
@@ -62,9 +63,11 @@ TEST_F(AnyMetaTest, TypeMetadataBasics) {
     atom::meta::TypeMetadata metadata;
 
     // Test method registration
-    metadata.addMethod("testMethod", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        return atom::meta::BoxedValue(42);
-    });
+    metadata.addMethod(
+        "testMethod",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            return atom::meta::BoxedValue(42);
+        });
 
     // Test method retrieval
     auto methods = metadata.getMethods("testMethod");
@@ -86,16 +89,20 @@ TEST_F(AnyMetaTest, MethodOverloads) {
     atom::meta::TypeMetadata metadata;
 
     // Add multiple overloads for the same method
-    metadata.addMethod("overloadedMethod", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        return atom::meta::BoxedValue(std::string("no_args"));
-    });
+    metadata.addMethod(
+        "overloadedMethod",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            return atom::meta::BoxedValue(std::string("no_args"));
+        });
 
-    metadata.addMethod("overloadedMethod", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        if (!args.empty() && args[0].isType<int>()) {
-            return atom::meta::BoxedValue(std::string("int_arg"));
-        }
-        return atom::meta::BoxedValue(std::string("unknown"));
-    });
+    metadata.addMethod(
+        "overloadedMethod",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            if (!args.empty() && args[0].isType<int>()) {
+                return atom::meta::BoxedValue(std::string("int_arg"));
+            }
+            return atom::meta::BoxedValue(std::string("unknown"));
+        });
 
     auto methods = metadata.getMethods("overloadedMethod");
     ASSERT_NE(methods, nullptr);
@@ -134,8 +141,7 @@ TEST_F(AnyMetaTest, PropertySystem) {
             }
         },
         atom::meta::BoxedValue(0),  // default value
-        "Test property description"
-    );
+        "Test property description");
 
     // Test property retrieval
     auto property = metadata.getProperty("testProperty");
@@ -162,24 +168,29 @@ TEST_F(AnyMetaTest, ConstructorSystem) {
     atom::meta::TypeMetadata metadata;
 
     // Add default constructor
-    metadata.addConstructor("TestClass", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        if (args.empty()) {
-            return atom::meta::BoxedValue(TestClass());
-        }
-        return atom::meta::BoxedValue();
-    });
+    metadata.addConstructor(
+        "TestClass",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            if (args.empty()) {
+                return atom::meta::BoxedValue(TestClass());
+            }
+            return atom::meta::BoxedValue();
+        });
 
     // Add parameterized constructor
-    metadata.addConstructor("TestClass", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        if (args.size() == 2) {
-            auto intArg = args[0].tryCast<int>();
-            auto stringArg = args[1].tryCast<std::string>();
-            if (intArg && stringArg) {
-                return atom::meta::BoxedValue(TestClass(*intArg, *stringArg));
+    metadata.addConstructor(
+        "TestClass",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            if (args.size() == 2) {
+                auto intArg = args[0].tryCast<int>();
+                auto stringArg = args[1].tryCast<std::string>();
+                if (intArg && stringArg) {
+                    return atom::meta::BoxedValue(
+                        TestClass(*intArg, *stringArg));
+                }
             }
-        }
-        return atom::meta::BoxedValue();
-    });
+            return atom::meta::BoxedValue();
+        });
 
     // Test constructor retrieval
     auto constructor = metadata.getConstructor("TestClass");
@@ -209,10 +220,13 @@ TEST_F(AnyMetaTest, EventSystem) {
 
     // Add event listener
     bool listenerCalled = false;
-    metadata.addEventListener("testEvent",
-        [&listenerCalled](atom::meta::BoxedValue& obj, const std::vector<atom::meta::BoxedValue>& args) {
+    metadata.addEventListener(
+        "testEvent",
+        [&listenerCalled](atom::meta::BoxedValue& obj,
+                          const std::vector<atom::meta::BoxedValue>& args) {
             listenerCalled = true;
-        }, 10);
+        },
+        10);
 
     // Check listener was added
     event = metadata.getEvent("testEvent");
@@ -235,20 +249,29 @@ TEST_F(AnyMetaTest, EventListenerPriorities) {
     std::vector<int> callOrder;
 
     // Add listeners with different priorities
-    metadata.addEventListener("priorityEvent",
-        [&callOrder](atom::meta::BoxedValue& obj, const std::vector<atom::meta::BoxedValue>& args) {
+    metadata.addEventListener(
+        "priorityEvent",
+        [&callOrder](atom::meta::BoxedValue& obj,
+                     const std::vector<atom::meta::BoxedValue>& args) {
             callOrder.push_back(1);
-        }, 1);  // Low priority
+        },
+        1);  // Low priority
 
-    metadata.addEventListener("priorityEvent",
-        [&callOrder](atom::meta::BoxedValue& obj, const std::vector<atom::meta::BoxedValue>& args) {
+    metadata.addEventListener(
+        "priorityEvent",
+        [&callOrder](atom::meta::BoxedValue& obj,
+                     const std::vector<atom::meta::BoxedValue>& args) {
             callOrder.push_back(10);
-        }, 10);  // High priority
+        },
+        10);  // High priority
 
-    metadata.addEventListener("priorityEvent",
-        [&callOrder](atom::meta::BoxedValue& obj, const std::vector<atom::meta::BoxedValue>& args) {
+    metadata.addEventListener(
+        "priorityEvent",
+        [&callOrder](atom::meta::BoxedValue& obj,
+                     const std::vector<atom::meta::BoxedValue>& args) {
             callOrder.push_back(5);
-        }, 5);  // Medium priority
+        },
+        5);  // Medium priority
 
     // Fire event
     TestClass testObj;
@@ -257,11 +280,15 @@ TEST_F(AnyMetaTest, EventListenerPriorities) {
 
     // Check call order (should be sorted by priority)
     EXPECT_EQ(callOrder.size(), 3);
-    // Note: The actual order depends on implementation - listeners might be called in registration order
-    // or sorted by priority. This test validates that all listeners are called.
-    EXPECT_TRUE(std::find(callOrder.begin(), callOrder.end(), 1) != callOrder.end());
-    EXPECT_TRUE(std::find(callOrder.begin(), callOrder.end(), 5) != callOrder.end());
-    EXPECT_TRUE(std::find(callOrder.begin(), callOrder.end(), 10) != callOrder.end());
+    // Note: The actual order depends on implementation - listeners might be
+    // called in registration order or sorted by priority. This test validates
+    // that all listeners are called.
+    EXPECT_TRUE(std::find(callOrder.begin(), callOrder.end(), 1) !=
+                callOrder.end());
+    EXPECT_TRUE(std::find(callOrder.begin(), callOrder.end(), 5) !=
+                callOrder.end());
+    EXPECT_TRUE(std::find(callOrder.begin(), callOrder.end(), 10) !=
+                callOrder.end());
 }
 
 // Test method removal
@@ -269,9 +296,11 @@ TEST_F(AnyMetaTest, MethodRemoval) {
     atom::meta::TypeMetadata metadata;
 
     // Add method
-    metadata.addMethod("removableMethod", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        return atom::meta::BoxedValue(42);
-    });
+    metadata.addMethod(
+        "removableMethod",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            return atom::meta::BoxedValue(42);
+        });
 
     // Verify method exists
     auto methods = metadata.getMethods("removableMethod");
@@ -301,14 +330,16 @@ TEST_F(AnyMetaTest, TypeRegistryBasics) {
 
     // Create metadata for TestClass
     atom::meta::TypeMetadata metadata;
-    metadata.addMethod("getValue", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        if (!args.empty()) {
-            if (auto testObj = args[0].tryCast<TestClass>()) {
-                return atom::meta::BoxedValue(testObj->getValue());
+    metadata.addMethod(
+        "getValue",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            if (!args.empty()) {
+                if (auto testObj = args[0].tryCast<TestClass>()) {
+                    return atom::meta::BoxedValue(testObj->getValue());
+                }
             }
-        }
-        return atom::meta::BoxedValue();
-    });
+            return atom::meta::BoxedValue();
+        });
 
     // Register type
     registry.registerType("TestClass", std::move(metadata));
@@ -337,14 +368,18 @@ TEST_F(AnyMetaTest, TypeRegistryThreadSafety) {
     std::vector<std::thread> threads;
 
     for (int i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&registry, &completedThreads, i, typesPerThread]() {
+        threads.emplace_back([&registry, &completedThreads, i,
+                              typesPerThread]() {
             for (int j = 0; j < typesPerThread; ++j) {
-                std::string typeName = "ThreadType_" + std::to_string(i) + "_" + std::to_string(j);
+                std::string typeName =
+                    "ThreadType_" + std::to_string(i) + "_" + std::to_string(j);
 
                 atom::meta::TypeMetadata metadata;
-                metadata.addMethod("threadMethod", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-                    return atom::meta::BoxedValue(42);
-                });
+                metadata.addMethod("threadMethod",
+                                   [](std::vector<atom::meta::BoxedValue> args)
+                                       -> atom::meta::BoxedValue {
+                                       return atom::meta::BoxedValue(42);
+                                   });
 
                 registry.registerType(typeName, std::move(metadata));
             }
@@ -361,7 +396,8 @@ TEST_F(AnyMetaTest, TypeRegistryThreadSafety) {
     // Verify all types were registered
     for (int i = 0; i < numThreads; ++i) {
         for (int j = 0; j < typesPerThread; ++j) {
-            std::string typeName = "ThreadType_" + std::to_string(i) + "_" + std::to_string(j);
+            std::string typeName =
+                "ThreadType_" + std::to_string(i) + "_" + std::to_string(j);
             EXPECT_TRUE(registry.hasType(typeName));
         }
     }
@@ -406,8 +442,7 @@ TEST_F(AnyMetaTest, GlobalUtilityFunctions) {
                     testObj->setValue(*intValue);
                 }
             }
-        }
-    );
+        });
 
     registry.registerType("TestClass", std::move(metadata));
 
@@ -431,8 +466,11 @@ TEST_F(AnyMetaTest, GlobalUtilityFunctionsErrorHandling) {
     atom::meta::BoxedValue boxedObj(testObj);
 
     // Test accessing non-existent property
-    EXPECT_THROW(atom::meta::getProperty(boxedObj, "nonExistentProperty"), atom::error::NotFound);
-    EXPECT_THROW(atom::meta::setProperty(boxedObj, "nonExistentProperty", atom::meta::BoxedValue(100)), atom::error::NotFound);
+    EXPECT_THROW(atom::meta::getProperty(boxedObj, "nonExistentProperty"),
+                 atom::error::NotFound);
+    EXPECT_THROW(atom::meta::setProperty(boxedObj, "nonExistentProperty",
+                                         atom::meta::BoxedValue(100)),
+                 atom::error::NotFound);
 }
 
 // Test createInstance function
@@ -441,24 +479,26 @@ TEST_F(AnyMetaTest, CreateInstanceFunction) {
 
     // Register TestClass with constructor
     atom::meta::TypeMetadata metadata;
-    metadata.addConstructor("TestClass", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        if (args.size() == 2) {
-            auto intArg = args[0].tryCast<int>();
-            auto stringArg = args[1].tryCast<std::string>();
-            if (intArg && stringArg) {
-                return atom::meta::BoxedValue(TestClass(*intArg, *stringArg));
+    metadata.addConstructor(
+        "TestClass",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            if (args.size() == 2) {
+                auto intArg = args[0].tryCast<int>();
+                auto stringArg = args[1].tryCast<std::string>();
+                if (intArg && stringArg) {
+                    return atom::meta::BoxedValue(
+                        TestClass(*intArg, *stringArg));
+                }
             }
-        }
-        return atom::meta::BoxedValue();
-    });
+            return atom::meta::BoxedValue();
+        });
 
     registry.registerType("TestClass", std::move(metadata));
 
     // Test instance creation
     std::vector<atom::meta::BoxedValue> args = {
         atom::meta::BoxedValue(42),
-        atom::meta::BoxedValue(std::string("created"))
-    };
+        atom::meta::BoxedValue(std::string("created"))};
 
     auto instance = atom::meta::createInstance("TestClass", std::move(args));
     EXPECT_TRUE(instance.isType<TestClass>());
@@ -468,7 +508,8 @@ TEST_F(AnyMetaTest, CreateInstanceFunction) {
     EXPECT_EQ(testObj.getName(), "created");
 
     // Test error handling for non-existent type
-    EXPECT_THROW(atom::meta::createInstance("NonExistentType", {}), atom::error::NotFound);
+    EXPECT_THROW(atom::meta::createInstance("NonExistentType", {}),
+                 atom::error::NotFound);
 }
 
 // Test fireEvent global function
@@ -480,8 +521,10 @@ TEST_F(AnyMetaTest, FireEventGlobalFunction) {
     metadata.addEvent("testEvent", "Test event");
 
     bool eventFired = false;
-    metadata.addEventListener("testEvent",
-        [&eventFired](atom::meta::BoxedValue& obj, const std::vector<atom::meta::BoxedValue>& args) {
+    metadata.addEventListener(
+        "testEvent",
+        [&eventFired](atom::meta::BoxedValue& obj,
+                      const std::vector<atom::meta::BoxedValue>& args) {
             eventFired = true;
         });
 
@@ -517,7 +560,8 @@ TEST_F(AnyMetaTest, TypeRegistrarTemplate) {
 
     auto destroyEvent = metadata->getEvent("onDestroy");
     ASSERT_NE(destroyEvent, nullptr);
-    EXPECT_EQ(destroyEvent->description, "Triggered when an object is destroyed");
+    EXPECT_EQ(destroyEvent->description,
+              "Triggered when an object is destroyed");
 
     // Check default method
     auto methods = metadata->getMethods("print");
@@ -533,19 +577,23 @@ TEST_F(AnyMetaTest, ComplexIntegrationScenario) {
     atom::meta::TypeMetadata metadata;
 
     // Add constructor
-    metadata.addConstructor("TestClass", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        if (args.size() == 2) {
-            auto intArg = args[0].tryCast<int>();
-            auto stringArg = args[1].tryCast<std::string>();
-            if (intArg && stringArg) {
-                return atom::meta::BoxedValue(TestClass(*intArg, *stringArg));
+    metadata.addConstructor(
+        "TestClass",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            if (args.size() == 2) {
+                auto intArg = args[0].tryCast<int>();
+                auto stringArg = args[1].tryCast<std::string>();
+                if (intArg && stringArg) {
+                    return atom::meta::BoxedValue(
+                        TestClass(*intArg, *stringArg));
+                }
             }
-        }
-        return atom::meta::BoxedValue();
-    });
+            return atom::meta::BoxedValue();
+        });
 
     // Add properties
-    metadata.addProperty("value",
+    metadata.addProperty(
+        "value",
         [](const atom::meta::BoxedValue& obj) -> atom::meta::BoxedValue {
             if (auto testObj = obj.tryCast<TestClass>()) {
                 return atom::meta::BoxedValue(testObj->getValue());
@@ -561,14 +609,16 @@ TEST_F(AnyMetaTest, ComplexIntegrationScenario) {
         });
 
     // Add methods
-    metadata.addMethod("print", [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
-        if (!args.empty()) {
-            if (auto testObj = args[0].tryCast<TestClass>()) {
-                testObj->print();
+    metadata.addMethod(
+        "print",
+        [](std::vector<atom::meta::BoxedValue> args) -> atom::meta::BoxedValue {
+            if (!args.empty()) {
+                if (auto testObj = args[0].tryCast<TestClass>()) {
+                    testObj->print();
+                }
             }
-        }
-        return atom::meta::BoxedValue();
-    });
+            return atom::meta::BoxedValue();
+        });
 
     // Add events
     metadata.addEvent("onValueChanged", "Triggered when value changes");
@@ -578,8 +628,7 @@ TEST_F(AnyMetaTest, ComplexIntegrationScenario) {
     // Create instance
     std::vector<atom::meta::BoxedValue> args = {
         atom::meta::BoxedValue(42),
-        atom::meta::BoxedValue(std::string("integration_test"))
-    };
+        atom::meta::BoxedValue(std::string("integration_test"))};
     auto instance = atom::meta::createInstance("TestClass", std::move(args));
 
     // Test property access
@@ -594,8 +643,10 @@ TEST_F(AnyMetaTest, ComplexIntegrationScenario) {
     // Test event firing
     bool eventFired = false;
     auto metadata_ptr = registry.getMetadata("TestClass");
-    metadata_ptr->addEventListener("onValueChanged",
-        [&eventFired](atom::meta::BoxedValue& obj, const std::vector<atom::meta::BoxedValue>& args) {
+    metadata_ptr->addEventListener(
+        "onValueChanged",
+        [&eventFired](atom::meta::BoxedValue& obj,
+                      const std::vector<atom::meta::BoxedValue>& args) {
             eventFired = true;
         });
 

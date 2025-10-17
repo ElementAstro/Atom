@@ -14,15 +14,15 @@ Tests serial communication, Bluetooth, USB, and device management.
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <string>
-#include <vector>
-#include <thread>
 #include <chrono>
+#include <string>
+#include <thread>
+#include <vector>
 
-#include "atom/serial/serial_port.hpp"
 #include "atom/serial/bluetooth_serial.hpp"
-#include "atom/serial/usb.hpp"
 #include "atom/serial/scanner.hpp"
+#include "atom/serial/serial_port.hpp"
+#include "atom/serial/usb.hpp"
 
 namespace atom::serial::test {
 
@@ -34,12 +34,12 @@ class SerialPortTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Setup test environment
-        test_port_name = "COM1"; // Windows
-        #ifdef __linux__
-        test_port_name = "/dev/ttyUSB0"; // Linux
-        #elif __APPLE__
-        test_port_name = "/dev/cu.usbserial"; // macOS
-        #endif
+        test_port_name = "COM1";  // Windows
+#ifdef __linux__
+        test_port_name = "/dev/ttyUSB0";  // Linux
+#elif __APPLE__
+        test_port_name = "/dev/cu.usbserial";  // macOS
+#endif
 
         test_baud_rate = 9600;
         test_data = "Hello Serial World!";
@@ -69,11 +69,10 @@ TEST_F(SerialPortTest, PortConfiguration) {
     };
 
     SerialConfig config = {
-        test_port_name,
-        test_baud_rate,
-        8,  // data bits
-        1,  // stop bits
-        'N' // no parity
+        test_port_name, test_baud_rate,
+        8,   // data bits
+        1,   // stop bits
+        'N'  // no parity
     };
 
     // Test configuration validation
@@ -83,7 +82,8 @@ TEST_F(SerialPortTest, PortConfiguration) {
     EXPECT_LE(config.data_bits, 8);
     EXPECT_GE(config.stop_bits, 1);
     EXPECT_LE(config.stop_bits, 2);
-    EXPECT_TRUE(config.parity == 'N' || config.parity == 'E' || config.parity == 'O');
+    EXPECT_TRUE(config.parity == 'N' || config.parity == 'E' ||
+                config.parity == 'O');
 }
 
 TEST_F(SerialPortTest, DataTransmission) {
@@ -94,9 +94,10 @@ TEST_F(SerialPortTest, DataTransmission) {
         return !data.empty() && data.length() <= 1024;
     };
 
-    auto simulateReception = [](const std::string& expected_data) -> std::string {
+    auto simulateReception =
+        [](const std::string& expected_data) -> std::string {
         // Simulate data reception
-        return expected_data; // Echo back the data
+        return expected_data;  // Echo back the data
     };
 
     // Test transmission
@@ -127,20 +128,27 @@ TEST_F(SerialPortTest, ErrorHandling) {
         BufferOverflow
     };
 
-    auto simulateOperation = [](const std::string& port, int baud) -> SerialError {
-        if (port.empty()) return SerialError::PortNotFound;
-        if (baud <= 0) return SerialError::InvalidBaudRate;
-        if (baud > 115200) return SerialError::InvalidBaudRate;
+    auto simulateOperation = [](const std::string& port,
+                                int baud) -> SerialError {
+        if (port.empty())
+            return SerialError::PortNotFound;
+        if (baud <= 0)
+            return SerialError::InvalidBaudRate;
+        if (baud > 115200)
+            return SerialError::InvalidBaudRate;
         return SerialError::None;
     };
 
     // Test valid operation
-    EXPECT_EQ(simulateOperation(test_port_name, test_baud_rate), SerialError::None);
+    EXPECT_EQ(simulateOperation(test_port_name, test_baud_rate),
+              SerialError::None);
 
     // Test error conditions
     EXPECT_EQ(simulateOperation("", test_baud_rate), SerialError::PortNotFound);
-    EXPECT_EQ(simulateOperation(test_port_name, 0), SerialError::InvalidBaudRate);
-    EXPECT_EQ(simulateOperation(test_port_name, 200000), SerialError::InvalidBaudRate);
+    EXPECT_EQ(simulateOperation(test_port_name, 0),
+              SerialError::InvalidBaudRate);
+    EXPECT_EQ(simulateOperation(test_port_name, 200000),
+              SerialError::InvalidBaudRate);
 }
 
 // ============================================================================
@@ -152,7 +160,7 @@ protected:
     void SetUp() override {
         test_device_name = "TestBluetoothDevice";
         test_device_address = "00:11:22:33:44:55";
-        test_service_uuid = "00001101-0000-1000-8000-00805F9B34FB"; // SPP UUID
+        test_service_uuid = "00001101-0000-1000-8000-00805F9B34FB";  // SPP UUID
     }
 
     void TearDown() override {
@@ -178,14 +186,14 @@ TEST_F(BluetoothSerialTest, DeviceDiscovery) {
     std::vector<BluetoothDevice> discovered_devices = {
         {"Device1", "00:11:22:33:44:55", true, -50},
         {"Device2", "AA:BB:CC:DD:EE:FF", false, -70},
-        {"Device3", "11:22:33:44:55:66", true, -40}
-    };
+        {"Device3", "11:22:33:44:55:66", true, -40}};
 
     // Test device discovery results
     EXPECT_EQ(discovered_devices.size(), 3);
 
     // Test device filtering
-    auto paired_devices = std::count_if(discovered_devices.begin(), discovered_devices.end(),
+    auto paired_devices = std::count_if(
+        discovered_devices.begin(), discovered_devices.end(),
         [](const BluetoothDevice& device) { return device.is_paired; });
 
     EXPECT_EQ(paired_devices, 2);
@@ -200,23 +208,22 @@ TEST_F(BluetoothSerialTest, DeviceDiscovery) {
 TEST_F(BluetoothSerialTest, ConnectionManagement) {
     // Test Bluetooth connection management
 
-    enum class ConnectionState {
-        Disconnected,
-        Connecting,
-        Connected,
-        Error
-    };
+    enum class ConnectionState { Disconnected, Connecting, Connected, Error };
 
-    auto simulateConnection = [](const std::string& address) -> ConnectionState {
-        if (address.empty()) return ConnectionState::Error;
-        if (address.length() != 17) return ConnectionState::Error; // MAC address format
+    auto simulateConnection =
+        [](const std::string& address) -> ConnectionState {
+        if (address.empty())
+            return ConnectionState::Error;
+        if (address.length() != 17)
+            return ConnectionState::Error;  // MAC address format
 
         // Simulate successful connection
         return ConnectionState::Connected;
     };
 
     // Test valid connection
-    EXPECT_EQ(simulateConnection(test_device_address), ConnectionState::Connected);
+    EXPECT_EQ(simulateConnection(test_device_address),
+              ConnectionState::Connected);
 
     // Test invalid connections
     EXPECT_EQ(simulateConnection(""), ConnectionState::Error);
@@ -258,18 +265,21 @@ TEST_F(USBTest, DeviceEnumeration) {
 
     // Simulate USB devices
     std::vector<USBDevice> usb_devices = {
-        {0x1234, 0x5678, "TestManufacturer", "TestProduct", "SN123456", "/dev/ttyUSB0"},
-        {0xABCD, 0xEF01, "AnotherMfg", "AnotherProduct", "SN789012", "/dev/ttyUSB1"}
-    };
+        {0x1234, 0x5678, "TestManufacturer", "TestProduct", "SN123456",
+         "/dev/ttyUSB0"},
+        {0xABCD, 0xEF01, "AnotherMfg", "AnotherProduct", "SN789012",
+         "/dev/ttyUSB1"}};
 
     // Test device enumeration
     EXPECT_EQ(usb_devices.size(), 2);
 
     // Test device identification
-    auto target_device = std::find_if(usb_devices.begin(), usb_devices.end(),
-        [this](const USBDevice& device) {
-            return device.vendor_id == test_vendor_id && device.product_id == test_product_id;
-        });
+    auto target_device =
+        std::find_if(usb_devices.begin(), usb_devices.end(),
+                     [this](const USBDevice& device) {
+                         return device.vendor_id == test_vendor_id &&
+                                device.product_id == test_product_id;
+                     });
 
     EXPECT_NE(target_device, usb_devices.end());
     EXPECT_EQ(target_device->device_path, test_device_path);
@@ -294,7 +304,7 @@ TEST_F(DeviceScannerTest, ComprehensiveScanning) {
     // Test comprehensive device scanning
 
     struct DetectedDevice {
-        std::string type; // "serial", "bluetooth", "usb"
+        std::string type;  // "serial", "bluetooth", "usb"
         std::string name;
         std::string identifier;
         bool available;
@@ -305,20 +315,24 @@ TEST_F(DeviceScannerTest, ComprehensiveScanning) {
         {"serial", "COM1", "COM1", true},
         {"serial", "COM2", "COM2", false},
         {"bluetooth", "BT Device", "00:11:22:33:44:55", true},
-        {"usb", "USB Serial", "/dev/ttyUSB0", true}
-    };
+        {"usb", "USB Serial", "/dev/ttyUSB0", true}};
 
     // Test scanning results
     EXPECT_GT(detected_devices.size(), 0);
 
     // Test device type filtering
-    auto serial_devices = std::count_if(detected_devices.begin(), detected_devices.end(),
+    auto serial_devices = std::count_if(
+        detected_devices.begin(), detected_devices.end(),
         [](const DetectedDevice& device) { return device.type == "serial"; });
 
-    auto bluetooth_devices = std::count_if(detected_devices.begin(), detected_devices.end(),
-        [](const DetectedDevice& device) { return device.type == "bluetooth"; });
+    auto bluetooth_devices =
+        std::count_if(detected_devices.begin(), detected_devices.end(),
+                      [](const DetectedDevice& device) {
+                          return device.type == "bluetooth";
+                      });
 
-    auto usb_devices = std::count_if(detected_devices.begin(), detected_devices.end(),
+    auto usb_devices = std::count_if(
+        detected_devices.begin(), detected_devices.end(),
         [](const DetectedDevice& device) { return device.type == "usb"; });
 
     EXPECT_EQ(serial_devices, 2);
@@ -326,7 +340,8 @@ TEST_F(DeviceScannerTest, ComprehensiveScanning) {
     EXPECT_EQ(usb_devices, 1);
 
     // Test availability filtering
-    auto available_devices = std::count_if(detected_devices.begin(), detected_devices.end(),
+    auto available_devices = std::count_if(
+        detected_devices.begin(), detected_devices.end(),
         [](const DetectedDevice& device) { return device.available; });
 
     EXPECT_EQ(available_devices, 3);
@@ -364,7 +379,7 @@ TEST_F(SerialIntegrationTest, CompleteWorkflow) {
 
     // 4. Data communication (simulated)
     std::string test_message = "Test communication";
-    std::string echo_response = test_message; // Simulate echo
+    std::string echo_response = test_message;  // Simulate echo
 
     EXPECT_EQ(echo_response, test_message);
 
@@ -373,7 +388,7 @@ TEST_F(SerialIntegrationTest, CompleteWorkflow) {
     EXPECT_TRUE(cleanup_successful);
 }
 
-} // namespace atom::serial::test
+}  // namespace atom::serial::test
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

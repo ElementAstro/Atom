@@ -9,9 +9,9 @@
 #include <thread>
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
+#include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 #include <opencv2/videoio.hpp>
-#include <opencv2/imgproc.hpp>
 #endif
 
 namespace atom::image {
@@ -23,10 +23,10 @@ bool RealtimeProcessor::initialize(const RealtimeParams& params) {
         maxBufferSize_ = params.maxBufferSize;
         enableFrameDropping_ = params.enableFrameDropping;
         processingMode_ = params.mode;
-        
+
         // Initialize statistics
         stats_ = ProcessingStats{};
-        
+
         return true;
     } catch (const std::exception&) {
         return false;
@@ -34,30 +34,30 @@ bool RealtimeProcessor::initialize(const RealtimeParams& params) {
 }
 
 bool RealtimeProcessor::startCapture(CaptureSource source,
-                                    const std::string& sourcePath,
-                                    FrameCallback frameCallback,
-                                    AnalysisCallback analysisCallback) {
+                                     const std::string& sourcePath,
+                                     FrameCallback frameCallback,
+                                     AnalysisCallback analysisCallback) {
     if (running_.load()) {
-        return false; // Already running
+        return false;  // Already running
     }
-    
+
     // Store callbacks
     frameCallback_ = frameCallback;
     analysisCallback_ = analysisCallback;
-    
+
     // Initialize capture source
     if (!initializeCapture(source, sourcePath)) {
         return false;
     }
-    
+
     // Start processing
     running_.store(true);
     paused_.store(false);
-    
+
     // Start threads
     captureThread_ = std::thread(&RealtimeProcessor::captureThread, this);
     processingThread_ = std::thread(&RealtimeProcessor::processingThread, this);
-    
+
     return true;
 }
 
@@ -65,12 +65,12 @@ void RealtimeProcessor::stop() {
     if (!running_.load()) {
         return;
     }
-    
+
     running_.store(false);
-    
+
     // Notify threads to wake up
     frameCondition_.notify_all();
-    
+
     // Wait for threads to finish
     if (captureThread_.joinable()) {
         captureThread_.join();
@@ -78,41 +78,44 @@ void RealtimeProcessor::stop() {
     if (processingThread_.joinable()) {
         processingThread_.join();
     }
-    
+
     // Cleanup resources
     cleanupCapture();
-    
+
     // Clear frame buffer
     std::lock_guard<std::mutex> lock(frameMutex_);
     frameBuffer_.clear();
 }
 
-blob RealtimeProcessor::processFrame(const blob& input, const FrameInfo& frameInfo) {
+blob RealtimeProcessor::processFrame(const blob& input,
+                                     const FrameInfo& frameInfo) {
     if (input.empty()) {
         return blob{};
     }
-    
+
     auto startTime = std::chrono::high_resolution_clock::now();
-    
+
     // Apply processing pipeline
     blob result = applyProcessingPipeline(input, frameInfo);
-    
+
     auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-    
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endTime - startTime);
+
     // Update statistics
     updateStatistics(static_cast<double>(duration.count()));
-    
+
     return result;
 }
 
-bool RealtimeProcessor::addFrame(const blob& frame, const FrameInfo& frameInfo) {
+bool RealtimeProcessor::addFrame(const blob& frame,
+                                 const FrameInfo& frameInfo) {
     if (frame.empty()) {
         return false;
     }
-    
+
     std::lock_guard<std::mutex> lock(frameMutex_);
-    
+
     // Check buffer size
     if (static_cast<int>(frameBuffer_.size()) >= maxBufferSize_) {
         if (enableFrameDropping_) {
@@ -120,25 +123,27 @@ bool RealtimeProcessor::addFrame(const blob& frame, const FrameInfo& frameInfo) 
             frameBuffer_.pop();
             stats_.droppedFrames++;
         } else {
-            return false; // Buffer full
+            return false;  // Buffer full
         }
     }
-    
+
     // Add frame to buffer
     frameBuffer_.push({frame, frameInfo});
     frameCondition_.notify_one();
-    
+
     return true;
 }
 
-void RealtimeProcessor::setProcessingMode(ProcessingMode mode,
-                                         const std::unordered_map<std::string, double>& params) {
+void RealtimeProcessor::setProcessingMode(
+    ProcessingMode mode,
+    const std::unordered_map<std::string, double>& params) {
     processingMode_ = mode;
     modeParams_ = params;
 }
 
-void RealtimeProcessor::addFilter(const std::string& filterName,
-                                 const std::unordered_map<std::string, double>& params) {
+void RealtimeProcessor::addFilter(
+    const std::string& filterName,
+    const std::unordered_map<std::string, double>& params) {
     std::lock_guard<std::mutex> lock(filterMutex_);
     filters_[filterName] = params;
 }
@@ -161,65 +166,54 @@ void RealtimeProcessor::setAnalysisCallback(AnalysisCallback callback) {
     analysisCallback_ = callback;
 }
 
-ProcessingStats RealtimeProcessor::getStatistics() const {
-    return stats_;
-}
+ProcessingStats RealtimeProcessor::getStatistics() const { return stats_; }
 
-double RealtimeProcessor::getCurrentFPS() const {
-    return stats_.currentFPS;
-}
+double RealtimeProcessor::getCurrentFPS() const { return stats_.currentFPS; }
 
-double RealtimeProcessor::getLatency() const {
-    return stats_.averageLatency;
-}
+double RealtimeProcessor::getLatency() const { return stats_.averageLatency; }
 
-bool RealtimeProcessor::isRunning() const {
-    return running_.load();
-}
+bool RealtimeProcessor::isRunning() const { return running_.load(); }
 
-void RealtimeProcessor::pause() {
-    paused_.store(true);
-}
+void RealtimeProcessor::pause() { paused_.store(true); }
 
 void RealtimeProcessor::resume() {
     paused_.store(false);
     frameCondition_.notify_all();
 }
 
-bool RealtimeProcessor::isPaused() const {
-    return paused_.load();
-}
+bool RealtimeProcessor::isPaused() const { return paused_.load(); }
 
 bool RealtimeProcessor::startRecording(const std::string& outputPath,
-                                      const std::string& codec,
-                                      int quality) {
+                                       const std::string& codec, int quality) {
     if (recording_.load()) {
-        return false; // Already recording
+        return false;  // Already recording
     }
-    
+
     try {
 #ifdef ATOM_IMAGE_HAS_OPENCV
         // Initialize video writer
-        int fourcc = cv::VideoWriter::fourcc('H', '2', '6', '4'); // Default to H264
+        int fourcc =
+            cv::VideoWriter::fourcc('H', '2', '6', '4');  // Default to H264
         if (codec == "h265") {
             fourcc = cv::VideoWriter::fourcc('H', '2', '6', '5');
         } else if (codec == "vp9") {
             fourcc = cv::VideoWriter::fourcc('V', 'P', '0', '9');
         }
-        
+
         // Use current capture resolution or default
-        cv::Size frameSize(1920, 1080); // Default resolution
-        
-        videoWriter_ = std::make_unique<cv::VideoWriter>(outputPath, fourcc, targetFPS_, frameSize);
-        
+        cv::Size frameSize(1920, 1080);  // Default resolution
+
+        videoWriter_ = std::make_unique<cv::VideoWriter>(outputPath, fourcc,
+                                                         targetFPS_, frameSize);
+
         if (!videoWriter_->isOpened()) {
             return false;
         }
-        
+
         recording_.store(true);
         return true;
 #else
-        return false; // OpenCV required for recording
+        return false;  // OpenCV required for recording
 #endif
     } catch (const std::exception&) {
         return false;
@@ -230,9 +224,9 @@ void RealtimeProcessor::stopRecording() {
     if (!recording_.load()) {
         return;
     }
-    
+
     recording_.store(false);
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     if (videoWriter_) {
         videoWriter_->release();
@@ -241,41 +235,35 @@ void RealtimeProcessor::stopRecording() {
 #endif
 }
 
-bool RealtimeProcessor::isRecording() const {
-    return recording_.load();
-}
+bool RealtimeProcessor::isRecording() const { return recording_.load(); }
 
 bool RealtimeProcessor::takeSnapshot(const std::string& outputPath) {
     if (!running_.load() || frameBuffer_.empty()) {
         return false;
     }
-    
+
     try {
         std::lock_guard<std::mutex> lock(frameMutex_);
         if (!frameBuffer_.empty()) {
             const auto& frameData = frameBuffer_.back();
-            
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
             cv::Mat frame = frameData.first.to_mat();
             return cv::imwrite(outputPath, frame);
 #else
-            return false; // OpenCV required for snapshot
+            return false;  // OpenCV required for snapshot
 #endif
         }
     } catch (const std::exception&) {
         return false;
     }
-    
+
     return false;
 }
 
-void RealtimeProcessor::setTargetFPS(double fps) {
-    targetFPS_ = fps;
-}
+void RealtimeProcessor::setTargetFPS(double fps) { targetFPS_ = fps; }
 
-void RealtimeProcessor::setMaxBufferSize(int size) {
-    maxBufferSize_ = size;
-}
+void RealtimeProcessor::setMaxBufferSize(int size) { maxBufferSize_ = size; }
 
 void RealtimeProcessor::setFrameDropping(bool enable) {
     enableFrameDropping_ = enable;
@@ -283,7 +271,7 @@ void RealtimeProcessor::setFrameDropping(bool enable) {
 
 std::vector<std::string> RealtimeProcessor::getAvailableDevices() const {
     std::vector<std::string> devices;
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     // Try to enumerate camera devices
     for (int i = 0; i < 10; ++i) {
@@ -294,11 +282,12 @@ std::vector<std::string> RealtimeProcessor::getAvailableDevices() const {
         }
     }
 #endif
-    
+
     return devices;
 }
 
-std::vector<std::string> RealtimeProcessor::getSupportedFormats(const std::string& devicePath) const {
+std::vector<std::string> RealtimeProcessor::getSupportedFormats(
+    const std::string& devicePath) const {
     // Return common video formats
     return {"BGR", "RGB", "GRAY", "YUV420", "MJPEG", "H264"};
 }
@@ -306,7 +295,7 @@ std::vector<std::string> RealtimeProcessor::getSupportedFormats(const std::strin
 bool RealtimeProcessor::setCaptureResolution(int width, int height) {
     captureWidth_ = width;
     captureHeight_ = height;
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     if (capture_) {
         capture_->set(cv::CAP_PROP_FRAME_WIDTH, width);
@@ -314,20 +303,20 @@ bool RealtimeProcessor::setCaptureResolution(int width, int height) {
         return true;
     }
 #endif
-    
+
     return false;
 }
 
 bool RealtimeProcessor::setCaptureFPS(double fps) {
     captureFPS_ = fps;
-    
+
 #ifdef ATOM_IMAGE_HAS_OPENCV
     if (capture_) {
         capture_->set(cv::CAP_PROP_FPS, fps);
         return true;
     }
 #endif
-    
+
     return false;
 }
 
@@ -339,7 +328,8 @@ void RealtimeProcessor::processingThread() {
         }
 
         std::unique_lock<std::mutex> lock(frameMutex_);
-        frameCondition_.wait(lock, [this] { return !frameBuffer_.empty() || !running_.load(); });
+        frameCondition_.wait(
+            lock, [this] { return !frameBuffer_.empty() || !running_.load(); });
 
         if (!running_.load()) {
             break;
@@ -377,7 +367,7 @@ void RealtimeProcessor::processingThread() {
 
 void RealtimeProcessor::captureThread() {
     auto lastFrameTime = std::chrono::high_resolution_clock::now();
-    double frameInterval = 1000.0 / targetFPS_; // milliseconds
+    double frameInterval = 1000.0 / targetFPS_;  // milliseconds
 
     while (running_.load()) {
         if (paused_.load()) {
@@ -386,7 +376,8 @@ void RealtimeProcessor::captureThread() {
         }
 
         auto currentTime = std::chrono::high_resolution_clock::now();
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - lastFrameTime);
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            currentTime - lastFrameTime);
 
         if (elapsed.count() < frameInterval) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -399,8 +390,10 @@ void RealtimeProcessor::captureThread() {
             if (capture_->read(frame)) {
                 if (!frame.empty()) {
                     FrameInfo frameInfo;
-                    frameInfo.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::system_clock::now().time_since_epoch()).count();
+                    frameInfo.timestamp =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::system_clock::now().time_since_epoch())
+                            .count();
                     frameInfo.frameNumber = stats_.capturedFrames;
 
                     blob frameBlob(frame);
@@ -415,7 +408,8 @@ void RealtimeProcessor::captureThread() {
     }
 }
 
-blob RealtimeProcessor::applyProcessingPipeline(const blob& input, const FrameInfo& frameInfo) {
+blob RealtimeProcessor::applyProcessingPipeline(const blob& input,
+                                                const FrameInfo& frameInfo) {
     if (input.empty()) {
         return blob{};
     }
@@ -462,17 +456,21 @@ blob RealtimeProcessor::applyProcessingPipeline(const blob& input, const FrameIn
 
 void RealtimeProcessor::updateStatistics(double processingTime) {
     stats_.totalProcessingTime += processingTime;
-    stats_.averageLatency = stats_.totalProcessingTime / std::max(1UL, stats_.processedFrames);
+    stats_.averageLatency =
+        stats_.totalProcessingTime / std::max(1UL, stats_.processedFrames);
 
     // Calculate FPS
     auto currentTime = std::chrono::high_resolution_clock::now();
-    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(currentTime - stats_.startTime);
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(
+        currentTime - stats_.startTime);
     if (elapsed.count() > 0) {
-        stats_.currentFPS = static_cast<double>(stats_.processedFrames) / elapsed.count();
+        stats_.currentFPS =
+            static_cast<double>(stats_.processedFrames) / elapsed.count();
     }
 }
 
-bool RealtimeProcessor::initializeCapture(CaptureSource source, const std::string& sourcePath) {
+bool RealtimeProcessor::initializeCapture(CaptureSource source,
+                                          const std::string& sourcePath) {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     try {
         switch (source) {
@@ -518,7 +516,7 @@ bool RealtimeProcessor::initializeCapture(CaptureSource source, const std::strin
         return false;
     }
 #else
-    return false; // OpenCV required for capture
+    return false;  // OpenCV required for capture
 #endif
 }
 
@@ -540,7 +538,7 @@ blob RealtimeProcessor::resizeFrame(const blob& input) {
     cv::Mat src = input.to_mat();
     cv::Mat dst;
     cv::Size targetSize(captureWidth_ > 0 ? captureWidth_ : src.cols,
-                       captureHeight_ > 0 ? captureHeight_ : src.rows);
+                        captureHeight_ > 0 ? captureHeight_ : src.rows);
     cv::resize(src, dst, targetSize);
     return blob(dst);
 #else
@@ -548,7 +546,8 @@ blob RealtimeProcessor::resizeFrame(const blob& input) {
 #endif
 }
 
-blob RealtimeProcessor::convertFormat(const blob& input, const std::string& targetFormat) {
+blob RealtimeProcessor::convertFormat(const blob& input,
+                                      const std::string& targetFormat) {
     if (input.empty()) {
         return input;
     }
@@ -572,8 +571,9 @@ blob RealtimeProcessor::convertFormat(const blob& input, const std::string& targ
 }
 
 // Helper methods for processing pipeline
-blob RealtimeProcessor::applyFilter(const blob& input, const std::string& filterName,
-                                   const std::unordered_map<std::string, double>& params) {
+blob RealtimeProcessor::applyFilter(
+    const blob& input, const std::string& filterName,
+    const std::unordered_map<std::string, double>& params) {
     if (input.empty()) {
         return input;
     }
@@ -583,14 +583,17 @@ blob RealtimeProcessor::applyFilter(const blob& input, const std::string& filter
     cv::Mat dst;
 
     if (filterName == "blur") {
-        int kernelSize = static_cast<int>(params.count("kernel_size") ? params.at("kernel_size") : 5);
+        int kernelSize = static_cast<int>(
+            params.count("kernel_size") ? params.at("kernel_size") : 5);
         cv::blur(src, dst, cv::Size(kernelSize, kernelSize));
     } else if (filterName == "gaussian_blur") {
-        int kernelSize = static_cast<int>(params.count("kernel_size") ? params.at("kernel_size") : 5);
+        int kernelSize = static_cast<int>(
+            params.count("kernel_size") ? params.at("kernel_size") : 5);
         double sigma = params.count("sigma") ? params.at("sigma") : 1.0;
         cv::GaussianBlur(src, dst, cv::Size(kernelSize, kernelSize), sigma);
     } else if (filterName == "sharpen") {
-        cv::Mat kernel = (cv::Mat_<float>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
+        cv::Mat kernel =
+            (cv::Mat_<float>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
         cv::filter2D(src, dst, -1, kernel);
     } else {
         dst = src.clone();
@@ -634,13 +637,15 @@ blob RealtimeProcessor::applyEnhancement(const blob& input) {
 #endif
 }
 
-blob RealtimeProcessor::applyDetection(const blob& input, const FrameInfo& frameInfo) {
+blob RealtimeProcessor::applyDetection(const blob& input,
+                                       const FrameInfo& frameInfo) {
     // Placeholder for object detection
     // In a real implementation, this would run object detection models
     return input;
 }
 
-blob RealtimeProcessor::applyTracking(const blob& input, const FrameInfo& frameInfo) {
+blob RealtimeProcessor::applyTracking(const blob& input,
+                                      const FrameInfo& frameInfo) {
     // Placeholder for object tracking
     // In a real implementation, this would track objects across frames
     return input;

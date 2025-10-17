@@ -2,11 +2,11 @@
 #include "atom/components/core/component.hpp"
 
 #include <gtest/gtest.h>
-#include <vector>
-#include <memory>
-#include <chrono>
-#include <thread>
 #include <atomic>
+#include <chrono>
+#include <memory>
+#include <thread>
+#include <vector>
 
 using namespace atom::components;
 
@@ -95,9 +95,7 @@ protected:
 // Constants Tests
 // ============================================================================
 
-TEST(IterationConstantsTest, CacheLineSize) {
-    EXPECT_EQ(CACHE_LINE_SIZE, 64);
-}
+TEST(IterationConstantsTest, CacheLineSize) { EXPECT_EQ(CACHE_LINE_SIZE, 64); }
 
 TEST(IterationConstantsTest, SIMDVectorWidths) {
     // Test that SIMD vector widths are reasonable
@@ -136,12 +134,13 @@ TEST_F(ComponentIteratorTest, BatchProcessing) {
     iterator_->setComponents(components_);
 
     std::vector<int> batchSizes;
-    iterator_->forEachBatch([&batchSizes](const std::vector<TestIterationComponent*>& batch) {
-        batchSizes.push_back(batch.size());
-        for (auto* component : batch) {
-            component->process();
-        }
-    });
+    iterator_->forEachBatch(
+        [&batchSizes](const std::vector<TestIterationComponent*>& batch) {
+            batchSizes.push_back(batch.size());
+            for (auto* component : batch) {
+                component->process();
+            }
+        });
 
     // Should have processed in batches
     EXPECT_GT(batchSizes.size(), 1);
@@ -158,10 +157,11 @@ TEST_F(ComponentIteratorTest, ParallelIteration) {
     iterator_->setComponents(components_);
 
     std::atomic<int> processedCount{0};
-    iterator_->forEachParallel([&processedCount](TestIterationComponent& component) {
-        component.process();
-        processedCount++;
-    });
+    iterator_->forEachParallel(
+        [&processedCount](TestIterationComponent& component) {
+            component.process();
+            processedCount++;
+        });
 
     EXPECT_EQ(processedCount.load(), components_.size());
 }
@@ -185,9 +185,8 @@ TEST_F(ComponentIteratorTest, ConditionalIteration) {
 TEST_F(ComponentIteratorTest, IteratorStatistics) {
     iterator_->setComponents(components_);
 
-    iterator_->forEach([](TestIterationComponent& component) {
-        component.process();
-    });
+    iterator_->forEach(
+        [](TestIterationComponent& component) { component.process(); });
 
     auto stats = iterator_->getStatistics();
     EXPECT_GT(stats.totalIterations, 0);
@@ -198,9 +197,8 @@ TEST_F(ComponentIteratorTest, IteratorStatistics) {
 TEST_F(ComponentIteratorTest, ResetStatistics) {
     iterator_->setComponents(components_);
 
-    iterator_->forEach([](TestIterationComponent& component) {
-        component.process();
-    });
+    iterator_->forEach(
+        [](TestIterationComponent& component) { component.process(); });
 
     auto statsBefore = iterator_->getStatistics();
     EXPECT_GT(statsBefore.totalIterations, 0);
@@ -278,8 +276,9 @@ TEST_F(SIMDProcessorTest, SIMDCapabilities) {
     auto capabilities = processor_->getSIMDCapabilities();
 
     // Should report some capabilities
-    EXPECT_TRUE(capabilities.hasSSE || capabilities.hasAVX || capabilities.hasAVX2 ||
-                capabilities.hasNEON || !capabilities.hasAny);
+    EXPECT_TRUE(capabilities.hasSSE || capabilities.hasAVX ||
+                capabilities.hasAVX2 || capabilities.hasNEON ||
+                !capabilities.hasAny);
 }
 
 // ============================================================================
@@ -373,9 +372,8 @@ TEST_F(ComponentIteratorTest, EmptyComponentList) {
     iterator_->setComponents(emptyComponents);
 
     int processedCount = 0;
-    iterator_->forEach([&processedCount](TestIterationComponent&) {
-        processedCount++;
-    });
+    iterator_->forEach(
+        [&processedCount](TestIterationComponent&) { processedCount++; });
 
     EXPECT_EQ(processedCount, 0);
 }
@@ -392,11 +390,12 @@ TEST_F(ComponentIteratorTest, NullComponentHandling) {
 
 TEST_F(SIMDProcessorTest, InvalidInputSizes) {
     std::vector<float> a = {1.0f, 2.0f};
-    std::vector<float> b = {3.0f, 4.0f, 5.0f}; // Different size
+    std::vector<float> b = {3.0f, 4.0f, 5.0f};  // Different size
     std::vector<float> result(2);
 
     // Should handle mismatched sizes gracefully
-    EXPECT_NO_THROW(processor_->vectorAdd(a.data(), b.data(), result.data(), 2));
+    EXPECT_NO_THROW(
+        processor_->vectorAdd(a.data(), b.data(), result.data(), 2));
 }
 
 TEST_F(CacheOptimizerTest, NullPointerHandling) {
@@ -418,10 +417,11 @@ TEST_F(ComponentIteratorTest, ConcurrentAccess) {
     for (int t = 0; t < numThreads; ++t) {
         threads.emplace_back([this, &totalProcessed]() {
             int localProcessed = 0;
-            iterator_->forEach([&localProcessed](TestIterationComponent& component) {
-                component.process();
-                localProcessed++;
-            });
+            iterator_->forEach(
+                [&localProcessed](TestIterationComponent& component) {
+                    component.process();
+                    localProcessed++;
+                });
             totalProcessed += localProcessed;
         });
     }

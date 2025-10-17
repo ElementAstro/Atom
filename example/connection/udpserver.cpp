@@ -45,7 +45,7 @@ public:
     enum class Level { Info, Success, Warning, Error, Debug };
 
     static void write(Level level, const std::string& component,
-                    const std::string& message) {
+                      const std::string& message) {
         static std::mutex log_mutex;
         std::lock_guard<std::mutex> lock(log_mutex);
 
@@ -120,15 +120,19 @@ public:
             std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 
         ExampleLogger::write(ExampleLogger::Level::Info, "ServerStats",
-                    "=== UDP Server Statistics ===");
-        ExampleLogger::write(ExampleLogger::Level::Info, "ServerStats",
-                    "Runtime: " + std::to_string(seconds) + " seconds");
-        ExampleLogger::write(ExampleLogger::Level::Info, "ServerStats",
-                    "Total messages: " + std::to_string(total_messages.load()));
-        ExampleLogger::write(ExampleLogger::Level::Info, "ServerStats",
-                    "Total bytes: " + std::to_string(total_bytes.load()));
-        ExampleLogger::write(ExampleLogger::Level::Info, "ServerStats",
-                    "Unique clients: " + std::to_string(unique_clients.load()));
+                             "=== UDP Server Statistics ===");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "ServerStats",
+            "Runtime: " + std::to_string(seconds) + " seconds");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "ServerStats",
+            "Total messages: " + std::to_string(total_messages.load()));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "ServerStats",
+            "Total bytes: " + std::to_string(total_bytes.load()));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "ServerStats",
+            "Unique clients: " + std::to_string(unique_clients.load()));
         ExampleLogger::write(
             ExampleLogger::Level::Info, "ServerStats",
             "Active sessions: " + std::to_string(active_sessions.load()));
@@ -146,9 +150,10 @@ public:
             "Unicast messages: " + std::to_string(unicast_messages.load()));
 
         if (seconds > 0) {
-            ExampleLogger::write(ExampleLogger::Level::Info, "ServerStats",
-                        "Messages/sec: " +
-                            std::to_string(total_messages.load() / seconds));
+            ExampleLogger::write(
+                ExampleLogger::Level::Info, "ServerStats",
+                "Messages/sec: " +
+                    std::to_string(total_messages.load() / seconds));
             ExampleLogger::write(
                 ExampleLogger::Level::Info, "ServerStats",
                 "Bytes/sec: " + std::to_string(total_bytes.load() / seconds));
@@ -160,8 +165,9 @@ public:
                    (processed_requests.load() + failed_requests.load())) *
                       100.0
                 : 0.0;
-        ExampleLogger::write(ExampleLogger::Level::Info, "ServerStats",
-                    "Success rate: " + std::to_string(success_rate) + "%");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "ServerStats",
+            "Success rate: " + std::to_string(success_rate) + "%");
     }
 };
 
@@ -192,7 +198,7 @@ public:
         if (it == sessions_.end()) {
             sessions_.emplace(endpoint, ClientSession(endpoint));
             ExampleLogger::write(ExampleLogger::Level::Info, "SessionMgr",
-                        "New client session: " + endpoint);
+                                 "New client session: " + endpoint);
         }
 
         auto& session = sessions_[endpoint];
@@ -224,8 +230,9 @@ public:
 
     void print_sessions() const {
         auto active = get_active_sessions();
-        ExampleLogger::write(ExampleLogger::Level::Info, "SessionMgr",
-                    "Active sessions (" + std::to_string(active.size()) + "):");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "SessionMgr",
+            "Active sessions (" + std::to_string(active.size()) + "):");
 
         std::lock_guard<std::mutex> lock(
             const_cast<std::mutex&>(sessions_mutex_));
@@ -251,7 +258,7 @@ public:
         while (it != sessions_.end()) {
             if (now - it->second.last_seen > timeout) {
                 ExampleLogger::write(ExampleLogger::Level::Debug, "SessionMgr",
-                            "Removing expired session: " + it->first);
+                                     "Removing expired session: " + it->first);
                 it = sessions_.erase(it);
             } else {
                 ++it;
@@ -281,20 +288,23 @@ void onMessageReceived(const std::string& message, const std::string& senderIp,
 
 // Example 1: Basic UDP server operations
 void basicUdpServerExample(int port) {
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example1", "Starting basic UDP server example");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
+                         "Starting basic UDP server example");
 
     try {
         atom::connection::UdpSocketHub udpServer;
 
         // Add message handler
         udpServer.addMessageHandler(onMessageReceived);
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example1", "Message handler added");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
+                             "Message handler added");
 
         // Start the UDP server
         auto startResult = udpServer.start(port);
         if (startResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Success, "Example1",
-                        "UDP server started on port " + std::to_string(port));
+            ExampleLogger::write(
+                ExampleLogger::Level::Success, "Example1",
+                "UDP server started on port " + std::to_string(port));
         } else {
             ExampleLogger::write(
                 ExampleLogger::Level::Error, "Example1",
@@ -304,7 +314,8 @@ void basicUdpServerExample(int port) {
 
         // Check if server is running
         if (udpServer.isRunning()) {
-            ExampleLogger::write(ExampleLogger::Level::Success, "Example1", "Server is running");
+            ExampleLogger::write(ExampleLogger::Level::Success, "Example1",
+                                 "Server is running");
         }
 
         // Send a test message to ourselves
@@ -312,30 +323,32 @@ void basicUdpServerExample(int port) {
             udpServer.sendTo("Hello from server!", "127.0.0.1", port);
         if (sendResult.has_value()) {
             ExampleLogger::write(ExampleLogger::Level::Success, "Example1",
-                        "Test message sent to self");
+                                 "Test message sent to self");
         }
 
         // Keep the server running for a while to receive messages
         ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                    "Server running for 10 seconds...");
+                             "Server running for 10 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(10));
 
         // Stop the UDP server
         udpServer.stop();
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example1", "UDP server stopped");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
+                             "UDP server stopped");
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example1",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example1", "Basic UDP server example completed");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
+                         "Basic UDP server example completed");
 }
 
 // Example 2: UDP server with statistics monitoring
 void statisticsMonitoringExample(int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                "Starting statistics monitoring example");
+                         "Starting statistics monitoring example");
 
     try {
         atom::connection::UdpSocketHub udpServer;
@@ -343,11 +356,12 @@ void statisticsMonitoringExample(int port) {
 
         auto startResult = udpServer.start(port);
         if (!startResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Error, "Example2", "Failed to start server");
+            ExampleLogger::write(ExampleLogger::Level::Error, "Example2",
+                                 "Failed to start server");
             return;
         }
         ExampleLogger::write(ExampleLogger::Level::Success, "Example2",
-                    "Server started for statistics monitoring");
+                             "Server started for statistics monitoring");
 
         // Send multiple test messages
         std::vector<std::string> testMessages = {"Statistics test message 1",
@@ -357,7 +371,8 @@ void statisticsMonitoringExample(int port) {
         for (const auto& msg : testMessages) {
             auto sendResult = udpServer.sendTo(msg, "127.0.0.1", port);
             if (sendResult.has_value()) {
-                ExampleLogger::write(ExampleLogger::Level::Info, "Example2", "Sent: " + msg);
+                ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
+                                     "Sent: " + msg);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -367,34 +382,37 @@ void statisticsMonitoringExample(int port) {
 
         // Display message statistics (manual tracking since basic UdpSocketHub
         // doesn't have getStatistics)
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example2", "=== Message Statistics ===");
         ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                    "Messages received: " + std::to_string(messageCount));
+                             "=== Message Statistics ===");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Example2",
+            "Messages received: " + std::to_string(messageCount));
         ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                    "Total received messages: " +
-                        std::to_string(receivedMessages.size()));
+                             "Total received messages: " +
+                                 std::to_string(receivedMessages.size()));
 
         // Display received messages
         for (size_t i = 0; i < receivedMessages.size(); ++i) {
             ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                        "Message " + std::to_string(i + 1) + ": " +
-                            receivedMessages[i]);
+                                 "Message " + std::to_string(i + 1) + ": " +
+                                     receivedMessages[i]);
         }
 
         udpServer.stop();
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example2",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                "Statistics monitoring example completed");
+                         "Statistics monitoring example completed");
 }
 
 // Example 3: Multiple handlers and buffer size configuration
 void multipleHandlersExample(int port) {
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "Starting multiple handlers example");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                         "Starting multiple handlers example");
 
     try {
         atom::connection::UdpSocketHub udpServer;
@@ -404,8 +422,8 @@ void multipleHandlersExample(int port) {
                                        const std::string& senderIp,
                                        int senderPort) {
             ExampleLogger::write(ExampleLogger::Level::Info, "Handler1",
-                        "Processed: " + message + " from " + senderIp + ":" +
-                            std::to_string(senderPort));
+                                 "Processed: " + message + " from " + senderIp +
+                                     ":" + std::to_string(senderPort));
         });
 
         udpServer.addMessageHandler([](const std::string& message,
@@ -413,21 +431,23 @@ void multipleHandlersExample(int port) {
                                        int /*senderPort*/) {
             if (message.find("important") != std::string::npos) {
                 ExampleLogger::write(ExampleLogger::Level::Warning, "Handler2",
-                            "Important message detected: " + message);
+                                     "Important message detected: " + message);
             }
         });
 
         // Set buffer size
         udpServer.setBufferSize(2048);
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "Buffer size set to 2048 bytes");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                             "Buffer size set to 2048 bytes");
 
         auto startResult = udpServer.start(port);
         if (!startResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Error, "Example3", "Failed to start server");
+            ExampleLogger::write(ExampleLogger::Level::Error, "Example3",
+                                 "Failed to start server");
             return;
         }
         ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
-                    "Server started with multiple handlers");
+                             "Server started with multiple handlers");
 
         // Send test messages
         std::vector<std::string> testMessages = {"Normal message",
@@ -437,7 +457,8 @@ void multipleHandlersExample(int port) {
         for (const auto& msg : testMessages) {
             auto sendResult = udpServer.sendTo(msg, "127.0.0.1", port);
             if (sendResult.has_value()) {
-                ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "Sent: " + msg);
+                ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                                     "Sent: " + msg);
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
@@ -447,18 +468,18 @@ void multipleHandlersExample(int port) {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example3",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
-                "Multiple handlers example completed");
+                         "Multiple handlers example completed");
 }
 
 // Example 4: Advanced message routing and filtering
 void advancedMessageRoutingExample(int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                "Starting advanced message routing example on port " +
-                    std::to_string(port));
+                         "Starting advanced message routing example on port " +
+                             std::to_string(port));
 
     try {
         atom::connection::UdpSocketHub server;
@@ -481,12 +502,13 @@ void advancedMessageRoutingExample(int port) {
                 std::string broadcastMsg =
                     message.substr(10);  // Remove "BROADCAST:" prefix
                 ExampleLogger::write(ExampleLogger::Level::Info, "Router",
-                            "Broadcasting message: " + broadcastMsg);
+                                     "Broadcasting message: " + broadcastMsg);
                 globalServerStats.record_message(broadcastMsg.length(), true);
 
             } else if (message.find("ECHO:") == 0) {
                 std::string echoMsg = "ECHO_RESPONSE:" + message.substr(5);
-                ExampleLogger::write(ExampleLogger::Level::Info, "Router", "Echoing back: " + echoMsg);
+                ExampleLogger::write(ExampleLogger::Level::Info, "Router",
+                                     "Echoing back: " + echoMsg);
                 globalServerStats.record_request(true);
 
             } else if (message.find("STATUS") == 0) {
@@ -495,19 +517,20 @@ void advancedMessageRoutingExample(int port) {
                 std::string statusMsg = "SERVER_STATUS:ACTIVE_SESSIONS=" +
                                         std::to_string(activeSessions.size());
                 ExampleLogger::write(ExampleLogger::Level::Info, "Router",
-                            "Status request: " + statusMsg);
+                                     "Status request: " + statusMsg);
                 globalServerStats.record_request(true);
 
             } else if (message.find("DISCOVERY_REQUEST") == 0) {
                 std::string discoveryResponse =
                     "DISCOVERY_RESPONSE:UDP_SERVER_AVAILABLE";
-                ExampleLogger::write(ExampleLogger::Level::Info, "Router",
-                            "Discovery request from " + clientEndpoint);
+                ExampleLogger::write(
+                    ExampleLogger::Level::Info, "Router",
+                    "Discovery request from " + clientEndpoint);
                 globalServerStats.record_request(true);
 
             } else {
                 ExampleLogger::write(ExampleLogger::Level::Info, "Router",
-                            "Regular message processed");
+                                     "Regular message processed");
                 globalServerStats.record_request(true);
             }
         });
@@ -532,19 +555,19 @@ void advancedMessageRoutingExample(int port) {
 
         server.stop();
         ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                    "Advanced message routing example completed");
+                             "Advanced message routing example completed");
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example4",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 }
 
 // Example 5: High-performance server with load testing
 void highPerformanceServerExample(int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example5",
-                "Starting high-performance server example on port " +
-                    std::to_string(port));
+                         "Starting high-performance server example on port " +
+                             std::to_string(port));
 
     try {
         atom::connection::UdpSocketHub server;
@@ -574,7 +597,7 @@ void highPerformanceServerExample(int port) {
         auto result = server.start(static_cast<std::uint16_t>(port));
         if (!result.has_value()) {
             ExampleLogger::write(ExampleLogger::Level::Error, "Example5",
-                        "Failed to start high-performance server");
+                                 "Failed to start high-performance server");
             return;
         }
         ExampleLogger::write(
@@ -597,9 +620,10 @@ void highPerformanceServerExample(int port) {
                             std::chrono::milliseconds(20));
                     }
                 } catch (const std::exception& e) {
-                    ExampleLogger::write(ExampleLogger::Level::Error, "LoadGen",
-                                "Load generator " + std::to_string(i) +
-                                    " error: " + std::string(e.what()));
+                    ExampleLogger::write(
+                        ExampleLogger::Level::Error, "LoadGen",
+                        "Load generator " + std::to_string(i) +
+                            " error: " + std::string(e.what()));
                 }
             }));
         }
@@ -612,8 +636,8 @@ void highPerformanceServerExample(int port) {
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(
             endTime - startTime);
         ExampleLogger::write(ExampleLogger::Level::Info, "Example5",
-                    "Performance test completed in " +
-                        std::to_string(duration.count()) + " seconds");
+                             "Performance test completed in " +
+                                 std::to_string(duration.count()) + " seconds");
 
         // Wait for load generators to complete
         for (auto& future : loadGenerators) {
@@ -622,18 +646,18 @@ void highPerformanceServerExample(int port) {
 
         server.stop();
         ExampleLogger::write(ExampleLogger::Level::Info, "Example5",
-                    "High-performance server example completed");
+                             "High-performance server example completed");
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example5",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 }
 
 // Function to print comprehensive summary of all examples
 void printSummary() {
     ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
-                "=== Enhanced UDP Server Examples Summary ===");
+                         "=== Enhanced UDP Server Examples Summary ===");
 
     // Print global statistics
     globalServerStats.print_summary();
@@ -642,52 +666,60 @@ void printSummary() {
     globalSessionManager.print_sessions();
 
     // Print legacy message information
+    ExampleLogger::write(
+        ExampleLogger::Level::Info, "Summary",
+        "Legacy message count: " + std::to_string(messageCount));
     ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
-                "Legacy message count: " + std::to_string(messageCount));
-    ExampleLogger::write(ExampleLogger::Level::Info, "Summary", "Sample messages received:");
+                         "Sample messages received:");
     for (size_t i = 0; i < std::min(receivedMessages.size(), size_t(3)); ++i) {
-        ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
-                    "  " + std::to_string(i + 1) + ": " + receivedMessages[i]);
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Summary",
+            "  " + std::to_string(i + 1) + ": " + receivedMessages[i]);
     }
     if (receivedMessages.size() > 3) {
         ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
-                    "  ... and " + std::to_string(receivedMessages.size() - 3) +
-                        " more messages");
+                             "  ... and " +
+                                 std::to_string(receivedMessages.size() - 3) +
+                                 " more messages");
     }
 }
 
 int main() {
     const int port = 8080;  // Port to listen for incoming messages
 
-    ExampleLogger::write(ExampleLogger::Level::Warning, "Main",
-                "This example demonstrates Enhanced UDP Server functionality");
+    ExampleLogger::write(
+        ExampleLogger::Level::Warning, "Main",
+        "This example demonstrates Enhanced UDP Server functionality");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "Server will listen on port " + std::to_string(port));
+                         "Server will listen on port " + std::to_string(port));
     ExampleLogger::write(
         ExampleLogger::Level::Info, "Main",
         "You can test with the udpclient example or netcat: nc -u localhost " +
             std::to_string(port));
     ExampleLogger::write(ExampleLogger::Level::Info, "Main", "");
-    ExampleLogger::write(ExampleLogger::Level::Info, "Main", "Features demonstrated:");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Basic UDP server operations with enhanced message handling");
+                         "Features demonstrated:");
+    ExampleLogger::write(
+        ExampleLogger::Level::Info, "Main",
+        "- Basic UDP server operations with enhanced message handling");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Advanced statistics monitoring and reporting");
+                         "- Advanced statistics monitoring and reporting");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Multiple message handlers and routing");
+                         "- Multiple message handlers and routing");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Advanced message routing and filtering");
+                         "- Advanced message routing and filtering");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- High-performance server with load testing");
+                         "- High-performance server with load testing");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Client session management and tracking");
+                         "- Client session management and tracking");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Comprehensive error handling and recovery");
+                         "- Comprehensive error handling and recovery");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main", "");
 
     try {
-        ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                    "Starting enhanced comprehensive UDP server examples");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Main",
+            "Starting enhanced comprehensive UDP server examples");
 
         // Run all examples with proper spacing
         basicUdpServerExample(port);
@@ -708,8 +740,9 @@ int main() {
         ExampleLogger::write(ExampleLogger::Level::Info, "Main", "");
         printSummary();
 
-        ExampleLogger::write(ExampleLogger::Level::Success, "Main",
-                    "All enhanced UDP server examples completed successfully");
+        ExampleLogger::write(
+            ExampleLogger::Level::Success, "Main",
+            "All enhanced UDP server examples completed successfully");
         ExampleLogger::write(ExampleLogger::Level::Info, "Main", "");
         ExampleLogger::write(
             ExampleLogger::Level::Info, "Main",
@@ -718,7 +751,7 @@ int main() {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Main",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
         globalServerStats.print_summary();
         return 1;
     }

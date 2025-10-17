@@ -30,8 +30,9 @@ namespace atom::io {
  * @brief Concept for types that can be compressed
  */
 template <typename T>
-concept CompressibleData = std::ranges::contiguous_range<T> &&
-                          std::is_trivially_copyable_v<std::ranges::range_value_t<T>>;
+concept CompressibleData =
+    std::ranges::contiguous_range<T> &&
+    std::is_trivially_copyable_v<std::ranges::range_value_t<T>>;
 
 /**
  * @brief Concept for compression level values

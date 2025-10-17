@@ -16,11 +16,11 @@
 
 #include <chrono>
 #include <iostream>
+#include <limits>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <vector>
-#include <limits>
-#include <random>
 
 #include "atom/image/core/image_blob.hpp"
 
@@ -37,9 +37,11 @@ void testEmptyBlobOperations() {
         // Test default constructor
         blob emptyBlob;
         std::cout << "Empty blob created successfully\n";
-        std::cout << "Empty check: " << (emptyBlob.isEmpty() ? "empty" : "not empty") << "\n";
+        std::cout << "Empty check: "
+                  << (emptyBlob.isEmpty() ? "empty" : "not empty") << "\n";
         std::cout << "Size: " << emptyBlob.size() << " bytes\n";
-        std::cout << "Dimensions: " << emptyBlob.getWidth() << "x" << emptyBlob.getHeight() << "\n";
+        std::cout << "Dimensions: " << emptyBlob.getWidth() << "x"
+                  << emptyBlob.getHeight() << "\n";
 
         // Test operations on empty blob
         try {
@@ -52,12 +54,14 @@ void testEmptyBlobOperations() {
         // Test serialization of empty blob
         try {
             auto serialized = emptyBlob.serialize();
-            std::cout << "Empty blob serialization: SUCCESS (size: " << serialized.size() << ")\n";
-            
+            std::cout << "Empty blob serialization: SUCCESS (size: "
+                      << serialized.size() << ")\n";
+
             auto deserialized = blob::deserialize(serialized);
             std::cout << "Empty blob deserialization: SUCCESS\n";
         } catch (const std::exception& e) {
-            std::cout << "Empty blob serialization/deserialization failed: " << e.what() << "\n";
+            std::cout << "Empty blob serialization/deserialization failed: "
+                      << e.what() << "\n";
         }
 
         // Test zero-size data creation
@@ -83,16 +87,17 @@ void testLargeBlobOperations() {
     try {
         // Test progressively larger blobs
         std::vector<size_t> sizes = {
-            1024 * 1024,        // 1MB
-            10 * 1024 * 1024,   // 10MB
-            50 * 1024 * 1024,   // 50MB
+            1024 * 1024,       // 1MB
+            10 * 1024 * 1024,  // 10MB
+            50 * 1024 * 1024,  // 50MB
         };
 
         for (size_t size : sizes) {
-            std::cout << "Testing blob size: " << (size / (1024 * 1024)) << "MB\n";
-            
+            std::cout << "Testing blob size: " << (size / (1024 * 1024))
+                      << "MB\n";
+
             auto start = high_resolution_clock::now();
-            
+
             try {
                 // Create large data buffer
                 std::vector<std::byte> largeData(size);
@@ -104,27 +109,31 @@ void testLargeBlobOperations() {
 
                 // Create blob from large data
                 blob largeBlob(largeData.data(), largeData.size());
-                
+
                 auto end = high_resolution_clock::now();
                 auto duration = duration_cast<milliseconds>(end - start);
-                
+
                 std::cout << "  Creation time: " << duration.count() << "ms\n";
                 std::cout << "  Blob size: " << largeBlob.size() << " bytes\n";
-                std::cout << "  Memory usage: " << (largeBlob.size() / (1024 * 1024)) << "MB\n";
+                std::cout << "  Memory usage: "
+                          << (largeBlob.size() / (1024 * 1024)) << "MB\n";
 
                 // Test operations on large blob
                 start = high_resolution_clock::now();
                 auto cloned = largeBlob.clone();
                 end = high_resolution_clock::now();
                 duration = duration_cast<milliseconds>(end - start);
-                
+
                 std::cout << "  Clone time: " << duration.count() << "ms\n";
 
             } catch (const std::bad_alloc& e) {
-                std::cout << "  Memory allocation failed for " << (size / (1024 * 1024)) << "MB: " << e.what() << "\n";
+                std::cout << "  Memory allocation failed for "
+                          << (size / (1024 * 1024)) << "MB: " << e.what()
+                          << "\n";
                 break;
             } catch (const std::exception& e) {
-                std::cout << "  Error with " << (size / (1024 * 1024)) << "MB blob: " << e.what() << "\n";
+                std::cout << "  Error with " << (size / (1024 * 1024))
+                          << "MB blob: " << e.what() << "\n";
             }
         }
 
@@ -142,20 +151,23 @@ void testMemoryConstraints() {
     try {
         // Test maximum size limits
         std::cout << "Testing maximum size limits...\n";
-        
+
         // Test with maximum possible size_t value (will likely fail)
         try {
             size_t maxSize = std::numeric_limits<size_t>::max();
-            std::cout << "Attempting to create blob with max size_t: " << maxSize << "\n";
-            
+            std::cout << "Attempting to create blob with max size_t: "
+                      << maxSize << "\n";
+
             std::vector<uint8_t> impossibleData;
             impossibleData.reserve(maxSize);  // This should throw
-            
+
             std::cout << "ERROR: Should not reach here!\n";
         } catch (const std::bad_alloc& e) {
-            std::cout << "Expected failure for max size_t: " << e.what() << "\n";
+            std::cout << "Expected failure for max size_t: " << e.what()
+                      << "\n";
         } catch (const std::exception& e) {
-            std::cout << "Expected failure for max size_t: " << e.what() << "\n";
+            std::cout << "Expected failure for max size_t: " << e.what()
+                      << "\n";
         }
 
         // Test memory alignment edge cases
@@ -163,7 +175,7 @@ void testMemoryConstraints() {
 
         std::vector<std::byte> testData(1024);
         blob alignmentBlob(testData.data(), testData.size());
-        
+
         try {
             alignmentBlob.alignMemory(64);
             std::cout << "Memory alignment (64 bytes): SUCCESS\n";
@@ -179,7 +191,8 @@ void testMemoryConstraints() {
                 testBlob.alignMemory(alignment);
                 std::cout << "Alignment " << alignment << ": SUCCESS\n";
             } catch (const std::exception& e) {
-                std::cout << "Alignment " << alignment << " failed: " << e.what() << "\n";
+                std::cout << "Alignment " << alignment
+                          << " failed: " << e.what() << "\n";
             }
         }
 
@@ -197,7 +210,7 @@ void testErrorConditions() {
     try {
         // Test null pointer handling
         std::cout << "Testing null pointer handling...\n";
-        
+
         try {
             // Cannot create blob from nullptr - use empty blob instead
             blob nullBlob;
@@ -212,7 +225,7 @@ void testErrorConditions() {
 
         // Test invalid size combinations
         std::cout << "Testing invalid size combinations...\n";
-        
+
         std::vector<std::byte> testData(100);
         try {
             blob invalidBlob(testData.data(), testData.size());
@@ -224,12 +237,15 @@ void testErrorConditions() {
         // Test corrupted serialization data
         std::cout << "Testing corrupted serialization data...\n";
 
-        std::vector<std::byte> corruptedData = {std::byte{0xFF}, std::byte{0xFF}, std::byte{0xFF}, std::byte{0xFF}, std::byte{0x00}, std::byte{0x00}};
+        std::vector<std::byte> corruptedData = {
+            std::byte{0xFF}, std::byte{0xFF}, std::byte{0xFF},
+            std::byte{0xFF}, std::byte{0x00}, std::byte{0x00}};
         try {
             auto corrupted = blob::deserialize(corruptedData);
             std::cout << "ERROR: Corrupted data should have failed!\n";
         } catch (const std::exception& e) {
-            std::cout << "Corrupted data correctly rejected: " << e.what() << "\n";
+            std::cout << "Corrupted data correctly rejected: " << e.what()
+                      << "\n";
         }
 
     } catch (const std::exception& e) {
@@ -253,7 +269,8 @@ void testBoundaryValues() {
                 blob minBlob(minData.data(), minData.size());
                 std::cout << "Minimum size " << size << ": SUCCESS\n";
             } catch (const std::exception& e) {
-                std::cout << "Minimum size " << size << " failed: " << e.what() << "\n";
+                std::cout << "Minimum size " << size << " failed: " << e.what()
+                          << "\n";
             }
         }
 
@@ -276,7 +293,8 @@ void testBoundaryValues() {
 
 int main() {
     std::cout << "=== Atom Image Blob Edge Cases Example ===\n";
-    std::cout << "This example demonstrates edge case handling for image blob operations\n";
+    std::cout << "This example demonstrates edge case handling for image blob "
+                 "operations\n";
 
     // Run all edge case tests
     testEmptyBlobOperations();
@@ -286,7 +304,8 @@ int main() {
     testBoundaryValues();
 
     std::cout << "\n=== Blob edge cases example completed ===\n";
-    std::cout << "\nNote: Some failures are expected and demonstrate proper error handling.\n";
-    
+    std::cout << "\nNote: Some failures are expected and demonstrate proper "
+                 "error handling.\n";
+
     return 0;
 }

@@ -39,7 +39,8 @@ static auto simdStringSearch(std::string_view haystack, char needle) -> size_t {
 
         // Process 32 bytes at a time
         for (; i + 32 <= haystack.size(); i += 32) {
-            __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data + i));
+            __m256i chunk =
+                _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data + i));
             __m256i cmp = _mm256_cmpeq_epi8(chunk, needle_vec);
             int mask = _mm256_movemask_epi8(cmp);
 
@@ -67,7 +68,8 @@ static auto simdStringSearch(std::string_view haystack, char needle) -> size_t {
 
         // Process 16 bytes at a time
         for (; i + 16 <= haystack.size(); i += 16) {
-            __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i));
+            __m128i chunk =
+                _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i));
             __m128i cmp = _mm_cmpeq_epi8(chunk, needle_vec);
             int mask = _mm_movemask_epi8(cmp);
 
@@ -113,7 +115,8 @@ auto AsyncGlob::escapeSpecialChars(std::string input) const -> std::string {
     result.reserve(input.size() * 2);
 
     // Escape backslashes
-    while (atom::io::stringReplace(input, std::string{"\\"}, std::string{R"(\\)"})) {
+    while (atom::io::stringReplace(input, std::string{"\\"},
+                                   std::string{R"(\\)"})) {
     }
 
     // Escape regex special characters [&~|]
@@ -135,10 +138,9 @@ auto AsyncGlob::escapeSpecialChars(std::string input) const -> std::string {
  * @param innerIndex End index of the character class
  * @return The processed character class string
  */
-auto AsyncGlob::processCharacterClass(std::string_view pattern,
-                                      std::size_t& index,
-                                      std::size_t innerIndex) const
-    -> std::string {
+auto AsyncGlob::processCharacterClass(
+    std::string_view pattern, std::size_t& index,
+    std::size_t innerIndex) const -> std::string {
     auto stuff = std::string(pattern.substr(index, innerIndex - index));
 
 #if ATOM_ENABLE_ABSL
@@ -165,10 +167,9 @@ auto AsyncGlob::processCharacterClass(std::string_view pattern,
  * @param innerIndex End index of the character class
  * @return The processed character range string
  */
-auto AsyncGlob::processCharacterRanges(std::string_view pattern,
-                                       std::size_t& index,
-                                       std::size_t innerIndex) const
-    -> std::string {
+auto AsyncGlob::processCharacterRanges(
+    std::string_view pattern, std::size_t& index,
+    std::size_t innerIndex) const -> std::string {
     std::vector<std::string> chunks;
     std::size_t chunkIndex = 0;
 
@@ -197,9 +198,11 @@ auto AsyncGlob::processCharacterRanges(std::string_view pattern,
     bool first = true;
     for (auto& chunk : chunks) {
         // Escape backslashes and hyphens
-        while (atom::io::stringReplace(chunk, std::string{"\\"}, std::string{R"(\\)"})) {
+        while (atom::io::stringReplace(chunk, std::string{"\\"},
+                                       std::string{R"(\\)"})) {
         }
-        while (atom::io::stringReplace(chunk, std::string{"-"}, std::string{R"(\-)"})) {
+        while (atom::io::stringReplace(chunk, std::string{"-"},
+                                       std::string{R"(\-)"})) {
         }
 
         if (first) {
@@ -263,10 +266,9 @@ auto AsyncGlob::escapeRegexChar(char currentChar,
  * @param patternSize Size of the pattern
  * @return The processed bracket expression string
  */
-auto AsyncGlob::processBracketExpression(std::string_view pattern,
-                                         std::size_t& index,
-                                         std::size_t patternSize) const
-    -> std::string {
+auto AsyncGlob::processBracketExpression(
+    std::string_view pattern, std::size_t& index,
+    std::size_t patternSize) const -> std::string {
     auto innerIndex = index;
 
     // Handle negation character '!'
@@ -503,10 +505,12 @@ auto AsyncGlob::hasMagic(std::string_view pathname) noexcept -> bool {
         char c = pathname[i];
         if (c == '*' || c == '?' || c == '[') {
             // Check if this character is escaped
-            if (i > 0 && pathname[i-1] == '\\') {
-                continue; // This magic character is escaped
+            if (i > 0 && pathname[i - 1] == '\\') {
+                continue;  // This magic character is escaped
             }
-            spdlog::info("AsyncGlob::hasMagic returning: true (found unescaped '{}')", c);
+            spdlog::info(
+                "AsyncGlob::hasMagic returning: true (found unescaped '{}')",
+                c);
             return true;
         }
     }

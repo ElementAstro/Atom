@@ -2,10 +2,10 @@
 #include "atom/components/core/component.hpp"
 
 #include <gtest/gtest.h>
-#include <thread>
 #include <chrono>
-#include <vector>
 #include <memory>
+#include <thread>
+#include <vector>
 
 using namespace atom::components;
 
@@ -24,9 +24,7 @@ protected:
         pool_ = std::make_unique<ComponentPool<Component>>(config_);
     }
 
-    void TearDown() override {
-        pool_.reset();
-    }
+    void TearDown() override { pool_.reset(); }
 
     PoolConfig config_;
     std::unique_ptr<ComponentPool<Component>> pool_;
@@ -35,9 +33,7 @@ protected:
 // Test fixture for ComponentFactory tests
 class ComponentFactoryTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        factory_ = &ComponentFactory::instance();
-    }
+    void SetUp() override { factory_ = &ComponentFactory::instance(); }
 
     ComponentFactory* factory_;
 };
@@ -50,7 +46,8 @@ protected:
         config.batchSize = 8;
         config.enablePrefetch = true;
 
-        container_ = std::make_unique<SIMDComponentContainer<Component>>(config);
+        container_ =
+            std::make_unique<SIMDComponentContainer<Component>>(config);
     }
 
     std::unique_ptr<SIMDComponentContainer<Component>> container_;
@@ -101,7 +98,7 @@ TEST_F(ComponentPoolTest, AllocationDeallocation) {
         auto component = pool_->allocate("TempComponent");
         EXPECT_EQ(stats.totalAllocations.load(), initialAllocations + 1);
         EXPECT_EQ(stats.currentAllocations.load(), 1);
-    } // component goes out of scope
+    }  // component goes out of scope
 
     // Allow time for deallocation processing
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
@@ -169,19 +166,22 @@ TEST_F(ComponentPoolTest, ThreadSafety) {
     const int numThreads = 4;
     const int allocationsPerThread = 10;
     std::vector<std::thread> threads;
-    std::vector<std::vector<std::shared_ptr<Component>>> threadComponents(numThreads);
+    std::vector<std::vector<std::shared_ptr<Component>>> threadComponents(
+        numThreads);
 
     // Launch threads that allocate components
     for (int t = 0; t < numThreads; ++t) {
-        threads.emplace_back([this, t, allocationsPerThread, &threadComponents]() {
-            for (int i = 0; i < allocationsPerThread; ++i) {
-                auto component = pool_->allocate("Thread" + std::to_string(t) +
-                                                "Component" + std::to_string(i));
-                if (component) {
-                    threadComponents[t].push_back(component);
+        threads.emplace_back(
+            [this, t, allocationsPerThread, &threadComponents]() {
+                for (int i = 0; i < allocationsPerThread; ++i) {
+                    auto component =
+                        pool_->allocate("Thread" + std::to_string(t) +
+                                        "Component" + std::to_string(i));
+                    if (component) {
+                        threadComponents[t].push_back(component);
+                    }
                 }
-            }
-        });
+            });
     }
 
     // Wait for all threads to complete
@@ -229,7 +229,8 @@ TEST_F(ComponentFactoryTest, GetPoolStatistics) {
     auto comp1 = factory_->create<Component>("Comp1");
     auto comp2 = factory_->create<Component>("Comp2");
 
-    const auto& stats = factory_->getPoolStatistics<Component>();  // Use reference, not copy
+    const auto& stats =
+        factory_->getPoolStatistics<Component>();  // Use reference, not copy
     EXPECT_GT(stats.totalAllocations.load(), 0);
 }
 
@@ -265,7 +266,8 @@ TEST_F(SIMDComponentContainerTest, RemoveComponent) {
 TEST_F(SIMDComponentContainerTest, ComponentIteration) {
     // Add multiple components
     for (int i = 0; i < 16; ++i) {
-        auto component = std::make_shared<Component>("IterComponent" + std::to_string(i));
+        auto component =
+            std::make_shared<Component>("IterComponent" + std::to_string(i));
         container_->add(component);
     }
 
@@ -278,7 +280,8 @@ TEST_F(SIMDComponentContainerTest, ComponentIteration) {
 TEST_F(SIMDComponentContainerTest, OptimizeLayout) {
     // Add components
     for (int i = 0; i < 10; ++i) {
-        auto component = std::make_shared<Component>("OptimizeComponent" + std::to_string(i));
+        auto component = std::make_shared<Component>("OptimizeComponent" +
+                                                     std::to_string(i));
         container_->add(component);
     }
 
@@ -366,7 +369,7 @@ TEST_F(ComponentPoolTest, ConcurrentAllocation) {
         threads.emplace_back([this, i, &components, &componentsMutex]() {
             for (int j = 0; j < allocsPerThread; ++j) {
                 auto comp = pool_->allocate("Thread" + std::to_string(i) +
-                                           "_Comp" + std::to_string(j));
+                                            "_Comp" + std::to_string(j));
                 std::lock_guard<std::mutex> lock(componentsMutex);
                 components.push_back(comp);
             }
@@ -391,15 +394,15 @@ TEST_F(ComponentPoolTest, ConcurrentDeallocation) {
 
     // Allocate components
     for (int i = 0; i < 20; ++i) {
-        components.push_back(pool_->allocate("DeallocComp" + std::to_string(i)));
+        components.push_back(
+            pool_->allocate("DeallocComp" + std::to_string(i)));
     }
 
     std::vector<std::thread> threads;
 
     for (size_t i = 0; i < components.size(); ++i) {
-        threads.emplace_back([this, &components, i]() {
-            pool_->deallocate(components[i]);
-        });
+        threads.emplace_back(
+            [this, &components, i]() { pool_->deallocate(components[i]); });
     }
 
     for (auto& thread : threads) {
@@ -488,7 +491,8 @@ TEST_F(SIMDComponentContainerTest, ComponentCountTracking) {
     EXPECT_TRUE(container_->empty());
 
     for (int i = 0; i < 20; ++i) {
-        container_->add(std::make_shared<Component>("Count" + std::to_string(i)));
+        container_->add(
+            std::make_shared<Component>("Count" + std::to_string(i)));
         EXPECT_EQ(container_->size(), i + 1);
     }
 
@@ -503,14 +507,14 @@ TEST_F(SIMDComponentContainerTest, ConcurrentAddRemove) {
 
     // Pre-create components
     for (int i = 0; i < 20; ++i) {
-        components.push_back(std::make_shared<Component>("Concurrent" + std::to_string(i)));
+        components.push_back(
+            std::make_shared<Component>("Concurrent" + std::to_string(i)));
     }
 
     // Add components concurrently
     for (int i = 0; i < 10; ++i) {
-        threads.emplace_back([this, &components, i]() {
-            container_->add(components[i]);
-        });
+        threads.emplace_back(
+            [this, &components, i]() { container_->add(components[i]); });
     }
 
     for (auto& thread : threads) {
@@ -523,9 +527,8 @@ TEST_F(SIMDComponentContainerTest, ConcurrentAddRemove) {
 
     // Remove components concurrently
     for (int i = 0; i < 10; ++i) {
-        threads.emplace_back([this, &components, i]() {
-            container_->remove(components[i]);
-        });
+        threads.emplace_back(
+            [this, &components, i]() { container_->remove(components[i]); });
     }
 
     for (auto& thread : threads) {

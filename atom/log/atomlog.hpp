@@ -36,13 +36,13 @@ using atom::containers::String;
  * Extended to support custom log levels.
  */
 enum class LogLevel : int {
-    TRACE = 0,     ///< Trace level logging.
-    DEBUG_LEVEL,   ///< Debug level logging.
-    INFO_LEVEL,    ///< Info level logging.
-    WARN_LEVEL,    ///< Warn level logging.
-    ERROR_LEVEL,   ///< Error level logging.
-    CRITICAL_LEVEL,///< Critical level logging.
-    OFF_LEVEL      ///< Used to disable logging.
+    TRACE = 0,       ///< Trace level logging.
+    DEBUG_LEVEL,     ///< Debug level logging.
+    INFO_LEVEL,      ///< Info level logging.
+    WARN_LEVEL,      ///< Warn level logging.
+    ERROR_LEVEL,     ///< Error level logging.
+    CRITICAL_LEVEL,  ///< Critical level logging.
+    OFF_LEVEL        ///< Used to disable logging.
 };
 
 /**

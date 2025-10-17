@@ -84,8 +84,6 @@ TEST_F(KMPTest, BasicPatternMatching) {
     EXPECT_EQ(result[1], 7);
 }
 
-
-
 TEST_F(KMPTest, EmptyText) {
     KMP kmp("pattern");
     auto result = kmp.search("");
@@ -174,8 +172,6 @@ TEST_F(KMPTest, CornerCases) {
     ASSERT_EQ(result3.size(), 1);
     EXPECT_EQ(result3[0], 0);
 }
-
-
 
 TEST_F(KMPTest, Performance) {
     // Create a large text and pattern
@@ -462,8 +458,6 @@ TEST_F(BoyerMooreTest, CompareWithRegularSearch) {
         EXPECT_EQ(regular_result[i], optimized_result[i]);
     }
 }
-
-
 
 TEST_F(BoyerMooreTest, Performance) {
     // Create a large text and pattern

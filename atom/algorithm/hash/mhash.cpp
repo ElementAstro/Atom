@@ -295,9 +295,11 @@ void MinHash::initializeOpenCL() noexcept {
 #endif
 
 auto MinHash::generateHashFunction() noexcept -> HashFunction {
-    // Use standard library random instead of atom::utils::Random to avoid include issues
+    // Use standard library random instead of atom::utils::Random to avoid
+    // include issues
     static thread_local std::mt19937_64 gen(std::random_device{}());
-    static thread_local std::uniform_int_distribution<u64> dist(1, std::numeric_limits<u64>::max() - 1);
+    static thread_local std::uniform_int_distribution<u64> dist(
+        1, std::numeric_limits<u64>::max() - 1);
 
     // Use large prime to improve hash quality
     constexpr usize LARGE_PRIME = 0xFFFFFFFFFFFFFFC5ULL;  // 2^64 - 59 (prime)

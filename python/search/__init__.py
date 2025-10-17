@@ -34,7 +34,7 @@ Examples:
 
 # Import core search functionality
 try:
-    from .search import SearchEngine, Document
+    from .search import Document, SearchEngine
     __all__ = ["SearchEngine", "Document"]
 except ImportError:
     __all__ = []

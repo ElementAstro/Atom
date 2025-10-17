@@ -1102,8 +1102,8 @@ bool add_file(const char* path_in, FileMode mode, Verbosity verbosity,
 auto add_syslog(const char* app_name, Verbosity verbosity) -> bool {
     return add_syslog(app_name, verbosity, LOG_USER);
 }
-auto add_syslog(const char* app_name, Verbosity verbosity, int facility)
-    -> bool {
+auto add_syslog(const char* app_name, Verbosity verbosity,
+                int facility) -> bool {
 #if LOGURU_SYSLOG
     if (app_name == nullptr) {
         app_name = argv0_filename();

@@ -80,7 +80,7 @@ TEST_F(DNSTest, GetIPAddressesValidHostname) {
     ASSERT_NO_THROW({
         auto addresses = getIPAddresses("google.com");
         EXPECT_FALSE(addresses.empty());
-        
+
         for (const auto& addr : addresses) {
             EXPECT_TRUE(isValidIPAddress(addr)) << "Invalid IP address: " << addr;
         }
@@ -91,7 +91,7 @@ TEST_F(DNSTest, GetIPAddressesLocalhost) {
     ASSERT_NO_THROW({
         auto addresses = getIPAddresses("localhost");
         EXPECT_FALSE(addresses.empty());
-        
+
         // Should contain at least 127.0.0.1 or ::1
         bool hasLoopback = false;
         for (const auto& addr : addresses) {
@@ -128,7 +128,7 @@ TEST_F(DNSTest, GetLocalIPAddresses) {
         auto addresses = getLocalIPAddresses();
         // Should have at least one local IP address
         EXPECT_FALSE(addresses.empty());
-        
+
         for (const auto& addr : addresses) {
             EXPECT_TRUE(isValidIPAddress(addr)) << "Invalid IP address: " << addr;
             // Should not contain loopback addresses
@@ -198,9 +198,9 @@ TEST_F(DNSTest, GetIPAddressesWithDifferentHostnames) {
         ASSERT_NO_THROW({
             auto addresses = getIPAddresses(hostname);
             EXPECT_FALSE(addresses.empty()) << "No addresses for: " << hostname;
-            
+
             for (const auto& addr : addresses) {
-                EXPECT_TRUE(isValidIPAddress(addr)) 
+                EXPECT_TRUE(isValidIPAddress(addr))
                     << "Invalid IP for " << hostname << ": " << addr;
             }
         }) << "Failed for hostname: " << hostname;

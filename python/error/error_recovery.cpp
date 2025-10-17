@@ -1,19 +1,19 @@
 #include "atom/error/error_recovery.hpp"
 
+#include <pybind11/chrono.h>
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/functional.h>
-#include <pybind11/chrono.h>
 
 namespace py = pybind11;
 
 PYBIND11_MODULE(error_recovery, m) {
-    m.doc() = "Error recovery framework with retry policies and fallback strategies";
+    m.doc() =
+        "Error recovery framework with retry policies and fallback strategies";
 
     // CircuitBreakerState enum
-    py::enum_<atom::error::CircuitBreakerState>(
-        m, "CircuitBreakerState",
-        R"(Circuit breaker states.
+    py::enum_<atom::error::CircuitBreakerState>(m, "CircuitBreakerState",
+                                                R"(Circuit breaker states.
 
 Represents the state of a circuit breaker for preventing cascading failures.
 
@@ -21,13 +21,17 @@ Examples:
     >>> from atom.error import CircuitBreakerState
     >>> state = CircuitBreakerState.Closed
 )")
-        .value("Closed", atom::error::CircuitBreakerState::Closed, "Normal operation")
-        .value("Open", atom::error::CircuitBreakerState::Open, "Circuit is open, failing fast")
-        .value("HalfOpen", atom::error::CircuitBreakerState::HalfOpen, "Testing if service has recovered")
+        .value("Closed", atom::error::CircuitBreakerState::Closed,
+               "Normal operation")
+        .value("Open", atom::error::CircuitBreakerState::Open,
+               "Circuit is open, failing fast")
+        .value("HalfOpen", atom::error::CircuitBreakerState::HalfOpen,
+               "Testing if service has recovered")
         .export_values();
 
     // RetryPolicy base class
-    py::class_<atom::error::RetryPolicy, std::shared_ptr<atom::error::RetryPolicy>>(
+    py::class_<atom::error::RetryPolicy,
+               std::shared_ptr<atom::error::RetryPolicy>>(
         m, "RetryPolicy",
         R"(Retry policy interface.
 
@@ -78,27 +82,28 @@ Examples:
     >>> from datetime import timedelta
     >>> policy = FixedIntervalRetryPolicy(3, timedelta(seconds=1))
 )")
-        .def(py::init<int, std::chrono::milliseconds>(),
-             py::arg("max_retries"), py::arg("interval"),
+        .def(py::init<int, std::chrono::milliseconds>(), py::arg("max_retries"),
+             py::arg("interval"),
              R"(Constructs a FixedIntervalRetryPolicy.
 
 Args:
     max_retries (int): Maximum number of retries
     interval (timedelta): Fixed interval between retries
 )")
-        .def("should_retry", &atom::error::FixedIntervalRetryPolicy::shouldRetry,
-             py::arg("context"),
-             "Check if operation should be retried.")
-        .def("get_retry_delay", &atom::error::FixedIntervalRetryPolicy::getRetryDelay,
-             py::arg("attempt_number"),
-             "Get delay before next retry.")
+        .def("should_retry",
+             &atom::error::FixedIntervalRetryPolicy::shouldRetry,
+             py::arg("context"), "Check if operation should be retried.")
+        .def("get_retry_delay",
+             &atom::error::FixedIntervalRetryPolicy::getRetryDelay,
+             py::arg("attempt_number"), "Get delay before next retry.")
         .def("reset", &atom::error::FixedIntervalRetryPolicy::reset,
              "Reset policy state.")
         .def("clone", &atom::error::FixedIntervalRetryPolicy::clone,
              "Clone the policy.");
 
     // ExponentialBackoffRetryPolicy class
-    py::class_<atom::error::ExponentialBackoffRetryPolicy, atom::error::RetryPolicy,
+    py::class_<atom::error::ExponentialBackoffRetryPolicy,
+               atom::error::RetryPolicy,
                std::shared_ptr<atom::error::ExponentialBackoffRetryPolicy>>(
         m, "ExponentialBackoffRetryPolicy",
         R"(Exponential backoff retry policy.
@@ -110,9 +115,11 @@ Examples:
     >>> from datetime import timedelta
     >>> policy = ExponentialBackoffRetryPolicy(5, timedelta(milliseconds=100), 2.0)
 )")
-        .def(py::init<int, std::chrono::milliseconds, double, std::chrono::milliseconds>(),
-             py::arg("max_retries"), py::arg("base_delay"), 
-             py::arg("multiplier") = 2.0, py::arg("max_delay") = std::chrono::minutes(5),
+        .def(py::init<int, std::chrono::milliseconds, double,
+                      std::chrono::milliseconds>(),
+             py::arg("max_retries"), py::arg("base_delay"),
+             py::arg("multiplier") = 2.0,
+             py::arg("max_delay") = std::chrono::minutes(5),
              R"(Constructs an ExponentialBackoffRetryPolicy.
 
 Args:
@@ -121,12 +128,12 @@ Args:
     multiplier (float, optional): Multiplier for exponential backoff (default: 2.0)
     max_delay (timedelta, optional): Maximum delay cap (default: 5 minutes)
 )")
-        .def("should_retry", &atom::error::ExponentialBackoffRetryPolicy::shouldRetry,
-             py::arg("context"),
-             "Check if operation should be retried.")
-        .def("get_retry_delay", &atom::error::ExponentialBackoffRetryPolicy::getRetryDelay,
-             py::arg("attempt_number"),
-             "Get delay before next retry.")
+        .def("should_retry",
+             &atom::error::ExponentialBackoffRetryPolicy::shouldRetry,
+             py::arg("context"), "Check if operation should be retried.")
+        .def("get_retry_delay",
+             &atom::error::ExponentialBackoffRetryPolicy::getRetryDelay,
+             py::arg("attempt_number"), "Get delay before next retry.")
         .def("reset", &atom::error::ExponentialBackoffRetryPolicy::reset,
              "Reset policy state.")
         .def("clone", &atom::error::ExponentialBackoffRetryPolicy::clone,
@@ -155,9 +162,9 @@ Args:
     jitter_factor (float, optional): Jitter factor (0.0-1.0, default: 0.1)
 )")
         .def("should_retry", &atom::error::JitteredRetryPolicy::shouldRetry,
-             py::arg("context"),
-             "Check if operation should be retried.")
-        .def("get_retry_delay", &atom::error::JitteredRetryPolicy::getRetryDelay,
+             py::arg("context"), "Check if operation should be retried.")
+        .def("get_retry_delay",
+             &atom::error::JitteredRetryPolicy::getRetryDelay,
              py::arg("attempt_number"),
              "Get delay before next retry with jitter.")
         .def("reset", &atom::error::JitteredRetryPolicy::reset,
@@ -166,7 +173,8 @@ Args:
              "Clone the policy.");
 
     // CircuitBreaker class
-    py::class_<atom::error::CircuitBreaker, std::shared_ptr<atom::error::CircuitBreaker>>(
+    py::class_<atom::error::CircuitBreaker,
+               std::shared_ptr<atom::error::CircuitBreaker>>(
         m, "CircuitBreaker",
         R"(Circuit breaker for preventing cascading failures.
 
@@ -182,7 +190,8 @@ Examples:
     >>> state = breaker.get_state()
 )")
         .def(py::init<int, std::chrono::milliseconds, int>(),
-             py::arg("failure_threshold"), py::arg("timeout"), py::arg("success_threshold") = 1,
+             py::arg("failure_threshold"), py::arg("timeout"),
+             py::arg("success_threshold") = 1,
              R"(Constructs a CircuitBreaker.
 
 Args:
@@ -230,8 +239,7 @@ Examples:
     >>> bulkhead = Bulkhead(10)  # Allow max 10 concurrent operations
     >>> stats = bulkhead.get_statistics()
 )")
-        .def(py::init<int>(),
-             py::arg("max_concurrent_operations"),
+        .def(py::init<int>(), py::arg("max_concurrent_operations"),
              R"(Constructs a Bulkhead.
 
 Args:
@@ -259,9 +267,10 @@ Examples:
     >>> policy = RecoveryStrategyFactory.create_fixed_retry(3, timedelta(seconds=1))
     >>> breaker = RecoveryStrategyFactory.create_circuit_breaker(5, timedelta(seconds=30))
 )")
-        .def_static("create_fixed_retry", &atom::error::RecoveryStrategyFactory::createFixedRetry,
-                   py::arg("max_retries"), py::arg("interval"),
-                   R"(Create fixed interval retry policy.
+        .def_static("create_fixed_retry",
+                    &atom::error::RecoveryStrategyFactory::createFixedRetry,
+                    py::arg("max_retries"), py::arg("interval"),
+                    R"(Create fixed interval retry policy.
 
 Args:
     max_retries (int): Maximum number of retries
@@ -274,9 +283,11 @@ Examples:
     >>> from datetime import timedelta
     >>> policy = RecoveryStrategyFactory.create_fixed_retry(3, timedelta(seconds=1))
 )")
-        .def_static("create_exponential_backoff", &atom::error::RecoveryStrategyFactory::createExponentialBackoff,
-                   py::arg("max_retries"), py::arg("base_delay"),
-                   R"(Create exponential backoff retry policy.
+        .def_static(
+            "create_exponential_backoff",
+            &atom::error::RecoveryStrategyFactory::createExponentialBackoff,
+            py::arg("max_retries"), py::arg("base_delay"),
+            R"(Create exponential backoff retry policy.
 
 Args:
     max_retries (int): Maximum number of retries
@@ -289,9 +300,10 @@ Examples:
     >>> from datetime import timedelta
     >>> policy = RecoveryStrategyFactory.create_exponential_backoff(5, timedelta(milliseconds=100))
 )")
-        .def_static("create_jittered_retry", &atom::error::RecoveryStrategyFactory::createJitteredRetry,
-                   py::arg("base_policy"), py::arg("jitter_factor") = 0.1,
-                   R"(Create jittered retry policy.
+        .def_static("create_jittered_retry",
+                    &atom::error::RecoveryStrategyFactory::createJitteredRetry,
+                    py::arg("base_policy"), py::arg("jitter_factor") = 0.1,
+                    R"(Create jittered retry policy.
 
 Args:
     base_policy (RetryPolicy): Base retry policy
@@ -300,9 +312,10 @@ Args:
 Returns:
     RetryPolicy: Jittered retry policy
 )")
-        .def_static("create_circuit_breaker", &atom::error::RecoveryStrategyFactory::createCircuitBreaker,
-                   py::arg("failure_threshold"), py::arg("timeout"),
-                   R"(Create circuit breaker.
+        .def_static("create_circuit_breaker",
+                    &atom::error::RecoveryStrategyFactory::createCircuitBreaker,
+                    py::arg("failure_threshold"), py::arg("timeout"),
+                    R"(Create circuit breaker.
 
 Args:
     failure_threshold (int): Number of failures before opening circuit
@@ -316,4 +329,3 @@ Examples:
     >>> breaker = RecoveryStrategyFactory.create_circuit_breaker(5, timedelta(seconds=30))
 )");
 }
-

@@ -1,27 +1,28 @@
-import os
 import json
-import tempfile
-import pytest
-from unittest.mock import patch, MagicMock, mock_open
-from io import StringIO
+import os
 import sys
+import tempfile
+from io import StringIO
+from unittest.mock import MagicMock, mock_open, patch
+
+import pytest
 
 from atom.tests.charts import (
-    load_data,
-    validate_metric,
-    get_available_metrics,
-    set_style,
-    generate_bar_chart,
-    generate_line_chart,
-    generate_scatter_chart,
-    generate_pie_chart,
-    generate_histogram,
-    generate_heatmap,
-    generate_all_charts,
-    generate_report,
     ChartGenerator,
+    generate_all_charts,
+    generate_bar_chart,
+    generate_heatmap,
+    generate_histogram,
+    generate_line_chart,
+    generate_pie_chart,
+    generate_report,
+    generate_scatter_chart,
+    get_available_metrics,
+    load_data,
+    main,
     plot_from_json,
-    main
+    set_style,
+    validate_metric,
 )
 
 

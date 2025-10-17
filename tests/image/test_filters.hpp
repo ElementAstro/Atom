@@ -19,7 +19,7 @@ protected:
     void SetUp() override {
         filter = std::make_unique<ImageFilter>();
         fileManager = std::make_unique<TestFileManager>();
-        
+
         // Create test images
         createTestImages();
     }
@@ -52,7 +52,7 @@ protected:
 
     std::unique_ptr<ImageFilter> filter;
     std::unique_ptr<TestFileManager> fileManager;
-    
+
     blob gradient_image, checkerboard_image, noisy_image, solid_image, circle_image;
 };
 
@@ -63,7 +63,7 @@ TEST_F(FiltersTest, GaussianBlurFilter) {
     params.kernelSize = 5;
 
     auto result = filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -74,7 +74,7 @@ TEST_F(FiltersTest, BoxBlurFilter) {
     params.kernelSize = 3;
 
     auto result = filter->applyFilter(gradient_image, FilterType::BOX_BLUR, params);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -86,7 +86,7 @@ TEST_F(FiltersTest, MotionBlurFilter) {
     params.distance = 5;
 
     auto result = filter->applyFilter(gradient_image, FilterType::MOTION_BLUR, params);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -102,9 +102,9 @@ TEST_F(FiltersTest, SharpeningFilters) {
     for (const auto& filterType : sharpenFilters) {
         FilterParams params;
         params.strength = 1.5;
-        
+
         auto result = filter->applyFilter(gradient_image, filterType, params);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), gradient_image.size());
     }
@@ -121,7 +121,7 @@ TEST_F(FiltersTest, EdgeDetectionFilters) {
 
     for (const auto& filterType : edgeFilters) {
         auto result = filter->applyFilter(circle_image, filterType);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), circle_image.size());
     }
@@ -135,7 +135,7 @@ TEST_F(FiltersTest, CannyEdgeDetection) {
     params.kernelSize = 3;
 
     auto result = filter->applyFilter(circle_image, FilterType::CANNY, params);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), circle_image.size());
 }
@@ -166,7 +166,7 @@ TEST_F(FiltersTest, NonLocalMeansDenoising) {
     params.searchWindowSize = 21;
 
     auto result = filter->applyFilter(noisy_image, FilterType::NON_LOCAL_MEANS, params);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), noisy_image.size());
 }
@@ -184,9 +184,9 @@ TEST_F(FiltersTest, MorphologicalOperations) {
     };
 
     for (const auto& operation : morphOps) {
-        auto result = filter->applyMorphological(checkerboard_image, operation, 
+        auto result = filter->applyMorphological(checkerboard_image, operation,
                                                StructuringElement::RECTANGLE, 3);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), checkerboard_image.size());
     }
@@ -202,9 +202,9 @@ TEST_F(FiltersTest, StructuringElements) {
     };
 
     for (const auto& element : elements) {
-        auto result = filter->applyMorphological(checkerboard_image, FilterType::EROSION, 
+        auto result = filter->applyMorphological(checkerboard_image, FilterType::EROSION,
                                                element, 3);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), checkerboard_image.size());
     }
@@ -220,7 +220,7 @@ TEST_F(FiltersTest, CustomConvolutionKernel) {
     };
 
     auto result = filter->applyCustomKernel(gradient_image, edgeKernel, true);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -231,7 +231,7 @@ TEST_F(FiltersTest, SeparableFilter) {
     std::vector<double> gaussianKernel = {0.25, 0.5, 0.25};
 
     auto result = filter->applySeparableFilter(gradient_image, gaussianKernel, gaussianKernel);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -249,9 +249,9 @@ TEST_F(FiltersTest, FrequencyDomainFilters) {
         FilterParams params;
         params.cutoffFreq = 0.3;
         params.bandwidth = 0.1;
-        
+
         auto result = filter->applyFrequencyFilter(gradient_image, filterType, params);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), gradient_image.size());
     }
@@ -264,7 +264,7 @@ TEST_F(FiltersTest, AdaptiveFiltering) {
     params.kernelSize = 5;
 
     auto result = filter->applyAdaptiveFilter(noisy_image, FilterType::GAUSSIAN_BLUR, 7, params);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), noisy_image.size());
 }
@@ -281,7 +281,7 @@ TEST_F(FiltersTest, ArtisticFilters) {
 
     for (const auto& filterType : artisticFilters) {
         auto result = filter->applyFilter(gradient_image, filterType);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), gradient_image.size());
     }
@@ -290,24 +290,24 @@ TEST_F(FiltersTest, ArtisticFilters) {
 // Test filter parameter validation
 TEST_F(FiltersTest, FilterParameterValidation) {
     FilterParams params;
-    
+
     // Test invalid kernel size (even number)
     params.kernelSize = 4;
-    EXPECT_THROW(filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params), 
+    EXPECT_THROW(filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params),
                  std::invalid_argument);
-    
+
     // Test negative sigma
     params.kernelSize = 3;
     params.sigma = -1.0;
-    EXPECT_THROW(filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params), 
+    EXPECT_THROW(filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params),
                  std::invalid_argument);
 }
 
 // Test empty image handling
 TEST_F(FiltersTest, EmptyImageHandling) {
     blob emptyImage;
-    
-    EXPECT_THROW(filter->applyFilter(emptyImage, FilterType::GAUSSIAN_BLUR), 
+
+    EXPECT_THROW(filter->applyFilter(emptyImage, FilterType::GAUSSIAN_BLUR),
                  std::invalid_argument);
 }
 

@@ -48,7 +48,8 @@ auto toUnderscore(std::string_view str) -> std::string {
 
         for (char ch : str) {
             if (std::isupper(static_cast<unsigned char>(ch))) {
-                // Only add underscore if not first char AND previous char wasn't underscore
+                // Only add underscore if not first char AND previous char
+                // wasn't underscore
                 if (!firstChar && !result.empty() && result.back() != '_') {
                     result.push_back('_');
                 }
@@ -175,8 +176,8 @@ auto endsWith(std::string_view str, std::string_view suffix) -> bool {
            str.substr(str.size() - suffix.size()) == suffix;
 }
 
-auto splitString(std::string_view str, char delimiter)
-    -> std::vector<std::string> {
+auto splitString(std::string_view str,
+                 char delimiter) -> std::vector<std::string> {
     try {
         if (str.empty()) {
             return {};
@@ -376,7 +377,7 @@ auto stringToWString(std::string_view str) -> std::wstring {
                     result.push_back(static_cast<wchar_t>(codepoint));
                 } else {
                     result.push_back(L'?');  // Invalid sequence
-                    --i;  // Back up to reprocess the byte
+                    --i;                     // Back up to reprocess the byte
                 }
             }
             // 3-byte UTF-8 sequence
@@ -384,12 +385,12 @@ auto stringToWString(std::string_view str) -> std::wstring {
                 const unsigned char c2 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c3 = static_cast<unsigned char>(str[i++]);
                 if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80) {
-                    const uint32_t codepoint = ((c & 0x0F) << 12) |
-                                               ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+                    const uint32_t codepoint =
+                        ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
                     result.push_back(static_cast<wchar_t>(codepoint));
                 } else {
                     result.push_back(L'?');  // Invalid sequence
-                    i -= 2;  // Back up to reprocess the bytes
+                    i -= 2;                  // Back up to reprocess the bytes
                 }
             }
             // 4-byte UTF-8 sequence
@@ -397,7 +398,8 @@ auto stringToWString(std::string_view str) -> std::wstring {
                 const unsigned char c2 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c3 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c4 = static_cast<unsigned char>(str[i++]);
-                if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80 && (c4 & 0xC0) == 0x80) {
+                if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80 &&
+                    (c4 & 0xC0) == 0x80) {
                     const uint32_t codepoint = ((c & 0x07) << 18) |
                                                ((c2 & 0x3F) << 12) |
                                                ((c3 & 0x3F) << 6) | (c4 & 0x3F);
@@ -414,7 +416,7 @@ auto stringToWString(std::string_view str) -> std::wstring {
                     }
                 } else {
                     result.push_back(L'?');  // Invalid sequence
-                    i -= 3;  // Back up to reprocess the bytes
+                    i -= 3;                  // Back up to reprocess the bytes
                 }
             } else {
                 // Invalid UTF-8 sequence, skip
@@ -461,16 +463,22 @@ auto wstringToString(std::wstring_view wstr) -> std::string {
 
                 if (low >= 0xDC00 && low <= 0xDFFF) {
                     // Valid surrogate pair
-                    const uint32_t codepoint = 0x10000 +
-                        ((high - 0xD800) << 10) + (low - 0xDC00);
+                    const uint32_t codepoint =
+                        0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
 
-                    result.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
-                    result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-                    result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-                    result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+                    result.push_back(
+                        static_cast<char>(0xF0 | (codepoint >> 18)));
+                    result.push_back(
+                        static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+                    result.push_back(
+                        static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+                    result.push_back(
+                        static_cast<char>(0x80 | (codepoint & 0x3F)));
                 } else {
-                    // Invalid surrogate pair, replace with replacement character
-                    result.append("\xEF\xBF\xBD");  // UTF-8 replacement character
+                    // Invalid surrogate pair, replace with replacement
+                    // character
+                    result.append(
+                        "\xEF\xBF\xBD");  // UTF-8 replacement character
                     --i;  // Back up to process the low surrogate separately
                 }
             }
@@ -506,7 +514,8 @@ auto stod(std::string_view str, std::size_t* idx) -> double {
 
         // If idx is null, validate that entire string was consumed
         if (idx == nullptr && pos != str.size()) {
-            throw std::invalid_argument("Invalid characters found after valid number");
+            throw std::invalid_argument(
+                "Invalid characters found after valid number");
         }
 
         // Set the position if idx is provided
@@ -535,7 +544,8 @@ auto stof(std::string_view str, std::size_t* idx) -> float {
 
         // If idx is null, validate that entire string was consumed
         if (idx == nullptr && pos != str.size()) {
-            throw std::invalid_argument("Invalid characters found after valid number");
+            throw std::invalid_argument(
+                "Invalid characters found after valid number");
         }
 
         // Set the position if idx is provided
@@ -639,8 +649,8 @@ auto nstrtok(std::string_view& str, const std::string_view& delims)
  * @throws std::bad_alloc if memory allocation fails
  */
 auto parallelReplaceString(std::string_view text, std::string_view oldStr,
-                           std::string_view newStr, size_t threshold)
-    -> std::string {
+                           std::string_view newStr,
+                           size_t threshold) -> std::string {
     try {
         // For small strings or when oldStr is empty, use the regular approach
         if (text.size() < threshold || oldStr.empty()) {
@@ -694,8 +704,8 @@ auto parallelReplaceString(std::string_view text, std::string_view oldStr,
  * @return The converted vector of string
  * @throws std::bad_alloc if memory allocation fails
  */
-auto parallelSVVtoSV(std::span<const std::string_view> svv, size_t threshold)
-    -> std::vector<std::string> {
+auto parallelSVVtoSV(std::span<const std::string_view> svv,
+                     size_t threshold) -> std::vector<std::string> {
     try {
         if (svv.empty()) {
             return {};

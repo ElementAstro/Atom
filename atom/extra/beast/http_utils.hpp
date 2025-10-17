@@ -196,9 +196,12 @@ inline std::string urlEncode(std::string_view input) {
     static const auto unreserved = []() {
         std::array<bool, 256> table{};
         // Unreserved characters: ALPHA / DIGIT / "-" / "." / "_" / "~"
-        for (char c = 'A'; c <= 'Z'; ++c) table[static_cast<unsigned char>(c)] = true;
-        for (char c = 'a'; c <= 'z'; ++c) table[static_cast<unsigned char>(c)] = true;
-        for (char c = '0'; c <= '9'; ++c) table[static_cast<unsigned char>(c)] = true;
+        for (char c = 'A'; c <= 'Z'; ++c)
+            table[static_cast<unsigned char>(c)] = true;
+        for (char c = 'a'; c <= 'z'; ++c)
+            table[static_cast<unsigned char>(c)] = true;
+        for (char c = '0'; c <= '9'; ++c)
+            table[static_cast<unsigned char>(c)] = true;
         table[static_cast<unsigned char>('-')] = true;
         table[static_cast<unsigned char>('.')] = true;
         table[static_cast<unsigned char>('_')] = true;
@@ -751,8 +754,8 @@ public:
     static std::pair<std::string, std::string> parseContentType(
         std::string_view content_type_header) {
         size_t semicolon_pos = content_type_header.find(';');
-        std::string content_type = std::string(
-            trim(content_type_header.substr(0, semicolon_pos)));
+        std::string content_type =
+            std::string(trim(content_type_header.substr(0, semicolon_pos)));
 
         std::string charset;
         if (semicolon_pos != std::string_view::npos) {
@@ -762,8 +765,7 @@ public:
             if (charset_pos != std::string_view::npos) {
                 std::string_view charset_part = params.substr(charset_pos + 8);
                 size_t end_pos = charset_part.find_first_of(" ;");
-                charset = std::string(
-                    trim(charset_part.substr(0, end_pos)));
+                charset = std::string(trim(charset_part.substr(0, end_pos)));
 
                 // Remove quotes if present
                 if (charset.size() >= 2 && charset.front() == '"' &&

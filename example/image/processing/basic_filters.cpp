@@ -71,9 +71,12 @@ blob createTestImage() {
 
             // Direct access to data vector
             int pixel_idx = (y * width + x) * 3;
-            data[pixel_idx] = static_cast<uint8_t>(std::clamp(base_r + noise, 0, 255));
-            data[pixel_idx + 1] = static_cast<uint8_t>(std::clamp(base_g + noise, 0, 255));
-            data[pixel_idx + 2] = static_cast<uint8_t>(std::clamp(base_b + noise, 0, 255));
+            data[pixel_idx] =
+                static_cast<uint8_t>(std::clamp(base_r + noise, 0, 255));
+            data[pixel_idx + 1] =
+                static_cast<uint8_t>(std::clamp(base_g + noise, 0, 255));
+            data[pixel_idx + 2] =
+                static_cast<uint8_t>(std::clamp(base_b + noise, 0, 255));
         }
     }
 
@@ -88,7 +91,8 @@ void demonstrateBlurFilters() {
 
     try {
         auto original = createTestImage();
-        std::cout << "Created test image blob size: " << original.size() << " bytes\n";
+        std::cout << "Created test image blob size: " << original.size()
+                  << " bytes\n";
 
         // Create image filter processor
         ImageFilter filter;

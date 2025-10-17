@@ -80,45 +80,58 @@ int main() {
     SECTION("1. 基本用法");
     {
         // 创建一个定时器
-        std::cout << "[MAIN DEBUG] About to create Timer object..." << std::endl;
+        std::cout << "[MAIN DEBUG] About to create Timer object..."
+                  << std::endl;
         atom::async::Timer timer;
-        std::cout << "[MAIN DEBUG] Timer object created successfully!" << std::endl;
+        std::cout << "[MAIN DEBUG] Timer object created successfully!"
+                  << std::endl;
 
         // 设置一个简单的定时任务（1000毫秒后执行一次）
         std::cout << "[MAIN DEBUG] About to LOG message..." << std::endl;
-        std::cout << "Setting up a 1000ms delay task" << std::endl;  // Replace Chinese with ASCII
+        std::cout << "Setting up a 1000ms delay task"
+                  << std::endl;  // Replace Chinese with ASCII
         std::cout << "[MAIN DEBUG] LOG message completed!" << std::endl;
         std::cout << "[MAIN DEBUG] About to enter try block..." << std::endl;
         try {
             std::cout << "[MAIN DEBUG] Inside try block!" << std::endl;
             // Debug: Check the delay value before calling setTimeout
             unsigned int delay = 1000;
-            std::cout << "[EXAMPLE DEBUG] About to call setTimeout with delay: " << delay << std::endl;
-            std::cout << "[EXAMPLE DEBUG] Timer object address: " << &timer << std::endl;
-            std::cout << "[EXAMPLE DEBUG] simpleTask function address: " << reinterpret_cast<void*>(simpleTask) << std::endl;
+            std::cout << "[EXAMPLE DEBUG] About to call setTimeout with delay: "
+                      << delay << std::endl;
+            std::cout << "[EXAMPLE DEBUG] Timer object address: " << &timer
+                      << std::endl;
+            std::cout << "[EXAMPLE DEBUG] simpleTask function address: "
+                      << reinterpret_cast<void*>(simpleTask) << std::endl;
 
             // Try calling setTimeout step by step
-            std::cout << "[EXAMPLE DEBUG] Calling setTimeout now..." << std::endl;
+            std::cout << "[EXAMPLE DEBUG] Calling setTimeout now..."
+                      << std::endl;
             auto future = timer.setTimeout(simpleTask, delay);
-            std::cout << "[EXAMPLE DEBUG] setTimeout returned successfully!" << std::endl;
+            std::cout << "[EXAMPLE DEBUG] setTimeout returned successfully!"
+                      << std::endl;
 
             LOG("setTimeout调用成功");
 
             // Wait for the task to complete
-            std::cout << "[EXAMPLE DEBUG] Waiting for task to complete..." << std::endl;
+            std::cout << "[EXAMPLE DEBUG] Waiting for task to complete..."
+                      << std::endl;
             future.wait();
             std::cout << "[EXAMPLE DEBUG] Task completed!" << std::endl;
         } catch (const std::exception& e) {
-            std::cout << "[EXAMPLE DEBUG] Exception caught: " << e.what() << std::endl;
+            std::cout << "[EXAMPLE DEBUG] Exception caught: " << e.what()
+                      << std::endl;
             LOG("setTimeout调用失败: " + std::string(e.what()));
             throw;
         }
 
         // 设置一个带参数的定时任务（800毫秒后执行一次）
         LOG("设置一个800ms延时的带参数任务");
-        std::cout << "[MAIN DEBUG] About to call parameterized setTimeout with delay=800" << std::endl;
+        std::cout << "[MAIN DEBUG] About to call parameterized setTimeout with "
+                     "delay=800"
+                  << std::endl;
         (void)timer.setTimeout(parameterizedTask, 800, "你好", 42);
-        std::cout << "[MAIN DEBUG] Parameterized setTimeout completed" << std::endl;
+        std::cout << "[MAIN DEBUG] Parameterized setTimeout completed"
+                  << std::endl;
 
         // 等待任务完成
         LOG("等待任务完成...");

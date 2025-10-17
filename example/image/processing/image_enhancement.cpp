@@ -37,7 +37,7 @@ blob createEnhancementTestImage() {
     const int height = 300;
     // Create raw data buffer
     std::vector<uint8_t> data(height * width * 3);
-    
+
     blob img(reinterpret_cast<std::byte*>(data.data()), data.size());
 
     // Create regions with different brightness levels
@@ -98,14 +98,13 @@ blob createEnhancementTestImage() {
 /**
  * @brief Calculate and display histogram statistics
  */
-void displayHistogramStats(const blob& img,
-                           const std::string& description) {
+void displayHistogramStats(const blob& img, const std::string& description) {
     std::vector<int> histogram(256, 0);
-    
+
     // Simplified histogram calculation
     const uint8_t* data = reinterpret_cast<const uint8_t*>(img.data());
     size_t pixel_count = img.size() / 3;  // Assume 3-channel image
-    
+
     for (size_t i = 0; i < pixel_count; ++i) {
         histogram[data[i * 3]]++;  // Only use first channel
     }
@@ -146,7 +145,8 @@ void demonstrateHistogramEqualization() {
 
     try {
         auto original = createEnhancementTestImage();
-        std::cout << "Original image blob size: " << original.size() << " bytes\n";
+        std::cout << "Original image blob size: " << original.size()
+                  << " bytes\n";
 
         displayHistogramStats(original, "Original");
 

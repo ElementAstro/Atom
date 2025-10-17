@@ -154,7 +154,8 @@ Examples:
         });
 
     // FileDescriptor struct binding
-    py::class_<atom::system::FileDescriptor>(m, "FileDescriptor",
+    py::class_<atom::system::FileDescriptor>(
+        m, "FileDescriptor",
         R"(Represents a file descriptor or handle used by a process.
 
 This structure contains information about file descriptors opened by a process,
@@ -172,17 +173,16 @@ Examples:
 )")
         .def(py::init<>())
         .def_readwrite("fd", &atom::system::FileDescriptor::fd,
-                      "File descriptor/handle ID")
-        .def_readwrite("path", &atom::system::FileDescriptor::path,
-                      "File path")
+                       "File descriptor/handle ID")
+        .def_readwrite("path", &atom::system::FileDescriptor::path, "File path")
         .def_readwrite("type", &atom::system::FileDescriptor::type,
-                      "File type (regular, socket, pipe, etc.)")
+                       "File type (regular, socket, pipe, etc.)")
         .def_readwrite("mode", &atom::system::FileDescriptor::mode,
-                      "Access mode (r, w, rw, etc.)")
+                       "Access mode (r, w, rw, etc.)")
         .def("__repr__", [](const atom::system::FileDescriptor& fd) {
-        return "<FileDescriptor fd=" + std::to_string(fd.fd) + " path=\"" +
-               fd.path + "\" type=\"" + fd.type + "\" mode=\"" + fd.mode +
-               "\">";
+            return "<FileDescriptor fd=" + std::to_string(fd.fd) + " path=\"" +
+                   fd.path + "\" type=\"" + fd.type + "\" mode=\"" + fd.mode +
+                   "\">";
         });
 
     // PerformanceDataPoint struct binding

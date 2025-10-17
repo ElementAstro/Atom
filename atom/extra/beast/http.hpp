@@ -104,12 +104,12 @@ public:
      * @throws std::invalid_argument If host or port is empty
      * @throws beast::system_error On connection or request failure
      */
-    auto request(
-        http::verb method, std::string_view host, std::string_view port,
-        std::string_view target, int version = 11,
-        std::string_view content_type = "", std::string_view body = "",
-        const std::unordered_map<std::string, std::string>& headers = {})
-        -> http::response<http::string_body>;
+    auto request(http::verb method, std::string_view host,
+                 std::string_view port, std::string_view target,
+                 int version = 11, std::string_view content_type = "",
+                 std::string_view body = "",
+                 const std::unordered_map<std::string, std::string>& headers =
+                     {}) -> http::response<http::string_body>;
 
     /**
      * @brief Sends an asynchronous HTTP request with callback

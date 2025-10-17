@@ -23,8 +23,9 @@ PYBIND11_MODULE(sn, m) {
     });
 
     // HardwareInfo class binding
-    py::class_<HardwareInfo>(m, "HardwareInfo",
-                            R"(Hardware information class that provides access to system hardware serial numbers.
+    py::class_<HardwareInfo>(
+        m, "HardwareInfo",
+        R"(Hardware information class that provides access to system hardware serial numbers.
 
 This class uses the PIMPL idiom to hide platform-specific implementation details.
 It supports both Windows (via WMI) and Linux (via filesystem) platforms.
@@ -33,13 +34,13 @@ Examples:
     >>> from atom.sysinfo import sn
     >>> # Create hardware info instance
     >>> hw_info = sn.HardwareInfo()
-    >>> 
+    >>>
     >>> # Get various hardware serial numbers
     >>> bios_sn = hw_info.get_bios_serial_number()
     >>> motherboard_sn = hw_info.get_motherboard_serial_number()
     >>> cpu_sn = hw_info.get_cpu_serial_number()
     >>> disk_sns = hw_info.get_disk_serial_numbers()
-    >>> 
+    >>>
     >>> print(f"BIOS Serial: {bios_sn}")
     >>> print(f"Motherboard Serial: {motherboard_sn}")
     >>> print(f"CPU Serial: {cpu_sn}")
@@ -63,7 +64,8 @@ Examples:
     ... else:
     ...     print("BIOS serial number not available")
 )")
-        .def("get_motherboard_serial_number", &HardwareInfo::getMotherboardSerialNumber,
+        .def("get_motherboard_serial_number",
+             &HardwareInfo::getMotherboardSerialNumber,
              R"(Get motherboard serial number.
 
 Returns:
@@ -111,17 +113,17 @@ Examples:
     >>> for i, serial in enumerate(disk_serials):
     ...     print(f"  Disk {i+1}: {serial}")
 )")
-        .def("__repr__", [](const HardwareInfo& info) {
-            return "<HardwareInfo>";
-        });
+        .def("__repr__",
+             [](const HardwareInfo& info) { return "<HardwareInfo>"; });
 
     // Convenience functions for quick access
-    m.def("get_bios_serial", 
-          []() {
-              HardwareInfo hw;
-              return hw.getBiosSerialNumber();
-          },
-          R"(Get BIOS serial number (convenience function).
+    m.def(
+        "get_bios_serial",
+        []() {
+            HardwareInfo hw;
+            return hw.getBiosSerialNumber();
+        },
+        R"(Get BIOS serial number (convenience function).
 
 Returns:
     String containing the BIOS serial number.
@@ -133,12 +135,13 @@ Examples:
     >>> print(f"BIOS Serial: {bios_serial}")
 )");
 
-    m.def("get_motherboard_serial",
-          []() {
-              HardwareInfo hw;
-              return hw.getMotherboardSerialNumber();
-          },
-          R"(Get motherboard serial number (convenience function).
+    m.def(
+        "get_motherboard_serial",
+        []() {
+            HardwareInfo hw;
+            return hw.getMotherboardSerialNumber();
+        },
+        R"(Get motherboard serial number (convenience function).
 
 Returns:
     String containing the motherboard serial number.
@@ -150,12 +153,13 @@ Examples:
     >>> print(f"Motherboard Serial: {mb_serial}")
 )");
 
-    m.def("get_cpu_serial",
-          []() {
-              HardwareInfo hw;
-              return hw.getCpuSerialNumber();
-          },
-          R"(Get CPU serial number (convenience function).
+    m.def(
+        "get_cpu_serial",
+        []() {
+            HardwareInfo hw;
+            return hw.getCpuSerialNumber();
+        },
+        R"(Get CPU serial number (convenience function).
 
 Returns:
     String containing the CPU serial number.
@@ -167,12 +171,13 @@ Examples:
     >>> print(f"CPU Serial: {cpu_serial}")
 )");
 
-    m.def("get_all_disk_serials",
-          []() {
-              HardwareInfo hw;
-              return hw.getDiskSerialNumbers();
-          },
-          R"(Get all disk serial numbers (convenience function).
+    m.def(
+        "get_all_disk_serials",
+        []() {
+            HardwareInfo hw;
+            return hw.getDiskSerialNumbers();
+        },
+        R"(Get all disk serial numbers (convenience function).
 
 Returns:
     List of strings containing all disk serial numbers.
@@ -185,17 +190,18 @@ Examples:
     ...     print(f"Disk Serial: {serial}")
 )");
 
-    m.def("get_hardware_summary",
-          []() {
-              HardwareInfo hw;
-              py::dict summary;
-              summary["bios_serial"] = hw.getBiosSerialNumber();
-              summary["motherboard_serial"] = hw.getMotherboardSerialNumber();
-              summary["cpu_serial"] = hw.getCpuSerialNumber();
-              summary["disk_serials"] = hw.getDiskSerialNumbers();
-              return summary;
-          },
-          R"(Get a comprehensive summary of all hardware serial numbers.
+    m.def(
+        "get_hardware_summary",
+        []() {
+            HardwareInfo hw;
+            py::dict summary;
+            summary["bios_serial"] = hw.getBiosSerialNumber();
+            summary["motherboard_serial"] = hw.getMotherboardSerialNumber();
+            summary["cpu_serial"] = hw.getCpuSerialNumber();
+            summary["disk_serials"] = hw.getDiskSerialNumbers();
+            return summary;
+        },
+        R"(Get a comprehensive summary of all hardware serial numbers.
 
 Returns:
     Dictionary containing all available hardware serial numbers.
@@ -211,16 +217,17 @@ Examples:
     >>> print(f"  Disks: {summary['disk_serials']}")
 )");
 
-    m.def("has_hardware_serials",
-          []() {
-              HardwareInfo hw;
-              bool has_bios = !hw.getBiosSerialNumber().empty();
-              bool has_mb = !hw.getMotherboardSerialNumber().empty();
-              bool has_cpu = !hw.getCpuSerialNumber().empty();
-              bool has_disks = !hw.getDiskSerialNumbers().empty();
-              return has_bios || has_mb || has_cpu || has_disks;
-          },
-          R"(Check if any hardware serial numbers are available.
+    m.def(
+        "has_hardware_serials",
+        []() {
+            HardwareInfo hw;
+            bool has_bios = !hw.getBiosSerialNumber().empty();
+            bool has_mb = !hw.getMotherboardSerialNumber().empty();
+            bool has_cpu = !hw.getCpuSerialNumber().empty();
+            bool has_disks = !hw.getDiskSerialNumbers().empty();
+            return has_bios || has_mb || has_cpu || has_disks;
+        },
+        R"(Check if any hardware serial numbers are available.
 
 Returns:
     Boolean indicating whether any hardware serial numbers could be retrieved.

@@ -14,16 +14,16 @@
  * @version 1.0.0
  */
 
-#include "../core/image_blob.hpp"
-#include <vector>
-#include <string>
-#include <memory>
-#include <functional>
 #include <atomic>
-#include <thread>
-#include <queue>
-#include <mutex>
 #include <condition_variable>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <queue>
+#include <string>
+#include <thread>
+#include <vector>
+#include "../core/image_blob.hpp"
 
 namespace atom::image {
 
@@ -31,54 +31,54 @@ namespace atom::image {
  * @brief Video capture sources
  */
 enum class CaptureSource {
-    CAMERA,         // Camera device
-    FILE,           // Video file
-    STREAM,         // Network stream (RTSP, HTTP, etc.)
-    SCREEN,         // Screen capture
-    SYNTHETIC,      // Synthetic/generated frames
-    CUSTOM          // Custom source
+    CAMERA,     // Camera device
+    FILE,       // Video file
+    STREAM,     // Network stream (RTSP, HTTP, etc.)
+    SCREEN,     // Screen capture
+    SYNTHETIC,  // Synthetic/generated frames
+    CUSTOM      // Custom source
 };
 
 /**
  * @brief Real-time processing modes
  */
 enum class ProcessingMode {
-    PASSTHROUGH,    // No processing (passthrough)
-    FILTER,         // Apply filters
-    ENHANCE,        // Image enhancement
-    DETECT,         // Object/feature detection
-    TRACK,          // Object tracking
-    ANALYZE,        // Image analysis
-    CUSTOM          // Custom processing pipeline
+    PASSTHROUGH,  // No processing (passthrough)
+    FILTER,       // Apply filters
+    ENHANCE,      // Image enhancement
+    DETECT,       // Object/feature detection
+    TRACK,        // Object tracking
+    ANALYZE,      // Image analysis
+    CUSTOM        // Custom processing pipeline
 };
 
 /**
  * @brief Frame information
  */
 struct FrameInfo {
-    int64_t timestamp;              // Frame timestamp (microseconds)
-    int frameNumber;                // Frame sequence number
-    double fps;                     // Current FPS
-    int width, height;              // Frame dimensions
-    int channels;                   // Number of channels
-    std::string format;             // Pixel format
-    std::unordered_map<std::string, double> metadata; // Additional metadata
+    int64_t timestamp;   // Frame timestamp (microseconds)
+    int frameNumber;     // Frame sequence number
+    double fps;          // Current FPS
+    int width, height;   // Frame dimensions
+    int channels;        // Number of channels
+    std::string format;  // Pixel format
+    std::unordered_map<std::string, double> metadata;  // Additional metadata
 };
 
 /**
  * @brief Processing statistics
  */
 struct ProcessingStats {
-    double averageFPS = 0.0;        // Average processing FPS
-    double currentFPS = 0.0;        // Current processing FPS
-    double averageLatency = 0.0;    // Average processing latency (ms)
-    double currentLatency = 0.0;    // Current processing latency (ms)
-    int64_t framesProcessed = 0;    // Total frames processed
-    int64_t framesDropped = 0;      // Total frames dropped
-    double cpuUsage = 0.0;          // CPU usage percentage
-    double memoryUsage = 0.0;       // Memory usage (MB)
-    double gpuUsage = 0.0;          // GPU usage percentage
-    std::string status = "idle";    // Current status
+    double averageFPS = 0.0;      // Average processing FPS
+    double currentFPS = 0.0;      // Current processing FPS
+    double averageLatency = 0.0;  // Average processing latency (ms)
+    double currentLatency = 0.0;  // Current processing latency (ms)
+    int64_t framesProcessed = 0;  // Total frames processed
+    int64_t framesDropped = 0;    // Total frames dropped
+    double cpuUsage = 0.0;        // CPU usage percentage
+    double memoryUsage = 0.0;     // Memory usage (MB)
+    double gpuUsage = 0.0;        // GPU usage percentage
+    std::string status = "idle";  // Current status
 };
 
 /**
@@ -86,28 +86,28 @@ struct ProcessingStats {
  */
 struct RealtimeParams {
     // Performance parameters
-    int maxBufferSize = 5;          // Maximum frame buffer size
-    int numThreads = 0;             // Number of processing threads (0 = auto)
-    bool useGPU = true;             // Use GPU acceleration
-    bool dropFrames = true;         // Drop frames if processing is slow
-    double targetFPS = 30.0;        // Target processing FPS
+    int maxBufferSize = 5;    // Maximum frame buffer size
+    int numThreads = 0;       // Number of processing threads (0 = auto)
+    bool useGPU = true;       // Use GPU acceleration
+    bool dropFrames = true;   // Drop frames if processing is slow
+    double targetFPS = 30.0;  // Target processing FPS
 
     // Quality parameters
-    int maxWidth = 1920;            // Maximum frame width
-    int maxHeight = 1080;           // Maximum frame height
-    bool maintainAspectRatio = true; // Maintain aspect ratio when resizing
-    std::string pixelFormat = "RGB"; // Preferred pixel format
+    int maxWidth = 1920;              // Maximum frame width
+    int maxHeight = 1080;             // Maximum frame height
+    bool maintainAspectRatio = true;  // Maintain aspect ratio when resizing
+    std::string pixelFormat = "RGB";  // Preferred pixel format
 
     // Processing parameters
     ProcessingMode mode = ProcessingMode::PASSTHROUGH;
-    std::vector<std::string> filters; // Filters to apply
-    std::unordered_map<std::string, double> filterParams; // Filter parameters
+    std::vector<std::string> filters;                      // Filters to apply
+    std::unordered_map<std::string, double> filterParams;  // Filter parameters
 
     // Callback parameters
-    bool enablePreview = true;      // Enable preview callbacks
-    bool enableAnalysis = false;    // Enable analysis callbacks
-    bool enableRecording = false;   // Enable recording
-    std::string recordingPath;      // Recording output path
+    bool enablePreview = true;     // Enable preview callbacks
+    bool enableAnalysis = false;   // Enable analysis callbacks
+    bool enableRecording = false;  // Enable recording
+    std::string recordingPath;     // Recording output path
 };
 
 /**
@@ -118,7 +118,8 @@ using FrameCallback = std::function<void(const blob&, const FrameInfo&)>;
 /**
  * @brief Analysis callback function type
  */
-using AnalysisCallback = std::function<void(const std::unordered_map<std::string, double>&)>;
+using AnalysisCallback =
+    std::function<void(const std::unordered_map<std::string, double>&)>;
 
 /**
  * @brief Real-time image processor
@@ -144,9 +145,9 @@ public:
      * @return Success status
      */
     virtual bool startCapture(CaptureSource source,
-                             const std::string& sourcePath,
-                             FrameCallback frameCallback = nullptr,
-                             AnalysisCallback analysisCallback = nullptr);
+                              const std::string& sourcePath,
+                              FrameCallback frameCallback = nullptr,
+                              AnalysisCallback analysisCallback = nullptr);
 
     /**
      * @brief Stop processing and capture
@@ -159,7 +160,8 @@ public:
      * @param frameInfo Frame information
      * @return Processed frame
      */
-    virtual blob processFrame(const blob& input, const FrameInfo& frameInfo = {});
+    virtual blob processFrame(const blob& input,
+                              const FrameInfo& frameInfo = {});
 
     /**
      * @brief Add frame to processing queue
@@ -174,16 +176,18 @@ public:
      * @param mode Processing mode
      * @param params Mode-specific parameters
      */
-    virtual void setProcessingMode(ProcessingMode mode,
-                                  const std::unordered_map<std::string, double>& params = {});
+    virtual void setProcessingMode(
+        ProcessingMode mode,
+        const std::unordered_map<std::string, double>& params = {});
 
     /**
      * @brief Add processing filter
      * @param filterName Filter name
      * @param params Filter parameters
      */
-    virtual void addFilter(const std::string& filterName,
-                          const std::unordered_map<std::string, double>& params = {});
+    virtual void addFilter(
+        const std::string& filterName,
+        const std::unordered_map<std::string, double>& params = {});
 
     /**
      * @brief Remove processing filter
@@ -256,8 +260,8 @@ public:
      * @return Success status
      */
     virtual bool startRecording(const std::string& outputPath,
-                               const std::string& codec = "h264",
-                               int quality = 80);
+                                const std::string& codec = "h264",
+                                int quality = 80);
 
     /**
      * @brief Stop recording
@@ -306,7 +310,8 @@ public:
      * @param devicePath Device path or index
      * @return Vector of supported formats
      */
-    virtual std::vector<std::string> getSupportedFormats(const std::string& devicePath) const;
+    virtual std::vector<std::string> getSupportedFormats(
+        const std::string& devicePath) const;
 
     /**
      * @brief Set capture resolution
@@ -340,7 +345,8 @@ protected:
      * @param frameInfo Frame information
      * @return Processed frame
      */
-    virtual blob applyProcessingPipeline(const blob& input, const FrameInfo& frameInfo);
+    virtual blob applyProcessingPipeline(const blob& input,
+                                         const FrameInfo& frameInfo);
 
     /**
      * @brief Update processing statistics
@@ -354,7 +360,8 @@ protected:
      * @param sourcePath Source path
      * @return Success status
      */
-    virtual bool initializeCapture(CaptureSource source, const std::string& sourcePath);
+    virtual bool initializeCapture(CaptureSource source,
+                                   const std::string& sourcePath);
 
     /**
      * @brief Cleanup capture resources
@@ -374,7 +381,8 @@ protected:
      * @param targetFormat Target pixel format
      * @return Converted frame
      */
-    virtual blob convertFormat(const blob& input, const std::string& targetFormat);
+    virtual blob convertFormat(const blob& input,
+                               const std::string& targetFormat);
 
 private:
     // Thread management
@@ -410,8 +418,9 @@ private:
  * @param numThreads Number of processing threads (0 = auto)
  * @return Unique pointer to real-time processor
  */
-std::unique_ptr<RealtimeProcessor> createOptimalRealtimeProcessor(bool useGPU = true, int numThreads = 0);
+std::unique_ptr<RealtimeProcessor> createOptimalRealtimeProcessor(
+    bool useGPU = true, int numThreads = 0);
 
-} // namespace atom::image
+}  // namespace atom::image
 
-#endif // ATOM_IMAGE_REALTIME_HPP
+#endif  // ATOM_IMAGE_REALTIME_HPP

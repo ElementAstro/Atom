@@ -144,7 +144,8 @@ TEST_F(BoxedValueTest, AttributeSystem) {
     atom::meta::BoxedValue value(42);
 
     // Set attributes
-    value.setAttr("description", atom::meta::BoxedValue(std::string("test integer")));
+    value.setAttr("description",
+                  atom::meta::BoxedValue(std::string("test integer")));
     value.setAttr("category", atom::meta::BoxedValue(std::string("number")));
 
     // Check if attributes exist
@@ -257,10 +258,12 @@ TEST_F(BoxedValueTest, ThreadSafety) {
     std::atomic<int> completedThreads(0);
 
     for (int i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&sharedValue, &completedThreads, incrementsPerThread]() {
+        threads.emplace_back([&sharedValue, &completedThreads,
+                              incrementsPerThread]() {
             for (int j = 0; j < incrementsPerThread; ++j) {
                 sharedValue.visit([](auto& value) {
-                    if constexpr (std::is_same_v<std::decay_t<decltype(value)>, int>) {
+                    if constexpr (std::is_same_v<std::decay_t<decltype(value)>,
+                                                 int>) {
                         ++value;
                     }
                 });
@@ -289,9 +292,7 @@ TEST_F(BoxedValueTest, ErrorHandling) {
     EXPECT_FALSE(tryResult.has_value());
 
     // Visiting void with fallback
-    auto result = voidValue.visit([](const auto& value) -> int {
-        return 42;
-    });
+    auto result = voidValue.visit([](const auto& value) -> int { return 42; });
     // Result depends on implementation - might be default constructed or throw
 }
 

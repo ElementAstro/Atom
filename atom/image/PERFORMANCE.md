@@ -21,12 +21,14 @@ atom::image::fast_blob fast_blob(data, size);
 ```
 
 **Use fast_blob when:**
+
 - Processing large datasets where memory copying is expensive
 - Implementing view-only operations
 - Working with memory-mapped files
 - Interfacing with external libraries that manage memory
 
 **Use normal blob when:**
+
 - You need to modify image dimensions
 - Performing operations that change image size
 - Building processing pipelines with multiple transformations

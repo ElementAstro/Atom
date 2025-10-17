@@ -5,18 +5,18 @@ Provides intelligent modular installation with dependency resolution and conflic
 """
 
 import argparse
+import hashlib
 import json
+import logging
 import os
-import sys
-import subprocess
 import platform
 import shutil
+import subprocess
+import sys
 import tempfile
 import urllib.request
-import hashlib
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Tuple
-import logging
+from typing import Dict, List, Optional, Set, Tuple
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

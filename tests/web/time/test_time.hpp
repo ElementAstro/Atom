@@ -1,22 +1,23 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 #include <chrono>
 #include <ctime>
 #include <memory>
 #include <optional>
 #include <string>
 #include <thread>
-#include <spdlog/spdlog.h>
 
 #include "atom/web/time.hpp"
-#include "atom/web/time/time_manager_impl.hpp"
 #include "atom/web/time/time_error.hpp"
+#include "atom/web/time/time_manager_impl.hpp"
 
 using namespace atom::web;
 using namespace std::chrono_literals;
 
-// Note: MockTimeManagerImpl removed because TimeManagerImpl methods are not virtual
-// Tests now use the actual TimeManager implementation with basic functionality tests
+// Note: MockTimeManagerImpl removed because TimeManagerImpl methods are not
+// virtual Tests now use the actual TimeManager implementation with basic
+// functionality tests
 
 class TimeManagerTest : public ::testing::Test {
 protected:
@@ -60,7 +61,7 @@ TEST_F(TimeManagerTest, SetSystemTime_Valid) {
     auto result = timeManager_.setSystemTime(2022, 3, 15, 14, 30, 45);
     // We don't assert the result since it depends on system permissions
     // Just verify the method can be called without crashing
-    (void)result; // Suppress unused variable warning
+    (void)result;  // Suppress unused variable warning
     SUCCEED();
 }
 
@@ -86,24 +87,24 @@ TEST_F(TimeManagerTest, SetSystemTime_Invalid) {
 TEST_F(TimeManagerTest, SetSystemTimezone_Valid) {
     // Test that setSystemTimezone doesn't crash with valid parameters
     auto result = timeManager_.setSystemTimezone("America/New_York");
-    (void)result; // Suppress unused variable warning
+    (void)result;  // Suppress unused variable warning
     SUCCEED();
 }
 
 TEST_F(TimeManagerTest, SetSystemTimezone_Invalid) {
     // Test invalid timezone parameters
     auto result1 = timeManager_.setSystemTimezone("");
-    EXPECT_TRUE(result1); // Should return error for empty timezone
+    EXPECT_TRUE(result1);  // Should return error for empty timezone
 
     std::string longTimezone(65, 'x');
     auto result2 = timeManager_.setSystemTimezone(longTimezone);
-    EXPECT_TRUE(result2); // Should return error for too long timezone
+    EXPECT_TRUE(result2);  // Should return error for too long timezone
 }
 
 TEST_F(TimeManagerTest, SyncTimeFromRTC) {
     // Test that syncTimeFromRTC doesn't crash
     auto result = timeManager_.syncTimeFromRTC();
-    (void)result; // Suppress unused variable warning
+    (void)result;  // Suppress unused variable warning
     SUCCEED();
 }
 
@@ -112,7 +113,7 @@ TEST_F(TimeManagerTest, GetNtpTime_Basic) {
     // We just verify the method can be called without crashing
     auto result = timeManager_.getNtpTime("pool.ntp.org", 1000ms);
     // Don't assert the result since it depends on network connectivity
-    (void)result; // Suppress unused variable warning
+    (void)result;  // Suppress unused variable warning
     SUCCEED();
 }
 
@@ -124,7 +125,7 @@ TEST_F(TimeManagerTest, GetNtpTime_InvalidHostname) {
 TEST_F(TimeManagerTest, GetNtpTime_DefaultTimeout) {
     // Test NTP with default timeout
     auto result = timeManager_.getNtpTime("pool.ntp.org");
-    (void)result; // Suppress unused variable warning
+    (void)result;  // Suppress unused variable warning
     SUCCEED();
 }
 
@@ -133,7 +134,7 @@ TEST_F(TimeManagerTest, MoveConstructor) {
     TimeManager movedManager = std::move(timeManager_);
     // Just verify we can call methods on the moved object
     auto time = movedManager.getSystemTime();
-    (void)time; // Suppress unused variable warning
+    (void)time;  // Suppress unused variable warning
     SUCCEED();
 }
 
@@ -143,7 +144,7 @@ TEST_F(TimeManagerTest, MoveAssignment) {
     secondManager = std::move(timeManager_);
     // Just verify we can call methods on the moved object
     auto time = secondManager.getSystemTime();
-    (void)time; // Suppress unused variable warning
+    (void)time;  // Suppress unused variable warning
     SUCCEED();
 }
 
@@ -152,9 +153,11 @@ TEST_F(TimeManagerTest, EdgeCases) {
     EXPECT_FALSE(leapYearResult);
     auto nonLeapYearResult = timeManager_.setSystemTime(2023, 2, 29, 12, 0, 0);
     EXPECT_TRUE(nonLeapYearResult);
-    auto validMonthEndResult = timeManager_.setSystemTime(2023, 4, 30, 12, 0, 0);
+    auto validMonthEndResult =
+        timeManager_.setSystemTime(2023, 4, 30, 12, 0, 0);
     EXPECT_FALSE(validMonthEndResult);
-    auto invalidMonthEndResult = timeManager_.setSystemTime(2023, 4, 31, 12, 0, 0);
+    auto invalidMonthEndResult =
+        timeManager_.setSystemTime(2023, 4, 31, 12, 0, 0);
     EXPECT_TRUE(invalidMonthEndResult);
     auto unusualTimezoneResult = timeManager_.setSystemTimezone("Etc/GMT+12");
     EXPECT_FALSE(unusualTimezoneResult);
@@ -164,8 +167,10 @@ TEST_F(TimeManagerTest, ConcurrentOperations) {
     // Test concurrent operations don't crash
     std::thread t1([&]() { (void)timeManager_.getSystemTime(); });
     std::thread t2([&]() { (void)timeManager_.getSystemTimePoint(); });
-    std::thread t3([&]() { (void)timeManager_.setSystemTime(2022, 3, 15, 14, 30, 45); });
-    std::thread t4([&]() { (void)timeManager_.getNtpTime("pool.ntp.org", 100ms); });
+    std::thread t3(
+        [&]() { (void)timeManager_.setSystemTime(2022, 3, 15, 14, 30, 45); });
+    std::thread t4(
+        [&]() { (void)timeManager_.getNtpTime("pool.ntp.org", 100ms); });
     t1.join();
     t2.join();
     t3.join();
@@ -235,15 +240,15 @@ TEST_F(TimeManagerTest, NtpTimeoutVariations) {
 
     // Test very short timeout
     auto shortResult = timeManager_.getNtpTime("pool.ntp.org", 1ms);
-    (void)shortResult; // Don't assert since it depends on network
+    (void)shortResult;  // Don't assert since it depends on network
 
     // Test very long timeout
     auto longResult = timeManager_.getNtpTime("pool.ntp.org", 60000ms);
-    (void)longResult; // Don't assert since it depends on network
+    (void)longResult;  // Don't assert since it depends on network
 
     // Test zero timeout
     auto zeroResult = timeManager_.getNtpTime("pool.ntp.org", 0ms);
-    (void)zeroResult; // Don't assert since it depends on network
+    (void)zeroResult;  // Don't assert since it depends on network
 }
 
 TEST_F(TimeManagerTest, NtpHostnameVariations) {
@@ -263,7 +268,7 @@ TEST_F(TimeManagerTest, NtpHostnameVariations) {
 
     for (const auto& hostname : hostnames) {
         auto result = timeManager_.getNtpTime(hostname);
-        (void)result; // Don't assert since it depends on network
+        (void)result;  // Don't assert since it depends on network
     }
 }
 
@@ -302,18 +307,18 @@ TEST_F(TimeManagerTest, MoveSemantics) {
     // Test move constructor
     TimeManager movedManager = std::move(timeManager_);
     auto time1 = movedManager.getSystemTime();
-    (void)time1; // Just verify it doesn't crash
+    (void)time1;  // Just verify it doesn't crash
 
     // Test move assignment
     TimeManager assignedManager;
     assignedManager = std::move(movedManager);
     auto time2 = assignedManager.getSystemTime();
-    (void)time2; // Just verify it doesn't crash
+    (void)time2;  // Just verify it doesn't crash
 }
 
 TEST_F(TimeManagerTest, StressTestOperations) {
     // Perform many operations rapidly to test stability
-    for (int i = 0; i < 100; ++i) { // Reduced for faster testing
+    for (int i = 0; i < 100; ++i) {  // Reduced for faster testing
         auto time = timeManager_.getSystemTime();
         auto timePoint = timeManager_.getSystemTimePoint();
         (void)time;

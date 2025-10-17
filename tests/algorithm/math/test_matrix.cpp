@@ -1,7 +1,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <vector>
 #include <spdlog/spdlog.h>
+#include <vector>
 #include "atom/algorithm/matrix.hpp"
 
 using namespace atom::algorithm;

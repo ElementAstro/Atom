@@ -7,7 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
-// Minimal stub implementations since atom-extra-inicpp has API compatibility issues
+// Minimal stub implementations since atom-extra-inicpp has API compatibility
+// issues
 
 namespace inicpp {
 
@@ -26,7 +27,8 @@ public:
     }
 
     void set(const std::string& key, const std::string& value) {
-        std::cout << "Setting value (stub): " << key << " = " << value << std::endl;
+        std::cout << "Setting value (stub): " << key << " = " << value
+                  << std::endl;
         keys_[key] = value;
     }
 
@@ -54,12 +56,14 @@ public:
     }
 
     void decode(const std::string& content) {
-        std::cout << "Decoding INI content (stub): " << content.size() << " characters" << std::endl;
+        std::cout << "Decoding INI content (stub): " << content.size()
+                  << " characters" << std::endl;
     }
 
     std::string encode() const {
         std::cout << "Encoding INI content (stub)" << std::endl;
-        return "[application]\nname=MyApp\nversion=1.0.0\n\n[database]\nhost=localhost\nport=5432\n";
+        return "[application]\nname=MyApp\nversion=1.0.0\n\n[database]\nhost="
+               "localhost\nport=5432\n";
     }
 
     IniSectionBase& operator[](const std::string& section_name) {
@@ -68,24 +72,28 @@ public:
     }
 
     const IniSectionBase& operator[](const std::string& section_name) const {
-        std::cout << "Accessing section const (stub): " << section_name << std::endl;
+        std::cout << "Accessing section const (stub): " << section_name
+                  << std::endl;
         static IniSectionBase empty_section;
         auto it = sections_.find(section_name);
         return it != sections_.end() ? it->second : empty_section;
     }
 
     bool has(const std::string& section_name) const {
-        std::cout << "Checking if file has section (stub): " << section_name << std::endl;
+        std::cout << "Checking if file has section (stub): " << section_name
+                  << std::endl;
         return sections_.find(section_name) != sections_.end();
     }
 
     void setFieldSep(char separator) {
-        std::cout << "Setting field separator (stub): " << separator << std::endl;
+        std::cout << "Setting field separator (stub): " << separator
+                  << std::endl;
         field_separator_ = separator;
     }
 
     void setCommentPrefixes(const std::vector<std::string>& prefixes) {
-        std::cout << "Setting comment prefixes (stub): " << prefixes.size() << " prefixes" << std::endl;
+        std::cout << "Setting comment prefixes (stub): " << prefixes.size()
+                  << " prefixes" << std::endl;
         comment_prefixes_ = prefixes;
     }
 
@@ -102,20 +110,22 @@ struct StringInsensitiveLess {
     bool operator()(const std::string& a, const std::string& b) const {
         return std::lexicographical_compare(
             a.begin(), a.end(), b.begin(), b.end(),
-            [](char a, char b) { return std::tolower(a) < std::tolower(b); }
-        );
+            [](char a, char b) { return std::tolower(a) < std::tolower(b); });
     }
 };
 
 using IniFileInsensitive = IniFileBase;
 
-} // namespace inicpp
+}  // namespace inicpp
 
 using namespace inicpp;
 
 int main() {
-    std::cout << "=== IniCpp Basic Usage Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation due to API compatibility issues." << std::endl;
+    std::cout << "=== IniCpp Basic Usage Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation due to API compatibility "
+                 "issues."
+              << std::endl;
 
     try {
         // 1. Basic INI file operations
@@ -130,7 +140,8 @@ int main() {
                 std::cout << "Application name: " << app_name << std::endl;
             }
             if (!ini["application"].has("non_existent_field")) {
-                std::cout << "Non-existent field not found (as expected)" << std::endl;
+                std::cout << "Non-existent field not found (as expected)"
+                          << std::endl;
             }
         }
 
@@ -182,13 +193,17 @@ port=3306
 
             ini.decode(ini_content);
             std::string encoded = ini.encode();
-            std::cout << "Encoded content: " << encoded.substr(0, 100) << "..." << std::endl;
+            std::cout << "Encoded content: " << encoded.substr(0, 100) << "..."
+                      << std::endl;
         }
 
-        std::cout << "\n=== IniCpp Basic Usage Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout << "\n=== IniCpp Basic Usage Example Complete (Stub "
+                     "Implementation) ==="
+                  << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in IniCpp basic usage examples: " << e.what() << std::endl;
+        std::cerr << "Error in IniCpp basic usage examples: " << e.what()
+                  << std::endl;
         return 1;
     }
 

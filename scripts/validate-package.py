@@ -5,18 +5,18 @@ Validates package integrity, dependencies, and installation correctness.
 """
 
 import argparse
-import os
-import sys
-import subprocess
-import tempfile
-import shutil
-import json
 import hashlib
+import json
+import logging
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import zipfile
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
-import logging
-import zipfile
-import tarfile
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

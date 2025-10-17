@@ -219,7 +219,8 @@ public:
     template <typename Func>
     auto withThreadSafety(Func&& func) const -> decltype(auto);
 
-    // Note: Stream operator is implemented as a non-friend template function below
+    // Note: Stream operator is implemented as a non-friend template function
+    // below
 
     /**
      * @brief Default destructor.
@@ -247,7 +248,8 @@ template <typename... Types>
 template <typename T>
 VariantWrapper<Types...>::VariantWrapper(T&& value) noexcept(
     std::is_nothrow_constructible_v<VariantType, T>)
-    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper<Types...>>) {
+    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper<Types...>>)
+{
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");
@@ -291,7 +293,8 @@ template <typename... Types>
 template <typename T>
 auto VariantWrapper<Types...>::operator=(T&& value) noexcept(
     std::is_nothrow_assignable_v<VariantType, T>) -> VariantWrapper&
-    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper>) {
+    requires(!std::is_same_v<std::decay_t<T>, VariantWrapper>)
+{
     static_assert(
         is_valid_type_v<T> || std::is_same_v<std::decay_t<T>, std::monostate>,
         "Type not supported by this VariantWrapper");

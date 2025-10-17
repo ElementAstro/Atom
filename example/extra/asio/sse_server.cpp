@@ -14,15 +14,15 @@ is not configured in the current build system.
 
 **************************************************/
 
+#include <atomic>
 #include <chrono>
+#include <functional>
 #include <iostream>
+#include <map>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
-#include <functional>
-#include <atomic>
-#include <map>
 
 using namespace std::chrono_literals;
 
@@ -34,7 +34,9 @@ namespace atom::extra::asio::sse {
 class Event {
 public:
     Event(std::string id, std::string event_type, std::string data)
-        : id_(std::move(id)), event_type_(std::move(event_type)), data_(std::move(data)) {}
+        : id_(std::move(id)),
+          event_type_(std::move(event_type)),
+          data_(std::move(data)) {}
 
     const std::string& id() const noexcept { return id_; }
     const std::string& event_type() const noexcept { return event_type_; }
@@ -66,7 +68,8 @@ class SSEServer {
 public:
     SSEServer(auto& io_context, const ServerConfig& config) : config_(config) {
         std::cout << "SSE Server created (stub implementation)" << std::endl;
-        std::cout << "  Host: " << config.host << ":" << config.port << std::endl;
+        std::cout << "  Host: " << config.host << ":" << config.port
+                  << std::endl;
         std::cout << "  Path: " << config.path << std::endl;
     }
 
@@ -76,7 +79,8 @@ public:
     }
 
     void broadcast_to_channel(const std::string& channel, const Event& event) {
-        std::cout << "Broadcasted to channel '" << channel << "': " << event.data() << std::endl;
+        std::cout << "Broadcasted to channel '" << channel
+                  << "': " << event.data() << std::endl;
         events_sent_++;
     }
 
@@ -90,7 +94,7 @@ public:
 
     void run() {
         std::cout << "Running SSE server (stub)..." << std::endl;
-        current_connections_ = 5; // Simulate some connections
+        current_connections_ = 5;  // Simulate some connections
 
         // Simulate server running
         std::this_thread::sleep_for(100ms);
@@ -102,7 +106,7 @@ private:
     std::atomic<int> current_connections_{0};
 };
 
-} // namespace atom::extra::asio::sse
+}  // namespace atom::extra::asio::sse
 
 // Stub io_context
 namespace asio {
@@ -114,21 +118,23 @@ public:
     }
 
     void run_for(std::chrono::milliseconds duration) {
-        std::cout << "Running io_context for " << duration.count() << "ms (stub)..." << std::endl;
+        std::cout << "Running io_context for " << duration.count()
+                  << "ms (stub)..." << std::endl;
         std::this_thread::sleep_for(duration);
     }
 
-    void stop() {
-        std::cout << "Stopping io_context (stub)..." << std::endl;
-    }
+    void stop() { std::cout << "Stopping io_context (stub)..." << std::endl; }
 };
-} // namespace asio
+}  // namespace asio
 
 using namespace atom::extra::asio::sse;
 
 int main() {
-    std::cout << "=== ASIO SSE Server Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation since atom-extra-asio library is not linked." << std::endl;
+    std::cout << "=== ASIO SSE Server Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation since atom-extra-asio "
+                 "library is not linked."
+              << std::endl;
 
     try {
         asio::io_context io_context;
@@ -147,7 +153,7 @@ int main() {
             // Simulate broadcasting events
             for (int i = 0; i < 3; ++i) {
                 Event event("event_" + std::to_string(i), "message",
-                           "Hello from SSE server stub #" + std::to_string(i));
+                            "Hello from SSE server stub #" + std::to_string(i));
                 server.broadcast_event(event);
                 std::this_thread::sleep_for(100ms);
             }
@@ -156,8 +162,10 @@ int main() {
 
             auto metrics = server.get_metrics();
             std::cout << "Server metrics:" << std::endl;
-            std::cout << "  Events sent: " << metrics["total_events_sent"] << std::endl;
-            std::cout << "  Active connections: " << metrics["current_connections"] << std::endl;
+            std::cout << "  Events sent: " << metrics["total_events_sent"]
+                      << std::endl;
+            std::cout << "  Active connections: "
+                      << metrics["current_connections"] << std::endl;
         }
 
         // 2. Channel-based broadcasting
@@ -173,7 +181,8 @@ int main() {
             // Simulate channel-based events
             for (int i = 0; i < 2; ++i) {
                 Event event("auth_event_" + std::to_string(i), "secure_message",
-                           "Authenticated event #" + std::to_string(i) + " with secure data");
+                            "Authenticated event #" + std::to_string(i) +
+                                " with secure data");
                 server.broadcast_to_channel("authenticated_users", event);
                 std::this_thread::sleep_for(100ms);
             }
@@ -181,7 +190,9 @@ int main() {
             server.run();
         }
 
-        std::cout << "\n=== SSE Server Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout
+            << "\n=== SSE Server Example Complete (Stub Implementation) ==="
+            << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error in SSE server examples: " << e.what() << std::endl;

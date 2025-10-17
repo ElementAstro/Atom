@@ -2,9 +2,9 @@
 #include "atom/components/scripting_api.hpp"
 
 #include <gtest/gtest.h>
+#include <chrono>
 #include <memory>
 #include <string>
-#include <chrono>
 
 using namespace atom::components::scripting;
 
@@ -13,7 +13,7 @@ class ScriptSandboxTest : public ::testing::Test {
 protected:
     void SetUp() override {
         SandboxConfig config;
-        config.memoryLimit = 1024 * 1024; // 1MB
+        config.memoryLimit = 1024 * 1024;  // 1MB
         config.executionTimeout = std::chrono::seconds(5);
         config.enableFileAccess = false;
         config.enableNetworkAccess = false;
@@ -36,7 +36,7 @@ protected:
 class SandboxConfigTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        config_.memoryLimit = 512 * 1024; // 512KB
+        config_.memoryLimit = 512 * 1024;  // 512KB
         config_.executionTimeout = std::chrono::seconds(10);
         config_.enableFileAccess = true;
         config_.enableNetworkAccess = false;
@@ -216,7 +216,8 @@ TEST_F(ScriptSandboxTest, CallDepthLimiting) {
 
     auto result = sandbox_->execute(recursiveScript);
 
-    // Should either succeed with limited depth or fail with stack overflow protection
+    // Should either succeed with limited depth or fail with stack overflow
+    // protection
     EXPECT_TRUE(result.success || !result.errorMessage.empty());
 }
 
@@ -246,7 +247,7 @@ TEST_F(ScriptSandboxTest, ResetStatistics) {
 
 TEST_F(ScriptSandboxTest, SetResourceLimits) {
     ResourceLimits limits;
-    limits.maxMemory = 2 * 1024 * 1024; // 2MB
+    limits.maxMemory = 2 * 1024 * 1024;  // 2MB
     limits.maxExecutionTime = std::chrono::seconds(30);
     limits.maxCallDepth = 200;
 

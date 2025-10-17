@@ -13,7 +13,7 @@ class TimeoutException;
 // Declare TimeoutException
 void declare_timeout_exception(py::module& m) {
     py::register_exception<TimeoutException>(m, "TimeoutException",
-        R"pbdoc(
+                                             R"pbdoc(
         Exception thrown when a timeout occurs during asynchronous operations.
 
         This exception is raised when an operation exceeds its specified timeout
@@ -25,7 +25,7 @@ void declare_timeout_exception(py::module& m) {
 // Declare platform utilities
 void declare_platform_utilities(py::module& m) {
     auto platform_module = m.def_submodule("platform",
-        R"pbdoc(
+                                           R"pbdoc(
         Platform-specific threading utilities.
 
         This submodule provides platform-specific functionality for thread
@@ -34,33 +34,39 @@ void declare_platform_utilities(py::module& m) {
         )pbdoc");
 
     // Priority constants
-    auto priority_class = py::class_<atom::platform::Priority>(platform_module, "Priority",
-        R"pbdoc(
+    auto priority_class =
+        py::class_<atom::platform::Priority>(platform_module, "Priority",
+                                             R"pbdoc(
         Platform-specific priority constants.
 
         These constants provide platform-appropriate priority values for
         different operating systems (Windows, macOS, Linux).
         )pbdoc");
 
-    priority_class.def_readonly_static("LOW", &atom::platform::Priority::LOW,
-                                      "Low priority value for the current platform");
-    priority_class.def_readonly_static("NORMAL", &atom::platform::Priority::NORMAL,
-                                      "Normal priority value for the current platform");
-    priority_class.def_readonly_static("HIGH", &atom::platform::Priority::HIGH,
-                                      "High priority value for the current platform");
-    priority_class.def_readonly_static("CRITICAL", &atom::platform::Priority::CRITICAL,
-                                      "Critical priority value for the current platform");
+    priority_class.def_readonly_static(
+        "LOW", &atom::platform::Priority::LOW,
+        "Low priority value for the current platform");
+    priority_class.def_readonly_static(
+        "NORMAL", &atom::platform::Priority::NORMAL,
+        "Normal priority value for the current platform");
+    priority_class.def_readonly_static(
+        "HIGH", &atom::platform::Priority::HIGH,
+        "High priority value for the current platform");
+    priority_class.def_readonly_static(
+        "CRITICAL", &atom::platform::Priority::CRITICAL,
+        "Critical priority value for the current platform");
 
     // Platform utility functions
     platform_module.def("yield_thread", &atom::platform::yieldThread,
-        R"pbdoc(
+                        R"pbdoc(
         Yields the current thread to allow other threads to run.
 
         This is a hint to the scheduler that the current thread is willing
         to give up its remaining time slice.
         )pbdoc");
 
-    platform_module.def("sleep_for",
+    platform_module.def(
+        "sleep_for",
         [](double seconds) {
             atom::platform::sleepFor(std::chrono::nanoseconds(
                 static_cast<long long>(seconds * 1e9)));
@@ -81,7 +87,7 @@ void declare_platform_utilities(py::module& m) {
 // Declare Priority enum for AsyncWorker
 void declare_async_worker_priority(py::module& m) {
     py::enum_<atom::async::AsyncWorker<int>::Priority>(m, "AsyncWorkerPriority",
-        R"pbdoc(
+                                                       R"pbdoc(
         Task priority levels for AsyncWorker.
 
         Controls the thread priority when executing asynchronous tasks.
@@ -461,7 +467,7 @@ void declare_async_retry(py::module& m, const std::string& suffix) {
 void declare_task_classes(py::module& m) {
     // Task class template - we'll bind common instantiations
     py::class_<atom::async::Task<void>>(m, "TaskVoid",
-        R"pbdoc(
+                                        R"pbdoc(
         A coroutine task that represents an asynchronous operation returning void.
 
         This class provides C++20 coroutine support for asynchronous operations
@@ -487,7 +493,7 @@ void declare_task_classes(py::module& m) {
              )pbdoc");
 
     py::class_<atom::async::Task<int>>(m, "TaskInt",
-        R"pbdoc(
+                                       R"pbdoc(
         A coroutine task that represents an asynchronous operation returning an integer.
 
         This class provides C++20 coroutine support for asynchronous operations
@@ -516,7 +522,7 @@ void declare_task_classes(py::module& m) {
              )pbdoc");
 
     py::class_<atom::async::Task<std::string>>(m, "TaskString",
-        R"pbdoc(
+                                               R"pbdoc(
         A coroutine task that represents an asynchronous operation returning a string.
 
         This class provides C++20 coroutine support for asynchronous operations
@@ -629,7 +635,7 @@ PYBIND11_MODULE(async, m) {
 
     // BackoffStrategy enum
     py::enum_<atom::async::BackoffStrategy>(m, "BackoffStrategy",
-        R"pbdoc(
+                                            R"pbdoc(
         Backoff strategy for retry operations.
 
         Defines how delays between retry attempts are calculated.

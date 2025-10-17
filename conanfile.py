@@ -4,13 +4,15 @@ Conan package configuration for Atom library
 Provides comprehensive package management with modular component support.
 """
 
-from conan import ConanFile
-from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
-from conan.tools.files import copy, save, load, collect_libs
-from conan.tools.scm import Git
-from conan.errors import ConanInvalidConfiguration
-import os
 import json
+import os
+
+from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
+from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.files import collect_libs, copy, load, save
+from conan.tools.scm import Git
+
 
 class AtomConan(ConanFile):
     name = "atom"

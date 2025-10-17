@@ -47,8 +47,8 @@ auto dumpAddrInfo(
  *
  * @throws std::invalid_argument if addrInfo is nullptr
  */
-auto addrInfoToString(const struct addrinfo* addrInfo, bool jsonFormat = false)
-    -> std::string;
+auto addrInfoToString(const struct addrinfo* addrInfo,
+                      bool jsonFormat = false) -> std::string;
 
 /**
  * @brief Get address information for a given hostname and service.

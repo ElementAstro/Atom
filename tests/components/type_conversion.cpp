@@ -2,22 +2,20 @@
 #include "atom/components/scripting_api.hpp"
 
 #include <gtest/gtest.h>
-#include <vector>
 #include <map>
-#include <unordered_map>
-#include <set>
-#include <optional>
 #include <memory>
+#include <optional>
+#include <set>
 #include <tuple>
+#include <unordered_map>
+#include <vector>
 
 using namespace atom::components::scripting;
 
 // Test fixture for TypeConverter tests
 class TypeConverterTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        converter_ = std::make_unique<TypeConverter>();
-    }
+    void SetUp() override { converter_ = std::make_unique<TypeConverter>(); }
 
     std::unique_ptr<TypeConverter> converter_;
 };
@@ -134,9 +132,8 @@ TEST_F(TypeConverterTest, BasicTypeConversion) {
 
 TEST_F(TypeConverterTest, VectorConversion) {
     // Create a vector of ScriptValues
-    std::vector<ScriptValue> scriptArray = {
-        ScriptValue(1), ScriptValue(2), ScriptValue(3), ScriptValue(4)
-    };
+    std::vector<ScriptValue> scriptArray = {ScriptValue(1), ScriptValue(2),
+                                            ScriptValue(3), ScriptValue(4)};
     ScriptValue arrayValue(scriptArray);
 
     // Convert to C++ vector
@@ -154,8 +151,7 @@ TEST_F(TypeConverterTest, MapConversion) {
     std::unordered_map<std::string, ScriptValue> scriptObject = {
         {"key1", ScriptValue(10)},
         {"key2", ScriptValue(20)},
-        {"key3", ScriptValue(30)}
-    };
+        {"key3", ScriptValue(30)}};
     ScriptValue objectValue(scriptObject);
 
     // Convert to C++ map
@@ -170,7 +166,8 @@ TEST_F(TypeConverterTest, MapConversion) {
 TEST_F(TypeConverterTest, OptionalConversion) {
     // Test optional with value
     ScriptValue valuePresent(42);
-    auto optionalWithValue = converter_->toNative<std::optional<int>>(valuePresent);
+    auto optionalWithValue =
+        converter_->toNative<std::optional<int>>(valuePresent);
 
     EXPECT_TRUE(optionalWithValue.has_value());
     EXPECT_EQ(optionalWithValue.value(), 42);
@@ -185,12 +182,12 @@ TEST_F(TypeConverterTest, OptionalConversion) {
 TEST_F(TypeConverterTest, TupleConversion) {
     // Create array for tuple conversion
     std::vector<ScriptValue> tupleArray = {
-        ScriptValue(42), ScriptValue("hello"), ScriptValue(3.14)
-    };
+        ScriptValue(42), ScriptValue("hello"), ScriptValue(3.14)};
     ScriptValue tupleValue(tupleArray);
 
     // Convert to C++ tuple
-    auto cppTuple = converter_->toNative<std::tuple<int, std::string, double>>(tupleValue);
+    auto cppTuple =
+        converter_->toNative<std::tuple<int, std::string, double>>(tupleValue);
 
     EXPECT_EQ(std::get<0>(cppTuple), 42);
     EXPECT_EQ(std::get<1>(cppTuple), "hello");
@@ -227,14 +224,15 @@ TEST_F(TypeConverterTest, VectorReverseConversion) {
 
 TEST_F(TypeConverterTest, MapReverseConversion) {
     std::map<std::string, int> cppMap = {
-        {"alpha", 1}, {"beta", 2}, {"gamma", 3}
-    };
+        {"alpha", 1}, {"beta", 2}, {"gamma", 3}};
 
     auto scriptValue = converter_->fromNative(cppMap);
 
-    EXPECT_TRUE(scriptValue.holds<std::unordered_map<std::string, ScriptValue>>());
+    EXPECT_TRUE(
+        scriptValue.holds<std::unordered_map<std::string, ScriptValue>>());
 
-    const auto& scriptObject = scriptValue.get<std::unordered_map<std::string, ScriptValue>>();
+    const auto& scriptObject =
+        scriptValue.get<std::unordered_map<std::string, ScriptValue>>();
     EXPECT_EQ(scriptObject.size(), 3);
     EXPECT_EQ(scriptObject.at("alpha").get<int64_t>(), 1);
     EXPECT_EQ(scriptObject.at("beta").get<int64_t>(), 2);
@@ -250,7 +248,8 @@ TEST_F(TypeConverterTest, NestedContainerConversion) {
     std::vector<std::vector<int>> nestedVector = {{1, 2}, {3, 4}, {5, 6}};
 
     auto scriptValue = converter_->fromNative(nestedVector);
-    auto convertedBack = converter_->toNative<std::vector<std::vector<int>>>(scriptValue);
+    auto convertedBack =
+        converter_->toNative<std::vector<std::vector<int>>>(scriptValue);
 
     EXPECT_EQ(convertedBack.size(), 3);
     EXPECT_EQ(convertedBack[0].size(), 2);
@@ -261,12 +260,12 @@ TEST_F(TypeConverterTest, NestedContainerConversion) {
 TEST_F(TypeConverterTest, ComplexMapConversion) {
     // Test map with vector values
     std::map<std::string, std::vector<int>> complexMap = {
-        {"numbers", {1, 2, 3}},
-        {"more_numbers", {4, 5, 6}}
-    };
+        {"numbers", {1, 2, 3}}, {"more_numbers", {4, 5, 6}}};
 
     auto scriptValue = converter_->fromNative(complexMap);
-    auto convertedBack = converter_->toNative<std::map<std::string, std::vector<int>>>(scriptValue);
+    auto convertedBack =
+        converter_->toNative<std::map<std::string, std::vector<int>>>(
+            scriptValue);
 
     EXPECT_EQ(convertedBack.size(), 2);
     EXPECT_EQ(convertedBack["numbers"].size(), 3);
@@ -278,7 +277,8 @@ TEST_F(TypeConverterTest, SharedPtrConversion) {
     auto sharedPtr = std::make_shared<int>(42);
 
     auto scriptValue = converter_->fromNative(sharedPtr);
-    auto convertedBack = converter_->toNative<std::shared_ptr<int>>(scriptValue);
+    auto convertedBack =
+        converter_->toNative<std::shared_ptr<int>>(scriptValue);
 
     EXPECT_NE(convertedBack, nullptr);
     EXPECT_EQ(*convertedBack, 42);
@@ -292,7 +292,8 @@ TEST_F(TypeConverterTest, InvalidTypeConversion) {
     ScriptValue stringValue("not a number");
 
     // Should handle invalid conversions gracefully
-    EXPECT_THROW(converter_->toNative<int>(stringValue), std::bad_variant_access);
+    EXPECT_THROW(converter_->toNative<int>(stringValue),
+                 std::bad_variant_access);
 }
 
 TEST_F(TypeConverterTest, EmptyContainerConversion) {
@@ -329,7 +330,8 @@ TEST_F(TypeConverterTest, LargeVectorConversion) {
     auto convertedBack = converter_->toNative<std::vector<int>>(scriptValue);
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(convertedBack.size(), 10000);
     EXPECT_EQ(convertedBack[0], 0);
@@ -359,13 +361,13 @@ TEST_F(TypeConverterTest, CustomTypeRegistration) {
             return ScriptValue(map);
         },
         [](const ScriptValue& script) -> CustomType {
-            const auto& map = script.get<std::unordered_map<std::string, ScriptValue>>();
+            const auto& map =
+                script.get<std::unordered_map<std::string, ScriptValue>>();
             CustomType obj;
             obj.value = map.at("value").get<int64_t>();
             obj.name = map.at("name").get<std::string>();
             return obj;
-        }
-    );
+        });
 
     // Test custom type conversion
     CustomType original{42, "test"};
@@ -390,9 +392,10 @@ TEST_F(TypeConverterTest, ConcurrentConversion) {
         threads.emplace_back([this, &successCount]() {
             for (int i = 0; i < conversionsPerThread; ++i) {
                 try {
-                    std::vector<int> testVector = {i, i+1, i+2};
+                    std::vector<int> testVector = {i, i + 1, i + 2};
                     auto scriptValue = converter_->fromNative(testVector);
-                    auto convertedBack = converter_->toNative<std::vector<int>>(scriptValue);
+                    auto convertedBack =
+                        converter_->toNative<std::vector<int>>(scriptValue);
 
                     if (convertedBack.size() == 3 && convertedBack[0] == i) {
                         successCount++;

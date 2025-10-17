@@ -51,7 +51,8 @@ PYBIND11_MODULE(threadlocal, m) {
     // Enhanced exception translator with detailed error information
     py::register_exception_translator([](std::exception_ptr p) {
         try {
-            if (p) std::rethrow_exception(p);
+            if (p)
+                std::rethrow_exception(p);
         } catch (const ThreadLocalException& e) {
             py::dict error_info;
             error_info["error_code"] = static_cast<int>(e.error());
@@ -67,7 +68,7 @@ PYBIND11_MODULE(threadlocal, m) {
 
     // Register ThreadLocalError enum
     py::enum_<ThreadLocalError>(m, "ThreadLocalError",
-        R"pbdoc(
+                                R"pbdoc(
         Enumeration of thread-local storage error types.
         )pbdoc")
         .value("NO_INITIALIZER", ThreadLocalError::NoInitializer,
@@ -81,9 +82,8 @@ PYBIND11_MODULE(threadlocal, m) {
         .export_values();
 
     // ThreadLocal class binding with enhanced functionality
-    py::class_<atom::async::ThreadLocal<py::object>>(
-        m, "ThreadLocal",
-        R"pbdoc(
+    py::class_<atom::async::ThreadLocal<py::object>>(m, "ThreadLocal",
+                                                     R"pbdoc(
         An enhanced thread-local storage class for Python objects.
 
         This class allows each thread to maintain its own independent instance of an object,
@@ -129,7 +129,8 @@ PYBIND11_MODULE(threadlocal, m) {
                  initializer: Function that returns the initial value for each thread.
                              Called once per thread on first access.
              )pbdoc")
-        .def(py::init<std::function<py::object()>, std::function<void(py::object&)>>(),
+        .def(py::init<std::function<py::object()>,
+                      std::function<void(py::object&)>>(),
              py::arg("initializer"), py::arg("cleanup"),
              R"pbdoc(
              Constructs a ThreadLocal object with initializer and cleanup functions.
@@ -177,7 +178,8 @@ PYBIND11_MODULE(threadlocal, m) {
              Clears thread-local storage for all threads.
              Calls cleanup function if set.
              )pbdoc")
-        .def("clear_current_thread", &atom::async::ThreadLocal<py::object>::clearCurrentThread,
+        .def("clear_current_thread",
+             &atom::async::ThreadLocal<py::object>::clearCurrentThread,
              R"pbdoc(
              Clears the thread-local storage for the current thread.
              Calls cleanup function if set.
@@ -196,7 +198,8 @@ PYBIND11_MODULE(threadlocal, m) {
              Returns:
                  bool: True if there are no stored thread values, False otherwise.
              )pbdoc")
-        .def("has_value_for_thread", &atom::async::ThreadLocal<py::object>::hasValueForThread,
+        .def("has_value_for_thread",
+             &atom::async::ThreadLocal<py::object>::hasValueForThread,
              py::arg("thread_id"),
              R"pbdoc(
              Checks if the specified thread has a value.
@@ -223,14 +226,16 @@ PYBIND11_MODULE(threadlocal, m) {
              R"pbdoc(
              Support for boolean evaluation (True if current thread has a value).
              )pbdoc")
-        .def("try_get", [](atom::async::ThreadLocal<py::object>& self) -> py::object {
+        .def(
+            "try_get",
+            [](atom::async::ThreadLocal<py::object>& self) -> py::object {
                 auto result = self.tryGet();
                 if (result.has_value()) {
                     return result.value().get();
                 }
                 return py::object();
-             },
-             R"pbdoc(
+            },
+            R"pbdoc(
              Tries to get the value for the current thread without throwing.
 
              Unlike get(), this method does not throw an exception if the value
@@ -239,7 +244,8 @@ PYBIND11_MODULE(threadlocal, m) {
              Returns:
                  The thread-local value or None if it doesn't exist.
              )pbdoc")
-        .def("compare_and_update", &atom::async::ThreadLocal<py::object>::compareAndUpdate,
+        .def("compare_and_update",
+             &atom::async::ThreadLocal<py::object>::compareAndUpdate,
              py::arg("expected"), py::arg("desired"),
              R"pbdoc(
              Atomically compares and updates the thread-local value.
@@ -254,15 +260,17 @@ PYBIND11_MODULE(threadlocal, m) {
              Returns:
                  bool: True if the update was successful, False otherwise.
              )pbdoc")
-        .def("get_or_create",
-             [](atom::async::ThreadLocal<py::object>& self, py::function factory) -> py::object& {
-                 return self.getOrCreate([factory]() -> py::object {
-                     py::gil_scoped_acquire acquire;
-                     return factory();
-                 });
-             },
-             py::arg("factory"),
-             R"pbdoc(
+        .def(
+            "get_or_create",
+            [](atom::async::ThreadLocal<py::object>& self,
+               py::function factory) -> py::object& {
+                return self.getOrCreate([factory]() -> py::object {
+                    py::gil_scoped_acquire acquire;
+                    return factory();
+                });
+            },
+            py::arg("factory"),
+            R"pbdoc(
              Gets or creates the value for the current thread using a factory function.
 
              If the value does not exist, it is created using the provided factory function.
@@ -277,15 +285,17 @@ PYBIND11_MODULE(threadlocal, m) {
                  >>> tls = ThreadLocal()
                  >>> value = tls.get_or_create(lambda: {"initialized": True})
              )pbdoc")
-        .def("update",
-             [](atom::async::ThreadLocal<py::object>& self, py::function func) -> bool {
-                 return self.update([func](py::object& value) -> py::object {
-                     py::gil_scoped_acquire acquire;
-                     return func(value);
-                 });
-             },
-             py::arg("func"),
-             R"pbdoc(
+        .def(
+            "update",
+            [](atom::async::ThreadLocal<py::object>& self,
+               py::function func) -> bool {
+                return self.update([func](py::object& value) -> py::object {
+                    py::gil_scoped_acquire acquire;
+                    return func(value);
+                });
+            },
+            py::arg("func"),
+            R"pbdoc(
              Updates the thread-local value using a transformation function.
 
              Args:
@@ -298,15 +308,16 @@ PYBIND11_MODULE(threadlocal, m) {
                  >>> tls = ThreadLocal(lambda: 0)
                  >>> tls.update(lambda x: x + 1)  # Increment the value
              )pbdoc")
-        .def("for_each",
-             [](atom::async::ThreadLocal<py::object>& self, py::function func) {
-                 self.forEach([func](py::object& value) {
-                     py::gil_scoped_acquire acquire;
-                     func(value);
-                 });
-             },
-             py::arg("func"),
-             R"pbdoc(
+        .def(
+            "for_each",
+            [](atom::async::ThreadLocal<py::object>& self, py::function func) {
+                self.forEach([func](py::object& value) {
+                    py::gil_scoped_acquire acquire;
+                    func(value);
+                });
+            },
+            py::arg("func"),
+            R"pbdoc(
              Executes a function for each thread-local value.
 
              Args:
@@ -316,17 +327,19 @@ PYBIND11_MODULE(threadlocal, m) {
                  >>> tls = ThreadLocal(lambda: [])
                  >>> tls.for_each(lambda value: value.append("processed"))
              )pbdoc")
-        .def("for_each_with_id",
-             [](atom::async::ThreadLocal<py::object>& self, py::function func) {
-                 self.forEachWithId([func](py::object& value, std::thread::id tid) {
-                     py::gil_scoped_acquire acquire;
-                     std::ostringstream oss;
-                     oss << tid;
-                     func(value, py::str(oss.str()));
-                 });
-             },
-             py::arg("func"),
-             R"pbdoc(
+        .def(
+            "for_each_with_id",
+            [](atom::async::ThreadLocal<py::object>& self, py::function func) {
+                self.forEachWithId(
+                    [func](py::object& value, std::thread::id tid) {
+                        py::gil_scoped_acquire acquire;
+                        std::ostringstream oss;
+                        oss << tid;
+                        func(value, py::str(oss.str()));
+                    });
+            },
+            py::arg("func"),
+            R"pbdoc(
              Executes a function for each thread-local value with thread ID.
 
              Args:
@@ -335,19 +348,22 @@ PYBIND11_MODULE(threadlocal, m) {
              Example:
                  >>> tls.for_each_with_id(lambda value, tid: print(f"Thread {tid}: {value}"))
              )pbdoc")
-        .def("find_if",
-             [](atom::async::ThreadLocal<py::object>& self, py::function predicate) -> py::object {
-                 auto result = self.findIf([predicate](py::object& value) -> bool {
-                     py::gil_scoped_acquire acquire;
-                     return predicate(value).cast<bool>();
-                 });
-                 if (result.has_value()) {
-                     return result.value().get();
-                 }
-                 return py::none();
-             },
-             py::arg("predicate"),
-             R"pbdoc(
+        .def(
+            "find_if",
+            [](atom::async::ThreadLocal<py::object>& self,
+               py::function predicate) -> py::object {
+                auto result =
+                    self.findIf([predicate](py::object& value) -> bool {
+                        py::gil_scoped_acquire acquire;
+                        return predicate(value).cast<bool>();
+                    });
+                if (result.has_value()) {
+                    return result.value().get();
+                }
+                return py::none();
+            },
+            py::arg("predicate"),
+            R"pbdoc(
              Finds the first thread value that satisfies the given condition.
 
              Args:
@@ -359,15 +375,17 @@ PYBIND11_MODULE(threadlocal, m) {
              Example:
                  >>> result = tls.find_if(lambda x: x > 10)
              )pbdoc")
-        .def("remove_if",
-             [](atom::async::ThreadLocal<py::object>& self, py::function predicate) -> std::size_t {
-                 return self.removeIf([predicate](py::object& value) -> bool {
-                     py::gil_scoped_acquire acquire;
-                     return predicate(value).cast<bool>();
-                 });
-             },
-             py::arg("predicate"),
-             R"pbdoc(
+        .def(
+            "remove_if",
+            [](atom::async::ThreadLocal<py::object>& self,
+               py::function predicate) -> std::size_t {
+                return self.removeIf([predicate](py::object& value) -> bool {
+                    py::gil_scoped_acquire acquire;
+                    return predicate(value).cast<bool>();
+                });
+            },
+            py::arg("predicate"),
+            R"pbdoc(
              Removes all thread values that satisfy the given condition.
 
              Args:
@@ -379,12 +397,13 @@ PYBIND11_MODULE(threadlocal, m) {
              Example:
                  >>> removed_count = tls.remove_if(lambda x: x < 0)
              )pbdoc")
-        .def("get_pointer",
-             [](atom::async::ThreadLocal<py::object>& self) -> py::object {
-                 auto* ptr = self.getPointer();
-                 return ptr ? *ptr : py::none();
-             },
-             R"pbdoc(
+        .def(
+            "get_pointer",
+            [](atom::async::ThreadLocal<py::object>& self) -> py::object {
+                auto* ptr = self.getPointer();
+                return ptr ? *ptr : py::none();
+            },
+            R"pbdoc(
              Gets a pointer to the thread-local value.
 
              Returns:
@@ -393,15 +412,17 @@ PYBIND11_MODULE(threadlocal, m) {
              This method is non-blocking and safe to call even if
              the value hasn't been initialized.
              )pbdoc")
-        .def("set_cleanup_function",
-             [](atom::async::ThreadLocal<py::object>& self, py::function cleanup) {
-                 self.setCleanupFunction([cleanup](py::object& value) {
-                     py::gil_scoped_acquire acquire;
-                     cleanup(value);
-                 });
-             },
-             py::arg("cleanup"),
-             R"pbdoc(
+        .def(
+            "set_cleanup_function",
+            [](atom::async::ThreadLocal<py::object>& self,
+               py::function cleanup) {
+                self.setCleanupFunction([cleanup](py::object& value) {
+                    py::gil_scoped_acquire acquire;
+                    cleanup(value);
+                });
+            },
+            py::arg("cleanup"),
+            R"pbdoc(
              Sets or updates the cleanup function.
 
              Args:
@@ -418,11 +439,11 @@ PYBIND11_MODULE(threadlocal, m) {
 
              Equivalent to calling .get().
              )pbdoc")
-        .def("__setitem__",
-             [](atom::async::ThreadLocal<py::object>& self, py::object, py::object value) {
-                 self.reset(value);
-             },
-             R"pbdoc(
+        .def(
+            "__setitem__",
+            [](atom::async::ThreadLocal<py::object>& self, py::object,
+               py::object value) { self.reset(value); },
+            R"pbdoc(
              Allows setting the thread-local value using [] operator.
 
              Equivalent to calling .reset(value).
@@ -431,43 +452,44 @@ PYBIND11_MODULE(threadlocal, m) {
              R"pbdoc(
              Returns the number of threads with stored values.
              )pbdoc")
-        .def("__iter__",
-             [](atom::async::ThreadLocal<py::object>& self) {
-                 py::list values;
-                 self.forEach([&values](py::object& value) {
-                     py::gil_scoped_acquire acquire;
-                     values.append(value);
-                 });
-                 return py::iter(values);
-             },
-             R"pbdoc(
+        .def(
+            "__iter__",
+            [](atom::async::ThreadLocal<py::object>& self) {
+                py::list values;
+                self.forEach([&values](py::object& value) {
+                    py::gil_scoped_acquire acquire;
+                    values.append(value);
+                });
+                return py::iter(values);
+            },
+            R"pbdoc(
              Allows iteration over all thread-local values.
 
              Returns an iterator over all currently stored values.
              )pbdoc");
 
     // Factory methods for different initialization strategies
-    m.def("create_thread_local",
-          []() {
-              return atom::async::ThreadLocal<py::object>();
-          },
-          R"pbdoc(
+    m.def(
+        "create_thread_local",
+        []() { return atom::async::ThreadLocal<py::object>(); },
+        R"pbdoc(
           Creates a new ThreadLocal object without an initializer.
 
           Returns:
               ThreadLocal: A new ThreadLocal instance.
           )pbdoc");
 
-    m.def("create_thread_local_with_initializer",
-          [](py::function initializer) {
-              return atom::async::ThreadLocal<py::object>(
-                  [initializer]() -> py::object {
-                      py::gil_scoped_acquire acquire;
-                      return initializer();
-                  });
-          },
-          py::arg("initializer"),
-          R"pbdoc(
+    m.def(
+        "create_thread_local_with_initializer",
+        [](py::function initializer) {
+            return atom::async::ThreadLocal<py::object>(
+                [initializer]() -> py::object {
+                    py::gil_scoped_acquire acquire;
+                    return initializer();
+                });
+        },
+        py::arg("initializer"),
+        R"pbdoc(
           Creates a new ThreadLocal object with an initializer function.
 
           Args:
@@ -477,12 +499,13 @@ PYBIND11_MODULE(threadlocal, m) {
               ThreadLocal: A new ThreadLocal instance.
           )pbdoc");
 
-    m.def("create_thread_local_with_default",
-          [](py::object default_value) {
-              return atom::async::ThreadLocal<py::object>(default_value);
-          },
-          py::arg("default_value"),
-          R"pbdoc(
+    m.def(
+        "create_thread_local_with_default",
+        [](py::object default_value) {
+            return atom::async::ThreadLocal<py::object>(default_value);
+        },
+        py::arg("default_value"),
+        R"pbdoc(
           Creates a new ThreadLocal object with a default value.
 
           Args:
@@ -492,20 +515,21 @@ PYBIND11_MODULE(threadlocal, m) {
               ThreadLocal: A new ThreadLocal instance.
           )pbdoc");
 
-    m.def("create_thread_local_with_cleanup",
-          [](py::function initializer, py::function cleanup) {
-              return atom::async::ThreadLocal<py::object>(
-                  [initializer]() -> py::object {
-                      py::gil_scoped_acquire acquire;
-                      return initializer();
-                  },
-                  [cleanup](py::object& value) {
-                      py::gil_scoped_acquire acquire;
-                      cleanup(value);
-                  });
-          },
-          py::arg("initializer"), py::arg("cleanup"),
-          R"pbdoc(
+    m.def(
+        "create_thread_local_with_cleanup",
+        [](py::function initializer, py::function cleanup) {
+            return atom::async::ThreadLocal<py::object>(
+                [initializer]() -> py::object {
+                    py::gil_scoped_acquire acquire;
+                    return initializer();
+                },
+                [cleanup](py::object& value) {
+                    py::gil_scoped_acquire acquire;
+                    cleanup(value);
+                });
+        },
+        py::arg("initializer"), py::arg("cleanup"),
+        R"pbdoc(
           Creates a new ThreadLocal object with initializer and cleanup functions.
 
           Args:
@@ -517,13 +541,14 @@ PYBIND11_MODULE(threadlocal, m) {
           )pbdoc");
 
     // Utility functions
-    m.def("get_current_thread_id",
-          []() {
-              std::ostringstream oss;
-              oss << std::this_thread::get_id();
-              return py::str(oss.str());
-          },
-          R"pbdoc(
+    m.def(
+         "get_current_thread_id",
+         []() {
+             std::ostringstream oss;
+             oss << std::this_thread::get_id();
+             return py::str(oss.str());
+         },
+         R"pbdoc(
           Get the ID of the current thread as a string.
 
           Returns:
@@ -532,72 +557,82 @@ PYBIND11_MODULE(threadlocal, m) {
           This is useful for debugging and logging thread-local operations.
           )pbdoc")
 
-    .def("benchmark_thread_local_performance",
-         [](py::function initializer, int num_threads, int operations_per_thread) -> py::dict {
-             using namespace std::chrono;
+        .def(
+            "benchmark_thread_local_performance",
+            [](py::function initializer, int num_threads,
+               int operations_per_thread) -> py::dict {
+                using namespace std::chrono;
 
-             py::dict results;
-             std::vector<std::thread> threads;
-             std::vector<double> thread_times(num_threads);
+                py::dict results;
+                std::vector<std::thread> threads;
+                std::vector<double> thread_times(num_threads);
 
-             auto tls = atom::async::ThreadLocal<py::object>(
-                 [initializer]() -> py::object {
-                     py::gil_scoped_acquire acquire;
-                     return initializer();
-                 });
+                auto tls = atom::async::ThreadLocal<py::object>(
+                    [initializer]() -> py::object {
+                        py::gil_scoped_acquire acquire;
+                        return initializer();
+                    });
 
-             auto start_time = high_resolution_clock::now();
+                auto start_time = high_resolution_clock::now();
 
-             for (int i = 0; i < num_threads; ++i) {
-                 threads.emplace_back([&tls, &thread_times, i, operations_per_thread]() {
-                     auto thread_start = high_resolution_clock::now();
+                for (int i = 0; i < num_threads; ++i) {
+                    threads.emplace_back(
+                        [&tls, &thread_times, i, operations_per_thread]() {
+                            auto thread_start = high_resolution_clock::now();
 
-                     for (int j = 0; j < operations_per_thread; ++j) {
-                         // Perform get operations
-                         auto& value = tls.get();
+                            for (int j = 0; j < operations_per_thread; ++j) {
+                                // Perform get operations
+                                auto& value = tls.get();
 
-                         // Simulate some work
-                         volatile int dummy = j;
-                         (void)dummy;
-                     }
+                                // Simulate some work
+                                volatile int dummy = j;
+                                (void)dummy;
+                            }
 
-                     auto thread_end = high_resolution_clock::now();
-                     auto duration = duration_cast<microseconds>(thread_end - thread_start);
-                     thread_times[i] = duration.count();
-                 });
-             }
+                            auto thread_end = high_resolution_clock::now();
+                            auto duration = duration_cast<microseconds>(
+                                thread_end - thread_start);
+                            thread_times[i] = duration.count();
+                        });
+                }
 
-             for (auto& thread : threads) {
-                 thread.join();
-             }
+                for (auto& thread : threads) {
+                    thread.join();
+                }
 
-             auto end_time = high_resolution_clock::now();
-             auto total_duration = duration_cast<microseconds>(end_time - start_time);
+                auto end_time = high_resolution_clock::now();
+                auto total_duration =
+                    duration_cast<microseconds>(end_time - start_time);
 
-             // Calculate statistics
-             double total_ops = num_threads * operations_per_thread;
-             double avg_thread_time = 0;
-             for (double time : thread_times) {
-                 avg_thread_time += time;
-             }
-             avg_thread_time /= num_threads;
+                // Calculate statistics
+                double total_ops = num_threads * operations_per_thread;
+                double avg_thread_time = 0;
+                for (double time : thread_times) {
+                    avg_thread_time += time;
+                }
+                avg_thread_time /= num_threads;
 
-             double min_time = *std::min_element(thread_times.begin(), thread_times.end());
-             double max_time = *std::max_element(thread_times.begin(), thread_times.end());
+                double min_time =
+                    *std::min_element(thread_times.begin(), thread_times.end());
+                double max_time =
+                    *std::max_element(thread_times.begin(), thread_times.end());
 
-             results[py::str("num_threads")] = num_threads;
-             results[py::str("operations_per_thread")] = operations_per_thread;
-             results[py::str("total_operations")] = total_ops;
-             results[py::str("total_time_us")] = total_duration.count();
-             results[py::str("avg_thread_time_us")] = avg_thread_time;
-             results[py::str("min_thread_time_us")] = min_time;
-             results[py::str("max_thread_time_us")] = max_time;
-             results[py::str("operations_per_second")] = (total_ops * 1000000.0) / total_duration.count();
+                results[py::str("num_threads")] = num_threads;
+                results[py::str("operations_per_thread")] =
+                    operations_per_thread;
+                results[py::str("total_operations")] = total_ops;
+                results[py::str("total_time_us")] = total_duration.count();
+                results[py::str("avg_thread_time_us")] = avg_thread_time;
+                results[py::str("min_thread_time_us")] = min_time;
+                results[py::str("max_thread_time_us")] = max_time;
+                results[py::str("operations_per_second")] =
+                    (total_ops * 1000000.0) / total_duration.count();
 
-             return results;
-         },
-         py::arg("initializer"), py::arg("num_threads") = 4, py::arg("operations_per_thread") = 1000,
-         R"pbdoc(
+                return results;
+            },
+            py::arg("initializer"), py::arg("num_threads") = 4,
+            py::arg("operations_per_thread") = 1000,
+            R"pbdoc(
          Benchmark thread-local storage performance across multiple threads.
 
          Args:
@@ -613,20 +648,21 @@ PYBIND11_MODULE(threadlocal, m) {
              >>> print(f"Operations per second: {results['operations_per_second']:.2f}")
          )pbdoc")
 
-    .def("create_thread_local_pool",
-         [](py::function initializer, size_t pool_size) -> py::list {
-             py::list pool;
-             for (size_t i = 0; i < pool_size; ++i) {
-                 pool.append(atom::async::ThreadLocal<py::object>(
-                     [initializer]() -> py::object {
-                         py::gil_scoped_acquire acquire;
-                         return initializer();
-                     }));
-             }
-             return pool;
-         },
-         py::arg("initializer"), py::arg("pool_size"),
-         R"pbdoc(
+        .def(
+            "create_thread_local_pool",
+            [](py::function initializer, size_t pool_size) -> py::list {
+                py::list pool;
+                for (size_t i = 0; i < pool_size; ++i) {
+                    pool.append(atom::async::ThreadLocal<py::object>(
+                        [initializer]() -> py::object {
+                            py::gil_scoped_acquire acquire;
+                            return initializer();
+                        }));
+                }
+                return pool;
+            },
+            py::arg("initializer"), py::arg("pool_size"),
+            R"pbdoc(
          Create a pool of ThreadLocal instances for load distribution.
 
          Args:
@@ -643,15 +679,16 @@ PYBIND11_MODULE(threadlocal, m) {
              >>> pool[1].reset("service2_data")
          )pbdoc")
 
-    .def("create_thread_local_registry",
-         []() -> py::dict {
-             py::dict registry;
-             registry[py::str("instances")] = py::dict();
-             registry[py::str("count")] = 0;
+        .def(
+            "create_thread_local_registry",
+            []() -> py::dict {
+                py::dict registry;
+                registry[py::str("instances")] = py::dict();
+                registry[py::str("count")] = 0;
 
-             return registry;
-         },
-         R"pbdoc(
+                return registry;
+            },
+            R"pbdoc(
          Create a registry for managing multiple ThreadLocal instances.
 
          Returns:

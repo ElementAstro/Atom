@@ -68,8 +68,8 @@ public:
      * @throws ProcessException if process creation fails.
      */
     auto createProcess(const std::string &command,
-                       const std::string &identifier, bool isBackground = false)
-        -> bool;
+                       const std::string &identifier,
+                       bool isBackground = false) -> bool;
 
     /**
      * @brief Terminates a process by its PID.
@@ -87,8 +87,8 @@ public:
      * @return True if the process was terminated successfully, otherwise false.
      * @throws ProcessException if termination fails.
      */
-    auto terminateProcessByName(const std::string &name, int signal = 15)
-        -> bool;
+    auto terminateProcessByName(const std::string &name,
+                                int signal = 15) -> bool;
 
     /**
      * @brief Checks if a process with the given identifier exists.
@@ -157,8 +157,8 @@ public:
      * @return The file path of the process.
      * @throws ProcessException if retrieval fails.
      */
-    static auto getProcFilePath(int pid, const std::string &file)
-        -> std::string;
+    static auto getProcFilePath(int pid,
+                                const std::string &file) -> std::string;
 #endif
 
 private:

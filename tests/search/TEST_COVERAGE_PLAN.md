@@ -1,6 +1,7 @@
 # Comprehensive Test Coverage Plan for Atom Search
 
 ## Current Status
+
 - ✅ Basic test infrastructure setup and working
 - ✅ SQLite test file created (comprehensive, ready for integration)
 - ✅ MySQL test file created (comprehensive, ready for integration)
@@ -18,6 +19,7 @@
 ### 1. Database Layer Tests
 
 #### SQLite Database (`test_sqlite.hpp`) - READY
+
 - ✅ Basic CRUD operations (Create, Read, Update, Delete)
 - ✅ Parameterized queries and SQL injection prevention
 - ✅ Transaction management (begin, commit, rollback)
@@ -33,6 +35,7 @@
 - ✅ Resource management and cleanup
 
 #### MySQL Database (`test_mysql.hpp`) - READY
+
 - ✅ Connection management and configuration
 - ✅ Basic CRUD operations with prepared statements
 - ✅ Transaction management with different isolation levels
@@ -47,6 +50,7 @@
 ### 2. Core Search Engine Tests
 
 #### Document Class (`test_document.hpp`) - READY
+
 - ✅ Document creation and validation
 - ✅ Content and metadata management
 - ✅ Tag operations (add, remove, search)
@@ -58,6 +62,7 @@
 - ✅ Special character and encoding support
 
 #### SearchEngine Class (`test_search_engine.hpp`) - READY
+
 - ✅ Document management (add, update, remove)
 - ✅ Tag-based searching (single and multiple tags)
 - ✅ Fuzzy search with tolerance levels
@@ -75,6 +80,7 @@
 ### 3. Cache Layer Tests
 
 #### LRU Cache (`test_lru.hpp`) - NEEDS FIXING
+
 - [ ] Basic cache operations (put, get, contains)
 - [ ] LRU eviction policy
 - [ ] Thread safety and concurrent access
@@ -87,6 +93,7 @@
 - [ ] Edge cases and error handling
 
 #### TTL Cache (`test_ttl.hpp`) - NEEDS FIXING
+
 - [ ] Time-based expiration
 - [ ] LRU eviction when capacity exceeded
 - [ ] Automatic cleanup of expired entries
@@ -97,6 +104,7 @@
 - [ ] Stress testing under load
 
 #### Resource Cache (`test_cache.hpp`) - NEEDS FIXING
+
 - [ ] Generic resource caching
 - [ ] Async operations (get, insert, load)
 - [ ] Expiration time management
@@ -110,6 +118,7 @@
 ### 4. Integration Tests
 
 #### Database-Search Integration (`test_integration.hpp`) - TODO
+
 - [ ] Search engine with SQLite backend
 - [ ] Search engine with MySQL backend
 - [ ] Cache integration with database operations
@@ -122,6 +131,7 @@
 ### 5. Performance and Stress Tests
 
 #### Performance Tests (`test_performance.hpp`) - TODO
+
 - [ ] Large dataset handling (millions of documents)
 - [ ] Concurrent user simulation
 - [ ] Memory usage profiling
@@ -132,6 +142,7 @@
 - [ ] Throughput under sustained load
 
 #### Stress Tests (`test_stress.hpp`) - TODO
+
 - [ ] Resource exhaustion scenarios
 - [ ] Memory pressure handling
 - [ ] Disk space limitations
@@ -143,24 +154,28 @@
 ## Implementation Priority
 
 ### Phase 1: Fix Existing Tests (Current)
+
 1. ✅ Fix test infrastructure and compilation
 2. ⏳ Resolve cache template compilation issues
 3. ⏳ Enable SQLite tests with proper linking
 4. ⏳ Create basic search engine tests
 
 ### Phase 2: Core Functionality
+
 1. Complete Document class tests
 2. Complete SearchEngine class tests
 3. Add MySQL database tests
 4. Fix and enhance cache tests
 
 ### Phase 3: Integration and Advanced Features
+
 1. Create integration tests
 2. Add performance benchmarks
 3. Add stress tests
 4. Add edge case and error scenario tests
 
 ### Phase 4: Comprehensive Coverage
+
 1. Achieve 100% line coverage where practical
 2. Add property-based testing
 3. Add fuzzing tests for robustness
@@ -169,6 +184,7 @@
 ## Test Infrastructure Requirements
 
 ### Dependencies
+
 - Google Test framework ✅
 - SQLite3 library ✅
 - MySQL/MariaDB client library (optional) ⏳
@@ -176,6 +192,7 @@
 - Filesystem support ✅
 
 ### Build System
+
 - CMake configuration ✅
 - Conditional compilation for optional features ⏳
 - Test discovery and execution ✅
@@ -183,6 +200,7 @@
 - Continuous integration setup (future)
 
 ### Test Data Management
+
 - In-memory databases for unit tests ✅
 - Temporary file cleanup ✅
 - Test data generation utilities (TODO)

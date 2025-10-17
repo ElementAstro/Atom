@@ -5,9 +5,9 @@
  */
 
 #include "scripting_api.hpp"
+#include "../core/registry.hpp"
 #include "lua_engine.hpp"
 #include "python_engine.hpp"
-#include "../core/registry.hpp"
 
 #include <algorithm>
 #include <cctype>

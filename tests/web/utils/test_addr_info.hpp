@@ -4,11 +4,11 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 #include <string>
 #include <thread>
 #include <vector>
-#include <spdlog/spdlog.h>
 
 #include "atom/web/utils/addr_info.hpp"
 
@@ -63,7 +63,8 @@ protected:
     }
 
     // Helper method to create a simple addrinfo structure for testing
-    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> createTestAddrInfo() {
+    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>
+    createTestAddrInfo() {
         try {
             return getAddrInfo("127.0.0.1", "80");
         } catch (const std::exception&) {
@@ -106,7 +107,8 @@ TEST_F(AddrInfoTest, GetAddrInfoEmptyHostname) {
 }
 
 TEST_F(AddrInfoTest, GetAddrInfoInvalidHostname) {
-    EXPECT_THROW(getAddrInfo("invalid.nonexistent.domain.xyz", "80"), std::runtime_error);
+    EXPECT_THROW(getAddrInfo("invalid.nonexistent.domain.xyz", "80"),
+                 std::runtime_error);
 }
 
 TEST_F(AddrInfoTest, GetAddrInfoEmptyService) {
@@ -169,8 +171,9 @@ TEST_F(AddrInfoTest, DumpAddrInfoValid) {
         GTEST_SKIP() << "Could not create test addrinfo";
     }
 
-    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dstAddrInfo(nullptr, ::freeaddrinfo);
-    
+    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dstAddrInfo(
+        nullptr, ::freeaddrinfo);
+
     int result = dumpAddrInfo(dstAddrInfo, sourceAddrInfo.get());
     EXPECT_EQ(result, 0);
     EXPECT_NE(dstAddrInfo, nullptr);
@@ -178,8 +181,9 @@ TEST_F(AddrInfoTest, DumpAddrInfoValid) {
 }
 
 TEST_F(AddrInfoTest, DumpAddrInfoNullSource) {
-    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dstAddrInfo(nullptr, ::freeaddrinfo);
-    
+    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dstAddrInfo(
+        nullptr, ::freeaddrinfo);
+
     int result = dumpAddrInfo(dstAddrInfo, nullptr);
     EXPECT_EQ(result, -1);
 }
@@ -188,7 +192,7 @@ TEST_F(AddrInfoTest, DumpAddrInfoNullSource) {
 TEST_F(AddrInfoTest, CompareAddrInfoEqual) {
     auto addrInfo1 = createTestAddrInfo();
     auto addrInfo2 = createTestAddrInfo();
-    
+
     if (!addrInfo1 || !addrInfo2) {
         GTEST_SKIP() << "Could not create test addrinfo";
     }
@@ -205,8 +209,10 @@ TEST_F(AddrInfoTest, CompareAddrInfoNullPointers) {
         GTEST_SKIP() << "Could not create test addrinfo";
     }
 
-    EXPECT_THROW(compareAddrInfo(nullptr, addrInfo.get()), std::invalid_argument);
-    EXPECT_THROW(compareAddrInfo(addrInfo.get(), nullptr), std::invalid_argument);
+    EXPECT_THROW(compareAddrInfo(nullptr, addrInfo.get()),
+                 std::invalid_argument);
+    EXPECT_THROW(compareAddrInfo(addrInfo.get(), nullptr),
+                 std::invalid_argument);
     EXPECT_THROW(compareAddrInfo(nullptr, nullptr), std::invalid_argument);
 }
 
@@ -264,18 +270,21 @@ TEST_F(AddrInfoTest, GetAddrInfoWithDifferentServices) {
         ASSERT_NO_THROW({
             auto addrInfo = getAddrInfo("127.0.0.1", service);
             EXPECT_NE(addrInfo, nullptr);
-        }) << "Failed for service: " << service;
+        }) << "Failed for service: "
+           << service;
     }
 }
 
 TEST_F(AddrInfoTest, GetAddrInfoWithNamedServices) {
-    std::vector<std::string> services = {"http", "https", "ssh", "ftp", "smtp", "dns"};
+    std::vector<std::string> services = {"http", "https", "ssh",
+                                         "ftp",  "smtp",  "dns"};
 
     for (const auto& service : services) {
         ASSERT_NO_THROW({
             auto addrInfo = getAddrInfo("127.0.0.1", service);
             EXPECT_NE(addrInfo, nullptr);
-        }) << "Failed for service: " << service;
+        }) << "Failed for service: "
+           << service;
     }
 }
 
@@ -320,7 +329,8 @@ TEST_F(AddrInfoTest, DumpAddrInfoPreservesData) {
         GTEST_SKIP() << "Could not create test addrinfo";
     }
 
-    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dstAddrInfo(nullptr, ::freeaddrinfo);
+    std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dstAddrInfo(
+        nullptr, ::freeaddrinfo);
 
     int result = dumpAddrInfo(dstAddrInfo, sourceAddrInfo.get());
     EXPECT_EQ(result, 0);
@@ -380,8 +390,8 @@ TEST_F(AddrInfoTest, SortAddrInfoOrdersByFamily) {
 
         // Verify sorting by family
         int lastFamily = -1;
-        for (const struct addrinfo* current = sorted.get();
-             current != nullptr; current = current->ai_next) {
+        for (const struct addrinfo* current = sorted.get(); current != nullptr;
+             current = current->ai_next) {
             if (lastFamily != -1) {
                 EXPECT_GE(current->ai_family, lastFamily);
             }
@@ -433,7 +443,8 @@ TEST_F(AddrInfoTest, ConcurrentDumpAddrInfo) {
 
     constexpr int numThreads = 10;
     std::vector<std::thread> threads;
-    std::vector<std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>> results;
+    std::vector<std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>>
+        results;
     std::vector<int> returnCodes(numThreads);
 
     // Initialize results vector
@@ -470,7 +481,8 @@ TEST_F(AddrInfoTest, MemoryLeakPrevention) {
             auto filtered = filterAddrInfo(addrInfo.get(), AF_INET);
             auto sorted = sortAddrInfo(addrInfo.get());
 
-            std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dumped(nullptr, ::freeaddrinfo);
+            std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)> dumped(
+                nullptr, ::freeaddrinfo);
             dumpAddrInfo(dumped, addrInfo.get());
         }
     }

@@ -26,7 +26,7 @@ PYBIND11_MODULE(core_glob, m) {
             >>> # Find all Python files
             >>> files = glob.glob("*.py")
             >>> print(f"Found {len(files)} Python files")
-            >>> 
+            >>>
             >>> # Recursive search
             >>> all_files = glob.rglob("**/*.txt")
             >>> print(f"Found {len(all_files)} text files recursively")
@@ -49,18 +49,21 @@ PYBIND11_MODULE(core_glob, m) {
     });
 
     // Core glob functions
-    m.def("glob", 
-          [](const std::string& pathname, bool recursive = false, bool dironly = false) {
-              atom::containers::String pattern(pathname.c_str());
-              auto result = atom::io::glob(pattern, recursive, dironly);
-              std::vector<std::string> paths;
-              for (const auto& path : result) {
-                  paths.push_back(path.string());
-              }
-              return paths;
-          },
-          py::arg("pathname"), py::arg("recursive") = false, py::arg("dironly") = false,
-          R"(Find all paths matching a shell-style pattern.
+    m.def(
+        "glob",
+        [](const std::string& pathname, bool recursive = false,
+           bool dironly = false) {
+            atom::containers::String pattern(pathname.c_str());
+            auto result = atom::io::glob(pattern, recursive, dironly);
+            std::vector<std::string> paths;
+            for (const auto& path : result) {
+                paths.push_back(path.string());
+            }
+            return paths;
+        },
+        py::arg("pathname"), py::arg("recursive") = false,
+        py::arg("dironly") = false,
+        R"(Find all paths matching a shell-style pattern.
 
 Args:
     pathname: The pattern to match (supports *, ?, [], **)
@@ -73,26 +76,27 @@ Returns:
 Examples:
     >>> # Find all Python files in current directory
     >>> files = glob("*.py")
-    >>> 
+    >>>
     >>> # Find all files recursively
     >>> all_files = glob("**/*", recursive=True)
-    >>> 
+    >>>
     >>> # Find only directories
     >>> dirs = glob("*/", dironly=True)
 )");
 
-    m.def("rglob",
-          [](const std::string& pathname) {
-              atom::containers::String pattern(pathname.c_str());
-              auto result = atom::io::rglob(pattern);
-              std::vector<std::string> paths;
-              for (const auto& path : result) {
-                  paths.push_back(path.string());
-              }
-              return paths;
-          },
-          py::arg("pathname"),
-          R"(Find all paths matching a shell-style pattern recursively.
+    m.def(
+        "rglob",
+        [](const std::string& pathname) {
+            atom::containers::String pattern(pathname.c_str());
+            auto result = atom::io::rglob(pattern);
+            std::vector<std::string> paths;
+            for (const auto& path : result) {
+                paths.push_back(path.string());
+            }
+            return paths;
+        },
+        py::arg("pathname"),
+        R"(Find all paths matching a shell-style pattern recursively.
 
 Args:
     pathname: The pattern to match
@@ -103,27 +107,29 @@ Returns:
 Examples:
     >>> # Find all text files recursively
     >>> files = rglob("**/*.txt")
-    >>> 
+    >>>
     >>> # Find all Python files in any subdirectory
     >>> py_files = rglob("**/*.py")
 )");
 
-    m.def("glob_multiple",
-          [](const std::vector<std::string>& pathnames, bool recursive = false) {
-              atom::containers::Vector<atom::containers::String> patterns;
-              for (const auto& pathname : pathnames) {
-                  patterns.emplace_back(pathname.c_str());
-              }
-              
-              auto result = recursive ? atom::io::rglob(patterns) : atom::io::glob(patterns);
-              std::vector<std::string> paths;
-              for (const auto& path : result) {
-                  paths.push_back(path.string());
-              }
-              return paths;
-          },
-          py::arg("pathnames"), py::arg("recursive") = false,
-          R"(Find all paths matching multiple shell-style patterns.
+    m.def(
+        "glob_multiple",
+        [](const std::vector<std::string>& pathnames, bool recursive = false) {
+            atom::containers::Vector<atom::containers::String> patterns;
+            for (const auto& pathname : pathnames) {
+                patterns.emplace_back(pathname.c_str());
+            }
+
+            auto result = recursive ? atom::io::rglob(patterns)
+                                    : atom::io::glob(patterns);
+            std::vector<std::string> paths;
+            for (const auto& path : result) {
+                paths.push_back(path.string());
+            }
+            return paths;
+        },
+        py::arg("pathnames"), py::arg("recursive") = false,
+        R"(Find all paths matching multiple shell-style patterns.
 
 Args:
     pathnames: List of patterns to match
@@ -136,20 +142,21 @@ Examples:
     >>> # Find Python and C++ files
     >>> patterns = ["*.py", "*.cpp", "*.hpp"]
     >>> files = glob_multiple(patterns)
-    >>> 
+    >>>
     >>> # Recursive search for multiple patterns
     >>> files = glob_multiple(["**/*.txt", "**/*.md"], recursive=True)
 )");
 
     // Pattern matching utilities
-    m.def("fnmatch",
-          [](const std::string& name, const std::string& pattern) {
-              fs::path path(name);
-              atom::containers::String pat(pattern.c_str());
-              return atom::io::fnmatch(path, pat);
-          },
-          py::arg("name"), py::arg("pattern"),
-          R"(Test whether a filename matches a shell-style pattern.
+    m.def(
+        "fnmatch",
+        [](const std::string& name, const std::string& pattern) {
+            fs::path path(name);
+            atom::containers::String pat(pattern.c_str());
+            return atom::io::fnmatch(path, pat);
+        },
+        py::arg("name"), py::arg("pattern"),
+        R"(Test whether a filename matches a shell-style pattern.
 
 Args:
     name: The filename or path to test
@@ -167,24 +174,25 @@ Examples:
     True
 )");
 
-    m.def("filter_paths",
-          [](const std::vector<std::string>& names, const std::string& pattern) {
-              atom::containers::Vector<fs::path> paths;
-              for (const auto& name : names) {
-                  paths.emplace_back(name);
-              }
-              
-              atom::containers::String pat(pattern.c_str());
-              auto result = atom::io::filter(paths, pat);
-              
-              std::vector<std::string> filtered;
-              for (const auto& path : result) {
-                  filtered.push_back(path.string());
-              }
-              return filtered;
-          },
-          py::arg("names"), py::arg("pattern"),
-          R"(Filter a list of paths by a shell-style pattern.
+    m.def(
+        "filter_paths",
+        [](const std::vector<std::string>& names, const std::string& pattern) {
+            atom::containers::Vector<fs::path> paths;
+            for (const auto& name : names) {
+                paths.emplace_back(name);
+            }
+
+            atom::containers::String pat(pattern.c_str());
+            auto result = atom::io::filter(paths, pat);
+
+            std::vector<std::string> filtered;
+            for (const auto& path : result) {
+                filtered.push_back(path.string());
+            }
+            return filtered;
+        },
+        py::arg("names"), py::arg("pattern"),
+        R"(Filter a list of paths by a shell-style pattern.
 
 Args:
     names: List of file paths to filter
@@ -200,14 +208,15 @@ Examples:
 )");
 
     // Path utilities
-    m.def("expand_tilde",
-          [](const std::string& path) {
-              fs::path p(path);
-              auto expanded = atom::io::expandTilde(p);
-              return expanded.string();
-          },
-          py::arg("path"),
-          R"(Expand tilde (~) in a filesystem path to the user's home directory.
+    m.def(
+        "expand_tilde",
+        [](const std::string& path) {
+            fs::path p(path);
+            auto expanded = atom::io::expandTilde(p);
+            return expanded.string();
+        },
+        py::arg("path"),
+        R"(Expand tilde (~) in a filesystem path to the user's home directory.
 
 Args:
     path: The path that may contain a tilde
@@ -225,13 +234,14 @@ Examples:
     'C:\\Users\\user\\Desktop\\file.txt'  # On Windows
 )");
 
-    m.def("has_magic",
-          [](const std::string& pathname) {
-              atom::containers::String path(pathname.c_str());
-              return atom::io::hasMagic(path);
-          },
-          py::arg("pathname"),
-          R"(Check if a pathname contains glob magic characters.
+    m.def(
+        "has_magic",
+        [](const std::string& pathname) {
+            atom::containers::String path(pathname.c_str());
+            return atom::io::hasMagic(path);
+        },
+        py::arg("pathname"),
+        R"(Check if a pathname contains glob magic characters.
 
 Args:
     pathname: The path string to check
@@ -248,13 +258,14 @@ Examples:
     True
 )");
 
-    m.def("is_hidden",
-          [](const std::string& pathname) {
-              atom::containers::String path(pathname.c_str());
-              return atom::io::isHidden(path);
-          },
-          py::arg("pathname"),
-          R"(Check if a pathname represents a hidden file or directory.
+    m.def(
+        "is_hidden",
+        [](const std::string& pathname) {
+            atom::containers::String path(pathname.c_str());
+            return atom::io::isHidden(path);
+        },
+        py::arg("pathname"),
+        R"(Check if a pathname represents a hidden file or directory.
 
 Args:
     pathname: The path string to check
@@ -271,13 +282,14 @@ Examples:
     True
 )");
 
-    m.def("is_recursive",
-          [](const std::string& pattern) {
-              atom::containers::String pat(pattern.c_str());
-              return atom::io::isRecursive(pat);
-          },
-          py::arg("pattern"),
-          R"(Check if a pattern is a recursive glob pattern (**).
+    m.def(
+        "is_recursive",
+        [](const std::string& pattern) {
+            atom::containers::String pat(pattern.c_str());
+            return atom::io::isRecursive(pat);
+        },
+        py::arg("pattern"),
+        R"(Check if a pattern is a recursive glob pattern (**).
 
 Args:
     pattern: The pattern to check
@@ -293,18 +305,19 @@ Examples:
 )");
 
     // Directory listing utilities
-    m.def("iter_directory",
-          [](const std::string& dirname, bool dironly = false) {
-              fs::path dir(dirname);
-              auto result = atom::io::iterDirectory(dir, dironly);
-              std::vector<std::string> paths;
-              for (const auto& path : result) {
-                  paths.push_back(path.string());
-              }
-              return paths;
-          },
-          py::arg("dirname"), py::arg("dironly") = false,
-          R"(Iterate through entries in a directory.
+    m.def(
+        "iter_directory",
+        [](const std::string& dirname, bool dironly = false) {
+            fs::path dir(dirname);
+            auto result = atom::io::iterDirectory(dir, dironly);
+            std::vector<std::string> paths;
+            for (const auto& path : result) {
+                paths.push_back(path.string());
+            }
+            return paths;
+        },
+        py::arg("dirname"), py::arg("dironly") = false,
+        R"(Iterate through entries in a directory.
 
 Args:
     dirname: The directory to iterate
@@ -318,18 +331,19 @@ Examples:
     >>> dirs_only = iter_directory("/path/to/dir", dironly=True)
 )");
 
-    m.def("rlist_directory",
-          [](const std::string& dirname, bool dironly = false) {
-              fs::path dir(dirname);
-              auto result = atom::io::rlistdir(dir, dironly);
-              std::vector<std::string> paths;
-              for (const auto& path : result) {
-                  paths.push_back(path.string());
-              }
-              return paths;
-          },
-          py::arg("dirname"), py::arg("dironly") = false,
-          R"(Recursively list all entries in a directory tree.
+    m.def(
+        "rlist_directory",
+        [](const std::string& dirname, bool dironly = false) {
+            fs::path dir(dirname);
+            auto result = atom::io::rlistdir(dir, dironly);
+            std::vector<std::string> paths;
+            for (const auto& path : result) {
+                paths.push_back(path.string());
+            }
+            return paths;
+        },
+        py::arg("dirname"), py::arg("dironly") = false,
+        R"(Recursively list all entries in a directory tree.
 
 Args:
     dirname: The root directory to start from
@@ -344,14 +358,15 @@ Examples:
 )");
 
     // Pattern compilation utilities
-    m.def("translate_pattern",
-          [](const std::string& pattern) {
-              atom::containers::String pat(pattern.c_str());
-              auto translated = atom::io::translate(pat);
-              return std::string(translated.c_str());
-          },
-          py::arg("pattern"),
-          R"(Translate a shell-style pattern to a regular expression.
+    m.def(
+        "translate_pattern",
+        [](const std::string& pattern) {
+            atom::containers::String pat(pattern.c_str());
+            auto translated = atom::io::translate(pat);
+            return std::string(translated.c_str());
+        },
+        py::arg("pattern"),
+        R"(Translate a shell-style pattern to a regular expression.
 
 Args:
     pattern: The shell pattern to translate (e.g., "*.txt", "file?.py")
@@ -365,37 +380,43 @@ Examples:
 )");
 
     // Convenience functions for common patterns
-    m.def("find_files",
-          [](const std::string& directory, const std::string& extension, bool recursive = false) {
-              std::string pattern = recursive ? "**/*" + extension : "*" + extension;
-              atom::containers::String pat(pattern.c_str());
+    m.def(
+        "find_files",
+        [](const std::string& directory, const std::string& extension,
+           bool recursive = false) {
+            std::string pattern =
+                recursive ? "**/*" + extension : "*" + extension;
+            atom::containers::String pat(pattern.c_str());
 
-              // Change to the directory temporarily for relative search
-              fs::path original_path = fs::current_path();
-              fs::path search_dir(directory);
+            // Change to the directory temporarily for relative search
+            fs::path original_path = fs::current_path();
+            fs::path search_dir(directory);
 
-              try {
-                  if (fs::exists(search_dir) && fs::is_directory(search_dir)) {
-                      fs::current_path(search_dir);
-                  }
+            try {
+                if (fs::exists(search_dir) && fs::is_directory(search_dir)) {
+                    fs::current_path(search_dir);
+                }
 
-                  auto result = recursive ? atom::io::rglob(pat) : atom::io::glob(pat, false, false);
-                  std::vector<std::string> paths;
-                  for (const auto& path : result) {
-                      // Convert back to absolute paths relative to original directory
-                      fs::path abs_path = search_dir / path;
-                      paths.push_back(abs_path.string());
-                  }
+                auto result = recursive ? atom::io::rglob(pat)
+                                        : atom::io::glob(pat, false, false);
+                std::vector<std::string> paths;
+                for (const auto& path : result) {
+                    // Convert back to absolute paths relative to original
+                    // directory
+                    fs::path abs_path = search_dir / path;
+                    paths.push_back(abs_path.string());
+                }
 
-                  fs::current_path(original_path);
-                  return paths;
-              } catch (...) {
-                  fs::current_path(original_path);
-                  throw;
-              }
-          },
-          py::arg("directory"), py::arg("extension"), py::arg("recursive") = false,
-          R"(Find files with a specific extension in a directory.
+                fs::current_path(original_path);
+                return paths;
+            } catch (...) {
+                fs::current_path(original_path);
+                throw;
+            }
+        },
+        py::arg("directory"), py::arg("extension"),
+        py::arg("recursive") = false,
+        R"(Find files with a specific extension in a directory.
 
 Args:
     directory: The directory to search in
@@ -410,35 +431,40 @@ Examples:
     >>> text_files = find_files("/docs", ".txt")
 )");
 
-    m.def("find_by_name",
-          [](const std::string& directory, const std::string& name_pattern, bool recursive = false) {
-              std::string pattern = recursive ? "**/" + name_pattern : name_pattern;
-              atom::containers::String pat(pattern.c_str());
+    m.def(
+        "find_by_name",
+        [](const std::string& directory, const std::string& name_pattern,
+           bool recursive = false) {
+            std::string pattern =
+                recursive ? "**/" + name_pattern : name_pattern;
+            atom::containers::String pat(pattern.c_str());
 
-              fs::path original_path = fs::current_path();
-              fs::path search_dir(directory);
+            fs::path original_path = fs::current_path();
+            fs::path search_dir(directory);
 
-              try {
-                  if (fs::exists(search_dir) && fs::is_directory(search_dir)) {
-                      fs::current_path(search_dir);
-                  }
+            try {
+                if (fs::exists(search_dir) && fs::is_directory(search_dir)) {
+                    fs::current_path(search_dir);
+                }
 
-                  auto result = recursive ? atom::io::rglob(pat) : atom::io::glob(pat, false, false);
-                  std::vector<std::string> paths;
-                  for (const auto& path : result) {
-                      fs::path abs_path = search_dir / path;
-                      paths.push_back(abs_path.string());
-                  }
+                auto result = recursive ? atom::io::rglob(pat)
+                                        : atom::io::glob(pat, false, false);
+                std::vector<std::string> paths;
+                for (const auto& path : result) {
+                    fs::path abs_path = search_dir / path;
+                    paths.push_back(abs_path.string());
+                }
 
-                  fs::current_path(original_path);
-                  return paths;
-              } catch (...) {
-                  fs::current_path(original_path);
-                  throw;
-              }
-          },
-          py::arg("directory"), py::arg("name_pattern"), py::arg("recursive") = false,
-          R"(Find files matching a name pattern in a directory.
+                fs::current_path(original_path);
+                return paths;
+            } catch (...) {
+                fs::current_path(original_path);
+                throw;
+            }
+        },
+        py::arg("directory"), py::arg("name_pattern"),
+        py::arg("recursive") = false,
+        R"(Find files matching a name pattern in a directory.
 
 Args:
     directory: The directory to search in
@@ -454,25 +480,26 @@ Examples:
 )");
 
     // Helper function for common glob patterns
-    m.def("common_patterns",
-          []() {
-              std::map<std::string, std::string> patterns;
-              patterns["python_files"] = "*.py";
-              patterns["cpp_files"] = "*.cpp";
-              patterns["header_files"] = "*.h";
-              patterns["text_files"] = "*.txt";
-              patterns["markdown_files"] = "*.md";
-              patterns["config_files"] = "*.conf";
-              patterns["json_files"] = "*.json";
-              patterns["xml_files"] = "*.xml";
-              patterns["all_files"] = "*";
-              patterns["hidden_files"] = ".*";
-              patterns["recursive_all"] = "**/*";
-              patterns["recursive_python"] = "**/*.py";
-              patterns["recursive_cpp"] = "**/*.{cpp,hpp,h}";
-              return patterns;
-          },
-          R"(Get a dictionary of common glob patterns.
+    m.def(
+        "common_patterns",
+        []() {
+            std::map<std::string, std::string> patterns;
+            patterns["python_files"] = "*.py";
+            patterns["cpp_files"] = "*.cpp";
+            patterns["header_files"] = "*.h";
+            patterns["text_files"] = "*.txt";
+            patterns["markdown_files"] = "*.md";
+            patterns["config_files"] = "*.conf";
+            patterns["json_files"] = "*.json";
+            patterns["xml_files"] = "*.xml";
+            patterns["all_files"] = "*";
+            patterns["hidden_files"] = ".*";
+            patterns["recursive_all"] = "**/*";
+            patterns["recursive_python"] = "**/*.py";
+            patterns["recursive_cpp"] = "**/*.{cpp,hpp,h}";
+            return patterns;
+        },
+        R"(Get a dictionary of common glob patterns.
 
 Returns:
     Dictionary mapping pattern names to glob patterns

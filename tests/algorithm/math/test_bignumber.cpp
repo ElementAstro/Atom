@@ -68,9 +68,7 @@ protected:
     BigNumber minInt;
 };
 
-BigNumber BigNumberTest::two() {
-    return BigNumber("2");
-}
+BigNumber BigNumberTest::two() { return BigNumber("2"); }
 
 // Constructor tests
 TEST_F(BigNumberTest, DefaultConstructor) {

@@ -34,16 +34,17 @@ struct EnumTraits<test::Color> {
     using underlying_type = std::underlying_type_t<test::Color>;
 
     static constexpr std::array<test::Color, 4> values = {
-        test::Color::Red, test::Color::Green, test::Color::Blue, test::Color::Yellow};
+        test::Color::Red, test::Color::Green, test::Color::Blue,
+        test::Color::Yellow};
 
-    static constexpr std::array<std::string_view, 4> names = {
-        "Red", "Green", "Blue", "Yellow"};
+    static constexpr std::array<std::string_view, 4> names = {"Red", "Green",
+                                                              "Blue", "Yellow"};
 
     static constexpr std::array<std::string_view, 4> descriptions = {
-        "The color red", "The color green", "The color blue", "The color yellow"};
+        "The color red", "The color green", "The color blue",
+        "The color yellow"};
 
-    static constexpr std::array<std::string_view, 4> aliases = {
-        "", "", "", ""};
+    static constexpr std::array<std::string_view, 4> aliases = {"", "", "", ""};
 
     static constexpr bool is_flags = false;
     static constexpr bool is_sequential = true;
@@ -52,20 +53,17 @@ struct EnumTraits<test::Color> {
     static constexpr std::string_view type_name = "Color";
     static constexpr std::string_view type_description = "Color enumeration";
 
-    static constexpr underlying_type min_value() noexcept {
-        return 0;
-    }
+    static constexpr underlying_type min_value() noexcept { return 0; }
 
-    static constexpr underlying_type max_value() noexcept {
-        return 3;
-    }
+    static constexpr underlying_type max_value() noexcept { return 3; }
 
     static constexpr size_t size() noexcept { return values.size(); }
     static constexpr bool empty() noexcept { return false; }
 
     static constexpr bool contains(test::Color value) noexcept {
         for (const auto& val : values) {
-            if (val == value) return true;
+            if (val == value)
+                return true;
         }
         return false;
     }
@@ -78,8 +76,9 @@ struct EnumTraits<test::Permissions> {
     using underlying_type = std::underlying_type_t<test::Permissions>;
 
     static constexpr std::array<test::Permissions, 5> values = {
-        test::Permissions::None, test::Permissions::Read, test::Permissions::Write,
-        test::Permissions::Execute, test::Permissions::All};
+        test::Permissions::None, test::Permissions::Read,
+        test::Permissions::Write, test::Permissions::Execute,
+        test::Permissions::All};
 
     static constexpr std::array<std::string_view, 5> names = {
         "None", "Read", "Write", "Execute", "All"};
@@ -98,20 +97,17 @@ struct EnumTraits<test::Permissions> {
     static constexpr std::string_view type_name = "Permissions";
     static constexpr std::string_view type_description = "Permission flags";
 
-    static constexpr underlying_type min_value() noexcept {
-        return 0;
-    }
+    static constexpr underlying_type min_value() noexcept { return 0; }
 
-    static constexpr underlying_type max_value() noexcept {
-        return 7;
-    }
+    static constexpr underlying_type max_value() noexcept { return 7; }
 
     static constexpr size_t size() noexcept { return values.size(); }
     static constexpr bool empty() noexcept { return false; }
 
     static constexpr bool contains(test::Permissions value) noexcept {
         for (const auto& val : values) {
-            if (val == value) return true;
+            if (val == value)
+                return true;
         }
         return false;
     }
@@ -261,7 +257,8 @@ TEST_F(EnumTest, BitwiseOperations) {
 
     // Test XOR operation
     auto readXorAll = Permissions::Read ^ Permissions::All;
-    EXPECT_EQ(atom::meta::enum_to_integer(readXorAll), 6);  // 1 ^ 7 = 6 (Write|Execute)
+    EXPECT_EQ(atom::meta::enum_to_integer(readXorAll),
+              6);  // 1 ^ 7 = 6 (Write|Execute)
 
     // Test NOT operation
     auto notRead = ~Permissions::Read;
@@ -371,7 +368,7 @@ TEST_F(EnumTest, FuzzyMatchingCorrected) {
 
     // Test matching multiple values
     auto eMatches = atom::meta::enum_cast_fuzzy<Color>("e");
-    EXPECT_GE(eMatches.size(), 2); // Both Green and Blue contain 'e'
+    EXPECT_GE(eMatches.size(), 2);  // Both Green and Blue contain 'e'
 }
 
 // Test flag enum specific functions
@@ -416,20 +413,22 @@ TEST_F(EnumTest, GetSetFlags) {
     // Flags should be in the order they appear in the enum values array
     bool foundRead = false, foundWrite = false;
     for (const auto& flag : setFlags) {
-        if (flag == Permissions::Read) foundRead = true;
-        if (flag == Permissions::Write) foundWrite = true;
+        if (flag == Permissions::Read)
+            foundRead = true;
+        if (flag == Permissions::Write)
+            foundWrite = true;
     }
     EXPECT_TRUE(foundRead);
     EXPECT_TRUE(foundWrite);
 
     // Test with no flags set
     auto noFlags = atom::meta::get_set_flags(Permissions::None);
-    EXPECT_EQ(noFlags.size(), 1); // None itself is a flag
+    EXPECT_EQ(noFlags.size(), 1);  // None itself is a flag
     EXPECT_EQ(noFlags[0], Permissions::None);
 
     // Test with all flags
     auto allFlags = atom::meta::get_set_flags(Permissions::All);
-    EXPECT_GE(allFlags.size(), 1); // At least the All flag itself
+    EXPECT_GE(allFlags.size(), 1);  // At least the All flag itself
 }
 
 // Test flag serialization and deserialization
@@ -470,13 +469,15 @@ TEST_F(EnumTest, FlagDeserialization) {
     EXPECT_TRUE(atom::meta::has_flag(readWrite.value(), Permissions::Write));
 
     // Test with custom separator
-    auto customSep = atom::meta::deserialize_flags<Permissions>("Read,Write", ",");
+    auto customSep =
+        atom::meta::deserialize_flags<Permissions>("Read,Write", ",");
     EXPECT_TRUE(customSep.has_value());
     EXPECT_TRUE(atom::meta::has_flag(customSep.value(), Permissions::Read));
     EXPECT_TRUE(atom::meta::has_flag(customSep.value(), Permissions::Write));
 
     // Test with whitespace
-    auto withSpaces = atom::meta::deserialize_flags<Permissions>("Read | Write");
+    auto withSpaces =
+        atom::meta::deserialize_flags<Permissions>("Read | Write");
     EXPECT_TRUE(withSpaces.has_value());
     EXPECT_TRUE(atom::meta::has_flag(withSpaces.value(), Permissions::Read));
     EXPECT_TRUE(atom::meta::has_flag(withSpaces.value(), Permissions::Write));
@@ -498,8 +499,7 @@ TEST_F(EnumTest, EnumValidator) {
         [](Color c) {
             return c == Color::Red || c == Color::Green || c == Color::Blue;
         },
-        "Only primary colors allowed"
-    );
+        "Only primary colors allowed");
 
     // Test validation
     EXPECT_TRUE(primaryColorValidator.validate(Color::Red));
@@ -508,7 +508,8 @@ TEST_F(EnumTest, EnumValidator) {
     EXPECT_FALSE(primaryColorValidator.validate(Color::Yellow));
 
     // Test error message
-    EXPECT_EQ(primaryColorValidator.error_message(), "Only primary colors allowed");
+    EXPECT_EQ(primaryColorValidator.error_message(),
+              "Only primary colors allowed");
 
     // Test validated_cast
     auto red = primaryColorValidator.validated_cast("Red");
@@ -594,7 +595,8 @@ TEST_F(EnumTest, EdgeCasesAndErrorConditions) {
     EXPECT_TRUE(atom::meta::enum_description(invalidColor).empty());
 
     // Test enum_in_range with invalid values
-    EXPECT_FALSE(atom::meta::enum_in_range(invalidColor, Color::Red, Color::Yellow));
+    EXPECT_FALSE(
+        atom::meta::enum_in_range(invalidColor, Color::Red, Color::Yellow));
 
     // Test integer_to_enum with invalid values
     auto invalidFromInt = atom::meta::integer_to_enum<Color>(999);
@@ -660,14 +662,19 @@ TEST_F(EnumTest, EnumSerialization) {
 
 // Test enum range functionality
 TEST_F(EnumTest, EnumInRange) {
-    EXPECT_TRUE(atom::meta::enum_in_range(Color::Green, Color::Red, Color::Yellow));
+    EXPECT_TRUE(
+        atom::meta::enum_in_range(Color::Green, Color::Red, Color::Yellow));
     EXPECT_TRUE(atom::meta::enum_in_range(Color::Red, Color::Red, Color::Blue));
-    EXPECT_TRUE(atom::meta::enum_in_range(Color::Yellow, Color::Yellow, Color::Yellow));
-    EXPECT_FALSE(atom::meta::enum_in_range(Color::Yellow, Color::Red, Color::Blue));
+    EXPECT_TRUE(
+        atom::meta::enum_in_range(Color::Yellow, Color::Yellow, Color::Yellow));
+    EXPECT_FALSE(
+        atom::meta::enum_in_range(Color::Yellow, Color::Red, Color::Blue));
 
     // Test with flag enum
-    EXPECT_TRUE(atom::meta::enum_in_range(Permissions::Write, Permissions::None, Permissions::All));
-    EXPECT_FALSE(atom::meta::enum_in_range(Permissions::All, Permissions::None, Permissions::Execute));
+    EXPECT_TRUE(atom::meta::enum_in_range(Permissions::Write, Permissions::None,
+                                          Permissions::All));
+    EXPECT_FALSE(atom::meta::enum_in_range(Permissions::All, Permissions::None,
+                                           Permissions::Execute));
 }
 
 // Test integer in enum range
@@ -678,7 +685,8 @@ TEST_F(EnumTest, IntegerInEnumRange) {
 
     EXPECT_TRUE(atom::meta::integer_in_enum_range<Permissions>(0));  // None
     EXPECT_TRUE(atom::meta::integer_in_enum_range<Permissions>(7));  // All
-    EXPECT_FALSE(atom::meta::integer_in_enum_range<Permissions>(99));  // Invalid
+    EXPECT_FALSE(
+        atom::meta::integer_in_enum_range<Permissions>(99));  // Invalid
 }
 
 }  // namespace atom::test

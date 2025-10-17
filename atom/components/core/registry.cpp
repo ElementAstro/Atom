@@ -348,7 +348,8 @@ auto Registry::getOrLoadComponent(const std::string& name)
         // Create a simple string representation of missing dependencies
         std::string missingDepsStr;
         for (const auto& dep : missingDeps) {
-            if (!missingDepsStr.empty()) missingDepsStr += ", ";
+            if (!missingDepsStr.empty())
+                missingDepsStr += ", ";
             missingDepsStr += dep;
         }
         spdlog::error(
@@ -552,7 +553,8 @@ bool Registry::removeComponent(const std::string& name) {
         // Create a simple string representation of dependents
         std::string dependentsStr;
         for (const auto& dep : dependents) {
-            if (!dependentsStr.empty()) dependentsStr += ", ";
+            if (!dependentsStr.empty())
+                dependentsStr += ", ";
             dependentsStr += dep;
         }
         spdlog::error(
@@ -812,7 +814,8 @@ void Registry::determineInitializationOrder() {
     // Create a simple string representation of initialization order
     std::string orderStr;
     for (const auto& name : initializationOrder_) {
-        if (!orderStr.empty()) orderStr += ", ";
+        if (!orderStr.empty())
+            orderStr += ", ";
         orderStr += name;
     }
     spdlog::info("Determined initialization order: {}", orderStr);

@@ -1,18 +1,18 @@
-#include "atom/connection/udpserver.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <atomic>
+#include <chrono>
 #include <future>
 #include <thread>
-#include <chrono>
-#include <atomic>
+#include "atom/connection/udpserver.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #endif
 
 using namespace atom::connection;
@@ -20,9 +20,7 @@ using namespace std::chrono_literals;
 
 class UdpServerTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        server_ = std::make_unique<UdpSocketHub>();
-    }
+    void SetUp() override { server_ = std::make_unique<UdpSocketHub>(); }
 
     void TearDown() override {
         if (server_) {
@@ -93,8 +91,7 @@ TEST_F(UdpServerTest, MessageHandler) {
     bool handlerCalled = false;
 
     server_->addMessageHandler([&](std::string_view message,
-                                   std::string_view host,
-                                   std::uint16_t port) {
+                                   std::string_view host, std::uint16_t port) {
         if (!handlerCalled) {
             handlerCalled = true;
             messagePromise.set_value(std::string(message));
@@ -155,13 +152,11 @@ TEST_F(UdpServerTest, MultipleMessageHandlers) {
     std::atomic<int> handler1Count{0};
     std::atomic<int> handler2Count{0};
 
-    server_->addMessageHandler([&](std::string_view, std::string_view, std::uint16_t) {
-        handler1Count++;
-    });
+    server_->addMessageHandler([&](std::string_view, std::string_view,
+                                   std::uint16_t) { handler1Count++; });
 
-    server_->addMessageHandler([&](std::string_view, std::string_view, std::uint16_t) {
-        handler2Count++;
-    });
+    server_->addMessageHandler([&](std::string_view, std::string_view,
+                                   std::uint16_t) { handler2Count++; });
 
     auto startResult = server_->start(12503);
     if (!startResult.has_value()) {
@@ -321,7 +316,7 @@ TEST_F(UdpServerTest, SendToSpecificEndpoint) {
                 socklen_t senderLen = sizeof(senderAddr);
 
                 int received = recvfrom(sock, buffer, sizeof(buffer), 0,
-                                      (sockaddr*)&senderAddr, &senderLen);
+                                        (sockaddr*)&senderAddr, &senderLen);
                 if (received > 0) {
                     messagePromise.set_value(std::string(buffer, received));
                 }
@@ -350,8 +345,8 @@ TEST_F(UdpServerTest, SendToSpecificEndpoint) {
     receiver.join();
 }
 
-// Broadcast functionality is not available in the current UdpSocketHub implementation
-// TEST_F(UdpServerTest, BroadcastMessage) {
+// Broadcast functionality is not available in the current UdpSocketHub
+// implementation TEST_F(UdpServerTest, BroadcastMessage) {
 //     auto startResult = server_->start(12507);
 //     if (!startResult.has_value()) {
 //         GTEST_SKIP() << "Could not start UDP server on port 12507";
@@ -361,8 +356,8 @@ TEST_F(UdpServerTest, SendToSpecificEndpoint) {
 //     // This test is disabled until broadcast functionality is implemented
 // }
 
-// Statistics functionality is not available in the current UdpSocketHub implementation
-// TEST_F(UdpServerTest, GetStatistics) {
+// Statistics functionality is not available in the current UdpSocketHub
+// implementation TEST_F(UdpServerTest, GetStatistics) {
 //     auto startResult = server_->start(12509);
 //     if (!startResult.has_value()) {
 //         GTEST_SKIP() << "Could not start UDP server on port 12509";
@@ -372,8 +367,8 @@ TEST_F(UdpServerTest, SendToSpecificEndpoint) {
 //     // This test is disabled until statistics functionality is implemented
 // }
 
-// Statistics functionality is not available in the current UdpSocketHub implementation
-// TEST_F(UdpServerTest, ResetStatistics) {
+// Statistics functionality is not available in the current UdpSocketHub
+// implementation TEST_F(UdpServerTest, ResetStatistics) {
 //     auto startResult = server_->start(12510);
 //     if (!startResult.has_value()) {
 //         GTEST_SKIP() << "Could not start UDP server on port 12510";
@@ -386,9 +381,8 @@ TEST_F(UdpServerTest, SendToSpecificEndpoint) {
 TEST_F(UdpServerTest, ConcurrentClients) {
     std::atomic<int> messagesReceived{0};
 
-    server_->addMessageHandler([&](std::string_view, std::string_view, std::uint16_t) {
-        messagesReceived++;
-    });
+    server_->addMessageHandler([&](std::string_view, std::string_view,
+                                   std::uint16_t) { messagesReceived++; });
 
     auto startResult = server_->start(12511);
     if (!startResult.has_value()) {
@@ -416,7 +410,8 @@ TEST_F(UdpServerTest, ConcurrentClients) {
                     serverAddr.sin_port = htons(12511);
                     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-                    std::string message = "Client" + std::to_string(i) + "_Msg" + std::to_string(j);
+                    std::string message = "Client" + std::to_string(i) +
+                                          "_Msg" + std::to_string(j);
                     sendto(sock, message.c_str(), message.length(), 0,
                            (sockaddr*)&serverAddr, sizeof(serverAddr));
 
@@ -447,12 +442,13 @@ TEST_F(UdpServerTest, LargeMessageHandling) {
 
     bool handlerCalled = false;
 
-    server_->addMessageHandler([&](std::string_view message, std::string_view, std::uint16_t) {
-        if (!handlerCalled) {
-            handlerCalled = true;
-            sizePromise.set_value(message.size());
-        }
-    });
+    server_->addMessageHandler(
+        [&](std::string_view message, std::string_view, std::uint16_t) {
+            if (!handlerCalled) {
+                handlerCalled = true;
+                sizePromise.set_value(message.size());
+            }
+        });
 
     auto startResult = server_->start(12512);
     if (!startResult.has_value()) {
@@ -513,8 +509,11 @@ TEST_F(UdpServerTest, ThreadSafety) {
                 // Test thread-safe operations
                 (void)server_->isRunning();  // Use the result to avoid warning
 
-                std::string message = "Thread_" + std::to_string(i) + "_message";
-                (void)server_->sendTo(message, "127.0.0.1", 12514);  // Use the result to avoid warning
+                std::string message =
+                    "Thread_" + std::to_string(i) + "_message";
+                (void)server_->sendTo(
+                    message, "127.0.0.1",
+                    12514);  // Use the result to avoid warning
 
                 operationCount++;
             } catch (...) {

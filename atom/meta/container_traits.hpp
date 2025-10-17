@@ -752,8 +752,9 @@ public:
      * \return New container with transformed elements
      */
     template <typename Func>
-    auto transform(Func func) -> container_pipe<std::vector<
-        std::invoke_result_t<Func, typename Container::value_type>>> {
+    auto transform(Func func)
+        -> container_pipe<std::vector<
+            std::invoke_result_t<Func, typename Container::value_type>>> {
         std::vector<std::invoke_result_t<Func, typename Container::value_type>>
             result;
         if constexpr (has_reserve_v<Container>) {

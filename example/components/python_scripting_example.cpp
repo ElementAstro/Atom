@@ -251,7 +251,8 @@ void demonstratePythonComponentBinding() {
                 //     "setPosition", {std::to_string(args[0].get<double>()),
                 //                     std::to_string(args[1].get<double>()),
                 //                     std::to_string(args[2].get<double>())});
-                std::cout << "  [PYTHON] Position set via Python script" << std::endl;
+                std::cout << "  [PYTHON] Position set via Python script"
+                          << std::endl;
                 return ScriptValue(true);
             }
             return ScriptValue(false);
@@ -262,7 +263,8 @@ void demonstratePythonComponentBinding() {
         [&](const std::vector<ScriptValue>& args) -> ScriptValue {
             // Note: executeCommand is not available in Component base class
             // auto result = component->executeCommand("getPosition", {});
-            // Note: In a real implementation, we'd parse the vector result properly
+            // Note: In a real implementation, we'd parse the vector result
+            // properly
             return ScriptValue("(0, 0, 0)");
         });
 
@@ -272,8 +274,9 @@ void demonstratePythonComponentBinding() {
                 // Note: executeCommand is not available in Component base class
                 // auto result = component->executeCommand(
                 //     "addScore", {std::to_string(args[0].get<int64_t>())});
-                std::cout << "  [PYTHON] Score added via Python script" << std::endl;
-                return ScriptValue(static_cast<int64_t>(100)); // Mock result
+                std::cout << "  [PYTHON] Score added via Python script"
+                          << std::endl;
+                return ScriptValue(static_cast<int64_t>(100));  // Mock result
             }
             return ScriptValue(static_cast<int64_t>(0));
         });
@@ -282,14 +285,15 @@ void demonstratePythonComponentBinding() {
         "get_score", [&](const std::vector<ScriptValue>& args) -> ScriptValue {
             // Note: executeCommand is not available in Component base class
             // auto result = component->executeCommand("getScore", {});
-            return ScriptValue(static_cast<int64_t>(100)); // Mock result
+            return ScriptValue(static_cast<int64_t>(100));  // Mock result
         });
 
     pythonEngine->registerFunction(
         "get_info", [&](const std::vector<ScriptValue>& args) -> ScriptValue {
             // Note: executeCommand is not available in Component base class
             // auto result = component->executeCommand("getInfo", {});
-            return ScriptValue("Player: Python Player, Score: 100, Enabled: true");
+            return ScriptValue(
+                "Player: Python Player, Score: 100, Enabled: true");
         });
 
     std::cout << "\n6. Executing Python scripts with component interaction..."

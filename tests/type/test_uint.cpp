@@ -5,8 +5,8 @@
 #include <limits>
 #include <type_traits>
 
-#include "atom/type/uint.hpp"
 #include "atom/error/exception.hpp"
+#include "atom/type/uint.hpp"
 
 namespace {
 

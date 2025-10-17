@@ -9,21 +9,22 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Executor
-Tests advanced async executor, thread pool management, task scheduling, priorities, and resource management.
+Tests advanced async executor, thread pool management, task scheduling,
+priorities, and resource management.
 
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
+#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <future>
-#include <algorithm>
+#include <thread>
+#include <vector>
 
-#include "atom/async/execution/async_executor.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/execution/async_executor.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -47,9 +48,7 @@ protected:
         config.statInterval = 50ms;
     }
 
-    void TearDown() override {
-        AsyncTestBase::TearDown();
-    }
+    void TearDown() override { AsyncTestBase::TearDown(); }
 
     AsyncExecutor::Configuration config;
 
@@ -125,29 +124,37 @@ TEST_F(AsyncExecutorTest, TaskPriorities) {
     std::mutex orderMutex;
 
     // Submit tasks in reverse priority order
-    auto lowFuture = executor.execute([&executionOrder, &orderMutex]() {
-        std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(1);
-        return 1;
-    }, AsyncExecutor::Priority::Low);
+    auto lowFuture = executor.execute(
+        [&executionOrder, &orderMutex]() {
+            std::lock_guard<std::mutex> lock(orderMutex);
+            executionOrder.push_back(1);
+            return 1;
+        },
+        AsyncExecutor::Priority::Low);
 
-    auto normalFuture = executor.execute([&executionOrder, &orderMutex]() {
-        std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(2);
-        return 2;
-    }, AsyncExecutor::Priority::Normal);
+    auto normalFuture = executor.execute(
+        [&executionOrder, &orderMutex]() {
+            std::lock_guard<std::mutex> lock(orderMutex);
+            executionOrder.push_back(2);
+            return 2;
+        },
+        AsyncExecutor::Priority::Normal);
 
-    auto highFuture = executor.execute([&executionOrder, &orderMutex]() {
-        std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(3);
-        return 3;
-    }, AsyncExecutor::Priority::High);
+    auto highFuture = executor.execute(
+        [&executionOrder, &orderMutex]() {
+            std::lock_guard<std::mutex> lock(orderMutex);
+            executionOrder.push_back(3);
+            return 3;
+        },
+        AsyncExecutor::Priority::High);
 
-    auto criticalFuture = executor.execute([&executionOrder, &orderMutex]() {
-        std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(4);
-        return 4;
-    }, AsyncExecutor::Priority::Critical);
+    auto criticalFuture = executor.execute(
+        [&executionOrder, &orderMutex]() {
+            std::lock_guard<std::mutex> lock(orderMutex);
+            executionOrder.push_back(4);
+            return 4;
+        },
+        AsyncExecutor::Priority::Critical);
 
     // Wait for all tasks to complete
     lowFuture.get();
@@ -172,9 +179,8 @@ TEST_F(AsyncExecutorTest, ConcurrentTaskExecution) {
 
     // Submit multiple tasks
     for (int i = 0; i < numTasks; ++i) {
-        futures.push_back(executor.execute([this, i]() {
-            return simpleTask(i, 10);
-        }));
+        futures.push_back(
+            executor.execute([this, i]() { return simpleTask(i, 10); }));
     }
 
     // Collect results
@@ -209,14 +215,14 @@ TEST_F(AsyncExecutorTest, DISABLED_ExecutorStatistics) {
     // Execute some tasks to verify basic functionality
     std::vector<std::future<int>> futures;
     for (int i = 0; i < 10; ++i) {
-        futures.push_back(executor.execute([this, i]() {
-            return simpleTask(i, 20);
-        }));
+        futures.push_back(
+            executor.execute([this, i]() { return simpleTask(i, 20); }));
     }
 
     // Wait for completion
     for (size_t i = 0; i < futures.size(); ++i) {
-        EXPECT_EQ(futures[i].get(), static_cast<int>(i) * 2);  // simpleTask returns i * 2
+        EXPECT_EQ(futures[i].get(),
+                  static_cast<int>(i) * 2);  // simpleTask returns i * 2
     }
 
     executor.stop();
@@ -228,9 +234,8 @@ TEST_F(AsyncExecutorTest, ExceptionHandling) {
     executor.start();
 
     // Task that throws exception
-    auto future = executor.execute([]() -> int {
-        throw std::runtime_error("Test exception");
-    });
+    auto future = executor.execute(
+        []() -> int { throw std::runtime_error("Test exception"); });
 
     // Should propagate exception through future
     EXPECT_THROW(future.get(), std::runtime_error);
@@ -252,9 +257,8 @@ TEST_F(AsyncExecutorTest, WithoutWorkStealing) {
     // Should still work without work stealing
     std::vector<std::future<int>> futures;
     for (int i = 0; i < 10; ++i) {
-        futures.push_back(executor.execute([this, i]() {
-            return simpleTask(i);
-        }));
+        futures.push_back(
+            executor.execute([this, i]() { return simpleTask(i); }));
     }
 
     for (int i = 0; i < 10; ++i) {
@@ -289,8 +293,8 @@ TEST_F(AsyncExecutorTest, ShutdownWithPendingTasks) {
 // Test executor with invalid configuration
 TEST_F(AsyncExecutorTest, InvalidConfiguration) {
     AsyncExecutor::Configuration invalidConfig;
-    invalidConfig.minThreads = 0; // Invalid
-    invalidConfig.maxThreads = 0; // Invalid
+    invalidConfig.minThreads = 0;  // Invalid
+    invalidConfig.maxThreads = 0;  // Invalid
 
     // Constructor should fix invalid values
     AsyncExecutor executor(invalidConfig);
@@ -308,10 +312,7 @@ TEST_F(AsyncExecutorTest, TaskSubmissionWhenNotRunning) {
     AsyncExecutor executor(config);
 
     // Should throw when not running
-    EXPECT_THROW(
-        executor.execute([]() { return 42; }),
-        ExecutorException
-    );
+    EXPECT_THROW(executor.execute([]() { return 42; }), ExecutorException);
 }
 
 // Test executor global instance
@@ -356,21 +357,21 @@ TEST_F(AsyncExecutorTest, PerformanceUnderLoad) {
 
     // Submit many lightweight tasks
     for (int i = 0; i < numTasks; ++i) {
-        executor.execute([&completedTasks]() {
-            completedTasks.fetch_add(1);
-        });
+        executor.execute([&completedTasks]() { completedTasks.fetch_add(1); });
     }
 
     // Wait for all tasks to complete
     std::this_thread::sleep_for(200ms);
 
     auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        endTime - startTime);
 
     EXPECT_EQ(completedTasks.load(), numTasks);
 
-    std::cout << "AsyncExecutor performance: " << numTasks << " tasks completed in "
-              << duration.count() << "ms" << std::endl;
+    std::cout << "AsyncExecutor performance: " << numTasks
+              << " tasks completed in " << duration.count() << "ms"
+              << std::endl;
 
     executor.stop();
 }
@@ -389,9 +390,7 @@ TEST_F(AsyncExecutorTest, ThreadSafety) {
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&executor, &counter]() {
             for (int j = 0; j < 50; ++j) {
-                executor.execute([&counter]() {
-                    counter.fetch_add(1);
-                });
+                executor.execute([&counter]() { counter.fetch_add(1); });
             }
         });
     }
@@ -428,7 +427,7 @@ TEST_F(AsyncExecutorTest, ResourceCleanup) {
         std::this_thread::sleep_for(150ms);
 
         executor.stop();
-    } // Executor destructor should clean up
+    }  // Executor destructor should clean up
 
     // Give some time for cleanup
     std::this_thread::sleep_for(50ms);

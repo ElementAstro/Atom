@@ -215,9 +215,8 @@ public:
      *
      * @param block_size_strategy Memory block growth strategy
      */
-    explicit MemoryPool(
-        std::unique_ptr<BlockSizeStrategy> block_size_strategy =
-            std::make_unique<ExponentialBlockSizeStrategy>())
+    explicit MemoryPool(std::unique_ptr<BlockSizeStrategy> block_size_strategy =
+                            std::make_unique<ExponentialBlockSizeStrategy>())
         : block_size_strategy_(std::move(block_size_strategy)) {
         static_assert(BlockSize >= sizeof(T),
                       "BlockSize must be at least as large as sizeof(T)");
@@ -476,8 +475,7 @@ public:
      * @param ptr Pointer to look up
      * @return The tag associated with the pointer, if any
      */
-    [[nodiscard]] std::optional<MemoryTag> findTag(
-        void* ptr) const {
+    [[nodiscard]] std::optional<MemoryTag> findTag(void* ptr) const {
         std::shared_lock lock(mutex_);
         auto it = tagged_allocations_.find(ptr);
         if (it != tagged_allocations_.end()) {
@@ -491,8 +489,8 @@ public:
      *
      * @return A copy of the pointer-to-tag mapping
      */
-    [[nodiscard]] std::unordered_map<void*, MemoryTag>
-    getTaggedAllocations() const {
+    [[nodiscard]] std::unordered_map<void*, MemoryTag> getTaggedAllocations()
+        const {
         std::shared_lock lock(mutex_);
         return tagged_allocations_;
     }
@@ -534,8 +532,7 @@ protected:
         void* ptr = aligned_alloc(alignment, bytes);
 #endif
         if (!ptr) {
-            throw MemoryPoolException(
-                "Aligned allocation failed");
+            throw MemoryPoolException("Aligned allocation failed");
         }
 
         std::unique_lock lock(mutex_);
@@ -744,7 +741,7 @@ private:
     std::vector<Chunk> pool_;           ///< Pool of memory chunks
     std::vector<FreeBlock> free_list_;  ///< List of free blocks
     mutable std::shared_mutex mutex_;   ///< Mutex to protect shared resources
-    MemoryPoolStats stats_;  ///< Memory pool statistics
+    MemoryPoolStats stats_;             ///< Memory pool statistics
     std::unordered_map<void*, MemoryTag>
         tagged_allocations_;  ///< Tagged allocations
 };

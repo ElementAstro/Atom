@@ -26,13 +26,13 @@ and updated without stopping the application.
 #define ENABLE_HOT_RELOAD 0
 #endif
 
+#include <atomic>
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
-#include <atomic>
-#include <functional>
 #include <unordered_map>
 
 #include "atom/components/component.hpp"
@@ -51,7 +51,8 @@ private:
 
 public:
     explicit ConfigComponent(const std::string& name) : Component(name) {
-        std::cout << "ConfigComponent '" << name << "' created (v" << version_ << ")" << std::endl;
+        std::cout << "ConfigComponent '" << name << "' created (v" << version_
+                  << ")" << std::endl;
         initializeConfig();
     }
 
@@ -75,12 +76,11 @@ public:
             setValue("refreshRate", 120.0);
             setValue("theme", "dark");
 
-            std::cout << "  Configuration reloaded (v" << version_ << ")" << std::endl;
+            std::cout << "  Configuration reloaded (v" << version_ << ")"
+                      << std::endl;
         });
 
-        def("getVersion", [this]() -> int {
-            return version_.load();
-        });
+        def("getVersion", [this]() -> int { return version_.load(); });
 
         def("printConfig", [this]() {
             auto serverUrl = getVariable<std::string>("serverUrl");
@@ -92,8 +92,10 @@ public:
             std::cout << "  Configuration (v" << version_ << "):" << std::endl;
             std::cout << "    Server URL: " << serverUrl->get() << std::endl;
             std::cout << "    Timeout: " << timeout->get() << "s" << std::endl;
-            std::cout << "    Debug Mode: " << (debugMode->get() ? "ON" : "OFF") << std::endl;
-            std::cout << "    Refresh Rate: " << refreshRate->get() << " Hz" << std::endl;
+            std::cout << "    Debug Mode: " << (debugMode->get() ? "ON" : "OFF")
+                      << std::endl;
+            std::cout << "    Refresh Rate: " << refreshRate->get() << " Hz"
+                      << std::endl;
             std::cout << "    Theme: " << theme->get() << std::endl;
         });
     }
@@ -119,14 +121,14 @@ public:
 
         def("execute", [this]() {
             if (currentBehavior_) {
-                std::cout << "  Executing behavior: " << behaviorName_ << std::endl;
+                std::cout << "  Executing behavior: " << behaviorName_
+                          << std::endl;
                 currentBehavior_();
             }
         });
 
-        def("getCurrentBehavior", [this]() -> std::string {
-            return behaviorName_;
-        });
+        def("getCurrentBehavior",
+            [this]() -> std::string { return behaviorName_; });
     }
 
 private:
@@ -147,7 +149,8 @@ private:
             addVariable<int>("defenseLevel", 80);
         } else if (name == "passive") {
             currentBehavior_ = [this]() {
-                std::cout << "    Remaining passive and observing..." << std::endl;
+                std::cout << "    Remaining passive and observing..."
+                          << std::endl;
                 setValue("observationLevel", 60);
             };
             addVariable<int>("observationLevel", 60);
@@ -168,20 +171,18 @@ private:
  */
 class HotReloadManager {
 private:
-    std::unordered_map<std::string, std::shared_ptr<Component>> watchedComponents_;
+    std::unordered_map<std::string, std::shared_ptr<Component>>
+        watchedComponents_;
     std::atomic<bool> running_{false};
     std::thread watchThread_;
 
 public:
-    HotReloadManager() {
-        std::cout << "HotReloadManager created" << std::endl;
-    }
+    HotReloadManager() { std::cout << "HotReloadManager created" << std::endl; }
 
-    ~HotReloadManager() {
-        stop();
-    }
+    ~HotReloadManager() { stop(); }
 
-    void watchComponent(const std::string& name, std::shared_ptr<Component> component) {
+    void watchComponent(const std::string& name,
+                        std::shared_ptr<Component> component) {
         watchedComponents_[name] = component;
         std::cout << "Now watching component: " << name << std::endl;
     }
@@ -198,7 +199,8 @@ public:
             while (running_) {
                 std::this_thread::sleep_for(std::chrono::seconds(3));
 
-                if (!running_) break;
+                if (!running_)
+                    break;
 
                 // Simulate file change detection and hot reload
                 simulateHotReload();
@@ -220,7 +222,8 @@ public:
     void triggerReload(const std::string& componentName) {
         auto it = watchedComponents_.find(componentName);
         if (it != watchedComponents_.end()) {
-            std::cout << "\n--- Hot Reloading Component: " << componentName << " ---" << std::endl;
+            std::cout << "\n--- Hot Reloading Component: " << componentName
+                      << " ---" << std::endl;
 
             auto component = it->second;
 
@@ -228,14 +231,19 @@ public:
             if (componentName.find("Config") != std::string::npos) {
                 // Note: executeCommand is not available in Component base class
                 // component->executeCommand("reload", {});
-                std::cout << "  [RELOAD] Config component reloaded" << std::endl;
+                std::cout << "  [RELOAD] Config component reloaded"
+                          << std::endl;
             } else if (componentName.find("Behavior") != std::string::npos) {
                 // Randomly change behavior
-                std::vector<std::string> behaviors = {"aggressive", "defensive", "passive", "default"};
+                std::vector<std::string> behaviors = {"aggressive", "defensive",
+                                                      "passive", "default"};
                 static int behaviorIndex = 0;
                 // Note: executeCommand is not available in Component base class
-                // component->executeCommand("setBehavior", {behaviors[behaviorIndex % behaviors.size()]});
-                std::cout << "  [RELOAD] Behavior component set to: " << behaviors[behaviorIndex % behaviors.size()] << std::endl;
+                // component->executeCommand("setBehavior",
+                // {behaviors[behaviorIndex % behaviors.size()]});
+                std::cout << "  [RELOAD] Behavior component set to: "
+                          << behaviors[behaviorIndex % behaviors.size()]
+                          << std::endl;
                 behaviorIndex++;
             }
 
@@ -257,7 +265,8 @@ private:
         }
 
         if (!componentNames.empty()) {
-            std::string componentToReload = componentNames[reloadCounter % componentNames.size()];
+            std::string componentToReload =
+                componentNames[reloadCounter % componentNames.size()];
             triggerReload(componentToReload);
             reloadCounter++;
         }
@@ -297,7 +306,8 @@ public:
         // Main application loop
         int iteration = 0;
         while (running_ && iteration < 10) {
-            std::cout << "\n--- Application Iteration " << (iteration + 1) << " ---" << std::endl;
+            std::cout << "\n--- Application Iteration " << (iteration + 1)
+                      << " ---" << std::endl;
 
             // Use configuration
             // Note: executeCommand is not available in Component base class
@@ -337,9 +347,7 @@ int main() {
         HotReloadApp app;
 
         // Start the application in a separate thread
-        std::thread appThread([&app]() {
-            app.run();
-        });
+        std::thread appThread([&app]() { app.run(); });
 
         // Simulate manual hot reloads
         std::this_thread::sleep_for(std::chrono::seconds(5));

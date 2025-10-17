@@ -204,28 +204,44 @@ auto getExecutableNameFromPath(std::string_view path) -> std::string {
 template bool isFolderExists<std::string>(const std::string& folderPath);
 template bool isFileExists<std::string>(const std::string& filePath);
 template std::uintmax_t fileSize<std::string>(const std::string& path);
-template void splitFile<std::string, std::string>(const std::string& filePath, std::size_t chunkSize, const std::string& outputPattern);
-template void mergeFiles<std::string>(const std::string& outputFilePath, std::span<const std::string> partFiles);
+template void splitFile<std::string, std::string>(
+    const std::string& filePath, std::size_t chunkSize,
+    const std::string& outputPattern);
+template void mergeFiles<std::string>(const std::string& outputFilePath,
+                                      std::span<const std::string> partFiles);
 template bool createDirectory<std::string>(const std::string& path);
 template bool removeDirectory<std::string>(const std::string& path);
-template bool copyFile<std::string, std::string>(const std::string& src_path, const std::string& dst_path);
-template bool moveFile<std::string, std::string>(const std::string& src_path, const std::string& dst_path);
-template bool renameFile<std::string, std::string>(const std::string& old_path, const std::string& new_path);
+template bool copyFile<std::string, std::string>(const std::string& src_path,
+                                                 const std::string& dst_path);
+template bool moveFile<std::string, std::string>(const std::string& src_path,
+                                                 const std::string& dst_path);
+template bool renameFile<std::string, std::string>(const std::string& old_path,
+                                                   const std::string& new_path);
 template bool removeFile<std::string>(const std::string& path);
-template bool createSymlink<std::string, std::string>(const std::string& target_path, const std::string& symlink_path);
+template bool createSymlink<std::string, std::string>(
+    const std::string& target_path, const std::string& symlink_path);
 template bool removeSymlink<std::string>(const std::string& path);
 template std::string jwalk<std::string>(const std::string& root);
-template void fwalk<std::string>(const std::string& root, const std::function<void(const fs::path&)>& callback);
+template void fwalk<std::string>(
+    const std::string& root,
+    const std::function<void(const fs::path&)>& callback);
 template bool isFolderEmpty<std::string>(const std::string& folderPath);
 template bool isAbsolutePath<std::string>(const std::string& path);
-template bool changeWorkingDirectory<std::string>(const std::string& directoryPath);
-template std::pair<std::string, std::string> getFileTimes<std::string>(const std::string& filePath);
-template bool isExecutableFile<std::string, std::string>(const std::string& fileName, const std::string& fileExt);
+template bool changeWorkingDirectory<std::string>(
+    const std::string& directoryPath);
+template std::pair<std::string, std::string> getFileTimes<std::string>(
+    const std::string& filePath);
+template bool isExecutableFile<std::string, std::string>(
+    const std::string& fileName, const std::string& fileExt);
 template std::size_t getFileSize<std::string>(const std::string& filePath);
-template bool truncateFile<std::string>(const std::string& path, std::streamsize size);
+template bool truncateFile<std::string>(const std::string& path,
+                                        std::streamsize size);
 template auto checkPathType<std::string>(const std::string& path) -> PathType;
-template auto countLinesInFile<std::string>(const std::string& filePath) -> std::optional<int>;
-template auto searchExecutableFiles<std::string>(const std::string& dir, std::string_view searchStr) -> std::vector<fs::path>;
+template auto countLinesInFile<std::string>(const std::string& filePath)
+    -> std::optional<int>;
+template auto searchExecutableFiles<std::string>(const std::string& dir,
+                                                 std::string_view searchStr)
+    -> std::vector<fs::path>;
 
 // Instantiations for const char*
 template bool isFolderExists<const char*>(const char* const& folderPath);

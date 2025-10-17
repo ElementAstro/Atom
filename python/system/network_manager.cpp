@@ -16,10 +16,10 @@ PYBIND11_MODULE(network_manager, m) {
 
         Examples:
             >>> from atom.system import network_manager
-            >>> 
+            >>>
             >>> # Create network manager
             >>> manager = network_manager.NetworkManager()
-            >>> 
+            >>>
             >>> # Get network interfaces
             >>> interfaces = manager.get_network_interfaces()
             >>> for iface in interfaces:
@@ -28,7 +28,7 @@ PYBIND11_MODULE(network_manager, m) {
             ...     print(f"  Status: {'UP' if iface.is_up() else 'DOWN'}")
             ...     for addr in iface.get_addresses():
             ...         print(f"  Address: {addr}")
-            >>> 
+            >>>
             >>> # DNS operations
             >>> dns_servers = network_manager.NetworkManager.get_dns_servers()
             >>> print(f"DNS servers: {dns_servers}")
@@ -69,26 +69,33 @@ Examples:
     >>> conn.local_address = "127.0.0.1"
     >>> conn.local_port = 8080
 )")
-        .def(py::init<>(),
-             "Constructs an empty NetworkConnection object.")
+        .def(py::init<>(), "Constructs an empty NetworkConnection object.")
         .def_readwrite("protocol", &atom::system::NetworkConnection::protocol,
-                      "Protocol (TCP or UDP)")
-        .def_readwrite("local_address", &atom::system::NetworkConnection::localAddress,
-                      "Local IP address")
-        .def_readwrite("remote_address", &atom::system::NetworkConnection::remoteAddress,
-                      "Remote IP address")
-        .def_readwrite("local_port", &atom::system::NetworkConnection::localPort,
-                      "Local port number")
-        .def_readwrite("remote_port", &atom::system::NetworkConnection::remotePort,
-                      "Remote port number")
-        .def("__repr__", [](const atom::system::NetworkConnection& self) {
-            return "<NetworkConnection(protocol='" + self.protocol + 
-                   "', local=" + self.localAddress + ":" + std::to_string(self.localPort) +
-                   ", remote=" + self.remoteAddress + ":" + std::to_string(self.remotePort) + ")>";
-        })
+                       "Protocol (TCP or UDP)")
+        .def_readwrite("local_address",
+                       &atom::system::NetworkConnection::localAddress,
+                       "Local IP address")
+        .def_readwrite("remote_address",
+                       &atom::system::NetworkConnection::remoteAddress,
+                       "Remote IP address")
+        .def_readwrite("local_port",
+                       &atom::system::NetworkConnection::localPort,
+                       "Local port number")
+        .def_readwrite("remote_port",
+                       &atom::system::NetworkConnection::remotePort,
+                       "Remote port number")
+        .def("__repr__",
+             [](const atom::system::NetworkConnection& self) {
+                 return "<NetworkConnection(protocol='" + self.protocol +
+                        "', local=" + self.localAddress + ":" +
+                        std::to_string(self.localPort) +
+                        ", remote=" + self.remoteAddress + ":" +
+                        std::to_string(self.remotePort) + ")>";
+             })
         .def("__str__", [](const atom::system::NetworkConnection& self) {
-            return self.protocol + " " + self.localAddress + ":" + std::to_string(self.localPort) +
-                   " -> " + self.remoteAddress + ":" + std::to_string(self.remotePort);
+            return self.protocol + " " + self.localAddress + ":" +
+                   std::to_string(self.localPort) + " -> " +
+                   self.remoteAddress + ":" + std::to_string(self.remotePort);
         });
 
     // NetworkInterface class binding
@@ -107,8 +114,10 @@ Examples:
     >>> for addr in interface.get_addresses():
     ...     print(f"Address: {addr}")
 )")
-        .def(py::init<std::string, std::vector<std::string>, std::string, bool>(),
-             py::arg("name"), py::arg("addresses"), py::arg("mac"), py::arg("is_up"),
+        .def(py::init<std::string, std::vector<std::string>, std::string,
+                      bool>(),
+             py::arg("name"), py::arg("addresses"), py::arg("mac"),
+             py::arg("is_up"),
              "Constructs a NetworkInterface with specified parameters.")
         .def("get_name", &atom::system::NetworkInterface::getName,
              py::return_value_policy::reference_internal,
@@ -121,9 +130,10 @@ Examples:
     >>> name = interface.get_name()
     >>> print(f"Interface name: {name}")
 )")
-        .def("get_addresses", 
-             static_cast<const std::vector<std::string>& (atom::system::NetworkInterface::*)() const>
-             (&atom::system::NetworkInterface::getAddresses),
+        .def("get_addresses",
+             static_cast<const std::vector<std::string>& (
+                 atom::system::NetworkInterface::*)() const>(
+                 &atom::system::NetworkInterface::getAddresses),
              py::return_value_policy::reference_internal,
              R"(Gets the IP addresses associated with the network interface.
 
@@ -158,13 +168,14 @@ Examples:
     ... else:
     ...     print("Interface is down")
 )")
-        .def("__repr__", [](const atom::system::NetworkInterface& self) {
-            return "<NetworkInterface(name='" + self.getName() + 
-                   "', mac='" + self.getMac() + 
-                   "', up=" + (self.isUp() ? "True" : "False") + ")>";
-        })
+        .def("__repr__",
+             [](const atom::system::NetworkInterface& self) {
+                 return "<NetworkInterface(name='" + self.getName() +
+                        "', mac='" + self.getMac() +
+                        "', up=" + (self.isUp() ? "True" : "False") + ")>";
+             })
         .def("__str__", [](const atom::system::NetworkInterface& self) {
-            return self.getName() + " (" + self.getMac() + ") - " + 
+            return self.getName() + " (" + self.getMac() + ") - " +
                    (self.isUp() ? "UP" : "DOWN");
         });
 
@@ -181,9 +192,9 @@ Examples:
     >>> interfaces = manager.get_network_interfaces()
     >>> status = manager.get_interface_status("eth0")
 )")
-        .def(py::init<>(),
-             "Constructs a NetworkManager object.")
-        .def("get_network_interfaces", &atom::system::NetworkManager::getNetworkInterfaces,
+        .def(py::init<>(), "Constructs a NetworkManager object.")
+        .def("get_network_interfaces",
+             &atom::system::NetworkManager::getNetworkInterfaces,
              R"(Gets the list of network interfaces.
 
 Returns:
@@ -195,7 +206,8 @@ Examples:
     >>> for iface in interfaces:
     ...     print(f"  {iface.get_name()}: {iface.get_mac()}")
 )")
-        .def("get_interface_status", &atom::system::NetworkManager::getInterfaceStatus,
+        .def("get_interface_status",
+             &atom::system::NetworkManager::getInterfaceStatus,
              py::arg("interface_name"),
              R"(Gets the status of a network interface.
 
@@ -209,7 +221,8 @@ Examples:
     >>> status = manager.get_interface_status("eth0")
     >>> print(f"eth0 status: {status}")
 )")
-        .def("monitor_connection_status", &atom::system::NetworkManager::monitorConnectionStatus,
+        .def("monitor_connection_status",
+             &atom::system::NetworkManager::monitorConnectionStatus,
              R"(Monitors the connection status of network interfaces.
 
 This method starts monitoring network interface status changes.
@@ -220,9 +233,10 @@ Examples:
 )")
 
         // Static methods
-        .def_static("enable_interface", &atom::system::NetworkManager::enableInterface,
-                   py::arg("interface_name"),
-                   R"(Enables a network interface.
+        .def_static("enable_interface",
+                    &atom::system::NetworkManager::enableInterface,
+                    py::arg("interface_name"),
+                    R"(Enables a network interface.
 
 Args:
     interface_name: The name of the network interface to enable.
@@ -236,9 +250,10 @@ Examples:
 Note:
     This operation typically requires administrator/root privileges.
 )")
-        .def_static("disable_interface", &atom::system::NetworkManager::disableInterface,
-                   py::arg("interface_name"),
-                   R"(Disables a network interface.
+        .def_static("disable_interface",
+                    &atom::system::NetworkManager::disableInterface,
+                    py::arg("interface_name"),
+                    R"(Disables a network interface.
 
 Args:
     interface_name: The name of the network interface to disable.
@@ -253,8 +268,8 @@ Note:
     This operation typically requires administrator/root privileges.
 )")
         .def_static("resolve_dns", &atom::system::NetworkManager::resolveDNS,
-                   py::arg("hostname"),
-                   R"(Resolves a DNS hostname to an IP address.
+                    py::arg("hostname"),
+                    R"(Resolves a DNS hostname to an IP address.
 
 Args:
     hostname: The DNS hostname to resolve.
@@ -269,8 +284,9 @@ Examples:
     >>> ip = network_manager.NetworkManager.resolve_dns("google.com")
     >>> print(f"google.com resolves to: {ip}")
 )")
-        .def_static("get_dns_servers", &atom::system::NetworkManager::getDNSServers,
-                   R"(Gets the list of DNS servers.
+        .def_static("get_dns_servers",
+                    &atom::system::NetworkManager::getDNSServers,
+                    R"(Gets the list of DNS servers.
 
 Returns:
     List of DNS server addresses.
@@ -281,9 +297,10 @@ Examples:
     >>> for server in dns_servers:
     ...     print(f"  {server}")
 )")
-        .def_static("set_dns_servers", &atom::system::NetworkManager::setDNSServers,
-                   py::arg("dns_servers"),
-                   R"(Sets the list of DNS servers.
+        .def_static("set_dns_servers",
+                    &atom::system::NetworkManager::setDNSServers,
+                    py::arg("dns_servers"),
+                    R"(Sets the list of DNS servers.
 
 Args:
     dns_servers: List of DNS server addresses.
@@ -298,9 +315,9 @@ Examples:
 Note:
     This operation typically requires administrator/root privileges.
 )")
-        .def_static("add_dns_server", &atom::system::NetworkManager::addDNSServer,
-                   py::arg("dns"),
-                   R"(Adds a DNS server to the list.
+        .def_static("add_dns_server",
+                    &atom::system::NetworkManager::addDNSServer, py::arg("dns"),
+                    R"(Adds a DNS server to the list.
 
 Args:
     dns: The DNS server address to add.
@@ -314,9 +331,10 @@ Examples:
 Note:
     This operation typically requires administrator/root privileges.
 )")
-        .def_static("remove_dns_server", &atom::system::NetworkManager::removeDNSServer,
-                   py::arg("dns"),
-                   R"(Removes a DNS server from the list.
+        .def_static("remove_dns_server",
+                    &atom::system::NetworkManager::removeDNSServer,
+                    py::arg("dns"),
+                    R"(Removes a DNS server from the list.
 
 Args:
     dns: The DNS server address to remove.

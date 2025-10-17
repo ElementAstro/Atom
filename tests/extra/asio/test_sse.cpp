@@ -1,5 +1,5 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 // Temporarily disable SSE tests due to missing dependencies
 #if 0
@@ -7,13 +7,13 @@
 #include "atom/extra/asio/sse/event_store.hpp"
 #include "atom/extra/asio/sse/sse.hpp"
 
-#include <string>
-#include <memory>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
-#include <unordered_map>
+#include <memory>
 #include <nlohmann/json.hpp>
+#include <string>
+#include <unordered_map>
 
 using namespace testing;
 using namespace atom::extra::asio::sse;
@@ -390,4 +390,4 @@ TEST_F(SseTest, EventEmptyData) {
 
 } // namespace atom::extra::asio::test
 
-#endif // Temporarily disabled SSE tests
+#endif  // Temporarily disabled SSE tests

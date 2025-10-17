@@ -1,8 +1,8 @@
 #include "atom/sysinfo/hardware/battery.hpp"
 #include <gtest/gtest.h>
+#include <atomic>
 #include <chrono>
 #include <thread>
-#include <atomic>
 #include <vector>
 
 using namespace atom::system;
@@ -116,23 +116,27 @@ TEST_F(BatteryTest, GetBatteryInfo) {
 
         // If energy values are available, they should be reasonable
         if (info.energyFull > 0) {
-            EXPECT_LE(info.energyNow, info.energyFull * 1.1f); // Allow some tolerance
+            EXPECT_LE(info.energyNow,
+                      info.energyFull * 1.1f);  // Allow some tolerance
         }
 
         if (info.energyDesign > 0) {
-            EXPECT_LE(info.energyFull, info.energyDesign * 1.1f); // Allow some tolerance
+            EXPECT_LE(info.energyFull,
+                      info.energyDesign * 1.1f);  // Allow some tolerance
         }
 
         // Voltage should be positive if available
         if (info.voltageNow > 0) {
             EXPECT_GT(info.voltageNow, 0.0f);
-            EXPECT_LT(info.voltageNow, 50.0f); // Reasonable upper bound for battery voltage
+            EXPECT_LT(info.voltageNow,
+                      50.0f);  // Reasonable upper bound for battery voltage
         }
 
         // Current should be reasonable if available
         if (info.currentNow != 0) {
             EXPECT_GT(std::abs(info.currentNow), 0.0f);
-            EXPECT_LT(std::abs(info.currentNow), 100.0f); // Reasonable upper bound for battery current
+            EXPECT_LT(std::abs(info.currentNow),
+                      100.0f);  // Reasonable upper bound for battery current
         }
 
         // Time values should be non-negative
@@ -159,8 +163,10 @@ TEST_F(BatteryTest, GetBatteryInfoConsistency) {
 
         // Dynamic information might differ slightly, but should be reasonable
         if (info1->batteryLifePercent > 0 && info2->batteryLifePercent > 0) {
-            float percentDiff = std::abs(info1->batteryLifePercent - info2->batteryLifePercent);
-            EXPECT_LT(percentDiff, 10.0f); // Should not change by more than 10% quickly
+            float percentDiff =
+                std::abs(info1->batteryLifePercent - info2->batteryLifePercent);
+            EXPECT_LT(percentDiff,
+                      10.0f);  // Should not change by more than 10% quickly
         }
     }
 }
@@ -181,9 +187,11 @@ TEST_F(BatteryTest, BatteryInfoEstimatedTime) {
         if (info.isCharging) {
             EXPECT_TRUE(estimatedTime >= 0.0f);
         } else {
-            // If discharging and we have a reasonable battery level, time should be reasonable
+            // If discharging and we have a reasonable battery level, time
+            // should be reasonable
             if (info.batteryLifePercent > 5.0f) {
-                EXPECT_LT(estimatedTime, 100.0f); // Less than 100 hours seems reasonable
+                EXPECT_LT(estimatedTime,
+                          100.0f);  // Less than 100 hours seems reasonable
             }
         }
     }
@@ -199,8 +207,9 @@ TEST_F(BatteryTest, BatteryMonitoringBasic) {
 
     if (batteryInfoOpt.has_value()) {
         // Test that we can create a battery monitor
-        // Note: This tests the basic functionality without actually starting monitoring
-        // since that would require elevated privileges and could interfere with system
+        // Note: This tests the basic functionality without actually starting
+        // monitoring since that would require elevated privileges and could
+        // interfere with system
 
         const BatteryInfo& info = batteryInfoOpt.value();
 
@@ -211,9 +220,12 @@ TEST_F(BatteryTest, BatteryMonitoringBasic) {
 
             // If we have energy information, it should be consistent
             if (info.energyFull > 0 && info.energyNow > 0) {
-                float calculatedPercent = (info.energyNow / info.energyFull) * 100.0f;
-                float percentDiff = std::abs(calculatedPercent - info.batteryLifePercent);
-                EXPECT_LT(percentDiff, 20.0f); // Allow some tolerance for different calculation methods
+                float calculatedPercent =
+                    (info.energyNow / info.energyFull) * 100.0f;
+                float percentDiff =
+                    std::abs(calculatedPercent - info.batteryLifePercent);
+                EXPECT_LT(percentDiff, 20.0f);  // Allow some tolerance for
+                                                // different calculation methods
             }
         }
     }
@@ -226,13 +238,15 @@ TEST_F(BatteryTest, BatteryPowerCalculations) {
     if (batteryInfoOpt.has_value()) {
         const BatteryInfo& info = batteryInfoOpt.value();
 
-        if (info.isBatteryPresent && info.voltageNow > 0 && info.currentNow != 0) {
+        if (info.isBatteryPresent && info.voltageNow > 0 &&
+            info.currentNow != 0) {
             // Calculate power (P = V * I)
             float power = info.voltageNow * std::abs(info.currentNow);
 
             // Power should be reasonable for a battery
             EXPECT_GT(power, 0.0f);
-            EXPECT_LT(power, 1000.0f); // Less than 1000W seems reasonable for most batteries
+            EXPECT_LT(power, 1000.0f);  // Less than 1000W seems reasonable for
+                                        // most batteries
 
             // If charging, current should typically be positive
             // If discharging, current should typically be negative
@@ -273,13 +287,13 @@ TEST_F(BatteryTest, BatteryInfoFieldValidation) {
     info.isBatteryPresent = true;
     info.isCharging = false;
     info.batteryLifePercent = 75.5f;
-    info.batteryLifeTime = 3.5f; // 3.5 hours
-    info.batteryFullLifeTime = 8.0f; // 8 hours when full
-    info.energyNow = 7500000.0f; // 7.5 Wh in µWh
-    info.energyFull = 10000000.0f; // 10 Wh in µWh
-    info.energyDesign = 11000000.0f; // 11 Wh in µWh
-    info.voltageNow = 3.7f; // 3.7V
-    info.currentNow = -2.0f; // -2A (discharging)
+    info.batteryLifeTime = 3.5f;      // 3.5 hours
+    info.batteryFullLifeTime = 8.0f;  // 8 hours when full
+    info.energyNow = 7500000.0f;      // 7.5 Wh in µWh
+    info.energyFull = 10000000.0f;    // 10 Wh in µWh
+    info.energyDesign = 11000000.0f;  // 11 Wh in µWh
+    info.voltageNow = 3.7f;           // 3.7V
+    info.currentNow = -2.0f;          // -2A (discharging)
 
     // Validate all fields are set correctly
     EXPECT_TRUE(info.isBatteryPresent);
@@ -309,7 +323,8 @@ TEST_F(BatteryTest, NoBatteryHandling) {
     // Function should not throw even if no battery is present
     EXPECT_NO_THROW(getBatteryInfo());
 
-    // If no battery is present, optional should either be empty or contain info with isBatteryPresent = false
+    // If no battery is present, optional should either be empty or contain info
+    // with isBatteryPresent = false
     if (batteryInfoOpt.has_value()) {
         // If we get battery info but no battery is present
         if (!batteryInfoOpt->isBatteryPresent) {
@@ -386,29 +401,31 @@ TEST_F(BatteryTest, GetDetailedBatteryInfo) {
         if (info.isBatteryPresent) {
             // Manufacturer and model might be available
             // (empty strings are acceptable on some systems)
-            EXPECT_TRUE(info.manufacturer.empty() || !info.manufacturer.empty());
+            EXPECT_TRUE(info.manufacturer.empty() ||
+                        !info.manufacturer.empty());
             EXPECT_TRUE(info.model.empty() || !info.model.empty());
 
             // Serial number might be available
-            EXPECT_TRUE(info.serialNumber.empty() || !info.serialNumber.empty());
+            EXPECT_TRUE(info.serialNumber.empty() ||
+                        !info.serialNumber.empty());
 
             // Cycle count should be non-negative
             EXPECT_GE(info.cycleCounts, 0);
 
             // Temperature should be reasonable if available
             if (info.temperature > 0) {
-                EXPECT_GT(info.temperature, -50.0f); // Reasonable lower bound
-                EXPECT_LT(info.temperature, 100.0f); // Reasonable upper bound
+                EXPECT_GT(info.temperature, -50.0f);  // Reasonable lower bound
+                EXPECT_LT(info.temperature, 100.0f);  // Reasonable upper bound
             }
         }
     } else {
         // We got a BatteryError
         BatteryError error = std::get<BatteryError>(batteryResult);
         EXPECT_TRUE(error == BatteryError::NOT_PRESENT ||
-                   error == BatteryError::ACCESS_DENIED ||
-                   error == BatteryError::NOT_SUPPORTED ||
-                   error == BatteryError::INVALID_DATA ||
-                   error == BatteryError::READ_ERROR);
+                    error == BatteryError::ACCESS_DENIED ||
+                    error == BatteryError::NOT_SUPPORTED ||
+                    error == BatteryError::INVALID_DATA ||
+                    error == BatteryError::READ_ERROR);
     }
 }
 
@@ -419,15 +436,19 @@ TEST_F(BatteryTest, BatteryHealthCalculation) {
     if (batteryInfoOpt.has_value()) {
         const BatteryInfo& info = batteryInfoOpt.value();
 
-        if (info.isBatteryPresent && info.energyDesign > 0 && info.energyFull > 0) {
+        if (info.isBatteryPresent && info.energyDesign > 0 &&
+            info.energyFull > 0) {
             float health = info.getBatteryHealth();
 
-            // Health should be between 0 and 100 (or slightly above for new batteries)
+            // Health should be between 0 and 100 (or slightly above for new
+            // batteries)
             EXPECT_GE(health, 0.0f);
-            EXPECT_LE(health, 120.0f); // Allow some tolerance for measurement errors
+            EXPECT_LE(health,
+                      120.0f);  // Allow some tolerance for measurement errors
 
             // Health calculation should be consistent
-            float expectedHealth = (info.energyFull / info.energyDesign) * 100.0f;
+            float expectedHealth =
+                (info.energyFull / info.energyDesign) * 100.0f;
             EXPECT_NEAR(health, expectedHealth, 1.0f);
         }
     }
@@ -555,15 +576,16 @@ TEST_F(BatteryManagerTest, AlertCallback) {
     bool alertReceived = false;
     AlertType receivedAlert = AlertType::LOW_BATTERY;
 
-    auto alertCallback = [&alertReceived, &receivedAlert](AlertType alert, const BatteryInfo& info) {
+    auto alertCallback = [&alertReceived, &receivedAlert](
+                             AlertType alert, const BatteryInfo& info) {
         alertReceived = true;
         receivedAlert = alert;
 
         // Validate alert parameters
         EXPECT_TRUE(alert == AlertType::LOW_BATTERY ||
-                   alert == AlertType::CRITICAL_BATTERY ||
-                   alert == AlertType::HIGH_TEMPERATURE ||
-                   alert == AlertType::LOW_BATTERY_HEALTH);
+                    alert == AlertType::CRITICAL_BATTERY ||
+                    alert == AlertType::HIGH_TEMPERATURE ||
+                    alert == AlertType::LOW_BATTERY_HEALTH);
 
         // Validate battery info
         EXPECT_GE(info.batteryLifePercent, 0.0f);
@@ -582,15 +604,15 @@ TEST_F(BatteryManagerTest, BatteryStats) {
     EXPECT_GE(stats.averagePowerConsumption, 0.0f);
     EXPECT_GE(stats.totalEnergyConsumed, 0.0f);
     EXPECT_GE(stats.batteryHealth, 0.0f);
-    EXPECT_LE(stats.batteryHealth, 120.0f); // Allow some tolerance
+    EXPECT_LE(stats.batteryHealth, 120.0f);  // Allow some tolerance
     EXPECT_GE(stats.totalUptime.count(), 0);
     EXPECT_GE(stats.cycleCount, 0);
 
     // Min/max values should be reasonable
     EXPECT_GE(stats.minBatteryLevel, 0.0f);
     EXPECT_LE(stats.maxBatteryLevel, 100.0f);
-    EXPECT_GE(stats.minTemperature, -50.0f); // Reasonable lower bound
-    EXPECT_LE(stats.maxTemperature, 100.0f); // Reasonable upper bound
+    EXPECT_GE(stats.minTemperature, -50.0f);  // Reasonable lower bound
+    EXPECT_LE(stats.maxTemperature, 100.0f);  // Reasonable upper bound
     EXPECT_GE(stats.minVoltage, 0.0f);
     EXPECT_GE(stats.maxVoltage, 0.0f);
 }
@@ -654,7 +676,7 @@ TEST_F(BatteryManagerTest, HistoryFunctionality) {
 
     // Get history without any recording (should be empty or minimal)
     auto history = manager->getHistory();
-    EXPECT_TRUE(history.empty() || !history.empty()); // Should not throw
+    EXPECT_TRUE(history.empty() || !history.empty());  // Should not throw
 
     // Test with max entries limit
     auto limitedHistory = manager->getHistory(10);
@@ -706,10 +728,9 @@ TEST_F(PowerPlanManagerTest, GetCurrentPowerPlan) {
     // If we get a plan, it should be valid
     if (currentPlan.has_value()) {
         PowerPlan plan = currentPlan.value();
-        EXPECT_TRUE(plan == PowerPlan::BALANCED ||
-                   plan == PowerPlan::PERFORMANCE ||
-                   plan == PowerPlan::POWER_SAVER ||
-                   plan == PowerPlan::CUSTOM);
+        EXPECT_TRUE(
+            plan == PowerPlan::BALANCED || plan == PowerPlan::PERFORMANCE ||
+            plan == PowerPlan::POWER_SAVER || plan == PowerPlan::CUSTOM);
     }
 }
 
@@ -764,16 +785,16 @@ TEST_F(BatteryTest, ErrorHandling) {
 
     // Test with invalid/extreme values
     BatteryInfo testInfo;
-    testInfo.batteryLifePercent = -10.0f; // Invalid percentage
-    testInfo.energyNow = -1000.0f; // Invalid energy
-    testInfo.currentNow = 0.0f; // Zero current
+    testInfo.batteryLifePercent = -10.0f;  // Invalid percentage
+    testInfo.energyNow = -1000.0f;         // Invalid energy
+    testInfo.currentNow = 0.0f;            // Zero current
 
     // Functions should handle invalid data gracefully
     EXPECT_NO_THROW(testInfo.getEstimatedTimeRemaining());
     EXPECT_NO_THROW(testInfo.getBatteryHealth());
 
     float estimatedTime = testInfo.getEstimatedTimeRemaining();
-    EXPECT_GE(estimatedTime, 0.0f); // Should return non-negative value
+    EXPECT_GE(estimatedTime, 0.0f);  // Should return non-negative value
 }
 
 TEST_F(BatteryTest, ThreadSafety) {
@@ -803,4 +824,4 @@ TEST_F(BatteryTest, ThreadSafety) {
     EXPECT_GE(successCount.load(), 0);
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

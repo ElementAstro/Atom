@@ -578,11 +578,10 @@ public:
      * @param confidence_level Confidence level for the interval
      * @return Pair of lower and upper bounds of the confidence interval
      */
-    auto bootstrapConfidenceInterval(const std::vector<T>& measured,
-                                     const std::vector<T>& actual,
-                                     i32 n_iterations = 1000,
-                                     f64 confidence_level = 0.95)
-        -> std::pair<T, T> {
+    auto bootstrapConfidenceInterval(
+        const std::vector<T>& measured, const std::vector<T>& actual,
+        i32 n_iterations = 1000,
+        f64 confidence_level = 0.95) -> std::pair<T, T> {
         if (n_iterations <= 0) {
             THROW_INVALID_ARGUMENT("Number of iterations must be positive.");
         }
@@ -648,8 +647,8 @@ public:
      * @return Tuple of mean residual, standard deviation, and threshold
      */
     auto outlierDetection(const std::vector<T>& measured,
-                          const std::vector<T>& actual, T threshold = 2.0)
-        -> std::tuple<T, T, T> {
+                          const std::vector<T>& actual,
+                          T threshold = 2.0) -> std::tuple<T, T, T> {
         if (residuals_.empty()) {
             calculateMetrics(measured, actual);
         }

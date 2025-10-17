@@ -292,8 +292,8 @@ public:
             if (sequence_ == 0) {
                 // Sequence overflow - wait for next millisecond
                 timestamp = wait_next_millis(last_ts);
-                // Re-load last_timestamp_ in case it was updated by another thread
-                // Use the maximum to ensure we never go backwards
+                // Re-load last_timestamp_ in case it was updated by another
+                // thread Use the maximum to ensure we never go backwards
                 u64 current_last = last_timestamp_.load();
                 if (timestamp < current_last) {
                     timestamp = current_last;

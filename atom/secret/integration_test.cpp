@@ -1,8 +1,8 @@
 #include "password_manager.hpp"
 #include "storage.hpp"
 
-#include <iostream>
 #include <cassert>
+#include <iostream>
 
 namespace atom::secret {
 
@@ -13,7 +13,7 @@ class IntegrationTest {
 public:
     static bool runBasicTests() {
         std::cout << "Running basic integration tests...\n";
-        
+
         // Test 1: Storage creation
         auto storage = SecureStorage::create("atom-test");
         if (!storage) {
@@ -21,17 +21,17 @@ public:
             return false;
         }
         std::cout << "✓ Storage backend created successfully\n";
-        
+
         // Test 2: Basic storage operations
         const std::string testKey = "test_key";
         const std::string testData = "test_data_12345";
-        
+
         if (!storage->store(testKey, testData)) {
             std::cerr << "Failed to store test data\n";
             return false;
         }
         std::cout << "✓ Data stored successfully\n";
-        
+
         std::string retrievedData = storage->retrieve(testKey);
         if (retrievedData != testData) {
             std::cerr << "Retrieved data doesn't match stored data\n";
@@ -40,7 +40,7 @@ public:
             return false;
         }
         std::cout << "✓ Data retrieved successfully\n";
-        
+
         // Test 3: getAllKeys functionality
         auto keys = storage->getAllKeys();
         bool foundKey = false;
@@ -55,14 +55,14 @@ public:
             return false;
         }
         std::cout << "✓ getAllKeys() working correctly\n";
-        
+
         // Test 4: Data removal
         if (!storage->remove(testKey)) {
             std::cerr << "Failed to remove test data\n";
             return false;
         }
         std::cout << "✓ Data removed successfully\n";
-        
+
         // Verify removal
         std::string removedData = storage->retrieve(testKey);
         if (!removedData.empty()) {
@@ -70,25 +70,25 @@ public:
             return false;
         }
         std::cout << "✓ Data removal verified\n";
-        
+
         return true;
     }
-    
+
     static bool runPasswordManagerTests() {
         std::cout << "\nRunning PasswordManager integration tests...\n";
-        
+
         // Test 1: PasswordManager initialization
         PasswordManager manager;
         PasswordManagerSettings settings;
         settings.minPasswordLength = 12;
         settings.autoLockTimeoutSeconds = 300;
-        
+
         if (!manager.initialize("test_master_password_123", settings)) {
             std::cerr << "Failed to initialize PasswordManager\n";
             return false;
         }
         std::cout << "✓ PasswordManager initialized successfully\n";
-        
+
         // Test 2: Password storage and retrieval
         PasswordEntry entry;
         entry.title = "Test Website";
@@ -99,13 +99,13 @@ public:
         entry.category = PasswordCategory::Personal;
         entry.created = std::chrono::system_clock::now();
         entry.modified = entry.created;
-        
+
         if (!manager.storePassword("test_entry", entry)) {
             std::cerr << "Failed to store password entry\n";
             return false;
         }
         std::cout << "✓ Password entry stored successfully\n";
-        
+
         PasswordEntry retrievedEntry = manager.retrievePassword("test_entry");
         if (retrievedEntry.password != entry.password ||
             retrievedEntry.username != entry.username ||
@@ -114,7 +114,7 @@ public:
             return false;
         }
         std::cout << "✓ Password entry retrieved successfully\n";
-        
+
         // Test 3: Search functionality
         auto searchResults = manager.searchPasswords("Test");
         if (searchResults.empty()) {
@@ -122,15 +122,16 @@ public:
             return false;
         }
         std::cout << "✓ Search functionality working\n";
-        
+
         // Test 4: Password generation
-        std::string generatedPassword = manager.generatePassword(16, true, true, true);
+        std::string generatedPassword =
+            manager.generatePassword(16, true, true, true);
         if (generatedPassword.empty() || generatedPassword.length() != 16) {
             std::cerr << "Password generation failed\n";
             return false;
         }
         std::cout << "✓ Password generation working\n";
-        
+
         // Test 5: Lock/unlock functionality
         manager.lock();
         if (!manager.isLocked()) {
@@ -138,7 +139,7 @@ public:
             return false;
         }
         std::cout << "✓ Lock functionality working\n";
-        
+
         if (!manager.unlock("test_master_password_123")) {
             std::cerr << "Failed to unlock manager\n";
             return false;
@@ -148,34 +149,38 @@ public:
             return false;
         }
         std::cout << "✓ Unlock functionality working\n";
-        
+
         // Test 6: Export/Import functionality
         auto exportResult = manager.exportToJson();
         if (exportResult.isError()) {
-            std::cerr << "Failed to export data: " << exportResult.error() << "\n";
+            std::cerr << "Failed to export data: " << exportResult.error()
+                      << "\n";
             return false;
         }
         std::cout << "✓ Export functionality working\n";
-        
+
         // Clean up
         manager.removePassword("test_entry");
-        
+
         return true;
     }
-    
+
     static bool runAllTests() {
         std::cout << "=== Atom Secret Module Integration Tests ===\n\n";
-        
+
         bool basicTestsPass = runBasicTests();
         bool managerTestsPass = runPasswordManagerTests();
-        
+
         std::cout << "\n=== Test Results ===\n";
-        std::cout << "Basic Storage Tests: " << (basicTestsPass ? "PASS" : "FAIL") << "\n";
-        std::cout << "PasswordManager Tests: " << (managerTestsPass ? "PASS" : "FAIL") << "\n";
-        
+        std::cout << "Basic Storage Tests: "
+                  << (basicTestsPass ? "PASS" : "FAIL") << "\n";
+        std::cout << "PasswordManager Tests: "
+                  << (managerTestsPass ? "PASS" : "FAIL") << "\n";
+
         bool allTestsPass = basicTestsPass && managerTestsPass;
-        std::cout << "Overall Result: " << (allTestsPass ? "PASS" : "FAIL") << "\n";
-        
+        std::cout << "Overall Result: " << (allTestsPass ? "PASS" : "FAIL")
+                  << "\n";
+
         return allTestsPass;
     }
 };

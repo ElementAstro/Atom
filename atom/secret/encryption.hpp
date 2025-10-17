@@ -3,8 +3,8 @@
 
 #include <openssl/err.h>
 #include <openssl/evp.h>
-#include <openssl/rand.h>
 #include <openssl/kdf.h>
+#include <openssl/rand.h>
 
 #include <array>
 #include <memory>
@@ -84,7 +84,7 @@ public:
      * @tparam T Type of vector elements.
      * @param vec Vector to clear.
      */
-    template<typename T>
+    template <typename T>
     static void secureClear(std::vector<T>& vec) noexcept;
 
     /**
@@ -121,7 +121,7 @@ public:
 /**
  * @brief RAII wrapper for secure memory allocation.
  */
-template<typename T>
+template <typename T>
 class SecureBuffer {
 private:
     T* data_;
@@ -200,10 +200,8 @@ public:
      * @return Result containing the derived key or error message.
      */
     static Result<std::vector<uint8_t>> deriveKey(
-        std::string_view password,
-        const std::vector<uint8_t>& salt,
-        int iterations,
-        size_t keyLength);
+        std::string_view password, const std::vector<uint8_t>& salt,
+        int iterations, size_t keyLength);
 
     /**
      * @brief Generates a cryptographically secure random salt.
@@ -224,12 +222,12 @@ public:
  * @brief Encrypted data container with metadata.
  */
 struct EncryptedData {
-    std::vector<uint8_t> ciphertext;  ///< The encrypted data.
-    std::vector<uint8_t> iv;          ///< Initialization vector.
-    std::vector<uint8_t> salt;        ///< Salt used for key derivation.
-    std::vector<uint8_t> tag;         ///< Authentication tag (for AEAD modes).
-    EncryptionOptions::Method method; ///< Encryption method used.
-    int keyIterations;                ///< PBKDF2 iterations used.
+    std::vector<uint8_t> ciphertext;   ///< The encrypted data.
+    std::vector<uint8_t> iv;           ///< Initialization vector.
+    std::vector<uint8_t> salt;         ///< Salt used for key derivation.
+    std::vector<uint8_t> tag;          ///< Authentication tag (for AEAD modes).
+    EncryptionOptions::Method method;  ///< Encryption method used.
+    int keyIterations;                 ///< PBKDF2 iterations used.
 
     /**
      * @brief Serializes the encrypted data to a binary format.
@@ -257,10 +255,9 @@ public:
      * @param options Encryption options.
      * @return Result containing encrypted data or error message.
      */
-    static Result<EncryptedData> encrypt(
-        std::string_view plaintext,
-        std::string_view password,
-        const EncryptionOptions& options = {});
+    static Result<EncryptedData> encrypt(std::string_view plaintext,
+                                         std::string_view password,
+                                         const EncryptionOptions& options = {});
 
     /**
      * @brief Decrypts data using the provided password.
@@ -268,9 +265,8 @@ public:
      * @param password The password for decryption.
      * @return Result containing decrypted plaintext or error message.
      */
-    static Result<std::string> decrypt(
-        const EncryptedData& encryptedData,
-        std::string_view password);
+    static Result<std::string> decrypt(const EncryptedData& encryptedData,
+                                       std::string_view password);
 
     /**
      * @brief Encrypts data with a pre-derived key.
@@ -280,8 +276,7 @@ public:
      * @return Result containing encrypted data or error message.
      */
     static Result<EncryptedData> encryptWithKey(
-        std::string_view plaintext,
-        const std::vector<uint8_t>& key,
+        std::string_view plaintext, const std::vector<uint8_t>& key,
         const EncryptionOptions& options = {});
 
     /**
@@ -291,8 +286,7 @@ public:
      * @return Result containing decrypted plaintext or error message.
      */
     static Result<std::string> decryptWithKey(
-        const EncryptedData& encryptedData,
-        const std::vector<uint8_t>& key);
+        const EncryptedData& encryptedData, const std::vector<uint8_t>& key);
 
 private:
     /**
@@ -303,10 +297,8 @@ private:
      * @return Result containing encrypted data and tag or error message.
      */
     static Result<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>>
-        encryptAesGcm(
-            std::string_view plaintext,
-            const std::vector<uint8_t>& key,
-            const std::vector<uint8_t>& iv);
+    encryptAesGcm(std::string_view plaintext, const std::vector<uint8_t>& key,
+                  const std::vector<uint8_t>& iv);
 
     /**
      * @brief Decrypts using AES-GCM.
@@ -317,10 +309,8 @@ private:
      * @return Result containing decrypted plaintext or error message.
      */
     static Result<std::string> decryptAesGcm(
-        const std::vector<uint8_t>& ciphertext,
-        const std::vector<uint8_t>& key,
-        const std::vector<uint8_t>& iv,
-        const std::vector<uint8_t>& tag);
+        const std::vector<uint8_t>& ciphertext, const std::vector<uint8_t>& key,
+        const std::vector<uint8_t>& iv, const std::vector<uint8_t>& tag);
 
     /**
      * @brief Encrypts using AES-CBC.
@@ -330,8 +320,7 @@ private:
      * @return Result containing encrypted data or error message.
      */
     static Result<std::vector<uint8_t>> encryptAesCbc(
-        std::string_view plaintext,
-        const std::vector<uint8_t>& key,
+        std::string_view plaintext, const std::vector<uint8_t>& key,
         const std::vector<uint8_t>& iv);
 
     /**
@@ -342,8 +331,7 @@ private:
      * @return Result containing decrypted plaintext or error message.
      */
     static Result<std::string> decryptAesCbc(
-        const std::vector<uint8_t>& ciphertext,
-        const std::vector<uint8_t>& key,
+        const std::vector<uint8_t>& ciphertext, const std::vector<uint8_t>& key,
         const std::vector<uint8_t>& iv);
 
     /**

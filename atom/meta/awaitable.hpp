@@ -30,9 +30,7 @@ public:
         handle.resume();
     }
 
-    result_type await_resume() {
-        return std::apply(func_, args_);
-    }
+    result_type await_resume() { return std::apply(func_, args_); }
 
 private:
     Function func_;

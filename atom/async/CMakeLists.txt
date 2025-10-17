@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
-project(atom-async VERSION 1.0.0 LANGUAGES C CXX)
+project(
+  atom-async
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
@@ -8,19 +11,14 @@ include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 set(SOURCES
     # Core files
     core/promise.cpp
-
     # Threading files
     threading/lock.cpp
-
     # Synchronization files
     sync/limiter.cpp
-
     # Utility files
     utils/timer.cpp
-
     # Execution files
-    execution/async_executor.cpp
-)
+    execution/async_executor.cpp)
 
 # Headers
 set(HEADERS
@@ -47,7 +45,6 @@ set(HEADERS
     threadlocal.hpp
     timer.hpp
     trigger.hpp
-
     # Actual implementation headers (in subdirectories)
     core/async.hpp
     core/future.hpp
@@ -57,31 +54,25 @@ set(HEADERS
     core/promise_impl.hpp
     core/promise_utils.hpp
     core/promise_void_impl.hpp
-
     threading/lock.hpp
     threading/thread_wrapper.hpp
     threading/threadlocal.hpp
-
     messaging/eventstack.hpp
     messaging/message_bus.hpp
     messaging/message_queue.hpp
     messaging/queue.hpp
-
     execution/async_executor.hpp
     execution/packaged_task.hpp
     execution/parallel.hpp
     execution/pool.hpp
-
     sync/limiter.hpp
     sync/safetype.hpp
     sync/slot.hpp
     sync/trigger.hpp
-
     utils/daemon.hpp
     utils/generator.hpp
     utils/lodash.hpp
-    utils/timer.hpp
-)
+    utils/timer.hpp)
 
 set(LIBS loguru atom-utils ${CMAKE_THREAD_LIBS_INIT})
 
@@ -95,6 +86,4 @@ atom_configure_module(atom-async)
 target_link_libraries(atom-async PRIVATE ${LIBS})
 
 # Install headers
-install(FILES ${HEADERS}
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/async
-)
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/async)

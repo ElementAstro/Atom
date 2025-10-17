@@ -197,7 +197,7 @@ void demonstrateDataTypes() {
     try {
         // Create blobs with different conceptual data types
         // Note: All blobs store std::byte, but can conceptually represent different data types
-        
+
         // 8-bit unsigned integer blob (most common)
         std::vector<uint8_t> data8u(100 * 100 * 3, 128);
         blob img8u(data8u.data(), data8u.size());

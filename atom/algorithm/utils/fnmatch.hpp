@@ -109,8 +109,8 @@ template <StringLike T1, StringLike T2>
  */
 template <std::ranges::input_range Range, StringLike Pattern>
     requires StringLike<std::ranges::range_value_t<Range>>
-[[nodiscard]] auto filter(const Range& names, Pattern&& pattern, int flags = 0)
-    -> bool;
+[[nodiscard]] auto filter(const Range& names, Pattern&& pattern,
+                          int flags = 0) -> bool;
 
 /**
  * @brief Filters a range of strings based on multiple patterns.
@@ -127,7 +127,7 @@ template <std::ranges::input_range Range, StringLike Pattern>
  */
 template <std::ranges::input_range Range, std::ranges::input_range PatternRange>
     requires StringLike<std::ranges::range_value_t<Range>> &&
-             StringLike<std::ranges::range_value_t<PatternRange>>
+                 StringLike<std::ranges::range_value_t<PatternRange>>
 [[nodiscard]] auto filter(const Range& names, const PatternRange& patterns,
                           int flags = 0, bool use_parallel = true)
     -> std::vector<std::ranges::range_value_t<Range>>;
@@ -271,7 +271,8 @@ auto translate(Pattern&& pattern, int flags) noexcept
                 case '[': {
                     result += '[';
                     if (++it == pattern_view.end()) {
-                        return atom::type::unexpected(FnmatchError::UnmatchedBracket);
+                        return atom::type::unexpected(
+                            FnmatchError::UnmatchedBracket);
                     }
 
                     if (*it == '!' || *it == '^') {
@@ -280,11 +281,13 @@ auto translate(Pattern&& pattern, int flags) noexcept
                     }
 
                     if (it == pattern_view.end()) {
-                        return atom::type::unexpected(FnmatchError::UnmatchedBracket);
+                        return atom::type::unexpected(
+                            FnmatchError::UnmatchedBracket);
                     }
 
-                    // Handle ] as first character in bracket expression (it's literal)
-                    // In ECMAScript regex, ] must be escaped even as first char
+                    // Handle ] as first character in bracket expression (it's
+                    // literal) In ECMAScript regex, ] must be escaped even as
+                    // first char
                     if (*it == ']') {
                         result += "\\]";
                         ++it;
@@ -295,10 +298,12 @@ auto translate(Pattern&& pattern, int flags) noexcept
                             *(it + 1) != ']') {
                             result += *it++;
                             if (it == pattern_view.end()) {
-                                return atom::type::unexpected(FnmatchError::UnmatchedBracket);
+                                return atom::type::unexpected(
+                                    FnmatchError::UnmatchedBracket);
                             }
                             // Escape special regex characters inside brackets
-                            // Note: dots are literal inside character classes, so don't escape them
+                            // Note: dots are literal inside character classes,
+                            // so don't escape them
                             if (*it == '+' || *it == '(' || *it == ')' ||
                                 *it == '{' || *it == '}' || *it == '|' ||
                                 *it == '$' || *it == '\\') {
@@ -307,7 +312,8 @@ auto translate(Pattern&& pattern, int flags) noexcept
                             result += *it;
                         } else {
                             // Escape special regex characters inside brackets
-                            // Note: dots, *, and ? are literal inside character classes, so don't escape them
+                            // Note: dots, *, and ? are literal inside character
+                            // classes, so don't escape them
                             if (*it == '+' || *it == '(' || *it == ')' ||
                                 *it == '{' || *it == '}' || *it == '|' ||
                                 *it == '$' || *it == '\\') {
@@ -319,7 +325,8 @@ auto translate(Pattern&& pattern, int flags) noexcept
                     }
 
                     if (it == pattern_view.end()) {
-                        return atom::type::unexpected(FnmatchError::UnmatchedBracket);
+                        return atom::type::unexpected(
+                            FnmatchError::UnmatchedBracket);
                     }
 
                     result += ']';
@@ -329,12 +336,14 @@ auto translate(Pattern&& pattern, int flags) noexcept
                 case '\\':
                     if ((flags & flags::NOESCAPE) == 0) {
                         if (++it == pattern_view.end()) {
-                            return atom::type::unexpected(FnmatchError::EscapeAtEnd);
+                            return atom::type::unexpected(
+                                FnmatchError::EscapeAtEnd);
                         }
                         // Escape the next character for regex
-                        if (*it == '.' || *it == '*' || *it == '?' || *it == '+' ||
-                            *it == '(' || *it == ')' || *it == '{' || *it == '}' ||
-                            *it == '|' || *it == '^' || *it == '$' || *it == '[' ||
+                        if (*it == '.' || *it == '*' || *it == '?' ||
+                            *it == '+' || *it == '(' || *it == ')' ||
+                            *it == '{' || *it == '}' || *it == '|' ||
+                            *it == '^' || *it == '$' || *it == '[' ||
                             *it == ']' || *it == '\\') {
                             result += '\\';
                         }
@@ -351,9 +360,9 @@ auto translate(Pattern&& pattern, int flags) noexcept
                         result += ']';
                     } else {
                         // Escape special regex characters outside brackets
-                        if (*it == '.' || *it == '+' || *it == '(' || *it == ')' ||
-                                   *it == '{' || *it == '}' || *it == '|' || *it == '^' ||
-                                   *it == '$') {
+                        if (*it == '.' || *it == '+' || *it == '(' ||
+                            *it == ')' || *it == '{' || *it == '}' ||
+                            *it == '|' || *it == '^' || *it == '$') {
                             result += '\\';
                         }
                         result += *it;
@@ -384,13 +393,14 @@ auto filter(const Range& names, Pattern&& pattern, int flags) -> bool {
         }
         return false;
     } catch (const std::exception& e) {
-        throw FnmatchException(std::string("Filter operation failed: ") + e.what());
+        throw FnmatchException(std::string("Filter operation failed: ") +
+                               e.what());
     }
 }
 
 template <std::ranges::input_range Range, std::ranges::input_range PatternRange>
     requires StringLike<std::ranges::range_value_t<Range>> &&
-             StringLike<std::ranges::range_value_t<PatternRange>>
+                 StringLike<std::ranges::range_value_t<PatternRange>>
 auto filter(const Range& names, const PatternRange& patterns, int flags,
             bool use_parallel)
     -> std::vector<std::ranges::range_value_t<Range>> {
@@ -403,7 +413,8 @@ auto filter(const Range& names, const PatternRange& patterns, int flags,
 
     try {
         const auto names_size = std::ranges::distance(names);
-        result.reserve(std::min(static_cast<size_t>(names_size), static_cast<size_t>(128)));
+        result.reserve(std::min(static_cast<size_t>(names_size),
+                                static_cast<size_t>(128)));
 
         std::vector<std::string_view> pattern_views;
         pattern_views.reserve(std::ranges::distance(patterns));
@@ -432,14 +443,16 @@ auto filter(const Range& names, const PatternRange& patterns, int flags,
             }
         }
 
-        // Debug output to see what regex is generated
-        #ifdef DEBUG_FNMATCH
-        std::cout << "Pattern: " << pattern_view << " -> Regex: " << result << std::endl;
-        #endif
+// Debug output to see what regex is generated
+#ifdef DEBUG_FNMATCH
+        std::cout << "Pattern: " << pattern_view << " -> Regex: " << result
+                  << std::endl;
+#endif
 
         return result;
     } catch (const std::exception& e) {
-        throw FnmatchException(std::string("Filter operation failed: ") + e.what());
+        throw FnmatchException(std::string("Filter operation failed: ") +
+                               e.what());
     }
 }
 

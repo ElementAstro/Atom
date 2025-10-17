@@ -184,7 +184,8 @@ Task<void> udp_example() {
         // Try to receive (this might timeout if no server is listening)
         try {
             auto received = co_await udp_receive(8080, 1000ms);
-            std::cout << "UDP message received: " << received.data.size() << " bytes" << std::endl;
+            std::cout << "UDP message received: " << received.data.size()
+                      << " bytes" << std::endl;
         } catch (const UvError& e) {
             std::cout << "UDP receive timeout or error (expected): " << e.what()
                       << std::endl;

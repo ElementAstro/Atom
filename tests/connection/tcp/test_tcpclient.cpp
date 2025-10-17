@@ -1,5 +1,5 @@
-#include "atom/connection/tcpclient.hpp"
 #include <gtest/gtest.h>
+#include "atom/connection/tcpclient.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -9,8 +9,8 @@
 #include <sys/socket.h>
 #endif
 #include <future>
-#include <thread>
 #include <span>
+#include <thread>
 
 using namespace atom::connection;
 
@@ -116,13 +116,15 @@ protected:
 };
 
 TEST_F(TcpClientTest, ConnectToServer) {
-    auto result = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto result =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(result.has_value());
     ASSERT_TRUE(client_.isConnected());
 }
 
 TEST_F(TcpClientTest, SendData) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
 
     std::string message = "Hello, server!";
@@ -132,7 +134,8 @@ TEST_F(TcpClientTest, SendData) {
 }
 
 TEST_F(TcpClientTest, ReceiveData) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
 
     std::string message = "Hello, server!";
@@ -148,7 +151,8 @@ TEST_F(TcpClientTest, ReceiveData) {
 }
 
 TEST_F(TcpClientTest, DisconnectFromServer) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
     client_.disconnect();
     ASSERT_FALSE(client_.isConnected());
@@ -168,7 +172,8 @@ TEST_F(TcpClientTest, Callbacks) {
     client_.setOnErrorCallback(
         [&](const std::system_error& error) { lastError = error; });
 
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
     ASSERT_TRUE(connected);
 
@@ -188,13 +193,15 @@ TEST_F(TcpClientTest, Callbacks) {
 }
 
 TEST_F(TcpClientTest, ConnectToInvalidHost) {
-    auto result = client_.connect("invalid.host.example.com", 80, std::chrono::milliseconds(1000));
+    auto result = client_.connect("invalid.host.example.com", 80,
+                                  std::chrono::milliseconds(1000));
     EXPECT_FALSE(result.has_value());
     EXPECT_FALSE(client_.isConnected());
 }
 
 TEST_F(TcpClientTest, ConnectToInvalidPort) {
-    auto result = client_.connect("127.0.0.1", 99999, std::chrono::milliseconds(1000));
+    auto result =
+        client_.connect("127.0.0.1", 99999, std::chrono::milliseconds(1000));
     EXPECT_FALSE(result.has_value());
     EXPECT_FALSE(client_.isConnected());
 }
@@ -212,7 +219,8 @@ TEST_F(TcpClientTest, ReceiveWithoutConnection) {
 }
 
 TEST_F(TcpClientTest, SendEmptyData) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
 
     std::string emptyMessage = "";
@@ -222,7 +230,8 @@ TEST_F(TcpClientTest, SendEmptyData) {
 }
 
 TEST_F(TcpClientTest, SendLargeData) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
 
     std::string largeMessage(8192, 'X');
@@ -234,17 +243,20 @@ TEST_F(TcpClientTest, SendLargeData) {
 }
 
 TEST_F(TcpClientTest, MultipleConnectCalls) {
-    auto result1 = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto result1 =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(result1.has_value());
     EXPECT_TRUE(client_.isConnected());
 
     // Second connect should handle gracefully
-    auto result2 = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto result2 =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     EXPECT_TRUE(client_.isConnected());
 }
 
 TEST_F(TcpClientTest, MultipleDisconnectCalls) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
     EXPECT_TRUE(client_.isConnected());
 
@@ -257,7 +269,8 @@ TEST_F(TcpClientTest, MultipleDisconnectCalls) {
 }
 
 TEST_F(TcpClientTest, SendAfterDisconnect) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
 
     client_.disconnect();
@@ -269,7 +282,8 @@ TEST_F(TcpClientTest, SendAfterDisconnect) {
 }
 
 TEST_F(TcpClientTest, ReceiveAfterDisconnect) {
-    auto connectResult = client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
     ASSERT_TRUE(connectResult.has_value());
 
     client_.disconnect();
@@ -281,7 +295,8 @@ TEST_F(TcpClientTest, ReceiveAfterDisconnect) {
 TEST_F(TcpClientTest, ConnectionTimeout) {
     // Try to connect to a non-routable IP to test timeout
     auto start = std::chrono::steady_clock::now();
-    auto result = client_.connect("192.0.2.1", 80, std::chrono::milliseconds(1000));
+    auto result =
+        client_.connect("192.0.2.1", 80, std::chrono::milliseconds(1000));
     auto duration = std::chrono::steady_clock::now() - start;
 
     EXPECT_FALSE(result.has_value());

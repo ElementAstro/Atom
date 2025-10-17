@@ -1,8 +1,8 @@
 #include "atom/extra/spdlog/modern_log.h"
 
+#include <pybind11/chrono.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/chrono.h>
 
 namespace py = pybind11;
 
@@ -24,22 +24,22 @@ Features:
 
 Examples:
     >>> from atom.extra.spdlog import spdlog
-    >>> 
+    >>>
     >>> # Get default logger
     >>> logger = spdlog.LogManager.default_logger()
-    >>> 
+    >>>
     >>> # Basic logging
     >>> logger.info("Application started")
     >>> logger.warn("This is a warning: {}", "something happened")
     >>> logger.error("Error occurred: code={}", 404)
-    >>> 
+    >>>
     >>> # Structured logging
     >>> data = spdlog.StructuredData()
     >>> data.add("user_id", 12345)
     >>> data.add("action", "login")
     >>> data.add("success", True)
     >>> logger.log_structured(spdlog.Level.INFO, data)
-    >>> 
+    >>>
     >>> # Performance measurement
     >>> timer = logger.time_scope("database_query")
     >>> # ... perform database query ...
@@ -63,7 +63,8 @@ Examples:
     });
 
     // LogError exception
-    py::register_exception<modern_log::LogError>(m, "LogError", PyExc_RuntimeError);
+    py::register_exception<modern_log::LogError>(m, "LogError",
+                                                 PyExc_RuntimeError);
 
     // Level enum
     py::enum_<modern_log::Level>(m, "Level",
@@ -72,17 +73,23 @@ Examples:
 Defines the severity levels for log messages, from most verbose (trace)
 to most critical (critical).)")
         .value("TRACE", modern_log::Level::trace, "Trace level - most verbose")
-        .value("DEBUG", modern_log::Level::debug, "Debug level - detailed information")
-        .value("INFO", modern_log::Level::info, "Info level - general information")
-        .value("WARN", modern_log::Level::warn, "Warning level - potential issues")
-        .value("ERROR", modern_log::Level::error, "Error level - error conditions")
-        .value("CRITICAL", modern_log::Level::critical, "Critical level - critical errors")
+        .value("DEBUG", modern_log::Level::debug,
+               "Debug level - detailed information")
+        .value("INFO", modern_log::Level::info,
+               "Info level - general information")
+        .value("WARN", modern_log::Level::warn,
+               "Warning level - potential issues")
+        .value("ERROR", modern_log::Level::error,
+               "Error level - error conditions")
+        .value("CRITICAL", modern_log::Level::critical,
+               "Critical level - critical errors")
         .value("OFF", modern_log::Level::off, "Off - disable logging")
         .export_values();
 
     // LogContext class
-    py::class_<modern_log::LogContext>(m, "LogContext",
-                                       R"(Context information for enriching log messages.
+    py::class_<modern_log::LogContext>(
+        m, "LogContext",
+        R"(Context information for enriching log messages.
 
 This class allows you to attach additional context data to log messages,
 such as request IDs, user information, or other relevant metadata.
@@ -94,7 +101,9 @@ Examples:
     >>> logger.log_with_context(spdlog.Level.INFO, context, "User action performed")
 )")
         .def(py::init<>(), "Create an empty log context")
-        .def("add", py::overload_cast<const std::string&, const std::string&>(&modern_log::LogContext::add),
+        .def("add",
+             py::overload_cast<const std::string&, const std::string&>(
+                 &modern_log::LogContext::add),
              py::arg("key"), py::arg("value"),
              R"(Add a string value to the context.
 
@@ -102,7 +111,9 @@ Args:
     key: The context key.
     value: The string value.
 )")
-        .def("add", py::overload_cast<const std::string&, int64_t>(&modern_log::LogContext::add),
+        .def("add",
+             py::overload_cast<const std::string&, int64_t>(
+                 &modern_log::LogContext::add),
              py::arg("key"), py::arg("value"),
              R"(Add an integer value to the context.
 
@@ -110,7 +121,9 @@ Args:
     key: The context key.
     value: The integer value.
 )")
-        .def("add", py::overload_cast<const std::string&, double>(&modern_log::LogContext::add),
+        .def("add",
+             py::overload_cast<const std::string&, double>(
+                 &modern_log::LogContext::add),
              py::arg("key"), py::arg("value"),
              R"(Add a double value to the context.
 
@@ -118,7 +131,9 @@ Args:
     key: The context key.
     value: The double value.
 )")
-        .def("add", py::overload_cast<const std::string&, bool>(&modern_log::LogContext::add),
+        .def("add",
+             py::overload_cast<const std::string&, bool>(
+                 &modern_log::LogContext::add),
              py::arg("key"), py::arg("value"),
              R"(Add a boolean value to the context.
 
@@ -126,8 +141,7 @@ Args:
     key: The context key.
     value: The boolean value.
 )")
-        .def("remove", &modern_log::LogContext::remove,
-             py::arg("key"),
+        .def("remove", &modern_log::LogContext::remove, py::arg("key"),
              R"(Remove a key from the context.
 
 Args:
@@ -152,8 +166,9 @@ Returns:
 )");
 
     // StructuredData class
-    py::class_<modern_log::StructuredData>(m, "StructuredData",
-                                           R"(Structured data for logging complex information.
+    py::class_<modern_log::StructuredData>(
+        m, "StructuredData",
+        R"(Structured data for logging complex information.
 
 This class allows you to build structured log entries with nested data,
 arrays, and various data types, making logs more searchable and analyzable.
@@ -164,17 +179,19 @@ Examples:
     >>> data.add("user_id", 12345)
     >>> data.add("timestamp", "2023-01-01T12:00:00Z")
     >>> data.add("success", True)
-    >>> 
+    >>>
     >>> # Add nested object
     >>> user_data = spdlog.StructuredData()
     >>> user_data.add("name", "John Doe")
     >>> user_data.add("email", "john@example.com")
     >>> data.add_object("user", user_data)
-    >>> 
+    >>>
     >>> logger.log_structured(spdlog.Level.INFO, data)
 )")
         .def(py::init<>(), "Create empty structured data")
-        .def("add", py::overload_cast<const std::string&, const std::string&>(&modern_log::StructuredData::add),
+        .def("add",
+             py::overload_cast<const std::string&, const std::string&>(
+                 &modern_log::StructuredData::add),
              py::arg("key"), py::arg("value"),
              R"(Add a string value.
 
@@ -182,7 +199,9 @@ Args:
     key: The field key.
     value: The string value.
 )")
-        .def("add", py::overload_cast<const std::string&, int64_t>(&modern_log::StructuredData::add),
+        .def("add",
+             py::overload_cast<const std::string&, int64_t>(
+                 &modern_log::StructuredData::add),
              py::arg("key"), py::arg("value"),
              R"(Add an integer value.
 
@@ -190,7 +209,9 @@ Args:
     key: The field key.
     value: The integer value.
 )")
-        .def("add", py::overload_cast<const std::string&, double>(&modern_log::StructuredData::add),
+        .def("add",
+             py::overload_cast<const std::string&, double>(
+                 &modern_log::StructuredData::add),
              py::arg("key"), py::arg("value"),
              R"(Add a double value.
 
@@ -198,7 +219,9 @@ Args:
     key: The field key.
     value: The double value.
 )")
-        .def("add", py::overload_cast<const std::string&, bool>(&modern_log::StructuredData::add),
+        .def("add",
+             py::overload_cast<const std::string&, bool>(
+                 &modern_log::StructuredData::add),
              py::arg("key"), py::arg("value"),
              R"(Add a boolean value.
 
@@ -222,8 +245,7 @@ Args:
     key: The field key.
     array: The array of string values.
 )")
-        .def("remove", &modern_log::StructuredData::remove,
-             py::arg("key"),
+        .def("remove", &modern_log::StructuredData::remove, py::arg("key"),
              R"(Remove a field from the structured data.
 
 Args:
@@ -248,8 +270,9 @@ Returns:
 )");
 
     // ScopedTimer class
-    py::class_<modern_log::ScopedTimer>(m, "ScopedTimer",
-                                        R"(RAII timer for performance measurement.
+    py::class_<modern_log::ScopedTimer>(
+        m, "ScopedTimer",
+        R"(RAII timer for performance measurement.
 
 This class automatically measures elapsed time and logs the result
 when the timer is destroyed (goes out of scope).
@@ -259,7 +282,7 @@ Examples:
     >>> timer = logger.time_scope("database_operation")
     >>> # ... perform operation ...
     >>> del timer  # Logs elapsed time
-    >>> 
+    >>>
     >>> # Or use with context manager (if implemented)
     >>> with logger.time_scope("api_call") as timer:
     ...     # ... perform API call ...
@@ -288,7 +311,7 @@ and context enrichment.
 
 Examples:
     >>> logger = spdlog.LogManager.default_logger()
-    >>> 
+    >>>
     >>> # Basic logging
     >>> logger.trace("Detailed trace information")
     >>> logger.debug("Debug information: value={}", 42)
@@ -297,50 +320,68 @@ Examples:
     >>> logger.error("Failed to connect to database")
     >>> logger.critical("System is shutting down")
 )")
-        .def("trace", [](modern_log::Logger& self, const std::string& message) {
-            self.trace("{}", message);
-        }, py::arg("message"),
-             R"(Log a trace-level message.
+        .def(
+            "trace",
+            [](modern_log::Logger& self, const std::string& message) {
+                self.trace("{}", message);
+            },
+            py::arg("message"),
+            R"(Log a trace-level message.
 
 Args:
     message: The message to log.
 )")
-        .def("debug", [](modern_log::Logger& self, const std::string& message) {
-            self.debug("{}", message);
-        }, py::arg("message"),
-             R"(Log a debug-level message.
+        .def(
+            "debug",
+            [](modern_log::Logger& self, const std::string& message) {
+                self.debug("{}", message);
+            },
+            py::arg("message"),
+            R"(Log a debug-level message.
 
 Args:
     message: The message to log.
 )")
-        .def("info", [](modern_log::Logger& self, const std::string& message) {
-            self.info("{}", message);
-        }, py::arg("message"),
-             R"(Log an info-level message.
+        .def(
+            "info",
+            [](modern_log::Logger& self, const std::string& message) {
+                self.info("{}", message);
+            },
+            py::arg("message"),
+            R"(Log an info-level message.
 
 Args:
     message: The message to log.
 )")
-        .def("warn", [](modern_log::Logger& self, const std::string& message) {
-            self.warn("{}", message);
-        }, py::arg("message"),
-             R"(Log a warning-level message.
+        .def(
+            "warn",
+            [](modern_log::Logger& self, const std::string& message) {
+                self.warn("{}", message);
+            },
+            py::arg("message"),
+            R"(Log a warning-level message.
 
 Args:
     message: The message to log.
 )")
-        .def("error", [](modern_log::Logger& self, const std::string& message) {
-            self.error("{}", message);
-        }, py::arg("message"),
-             R"(Log an error-level message.
+        .def(
+            "error",
+            [](modern_log::Logger& self, const std::string& message) {
+                self.error("{}", message);
+            },
+            py::arg("message"),
+            R"(Log an error-level message.
 
 Args:
     message: The message to log.
 )")
-        .def("critical", [](modern_log::Logger& self, const std::string& message) {
-            self.critical("{}", message);
-        }, py::arg("message"),
-             R"(Log a critical-level message.
+        .def(
+            "critical",
+            [](modern_log::Logger& self, const std::string& message) {
+                self.critical("{}", message);
+            },
+            py::arg("message"),
+            R"(Log a critical-level message.
 
 Args:
     message: The message to log.
@@ -362,8 +403,8 @@ Args:
     exception: The exception to log.
     context: Optional context string.
 )")
-        .def("time_scope", &modern_log::Logger::time_scope,
-             py::arg("name"), py::arg("level") = modern_log::Level::info,
+        .def("time_scope", &modern_log::Logger::time_scope, py::arg("name"),
+             py::arg("level") = modern_log::Level::info,
              R"(Create a scoped timer for performance measurement.
 
 Args:
@@ -373,8 +414,7 @@ Args:
 Returns:
     ScopedTimer object for RAII timing.
 )")
-        .def("set_level", &modern_log::Logger::set_level,
-             py::arg("level"),
+        .def("set_level", &modern_log::Logger::set_level, py::arg("level"),
              R"(Set the minimum log level.
 
 Args:
@@ -386,8 +426,7 @@ Args:
 Returns:
     The current minimum log level.
 )")
-        .def("should_log", &modern_log::Logger::should_log,
-             py::arg("level"),
+        .def("should_log", &modern_log::Logger::should_log, py::arg("level"),
              R"(Check if a message at the given level should be logged.
 
 Args:
@@ -398,8 +437,9 @@ Returns:
 )");
 
     // LogManager class
-    py::class_<modern_log::LogManager>(m, "LogManager",
-                                       R"(Manager for creating and accessing loggers.
+    py::class_<modern_log::LogManager>(
+        m, "LogManager",
+        R"(Manager for creating and accessing loggers.
 
 This class provides factory methods for creating loggers and accessing
 the default logger instance.
@@ -422,8 +462,7 @@ Returns:
     Reference to the default logger.
 )")
         .def_static("create_logger", &modern_log::LogManager::create_logger,
-                    py::arg("name"),
-                    py::return_value_policy::reference,
+                    py::arg("name"), py::return_value_policy::reference,
                     R"(Create a new named logger.
 
 Args:
@@ -433,8 +472,7 @@ Returns:
     Reference to the newly created logger.
 )")
         .def_static("get_logger", &modern_log::LogManager::get_logger,
-                    py::arg("name"),
-                    py::return_value_policy::reference,
+                    py::arg("name"), py::return_value_policy::reference,
                     R"(Get an existing logger by name.
 
 Args:
@@ -443,8 +481,8 @@ Args:
 Returns:
     Reference to the logger, or None if not found.
 )")
-        .def_static("set_global_level", &modern_log::LogManager::set_global_level,
-                    py::arg("level"),
+        .def_static("set_global_level",
+                    &modern_log::LogManager::set_global_level, py::arg("level"),
                     R"(Set the global log level for all loggers.
 
 Args:
@@ -454,64 +492,85 @@ Args:
                     R"(Shutdown the logging system and flush all loggers.)");
 
     // Convenience functions for global logging
-    m.def("trace", [](const std::string& message) {
-        modern_log::LogManager::default_logger().trace("{}", message);
-    }, py::arg("message"),
-    R"(Log a trace message using the default logger.
+    m.def(
+        "trace",
+        [](const std::string& message) {
+            modern_log::LogManager::default_logger().trace("{}", message);
+        },
+        py::arg("message"),
+        R"(Log a trace message using the default logger.
 
 Args:
     message: The message to log.
 )");
 
-    m.def("debug", [](const std::string& message) {
-        modern_log::LogManager::default_logger().debug("{}", message);
-    }, py::arg("message"),
-    R"(Log a debug message using the default logger.
+    m.def(
+        "debug",
+        [](const std::string& message) {
+            modern_log::LogManager::default_logger().debug("{}", message);
+        },
+        py::arg("message"),
+        R"(Log a debug message using the default logger.
 
 Args:
     message: The message to log.
 )");
 
-    m.def("info", [](const std::string& message) {
-        modern_log::LogManager::default_logger().info("{}", message);
-    }, py::arg("message"),
-    R"(Log an info message using the default logger.
+    m.def(
+        "info",
+        [](const std::string& message) {
+            modern_log::LogManager::default_logger().info("{}", message);
+        },
+        py::arg("message"),
+        R"(Log an info message using the default logger.
 
 Args:
     message: The message to log.
 )");
 
-    m.def("warn", [](const std::string& message) {
-        modern_log::LogManager::default_logger().warn("{}", message);
-    }, py::arg("message"),
-    R"(Log a warning message using the default logger.
+    m.def(
+        "warn",
+        [](const std::string& message) {
+            modern_log::LogManager::default_logger().warn("{}", message);
+        },
+        py::arg("message"),
+        R"(Log a warning message using the default logger.
 
 Args:
     message: The message to log.
 )");
 
-    m.def("error", [](const std::string& message) {
-        modern_log::LogManager::default_logger().error("{}", message);
-    }, py::arg("message"),
-    R"(Log an error message using the default logger.
+    m.def(
+        "error",
+        [](const std::string& message) {
+            modern_log::LogManager::default_logger().error("{}", message);
+        },
+        py::arg("message"),
+        R"(Log an error message using the default logger.
 
 Args:
     message: The message to log.
 )");
 
-    m.def("critical", [](const std::string& message) {
-        modern_log::LogManager::default_logger().critical("{}", message);
-    }, py::arg("message"),
-    R"(Log a critical message using the default logger.
+    m.def(
+        "critical",
+        [](const std::string& message) {
+            modern_log::LogManager::default_logger().critical("{}", message);
+        },
+        py::arg("message"),
+        R"(Log a critical message using the default logger.
 
 Args:
     message: The message to log.
 )");
 
-    m.def("set_level", [](modern_log::Level level) {
-        modern_log::LogManager::set_global_level(level);
-    }, py::arg("level"),
-    R"(Set the global log level.
+    m.def(
+        "set_level",
+        [](modern_log::Level level) {
+            modern_log::LogManager::set_global_level(level);
+        },
+        py::arg("level"),
+        R"(Set the global log level.
 
 Args:
     level: The global log level.

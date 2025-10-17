@@ -14,18 +14,20 @@ Description: Implementation of error formatting system
 
 #include "error_formatter.hpp"
 #include <algorithm>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <regex>
-#include <fstream>
 
 namespace atom::error {
 
 // ErrorFormatter base implementation
-std::string ErrorFormatter::formatMultiple(const std::vector<std::shared_ptr<ErrorContext>>& contexts) {
+std::string ErrorFormatter::formatMultiple(
+    const std::vector<std::shared_ptr<ErrorContext>>& contexts) {
     std::stringstream ss;
     for (size_t i = 0; i < contexts.size(); ++i) {
-        if (i > 0) ss << "\n";
+        if (i > 0)
+            ss << "\n";
         ss << format(contexts[i]);
     }
     return ss.str();
@@ -33,10 +35,10 @@ std::string ErrorFormatter::formatMultiple(const std::vector<std::shared_ptr<Err
 
 // PlainTextFormatter implementation
 PlainTextFormatter::PlainTextFormatter()
-    : includeStackTrace_(true)
-    , includeSystemInfo_(true)
-    , includeTimestamp_(true)
-    , dateFormat_("%Y-%m-%d %H:%M:%S") {
+    : includeStackTrace_(true),
+      includeSystemInfo_(true),
+      includeTimestamp_(true),
+      dateFormat_("%Y-%m-%d %H:%M:%S") {
     options_["include_stack_trace"] = "true";
     options_["include_system_info"] = "true";
     options_["include_timestamp"] = "true";
@@ -44,72 +46,82 @@ PlainTextFormatter::PlainTextFormatter()
 }
 
 std::string PlainTextFormatter::format(std::shared_ptr<ErrorContext> context) {
-    if (!context) return "";
-    
+    if (!context)
+        return "";
+
     std::stringstream ss;
-    
+
     // Header
     ss << "=== ERROR REPORT ===\n";
-    
+
     // Basic information
     ss << "Error ID: " << context->getErrorId() << "\n";
     ss << "Error Code: " << context->getErrorCode() << "\n";
     ss << "Message: " << context->getMessage() << "\n";
     ss << "Severity: " << severityToString(context->getSeverity()) << "\n";
     ss << "Category: " << categoryToString(context->getCategory()) << "\n";
-    
+
     // Timestamp
     if (includeTimestamp_) {
-        auto time_t = std::chrono::system_clock::to_time_t(context->getTimestamp());
-        ss << "Timestamp: " << std::put_time(std::localtime(&time_t), dateFormat_.c_str()) << "\n";
+        auto time_t =
+            std::chrono::system_clock::to_time_t(context->getTimestamp());
+        ss << "Timestamp: "
+           << std::put_time(std::localtime(&time_t), dateFormat_.c_str())
+           << "\n";
     }
-    
+
     // Correlation information
     if (!context->getCorrelationId().empty()) {
         ss << "Correlation ID: " << context->getCorrelationId() << "\n";
     }
-    
+
     // Retry information
-    ss << "Retry Count: " << context->getRetryCount() << "/" << context->getMaxRetries() << "\n";
-    
+    ss << "Retry Count: " << context->getRetryCount() << "/"
+       << context->getMaxRetries() << "\n";
+
     // Tags
     const auto& tags = context->getTags();
     if (!tags.empty()) {
         ss << "Tags: ";
         for (size_t i = 0; i < tags.size(); ++i) {
-            if (i > 0) ss << ", ";
+            if (i > 0)
+                ss << ", ";
             ss << tags[i];
         }
         ss << "\n";
     }
-    
+
     // System information
     if (includeSystemInfo_) {
         ss << "\n--- System Information ---\n";
         auto sysInfo = context->getSystemInfo("pid");
-        if (!sysInfo.empty()) ss << "Process ID: " << sysInfo << "\n";
-        
+        if (!sysInfo.empty())
+            ss << "Process ID: " << sysInfo << "\n";
+
         sysInfo = context->getSystemInfo("thread_id");
-        if (!sysInfo.empty()) ss << "Thread ID: " << sysInfo << "\n";
-        
+        if (!sysInfo.empty())
+            ss << "Thread ID: " << sysInfo << "\n";
+
         sysInfo = context->getSystemInfo("hostname");
-        if (!sysInfo.empty()) ss << "Hostname: " << sysInfo << "\n";
+        if (!sysInfo.empty())
+            ss << "Hostname: " << sysInfo << "\n";
     }
-    
+
     // Stack trace
     if (includeStackTrace_ && !context->getStackTrace().empty()) {
         ss << "\n--- Stack Trace ---\n";
         ss << context->getStackTrace() << "\n";
     }
-    
+
     ss << "==================\n";
-    
+
     return ss.str();
 }
 
-void PlainTextFormatter::setOption(const std::string& key, const std::string& value) {
+void PlainTextFormatter::setOption(const std::string& key,
+                                   const std::string& value) {
     options_[key] = value;
-    
+
     if (key == "include_stack_trace") {
         includeStackTrace_ = (value == "true");
     } else if (key == "include_system_info") {
@@ -127,71 +139,94 @@ std::string PlainTextFormatter::getOption(const std::string& key) const {
 }
 
 // JsonFormatter implementation
-JsonFormatter::JsonFormatter()
-    : prettyPrint_(true)
-    , indentSize_(2) {
+JsonFormatter::JsonFormatter() : prettyPrint_(true), indentSize_(2) {
     options_["pretty_print"] = "true";
     options_["indent_size"] = "2";
 }
 
 std::string JsonFormatter::format(std::shared_ptr<ErrorContext> context) {
-    if (!context) return "{}";
-    
+    if (!context)
+        return "{}";
+
     std::stringstream ss;
     std::string indent = prettyPrint_ ? std::string(indentSize_, ' ') : "";
     std::string newline = prettyPrint_ ? "\n" : "";
-    
+
     ss << "{" << newline;
-    
+
     // Basic information
-    ss << indent << formatJsonValue("errorId", context->getErrorId()) << newline;
-    ss << indent << formatJsonValue("errorCode", std::to_string(context->getErrorCode())) << newline;
-    ss << indent << formatJsonValue("message", context->getMessage()) << newline;
-    ss << indent << formatJsonValue("severity", std::string(severityToString(context->getSeverity()))) << newline;
-    ss << indent << formatJsonValue("category", std::string(categoryToString(context->getCategory()))) << newline;
-    
+    ss << indent << formatJsonValue("errorId", context->getErrorId())
+       << newline;
+    ss << indent
+       << formatJsonValue("errorCode", std::to_string(context->getErrorCode()))
+       << newline;
+    ss << indent << formatJsonValue("message", context->getMessage())
+       << newline;
+    ss << indent
+       << formatJsonValue("severity",
+                          std::string(severityToString(context->getSeverity())))
+       << newline;
+    ss << indent
+       << formatJsonValue("category",
+                          std::string(categoryToString(context->getCategory())))
+       << newline;
+
     // Timestamp
     auto time_t = std::chrono::system_clock::to_time_t(context->getTimestamp());
-    ss << indent << formatJsonValue("timestamp", std::to_string(time_t)) << newline;
-    
+    ss << indent << formatJsonValue("timestamp", std::to_string(time_t))
+       << newline;
+
     // Correlation ID
     if (!context->getCorrelationId().empty()) {
-        ss << indent << formatJsonValue("correlationId", context->getCorrelationId()) << newline;
+        ss << indent
+           << formatJsonValue("correlationId", context->getCorrelationId())
+           << newline;
     }
-    
+
     // Retry information
-    ss << indent << formatJsonValue("retryCount", std::to_string(context->getRetryCount())) << newline;
-    ss << indent << formatJsonValue("maxRetries", std::to_string(context->getMaxRetries())) << newline;
-    
+    ss << indent
+       << formatJsonValue("retryCount",
+                          std::to_string(context->getRetryCount()))
+       << newline;
+    ss << indent
+       << formatJsonValue("maxRetries",
+                          std::to_string(context->getMaxRetries()))
+       << newline;
+
     // Tags
     const auto& tags = context->getTags();
     if (!tags.empty()) {
         ss << indent << "\"tags\": [";
         for (size_t i = 0; i < tags.size(); ++i) {
-            if (i > 0) ss << ", ";
+            if (i > 0)
+                ss << ", ";
             ss << "\"" << escapeJsonString(tags[i]) << "\"";
         }
         ss << "]," << newline;
     }
-    
+
     // Stack trace
     if (!context->getStackTrace().empty()) {
-        ss << indent << formatJsonValue("stackTrace", context->getStackTrace(), true) << newline;
+        ss << indent
+           << formatJsonValue("stackTrace", context->getStackTrace(), true)
+           << newline;
     }
-    
+
     ss << "}";
-    
+
     return ss.str();
 }
 
-std::string JsonFormatter::formatMultiple(const std::vector<std::shared_ptr<ErrorContext>>& contexts) {
+std::string JsonFormatter::formatMultiple(
+    const std::vector<std::shared_ptr<ErrorContext>>& contexts) {
     std::stringstream ss;
     std::string newline = prettyPrint_ ? "\n" : "";
     std::string indent = prettyPrint_ ? std::string(indentSize_, ' ') : "";
-    
+
     ss << "[" << newline;
     for (size_t i = 0; i < contexts.size(); ++i) {
-        if (i > 0) ss << "," << newline;
+        if (i > 0)
+            ss << "," << newline;
         if (prettyPrint_) {
             std::string contextJson = format(contexts[i]);
             // Add indentation to each line
@@ -203,13 +238,14 @@ std::string JsonFormatter::formatMultiple(const std::vector<std::shared_ptr<Erro
         }
     }
     ss << newline << "]";
-    
+
     return ss.str();
 }
 
-void JsonFormatter::setOption(const std::string& key, const std::string& value) {
+void JsonFormatter::setOption(const std::string& key,
+                              const std::string& value) {
     options_[key] = value;
-    
+
     if (key == "pretty_print") {
         prettyPrint_ = (value == "true");
     } else if (key == "indent_size") {
@@ -225,16 +261,30 @@ std::string JsonFormatter::getOption(const std::string& key) const {
 std::string JsonFormatter::escapeJsonString(const std::string& str) const {
     std::string escaped;
     escaped.reserve(str.length() * 2);
-    
+
     for (char c : str) {
         switch (c) {
-            case '"': escaped += "\\\""; break;
-            case '\\': escaped += "\\\\"; break;
-            case '\b': escaped += "\\b"; break;
-            case '\f': escaped += "\\f"; break;
-            case '\n': escaped += "\\n"; break;
-            case '\r': escaped += "\\r"; break;
-            case '\t': escaped += "\\t"; break;
+            case '"':
+                escaped += "\\\"";
+                break;
+            case '\\':
+                escaped += "\\\\";
+                break;
+            case '\b':
+                escaped += "\\b";
+                break;
+            case '\f':
+                escaped += "\\f";
+                break;
+            case '\n':
+                escaped += "\\n";
+                break;
+            case '\r':
+                escaped += "\\r";
+                break;
+            case '\t':
+                escaped += "\\t";
+                break;
             default:
                 if (c < 0x20) {
                     escaped += "\\u";
@@ -248,22 +298,25 @@ std::string JsonFormatter::escapeJsonString(const std::string& str) const {
                 break;
         }
     }
-    
+
     return escaped;
 }
 
-std::string JsonFormatter::formatJsonValue(const std::string& key, const std::string& value, bool isLast) const {
+std::string JsonFormatter::formatJsonValue(const std::string& key,
+                                           const std::string& value,
+                                           bool isLast) const {
     std::stringstream ss;
-    ss << "\"" << escapeJsonString(key) << "\": \"" << escapeJsonString(value) << "\"";
-    if (!isLast) ss << ",";
+    ss << "\"" << escapeJsonString(key) << "\": \"" << escapeJsonString(value)
+       << "\"";
+    if (!isLast)
+        ss << ",";
     return ss.str();
 }
 
 // ColoredFormatter implementation
-ColoredFormatter::ColoredFormatter()
-    : enableColors_(true) {
+ColoredFormatter::ColoredFormatter() : enableColors_(true) {
     options_["enable_colors"] = "true";
-    
+
     // Set default severity colors
     severityColors_[ErrorSeverity::Trace] = Color::White;
     severityColors_[ErrorSeverity::Debug] = Color::Cyan;
@@ -275,38 +328,50 @@ ColoredFormatter::ColoredFormatter()
 }
 
 std::string ColoredFormatter::format(std::shared_ptr<ErrorContext> context) {
-    if (!context) return "";
-    
+    if (!context)
+        return "";
+
     std::stringstream ss;
-    
+
     // Colored header based on severity
     Color headerColor = getSeverityColor(context->getSeverity());
     ss << colorize("=== ERROR REPORT ===", headerColor) << "\n";
-    
+
     // Basic information with colors
     ss << "Error ID: " << colorize(context->getErrorId(), Color::Cyan) << "\n";
-    ss << "Error Code: " << colorize(std::to_string(context->getErrorCode()), Color::Yellow) << "\n";
+    ss << "Error Code: "
+       << colorize(std::to_string(context->getErrorCode()), Color::Yellow)
+       << "\n";
     ss << "Message: " << colorize(context->getMessage(), Color::White) << "\n";
-    ss << "Severity: " << colorize(std::string(severityToString(context->getSeverity())), headerColor) << "\n";
-    ss << "Category: " << colorize(std::string(categoryToString(context->getCategory())), Color::Blue) << "\n";
-    
+    ss << "Severity: "
+       << colorize(std::string(severityToString(context->getSeverity())),
+                   headerColor)
+       << "\n";
+    ss << "Category: "
+       << colorize(std::string(categoryToString(context->getCategory())),
+                   Color::Blue)
+       << "\n";
+
     // Timestamp
     auto time_t = std::chrono::system_clock::to_time_t(context->getTimestamp());
-    ss << "Timestamp: " << colorize(std::to_string(time_t), Color::Green) << "\n";
-    
+    ss << "Timestamp: " << colorize(std::to_string(time_t), Color::Green)
+       << "\n";
+
     // Correlation information
     if (!context->getCorrelationId().empty()) {
-        ss << "Correlation ID: " << colorize(context->getCorrelationId(), Color::Magenta) << "\n";
+        ss << "Correlation ID: "
+           << colorize(context->getCorrelationId(), Color::Magenta) << "\n";
     }
-    
+
     ss << colorize("==================", headerColor) << "\n";
-    
+
     return ss.str();
 }
 
-void ColoredFormatter::setOption(const std::string& key, const std::string& value) {
+void ColoredFormatter::setOption(const std::string& key,
+                                 const std::string& value) {
     options_[key] = value;
-    
+
     if (key == "enable_colors") {
         enableColors_ = (value == "true");
     }
@@ -317,11 +382,14 @@ std::string ColoredFormatter::getOption(const std::string& key) const {
     return it != options_.end() ? it->second : "";
 }
 
-std::string ColoredFormatter::colorize(const std::string& text, Color color) const {
-    if (!enableColors_) return text;
-    
+std::string ColoredFormatter::colorize(const std::string& text,
+                                       Color color) const {
+    if (!enableColors_)
+        return text;
+
     std::stringstream ss;
-    ss << "\033[" << static_cast<int>(color) << "m" << text << "\033[" << static_cast<int>(Color::Reset) << "m";
+    ss << "\033[" << static_cast<int>(color) << "m" << text << "\033["
+       << static_cast<int>(Color::Reset) << "m";
     return ss.str();
 }
 
@@ -331,9 +399,12 @@ Color ColoredFormatter::getSeverityColor(ErrorSeverity severity) const {
 }
 
 // ErrorFormatterFactory implementation
-std::unordered_map<std::string, std::function<std::unique_ptr<ErrorFormatter>()>> ErrorFormatterFactory::customFormatters_;
+std::unordered_map<std::string,
+                   std::function<std::unique_ptr<ErrorFormatter>()>>
+    ErrorFormatterFactory::customFormatters_;
 
-std::unique_ptr<ErrorFormatter> ErrorFormatterFactory::createFormatter(OutputFormat format) {
+std::unique_ptr<ErrorFormatter> ErrorFormatterFactory::createFormatter(
+    OutputFormat format) {
     switch (format) {
         case OutputFormat::Plain:
             return std::make_unique<PlainTextFormatter>();
@@ -350,11 +421,14 @@ std::unique_ptr<ErrorFormatter> ErrorFormatterFactory::createFormatter(OutputFor
     }
 }
 
-void ErrorFormatterFactory::registerFormatter(const std::string& name, std::function<std::unique_ptr<ErrorFormatter>()> factory) {
+void ErrorFormatterFactory::registerFormatter(
+    const std::string& name,
+    std::function<std::unique_ptr<ErrorFormatter>()> factory) {
     customFormatters_[name] = std::move(factory);
 }
 
-std::unique_ptr<ErrorFormatter> ErrorFormatterFactory::createCustomFormatter(const std::string& name) {
+std::unique_ptr<ErrorFormatter> ErrorFormatterFactory::createCustomFormatter(
+    const std::string& name) {
     auto it = customFormatters_.find(name);
     if (it != customFormatters_.end()) {
         return it->second();
@@ -363,7 +437,8 @@ std::unique_ptr<ErrorFormatter> ErrorFormatterFactory::createCustomFormatter(con
 }
 
 std::vector<std::string> ErrorFormatterFactory::getAvailableFormatters() {
-    std::vector<std::string> formatters = {"plain", "json", "colored", "html", "structured"};
+    std::vector<std::string> formatters = {"plain", "json", "colored", "html",
+                                           "structured"};
 
     for (const auto& [name, factory] : customFormatters_) {
         formatters.push_back(name);
@@ -373,8 +448,7 @@ std::vector<std::string> ErrorFormatterFactory::getAvailableFormatters() {
 }
 
 // HtmlFormatter implementation
-HtmlFormatter::HtmlFormatter()
-    : includeCSS_(true) {
+HtmlFormatter::HtmlFormatter() : includeCSS_(true) {
     options_["include_css"] = "true";
 
     cssStyle_ = R"(
@@ -396,7 +470,8 @@ HtmlFormatter::HtmlFormatter()
 }
 
 std::string HtmlFormatter::format(std::shared_ptr<ErrorContext> context) {
-    if (!context) return "";
+    if (!context)
+        return "";
 
     std::stringstream ss;
 
@@ -413,34 +488,40 @@ std::string HtmlFormatter::format(std::shared_ptr<ErrorContext> context) {
     // Basic information
     ss << "  <div class=\"error-field\">\n";
     ss << "    <span class=\"error-label\">Error ID:</span>\n";
-    ss << "    <span class=\"error-value\">" << escapeHtml(context->getErrorId()) << "</span>\n";
+    ss << "    <span class=\"error-value\">"
+       << escapeHtml(context->getErrorId()) << "</span>\n";
     ss << "  </div>\n";
 
     ss << "  <div class=\"error-field\">\n";
     ss << "    <span class=\"error-label\">Error Code:</span>\n";
-    ss << "    <span class=\"error-value\">" << context->getErrorCode() << "</span>\n";
+    ss << "    <span class=\"error-value\">" << context->getErrorCode()
+       << "</span>\n";
     ss << "  </div>\n";
 
     ss << "  <div class=\"error-field\">\n";
     ss << "    <span class=\"error-label\">Message:</span>\n";
-    ss << "    <span class=\"error-value\">" << escapeHtml(context->getMessage()) << "</span>\n";
+    ss << "    <span class=\"error-value\">"
+       << escapeHtml(context->getMessage()) << "</span>\n";
     ss << "  </div>\n";
 
     ss << "  <div class=\"error-field\">\n";
     ss << "    <span class=\"error-label\">Severity:</span>\n";
-    ss << "    <span class=\"error-value\">" << severityToString(context->getSeverity()) << "</span>\n";
+    ss << "    <span class=\"error-value\">"
+       << severityToString(context->getSeverity()) << "</span>\n";
     ss << "  </div>\n";
 
     ss << "  <div class=\"error-field\">\n";
     ss << "    <span class=\"error-label\">Category:</span>\n";
-    ss << "    <span class=\"error-value\">" << categoryToString(context->getCategory()) << "</span>\n";
+    ss << "    <span class=\"error-value\">"
+       << categoryToString(context->getCategory()) << "</span>\n";
     ss << "  </div>\n";
 
     // Stack trace
     if (!context->getStackTrace().empty()) {
         ss << "  <div class=\"error-field\">\n";
         ss << "    <span class=\"error-label\">Stack Trace:</span>\n";
-        ss << "    <pre class=\"error-value\">" << escapeHtml(context->getStackTrace()) << "</pre>\n";
+        ss << "    <pre class=\"error-value\">"
+           << escapeHtml(context->getStackTrace()) << "</pre>\n";
         ss << "  </div>\n";
     }
 
@@ -449,7 +530,8 @@ std::string HtmlFormatter::format(std::shared_ptr<ErrorContext> context) {
     return ss.str();
 }
 
-std::string HtmlFormatter::formatMultiple(const std::vector<std::shared_ptr<ErrorContext>>& contexts) {
+std::string HtmlFormatter::formatMultiple(
+    const std::vector<std::shared_ptr<ErrorContext>>& contexts) {
     std::stringstream ss;
 
     if (includeCSS_) {
@@ -471,7 +553,8 @@ std::string HtmlFormatter::formatMultiple(const std::vector<std::shared_ptr<Erro
     return ss.str();
 }
 
-void HtmlFormatter::setOption(const std::string& key, const std::string& value) {
+void HtmlFormatter::setOption(const std::string& key,
+                              const std::string& value) {
     options_[key] = value;
 
     if (key == "include_css") {
@@ -492,12 +575,24 @@ std::string HtmlFormatter::escapeHtml(const std::string& str) const {
 
     for (char c : str) {
         switch (c) {
-            case '<': escaped += "&lt;"; break;
-            case '>': escaped += "&gt;"; break;
-            case '&': escaped += "&amp;"; break;
-            case '"': escaped += "&quot;"; break;
-            case '\'': escaped += "&#39;"; break;
-            default: escaped += c; break;
+            case '<':
+                escaped += "&lt;";
+                break;
+            case '>':
+                escaped += "&gt;";
+                break;
+            case '&':
+                escaped += "&amp;";
+                break;
+            case '"':
+                escaped += "&quot;";
+                break;
+            case '\'':
+                escaped += "&#39;";
+                break;
+            default:
+                escaped += c;
+                break;
         }
     }
 
@@ -506,48 +601,64 @@ std::string HtmlFormatter::escapeHtml(const std::string& str) const {
 
 std::string HtmlFormatter::getSeverityClass(ErrorSeverity severity) const {
     switch (severity) {
-        case ErrorSeverity::Trace: return "error-trace";
-        case ErrorSeverity::Debug: return "error-debug";
-        case ErrorSeverity::Info: return "error-info";
-        case ErrorSeverity::Warning: return "error-warning";
-        case ErrorSeverity::Error: return "error-error";
-        case ErrorSeverity::Critical: return "error-critical";
-        case ErrorSeverity::Fatal: return "error-fatal";
-        default: return "error-error";
+        case ErrorSeverity::Trace:
+            return "error-trace";
+        case ErrorSeverity::Debug:
+            return "error-debug";
+        case ErrorSeverity::Info:
+            return "error-info";
+        case ErrorSeverity::Warning:
+            return "error-warning";
+        case ErrorSeverity::Error:
+            return "error-error";
+        case ErrorSeverity::Critical:
+            return "error-critical";
+        case ErrorSeverity::Fatal:
+            return "error-fatal";
+        default:
+            return "error-error";
     }
 }
 
 // StructuredFormatter implementation
 StructuredFormatter::StructuredFormatter()
-    : fieldSeparator_(" ")
-    , keyValueSeparator_("=") {
+    : fieldSeparator_(" "), keyValueSeparator_("=") {
     options_["field_separator"] = " ";
     options_["key_value_separator"] = "=";
 
-    fieldOrder_ = {"timestamp", "severity", "category", "code", "message", "correlation_id", "error_id"};
+    fieldOrder_ = {"timestamp", "severity",       "category", "code",
+                   "message",   "correlation_id", "error_id"};
 }
 
 std::string StructuredFormatter::format(std::shared_ptr<ErrorContext> context) {
-    if (!context) return "";
+    if (!context)
+        return "";
 
     std::stringstream ss;
 
     for (size_t i = 0; i < fieldOrder_.size(); ++i) {
-        if (i > 0) ss << fieldSeparator_;
+        if (i > 0)
+            ss << fieldSeparator_;
 
         const std::string& field = fieldOrder_[i];
         if (field == "timestamp") {
-            auto time_t = std::chrono::system_clock::to_time_t(context->getTimestamp());
+            auto time_t =
+                std::chrono::system_clock::to_time_t(context->getTimestamp());
             ss << formatField("timestamp", std::to_string(time_t));
         } else if (field == "severity") {
-            ss << formatField("severity", std::string(severityToString(context->getSeverity())));
+            ss << formatField(
+                "severity",
+                std::string(severityToString(context->getSeverity())));
         } else if (field == "category") {
-            ss << formatField("category", std::string(categoryToString(context->getCategory())));
+            ss << formatField(
+                "category",
+                std::string(categoryToString(context->getCategory())));
         } else if (field == "code") {
             ss << formatField("code", std::to_string(context->getErrorCode()));
         } else if (field == "message") {
             ss << formatField("message", context->getMessage());
-        } else if (field == "correlation_id" && !context->getCorrelationId().empty()) {
+        } else if (field == "correlation_id" &&
+                   !context->getCorrelationId().empty()) {
             ss << formatField("correlation_id", context->getCorrelationId());
         } else if (field == "error_id") {
             ss << formatField("error_id", context->getErrorId());
@@ -557,7 +668,8 @@ std::string StructuredFormatter::format(std::shared_ptr<ErrorContext> context) {
     return ss.str();
 }
 
-void StructuredFormatter::setOption(const std::string& key, const std::string& value) {
+void StructuredFormatter::setOption(const std::string& key,
+                                    const std::string& value) {
     options_[key] = value;
 
     if (key == "field_separator") {
@@ -572,8 +684,9 @@ std::string StructuredFormatter::getOption(const std::string& key) const {
     return it != options_.end() ? it->second : "";
 }
 
-std::string StructuredFormatter::formatField(const std::string& key, const std::string& value) const {
+std::string StructuredFormatter::formatField(const std::string& key,
+                                             const std::string& value) const {
     return key + keyValueSeparator_ + value;
 }
 
-} // namespace atom::error
+}  // namespace atom::error

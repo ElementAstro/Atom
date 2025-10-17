@@ -112,8 +112,8 @@ auto dumpAddrInfo(
     }
 }
 
-auto addrInfoToString(const struct addrinfo* addrInfo, bool jsonFormat)
-    -> std::string {
+auto addrInfoToString(const struct addrinfo* addrInfo,
+                      bool jsonFormat) -> std::string {
     if (!addrInfo) {
         throw std::invalid_argument("addrInfo is null");
     }
@@ -172,7 +172,7 @@ auto getAddrInfo(const std::string& hostname, const std::string& service)
         throw std::invalid_argument("Hostname cannot be empty");
     }
 
-    struct addrinfo hints{};
+    struct addrinfo hints {};
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_flags = AI_CANONNAME;

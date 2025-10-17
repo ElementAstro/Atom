@@ -231,8 +231,8 @@ auto serializeTree(const HuffmanNode* root) -> std::string {
 
 /* ------------------------ deserializeTree ------------------------ */
 
-auto deserializeTree(const std::string& serializedTree, size_t& index)
-    -> std::shared_ptr<HuffmanNode> {
+auto deserializeTree(const std::string& serializedTree,
+                     size_t& index) -> std::shared_ptr<HuffmanNode> {
     if (index >= serializedTree.size()) {
 #ifdef ATOM_USE_BOOST
         throw HuffmanException(boost::str(boost::format(

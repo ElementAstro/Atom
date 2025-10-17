@@ -16,16 +16,16 @@ serialization, and optional scripting support.
 **************************************************/
 
 #include <chrono>
+#include <fstream>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
-#include <fstream>
 
 #include "atom/components/component.hpp"
 #include "atom/components/core/registry.hpp"
-#include "atom/components/lifecycle/lifecycle.hpp"
 #include "atom/components/data/serialization.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
 
 // Conditional scripting support
 #if ATOM_ENABLE_LUA
@@ -33,7 +33,8 @@ serialization, and optional scripting support.
 #include "atom/components/scripting_api.hpp"
 #endif
 
-// Note: Registry and Component are in the global namespace, not atom::components
+// Note: Registry and Component are in the global namespace, not
+// atom::components
 using atom::components::LifecycleManager;
 using atom::components::LifecyclePhase;
 
@@ -43,14 +44,16 @@ using atom::components::LifecyclePhase;
 class DataProcessorComponent : public Component {
 public:
     explicit DataProcessorComponent(const std::string& name) : Component(name) {
-        std::cout << "DataProcessorComponent '" << name << "' created" << std::endl;
+        std::cout << "DataProcessorComponent '" << name << "' created"
+                  << std::endl;
 
         // Initialize processing variables
         addVariable<int>("processedCount", 0);
         addVariable<double>("processingRate", 100.0);
         addVariable<bool>("enabled", true);
         addVariable<std::string>("status", "idle");
-        addVariable<std::vector<std::string>>("dataQueue", std::vector<std::string>());
+        addVariable<std::vector<std::string>>("dataQueue",
+                                              std::vector<std::string>());
 
         // Add processing commands
         def("processData", [this](const std::string& data) {
@@ -85,7 +88,8 @@ public:
 
             std::cout << "  Processing Stats:" << std::endl;
             std::cout << "    Count: " << count->get() << std::endl;
-            std::cout << "    Rate: " << rate->get() << " items/sec" << std::endl;
+            std::cout << "    Rate: " << rate->get() << " items/sec"
+                      << std::endl;
             std::cout << "    Status: " << status->get() << std::endl;
         });
 
@@ -114,22 +118,28 @@ public:
         auto& lifecycle = LifecycleManager::instance();
 
         lifecycle.registerHook(name, LifecyclePhase::PostInitialization,
-            [this]([[maybe_unused]] Component& comp, [[maybe_unused]] LifecyclePhase phase) {
-                std::cout << "  Service initializing..." << std::endl;
-                setValue("running", false);
-            });
+                               [this]([[maybe_unused]] Component& comp,
+                                      [[maybe_unused]] LifecyclePhase phase) {
+                                   std::cout << "  Service initializing..."
+                                             << std::endl;
+                                   setValue("running", false);
+                               });
 
         lifecycle.registerHook(name, LifecyclePhase::PostActivation,
-            [this]([[maybe_unused]] Component& comp, [[maybe_unused]] LifecyclePhase phase) {
-                std::cout << "  Service starting..." << std::endl;
-                setValue("running", true);
-            });
+                               [this]([[maybe_unused]] Component& comp,
+                                      [[maybe_unused]] LifecyclePhase phase) {
+                                   std::cout << "  Service starting..."
+                                             << std::endl;
+                                   setValue("running", true);
+                               });
 
         lifecycle.registerHook(name, LifecyclePhase::PreDeactivation,
-            [this]([[maybe_unused]] Component& comp, [[maybe_unused]] LifecyclePhase phase) {
-                std::cout << "  Service stopping..." << std::endl;
-                setValue("running", false);
-            });
+                               [this]([[maybe_unused]] Component& comp,
+                                      [[maybe_unused]] LifecyclePhase phase) {
+                                   std::cout << "  Service stopping..."
+                                             << std::endl;
+                                   setValue("running", false);
+                               });
 
         // Add service commands
         def("start", [this]() {
@@ -174,7 +184,8 @@ public:
         auto& registry = Registry::instance();
 
         // Create components
-        processor_ = registry.createComponent<DataProcessorComponent>("DataProcessor");
+        processor_ =
+            registry.createComponent<DataProcessorComponent>("DataProcessor");
         service_ = registry.createComponent<ServiceComponent>("WebService");
 
         // Initialize lifecycle
@@ -191,14 +202,16 @@ public:
         config.enableJIT = true;
         config.enableDebug = true;
 
-        luaEngine_ = std::make_unique<atom::components::scripting::LuaEngine>(config);
+        luaEngine_ =
+            std::make_unique<atom::components::scripting::LuaEngine>(config);
 
         atom::components::scripting::ScriptEngineConfig engineConfig;
         if (luaEngine_->initialize(engineConfig)) {
             std::cout << "  Lua engine initialized successfully" << std::endl;
 
             // Register component API
-            atom::components::ComponentScriptingAPI::registerComponentAPI(*luaEngine_);
+            atom::components::ComponentScriptingAPI::registerComponentAPI(
+                *luaEngine_);
 
             // Execute a simple Lua script
             std::string luaScript = R"(
@@ -211,7 +224,8 @@ public:
             if (result.success) {
                 std::cout << "  Lua script executed successfully" << std::endl;
             } else {
-                std::cout << "  Lua script failed: " << result.errorMessage << std::endl;
+                std::cout << "  Lua script failed: " << result.errorMessage
+                          << std::endl;
             }
         }
 #else
@@ -231,10 +245,14 @@ public:
         std::vector<std::any> args1 = {std::any(std::string("sample_data_1"))};
         std::vector<std::any> args2 = {std::any(std::string("sample_data_2"))};
         std::vector<std::any> args3 = {std::any(std::string("sample_data_3"))};
-        [[maybe_unused]] auto result1 = processor_->runCommand("processData", args1);
-        [[maybe_unused]] auto result2 = processor_->runCommand("processData", args2);
-        [[maybe_unused]] auto result3 = processor_->runCommand("processData", args3);
-        [[maybe_unused]] auto statsResult = processor_->runCommand("getStats", {});
+        [[maybe_unused]] auto result1 =
+            processor_->runCommand("processData", args1);
+        [[maybe_unused]] auto result2 =
+            processor_->runCommand("processData", args2);
+        [[maybe_unused]] auto result3 =
+            processor_->runCommand("processData", args3);
+        [[maybe_unused]] auto statsResult =
+            processor_->runCommand("getStats", {});
 
         // Serialization demonstration
         std::cout << "\n--- Serialization ---" << std::endl;
@@ -246,16 +264,19 @@ public:
 
         // Cleanup
         std::cout << "\n--- Cleanup ---" << std::endl;
-        [[maybe_unused]] auto clearResult = processor_->runCommand("clearQueue", {});
+        [[maybe_unused]] auto clearResult =
+            processor_->runCommand("clearQueue", {});
         [[maybe_unused]] auto stopResult = service_->runCommand("stop", {});
     }
 
     void demonstrateSerialization() {
         try {
-            std::cout << "  Demonstrating component serialization..." << std::endl;
+            std::cout << "  Demonstrating component serialization..."
+                      << std::endl;
 
             // Get the serialization manager
-            auto& serializationMgr = atom::components::SerializationManager::instance();
+            auto& serializationMgr =
+                atom::components::SerializationManager::instance();
 
             // Configure serialization options
             atom::components::SerializationOptions options;
@@ -269,23 +290,35 @@ public:
 
             if (result.success) {
                 std::cout << "  Component serialized successfully" << std::endl;
-                std::cout << "  Original size: " << result.originalSize << " bytes" << std::endl;
-                std::cout << "  Serialization time: " << result.serializationTime.count() << " μs" << std::endl;
+                std::cout << "  Original size: " << result.originalSize
+                          << " bytes" << std::endl;
+                std::cout << "  Serialization time: "
+                          << result.serializationTime.count() << " μs"
+                          << std::endl;
 
                 // Convert data to string for display (JSON format)
                 std::string jsonStr(result.data.begin(), result.data.end());
-                std::cout << "  Serialized data preview: " << jsonStr.substr(0, std::min(size_t(100), jsonStr.size())) << "..." << std::endl;
+                std::cout << "  Serialized data preview: "
+                          << jsonStr.substr(
+                                 0, std::min(size_t(100), jsonStr.size()))
+                          << "..." << std::endl;
 
                 // Demonstrate deserialization
-                auto deserResult = serializationMgr.deserialize(result.data, options);
+                auto deserResult =
+                    serializationMgr.deserialize(result.data, options);
                 if (deserResult.success) {
-                    std::cout << "  Component deserialized successfully" << std::endl;
-                    std::cout << "  Deserialization time: " << deserResult.deserializationTime.count() << " μs" << std::endl;
+                    std::cout << "  Component deserialized successfully"
+                              << std::endl;
+                    std::cout << "  Deserialization time: "
+                              << deserResult.deserializationTime.count()
+                              << " μs" << std::endl;
                 } else {
-                    std::cout << "  Deserialization failed: " << deserResult.errorMessage << std::endl;
+                    std::cout << "  Deserialization failed: "
+                              << deserResult.errorMessage << std::endl;
                 }
             } else {
-                std::cout << "  Serialization failed: " << result.errorMessage << std::endl;
+                std::cout << "  Serialization failed: " << result.errorMessage
+                          << std::endl;
             }
 
         } catch (const std::exception& e) {
@@ -298,19 +331,22 @@ public:
 
         // List all components
         auto components = registry.getAllComponents();
-        std::cout << "  Total components in registry: " << components.size() << std::endl;
+        std::cout << "  Total components in registry: " << components.size()
+                  << std::endl;
 
         for (const auto& comp : components) {
             if (comp) {
                 std::cout << "    - " << comp->getName()
-                          << " (State: " << static_cast<int>(comp->getState()) << ")" << std::endl;
+                          << " (State: " << static_cast<int>(comp->getState())
+                          << ")" << std::endl;
             }
         }
 
         // Demonstrate component lookup
         auto foundProcessor = registry.getComponent("DataProcessor");
         if (foundProcessor) {
-            std::cout << "  Successfully retrieved DataProcessor from registry" << std::endl;
+            std::cout << "  Successfully retrieved DataProcessor from registry"
+                      << std::endl;
         }
     }
 
@@ -321,22 +357,29 @@ public:
 
         // Process many items
         for (int i = 0; i < 1000; ++i) {
-            std::vector<std::any> args = {std::any(std::string("test_data_" + std::to_string(i)))};
-            [[maybe_unused]] auto result = processor_->runCommand("processData", args);
+            std::vector<std::any> args = {
+                std::any(std::string("test_data_" + std::to_string(i)))};
+            [[maybe_unused]] auto result =
+                processor_->runCommand("processData", args);
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            endTime - startTime);
 
-        std::cout << "  Processed 1000 items in " << duration.count() << " microseconds" << std::endl;
-        std::cout << "  Average: " << (duration.count() / 1000.0) << " microseconds per item" << std::endl;
+        std::cout << "  Processed 1000 items in " << duration.count()
+                  << " microseconds" << std::endl;
+        std::cout << "  Average: " << (duration.count() / 1000.0)
+                  << " microseconds per item" << std::endl;
 
-        [[maybe_unused]] auto statsResult = processor_->runCommand("getStats", {});
+        [[maybe_unused]] auto statsResult =
+            processor_->runCommand("getStats", {});
     }
 };
 
 int main() {
-    std::cout << "=== Atom Component Comprehensive Integration Example ===" << std::endl;
+    std::cout << "=== Atom Component Comprehensive Integration Example ==="
+              << std::endl;
 
     try {
         // Create and run integration demo
@@ -348,7 +391,8 @@ int main() {
         // Run performance test
         demo.runPerformanceTest();
 
-        std::cout << "\n=== Comprehensive Integration Example Complete ===" << std::endl;
+        std::cout << "\n=== Comprehensive Integration Example Complete ==="
+                  << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

@@ -204,7 +204,8 @@ CompressionResult compressFile(std::string_view file_path_sv,
         // Edge case: Check if input path is valid
         std::error_code ec;
         if (!fs::exists(input_path, ec) || ec) {
-            result.error_message = "Input file does not exist or is inaccessible";
+            result.error_message =
+                "Input file does not exist or is inaccessible";
             return result;
         }
 
@@ -214,7 +215,8 @@ CompressionResult compressFile(std::string_view file_path_sv,
             return result;
         }
 
-        // Edge case: Check file size (avoid compressing empty files or extremely large files)
+        // Edge case: Check file size (avoid compressing empty files or
+        // extremely large files)
         auto file_size = fs::file_size(input_path, ec);
         if (ec) {
             result.error_message = "Cannot determine input file size";
@@ -226,11 +228,14 @@ CompressionResult compressFile(std::string_view file_path_sv,
             return result;
         }
 
-        // Edge case: Check for extremely large files (> 4GB might cause issues with some zip implementations)
-        constexpr auto MAX_FILE_SIZE = static_cast<std::uintmax_t>(4ULL * 1024 * 1024 * 1024); // 4GB
+        // Edge case: Check for extremely large files (> 4GB might cause issues
+        // with some zip implementations)
+        constexpr auto MAX_FILE_SIZE =
+            static_cast<std::uintmax_t>(4ULL * 1024 * 1024 * 1024);  // 4GB
         if (file_size > MAX_FILE_SIZE) {
-            spdlog::warn("Compressing very large file ({}GB), this may take a long time",
-                        file_size / (1024.0 * 1024.0 * 1024.0));
+            spdlog::warn(
+                "Compressing very large file ({}GB), this may take a long time",
+                file_size / (1024.0 * 1024.0 * 1024.0));
         }
 
         fs::path output_dir(output_folder_sv);
@@ -243,13 +248,15 @@ CompressionResult compressFile(std::string_view file_path_sv,
 
         if (!fs::exists(output_dir, ec)) {
             if (!fs::create_directories(output_dir, ec) || ec) {
-                result.error_message = "Failed to create output directory: " + ec.message();
+                result.error_message =
+                    "Failed to create output directory: " + ec.message();
                 return result;
             }
         } else {
             // Edge case: Check if output path is actually a directory
             if (!fs::is_directory(output_dir, ec) || ec) {
-                result.error_message = "Output path exists but is not a directory";
+                result.error_message =
+                    "Output path exists but is not a directory";
                 return result;
             }
         }
@@ -634,7 +641,7 @@ CompressionResult compressFolder(std::string_view folder_path_sv,
 
     return result;
 }
-#endif // ATOM_IO_NO_MINIZIP
+#endif  // ATOM_IO_NO_MINIZIP
 
 #ifndef ATOM_IO_NO_MINIZIP
 CompressionResult extractZip(std::string_view zip_path_sv,
@@ -1349,7 +1356,7 @@ std::optional<size_t> getZipSize(std::string_view zip_path_sv) {
         return std::nullopt;
     }
 }
-#endif // ATOM_IO_NO_MINIZIP
+#endif  // ATOM_IO_NO_MINIZIP
 
 // compressFileInSlices needs careful handling of filenames and manifest
 CompressionResult compressFileInSlices(std::string_view file_path_sv,
@@ -2454,14 +2461,16 @@ decompressData<std::span<const char>>(const std::span<const char>&, size_t,
 
 #ifdef ATOM_IO_NO_MINIZIP
 // Stub implementations when minizip-ng is not available
-CompressionResult extractZip(std::string_view, std::string_view, const DecompressionOptions&) {
+CompressionResult extractZip(std::string_view, std::string_view,
+                             const DecompressionOptions&) {
     CompressionResult result;
     result.success = false;
     result.error_message = "ZIP support not available - minizip-ng not found";
     return result;
 }
 
-CompressionResult createZip(std::string_view, std::string_view, const CompressionOptions&) {
+CompressionResult createZip(std::string_view, std::string_view,
+                            const CompressionOptions&) {
     CompressionResult result;
     result.success = false;
     result.error_message = "ZIP support not available - minizip-ng not found";
@@ -2479,13 +2488,9 @@ Vector<ZipFileInfo> listZipContents(std::string_view) {
     return Vector<ZipFileInfo>{};
 }
 
-bool fileExistsInZip(std::string_view, std::string_view) {
-    return false;
-}
+bool fileExistsInZip(std::string_view, std::string_view) { return false; }
 
-std::optional<size_t> getZipSize(std::string_view) {
-    return std::nullopt;
-}
+std::optional<size_t> getZipSize(std::string_view) { return std::nullopt; }
 #endif
 
 }  // namespace atom::io

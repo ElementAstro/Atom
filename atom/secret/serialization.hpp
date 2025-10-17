@@ -1,9 +1,9 @@
 #ifndef ATOM_SECRET_SERIALIZATION_HPP
 #define ATOM_SECRET_SERIALIZATION_HPP
 
+#include <chrono>
 #include <string>
 #include <vector>
-#include <chrono>
 
 #include "password_entry.hpp"
 #include "result.hpp"
@@ -34,28 +34,32 @@ public:
      * @param entries Vector of password entries to serialize.
      * @return Result containing JSON string or error message.
      */
-    static Result<std::string> serializeEntries(const std::vector<PasswordEntry>& entries);
+    static Result<std::string> serializeEntries(
+        const std::vector<PasswordEntry>& entries);
 
     /**
      * @brief Deserializes multiple PasswordEntry objects from JSON array.
      * @param json The JSON array string to deserialize.
      * @return Result containing vector of PasswordEntry or error message.
      */
-    static Result<std::vector<PasswordEntry>> deserializeEntries(const std::string& json);
+    static Result<std::vector<PasswordEntry>> deserializeEntries(
+        const std::string& json);
 
     /**
      * @brief Serializes a PasswordManagerSettings object to JSON.
      * @param settings The settings to serialize.
      * @return Result containing JSON string or error message.
      */
-    static Result<std::string> serializeSettings(const PasswordManagerSettings& settings);
+    static Result<std::string> serializeSettings(
+        const PasswordManagerSettings& settings);
 
     /**
      * @brief Deserializes a PasswordManagerSettings object from JSON.
      * @param json The JSON string to deserialize.
      * @return Result containing PasswordManagerSettings or error message.
      */
-    static Result<PasswordManagerSettings> deserializeSettings(const std::string& json);
+    static Result<PasswordManagerSettings> deserializeSettings(
+        const std::string& json);
 
     /**
      * @brief Unescapes a JSON string (public utility).
@@ -84,14 +88,16 @@ private:
      * @param timePoint Time point to convert.
      * @return ISO 8601 formatted string.
      */
-    static std::string timePointToString(const std::chrono::system_clock::time_point& timePoint);
+    static std::string timePointToString(
+        const std::chrono::system_clock::time_point& timePoint);
 
     /**
      * @brief Converts ISO 8601 string to time_point.
      * @param timeString ISO 8601 formatted string.
      * @return Time point.
      */
-    static std::chrono::system_clock::time_point stringToTimePoint(const std::string& timeString);
+    static std::chrono::system_clock::time_point stringToTimePoint(
+        const std::string& timeString);
 
     /**
      * @brief Converts PasswordCategory enum to string.
@@ -126,14 +132,16 @@ private:
      * @param strings Vector of strings to serialize.
      * @return JSON array string.
      */
-    static std::string serializeStringArray(const std::vector<std::string>& strings);
+    static std::string serializeStringArray(
+        const std::vector<std::string>& strings);
 
     /**
      * @brief Deserializes a JSON array to vector of strings.
      * @param json JSON array string.
      * @return Vector of strings.
      */
-    static std::vector<std::string> deserializeStringArray(const std::string& json);
+    static std::vector<std::string> deserializeStringArray(
+        const std::string& json);
 };
 
 /**
@@ -148,7 +156,8 @@ public:
      * @param key Key to extract.
      * @return Extracted string value or empty string if not found.
      */
-    static std::string extractString(const std::string& json, const std::string& key);
+    static std::string extractString(const std::string& json,
+                                     const std::string& key);
 
     /**
      * @brief Extracts an integer value from JSON.
@@ -172,7 +181,8 @@ public:
      * @param key Key to extract.
      * @return Extracted array as string or empty string if not found.
      */
-    static std::string extractArray(const std::string& json, const std::string& key);
+    static std::string extractArray(const std::string& json,
+                                    const std::string& key);
 
     /**
      * @brief Extracts an object value from JSON.
@@ -180,7 +190,8 @@ public:
      * @param key Key to extract.
      * @return Extracted object as string or empty string if not found.
      */
-    static std::string extractObject(const std::string& json, const std::string& key);
+    static std::string extractObject(const std::string& json,
+                                     const std::string& key);
 
     /**
      * @brief Checks if JSON string is valid.
@@ -198,8 +209,8 @@ private:
      * @param endPos Ending position of the value.
      * @return Starting position of the value or std::string::npos if not found.
      */
-    static size_t findValue(const std::string& json, const std::string& key, 
-                           size_t startPos, size_t& endPos);
+    static size_t findValue(const std::string& json, const std::string& key,
+                            size_t startPos, size_t& endPos);
 
     /**
      * @brief Skips whitespace characters.

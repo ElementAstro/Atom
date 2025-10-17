@@ -485,8 +485,8 @@ public:
         return emplace(pos, std::move(value));
     }
 
-    auto insert(const_iterator pos, size_type count, const T& value)
-        -> iterator {
+    auto insert(const_iterator pos, size_type count,
+                const T& value) -> iterator {
         if (count == 0) {
             return const_cast<iterator>(pos);
         }

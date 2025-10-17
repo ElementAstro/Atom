@@ -112,9 +112,8 @@ Determines how transactions interact with other transactions.)")
  * @param m The pybind11 module to bind to
  */
 void bindRow(py::module_& m) {
-    py::class_<atom::database::Row>(
-        m, "Row",
-        R"(Class representing a database result row.
+    py::class_<atom::database::Row>(m, "Row",
+                                    R"(Class representing a database result row.
 
 Provides methods to access column values in different data types.
 
@@ -140,8 +139,8 @@ Examples:
 /**
  * @brief Binds the ResultSet class to Python.
  *
- * This function creates Python bindings for the ResultSet class which represents
- * a database query result set with navigation methods.
+ * This function creates Python bindings for the ResultSet class which
+ * represents a database query result set with navigation methods.
  *
  * @param m The pybind11 module to bind to
  */
@@ -278,7 +277,8 @@ Examples:
              &atom::database::MysqlDB::executeQueryWithResults,
              py::arg("query"), "Execute a query and return results.")
         .def("execute_update", &atom::database::MysqlDB::executeUpdate,
-             py::arg("query"), "Execute a data modification query and return affected rows.")
+             py::arg("query"),
+             "Execute a data modification query and return affected rows.")
         .def("execute_query_with_pagination",
              &atom::database::MysqlDB::executeQueryWithPagination,
              py::arg("query"), py::arg("limit"), py::arg("offset"),
@@ -297,7 +297,8 @@ Examples:
 
         // Prepared statement methods
         .def("prepare_statement", &atom::database::MysqlDB::prepareStatement,
-             py::arg("query"), "Create a prepared statement for safe query execution.")
+             py::arg("query"),
+             "Create a prepared statement for safe query execution.")
 
         // Transaction management methods
         .def("begin_transaction", &atom::database::MysqlDB::beginTransaction,
@@ -308,7 +309,8 @@ Examples:
              &atom::database::MysqlDB::rollbackTransaction,
              "Rollback the current transaction.")
         .def("set_savepoint", &atom::database::MysqlDB::setSavepoint,
-             py::arg("savepoint_name"), "Set a savepoint within the current transaction.")
+             py::arg("savepoint_name"),
+             "Set a savepoint within the current transaction.")
         .def("rollback_to_savepoint",
              &atom::database::MysqlDB::rollbackToSavepoint,
              py::arg("savepoint_name"), "Rollback to a specific savepoint.")
@@ -321,11 +323,13 @@ Examples:
              py::arg("queries"), "Execute multiple queries in sequence.")
         .def("execute_batch_transaction",
              &atom::database::MysqlDB::executeBatchTransaction,
-             py::arg("queries"), "Execute multiple queries as a single transaction.")
+             py::arg("queries"),
+             "Execute multiple queries as a single transaction.")
 
         // Stored procedure methods
         .def("call_procedure", &atom::database::MysqlDB::callProcedure,
-             py::arg("procedure_name"), py::arg("params"), "Call a stored procedure.")
+             py::arg("procedure_name"), py::arg("params"),
+             "Call a stored procedure.")
 
         // Schema information methods
         .def("get_databases", &atom::database::MysqlDB::getDatabases,

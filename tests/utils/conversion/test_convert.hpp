@@ -35,34 +35,34 @@ protected:
         asciiString = "Hello, World!";
         utf8String = "Hello, 世界! Café";
         emptyString = "";
-        
+
         // Wide string equivalents
         asciiWString = L"Hello, World!";
         utf8WString = L"Hello, 世界! Café";
         emptyWString = L"";
-        
+
         // Long string for performance testing
         longString.reserve(10000);
         for (int i = 0; i < 1000; ++i) {
             longString += "Test string ";
         }
-        
+
         // Special characters that might cause issues
         specialChars = "Special: \t\n\r\"'\\";
         specialWChars = L"Special: \t\n\r\"'\\";
     }
-    
+
     void TearDown() override {
         // Clean up any allocated memory if needed
     }
-    
+
     // Helper function to compare LPWSTR with std::wstring
     bool compareLPWSTRWithWString(LPWSTR lpwstr, const std::wstring& wstr) {
         if (!lpwstr && wstr.empty()) return true;
         if (!lpwstr || wstr.empty()) return false;
         return std::wstring(lpwstr) == wstr;
     }
-    
+
     // Helper function to compare LPSTR with std::string
     bool compareLPSTRWithString(LPSTR lpstr, const std::string& str) {
         if (!lpstr && str.empty()) return true;
@@ -76,7 +76,7 @@ protected:
     std::string emptyString;
     std::string longString;
     std::string specialChars;
-    
+
     std::wstring asciiWString;
     std::wstring utf8WString;
     std::wstring emptyWString;
@@ -89,17 +89,17 @@ TEST_F(ConvertTest, CharToLPWSTR) {
     LPWSTR result = CharToLPWSTR(asciiString);
     ASSERT_NE(result, nullptr);
     EXPECT_TRUE(compareLPWSTRWithWString(result, asciiWString));
-    
+
     // Test with UTF-8 string
     LPWSTR utf8Result = CharToLPWSTR(utf8String);
     ASSERT_NE(utf8Result, nullptr);
     EXPECT_TRUE(compareLPWSTRWithWString(utf8Result, utf8WString));
-    
+
     // Test with empty string
     LPWSTR emptyResult = CharToLPWSTR(emptyString);
     ASSERT_NE(emptyResult, nullptr);
     EXPECT_EQ(std::wstring(emptyResult), emptyWString);
-    
+
     // Test with special characters
     LPWSTR specialResult = CharToLPWSTR(specialChars);
     ASSERT_NE(specialResult, nullptr);
@@ -111,15 +111,15 @@ TEST_F(ConvertTest, WCharArrayToString) {
     // Test with ASCII wide string
     std::string result = WCharArrayToString(asciiWString.c_str());
     EXPECT_EQ(result, asciiString);
-    
+
     // Test with UTF-8 wide string
     std::string utf8Result = WCharArrayToString(utf8WString.c_str());
     EXPECT_EQ(utf8Result, utf8String);
-    
+
     // Test with empty wide string
     std::string emptyResult = WCharArrayToString(emptyWString.c_str());
     EXPECT_EQ(emptyResult, emptyString);
-    
+
     // Test with null pointer
     EXPECT_THROW(WCharArrayToString(nullptr), std::exception);
 }
@@ -130,12 +130,12 @@ TEST_F(ConvertTest, StringToLPSTR) {
     LPSTR result = StringToLPSTR(asciiString);
     ASSERT_NE(result, nullptr);
     EXPECT_TRUE(compareLPSTRWithString(result, asciiString));
-    
+
     // Test with empty string
     LPSTR emptyResult = StringToLPSTR(emptyString);
     ASSERT_NE(emptyResult, nullptr);
     EXPECT_EQ(std::string(emptyResult), emptyString);
-    
+
     // Test with special characters
     LPSTR specialResult = StringToLPSTR(specialChars);
     ASSERT_NE(specialResult, nullptr);
@@ -148,7 +148,7 @@ TEST_F(ConvertTest, WStringToLPSTR) {
     LPSTR result = WStringToLPSTR(asciiWString);
     ASSERT_NE(result, nullptr);
     EXPECT_TRUE(compareLPSTRWithString(result, asciiString));
-    
+
     // Test with empty wide string
     LPSTR emptyResult = WStringToLPSTR(emptyWString);
     ASSERT_NE(emptyResult, nullptr);
@@ -161,12 +161,12 @@ TEST_F(ConvertTest, StringToLPWSTR) {
     LPWSTR result = StringToLPWSTR(asciiString);
     ASSERT_NE(result, nullptr);
     EXPECT_TRUE(compareLPWSTRWithWString(result, asciiWString));
-    
+
     // Test with UTF-8 string
     LPWSTR utf8Result = StringToLPWSTR(utf8String);
     ASSERT_NE(utf8Result, nullptr);
     EXPECT_TRUE(compareLPWSTRWithWString(utf8Result, utf8WString));
-    
+
     // Test with empty string
     LPWSTR emptyResult = StringToLPWSTR(emptyString);
     ASSERT_NE(emptyResult, nullptr);
@@ -178,11 +178,11 @@ TEST_F(ConvertTest, LPWSTRToString) {
     // Create LPWSTR from wide string
     LPWSTR lpwstr = StringToLPWSTR(asciiString);
     ASSERT_NE(lpwstr, nullptr);
-    
+
     // Convert back to string
     std::string result = LPWSTRToString(lpwstr);
     EXPECT_EQ(result, asciiString);
-    
+
     // Test with null pointer
     EXPECT_THROW(LPWSTRToString(nullptr), std::exception);
 }
@@ -193,12 +193,12 @@ TEST_F(ConvertTest, LPCWSTRToString) {
     LPCWSTR lpcwstr = asciiWString.c_str();
     std::string result = LPCWSTRToString(lpcwstr);
     EXPECT_EQ(result, asciiString);
-    
+
     // Test with empty const wide string
     LPCWSTR emptyLpcwstr = emptyWString.c_str();
     std::string emptyResult = LPCWSTRToString(emptyLpcwstr);
     EXPECT_EQ(emptyResult, emptyString);
-    
+
     // Test with null pointer
     EXPECT_THROW(LPCWSTRToString(nullptr), std::exception);
 }
@@ -209,12 +209,12 @@ TEST_F(ConvertTest, WStringToLPWSTR) {
     LPWSTR result = WStringToLPWSTR(asciiWString);
     ASSERT_NE(result, nullptr);
     EXPECT_TRUE(compareLPWSTRWithWString(result, asciiWString));
-    
+
     // Test with UTF-8 wide string
     LPWSTR utf8Result = WStringToLPWSTR(utf8WString);
     ASSERT_NE(utf8Result, nullptr);
     EXPECT_TRUE(compareLPWSTRWithWString(utf8Result, utf8WString));
-    
+
     // Test with empty wide string
     LPWSTR emptyResult = WStringToLPWSTR(emptyWString);
     ASSERT_NE(emptyResult, nullptr);
@@ -226,11 +226,11 @@ TEST_F(ConvertTest, LPWSTRToWString) {
     // Create LPWSTR from wide string
     LPWSTR lpwstr = WStringToLPWSTR(asciiWString);
     ASSERT_NE(lpwstr, nullptr);
-    
+
     // Convert back to wide string
     std::wstring result = LPWSTRToWString(lpwstr);
     EXPECT_EQ(result, asciiWString);
-    
+
     // Test with null pointer
     EXPECT_THROW(LPWSTRToWString(nullptr), std::exception);
 }
@@ -241,12 +241,12 @@ TEST_F(ConvertTest, LPCWSTRToWString) {
     LPCWSTR lpcwstr = asciiWString.c_str();
     std::wstring result = LPCWSTRToWString(lpcwstr);
     EXPECT_EQ(result, asciiWString);
-    
+
     // Test with empty const wide string
     LPCWSTR emptyLpcwstr = emptyWString.c_str();
     std::wstring emptyResult = LPCWSTRToWString(emptyLpcwstr);
     EXPECT_EQ(emptyResult, emptyWString);
-    
+
     // Test with null pointer
     EXPECT_THROW(LPCWSTRToWString(nullptr), std::exception);
 }
@@ -258,7 +258,7 @@ TEST_F(ConvertTest, RoundTripConversions) {
     ASSERT_NE(lpwstr, nullptr);
     std::string backToString = LPWSTRToString(lpwstr);
     EXPECT_EQ(backToString, asciiString);
-    
+
     // WString -> LPWSTR -> WString
     LPWSTR lpwstrFromWString = WStringToLPWSTR(asciiWString);
     ASSERT_NE(lpwstrFromWString, nullptr);
@@ -269,7 +269,7 @@ TEST_F(ConvertTest, RoundTripConversions) {
 // Test performance with large strings
 TEST_F(ConvertTest, LargeStringPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     // Convert large string multiple times
     for (int i = 0; i < 100; ++i) {
         LPWSTR result = StringToLPWSTR(longString);
@@ -277,10 +277,10 @@ TEST_F(ConvertTest, LargeStringPerformance) {
         std::string backToString = LPWSTRToString(result);
         EXPECT_EQ(backToString.length(), longString.length());
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+
     // Should complete within reasonable time
     EXPECT_LT(duration.count(), 5000) << "Large string conversion took too long: " << duration.count() << "ms";
 }
@@ -289,7 +289,7 @@ TEST_F(ConvertTest, LargeStringPerformance) {
 TEST_F(ConvertTest, ErrorHandling) {
     // Test with very large strings that might cause allocation failures
     std::string veryLargeString(SIZE_MAX / 4, 'A'); // This might fail
-    
+
     // The function should either succeed or throw an exception, not crash
     EXPECT_NO_THROW({
         try {

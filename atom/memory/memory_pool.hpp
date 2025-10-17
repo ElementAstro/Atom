@@ -3,15 +3,16 @@
  * @brief Fixed-size block memory pool and simple object pool implementations
  *
  * This file provides FixedBlockPool and SimpleObjectPool classes for efficient
- * fixed-size memory allocations. These are simpler and faster than the variable-size
- * MemoryPool when all allocations are the same size.
+ * fixed-size memory allocations. These are simpler and faster than the
+ * variable-size MemoryPool when all allocations are the same size.
  *
  * CLASSES PROVIDED:
  * - FixedBlockPool: Low-level fixed-size block allocator
  * - SimpleObjectPool: Object-oriented wrapper with RAII smart pointers
  * - PoolPtr: Smart pointer for automatic object return to pool
  *
- * For other memory pool types in atom::memory, see the documentation in memory.hpp.
+ * For other memory pool types in atom::memory, see the documentation in
+ * memory.hpp.
  *
  * @author Max Qian
  * @copyright Copyright (C) 2024 Max Qian <lightapt.com>

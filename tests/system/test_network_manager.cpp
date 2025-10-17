@@ -1,10 +1,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include <string>
-#include <vector>
-#include <thread>
 #include <chrono>
+#include <string>
+#include <thread>
+#include <vector>
 
 #include "atom/system/network/network_manager.hpp"
 
@@ -16,29 +16,38 @@ using atom::system::NetworkManager;
 // Mock class for testing network operations without actual network access
 class MockNetworkManager {
 public:
-    MOCK_METHOD(std::vector<NetworkInterface>, getNetworkInterfaces, (), (const));
-    MOCK_METHOD(void, enableInterface, (const std::string& interfaceName), (const));
-    MOCK_METHOD(void, disableInterface, (const std::string& interfaceName), (const));
-    MOCK_METHOD(std::string, resolveDNS, (const std::string& hostname), (const));
+    MOCK_METHOD(std::vector<NetworkInterface>, getNetworkInterfaces, (),
+                (const));
+    MOCK_METHOD(void, enableInterface, (const std::string& interfaceName),
+                (const));
+    MOCK_METHOD(void, disableInterface, (const std::string& interfaceName),
+                (const));
+    MOCK_METHOD(std::string, resolveDNS, (const std::string& hostname),
+                (const));
     MOCK_METHOD(void, monitorConnectionStatus, (), (const));
-    MOCK_METHOD(std::string, getInterfaceStatus, (const std::string& interfaceName), (const));
+    MOCK_METHOD(std::string, getInterfaceStatus,
+                (const std::string& interfaceName), (const));
     MOCK_METHOD(std::string, getDefaultGateway, (), (const));
     MOCK_METHOD(std::vector<std::string>, getActiveConnections, (), (const));
-    MOCK_METHOD(bool, pingHost, (const std::string& hostname, int timeout), (const));
+    MOCK_METHOD(bool, pingHost, (const std::string& hostname, int timeout),
+                (const));
     MOCK_METHOD(std::string, getPublicIP, (), (const));
 };
 
 class NetworkManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockNetworkManager = std::make_unique<::testing::NiceMock<MockNetworkManager>>();
+        mockNetworkManager =
+            std::make_unique<::testing::NiceMock<MockNetworkManager>>();
 
         // Set up sample network interfaces
         sampleInterfaces = {
-            {"eth0", "192.168.1.100", "255.255.255.0", "00:11:22:33:44:55", InterfaceType::ETHERNET, true},
-            {"wlan0", "192.168.1.101", "255.255.255.0", "AA:BB:CC:DD:EE:FF", InterfaceType::WIRELESS, true},
-            {"lo", "127.0.0.1", "255.0.0.0", "00:00:00:00:00:00", InterfaceType::LOOPBACK, true}
-        };
+            {"eth0", "192.168.1.100", "255.255.255.0", "00:11:22:33:44:55",
+             InterfaceType::ETHERNET, true},
+            {"wlan0", "192.168.1.101", "255.255.255.0", "AA:BB:CC:DD:EE:FF",
+             InterfaceType::WIRELESS, true},
+            {"lo", "127.0.0.1", "255.0.0.0", "00:00:00:00:00:00",
+             InterfaceType::LOOPBACK, true}};
 
         // Set up default behavior for the mock
         ON_CALL(*mockNetworkManager, getNetworkInterfaces())
@@ -50,16 +59,15 @@ protected:
         ON_CALL(*mockNetworkManager, getDefaultGateway())
             .WillByDefault(::testing::Return("192.168.1.1"));
         ON_CALL(*mockNetworkManager, getActiveConnections())
-            .WillByDefault(::testing::Return(std::vector<std::string>{"eth0", "wlan0"}));
+            .WillByDefault(
+                ::testing::Return(std::vector<std::string>{"eth0", "wlan0"}));
         ON_CALL(*mockNetworkManager, pingHost(::testing::_, ::testing::_))
             .WillByDefault(::testing::Return(true));
         ON_CALL(*mockNetworkManager, getPublicIP())
             .WillByDefault(::testing::Return("203.0.113.1"));
     }
 
-    void TearDown() override {
-        mockNetworkManager.reset();
-    }
+    void TearDown() override { mockNetworkManager.reset(); }
 
     std::unique_ptr<MockNetworkManager> mockNetworkManager;
     std::vector<NetworkInterface> sampleInterfaces;
@@ -97,15 +105,13 @@ TEST_F(NetworkManagerTest, GetNetworkInterfacesEmpty) {
 
 // Test interface management
 TEST_F(NetworkManagerTest, EnableInterface) {
-    EXPECT_CALL(*mockNetworkManager, enableInterface("eth0"))
-        .Times(1);
+    EXPECT_CALL(*mockNetworkManager, enableInterface("eth0")).Times(1);
 
     mockNetworkManager->enableInterface("eth0");
 }
 
 TEST_F(NetworkManagerTest, DisableInterface) {
-    EXPECT_CALL(*mockNetworkManager, disableInterface("wlan0"))
-        .Times(1);
+    EXPECT_CALL(*mockNetworkManager, disableInterface("wlan0")).Times(1);
 
     mockNetworkManager->disableInterface("wlan0");
 }
@@ -158,8 +164,7 @@ TEST_F(NetworkManagerTest, ResolveDNSMultipleHosts) {
 
 // Test connection monitoring
 TEST_F(NetworkManagerTest, MonitorConnectionStatus) {
-    EXPECT_CALL(*mockNetworkManager, monitorConnectionStatus())
-        .Times(1);
+    EXPECT_CALL(*mockNetworkManager, monitorConnectionStatus()).Times(1);
 
     mockNetworkManager->monitorConnectionStatus();
 }
@@ -251,20 +256,18 @@ TEST_F(NetworkManagerTest, InterfaceTypes) {
 class NetworkManagerErrorTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockNetworkManager = std::make_unique<::testing::NiceMock<MockNetworkManager>>();
+        mockNetworkManager =
+            std::make_unique<::testing::NiceMock<MockNetworkManager>>();
     }
 
-    void TearDown() override {
-        mockNetworkManager.reset();
-    }
+    void TearDown() override { mockNetworkManager.reset(); }
 
     std::unique_ptr<MockNetworkManager> mockNetworkManager;
 };
 
 // Test invalid interface names
 TEST_F(NetworkManagerErrorTest, InvalidInterfaceNames) {
-    EXPECT_CALL(*mockNetworkManager, enableInterface(""))
-        .Times(1);
+    EXPECT_CALL(*mockNetworkManager, enableInterface("")).Times(1);
     EXPECT_CALL(*mockNetworkManager, disableInterface("nonexistent_interface"))
         .Times(1);
     EXPECT_CALL(*mockNetworkManager, getInterfaceStatus("invalid@interface"))
@@ -274,7 +277,8 @@ TEST_F(NetworkManagerErrorTest, InvalidInterfaceNames) {
     mockNetworkManager->enableInterface("");
     mockNetworkManager->disableInterface("nonexistent_interface");
 
-    std::string status = mockNetworkManager->getInterfaceStatus("invalid@interface");
+    std::string status =
+        mockNetworkManager->getInterfaceStatus("invalid@interface");
     EXPECT_EQ(status, "ERROR");
 }
 
@@ -284,7 +288,8 @@ TEST_F(NetworkManagerErrorTest, DNSResolutionErrors) {
         .WillOnce(::testing::Return(""));
     EXPECT_CALL(*mockNetworkManager, resolveDNS("invalid..hostname"))
         .WillOnce(::testing::Return(""));
-    EXPECT_CALL(*mockNetworkManager, resolveDNS("toolong" + std::string(300, 'a') + ".com"))
+    EXPECT_CALL(*mockNetworkManager,
+                resolveDNS("toolong" + std::string(300, 'a') + ".com"))
         .WillOnce(::testing::Return(""));
 
     // Empty hostname
@@ -296,7 +301,8 @@ TEST_F(NetworkManagerErrorTest, DNSResolutionErrors) {
     EXPECT_TRUE(result2.empty());
 
     // Very long hostname
-    std::string result3 = mockNetworkManager->resolveDNS("toolong" + std::string(300, 'a') + ".com");
+    std::string result3 = mockNetworkManager->resolveDNS(
+        "toolong" + std::string(300, 'a') + ".com");
     EXPECT_TRUE(result3.empty());
 }
 
@@ -320,16 +326,17 @@ TEST_F(NetworkManagerErrorTest, NetworkTimeouts) {
 class NetworkManagerPerformanceTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockNetworkManager = std::make_unique<::testing::NiceMock<MockNetworkManager>>();
+        mockNetworkManager =
+            std::make_unique<::testing::NiceMock<MockNetworkManager>>();
 
         // Create large interface list for performance testing
         largeInterfaceList.reserve(100);
         for (int i = 0; i < 100; ++i) {
             largeInterfaceList.push_back({
                 "eth" + std::to_string(i),
-                "192.168." + std::to_string(i / 256) + "." + std::to_string(i % 256),
-                "255.255.255.0",
-                "00:11:22:33:44:" + std::to_string(i % 256),
+                "192.168." + std::to_string(i / 256) + "." +
+                    std::to_string(i % 256),
+                "255.255.255.0", "00:11:22:33:44:" + std::to_string(i % 256),
                 InterfaceType::ETHERNET,
                 i % 2 == 0  // Alternate between up and down
             });
@@ -341,9 +348,7 @@ protected:
             .WillByDefault(::testing::Return("8.8.8.8"));
     }
 
-    void TearDown() override {
-        mockNetworkManager.reset();
-    }
+    void TearDown() override { mockNetworkManager.reset(); }
 
     std::unique_ptr<MockNetworkManager> mockNetworkManager;
     std::vector<NetworkInterface> largeInterfaceList;
@@ -358,7 +363,8 @@ TEST_F(NetworkManagerPerformanceTest, LargeInterfaceEnumeration) {
     auto interfaces = mockNetworkManager->getNetworkInterfaces();
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(interfaces.size(), 100);
     // Should complete within reasonable time (50ms for mock)
@@ -380,7 +386,8 @@ TEST_F(NetworkManagerPerformanceTest, MultipleDNSResolutions) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // 50 DNS resolutions should complete within reasonable time
     EXPECT_LT(duration.count(), 200);
@@ -394,9 +401,7 @@ protected:
         networkManager = std::make_unique<NetworkManager>();
     }
 
-    void TearDown() override {
-        networkManager.reset();
-    }
+    void TearDown() override { networkManager.reset(); }
 
     std::unique_ptr<NetworkManager> networkManager;
 };

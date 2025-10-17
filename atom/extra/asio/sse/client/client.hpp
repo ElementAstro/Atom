@@ -6,8 +6,8 @@
  */
 
 #include "../../asio_compatibility.hpp"
-#include "client_config.hpp"
 #include "../event.hpp"
+#include "client_config.hpp"
 
 #include <functional>
 #include <memory>

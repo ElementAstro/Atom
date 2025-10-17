@@ -1,7 +1,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-
 #include "atom/type/json-schema.hpp"
 
 using namespace atom::type;

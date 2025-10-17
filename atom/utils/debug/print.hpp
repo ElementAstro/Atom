@@ -61,12 +61,7 @@ concept Container = requires(T a) {
 /**
  * @brief Log levels for structured logging
  */
-enum class LogLevel {
-    DEBUG_LEVEL,
-    INFO_LEVEL,
-    WARNING_LEVEL,
-    ERROR_LEVEL
-};
+enum class LogLevel { DEBUG_LEVEL, INFO_LEVEL, WARNING_LEVEL, ERROR_LEVEL };
 
 /**
  * @brief Progress bar display styles
@@ -535,8 +530,8 @@ private:
                                  ? chunk_size
                                  : std::distance(it, data.end()));
 
-            futures.push_back(
-                std::async(std::launch::async, [start, end_it = it, mean_value]() {
+            futures.push_back(std::async(
+                std::launch::async, [start, end_it = it, mean_value]() {
                     double partial_sum = 0.0;
                     for (auto current = start; current != end_it; ++current) {
                         const double diff = *current - mean_value;
@@ -702,10 +697,10 @@ public:
         static constexpr std::array<std::string_view, 4> level_strings = {
             "DEBUG", "INFO", "WARNING", "ERROR"};
 
-        log_file_ << std::format("[{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}] [{}] ",
-                                tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-                                tm.tm_hour, tm.tm_min, tm.tm_sec,
-                                level_strings[static_cast<size_t>(level)]);
+        log_file_ << std::format(
+            "[{:04d}-{:02d}-{:02d} {:02d}:{:02d}:{:02d}] [{}] ",
+            tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min,
+            tm.tm_sec, level_strings[static_cast<size_t>(level)]);
 
         if constexpr (sizeof...(args) > 0) {
             log_file_ << std::vformat(fmt, std::make_format_args(args...));
@@ -789,8 +784,8 @@ struct formatter<
                     is_same_v<T, std::deque<typename T::value_type>> ||
                     is_same_v<T, std::forward_list<typename T::value_type>>,
                 char>> : formatter<std::string_view> {
-    auto format(const T& container, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const T& container,
+                format_context& ctx) const -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '[';
         bool first = true;
@@ -809,8 +804,8 @@ struct formatter<
 
 template <typename T1, typename T2>
 struct formatter<std::map<T1, T2>> : formatter<std::string_view> {
-    auto format(const std::map<T1, T2>& m, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const std::map<T1, T2>& m,
+                format_context& ctx) const -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '{';
         bool first = true;
@@ -829,8 +824,8 @@ struct formatter<std::map<T1, T2>> : formatter<std::string_view> {
 
 template <typename T1, typename T2>
 struct formatter<std::unordered_map<T1, T2>> : formatter<std::string_view> {
-    auto format(const std::unordered_map<T1, T2>& m, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const std::unordered_map<T1, T2>& m,
+                format_context& ctx) const -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '{';
         bool first = true;
@@ -849,8 +844,8 @@ struct formatter<std::unordered_map<T1, T2>> : formatter<std::string_view> {
 
 template <typename T, std::size_t N>
 struct formatter<std::array<T, N>> : formatter<std::string_view> {
-    auto format(const std::array<T, N>& arr, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const std::array<T, N>& arr,
+                format_context& ctx) const -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '[';
         for (std::size_t i = 0; i < N; ++i) {
@@ -867,8 +862,8 @@ struct formatter<std::array<T, N>> : formatter<std::string_view> {
 
 template <typename T1, typename T2>
 struct formatter<std::pair<T1, T2>> : formatter<std::string_view> {
-    auto format(const std::pair<T1, T2>& p, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const std::pair<T1, T2>& p,
+                format_context& ctx) const -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '(';
         out = std::format_to(out, "{}", p.first);
@@ -882,8 +877,8 @@ struct formatter<std::pair<T1, T2>> : formatter<std::string_view> {
 
 template <typename... Ts>
 struct formatter<std::tuple<Ts...>> : formatter<std::string_view> {
-    auto format(const std::tuple<Ts...>& tup, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const std::tuple<Ts...>& tup,
+                format_context& ctx) const -> decltype(ctx.out()) {
         auto out = ctx.out();
         *out++ = '(';
         std::apply(
@@ -902,8 +897,8 @@ struct formatter<std::tuple<Ts...>> : formatter<std::string_view> {
 
 template <typename... Ts>
 struct formatter<std::variant<Ts...>> : formatter<std::string_view> {
-    auto format(const std::variant<Ts...>& var, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const std::variant<Ts...>& var,
+                format_context& ctx) const -> decltype(ctx.out()) {
         return std::visit(
             [&ctx](const auto& val) -> decltype(ctx.out()) {
                 return std::format_to(ctx.out(), "{}", val);
@@ -914,8 +909,8 @@ struct formatter<std::variant<Ts...>> : formatter<std::string_view> {
 
 template <typename T>
 struct formatter<std::optional<T>> : formatter<std::string_view> {
-    auto format(const std::optional<T>& opt, format_context& ctx) const
-        -> decltype(ctx.out()) {
+    auto format(const std::optional<T>& opt,
+                format_context& ctx) const -> decltype(ctx.out()) {
         auto out = ctx.out();
         if (opt.has_value()) {
             return std::format_to(out, "Optional({})", opt.value());

@@ -1,18 +1,18 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
-#include <vector>
-#include <chrono>
 #include <thread>
+#include <vector>
 
-#include "atom/image/io/image_saver.hpp"
-#include "atom/image/io/image_loader.hpp"
 #include "atom/image/core/image_blob.hpp"
+#include "atom/image/io/image_loader.hpp"
+#include "atom/image/io/image_saver.hpp"
 #include "test_utils.hpp"
 
 namespace fs = std::filesystem;
@@ -25,25 +25,26 @@ protected:
         saver = createImageSaver();
         loader = createImageLoader();
         fileManager = std::make_unique<TestFileManager>();
-        
+
         // Create test image data
         createTestImageData();
     }
 
-    void TearDown() override {
-        fileManager->cleanup();
-    }
+    void TearDown() override { fileManager->cleanup(); }
 
     void createTestImageData() {
         // Create various test images
         rgb_image_data = TestDataGenerator::generateGradientImage(32, 32, 3);
-        grayscale_image_data = TestDataGenerator::generateCheckerboard(16, 16, 1, 4);
+        grayscale_image_data =
+            TestDataGenerator::generateCheckerboard(16, 16, 1, 4);
         rgba_image_data = TestDataGenerator::generateGradientImage(24, 24, 4);
-        large_image_data = TestDataGenerator::generateRandomNoise(128, 128, 3, 54321);
+        large_image_data =
+            TestDataGenerator::generateRandomNoise(128, 128, 3, 54321);
 
         // Create blob objects
         rgb_blob = blob(rgb_image_data.data(), rgb_image_data.size());
-        grayscale_blob = blob(grayscale_image_data.data(), grayscale_image_data.size());
+        grayscale_blob =
+            blob(grayscale_image_data.data(), grayscale_image_data.size());
         rgba_blob = blob(rgba_image_data.data(), rgba_image_data.size());
         large_blob = blob(large_image_data.data(), large_image_data.size());
     }
@@ -51,8 +52,9 @@ protected:
     std::unique_ptr<ImageSaver> saver;
     std::unique_ptr<ImageLoader> loader;
     std::unique_ptr<TestFileManager> fileManager;
-    
-    std::vector<std::byte> rgb_image_data, grayscale_image_data, rgba_image_data, large_image_data;
+
+    std::vector<std::byte> rgb_image_data, grayscale_image_data,
+        rgba_image_data, large_image_data;
     blob rgb_blob, grayscale_blob, rgba_blob, large_blob;
 };
 
@@ -77,18 +79,18 @@ TEST_F(ImageSaverTest, SaveDifferentFormats) {
         {ImageFormat::PNG, "test.png"},
         {ImageFormat::JPEG, "test.jpg"},
         {ImageFormat::BMP, "test.bmp"},
-        {ImageFormat::TIFF, "test.tiff"}
-    };
+        {ImageFormat::TIFF, "test.tiff"}};
 
     for (const auto& [format, filename] : formats) {
         fileManager->registerTempFile(filename);
-        
+
         SaveOptions options;
         options.targetFormat = format;
         options.quality = 90;
 
         auto result = saver->saveToFile(rgb_blob, filename, options);
-        EXPECT_TRUE(result.success) << "Failed to save format: " << static_cast<int>(format);
+        EXPECT_TRUE(result.success)
+            << "Failed to save format: " << static_cast<int>(format);
         EXPECT_TRUE(fs::exists(filename));
         EXPECT_GT(fs::file_size(filename), 0);
     }
@@ -98,7 +100,7 @@ TEST_F(ImageSaverTest, SaveDifferentFormats) {
 TEST_F(ImageSaverTest, QualitySettings) {
     std::string highQualityFile = "test_high_quality.jpg";
     std::string lowQualityFile = "test_low_quality.jpg";
-    
+
     fileManager->registerTempFile(highQualityFile);
     fileManager->registerTempFile(lowQualityFile);
 
@@ -107,15 +109,17 @@ TEST_F(ImageSaverTest, QualitySettings) {
     highQualityOptions.targetFormat = ImageFormat::JPEG;
     highQualityOptions.quality = 95;
 
-    auto highResult = saver->saveToFile(rgb_blob, highQualityFile, highQualityOptions);
+    auto highResult =
+        saver->saveToFile(rgb_blob, highQualityFile, highQualityOptions);
     EXPECT_TRUE(highResult.success);
 
     // Save with low quality
     SaveOptions lowQualityOptions;
     lowQualityOptions.targetFormat = ImageFormat::JPEG;
     lowQualityOptions.quality = 20;
-    
-    auto lowResult = saver->saveToFile(rgb_blob, lowQualityFile, lowQualityOptions);
+
+    auto lowResult =
+        saver->saveToFile(rgb_blob, lowQualityFile, lowQualityOptions);
     EXPECT_TRUE(lowResult.success);
 
     // High quality file should be larger
@@ -128,7 +132,7 @@ TEST_F(ImageSaverTest, QualitySettings) {
 TEST_F(ImageSaverTest, CompressionSettings) {
     std::string uncompressedFile = "test_uncompressed.png";
     std::string compressedFile = "test_compressed.png";
-    
+
     fileManager->registerTempFile(uncompressedFile);
     fileManager->registerTempFile(compressedFile);
 
@@ -137,15 +141,17 @@ TEST_F(ImageSaverTest, CompressionSettings) {
     uncompressedOptions.targetFormat = ImageFormat::PNG;
     uncompressedOptions.compressionLevel = 0;
 
-    auto uncompressedResult = saver->saveToFile(rgb_blob, uncompressedFile, uncompressedOptions);
+    auto uncompressedResult =
+        saver->saveToFile(rgb_blob, uncompressedFile, uncompressedOptions);
     EXPECT_TRUE(uncompressedResult.success);
 
     // Save with maximum compression
     SaveOptions compressedOptions;
     compressedOptions.targetFormat = ImageFormat::PNG;
     compressedOptions.compressionLevel = 9;
-    
-    auto compressedResult = saver->saveToFile(rgb_blob, compressedFile, compressedOptions);
+
+    auto compressedResult =
+        saver->saveToFile(rgb_blob, compressedFile, compressedOptions);
     EXPECT_TRUE(compressedResult.success);
 
     // Compressed file should be smaller or equal
@@ -162,12 +168,10 @@ TEST_F(ImageSaverTest, MetadataPreservation) {
     SaveOptions options;
     options.targetFormat = ImageFormat::JPEG;
     options.preserveMetadata = true;
-    options.customMetadata = {
-        {"Artist", "Test Artist"},
-        {"Copyright", "Test Copyright"},
-        {"Description", "Test Description"},
-        {"Software", "Atom Image Library"}
-    };
+    options.customMetadata = {{"Artist", "Test Artist"},
+                              {"Copyright", "Test Copyright"},
+                              {"Description", "Test Description"},
+                              {"Software", "Atom Image Library"}};
 
     auto result = saver->saveToFile(rgb_blob, outputFile, options);
     EXPECT_TRUE(result.success);
@@ -178,18 +182,14 @@ TEST_F(ImageSaverTest, MetadataPreservation) {
 
 // Test format auto-detection from extension
 TEST_F(ImageSaverTest, FormatAutoDetection) {
-    std::vector<std::string> files = {
-        "test_auto.png",
-        "test_auto.jpg",
-        "test_auto.bmp",
-        "test_auto.tiff"
-    };
+    std::vector<std::string> files = {"test_auto.png", "test_auto.jpg",
+                                      "test_auto.bmp", "test_auto.tiff"};
 
     for (const auto& filename : files) {
         fileManager->registerTempFile(filename);
-        
-        SaveOptions options; // No format specified - should auto-detect
-        
+
+        SaveOptions options;  // No format specified - should auto-detect
+
         auto result = saver->saveToFile(rgb_blob, filename, options);
         EXPECT_TRUE(result.success) << "Failed to save: " << filename;
         EXPECT_TRUE(fs::exists(filename));
@@ -205,7 +205,8 @@ TEST_F(ImageSaverTest, DifferentChannelConfigurations) {
     SaveOptions grayscaleOptions;
     grayscaleOptions.targetFormat = ImageFormat::PNG;
 
-    auto grayscaleResult = saver->saveToFile(grayscale_blob, grayscaleFile, grayscaleOptions);
+    auto grayscaleResult =
+        saver->saveToFile(grayscale_blob, grayscaleFile, grayscaleOptions);
     EXPECT_TRUE(grayscaleResult.success);
 
     // Test RGB (3 channels)
@@ -260,7 +261,8 @@ TEST_F(ImageSaverTest, ErrorHandling) {
 // Test batch saving
 TEST_F(ImageSaverTest, BatchSaving) {
     std::vector<blob> images = {rgb_blob, grayscale_blob, rgba_blob};
-    std::vector<std::filesystem::path> filenames = {"batch1.png", "batch2.png", "batch3.png"};
+    std::vector<std::filesystem::path> filenames = {"batch1.png", "batch2.png",
+                                                    "batch3.png"};
 
     for (const auto& filename : filenames) {
         fileManager->registerTempFile(filename.string());
@@ -273,7 +275,8 @@ TEST_F(ImageSaverTest, BatchSaving) {
     EXPECT_EQ(results.results.size(), images.size());
 
     for (size_t i = 0; i < results.results.size(); ++i) {
-        EXPECT_TRUE(results.results[i].success) << "Failed to save batch image " << i;
+        EXPECT_TRUE(results.results[i].success)
+            << "Failed to save batch image " << i;
         EXPECT_TRUE(fs::exists(filenames[i]));
     }
 }
@@ -290,13 +293,15 @@ TEST_F(ImageSaverTest, ConcurrentSaving) {
         threads.emplace_back([this, t, &successCount, &errorCount]() {
             for (int i = 0; i < savesPerThread; ++i) {
                 try {
-                    std::string filename = "concurrent_" + std::to_string(t) + "_" + std::to_string(i) + ".png";
+                    std::string filename = "concurrent_" + std::to_string(t) +
+                                           "_" + std::to_string(i) + ".png";
                     fileManager->registerTempFile(filename);
 
                     SaveOptions options;
                     options.targetFormat = ImageFormat::PNG;
 
-                    auto result = saver->saveToFile(rgb_blob, filename, options);
+                    auto result =
+                        saver->saveToFile(rgb_blob, filename, options);
                     if (result.success) {
                         successCount.fetch_add(1);
                     } else {
@@ -323,7 +328,8 @@ TEST_F(ImageSaverTest, CustomFormatSaver) {
     fileManager->registerTempFile(customFile);
 
     SaveOptions options;
-    options.targetFormat = ImageFormat::UNKNOWN; // Will auto-detect from extension
+    options.targetFormat =
+        ImageFormat::UNKNOWN;  // Will auto-detect from extension
 
     // This test verifies that the saver can handle unknown formats gracefully
     auto result = saver->saveToFile(rgb_blob, customFile, options);
@@ -339,7 +345,7 @@ TEST_F(ImageSaverTest, RoundTripConsistency) {
     // Save image
     SaveOptions saveOptions;
     saveOptions.targetFormat = ImageFormat::PNG;
-    saveOptions.compressionLevel = 0; // No compression for exact match
+    saveOptions.compressionLevel = 0;  // No compression for exact match
 
     auto saveResult = saver->saveToFile(rgb_blob, tempFile, saveOptions);
     EXPECT_TRUE(saveResult.success);
@@ -379,7 +385,7 @@ TEST_F(ImageSaverTest, MemoryUsageOptimization) {
 
     SaveOptions options;
     options.targetFormat = ImageFormat::PNG;
-    options.optimizeSize = true; // Use available optimization option
+    options.optimizeSize = true;  // Use available optimization option
 
     auto result = saver->saveToFile(large_blob, outputFile, options);
     EXPECT_TRUE(result.success);
@@ -389,9 +395,7 @@ TEST_F(ImageSaverTest, MemoryUsageOptimization) {
 // Test saving with different compression levels
 TEST_F(ImageSaverTest, DifferentCompressionLevels) {
     std::vector<std::pair<int, std::string>> levels = {
-        {0, "test_no_compression.png"},
-        {9, "test_max_compression.png"}
-    };
+        {0, "test_no_compression.png"}, {9, "test_max_compression.png"}};
 
     for (const auto& [level, filename] : levels) {
         fileManager->registerTempFile(filename);
@@ -401,7 +405,8 @@ TEST_F(ImageSaverTest, DifferentCompressionLevels) {
         options.compressionLevel = level;
 
         auto result = saver->saveToFile(rgb_blob, filename, options);
-        EXPECT_TRUE(result.success) << "Failed to save with compression level " << level;
+        EXPECT_TRUE(result.success)
+            << "Failed to save with compression level " << level;
         EXPECT_TRUE(fs::exists(filename));
     }
 }
@@ -449,7 +454,7 @@ TEST_F(ImageSaverTest, DISABLED_SavingPerformance) {
 
     SaveOptions options;
     options.targetFormat = ImageFormat::PNG;
-    options.compressionLevel = 6; // Balanced compression
+    options.compressionLevel = 6;  // Balanced compression
 
     auto start = std::chrono::high_resolution_clock::now();
     for (int i = 0; i < iterations; ++i) {
@@ -458,7 +463,8 @@ TEST_F(ImageSaverTest, DISABLED_SavingPerformance) {
     }
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     double avgTime = static_cast<double>(duration.count()) / iterations;
 
     std::cout << "Average saving time: " << avgTime << " ms" << std::endl;
@@ -489,4 +495,4 @@ TEST_F(ImageSaverTest, FileOverwriteBehavior) {
     EXPECT_NE(size1, size2);
 }
 
-} // namespace atom::image::test
+}  // namespace atom::image::test

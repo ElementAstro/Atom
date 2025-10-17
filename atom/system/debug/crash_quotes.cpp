@@ -268,9 +268,8 @@ bool QuoteManager::saveQuotesToJson(const std::string &filename) const {
     }
 }
 
-auto QuoteManager::searchQuotes(const std::string &keyword,
-                                bool caseSensitive) const
-    -> std::vector<Quote> {
+auto QuoteManager::searchQuotes(const std::string &keyword, bool caseSensitive)
+    const -> std::vector<Quote> {
     spdlog::info("Searching quotes with keyword: {} (case sensitive: {})",
                  keyword, caseSensitive ? "yes" : "no");
 

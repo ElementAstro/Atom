@@ -220,7 +220,7 @@ TEST_F(PrintUtilsTest, TablePrinting) {
 
     printTable(tableData);
     std::string output = capture.getCout();
-    
+
     EXPECT_TRUE(output.find("Name") != std::string::npos);
     EXPECT_TRUE(output.find("Alice") != std::string::npos);
     EXPECT_TRUE(output.find("25") != std::string::npos);
@@ -261,22 +261,22 @@ TEST_F(PrintUtilsTest, LoggingFunctionality) {
 // Test file output
 TEST_F(PrintUtilsTest, FileOutput) {
     const std::string filename = "test_output.txt";
-    
+
     // Clean up any existing file
     std::remove(filename.c_str());
 
     printToFile(filename, "Test message to file");
-    
+
     // Read the file and verify content
     std::ifstream file(filename);
     ASSERT_TRUE(file.is_open());
-    
+
     std::string content;
     std::getline(file, content);
     file.close();
-    
+
     EXPECT_EQ(content, "Test message to file");
-    
+
     // Clean up
     std::remove(filename.c_str());
 }
@@ -287,7 +287,7 @@ TEST_F(PrintUtilsTest, TimestampFunctionality) {
 
     printWithTimestamp("Message with timestamp");
     std::string output = capture.getCout();
-    
+
     EXPECT_TRUE(output.find("Message with timestamp") != std::string::npos);
     // Should contain timestamp format (basic check)
     EXPECT_TRUE(output.find(":") != std::string::npos);
@@ -299,9 +299,9 @@ TEST_F(PrintUtilsTest, MemoryUsagePrinting) {
 
     printMemoryUsage();
     std::string output = capture.getCout();
-    
+
     // Should contain memory-related keywords
-    EXPECT_TRUE(output.find("Memory") != std::string::npos || 
+    EXPECT_TRUE(output.find("Memory") != std::string::npos ||
                 output.find("memory") != std::string::npos ||
                 output.find("MB") != std::string::npos ||
                 output.find("KB") != std::string::npos);
@@ -329,7 +329,7 @@ TEST_F(PrintUtilsTest, ThreadSafePrinting) {
     }
 
     std::string output = capture.getCout();
-    
+
     // Should contain messages from all threads
     for (int t = 0; t < numThreads; ++t) {
         EXPECT_TRUE(output.find("Thread " + std::to_string(t)) != std::string::npos);

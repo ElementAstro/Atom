@@ -154,9 +154,11 @@ Returns:
             "is callable).")
         .def(
             "on_complete",
-            [](atom::async::EnhancedPackagedTask<py::object>& self, py::function callback) {
+            [](atom::async::EnhancedPackagedTask<py::object>& self,
+               py::function callback) {
                 // Store the callback in a way that can be called from C++
-                auto stored_callback = std::make_shared<py::function>(std::move(callback));
+                auto stored_callback =
+                    std::make_shared<py::function>(std::move(callback));
                 self.onComplete([stored_callback](const py::object& result) {
                     py::gil_scoped_acquire acquire;
                     try {
@@ -183,10 +185,13 @@ Returns:
 #ifdef ATOM_USE_ASIO
         .def(
             "set_asio_context",
-            [](atom::async::EnhancedPackagedTask<py::object>& /*self*/, py::object /*context*/) {
+            [](atom::async::EnhancedPackagedTask<py::object>& /*self*/,
+               py::object /*context*/) {
                 // Note: This would require proper ASIO context binding
                 // For now, we'll provide a placeholder
-                py::print("ASIO context setting not fully implemented in Python bindings");
+                py::print(
+                    "ASIO context setting not fully implemented in Python "
+                    "bindings");
             },
             py::arg("context"),
             R"pbdoc(
@@ -200,7 +205,8 @@ Returns:
             )pbdoc")
         .def(
             "get_asio_context",
-            [](const atom::async::EnhancedPackagedTask<py::object>& /*self*/) -> py::object {
+            [](const atom::async::EnhancedPackagedTask<py::object>& /*self*/)
+                -> py::object {
                 return py::none();  // Placeholder implementation
             },
             R"pbdoc(
@@ -296,13 +302,16 @@ Returns:
             "is callable).")
         .def(
             "on_complete",
-            [](atom::async::EnhancedPackagedTask<void>& self, py::function callback) {
+            [](atom::async::EnhancedPackagedTask<void>& self,
+               py::function callback) {
                 // Store the callback in a way that can be called from C++
-                auto stored_callback = std::make_shared<py::function>(std::move(callback));
+                auto stored_callback =
+                    std::make_shared<py::function>(std::move(callback));
                 self.onComplete([stored_callback]() {
                     py::gil_scoped_acquire acquire;
                     try {
-                        // Call the Python function without arguments for void tasks
+                        // Call the Python function without arguments for void
+                        // tasks
                         py::object result = (*stored_callback)();
                     } catch (const py::error_already_set& e) {
                         // Log Python exception but don't propagate
@@ -326,10 +335,13 @@ Returns:
 #ifdef ATOM_USE_ASIO
         .def(
             "set_asio_context",
-            [](atom::async::EnhancedPackagedTask<void>& /*self*/, py::object /*context*/) {
+            [](atom::async::EnhancedPackagedTask<void>& /*self*/,
+               py::object /*context*/) {
                 // Note: This would require proper ASIO context binding
                 // For now, we'll provide a placeholder
-                py::print("ASIO context setting not fully implemented in Python bindings");
+                py::print(
+                    "ASIO context setting not fully implemented in Python "
+                    "bindings");
             },
             py::arg("context"),
             R"pbdoc(
@@ -343,7 +355,8 @@ Returns:
             )pbdoc")
         .def(
             "get_asio_context",
-            [](const atom::async::EnhancedPackagedTask<void>& /*self*/) -> py::object {
+            [](const atom::async::EnhancedPackagedTask<void>& /*self*/)
+                -> py::object {
                 return py::none();  // Placeholder implementation
             },
             R"pbdoc(
@@ -454,42 +467,46 @@ Examples:
 
     // Advanced utility functions
     m.def(
-        "run_void_packaged_task",
-        [](py::function func) {
-            // Create a void task
-            auto wrapped_task = [func]() {
-                try {
-                    func();
-                } catch (const py::error_already_set& e) {
-                    throw std::runtime_error(std::string("Python exception: ") + e.what());
-                } catch (...) {
-                    throw std::runtime_error("Unknown error in Python callable");
-                }
-            };
-            auto task = std::make_unique<atom::async::EnhancedPackagedTask<void>>(
-                std::move(wrapped_task));
+         "run_void_packaged_task",
+         [](py::function func) {
+             // Create a void task
+             auto wrapped_task = [func]() {
+                 try {
+                     func();
+                 } catch (const py::error_already_set& e) {
+                     throw std::runtime_error(
+                         std::string("Python exception: ") + e.what());
+                 } catch (...) {
+                     throw std::runtime_error(
+                         "Unknown error in Python callable");
+                 }
+             };
+             auto task =
+                 std::make_unique<atom::async::EnhancedPackagedTask<void>>(
+                     std::move(wrapped_task));
 
-            // Get the future
-            auto future = task->getEnhancedFuture();
+             // Get the future
+             auto future = task->getEnhancedFuture();
 
-            // Create a Python future
-            auto py_future = py::module::import("concurrent.futures").attr("Future")();
+             // Create a Python future
+             auto py_future =
+                 py::module::import("concurrent.futures").attr("Future")();
 
-            // Run the task in a separate thread
-            std::thread([task = std::move(task), future, py_future]() mutable {
-                try {
-                    (*task)();      // Execute the task
-                    future.get();   // Wait for completion
-                    py_future.attr("set_result")(py::none());
-                } catch (const std::exception& e) {
-                    py_future.attr("set_exception")(py::str(e.what()));
-                }
-            }).detach();
+             // Run the task in a separate thread
+             std::thread([task = std::move(task), future, py_future]() mutable {
+                 try {
+                     (*task)();     // Execute the task
+                     future.get();  // Wait for completion
+                     py_future.attr("set_result")(py::none());
+                 } catch (const std::exception& e) {
+                     py_future.attr("set_exception")(py::str(e.what()));
+                 }
+             }).detach();
 
-            return py_future;
-        },
-        py::arg("task"),
-        R"pbdoc(
+             return py_future;
+         },
+         py::arg("task"),
+         R"pbdoc(
         Run a void callable as a packaged task and return its future.
 
         This is a convenience function for void tasks that creates a packaged task,
@@ -507,42 +524,45 @@ Examples:
             >>> future.result()  # Waits for completion, prints "Hello World"
         )pbdoc")
 
-    .def(
-        "create_task_chain",
-        [](py::list tasks) -> py::object {
-            if (tasks.empty()) {
-                throw std::invalid_argument("Task list cannot be empty");
-            }
-
-            // Create a chain of tasks that execute sequentially
-            auto py_future = py::module::import("concurrent.futures").attr("Future")();
-
-            std::thread([tasks, py_future]() {
-                py::list results;
-                try {
-                    for (auto task_func : tasks) {
-                        py::function func = task_func.cast<py::function>();
-
-                        // Create and execute each task
-                        auto wrapped_task = create_wrapped_task<py::object>(func);
-                        auto task = std::make_unique<atom::async::EnhancedPackagedTask<py::object>>(
-                            std::move(wrapped_task));
-
-                        auto future = task->getEnhancedFuture();
-                        (*task)();  // Execute
-                        py::object result = future.get();  // Get result
-                        results.append(result);
-                    }
-                    py_future.attr("set_result")(results);
-                } catch (const std::exception& e) {
-                    py_future.attr("set_exception")(py::str(e.what()));
+        .def(
+            "create_task_chain",
+            [](py::list tasks) -> py::object {
+                if (tasks.empty()) {
+                    throw std::invalid_argument("Task list cannot be empty");
                 }
-            }).detach();
 
-            return py_future;
-        },
-        py::arg("tasks"),
-        R"pbdoc(
+                // Create a chain of tasks that execute sequentially
+                auto py_future =
+                    py::module::import("concurrent.futures").attr("Future")();
+
+                std::thread([tasks, py_future]() {
+                    py::list results;
+                    try {
+                        for (auto task_func : tasks) {
+                            py::function func = task_func.cast<py::function>();
+
+                            // Create and execute each task
+                            auto wrapped_task =
+                                create_wrapped_task<py::object>(func);
+                            auto task = std::make_unique<
+                                atom::async::EnhancedPackagedTask<py::object>>(
+                                std::move(wrapped_task));
+
+                            auto future = task->getEnhancedFuture();
+                            (*task)();                         // Execute
+                            py::object result = future.get();  // Get result
+                            results.append(result);
+                        }
+                        py_future.attr("set_result")(results);
+                    } catch (const std::exception& e) {
+                        py_future.attr("set_exception")(py::str(e.what()));
+                    }
+                }).detach();
+
+                return py_future;
+            },
+            py::arg("tasks"),
+            R"pbdoc(
         Create a chain of tasks that execute sequentially.
 
         Args:
@@ -557,49 +577,54 @@ Examples:
             >>> results = future.result()  # [1, 2, 3]
         )pbdoc")
 
-    .def(
-        "benchmark_packaged_task",
-        [](py::function func, size_t num_iterations) -> py::dict {
-            using namespace std::chrono;
+        .def(
+            "benchmark_packaged_task",
+            [](py::function func, size_t num_iterations) -> py::dict {
+                using namespace std::chrono;
 
-            py::dict results;
-            std::vector<double> execution_times;
-            execution_times.reserve(num_iterations);
+                py::dict results;
+                std::vector<double> execution_times;
+                execution_times.reserve(num_iterations);
 
-            for (size_t i = 0; i < num_iterations; ++i) {
-                auto start = high_resolution_clock::now();
+                for (size_t i = 0; i < num_iterations; ++i) {
+                    auto start = high_resolution_clock::now();
 
-                // Create and execute task
-                auto wrapped_task = create_wrapped_task<py::object>(func);
-                auto task = std::make_unique<atom::async::EnhancedPackagedTask<py::object>>(
-                    std::move(wrapped_task));
+                    // Create and execute task
+                    auto wrapped_task = create_wrapped_task<py::object>(func);
+                    auto task = std::make_unique<
+                        atom::async::EnhancedPackagedTask<py::object>>(
+                        std::move(wrapped_task));
 
-                auto future = task->getEnhancedFuture();
-                (*task)();
-                future.get();  // Wait for completion
+                    auto future = task->getEnhancedFuture();
+                    (*task)();
+                    future.get();  // Wait for completion
 
-                auto end = high_resolution_clock::now();
-                auto duration = duration_cast<microseconds>(end - start);
-                execution_times.push_back(duration.count());
-            }
+                    auto end = high_resolution_clock::now();
+                    auto duration = duration_cast<microseconds>(end - start);
+                    execution_times.push_back(duration.count());
+                }
 
-            // Calculate statistics
-            double total_time = std::accumulate(execution_times.begin(), execution_times.end(), 0.0);
-            double avg_time = total_time / num_iterations;
-            double min_time = *std::min_element(execution_times.begin(), execution_times.end());
-            double max_time = *std::max_element(execution_times.begin(), execution_times.end());
+                // Calculate statistics
+                double total_time = std::accumulate(execution_times.begin(),
+                                                    execution_times.end(), 0.0);
+                double avg_time = total_time / num_iterations;
+                double min_time = *std::min_element(execution_times.begin(),
+                                                    execution_times.end());
+                double max_time = *std::max_element(execution_times.begin(),
+                                                    execution_times.end());
 
-            results[py::str("num_iterations")] = num_iterations;
-            results[py::str("total_time_us")] = total_time;
-            results[py::str("average_time_us")] = avg_time;
-            results[py::str("min_time_us")] = min_time;
-            results[py::str("max_time_us")] = max_time;
-            results[py::str("throughput_ops_per_sec")] = (num_iterations * 1000000.0) / total_time;
+                results[py::str("num_iterations")] = num_iterations;
+                results[py::str("total_time_us")] = total_time;
+                results[py::str("average_time_us")] = avg_time;
+                results[py::str("min_time_us")] = min_time;
+                results[py::str("max_time_us")] = max_time;
+                results[py::str("throughput_ops_per_sec")] =
+                    (num_iterations * 1000000.0) / total_time;
 
-            return results;
-        },
-        py::arg("func"), py::arg("num_iterations") = 1000,
-        R"pbdoc(
+                return results;
+            },
+            py::arg("func"), py::arg("num_iterations") = 1000,
+            R"pbdoc(
         Benchmark packaged task performance.
 
         Args:
@@ -629,6 +654,8 @@ Examples:
     m.attr("HAS_ASIO") = false;
 #endif
 
-    m.attr("HARDWARE_CONSTRUCTIVE_INTERFERENCE_SIZE") = hardware_constructive_interference_size;
-    m.attr("HARDWARE_DESTRUCTIVE_INTERFERENCE_SIZE") = hardware_destructive_interference_size;
+    m.attr("HARDWARE_CONSTRUCTIVE_INTERFERENCE_SIZE") =
+        hardware_constructive_interference_size;
+    m.attr("HARDWARE_DESTRUCTIVE_INTERFERENCE_SIZE") =
+        hardware_destructive_interference_size;
 }

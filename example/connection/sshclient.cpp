@@ -35,7 +35,7 @@ public:
     enum Level { INFO, SUCCESS, WARNING, LOG_ERROR };
 
     static void write(Level level, const std::string& component,
-                    const std::string& message) {
+                      const std::string& message) {
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
 
@@ -66,7 +66,7 @@ void basicConnectionExample(const std::string& host,
                             const std::string& username,
                             const std::string& password) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                "Starting basic SSH connection example");
+                         "Starting basic SSH connection example");
 
     try {
         // Create SSH client
@@ -74,35 +74,37 @@ void basicConnectionExample(const std::string& host,
 
         // Connect with authentication
         ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                    "Connecting to " + host + " as " + username);
+                             "Connecting to " + host + " as " + username);
         sshClient.connect(username, password, 10);
 
         if (sshClient.isConnected()) {
             ExampleLogger::write(ExampleLogger::Level::Success, "Example1",
-                        "Successfully connected to SSH server");
+                                 "Successfully connected to SSH server");
 
             // Disconnect
             sshClient.disconnect();
             ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                        "Disconnected from SSH server");
+                                 "Disconnected from SSH server");
         } else {
             ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
-                        "Failed to connect to SSH server");
+                                 "Failed to connect to SSH server");
         }
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example1", "Basic connection example completed");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
+                         "Basic connection example completed");
 }
 
 // Example 2: Command execution
 void commandExecutionExample(const std::string& host,
                              const std::string& username,
                              const std::string& password) {
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example2", "Starting command execution example");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
+                         "Starting command execution example");
 
     try {
         atom::connection::SSHClient sshClient(host, 22);
@@ -110,15 +112,16 @@ void commandExecutionExample(const std::string& host,
 
         if (sshClient.isConnected()) {
             ExampleLogger::write(ExampleLogger::Level::Success, "Example2",
-                        "Connected for command execution");
+                                 "Connected for command execution");
 
             // Execute single command
             std::vector<std::string> output;
             sshClient.executeCommand("ls -la", output);
 
             ExampleLogger::write(ExampleLogger::Level::Success, "Example2",
-                        "Command 'ls -la' executed successfully");
-            ExampleLogger::write(ExampleLogger::Level::Info, "Example2", "Output:");
+                                 "Command 'ls -la' executed successfully");
+            ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
+                                 "Output:");
             for (const auto& line : output) {
                 std::cout << "  " << line << std::endl;
             }
@@ -129,11 +132,11 @@ void commandExecutionExample(const std::string& host,
             sshClient.executeCommands(commands, multiOutput);
 
             ExampleLogger::write(ExampleLogger::Level::Success, "Example2",
-                        "Multiple commands executed successfully");
+                                 "Multiple commands executed successfully");
             for (size_t i = 0; i < commands.size() && i < multiOutput.size();
                  ++i) {
                 ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                            "Command '" + commands[i] + "' output:");
+                                     "Command '" + commands[i] + "' output:");
                 for (const auto& line : multiOutput[i]) {
                     std::cout << "  " << line << std::endl;
                 }
@@ -144,17 +147,18 @@ void commandExecutionExample(const std::string& host,
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example2",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                "Command execution example completed");
+                         "Command execution example completed");
 }
 
 // Example 3: File operations
 void fileOperationsExample(const std::string& host, const std::string& username,
                            const std::string& password) {
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "Starting file operations example");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                         "Starting file operations example");
 
     try {
         atom::connection::SSHClient sshClient(host, 22);
@@ -162,7 +166,7 @@ void fileOperationsExample(const std::string& host, const std::string& username,
 
         if (sshClient.isConnected()) {
             ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
-                        "Connected for file operations");
+                                 "Connected for file operations");
 
             // Create a test file locally
             std::string localTestFile = "test_upload.txt";
@@ -184,12 +188,12 @@ void fileOperationsExample(const std::string& host, const std::string& username,
                 "Uploading file: " + localTestFile + " -> " + remoteTestFile);
             sshClient.uploadFile(localTestFile, remoteTestFile);
             ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
-                        "File uploaded successfully");
+                                 "File uploaded successfully");
 
             // Check if file exists
             if (sshClient.fileExists(remoteTestFile)) {
                 ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
-                            "Remote file exists: " + remoteTestFile);
+                                     "Remote file exists: " + remoteTestFile);
 
                 // Get file info
                 sftp_attributes attrs;
@@ -201,31 +205,34 @@ void fileOperationsExample(const std::string& host, const std::string& username,
 
                 // Download file
                 ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
-                            "Downloading file: " + remoteTestFile + " -> " +
-                                downloadedFile);
+                                     "Downloading file: " + remoteTestFile +
+                                         " -> " + downloadedFile);
                 sshClient.downloadFile(remoteTestFile, downloadedFile);
                 ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
-                            "File downloaded successfully");
+                                     "File downloaded successfully");
 
                 // Clean up remote file
                 sshClient.removeFile(remoteTestFile);
-                ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "Remote file cleaned up");
+                ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                                     "Remote file cleaned up");
             }
 
             // Clean up local files
             std::filesystem::remove(localTestFile);
             std::filesystem::remove(downloadedFile);
-            ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "Local files cleaned up");
+            ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                                 "Local files cleaned up");
 
             sshClient.disconnect();
         }
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example3",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "File operations example completed");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                         "File operations example completed");
 }
 
 // Example 4: Directory operations
@@ -233,7 +240,7 @@ void directoryOperationsExample(const std::string& host,
                                 const std::string& username,
                                 const std::string& password) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                "Starting directory operations example");
+                         "Starting directory operations example");
 
     try {
         atom::connection::SSHClient sshClient(host, 22);
@@ -241,20 +248,20 @@ void directoryOperationsExample(const std::string& host,
 
         if (sshClient.isConnected()) {
             ExampleLogger::write(ExampleLogger::Level::Success, "Example4",
-                        "Connected for directory operations");
+                                 "Connected for directory operations");
 
             std::string testDir = "/tmp/ssh_test_dir";
 
             // Create directory
             ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                        "Creating directory: " + testDir);
+                                 "Creating directory: " + testDir);
             sshClient.createDirectory(testDir);
             ExampleLogger::write(ExampleLogger::Level::Success, "Example4",
-                        "Directory created successfully");
+                                 "Directory created successfully");
 
             // List directory contents
             ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                        "Listing /tmp directory contents:");
+                                 "Listing /tmp directory contents:");
             auto contents = sshClient.listDirectory("/tmp");
             for (const auto& item : contents) {
                 if (item.find("ssh_test") != std::string::npos) {
@@ -265,18 +272,18 @@ void directoryOperationsExample(const std::string& host,
             // Remove directory
             sshClient.removeDirectory(testDir);
             ExampleLogger::write(ExampleLogger::Level::Success, "Example4",
-                        "Directory removed successfully");
+                                 "Directory removed successfully");
 
             sshClient.disconnect();
         }
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example4",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                "Directory operations example completed");
+                         "Directory operations example completed");
 }
 
 int main() {
@@ -286,15 +293,16 @@ int main() {
     std::string password = "testpass";  // Change to your password
 
     ExampleLogger::write(ExampleLogger::Level::Warning, "Main",
-                "This example requires a running SSH server");
+                         "This example requires a running SSH server");
     ExampleLogger::write(
         ExampleLogger::Level::Warning, "Main",
         "Please modify host, username, and password in the source code");
-    ExampleLogger::write(ExampleLogger::Level::Info, "Main", "Target: " + username + "@" + host);
+    ExampleLogger::write(ExampleLogger::Level::Info, "Main",
+                         "Target: " + username + "@" + host);
 
     try {
         ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                    "Starting comprehensive SSH client examples");
+                             "Starting comprehensive SSH client examples");
 
         // Run all examples
         basicConnectionExample(host, username, password);
@@ -309,12 +317,12 @@ int main() {
         directoryOperationsExample(host, username, password);
 
         ExampleLogger::write(ExampleLogger::Level::Success, "Main",
-                    "All SSH client examples completed successfully");
+                             "All SSH client examples completed successfully");
         return 0;
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Main",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
         return 1;
     }
 }

@@ -4,7 +4,6 @@
 #include <numeric>
 #include "../logger/logger.h"
 
-
 namespace modern_log {
 
 ScopedTimer::ScopedTimer(Logger* logger, std::string name, Level level)

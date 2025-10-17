@@ -35,9 +35,7 @@ protected:
         }
 
         // Create empty file
-        {
-            std::ofstream file(testEmptyFile);
-        }
+        { std::ofstream file(testEmptyFile); }
 
         // Create binary file
         {
@@ -91,10 +89,10 @@ TEST_F(StatTest, FileType) {
     EXPECT_EQ(directoryStat.type(), fs::file_type::directory);
 
     if (symlinkSupported) {
-        Stat symlinkStat(testSymlink, false); // Don't follow symlinks
+        Stat symlinkStat(testSymlink, false);  // Don't follow symlinks
         EXPECT_EQ(symlinkStat.type(), fs::file_type::symlink);
 
-        Stat symlinkTargetStat(testSymlink, true); // Follow symlinks
+        Stat symlinkTargetStat(testSymlink, true);  // Follow symlinks
         EXPECT_EQ(symlinkTargetStat.type(), fs::file_type::regular);
     }
 }
@@ -126,7 +124,7 @@ TEST_F(StatTest, FileTimestamps) {
 
     // Modification time should be recent (within last hour)
     std::time_t now = std::time(nullptr);
-    EXPECT_LT(now - mtime, 3600); // Within 1 hour
+    EXPECT_LT(now - mtime, 3600);  // Within 1 hour
 }
 
 // Test file permissions
@@ -152,7 +150,8 @@ TEST_F(StatTest, DirectoryPermissions) {
 
     EXPECT_TRUE(dirStat.isReadable());
     EXPECT_TRUE(dirStat.isWritable());
-    EXPECT_TRUE(dirStat.isExecutable()); // Execute permission for directories means "searchable"
+    EXPECT_TRUE(dirStat.isExecutable());  // Execute permission for directories
+                                          // means "searchable"
 }
 
 // Test file ownership (platform-dependent)
@@ -217,7 +216,7 @@ TEST_F(StatTest, FileTypeChecking) {
     EXPECT_FALSE(directoryStat.isSymlink());
 
     if (symlinkSupported) {
-        Stat symlinkStat(testSymlink, false); // Don't follow symlinks
+        Stat symlinkStat(testSymlink, false);  // Don't follow symlinks
         EXPECT_FALSE(symlinkStat.isRegularFile());
         EXPECT_FALSE(symlinkStat.isDirectory());
         EXPECT_TRUE(symlinkStat.isSymlink());
@@ -229,7 +228,7 @@ TEST_F(StatTest, HardLinkCount) {
     Stat stat(testFile);
 
     auto linkCount = stat.getHardLinkCount();
-    EXPECT_GE(linkCount, 1); // At least one link (the file itself)
+    EXPECT_GE(linkCount, 1);  // At least one link (the file itself)
 
     // Create a hard link (if supported)
     fs::path hardLink = testDir / "hard_link.txt";
@@ -355,7 +354,8 @@ TEST_F(StatPlatformTest, WindowsHiddenFiles) {
         file << "Hidden file content\n";
     }
 
-    // Set hidden attribute (this would require Windows API calls in real implementation)
+    // Set hidden attribute (this would require Windows API calls in real
+    // implementation)
     Stat stat(hiddenFile);
     EXPECT_TRUE(stat.exists());
     EXPECT_TRUE(stat.isRegularFile());
@@ -459,7 +459,8 @@ TEST_F(StatPerformanceTest, MultipleFileStats) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time (1 second for 100 files)
     EXPECT_LT(duration.count(), 1000);
@@ -478,7 +479,8 @@ TEST_F(StatPerformanceTest, RepeatedStatOperations) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Repeated operations should be fast (within 500ms for 1000 operations)
     EXPECT_LT(duration.count(), 500);
@@ -526,11 +528,8 @@ TEST_F(StatEdgeCaseTest, LargeFile) {
 // Test files with special characters in names
 TEST_F(StatEdgeCaseTest, SpecialCharacterFilenames) {
     std::vector<std::string> specialNames = {
-        "file with spaces.txt",
-        "file-with-dashes.txt",
-        "file_with_underscores.txt",
-        "file.with.dots.txt"
-    };
+        "file with spaces.txt", "file-with-dashes.txt",
+        "file_with_underscores.txt", "file.with.dots.txt"};
 
     for (const auto& name : specialNames) {
         fs::path specialFile = testDir / name;
@@ -548,7 +547,8 @@ TEST_F(StatEdgeCaseTest, SpecialCharacterFilenames) {
 
         } catch (const std::exception& e) {
             // Some special characters might not be supported on all filesystems
-            GTEST_SKIP() << "Special character filename not supported: " << name;
+            GTEST_SKIP() << "Special character filename not supported: "
+                         << name;
         }
     }
 }

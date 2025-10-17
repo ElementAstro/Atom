@@ -300,8 +300,8 @@ void base64EncodeSIMD(std::string_view input, OutputIt dest,
 
 // 改进后的Base64解码实现 - 使用atom::type::expected
 template <typename OutputIt>
-auto base64DecodeImpl(std::string_view input, OutputIt dest) noexcept
-    -> atom::type::expected<usize> {
+auto base64DecodeImpl(std::string_view input,
+                      OutputIt dest) noexcept -> atom::type::expected<usize> {
     usize outSize = 0;
     std::array<u8, 4> inBlock{};
     std::array<u8, 3> outBlock{};
@@ -410,8 +410,8 @@ auto base64DecodeImpl(std::string_view input, OutputIt dest) noexcept
 #ifdef ATOM_USE_SIMD
 // 完善的SIMD优化Base64解码实现
 template <typename OutputIt>
-auto base64DecodeSIMD(std::string_view input, OutputIt dest) noexcept
-    -> atom::type::expected<usize> {
+auto base64DecodeSIMD(std::string_view input,
+                      OutputIt dest) noexcept -> atom::type::expected<usize> {
 #if defined(__AVX2__)
     // AVX2实现
     // 这里应实现完整的AVX2 Base64解码逻辑
@@ -429,8 +429,8 @@ auto base64DecodeSIMD(std::string_view input, OutputIt dest) noexcept
 #endif
 
 // Base64编码接口
-auto base64Encode(std::string_view input, bool padding) noexcept
-    -> atom::type::expected<std::string> {
+auto base64Encode(std::string_view input,
+                  bool padding) noexcept -> atom::type::expected<std::string> {
     try {
         std::string output;
         const usize outSize = ((input.size() + 2) / 3) * 4;
@@ -645,7 +645,8 @@ auto decodeBase32(std::string_view encoded_sv) noexcept
 }
 
 // Base16/Hex encoding implementation
-auto encodeHex(std::span<const std::uint8_t> data, bool uppercase) noexcept -> std::string {
+auto encodeHex(std::span<const std::uint8_t> data,
+               bool uppercase) noexcept -> std::string {
     if (data.empty()) {
         return {};
     }
@@ -662,10 +663,12 @@ auto encodeHex(std::span<const std::uint8_t> data, bool uppercase) noexcept -> s
     return result;
 }
 
-auto decodeHex(std::string_view hex) noexcept -> atom::type::expected<std::vector<std::uint8_t>> {
+auto decodeHex(std::string_view hex) noexcept
+    -> atom::type::expected<std::vector<std::uint8_t>> {
     try {
         if (hex.size() % 2 != 0) {
-            return atom::type::make_unexpected("Hex string must have even length");
+            return atom::type::make_unexpected(
+                "Hex string must have even length");
         }
 
         std::vector<std::uint8_t> result;
@@ -676,9 +679,12 @@ auto decodeHex(std::string_view hex) noexcept -> atom::type::expected<std::vecto
             char low = hex[i + 1];
 
             auto hexToNibble = [](char c) -> atom::type::expected<u8> {
-                if (c >= '0' && c <= '9') return c - '0';
-                if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-                if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+                if (c >= '0' && c <= '9')
+                    return c - '0';
+                if (c >= 'A' && c <= 'F')
+                    return c - 'A' + 10;
+                if (c >= 'a' && c <= 'f')
+                    return c - 'a' + 10;
                 return atom::type::make_unexpected("Invalid hex character");
             };
 
@@ -695,14 +701,16 @@ auto decodeHex(std::string_view hex) noexcept -> atom::type::expected<std::vecto
         return result;
     } catch (const std::exception& e) {
         spdlog::error("Hex decode error: {}", e.what());
-        return atom::type::make_unexpected(std::string("Hex decode error: ") + e.what());
+        return atom::type::make_unexpected(std::string("Hex decode error: ") +
+                                           e.what());
     }
 }
 
 // URL encoding implementation
-auto urlEncode(std::string_view str, bool encodeSpaceAsPlus) noexcept -> std::string {
+auto urlEncode(std::string_view str,
+               bool encodeSpaceAsPlus) noexcept -> std::string {
     std::string result;
-    result.reserve(str.size() * 3); // Worst case: every char needs encoding
+    result.reserve(str.size() * 3);  // Worst case: every char needs encoding
 
     const char* hexChars = "0123456789ABCDEF";
 
@@ -711,8 +719,8 @@ auto urlEncode(std::string_view str, bool encodeSpaceAsPlus) noexcept -> std::st
 
         // Unreserved characters (RFC 3986)
         if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-            (c >= '0' && c <= '9') || c == '-' || c == '.' ||
-            c == '_' || c == '~') {
+            (c >= '0' && c <= '9') || c == '-' || c == '.' || c == '_' ||
+            c == '~') {
             result += c;
         } else if (c == ' ' && encodeSpaceAsPlus) {
             result += '+';
@@ -726,7 +734,8 @@ auto urlEncode(std::string_view str, bool encodeSpaceAsPlus) noexcept -> std::st
     return result;
 }
 
-auto urlDecode(std::string_view str) noexcept -> atom::type::expected<std::string> {
+auto urlDecode(std::string_view str) noexcept
+    -> atom::type::expected<std::string> {
     try {
         std::string result;
         result.reserve(str.size());
@@ -734,16 +743,20 @@ auto urlDecode(std::string_view str) noexcept -> atom::type::expected<std::strin
         for (usize i = 0; i < str.size(); ++i) {
             if (str[i] == '%') {
                 if (i + 2 >= str.size()) {
-                    return atom::type::make_unexpected("Invalid URL encoding: incomplete percent sequence");
+                    return atom::type::make_unexpected(
+                        "Invalid URL encoding: incomplete percent sequence");
                 }
 
                 char high = str[i + 1];
                 char low = str[i + 2];
 
                 auto hexToNibble = [](char c) -> atom::type::expected<u8> {
-                    if (c >= '0' && c <= '9') return c - '0';
-                    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-                    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+                    if (c >= '0' && c <= '9')
+                        return c - '0';
+                    if (c >= 'A' && c <= 'F')
+                        return c - 'A' + 10;
+                    if (c >= 'a' && c <= 'f')
+                        return c - 'a' + 10;
                     return atom::type::make_unexpected("Invalid hex character");
                 };
 
@@ -751,13 +764,15 @@ auto urlDecode(std::string_view str) noexcept -> atom::type::expected<std::strin
                 auto lowNibble = hexToNibble(low);
 
                 if (!highNibble || !lowNibble) {
-                    return atom::type::make_unexpected("Invalid URL encoding: invalid hex character");
+                    return atom::type::make_unexpected(
+                        "Invalid URL encoding: invalid hex character");
                 }
 
-                result += static_cast<char>((highNibble.value() << 4) | lowNibble.value());
-                i += 2; // Skip the two hex digits
+                result += static_cast<char>((highNibble.value() << 4) |
+                                            lowNibble.value());
+                i += 2;  // Skip the two hex digits
             } else if (str[i] == '+') {
-                result += ' '; // Convert '+' to space
+                result += ' ';  // Convert '+' to space
             } else {
                 result += str[i];
             }
@@ -766,7 +781,8 @@ auto urlDecode(std::string_view str) noexcept -> atom::type::expected<std::strin
         return result;
     } catch (const std::exception& e) {
         spdlog::error("URL decode error: {}", e.what());
-        return atom::type::make_unexpected(std::string("URL decode error: ") + e.what());
+        return atom::type::make_unexpected(std::string("URL decode error: ") +
+                                           e.what());
     }
 }
 

@@ -232,7 +232,7 @@ std::string getFilePermissions(std::string_view filePath) noexcept {
     }
 
     try {
-        struct stat fileStat{};
+        struct stat fileStat {};
         if (stat(filePath.data(), &fileStat) < 0) {
             spdlog::error("stat failed for '{}': {}", filePath,
                           strerror(errno));

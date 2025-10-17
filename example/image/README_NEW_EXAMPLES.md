@@ -5,6 +5,7 @@ This document describes the comprehensive set of new examples added to the Atom 
 ## Overview
 
 The new examples extend the existing example suite with:
+
 - **Complete edge case coverage** for all core functionality
 - **Advanced processing techniques** including GPU acceleration and real-time processing
 - **Comprehensive SER format support** for astronomical imaging
@@ -17,8 +18,10 @@ The new examples extend the existing example suite with:
 ### Core Module (`example/image/core/`)
 
 #### `blob_edge_cases.cpp`
+
 **Purpose**: Tests edge cases and boundary conditions for the blob system
 **Key Features**:
+
 - Empty blob operations and error handling
 - Large blob memory management (>1GB images)
 - Memory constraint testing and graceful degradation
@@ -26,6 +29,7 @@ The new examples extend the existing example suite with:
 - Error condition simulation and recovery
 
 **Usage**:
+
 ```bash
 ./image_core_blob_edge_cases
 ```
@@ -33,8 +37,10 @@ The new examples extend the existing example suite with:
 **Requirements**: None (uses core functionality only)
 
 #### `fast_blob_performance.cpp`
+
 **Purpose**: Performance comparison between `blob` and `fast_blob` types
 **Key Features**:
+
 - Creation performance benchmarking
 - Zero-copy operation demonstrations
 - Memory usage pattern analysis
@@ -42,6 +48,7 @@ The new examples extend the existing example suite with:
 - Performance scaling with image size
 
 **Usage**:
+
 ```bash
 ./image_core_fast_blob_performance
 ```
@@ -49,8 +56,10 @@ The new examples extend the existing example suite with:
 **Requirements**: None (uses core functionality only)
 
 #### `advanced_memory_management.cpp`
+
 **Purpose**: Advanced memory management techniques and optimization
 **Key Features**:
+
 - Custom memory pool implementation (`BlobMemoryPool`)
 - Memory alignment optimization for SIMD operations
 - Cache-friendly data layout strategies
@@ -58,6 +67,7 @@ The new examples extend the existing example suite with:
 - Memory usage monitoring and statistics
 
 **Usage**:
+
 ```bash
 ./image_core_advanced_memory_management
 ```
@@ -65,8 +75,10 @@ The new examples extend the existing example suite with:
 **Requirements**: None (uses core functionality only)
 
 #### `serialization_edge_cases.cpp`
+
 **Purpose**: Comprehensive serialization testing and edge case handling
 **Key Features**:
+
 - Round-trip serialization integrity testing
 - Corruption detection and recovery mechanisms
 - Cross-platform compatibility validation
@@ -74,6 +86,7 @@ The new examples extend the existing example suite with:
 - Version compatibility testing
 
 **Usage**:
+
 ```bash
 ./image_core_serialization_edge_cases
 ```
@@ -83,8 +96,10 @@ The new examples extend the existing example suite with:
 ### Formats Module (`example/image/formats/`)
 
 #### `basic_ser_operations.cpp`
+
 **Purpose**: Comprehensive SER format file operations
 **Key Features**:
+
 - SER file reading and writing with full header support
 - Multiple color format handling (Mono, RGB, BGR, Bayer patterns)
 - Timestamp management and frame metadata
@@ -92,6 +107,7 @@ The new examples extend the existing example suite with:
 - Error handling and validation
 
 **Usage**:
+
 ```bash
 ./image_formats_basic_ser_operations
 ```
@@ -99,8 +115,10 @@ The new examples extend the existing example suite with:
 **Requirements**: OpenCV (`ATOM_IMAGE_HAS_OPENCV=ON`)
 
 #### `ser_quality_assessment.cpp`
+
 **Purpose**: SER frame quality assessment and ranking
 **Key Features**:
+
 - Multiple quality metrics (sharpness, SNR, entropy, star count)
 - Customizable quality parameters and weights
 - Quality-based frame selection and filtering
@@ -108,6 +126,7 @@ The new examples extend the existing example suite with:
 - Performance characteristics for different frame sizes
 
 **Usage**:
+
 ```bash
 ./image_formats_ser_quality_assessment
 ```
@@ -115,8 +134,10 @@ The new examples extend the existing example suite with:
 **Requirements**: OpenCV (`ATOM_IMAGE_HAS_OPENCV=ON`)
 
 #### `ser_registration_stacking.cpp`
+
 **Purpose**: SER frame registration and stacking operations
 **Key Features**:
+
 - Multiple registration algorithms (phase correlation, feature matching, ECC)
 - Various stacking methods (mean, median, sigma clipping, weighted)
 - Complete astronomical processing workflow
@@ -124,6 +145,7 @@ The new examples extend the existing example suite with:
 - Performance optimization for batch processing
 
 **Usage**:
+
 ```bash
 ./image_formats_ser_registration_stacking
 ```
@@ -133,8 +155,10 @@ The new examples extend the existing example suite with:
 ### Processing Module (`example/image/processing/`)
 
 #### `gpu_acceleration_demo.cpp`
+
 **Purpose**: GPU acceleration with comprehensive fallback mechanisms
 **Key Features**:
+
 - Multi-backend GPU support (CUDA, OpenCL, Vulkan, Metal)
 - GPU device detection and capability assessment
 - Performance comparison between GPU and CPU processing
@@ -143,6 +167,7 @@ The new examples extend the existing example suite with:
 - Error handling and recovery
 
 **Usage**:
+
 ```bash
 ./image_processing_gpu_acceleration_demo
 ```
@@ -150,8 +175,10 @@ The new examples extend the existing example suite with:
 **Requirements**: At least one GPU backend (CUDA, OpenCL, etc.)
 
 #### `realtime_processing.cpp`
+
 **Purpose**: Real-time image processing and optimization
 **Key Features**:
+
 - Live camera capture simulation and processing
 - Multi-threaded processing pipeline
 - Adaptive quality control based on performance
@@ -160,6 +187,7 @@ The new examples extend the existing example suite with:
 - Thread-safe frame buffering
 
 **Usage**:
+
 ```bash
 ./image_processing_realtime_processing
 ```
@@ -169,8 +197,10 @@ The new examples extend the existing example suite with:
 ### I/O Module (`example/image/io/`)
 
 #### `streaming_io_demo.cpp`
+
 **Purpose**: Streaming I/O operations for large images
 **Key Features**:
+
 - Streaming read/write for large images (>1GB)
 - Progressive loading with multiple quality levels
 - Tiled processing for memory-efficient operations
@@ -179,6 +209,7 @@ The new examples extend the existing example suite with:
 - Performance monitoring and statistics
 
 **Usage**:
+
 ```bash
 ./image_io_streaming_io_demo
 ```
@@ -186,8 +217,10 @@ The new examples extend the existing example suite with:
 **Requirements**: None (creates test files automatically)
 
 #### `memory_mapped_io.cpp`
+
 **Purpose**: Memory-mapped I/O operations and virtual memory management
 **Key Features**:
+
 - Memory-mapped file access for efficient random access
 - Performance comparison with traditional I/O
 - Virtual memory management with page fault handling
@@ -196,6 +229,7 @@ The new examples extend the existing example suite with:
 - Memory advice and optimization techniques
 
 **Usage**:
+
 ```bash
 ./image_io_memory_mapped_io
 ```
@@ -205,6 +239,7 @@ The new examples extend the existing example suite with:
 ## Build Configuration
 
 ### Basic Build
+
 ```bash
 mkdir build && cd build
 cmake .. -DATOM_IMAGE_BUILD_EXAMPLES=ON
@@ -212,6 +247,7 @@ cmake --build . -j
 ```
 
 ### With All Dependencies
+
 ```bash
 cmake .. \
   -DATOM_IMAGE_BUILD_EXAMPLES=ON \
@@ -222,7 +258,9 @@ cmake --build . -j
 ```
 
 ### Selective Building
+
 Individual examples can be disabled:
+
 ```bash
 cmake .. \
   -DATOM_IMAGE_BUILD_EXAMPLES=ON \
@@ -234,6 +272,7 @@ cmake .. \
 ## Testing and Validation
 
 ### Running All New Examples
+
 ```bash
 # Core examples
 ./image_core_blob_edge_cases
@@ -256,14 +295,18 @@ cmake .. \
 ```
 
 ### Performance Benchmarking
+
 Many examples include built-in performance benchmarking:
+
 - Memory allocation and access patterns
 - I/O throughput measurements
 - Processing speed comparisons
 - GPU vs CPU performance analysis
 
 ### Error Testing
+
 Examples include comprehensive error testing:
+
 - Invalid input handling
 - Memory constraint scenarios
 - Hardware capability limitations
@@ -272,24 +315,28 @@ Examples include comprehensive error testing:
 ## Key Technical Concepts Demonstrated
 
 ### Memory Management
+
 - **Memory Pooling**: Custom allocators for efficient memory reuse
 - **Alignment Optimization**: SIMD-friendly data layouts
 - **Virtual Memory**: Page-based memory management for large datasets
 - **Copy-on-Write**: Efficient data sharing with modification isolation
 
 ### Performance Optimization
+
 - **SIMD Operations**: Vectorized processing for improved performance
 - **Cache Optimization**: Data layout and access patterns for cache efficiency
 - **GPU Acceleration**: Parallel processing with fallback mechanisms
 - **Streaming Processing**: Memory-efficient handling of large datasets
 
 ### Advanced I/O
+
 - **Memory Mapping**: Direct file access without explicit I/O operations
 - **Progressive Loading**: Multi-resolution image loading
 - **Streaming Compression**: Real-time compression/decompression
 - **Tiled Processing**: Chunk-based processing for memory efficiency
 
 ### Astronomical Imaging (SER Format)
+
 - **Frame Registration**: Alignment algorithms for image sequences
 - **Quality Assessment**: Automated frame quality evaluation
 - **Stacking Algorithms**: Multiple methods for combining frames
@@ -298,6 +345,7 @@ Examples include comprehensive error testing:
 ## Integration with Existing Examples
 
 The new examples are designed to complement existing examples:
+
 - **Consistent API Usage**: Follow established patterns and conventions
 - **Progressive Complexity**: Build upon concepts from basic examples
 - **Cross-Reference**: Reference related functionality in other examples
@@ -308,6 +356,7 @@ The new examples are designed to complement existing examples:
 ### Common Issues
 
 1. **OpenCV Not Found**: Install OpenCV development packages
+
    ```bash
    # Ubuntu/Debian
    sudo apt-get install libopencv-dev
@@ -339,6 +388,7 @@ The new examples are designed to complement existing examples:
 ## Future Enhancements
 
 Potential areas for additional examples:
+
 - **Network Streaming**: Remote image processing and streaming
 - **Cloud Integration**: AWS S3, Azure Blob Storage integration
 - **Advanced ML**: Deep learning model integration
@@ -348,6 +398,7 @@ Potential areas for additional examples:
 ## Contributing
 
 When adding new examples:
+
 1. Follow existing naming conventions and structure
 2. Include comprehensive documentation and comments
 3. Add appropriate error handling and edge case testing

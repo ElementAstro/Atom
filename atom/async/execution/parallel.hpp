@@ -35,8 +35,8 @@ Description: High-performance parallel algorithms library
 #include "atom/macro.hpp"
 
 #if defined(ATOM_PLATFORM_WINDOWS)
-#include "../../../cmake/WindowsCompat.hpp"
 #include <processthreadsapi.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #elif defined(ATOM_PLATFORM_APPLE)
 #include <mach/thread_act.h>
 #include <mach/thread_policy.h>
@@ -303,7 +303,7 @@ public:
             return SetThreadPriority(GetCurrentThread(), winPriority) != 0;
 #elif defined(ATOM_PLATFORM_LINUX) || defined(ATOM_PLATFORM_MACOS)
             int policy;
-            struct sched_param param{};
+            struct sched_param param {};
 
             if (pthread_getschedparam(pthread_self(), &policy, &param) != 0) {
                 return false;
@@ -352,10 +352,10 @@ public:
      * @param numThreads 线程数量（0 = 硬件支持的线程数）
      */
     template <typename Iterator, typename Function>
-        requires std::invocable<
-            Function, typename std::iterator_traits<Iterator>::value_type&> ||
-                 std::invocable<
-            Function, typename std::iterator_traits<Iterator>::value_type>
+        requires std::invocable<Function, typename std::iterator_traits<
+                                              Iterator>::value_type&> ||
+                 std::invocable<Function, typename std::iterator_traits<
+                                              Iterator>::value_type>
     static void for_each_jthread(Iterator begin, Iterator end, Function func,
                                  size_t numThreads = 0) {
         if (numThreads == 0) {
@@ -434,10 +434,10 @@ public:
      * @param numThreads Number of threads to use (0 = hardware concurrency)
      */
     template <typename Iterator, typename Function>
-        requires std::invocable<
-            Function, typename std::iterator_traits<Iterator>::value_type&> ||
-                 std::invocable<
-            Function, typename std::iterator_traits<Iterator>::value_type>
+        requires std::invocable<Function, typename std::iterator_traits<
+                                              Iterator>::value_type&> ||
+                 std::invocable<Function, typename std::iterator_traits<
+                                              Iterator>::value_type>
     static void for_each(Iterator begin, Iterator end, Function func,
                          size_t numThreads = 0) {
         if (numThreads == 0) {
@@ -448,7 +448,8 @@ public:
         if (range_size == 0)
             return;
 
-        if (range_size <= static_cast<decltype(range_size)>(numThreads) || numThreads == 1) {
+        if (range_size <= static_cast<decltype(range_size)>(numThreads) ||
+            numThreads == 1) {
             // For small ranges, just use std::for_each
             std::for_each(begin, end, func);
             return;
@@ -491,8 +492,8 @@ public:
      * @return Vector of results from applying the function to each element
      */
     template <typename Iterator, typename Function>
-        requires std::invocable<
-            Function, typename std::iterator_traits<Iterator>::value_type>
+        requires std::invocable<Function, typename std::iterator_traits<
+                                              Iterator>::value_type>
     static auto map(Iterator begin, Iterator end, Function func,
                     size_t numThreads = 0)
         -> std::vector<std::invoke_result_t<
@@ -682,8 +683,8 @@ public:
      * @return Vector of elements that satisfy the predicate
      */
     template <typename Iterator, typename Predicate>
-        requires std::predicate<
-            Predicate, typename std::iterator_traits<Iterator>::value_type>
+        requires std::predicate<Predicate, typename std::iterator_traits<
+                                               Iterator>::value_type>
     static auto filter(Iterator begin, Iterator end, Predicate pred,
                        size_t numThreads = 0)
         -> std::vector<typename std::iterator_traits<Iterator>::value_type> {
@@ -697,7 +698,8 @@ public:
         if (range_size == 0)
             return {};
 
-        if (range_size <= static_cast<decltype(range_size)>(numThreads * 4) || numThreads == 1) {
+        if (range_size <= static_cast<decltype(range_size)>(numThreads * 4) ||
+            numThreads == 1) {
             // For small ranges, just filter sequentially
             std::vector<ValueType> result;
             for (auto it = begin; it != end; ++it) {

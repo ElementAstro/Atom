@@ -196,8 +196,8 @@ auto idfT2D(
     i32 numThreads = static_cast<i32>(std::thread::hardware_concurrency()))
     -> std::vector<std::vector<f64>>;
 
-auto generateGaussianKernel(i32 size, f64 sigma)
-    -> std::vector<std::vector<f64>>;
+auto generateGaussianKernel(i32 size,
+                            f64 sigma) -> std::vector<std::vector<f64>>;
 
 auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
                          const std::vector<std::vector<f64>>& kernel)
@@ -361,11 +361,10 @@ auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
  * @param paddingMode Mode for handling boundaries
  * @return std::pair<usize, usize> Output dimensions (height, width)
  */
-auto getConvolutionOutputDimensions(usize inputHeight, usize inputWidth,
-                                    usize kernelHeight, usize kernelWidth,
-                                    usize strideY = 1, usize strideX = 1,
-                                    PaddingMode paddingMode = PaddingMode::SAME)
-    -> std::pair<usize, usize>;
+auto getConvolutionOutputDimensions(
+    usize inputHeight, usize inputWidth, usize kernelHeight, usize kernelWidth,
+    usize strideY = 1, usize strideX = 1,
+    PaddingMode paddingMode = PaddingMode::SAME) -> std::pair<usize, usize>;
 
 /**
  * @brief Efficient class for working with convolution in frequency domain
@@ -456,8 +455,8 @@ auto Convolution1D<T>::convolve(const std::vector<T>& signal,
 
 template <ConvolutionNumeric T>
 auto Convolution1D<T>::deconvolve(const std::vector<T>& signal,
-                                  const std::vector<T>& kernel, i32 numThreads)
-    -> std::vector<T> {
+                                  const std::vector<T>& kernel,
+                                  i32 numThreads) -> std::vector<T> {
     // Simple 1D deconvolution implementation using frequency domain
     // This is a basic implementation for compilation compatibility
     (void)numThreads;  // Suppress unused parameter warning
@@ -644,8 +643,8 @@ auto FrequencyDomainConvolution<T>::convolve(
 // Template function implementations
 template <ConvolutionNumeric T>
 auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
-           usize padBottom, usize padLeft, usize padRight, PaddingMode mode)
-    -> std::vector<std::vector<T>> {
+           usize padBottom, usize padLeft, usize padRight,
+           PaddingMode mode) -> std::vector<std::vector<T>> {
     if (input.empty()) {
         return {};
     }

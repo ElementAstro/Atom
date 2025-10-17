@@ -13,6 +13,7 @@ The I/O module provides efficient and flexible image file input/output operation
 Automatic detection of image file formats based on file headers, magic numbers, and file extensions.
 
 #### Features
+
 - **Magic Number Detection**: Reliable format identification from file headers
 - **Extension Fallback**: Format detection from file extensions when headers are unavailable
 - **Confidence Scoring**: Probability-based format detection for ambiguous cases
@@ -47,6 +48,7 @@ if (result.confidence > 0.9) {
 Efficient streaming operations for large image files and video sequences.
 
 #### Features
+
 - **Progressive Loading**: Load images progressively for immediate display
 - **Memory-Mapped I/O**: Efficient access to large files without loading into memory
 - **Chunked Processing**: Process large images in manageable chunks
@@ -80,6 +82,7 @@ auto pixel = mmap.getPixel(x, y);  // Direct access without loading
 Efficient processing of multiple image files with parallel I/O.
 
 #### Features
+
 - **Parallel Loading**: Load multiple images simultaneously
 - **Queue Management**: Intelligent queuing for optimal resource usage
 - **Progress Tracking**: Comprehensive progress reporting for batch operations
@@ -116,6 +119,7 @@ auto images = loader.loadAll();
 Integration with various file systems and storage backends.
 
 #### Features
+
 - **Local File System**: Standard file operations
 - **Network Storage**: HTTP/HTTPS, FTP, cloud storage
 - **Archive Support**: ZIP, TAR, and other archive formats
@@ -222,6 +226,7 @@ try {
 ## Format Support
 
 ### Standard Formats
+
 - **JPEG**: Full support with quality control
 - **PNG**: Complete support including transparency
 - **TIFF**: Multi-page and compression support
@@ -230,12 +235,14 @@ try {
 - **HEIF**: High-efficiency image format
 
 ### Specialized Formats
+
 - **FITS**: Astronomical image format
 - **SER**: Astronomical video sequences
 - **RAW**: Camera raw formats (CR2, NEF, ARW, etc.)
 - **Medical**: DICOM and other medical imaging formats
 
 ### Archive Formats
+
 - **ZIP**: Standard archive format
 - **TAR**: Unix archive format
 - **7Z**: High-compression archive format
@@ -280,10 +287,12 @@ monitor.endOperation("large_file.tiff");
 ## Dependencies
 
 ### Required
+
 - atom-error: Error handling framework
 - atom-image-core: Core image functionality
 
 ### Optional
+
 - libcurl: HTTP/HTTPS support
 - zlib: Compression support
 - liblzma: LZMA compression

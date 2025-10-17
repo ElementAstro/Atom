@@ -673,7 +673,7 @@ auto Component::getVariableNames() const -> std::vector<std::string> {
 }
 
 template <typename Class, typename VarType>
-void Component::def(std::string_view name, VarType Class::* var,
+void Component::def(std::string_view name, VarType Class::*var,
                     std::string_view group, std::string_view description) {
     if (!var) {
         throw std::invalid_argument("Member variable pointer cannot be null");

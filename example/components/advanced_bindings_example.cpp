@@ -36,7 +36,8 @@ and advanced binding features with the component system.
 #include "atom/components/component.hpp"
 #include "atom/components/core/registry.hpp"
 
-// Note: Registry and Component are in the global namespace, not atom::components
+// Note: Registry and Component are in the global namespace, not
+// atom::components
 
 /**
  * @brief Math utility class for binding demonstration
@@ -233,10 +234,11 @@ private:
     std::shared_ptr<Vector3D> velocity_;
 
     void setupBindings() {
-        // Note: The advanced_bindings.hpp provides template-based binding utilities
-        // that require integration with specific script engines (Lua/Python).
-        // This example demonstrates component-level bindings using the Component::def() API
-        // which provides similar functionality for command registration.
+        // Note: The advanced_bindings.hpp provides template-based binding
+        // utilities that require integration with specific script engines
+        // (Lua/Python). This example demonstrates component-level bindings
+        // using the Component::def() API which provides similar functionality
+        // for command registration.
 
         // Register component commands that provide access to bound classes
         def("getMathUtils",
@@ -250,10 +252,10 @@ private:
 
         def("updatePosition", [this](double deltaTime) {
             auto displacement = velocity_->multiply(deltaTime);
-            position_ =
-                std::make_shared<Vector3D>(position_->getX() + displacement.getX(),
-                                         position_->getY() + displacement.getY(),
-                                         position_->getZ() + displacement.getZ());
+            position_ = std::make_shared<Vector3D>(
+                position_->getX() + displacement.getX(),
+                position_->getY() + displacement.getY(),
+                position_->getZ() + displacement.getZ());
             std::cout << "  [" << getName()
                       << "] Position updated to: " << position_->toString()
                       << std::endl;
@@ -444,7 +446,8 @@ void demonstrateExceptionHandling() {
     std::cout << "\n--- Component Command Exceptions ---" << std::endl;
     try {
         std::cout << "Testing unknown math operation..." << std::endl;
-        std::vector<std::any> args = {std::string("unknown"), std::string("5"), std::string("3")};
+        std::vector<std::any> args = {std::string("unknown"), std::string("5"),
+                                      std::string("3")};
         auto result = component->runCommand("performMathOperation", args);
         std::cout << "Unexpected success" << std::endl;
     } catch (const std::exception& e) {
@@ -515,10 +518,12 @@ void demonstrateAdvancedFeatures() {
     // Update position using bound objects
     std::cout << "Updating position with deltaTime = 0.5..." << std::endl;
     std::vector<std::any> updateArgs = {std::string("0.5")};
-    [[maybe_unused]] auto updateResult = component->runCommand("updatePosition", updateArgs);
+    [[maybe_unused]] auto updateResult =
+        component->runCommand("updatePosition", updateArgs);
 
     // Calculate distance to a target
-    std::vector<std::any> distanceArgs = {std::string("5.0"), std::string("5.0"), std::string("5.0")};
+    std::vector<std::any> distanceArgs = {
+        std::string("5.0"), std::string("5.0"), std::string("5.0")};
     double distance = std::stod(std::any_cast<std::string>(
         component->runCommand("calculateDistance", distanceArgs)));
     std::cout << "Distance to (5, 5, 5): " << distance << std::endl;
@@ -532,7 +537,8 @@ void demonstrateAdvancedFeatures() {
     std::cout << "10.5 + 7.3 = " << addValue << std::endl;
 
     std::vector<std::any> multiplyArgs = {"multiply", "4.2", "3.1"};
-    auto multiplyResult = component->runCommand("performMathOperation", multiplyArgs);
+    auto multiplyResult =
+        component->runCommand("performMathOperation", multiplyArgs);
     double multiplyValue = std::any_cast<double>(multiplyResult);
     std::cout << "4.2 * 3.1 = " << multiplyValue << std::endl;
 
@@ -553,14 +559,27 @@ void demonstrateBindingStatistics() {
     if (component) {
         auto stats = component->getPerformanceStats();
         std::cout << "Component Performance Statistics:" << std::endl;
-        std::cout << "  Command Call Count: " << stats.commandCallCount.load() << std::endl;
-        std::cout << "  Command Error Count: " << stats.commandErrorCount.load() << std::endl;
+        std::cout << "  Command Call Count: " << stats.commandCallCount.load()
+                  << std::endl;
+        std::cout << "  Command Error Count: " << stats.commandErrorCount.load()
+                  << std::endl;
         std::cout << "  Event Count: " << stats.eventCount.load() << std::endl;
-        std::cout << "  Memory Allocations: " << stats.memoryAllocations.load() << std::endl;
-        std::cout << "  Total Execution Time: " << stats.timing.totalExecutionTimeNs.load() / 1000000.0 << " ms" << std::endl;
-        std::cout << "  Average Execution Time: " << stats.timing.avgExecutionTimeNs.load() / 1000000.0 << " ms" << std::endl;
-        std::cout << "  Max Execution Time: " << stats.timing.maxExecutionTimeNs.load() / 1000000.0 << " ms" << std::endl;
-        std::cout << "  Min Execution Time: " << (stats.timing.minExecutionTimeNs.load() == UINT64_MAX ? 0 : stats.timing.minExecutionTimeNs.load() / 1000000.0) << " ms" << std::endl;
+        std::cout << "  Memory Allocations: " << stats.memoryAllocations.load()
+                  << std::endl;
+        std::cout << "  Total Execution Time: "
+                  << stats.timing.totalExecutionTimeNs.load() / 1000000.0
+                  << " ms" << std::endl;
+        std::cout << "  Average Execution Time: "
+                  << stats.timing.avgExecutionTimeNs.load() / 1000000.0 << " ms"
+                  << std::endl;
+        std::cout << "  Max Execution Time: "
+                  << stats.timing.maxExecutionTimeNs.load() / 1000000.0 << " ms"
+                  << std::endl;
+        std::cout << "  Min Execution Time: "
+                  << (stats.timing.minExecutionTimeNs.load() == UINT64_MAX
+                          ? 0
+                          : stats.timing.minExecutionTimeNs.load() / 1000000.0)
+                  << " ms" << std::endl;
     }
 }
 

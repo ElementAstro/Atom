@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(perlin, m) {
@@ -260,35 +259,37 @@ PYBIND11_MODULE(perlin, m) {
           )pbdoc");
 
     // Additional utility functions for enhanced functionality
-    m.def("generate_3d_noise_volume", [](int width, int height, int depth,
-                                         double scale, int octaves, double persistence,
-                                         double lacunarity, int seed) {
-        atom::algorithm::PerlinNoise noise(seed);
+    m.def(
+        "generate_3d_noise_volume",
+        [](int width, int height, int depth, double scale, int octaves,
+           double persistence, double lacunarity, int seed) {
+            atom::algorithm::PerlinNoise noise(seed);
 
-        // Generate 3D noise volume
-        py::array_t<double> result({depth, height, width});
-        py::buffer_info buf = result.request();
-        double* ptr = static_cast<double*>(buf.ptr);
+            // Generate 3D noise volume
+            py::array_t<double> result({depth, height, width});
+            py::buffer_info buf = result.request();
+            double* ptr = static_cast<double*>(buf.ptr);
 
-        for (int z = 0; z < depth; ++z) {
-            for (int y = 0; y < height; ++y) {
-                for (int x = 0; x < width; ++x) {
-                    double sample_x = x / scale;
-                    double sample_y = y / scale;
-                    double sample_z = z / scale;
+            for (int z = 0; z < depth; ++z) {
+                for (int y = 0; y < height; ++y) {
+                    for (int x = 0; x < width; ++x) {
+                        double sample_x = x / scale;
+                        double sample_y = y / scale;
+                        double sample_z = z / scale;
 
-                    double noise_value = noise.octaveNoise(sample_x, sample_y, sample_z,
-                                                          octaves, persistence);
-                    ptr[z * height * width + y * width + x] = noise_value;
+                        double noise_value = noise.octaveNoise(
+                            sample_x, sample_y, sample_z, octaves, persistence);
+                        ptr[z * height * width + y * width + x] = noise_value;
+                    }
                 }
             }
-        }
 
-        return result;
-    }, py::arg("width"), py::arg("height"), py::arg("depth"), py::arg("scale"),
-       py::arg("octaves"), py::arg("persistence"), py::arg("lacunarity") = 2.0,
-       py::arg("seed") = std::default_random_engine::default_seed,
-    R"pbdoc(
+            return result;
+        },
+        py::arg("width"), py::arg("height"), py::arg("depth"), py::arg("scale"),
+        py::arg("octaves"), py::arg("persistence"), py::arg("lacunarity") = 2.0,
+        py::arg("seed") = std::default_random_engine::default_seed,
+        R"pbdoc(
     Generate a 3D noise volume for volumetric effects.
 
     Args:
@@ -309,35 +310,39 @@ PYBIND11_MODULE(perlin, m) {
         >>> # Use for cloud generation, cave systems, etc.
     )pbdoc");
 
-    m.def("generate_seamless_noise", [](int width, int height, double scale,
-                                       int octaves, double persistence, int seed) {
-        atom::algorithm::PerlinNoise noise(seed);
+    m.def(
+        "generate_seamless_noise",
+        [](int width, int height, double scale, int octaves, double persistence,
+           int seed) {
+            atom::algorithm::PerlinNoise noise(seed);
 
-        py::array_t<double> result({height, width});
-        py::buffer_info buf = result.request();
-        double* ptr = static_cast<double*>(buf.ptr);
+            py::array_t<double> result({height, width});
+            py::buffer_info buf = result.request();
+            double* ptr = static_cast<double*>(buf.ptr);
 
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                // Create seamless noise by using trigonometric functions
-                double s = static_cast<double>(x) / width;
-                double t = static_cast<double>(y) / height;
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    // Create seamless noise by using trigonometric functions
+                    double s = static_cast<double>(x) / width;
+                    double t = static_cast<double>(y) / height;
 
-                double nx = std::cos(s * 2 * M_PI) / (2 * M_PI);
-                double ny = std::cos(t * 2 * M_PI) / (2 * M_PI);
-                double nz = std::sin(s * 2 * M_PI) / (2 * M_PI);
-                double nw = std::sin(t * 2 * M_PI) / (2 * M_PI);
+                    double nx = std::cos(s * 2 * M_PI) / (2 * M_PI);
+                    double ny = std::cos(t * 2 * M_PI) / (2 * M_PI);
+                    double nz = std::sin(s * 2 * M_PI) / (2 * M_PI);
+                    double nw = std::sin(t * 2 * M_PI) / (2 * M_PI);
 
-                double noise_value = noise.octaveNoise(nx * scale, ny * scale, 0.0,
-                                                      octaves, persistence);
-                ptr[y * width + x] = noise_value;
+                    double noise_value = noise.octaveNoise(
+                        nx * scale, ny * scale, 0.0, octaves, persistence);
+                    ptr[y * width + x] = noise_value;
+                }
             }
-        }
 
-        return result;
-    }, py::arg("width"), py::arg("height"), py::arg("scale"), py::arg("octaves"),
-       py::arg("persistence"), py::arg("seed") = std::default_random_engine::default_seed,
-    R"pbdoc(
+            return result;
+        },
+        py::arg("width"), py::arg("height"), py::arg("scale"),
+        py::arg("octaves"), py::arg("persistence"),
+        py::arg("seed") = std::default_random_engine::default_seed,
+        R"pbdoc(
     Generate seamlessly tileable noise texture.
 
     Args:
@@ -356,32 +361,36 @@ PYBIND11_MODULE(perlin, m) {
         >>> # Perfect for repeating textures
     )pbdoc");
 
-    m.def("generate_ridged_noise", [](int width, int height, double scale,
-                                     int octaves, double persistence, int seed) {
-        atom::algorithm::PerlinNoise noise(seed);
+    m.def(
+        "generate_ridged_noise",
+        [](int width, int height, double scale, int octaves, double persistence,
+           int seed) {
+            atom::algorithm::PerlinNoise noise(seed);
 
-        py::array_t<double> result({height, width});
-        py::buffer_info buf = result.request();
-        double* ptr = static_cast<double*>(buf.ptr);
+            py::array_t<double> result({height, width});
+            py::buffer_info buf = result.request();
+            double* ptr = static_cast<double*>(buf.ptr);
 
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                double sample_x = x / scale;
-                double sample_y = y / scale;
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    double sample_x = x / scale;
+                    double sample_y = y / scale;
 
-                // Ridged noise: abs(noise) * 2 - 1, then invert
-                double noise_value = noise.octaveNoise(sample_x, sample_y, 0.0,
-                                                      octaves, persistence);
-                noise_value = 1.0 - std::abs(noise_value * 2.0 - 1.0);
+                    // Ridged noise: abs(noise) * 2 - 1, then invert
+                    double noise_value = noise.octaveNoise(
+                        sample_x, sample_y, 0.0, octaves, persistence);
+                    noise_value = 1.0 - std::abs(noise_value * 2.0 - 1.0);
 
-                ptr[y * width + x] = noise_value;
+                    ptr[y * width + x] = noise_value;
+                }
             }
-        }
 
-        return result;
-    }, py::arg("width"), py::arg("height"), py::arg("scale"), py::arg("octaves"),
-       py::arg("persistence"), py::arg("seed") = std::default_random_engine::default_seed,
-    R"pbdoc(
+            return result;
+        },
+        py::arg("width"), py::arg("height"), py::arg("scale"),
+        py::arg("octaves"), py::arg("persistence"),
+        py::arg("seed") = std::default_random_engine::default_seed,
+        R"pbdoc(
     Generate ridged noise for mountain-like terrain.
 
     Args:
@@ -400,32 +409,36 @@ PYBIND11_MODULE(perlin, m) {
         >>> # Great for mountain ranges and rocky terrain
     )pbdoc");
 
-    m.def("generate_billow_noise", [](int width, int height, double scale,
-                                     int octaves, double persistence, int seed) {
-        atom::algorithm::PerlinNoise noise(seed);
+    m.def(
+        "generate_billow_noise",
+        [](int width, int height, double scale, int octaves, double persistence,
+           int seed) {
+            atom::algorithm::PerlinNoise noise(seed);
 
-        py::array_t<double> result({height, width});
-        py::buffer_info buf = result.request();
-        double* ptr = static_cast<double*>(buf.ptr);
+            py::array_t<double> result({height, width});
+            py::buffer_info buf = result.request();
+            double* ptr = static_cast<double*>(buf.ptr);
 
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                double sample_x = x / scale;
-                double sample_y = y / scale;
+            for (int y = 0; y < height; ++y) {
+                for (int x = 0; x < width; ++x) {
+                    double sample_x = x / scale;
+                    double sample_y = y / scale;
 
-                // Billow noise: abs(noise) for cloud-like patterns
-                double noise_value = noise.octaveNoise(sample_x, sample_y, 0.0,
-                                                      octaves, persistence);
-                noise_value = std::abs(noise_value * 2.0 - 1.0);
+                    // Billow noise: abs(noise) for cloud-like patterns
+                    double noise_value = noise.octaveNoise(
+                        sample_x, sample_y, 0.0, octaves, persistence);
+                    noise_value = std::abs(noise_value * 2.0 - 1.0);
 
-                ptr[y * width + x] = noise_value;
+                    ptr[y * width + x] = noise_value;
+                }
             }
-        }
 
-        return result;
-    }, py::arg("width"), py::arg("height"), py::arg("scale"), py::arg("octaves"),
-       py::arg("persistence"), py::arg("seed") = std::default_random_engine::default_seed,
-    R"pbdoc(
+            return result;
+        },
+        py::arg("width"), py::arg("height"), py::arg("scale"),
+        py::arg("octaves"), py::arg("persistence"),
+        py::arg("seed") = std::default_random_engine::default_seed,
+        R"pbdoc(
     Generate billow noise for cloud-like patterns.
 
     Args:

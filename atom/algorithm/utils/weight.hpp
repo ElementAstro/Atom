@@ -321,8 +321,8 @@ public:
          * @param n Number of samples to draw
          * @return Vector of sampled indices
          */
-        [[nodiscard]] auto sample(std::span<const T> weights, usize n) const
-            -> std::vector<usize> {
+        [[nodiscard]] auto sample(std::span<const T> weights,
+                                  usize n) const -> std::vector<usize> {
             if (weights.empty()) {
                 throw WeightError("Cannot sample from empty weights");
             }
@@ -393,9 +393,8 @@ public:
         }
 
     private:
-        [[nodiscard]] auto sampleUniqueRejection(std::span<const T> weights,
-                                                 usize n) const
-            -> std::vector<usize> {
+        [[nodiscard]] auto sampleUniqueRejection(
+            std::span<const T> weights, usize n) const -> std::vector<usize> {
             std::vector<usize> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 
@@ -440,9 +439,8 @@ public:
             return results;
         }
 
-        [[nodiscard]] auto sampleUniqueShuffle(std::span<const T> weights,
-                                               usize n) const
-            -> std::vector<usize> {
+        [[nodiscard]] auto sampleUniqueShuffle(
+            std::span<const T> weights, usize n) const -> std::vector<usize> {
             std::vector<usize> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 

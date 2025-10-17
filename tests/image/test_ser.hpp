@@ -1,18 +1,18 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <vector>
 
+#include "atom/image/formats/ser/frame_processor.h"
+#include "atom/image/formats/ser/quality.h"
 #include "atom/image/formats/ser/ser.hpp"
 #include "atom/image/formats/ser/ser_reader.h"
 #include "atom/image/formats/ser/ser_writer.h"
-#include "atom/image/formats/ser/frame_processor.h"
-#include "atom/image/formats/ser/quality.h"
 
 namespace fs = std::filesystem;
 
@@ -53,7 +53,7 @@ protected:
         header.observer[0] = '\0';
         header.instrument[0] = '\0';
         header.telescope[0] = '\0';
-        header.dateTime = 1234567890; // Unix timestamp
+        header.dateTime = 1234567890;  // Unix timestamp
 
         // Create test file
         std::ofstream file(test_ser_path, std::ios::binary);
@@ -72,12 +72,14 @@ protected:
             for (int y = 0; y < 64; ++y) {
                 for (int x = 0; x < 64; ++x) {
                     // Create a simple pattern that changes per frame
-                    uint8_t value = static_cast<uint8_t>((x + y + frame * 10) % 256);
+                    uint8_t value =
+                        static_cast<uint8_t>((x + y + frame * 10) % 256);
                     frame_data[y * 64 + x] = value;
                 }
             }
 
-            file.write(reinterpret_cast<const char*>(frame_data.data()), frame_data.size());
+            file.write(reinterpret_cast<const char*>(frame_data.data()),
+                       frame_data.size());
         }
 
         file.close();
@@ -120,7 +122,7 @@ TEST_F(SERTest, HeaderValidation) {
     header.pixelDepth = 0;
     EXPECT_FALSE(header.isValid());
 
-    header.pixelDepth = 7; // Not 8 or 16
+    header.pixelDepth = 7;  // Not 8 or 16
     EXPECT_FALSE(header.isValid());
 
     // Test valid pixel depths
@@ -145,9 +147,9 @@ TEST_F(SERTest, ReaderInitialization) {
     });
 
     // Test with non-existent file
-    EXPECT_THROW({
-        serastro::SERReader reader("non_existent.ser");
-    }, serastro::SERIOException);
+    EXPECT_THROW(
+        { serastro::SERReader reader("non_existent.ser"); },
+        serastro::SERIOException);
 
     // Test with invalid file
     std::string invalid_path = "invalid.ser";
@@ -156,9 +158,9 @@ TEST_F(SERTest, ReaderInitialization) {
     invalid_file.close();
     temp_files.push_back(invalid_path);
 
-    EXPECT_THROW({
-        serastro::SERReader reader(invalid_path);
-    }, serastro::SERFormatException);
+    EXPECT_THROW(
+        { serastro::SERReader reader(invalid_path); },
+        serastro::SERFormatException);
 }
 
 // Test frame reading
@@ -180,13 +182,14 @@ TEST_F(SERTest, FrameReading) {
             cv::Mat diff;
             cv::absdiff(frame, prev_frame, diff);
             cv::Scalar mean_diff = cv::mean(diff);
-            EXPECT_GT(mean_diff[0], 0); // Should be different
+            EXPECT_GT(mean_diff[0], 0);  // Should be different
         }
     }
 
     // Test reading invalid frame indices
     EXPECT_THROW(reader.readFrame(header.frameCount), serastro::SERIOException);
-    EXPECT_THROW(reader.readFrame(header.frameCount + 100), serastro::SERIOException);
+    EXPECT_THROW(reader.readFrame(header.frameCount + 100),
+                 serastro::SERIOException);
 }
 
 // Test frame range reading
@@ -209,8 +212,10 @@ TEST_F(SERTest, FrameRangeReading) {
     }
 
     // Test invalid ranges
-    EXPECT_THROW(reader.readFrameRange(5, 3), serastro::SERIOException); // start > end
-    EXPECT_THROW(reader.readFrameRange(0, header.frameCount), serastro::SERIOException); // end >= frameCount
+    EXPECT_THROW(reader.readFrameRange(5, 3),
+                 serastro::SERIOException);  // start > end
+    EXPECT_THROW(reader.readFrameRange(0, header.frameCount),
+                 serastro::SERIOException);  // end >= frameCount
 }
 
 // Test SER writer
@@ -223,7 +228,8 @@ TEST_F(SERTest, SERWriter) {
         // Fill with test pattern
         for (int y = 0; y < 32; ++y) {
             for (int x = 0; x < 32; ++x) {
-                frame.at<uint8_t>(y, x) = static_cast<uint8_t>((x + y + i * 5) % 256);
+                frame.at<uint8_t>(y, x) =
+                    static_cast<uint8_t>((x + y + i * 5) % 256);
             }
         }
 
@@ -250,7 +256,7 @@ TEST_F(SERTest, SERWriter) {
         for (const auto& frame : test_frames) {
             writer.writeFrame(frame);
         }
-    } // Writer destructor should finalize the file
+    }  // Writer destructor should finalize the file
 
     // Verify written file by reading it back
     serastro::SERReader reader(test_output_path);
@@ -268,7 +274,9 @@ TEST_F(SERTest, SERWriter) {
         cv::Mat diff;
         cv::absdiff(test_frames[i], read_frame, diff);
         cv::Scalar mean_diff = cv::mean(diff);
-        EXPECT_LT(mean_diff[0], 1.0); // Should be very similar (allowing for minor differences)
+        EXPECT_LT(
+            mean_diff[0],
+            1.0);  // Should be very similar (allowing for minor differences)
     }
 }
 
@@ -278,7 +286,8 @@ TEST_F(SERTest, SERWriter) {
 TEST_F(SERTest, DISABLED_FrameProcessor) {
     // This test is disabled because FrameProcessor is abstract.
     // TODO: Create tests for concrete processor implementations
-    GTEST_SKIP() << "FrameProcessor is abstract - test concrete implementations instead";
+    GTEST_SKIP()
+        << "FrameProcessor is abstract - test concrete implementations instead";
 }
 
 // Test quality assessment
@@ -289,7 +298,8 @@ TEST_F(SERTest, QualityAssessment) {
     serastro::QualityAssessor qa;
 
     // Test quality metrics for individual frames
-    for (uint64_t i = 0; i < std::min(static_cast<uint64_t>(3), header.frameCount); ++i) {
+    for (uint64_t i = 0;
+         i < std::min(static_cast<uint64_t>(3), header.frameCount); ++i) {
         auto frame = reader.readFrame(i);
 
         auto quality = qa.assessQuality(frame);
@@ -300,7 +310,8 @@ TEST_F(SERTest, QualityAssessment) {
 
     // Test batch quality assessment
     std::vector<cv::Mat> frames;
-    for (uint64_t i = 0; i < std::min(static_cast<uint64_t>(5), header.frameCount); ++i) {
+    for (uint64_t i = 0;
+         i < std::min(static_cast<uint64_t>(5), header.frameCount); ++i) {
         frames.push_back(reader.readFrame(i));
     }
 
@@ -348,16 +359,18 @@ TEST_F(SERTest, ErrorHandling) {
         // Write partial header
         serastro::SERHeader header;
         std::copy_n("LUCAM-RECORDER", 14, header.fileID.begin());
-        header.frameCount = 1000; // Claim many frames
+        header.frameCount = 1000;  // Claim many frames
         header.imageWidth = 640;
         header.imageHeight = 480;
         header.pixelDepth = 8;
 
-        corrupted_file.write(reinterpret_cast<const char*>(&header), sizeof(header));
+        corrupted_file.write(reinterpret_cast<const char*>(&header),
+                             sizeof(header));
 
         // Write insufficient frame data
-        std::vector<uint8_t> partial_data(100); // Much less than needed
-        corrupted_file.write(reinterpret_cast<const char*>(partial_data.data()), partial_data.size());
+        std::vector<uint8_t> partial_data(100);  // Much less than needed
+        corrupted_file.write(reinterpret_cast<const char*>(partial_data.data()),
+                             partial_data.size());
     }
     temp_files.push_back(corrupted_path);
 
@@ -380,7 +393,8 @@ TEST_F(SERTest, DISABLED_PerformanceTest) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     std::cout << "Read " << header.frameCount << " frames in "
               << duration.count() << " ms" << std::endl;

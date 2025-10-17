@@ -104,7 +104,9 @@ public:
      * @brief Checks if the task is valid (has a function).
      * @return true if the task is valid, false otherwise.
      */
-    [[nodiscard]] auto isValid() const noexcept -> bool { return m_func != nullptr; }
+    [[nodiscard]] auto isValid() const noexcept -> bool {
+        return m_func != nullptr;
+    }
 
     std::function<void()> m_func;  ///< The function to be executed.
     unsigned int m_delay;          ///< The delay before the first execution.
@@ -147,7 +149,7 @@ public:
      * @throws std::invalid_argument If the function is null or delay is invalid
      */
     template <typename Function, typename... Args>
-        // requires Invocable<Function, Args...>  // Temporarily disabled
+    // requires Invocable<Function, Args...>  // Temporarily disabled
     [[nodiscard]] auto setTimeout(Function &&func, unsigned int delay,
                                   Args &&...args) noexcept(false)
         -> EnhancedFuture<std::invoke_result_t<Function, Args...>>;
@@ -257,7 +259,8 @@ private:
 #ifdef ATOM_USE_ASIO
     void asioRun() noexcept;
     std::unique_ptr<asio::io_context> m_ioContext;
-    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> m_work;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>>
+        m_work;
     std::unique_ptr<asio::steady_timer> m_asioTimer;
 #endif
 
@@ -334,11 +337,12 @@ private:
 };
 
 template <typename Function, typename... Args>
-    // requires Invocable<Function, Args...>  // Temporarily disabled
+// requires Invocable<Function, Args...>  // Temporarily disabled
 auto Timer::setTimeout(Function &&func, unsigned int delay,
                        Args &&...args) noexcept(false)
     -> EnhancedFuture<std::invoke_result_t<Function, Args...>> {
-    std::cout << "[DEBUG] setTimeout ENTRY: delay = " << delay << ", type = " << typeid(delay).name() << std::endl;
+    std::cout << "[DEBUG] setTimeout ENTRY: delay = " << delay
+              << ", type = " << typeid(delay).name() << std::endl;
     validateTaskParams(delay, 1);
 
     // Ensure the timer thread is started before adding tasks
@@ -384,8 +388,10 @@ auto Timer::setTimeout(Function &&func, unsigned int delay,
 #else
     {
         std::scoped_lock lock(m_mutex);
-        std::cout << "[DEBUG] About to emplace TimerTask with delay: " << delay << std::endl;
-        std::cout << "[DEBUG] Emplace parameters: func=valid, delay=" << delay << ", repeatCount=1, priority=0" << std::endl;
+        std::cout << "[DEBUG] About to emplace TimerTask with delay: " << delay
+                  << std::endl;
+        std::cout << "[DEBUG] Emplace parameters: func=valid, delay=" << delay
+                  << ", repeatCount=1, priority=0" << std::endl;
         m_taskQueue.emplace([task]() { (*task)(); }, delay, 1, 0);
         std::cout << "[DEBUG] TimerTask emplaced successfully" << std::endl;
     }

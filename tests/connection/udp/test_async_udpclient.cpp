@@ -1,9 +1,9 @@
-#include "atom/connection/async_udpclient.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <chrono>
 #include <future>
 #include <thread>
-#include <chrono>
+#include "atom/connection/async_udpclient.hpp"
 
 using namespace atom::async::connection;
 using namespace std::chrono_literals;
@@ -30,9 +30,7 @@ protected:
     std::unique_ptr<UdpClient> receiverClient_;
 };
 
-TEST_F(AsyncUdpClientTest, BasicBinding) {
-    EXPECT_TRUE(client_->bind(12346));
-}
+TEST_F(AsyncUdpClientTest, BasicBinding) { EXPECT_TRUE(client_->bind(12346)); }
 
 TEST_F(AsyncUdpClientTest, BindWithAddress) {
     EXPECT_TRUE(client_->bind(12347, "127.0.0.1"));
@@ -63,10 +61,7 @@ TEST_F(AsyncUdpClientTest, BatchSend) {
     ASSERT_TRUE(receiverClient_->bind(12351));
 
     std::vector<std::pair<std::string, int>> destinations = {
-        {"127.0.0.1", 12351},
-        {"127.0.0.1", 12351},
-        {"127.0.0.1", 12351}
-    };
+        {"127.0.0.1", 12351}, {"127.0.0.1", 12351}, {"127.0.0.1", 12351}};
 
     std::vector<char> testData = {'B', 'a', 't', 'c', 'h'};
     int sent = client_->batchSend(destinations, testData);
@@ -109,15 +104,15 @@ TEST_F(AsyncUdpClientTest, AsyncReceiveCallback) {
 
     bool callbackCalled = false;
 
-    client_->setOnDataReceivedCallback([&](const std::vector<char>& data,
-                                           const std::string& host, int port) {
-        if (!callbackCalled) {
-            callbackCalled = true;
-            dataPromise.set_value(data);
-            hostPromise.set_value(host);
-            portPromise.set_value(port);
-        }
-    });
+    client_->setOnDataReceivedCallback(
+        [&](const std::vector<char>& data, const std::string& host, int port) {
+            if (!callbackCalled) {
+                callbackCalled = true;
+                dataPromise.set_value(data);
+                hostPromise.set_value(host);
+                portPromise.set_value(port);
+            }
+        });
 
     // startReceiving returns void in async client
     client_->startReceiving(1024);
@@ -220,7 +215,8 @@ TEST_F(AsyncUdpClientTest, MulticastJoinLeave) {
 
 TEST_F(AsyncUdpClientTest, BroadcastSend) {
     // The async UdpClient does not support sendBroadcast; skip this test
-    GTEST_SKIP() << "sendBroadcast is not supported by async::connection::UdpClient";
+    GTEST_SKIP()
+        << "sendBroadcast is not supported by async::connection::UdpClient";
 }
 
 TEST_F(AsyncUdpClientTest, GetStatistics) {
@@ -261,10 +257,14 @@ TEST_F(AsyncUdpClientTest, SocketOptions) {
     ASSERT_TRUE(client_->bind(12364));
 
     // Test socket option setting (implementation dependent)
-    EXPECT_NO_THROW(client_->setSocketOption(UdpClient::SocketOption::Broadcast, 1));
-    EXPECT_NO_THROW(client_->setSocketOption(UdpClient::SocketOption::ReuseAddress, 1));
-    EXPECT_NO_THROW(client_->setSocketOption(UdpClient::SocketOption::ReceiveBufferSize, 8192));
-    EXPECT_NO_THROW(client_->setSocketOption(UdpClient::SocketOption::SendBufferSize, 8192));
+    EXPECT_NO_THROW(
+        client_->setSocketOption(UdpClient::SocketOption::Broadcast, 1));
+    EXPECT_NO_THROW(
+        client_->setSocketOption(UdpClient::SocketOption::ReuseAddress, 1));
+    EXPECT_NO_THROW(client_->setSocketOption(
+        UdpClient::SocketOption::ReceiveBufferSize, 8192));
+    EXPECT_NO_THROW(client_->setSocketOption(
+        UdpClient::SocketOption::SendBufferSize, 8192));
 }
 
 TEST_F(AsyncUdpClientTest, IPv6Support) {
@@ -292,7 +292,8 @@ TEST_F(AsyncUdpClientTest, LargeDataTransfer) {
 
     std::string remoteHost;
     int remotePort;
-    auto received = receiverClient_->receive(2000, remoteHost, remotePort, 2000ms);
+    auto received =
+        receiverClient_->receive(2000, remoteHost, remotePort, 2000ms);
 
     EXPECT_EQ(received.size(), largeData.size());
     EXPECT_EQ(received, largeData);
@@ -309,7 +310,8 @@ TEST_F(AsyncUdpClientTest, ConcurrentOperations) {
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([this, i, messagesPerThread, &successCount]() {
             for (int j = 0; j < messagesPerThread; ++j) {
-                std::string message = "Thread" + std::to_string(i) + "_Msg" + std::to_string(j);
+                std::string message =
+                    "Thread" + std::to_string(i) + "_Msg" + std::to_string(j);
                 if (client_->send("127.0.0.1", 12370, message)) {
                     successCount++;
                 }

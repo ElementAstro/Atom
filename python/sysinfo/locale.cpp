@@ -8,7 +8,8 @@ namespace py = pybind11;
 using namespace atom::system;
 
 PYBIND11_MODULE(locale, m) {
-    m.doc() = "System locale information and management module for the atom package";
+    m.doc() =
+        "System locale information and management module for the atom package";
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -25,16 +26,20 @@ PYBIND11_MODULE(locale, m) {
     });
 
     // LocaleError enum binding
-    py::enum_<LocaleError>(m, "LocaleError", "Enumeration of locale operation error codes")
+    py::enum_<LocaleError>(m, "LocaleError",
+                           "Enumeration of locale operation error codes")
         .value("NONE", LocaleError::None, "No error occurred")
-        .value("INVALID_LOCALE", LocaleError::InvalidLocale, "The specified locale is invalid or not recognized")
-        .value("SYSTEM_ERROR", LocaleError::SystemError, "A system-level error occurred during the operation")
-        .value("UNSUPPORTED_PLATFORM", LocaleError::UnsupportedPlatform, "The operation is not supported on the current platform")
+        .value("INVALID_LOCALE", LocaleError::InvalidLocale,
+               "The specified locale is invalid or not recognized")
+        .value("SYSTEM_ERROR", LocaleError::SystemError,
+               "A system-level error occurred during the operation")
+        .value("UNSUPPORTED_PLATFORM", LocaleError::UnsupportedPlatform,
+               "The operation is not supported on the current platform")
         .export_values();
 
     // LocaleInfo structure binding
     py::class_<LocaleInfo>(m, "LocaleInfo",
-                          R"(Comprehensive information about a system locale.
+                           R"(Comprehensive information about a system locale.
 
 This class contains detailed information about locale settings including language,
 country, formatting preferences, and display characteristics.
@@ -56,7 +61,8 @@ Examples:
                        "ISO 3166 country code (e.g., 'US')")
         .def_readwrite("locale_name", &LocaleInfo::localeName,
                        "Full locale name (e.g., 'en_US')")
-        .def_readwrite("language_display_name", &LocaleInfo::languageDisplayName,
+        .def_readwrite("language_display_name",
+                       &LocaleInfo::languageDisplayName,
                        "Human-readable language name")
         .def_readwrite("country_display_name", &LocaleInfo::countryDisplayName,
                        "Human-readable country name")
@@ -127,8 +133,9 @@ Examples:
     >>> locale.print_locale_info(info)
 )");
 
-    m.def("validate_locale", &validateLocale, py::arg("locale"),
-          R"(Validate if a locale identifier is valid and available on the system.
+    m.def(
+        "validate_locale", &validateLocale, py::arg("locale"),
+        R"(Validate if a locale identifier is valid and available on the system.
 
 Args:
     locale: The locale identifier to validate (e.g., "en_US")
@@ -141,7 +148,7 @@ Examples:
     >>> # Check if specific locales are valid
     >>> if locale.validate_locale("en_US"):
     ...     print("en_US locale is available")
-    >>> 
+    >>>
     >>> if locale.validate_locale("fr_FR"):
     ...     print("fr_FR locale is available")
     >>> else:

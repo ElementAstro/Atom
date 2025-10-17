@@ -17,6 +17,7 @@
 #include <future>
 #include <memory>
 #include <mutex>
+#include <ostream>
 #include <shared_mutex>
 #include <source_location>
 #include <string>
@@ -25,7 +26,6 @@
 #include <unordered_map>
 #include <variant>
 #include <vector>
-#include <ostream>
 
 #if defined(_WIN32)
 #include <windows.h>
@@ -321,8 +321,8 @@ public:
      * \param args Function arguments
      * \return Result or error
      */
-    [[nodiscard]] auto call(void* funcPtr, Args... args) const
-        -> FFIResult<ResultType> {
+    [[nodiscard]] auto call(void* funcPtr,
+                            Args... args) const -> FFIResult<ResultType> {
         if (validate_ && !validateArguments(args...)) {
             return type::unexpected(FFIError::InvalidArgument);
         }
@@ -347,10 +347,9 @@ public:
      * \param args Function arguments
      * \return Result or error (including timeout)
      */
-    [[nodiscard]] auto callWithTimeout(void* funcPtr,
-                                       std::chrono::milliseconds timeout,
-                                       Args... args) const
-        -> FFIResult<ResultType> {
+    [[nodiscard]] auto callWithTimeout(
+        void* funcPtr, std::chrono::milliseconds timeout,
+        Args... args) const -> FFIResult<ResultType> {
         if (validate_ && !validateArguments(args...)) {
             return type::unexpected(FFIError::InvalidArgument);
         }
@@ -836,10 +835,10 @@ public:
     void registerCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        // Store the function directly without trying to construct a specific signature
-        callbackMap_.emplace(
-            std::string(callbackName),
-            std::any{std::forward<Func>(func)});
+        // Store the function directly without trying to construct a specific
+        // signature
+        callbackMap_.emplace(std::string(callbackName),
+                             std::any{std::forward<Func>(func)});
     }
 
     /**
@@ -875,14 +874,14 @@ public:
     void registerAsyncCallback(std::string_view callbackName, Func&& func) {
         std::unique_lock lock(mutex_);
 
-        // Store the async wrapper directly without trying to construct a specific signature
+        // Store the async wrapper directly without trying to construct a
+        // specific signature
         auto asyncWrapper = [func = std::forward<Func>(func)](auto&&... args) {
-            return std::async(std::launch::async, func, std::forward<decltype(args)>(args)...);
+            return std::async(std::launch::async, func,
+                              std::forward<decltype(args)>(args)...);
         };
 
-        callbackMap_.emplace(
-            std::string(callbackName),
-            std::any{asyncWrapper});
+        callbackMap_.emplace(std::string(callbackName), std::any{asyncWrapper});
     }
 
     /**

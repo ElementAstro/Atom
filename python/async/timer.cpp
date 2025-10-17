@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(timer, m) {
@@ -325,15 +324,15 @@ Examples:
 
     // Convenience function to create and schedule a timeout
     m.def(
-        "schedule_timeout",
-        [](py::function func, unsigned int delay, py::args args) {
-            auto timer = std::make_shared<atom::async::Timer>();
-            auto future =
-                timer->setTimeout([func, args]() { func(*args); }, delay);
-            return py::make_tuple(timer, future);
-        },
-        py::arg("func"), py::arg("delay"),
-        R"(Creates a new Timer and schedules a one-time task.
+         "schedule_timeout",
+         [](py::function func, unsigned int delay, py::args args) {
+             auto timer = std::make_shared<atom::async::Timer>();
+             auto future =
+                 timer->setTimeout([func, args]() { func(*args); }, delay);
+             return py::make_tuple(timer, future);
+         },
+         py::arg("func"), py::arg("delay"),
+         R"(Creates a new Timer and schedules a one-time task.
 
 Args:
     func: The function to be executed.
@@ -350,15 +349,18 @@ Examples:
     >>> timer, future = schedule_timeout(alert, 2000, "Time's up!")
 )")
 
-    .def(
-        "schedule_interval",
-        [](py::function func, unsigned int interval, int repeat_count, int priority, py::args args) {
-            auto timer = std::make_shared<atom::async::Timer>();
-            timer->setInterval([func, args]() { func(*args); }, interval, repeat_count, priority);
-            return timer;
-        },
-        py::arg("func"), py::arg("interval"), py::arg("repeat_count") = -1, py::arg("priority") = 0,
-        R"pbdoc(
+        .def(
+            "schedule_interval",
+            [](py::function func, unsigned int interval, int repeat_count,
+               int priority, py::args args) {
+                auto timer = std::make_shared<atom::async::Timer>();
+                timer->setInterval([func, args]() { func(*args); }, interval,
+                                   repeat_count, priority);
+                return timer;
+            },
+            py::arg("func"), py::arg("interval"), py::arg("repeat_count") = -1,
+            py::arg("priority") = 0,
+            R"pbdoc(
         Create a new Timer and schedule a recurring task.
 
         Args:
@@ -377,64 +379,70 @@ Examples:
             >>> timer = schedule_interval(status_check, 10000, 5, 1, "database")
         )pbdoc")
 
-    .def(
-        "benchmark_timer_performance",
-        [](size_t num_tasks, unsigned int delay_ms) -> py::dict {
-            using namespace std::chrono;
+        .def(
+            "benchmark_timer_performance",
+            [](size_t num_tasks, unsigned int delay_ms) -> py::dict {
+                using namespace std::chrono;
 
-            py::dict results;
-            atom::async::Timer timer;
+                py::dict results;
+                atom::async::Timer timer;
 
-            // Benchmark task scheduling
-            auto start = high_resolution_clock::now();
+                // Benchmark task scheduling
+                auto start = high_resolution_clock::now();
 
-            std::vector<atom::async::EnhancedFuture<void>> futures;
-            futures.reserve(num_tasks);
+                std::vector<atom::async::EnhancedFuture<void>> futures;
+                futures.reserve(num_tasks);
 
-            for (size_t i = 0; i < num_tasks; ++i) {
-                auto future = timer.setTimeout([]() {
-                    // Simulate some work
-                    volatile int dummy = 0;
-                    for (int j = 0; j < 50; ++j) {
-                        dummy += j;
-                    }
-                }, delay_ms);
-                futures.push_back(std::move(future));
-            }
-
-            auto scheduling_end = high_resolution_clock::now();
-            auto scheduling_duration = duration_cast<microseconds>(scheduling_end - start);
-
-            // Wait for all tasks to complete
-            for (auto& future : futures) {
-                try {
-                    future.get();
-                } catch (...) {
-                    // Ignore task execution errors for benchmarking
+                for (size_t i = 0; i < num_tasks; ++i) {
+                    auto future = timer.setTimeout(
+                        []() {
+                            // Simulate some work
+                            volatile int dummy = 0;
+                            for (int j = 0; j < 50; ++j) {
+                                dummy += j;
+                            }
+                        },
+                        delay_ms);
+                    futures.push_back(std::move(future));
                 }
-            }
 
-            auto completion_end = high_resolution_clock::now();
-            auto total_duration = duration_cast<microseconds>(completion_end - start);
+                auto scheduling_end = high_resolution_clock::now();
+                auto scheduling_duration =
+                    duration_cast<microseconds>(scheduling_end - start);
 
-            // Calculate statistics
-            double scheduling_time_us = scheduling_duration.count();
-            double total_time_us = total_duration.count();
-            double tasks_per_second = (num_tasks * 1000000.0) / total_time_us;
-            double avg_scheduling_time = scheduling_time_us / num_tasks;
+                // Wait for all tasks to complete
+                for (auto& future : futures) {
+                    try {
+                        future.get();
+                    } catch (...) {
+                        // Ignore task execution errors for benchmarking
+                    }
+                }
 
-            results[py::str("num_tasks")] = num_tasks;
-            results[py::str("delay_ms")] = delay_ms;
-            results[py::str("scheduling_time_us")] = scheduling_time_us;
-            results[py::str("total_time_us")] = total_time_us;
-            results[py::str("tasks_per_second")] = tasks_per_second;
-            results[py::str("avg_scheduling_time_us")] = avg_scheduling_time;
-            results[py::str("final_task_count")] = timer.getTaskCount();
+                auto completion_end = high_resolution_clock::now();
+                auto total_duration =
+                    duration_cast<microseconds>(completion_end - start);
 
-            return results;
-        },
-        py::arg("num_tasks") = 1000, py::arg("delay_ms") = 100,
-        R"pbdoc(
+                // Calculate statistics
+                double scheduling_time_us = scheduling_duration.count();
+                double total_time_us = total_duration.count();
+                double tasks_per_second =
+                    (num_tasks * 1000000.0) / total_time_us;
+                double avg_scheduling_time = scheduling_time_us / num_tasks;
+
+                results[py::str("num_tasks")] = num_tasks;
+                results[py::str("delay_ms")] = delay_ms;
+                results[py::str("scheduling_time_us")] = scheduling_time_us;
+                results[py::str("total_time_us")] = total_time_us;
+                results[py::str("tasks_per_second")] = tasks_per_second;
+                results[py::str("avg_scheduling_time_us")] =
+                    avg_scheduling_time;
+                results[py::str("final_task_count")] = timer.getTaskCount();
+
+                return results;
+            },
+            py::arg("num_tasks") = 1000, py::arg("delay_ms") = 100,
+            R"pbdoc(
         Benchmark timer performance with multiple tasks.
 
         Args:
@@ -450,17 +458,17 @@ Examples:
             >>> print(f"Avg scheduling time: {results['avg_scheduling_time_us']:.2f} μs")
         )pbdoc")
 
-    .def(
-        "create_timer_pool",
-        [](size_t pool_size) -> py::list {
-            py::list timers;
-            for (size_t i = 0; i < pool_size; ++i) {
-                timers.append(std::make_unique<atom::async::Timer>());
-            }
-            return timers;
-        },
-        py::arg("pool_size"),
-        R"pbdoc(
+        .def(
+            "create_timer_pool",
+            [](size_t pool_size) -> py::list {
+                py::list timers;
+                for (size_t i = 0; i < pool_size; ++i) {
+                    timers.append(std::make_unique<atom::async::Timer>());
+                }
+                return timers;
+            },
+            py::arg("pool_size"),
+            R"pbdoc(
         Create a pool of timer instances for load distribution.
 
         Args:
@@ -476,17 +484,18 @@ Examples:
             >>> timer_pool[1].set_timeout(task2, 2000)
         )pbdoc")
 
-    .def(
-        "create_scheduled_task_manager",
-        []() -> py::dict {
-            py::dict manager;
-            manager[py::str("timer")] = std::make_unique<atom::async::Timer>();
-            manager[py::str("tasks")] = py::list();
-            manager[py::str("active")] = true;
+        .def(
+            "create_scheduled_task_manager",
+            []() -> py::dict {
+                py::dict manager;
+                manager[py::str("timer")] =
+                    std::make_unique<atom::async::Timer>();
+                manager[py::str("tasks")] = py::list();
+                manager[py::str("active")] = true;
 
-            return manager;
-        },
-        R"pbdoc(
+                return manager;
+            },
+            R"pbdoc(
         Create a task manager for organizing scheduled tasks.
 
         Returns:

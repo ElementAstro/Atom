@@ -46,9 +46,11 @@ public:
         if (server_thread_.joinable()) {
             auto start = std::chrono::steady_clock::now();
             while (server_thread_.joinable() &&
-                   std::chrono::steady_clock::now() - start < std::chrono::seconds(2)) {
+                   std::chrono::steady_clock::now() - start <
+                       std::chrono::seconds(2)) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                if (!server_thread_.joinable()) break;
+                if (!server_thread_.joinable())
+                    break;
             }
 
             if (server_thread_.joinable()) {
@@ -171,9 +173,11 @@ protected:
             if (run_thread_.joinable()) {
                 auto start = std::chrono::steady_clock::now();
                 while (run_thread_.joinable() &&
-                       std::chrono::steady_clock::now() - start < std::chrono::seconds(3)) {
+                       std::chrono::steady_clock::now() - start <
+                           std::chrono::seconds(3)) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
-                    if (!run_thread_.joinable()) break;
+                    if (!run_thread_.joinable())
+                        break;
                 }
 
                 if (run_thread_.joinable()) {
@@ -373,15 +377,16 @@ TEST_F(WSClientTest, AsyncSendJson) {
     std::promise<bool> send_promise;
     std::future<bool> send_future = send_promise.get_future();
 
-    client_->asyncSendJson(
-        test_json, [&send_promise](beast::error_code ec, std::size_t /*bytes*/) {
-            send_promise.set_value(!ec);
-        });
+    client_->asyncSendJson(test_json, [&send_promise](beast::error_code ec,
+                                                      std::size_t /*bytes*/) {
+        send_promise.set_value(!ec);
+    });
 
     // Wait for async send to complete (increased timeout for CI environments)
     auto send_status = send_future.wait_for(std::chrono::seconds(10));
     if (send_status != std::future_status::ready) {
-        GTEST_SKIP() << "Async send timed out - WebSocket server may not be available";
+        GTEST_SKIP()
+            << "Async send timed out - WebSocket server may not be available";
         return;
     }
     EXPECT_TRUE(send_future.get());
@@ -389,7 +394,8 @@ TEST_F(WSClientTest, AsyncSendJson) {
     // Wait for server to receive message
     auto message_status = message_future.wait_for(std::chrono::seconds(10));
     if (message_status != std::future_status::ready) {
-        GTEST_SKIP() << "Message receiving timed out - WebSocket server may not be available";
+        GTEST_SKIP() << "Message receiving timed out - WebSocket server may "
+                        "not be available";
         return;
     }
 
@@ -406,14 +412,15 @@ TEST_F(WSClientTest, AsyncSendJsonWithoutConnection) {
     std::promise<beast::error_code> error_promise;
     std::future<beast::error_code> error_future = error_promise.get_future();
 
-    client_->asyncSendJson(
-        test_json, [&error_promise](beast::error_code ec, std::size_t /*bytes*/) {
-            error_promise.set_value(ec);
-        });
+    client_->asyncSendJson(test_json, [&error_promise](beast::error_code ec,
+                                                       std::size_t /*bytes*/) {
+        error_promise.set_value(ec);
+    });
 
     auto status = error_future.wait_for(std::chrono::seconds(10));
     if (status != std::future_status::ready) {
-        GTEST_SKIP() << "Async operation timed out - WebSocket client may have issues";
+        GTEST_SKIP()
+            << "Async operation timed out - WebSocket client may have issues";
         return;
     }
     EXPECT_TRUE(error_future.get() == net::error::not_connected);
@@ -442,14 +449,16 @@ TEST_F(WSClientTest, InvalidJsonHandling) {
         GTEST_SKIP() << "Cannot create invalid JSON for testing";
     }
 
-    client_->asyncSendJson(invalid_json, [&error_promise](beast::error_code ec,
-                                                          std::size_t /*bytes*/) {
-        error_promise.set_value(ec);
-    });
+    client_->asyncSendJson(
+        invalid_json,
+        [&error_promise](beast::error_code ec, std::size_t /*bytes*/) {
+            error_promise.set_value(ec);
+        });
 
     auto status = error_future.wait_for(std::chrono::seconds(10));
     if (status != std::future_status::ready) {
-        GTEST_SKIP() << "Invalid JSON handling test timed out - WebSocket client may have issues";
+        GTEST_SKIP() << "Invalid JSON handling test timed out - WebSocket "
+                        "client may have issues";
         return;
     }
     EXPECT_TRUE(error_future.get() == net::error::invalid_argument);
@@ -499,7 +508,8 @@ TEST_F(WSClientTest, PingMechanism) {
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // Check if we're taking too long
-        if (std::chrono::steady_clock::now() - start > std::chrono::seconds(5)) {
+        if (std::chrono::steady_clock::now() - start >
+            std::chrono::seconds(5)) {
             GTEST_SKIP() << "Ping mechanism test timed out";
             return;
         }
@@ -510,7 +520,8 @@ TEST_F(WSClientTest, PingMechanism) {
         // Send a message to verify connection is still good
         EXPECT_NO_THROW(client_->send("After pings"));
     } catch (const std::exception& e) {
-        GTEST_SKIP() << "Ping mechanism test failed with exception: " << e.what();
+        GTEST_SKIP() << "Ping mechanism test failed with exception: "
+                     << e.what();
     }
 }
 
@@ -540,7 +551,8 @@ TEST_F(WSClientTest, DestructorBehavior) {
         EXPECT_NO_THROW(local_client.reset());
 
         // Check if destruction took too long
-        if (std::chrono::steady_clock::now() - start > std::chrono::seconds(3)) {
+        if (std::chrono::steady_clock::now() - start >
+            std::chrono::seconds(3)) {
             GTEST_SKIP() << "Client destruction took too long";
         }
     } catch (const std::exception& e) {

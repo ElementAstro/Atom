@@ -4,12 +4,12 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 #include <chrono>
 #include <string>
 #include <thread>
 #include <vector>
-#include <spdlog/spdlog.h>
 
 #include "atom/web/utils/socket.hpp"
 
@@ -20,11 +20,11 @@
 #pragma comment(lib, "Ws2_32.lib")
 #endif
 #elif defined(__linux__) || defined(__APPLE__)
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
-#include <unistd.h>
 #include <fcntl.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 using namespace atom::web;
@@ -67,7 +67,7 @@ protected:
 
     // Helper method to create a sockaddr_in structure
     struct sockaddr_in createSockAddr(const std::string& ip, uint16_t port) {
-        struct sockaddr_in addr{};
+        struct sockaddr_in addr {};
         addr.sin_family = AF_INET;
         addr.sin_port = htons(port);
         inet_pton(AF_INET, ip.c_str(), &addr.sin_addr);
@@ -114,7 +114,7 @@ TEST_F(SocketTest, InitializeWindowsSocketAPIConcurrent) {
 TEST_F(SocketTest, CreateSocketBasic) {
     int sockfd = createSocket();
     EXPECT_GE(sockfd, 0);
-    
+
     if (sockfd >= 0) {
         closeSocket(sockfd);
     }
@@ -122,7 +122,7 @@ TEST_F(SocketTest, CreateSocketBasic) {
 
 TEST_F(SocketTest, CreateMultipleSockets) {
     std::vector<int> sockets;
-    
+
     // Create multiple sockets
     for (int i = 0; i < 10; ++i) {
         int sockfd = createSocket();
@@ -131,9 +131,9 @@ TEST_F(SocketTest, CreateMultipleSockets) {
             sockets.push_back(sockfd);
         }
     }
-    
+
     EXPECT_FALSE(sockets.empty());
-    
+
     // Clean up all sockets
     for (int sockfd : sockets) {
         closeSocket(sockfd);
@@ -156,25 +156,25 @@ TEST_F(SocketTest, CreateSocketResourceManagement) {
 TEST_F(SocketTest, BindSocketValidPort) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     // Try to bind to a high port number (less likely to be in use)
     bool bindResult = bindSocket(sockfd, 56789);
-    
+
     // Result depends on whether port is available
     // The important thing is that it doesn't crash
     EXPECT_NO_THROW(bindSocket(sockfd, 56789));
-    
+
     closeSocket(sockfd);
 }
 
 TEST_F(SocketTest, BindSocketPortZero) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     // Port 0 should let the system choose a port
     bool result = bindSocket(sockfd, 0);
     EXPECT_TRUE(result);  // Should succeed with system-chosen port
-    
+
     closeSocket(sockfd);
 }
 
@@ -186,21 +186,21 @@ TEST_F(SocketTest, BindSocketInvalidSocket) {
 
 TEST_F(SocketTest, BindSocketSamePortTwice) {
     uint16_t testPort = 56790;
-    
+
     int sockfd1 = createSocket();
     int sockfd2 = createSocket();
     ASSERT_GE(sockfd1, 0);
     ASSERT_GE(sockfd2, 0);
-    
+
     // First bind should succeed
     bool result1 = bindSocket(sockfd1, testPort);
-    
+
     if (result1) {
         // Second bind to same port should fail
         bool result2 = bindSocket(sockfd2, testPort);
         EXPECT_FALSE(result2);
     }
-    
+
     closeSocket(sockfd1);
     closeSocket(sockfd2);
 }
@@ -209,10 +209,10 @@ TEST_F(SocketTest, BindSocketSamePortTwice) {
 TEST_F(SocketTest, SetSocketNonBlockingValid) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     bool result = setSocketNonBlocking(sockfd);
     EXPECT_TRUE(result);
-    
+
     closeSocket(sockfd);
 }
 
@@ -225,87 +225,85 @@ TEST_F(SocketTest, SetSocketNonBlockingInvalid) {
 TEST_F(SocketTest, SetSocketNonBlockingMultipleCalls) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     // Multiple calls should be safe
     EXPECT_TRUE(setSocketNonBlocking(sockfd));
     EXPECT_TRUE(setSocketNonBlocking(sockfd));
     EXPECT_TRUE(setSocketNonBlocking(sockfd));
-    
+
     closeSocket(sockfd);
 }
 
 // Connection Timeout Tests
 TEST_F(SocketTest, ConnectWithTimeoutInvalidSocket) {
     auto addr = createSockAddr("127.0.0.1", 80);
-    
-    bool result = connectWithTimeout(-1, 
-                                   reinterpret_cast<struct sockaddr*>(&addr),
-                                   sizeof(addr),
-                                   std::chrono::milliseconds(1000));
+
+    bool result =
+        connectWithTimeout(-1, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(1000));
     EXPECT_FALSE(result);
 }
 
 TEST_F(SocketTest, ConnectWithTimeoutNullAddress) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
-    bool result = connectWithTimeout(sockfd, nullptr, 0, 
-                                   std::chrono::milliseconds(1000));
+
+    bool result =
+        connectWithTimeout(sockfd, nullptr, 0, std::chrono::milliseconds(1000));
     EXPECT_FALSE(result);
-    
+
     closeSocket(sockfd);
 }
 
 TEST_F(SocketTest, ConnectWithTimeoutUnreachableAddress) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     // Set socket to non-blocking first
     EXPECT_TRUE(setSocketNonBlocking(sockfd));
-    
+
     // Try to connect to a non-routable address
     auto addr = createSockAddr("10.255.255.1", 12345);
-    
+
     auto start = std::chrono::high_resolution_clock::now();
-    
-    bool result = connectWithTimeout(sockfd,
-                                   reinterpret_cast<struct sockaddr*>(&addr),
-                                   sizeof(addr),
-                                   std::chrono::milliseconds(100));
-    
+
+    bool result =
+        connectWithTimeout(sockfd, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(100));
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     // Should fail and respect timeout
     EXPECT_FALSE(result);
     EXPECT_LT(duration.count(), 1000);  // Should timeout quickly
-    
+
     closeSocket(sockfd);
 }
 
 TEST_F(SocketTest, ConnectWithTimeoutZeroTimeout) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     setSocketNonBlocking(sockfd);
-    
+
     auto addr = createSockAddr("127.0.0.1", 56791);
-    
-    bool result = connectWithTimeout(sockfd,
-                                   reinterpret_cast<struct sockaddr*>(&addr),
-                                   sizeof(addr),
-                                   std::chrono::milliseconds(0));
-    
+
+    bool result =
+        connectWithTimeout(sockfd, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(0));
+
     // Should fail immediately with zero timeout
     EXPECT_FALSE(result);
-    
+
     closeSocket(sockfd);
 }
 
 // Performance Tests
 TEST_F(SocketTest, SocketCreationPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     std::vector<int> sockets;
     for (int i = 0; i < 100; ++i) {
         int sockfd = createSocket();
@@ -313,15 +311,16 @@ TEST_F(SocketTest, SocketCreationPerformance) {
             sockets.push_back(sockfd);
         }
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     // Clean up
     for (int sockfd : sockets) {
         closeSocket(sockfd);
     }
-    
+
     // Should complete within reasonable time (1 second)
     EXPECT_LT(duration.count(), 1000);
     EXPECT_FALSE(sockets.empty());
@@ -329,7 +328,7 @@ TEST_F(SocketTest, SocketCreationPerformance) {
 
 TEST_F(SocketTest, SocketBindingPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     std::vector<int> sockets;
     for (int i = 0; i < 50; ++i) {
         int sockfd = createSocket();
@@ -338,15 +337,16 @@ TEST_F(SocketTest, SocketBindingPerformance) {
             sockets.push_back(sockfd);
         }
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     // Clean up
     for (int sockfd : sockets) {
         closeSocket(sockfd);
     }
-    
+
     // Should complete within reasonable time (2 seconds)
     EXPECT_LT(duration.count(), 2000);
 }
@@ -430,11 +430,10 @@ TEST_F(SocketTest, ErrorHandlingInvalidOperations) {
     EXPECT_FALSE(bindSocket(-1, 80));
     EXPECT_FALSE(setSocketNonBlocking(-1));
 
-    struct sockaddr_in addr{};
-    EXPECT_FALSE(connectWithTimeout(-1,
-                                   reinterpret_cast<struct sockaddr*>(&addr),
-                                   sizeof(addr),
-                                   std::chrono::milliseconds(100)));
+    struct sockaddr_in addr {};
+    EXPECT_FALSE(
+        connectWithTimeout(-1, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(100)));
 }
 
 // Platform-Specific Tests
@@ -451,7 +450,8 @@ TEST_F(SocketTest, PlatformSpecificBehavior) {
     }
 #else
     // Unix-like systems tests
-    EXPECT_TRUE(initializeWindowsSocketAPI());  // Should return true on non-Windows
+    EXPECT_TRUE(
+        initializeWindowsSocketAPI());  // Should return true on non-Windows
 
     int sockfd = createSocket();
     EXPECT_GE(sockfd, 0);
@@ -510,12 +510,11 @@ TEST_F(SocketTest, MemorySafetyTests) {
             bindSocket(sockfd, 0);
 
             // Test connection with invalid address (should fail gracefully)
-            struct sockaddr_in addr{};
+            struct sockaddr_in addr {};
             addr.sin_family = AF_INET;
             connectWithTimeout(sockfd,
-                             reinterpret_cast<struct sockaddr*>(&addr),
-                             sizeof(addr),
-                             std::chrono::milliseconds(1));
+                               reinterpret_cast<struct sockaddr*>(&addr),
+                               sizeof(addr), std::chrono::milliseconds(1));
 
             closeSocket(sockfd);
         }
@@ -537,10 +536,9 @@ TEST_F(SocketTest, SocketLifecycleIntegration) {
 
     // Try to connect to localhost (should fail but not crash)
     auto addr = createSockAddr("127.0.0.1", 56792);
-    bool connectResult = connectWithTimeout(sockfd,
-                                          reinterpret_cast<struct sockaddr*>(&addr),
-                                          sizeof(addr),
-                                          std::chrono::milliseconds(10));
+    bool connectResult =
+        connectWithTimeout(sockfd, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(10));
     // Connection will likely fail, but that's expected
     EXPECT_FALSE(connectResult);  // Should fail to connect to closed port
 
@@ -552,11 +550,8 @@ TEST_F(SocketTest, SocketLifecycleIntegration) {
 // Timeout Behavior Tests
 TEST_F(SocketTest, TimeoutBehaviorValidation) {
     std::vector<std::chrono::milliseconds> timeouts = {
-        std::chrono::milliseconds(1),
-        std::chrono::milliseconds(10),
-        std::chrono::milliseconds(100),
-        std::chrono::milliseconds(1000)
-    };
+        std::chrono::milliseconds(1), std::chrono::milliseconds(10),
+        std::chrono::milliseconds(100), std::chrono::milliseconds(1000)};
 
     for (auto timeout : timeouts) {
         int sockfd = createSocket();
@@ -568,13 +563,13 @@ TEST_F(SocketTest, TimeoutBehaviorValidation) {
 
         // Try to connect to non-routable address
         auto addr = createSockAddr("10.255.255.1", 56793);
-        bool result = connectWithTimeout(sockfd,
-                                       reinterpret_cast<struct sockaddr*>(&addr),
-                                       sizeof(addr),
-                                       timeout);
+        bool result = connectWithTimeout(
+            sockfd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr),
+            timeout);
 
         auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
         // Should fail and respect timeout (allow some margin)
         EXPECT_FALSE(result);

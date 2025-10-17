@@ -26,9 +26,8 @@ static std::string diskTypeToString(const std::string& fsType) {
 namespace atom::system {
 
 // Format helper functions
-auto SystemInfoPrinter::createTableRow(const std::string& label,
-                                       const std::string& value)
-    -> std::string {
+auto SystemInfoPrinter::createTableRow(
+    const std::string& label, const std::string& value) -> std::string {
     return std::format("| {:<30} | {:<40} |\n", label, value);
 }
 

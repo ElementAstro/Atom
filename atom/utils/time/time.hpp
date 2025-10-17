@@ -113,8 +113,8 @@ class TimeConvertException : public atom::error::Exception {
  * @throws TimeConvertException If the timestamp is invalid or conversion fails
  */
 [[nodiscard]] auto timeStampToString(
-    time_t timestamp, std::string_view format = "%Y-%m-%d %H:%M:%S")
-    -> std::string;
+    time_t timestamp,
+    std::string_view format = "%Y-%m-%d %H:%M:%S") -> std::string;
 
 /**
  * @brief Converts a `tm` structure to a formatted string.
@@ -129,8 +129,8 @@ class TimeConvertException : public atom::error::Exception {
  * format.
  * @throws TimeConvertException If formatting fails
  */
-[[nodiscard]] auto toString(const std::tm& tm, std::string_view format)
-    -> std::string;
+[[nodiscard]] auto toString(const std::tm& tm,
+                            std::string_view format) -> std::string;
 
 /**
  * @brief Retrieves the current UTC time as a formatted string.

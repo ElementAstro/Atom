@@ -550,7 +550,7 @@ public:
             rate_limiter_.releaseConnection(client->getRemoteAddress());
 
             log(LogLevel::INFO_LEVEL, "Client " + std::to_string(client_id) +
-                                    " disconnected. Reason: " + reason);
+                                          " disconnected. Reason: " + reason);
         }
     }
 
@@ -569,8 +569,8 @@ public:
 
         if (!client_exists) {
             log(LogLevel::WARNING_LEVEL, "Cannot add non-existent client " +
-                                       std::to_string(client_id) +
-                                       " to group " + group_name);
+                                             std::to_string(client_id) +
+                                             " to group " + group_name);
             return;
         }
 
@@ -580,12 +580,13 @@ public:
             // Create the group if it doesn't exist
             groups_[group_name] = std::unordered_set<size_t>{client_id};
             log(LogLevel::INFO_LEVEL, "Created group " + group_name +
-                                    " and added client " +
-                                    std::to_string(client_id));
+                                          " and added client " +
+                                          std::to_string(client_id));
         } else {
             it->second.insert(client_id);
-            log(LogLevel::INFO_LEVEL, "Added client " + std::to_string(client_id) +
-                                    " to group " + group_name);
+            log(LogLevel::INFO_LEVEL, "Added client " +
+                                          std::to_string(client_id) +
+                                          " to group " + group_name);
         }
     }
 
@@ -595,8 +596,9 @@ public:
         auto it = groups_.find(group_name);
         if (it != groups_.end()) {
             it->second.erase(client_id);
-            log(LogLevel::INFO_LEVEL, "Removed client " + std::to_string(client_id) +
-                                    " from group " + group_name);
+            log(LogLevel::INFO_LEVEL, "Removed client " +
+                                          std::to_string(client_id) +
+                                          " from group " + group_name);
         }
     }
 
@@ -615,9 +617,9 @@ public:
             sendMessageToClient(client_id, message);
         }
 
-        log(LogLevel::DEBUG_LEVEL, "Broadcasted message to group " + group_name +
-                                 " (" + std::to_string(client_ids.size()) +
-                                 " clients)");
+        log(LogLevel::DEBUG_LEVEL,
+            "Broadcasted message to group " + group_name + " (" +
+                std::to_string(client_ids.size()) + " clients)");
     }
 
     void setAuthenticator(
@@ -630,7 +632,7 @@ public:
     void requireAuthentication(bool require) {
         require_authentication_ = require;
         log(LogLevel::INFO_LEVEL, "Authentication requirement set to: " +
-                                std::string(require ? "true" : "false"));
+                                      std::string(require ? "true" : "false"));
     }
 
     void setClientMetadata(size_t client_id, const std::string& key,
@@ -646,8 +648,9 @@ public:
 
         if (client) {
             client->setMetadata(key, value);
-            log(LogLevel::DEBUG_LEVEL, "Set metadata '" + key + "' for client " +
-                                     std::to_string(client_id));
+            log(LogLevel::DEBUG_LEVEL, "Set metadata '" + key +
+                                           "' for client " +
+                                           std::to_string(client_id));
         }
     }
 
@@ -1133,9 +1136,9 @@ private:
         }
 
         if (!timeout_clients.empty()) {
-            log(LogLevel::INFO_LEVEL, "Disconnected " +
-                                    std::to_string(timeout_clients.size()) +
-                                    " clients due to timeout");
+            log(LogLevel::INFO_LEVEL,
+                "Disconnected " + std::to_string(timeout_clients.size()) +
+                    " clients due to timeout");
         }
     }
 

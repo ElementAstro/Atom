@@ -6,8 +6,8 @@
  */
 
 #include "asio_compatibility.hpp"
-#include "event.hpp"
-#include "client_config.hpp"
-#include "event_store.hpp"
 #include "client.hpp"
+#include "client_config.hpp"
+#include "event.hpp"
+#include "event_store.hpp"
 #include "logger.hpp"

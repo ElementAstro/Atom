@@ -97,7 +97,7 @@ Raises:
                const std::chrono::duration<long, std::ratio<1>>& timeout) {
                 // Note: takeFor method doesn't exist in the C++ interface
                 // We'll use take() as a fallback (ignoring timeout for now)
-                (void)timeout; // Suppress unused parameter warning
+                (void)timeout;  // Suppress unused parameter warning
                 auto result = self.take();
                 if (result) {
                     return *result;
@@ -212,9 +212,10 @@ Args:
             "extract_if",
             [](atom::async::ThreadSafeQueue<py::object>& self,
                py::function predicate) {
-                auto extracted = self.extractIf([predicate](const py::object& obj) {
-                    return predicate(obj).cast<bool>();
-                });
+                auto extracted =
+                    self.extractIf([predicate](const py::object& obj) {
+                        return predicate(obj).cast<bool>();
+                    });
                 py::list result;
                 for (auto& item : extracted) {
                     result.append(item);
@@ -413,9 +414,8 @@ Examples:
              "Creates a new LockFreeQueue with specified capacity.")
         .def(
             "put",
-            [](atom::async::LockFreeQueue<py::object>& self, py::object element) {
-                return self.put(element);
-            },
+            [](atom::async::LockFreeQueue<py::object>& self,
+               py::object element) { return self.put(element); },
             py::arg("element"),
             R"(Add an element to the queue.
 
@@ -490,19 +490,19 @@ Examples:
 
     // Factory functions
     m.def(
-        "create_queue",
-        [](const py::list& items) {
-            auto queue =
-                std::make_shared<atom::async::ThreadSafeQueue<py::object>>();
-            for (const py::handle& item : items) {
-                // Convert handle to object properly
-                py::object obj = py::reinterpret_borrow<py::object>(item);
-                queue->put(std::move(obj));
-            }
-            return queue;
-        },
-        py::arg("items") = py::list(),
-        R"(Create a ThreadSafeQueue with initial elements.
+         "create_queue",
+         [](const py::list& items) {
+             auto queue =
+                 std::make_shared<atom::async::ThreadSafeQueue<py::object>>();
+             for (const py::handle& item : items) {
+                 // Convert handle to object properly
+                 py::object obj = py::reinterpret_borrow<py::object>(item);
+                 queue->put(std::move(obj));
+             }
+             return queue;
+         },
+         py::arg("items") = py::list(),
+         R"(Create a ThreadSafeQueue with initial elements.
 
 Args:
     items: Initial items to add to the queue (optional).
@@ -518,13 +518,14 @@ Examples:
 )")
 
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-    .def(
-        "create_lockfree_queue",
-        [](size_t capacity) {
-            return std::make_shared<atom::async::LockFreeQueue<py::object>>(capacity);
-        },
-        py::arg("capacity") = 128,
-        R"(Create a LockFreeQueue with specified capacity.
+        .def(
+            "create_lockfree_queue",
+            [](size_t capacity) {
+                return std::make_shared<atom::async::LockFreeQueue<py::object>>(
+                    capacity);
+            },
+            py::arg("capacity") = 128,
+            R"(Create a LockFreeQueue with specified capacity.
 
 Args:
     capacity: Initial capacity of the queue.
@@ -533,13 +534,14 @@ Returns:
     A new LockFreeQueue instance.
 )")
 
-    .def(
-        "create_spsc_queue",
-        [](size_t capacity) {
-            return std::make_shared<atom::async::SPSCQueue<py::object>>(capacity);
-        },
-        py::arg("capacity") = 128,
-        R"(Create a SPSCQueue with specified capacity.
+        .def(
+            "create_spsc_queue",
+            [](size_t capacity) {
+                return std::make_shared<atom::async::SPSCQueue<py::object>>(
+                    capacity);
+            },
+            py::arg("capacity") = 128,
+            R"(Create a SPSCQueue with specified capacity.
 
 Args:
     capacity: Initial capacity of the queue.
@@ -548,7 +550,7 @@ Returns:
     A new SPSCQueue instance.
 )")
 #endif
-    ;
+        ;
 
     // Add feature detection
     m.attr("HAS_LOCKFREE_QUEUE") =

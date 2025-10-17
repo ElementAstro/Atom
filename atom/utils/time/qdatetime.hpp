@@ -148,8 +148,8 @@ public:
      * string and format.
      */
     template <typename DateTimeStr, typename FormatStr>
-    static auto fromString(DateTimeStr&& dateTimeString, FormatStr&& format)
-        -> QDateTime;
+    static auto fromString(DateTimeStr&& dateTimeString,
+                           FormatStr&& format) -> QDateTime;
 
     /**
      * @brief Constructs a `QDateTime` object from a date-time string, format,
@@ -490,8 +490,8 @@ QDateTime::QDateTime(DateTimeStr&& dateTimeString, FormatStr&& format,
 }
 
 template <typename DateTimeStr, typename FormatStr>
-auto QDateTime::fromString(DateTimeStr&& dateTimeString, FormatStr&& format)
-    -> QDateTime {
+auto QDateTime::fromString(DateTimeStr&& dateTimeString,
+                           FormatStr&& format) -> QDateTime {
     return QDateTime(std::forward<DateTimeStr>(dateTimeString),
                      std::forward<FormatStr>(format));
 }
@@ -522,8 +522,8 @@ auto QDateTime::toString(FormatStr&& format) const -> std::string {
 }
 
 template <typename FormatStr>
-auto QDateTime::toString(FormatStr&& format, const QTimeZone& timeZone) const
-    -> std::string {
+auto QDateTime::toString(FormatStr&& format,
+                         const QTimeZone& timeZone) const -> std::string {
     if (!dateTime_) {
         return "";
     }

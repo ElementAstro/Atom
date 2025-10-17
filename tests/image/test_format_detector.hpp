@@ -1,7 +1,7 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
@@ -20,14 +20,12 @@ protected:
     void SetUp() override {
         detector = std::make_unique<FormatDetector>();
         fileManager = std::make_unique<TestFileManager>();
-        
+
         // Create test files with various formats
         createTestFiles();
     }
 
-    void TearDown() override {
-        fileManager->cleanup();
-    }
+    void TearDown() override { fileManager->cleanup(); }
 
     void createTestFiles() {
         // Create JPEG test file
@@ -35,7 +33,8 @@ protected:
         fileManager->registerTempFile(jpeg_file);
 
         // Create PNG test file
-        png_file = createTestImageFile("test.png", {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A});
+        png_file = createTestImageFile(
+            "test.png", {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A});
         fileManager->registerTempFile(png_file);
 
         // Create BMP test file
@@ -47,11 +46,14 @@ protected:
         fileManager->registerTempFile(tiff_file);
 
         // Create GIF test file
-        gif_file = createTestImageFile("test.gif", {0x47, 0x49, 0x46, 0x38, 0x39, 0x61});
+        gif_file = createTestImageFile("test.gif",
+                                       {0x47, 0x49, 0x46, 0x38, 0x39, 0x61});
         fileManager->registerTempFile(gif_file);
 
         // Create WEBP test file
-        webp_file = createTestImageFile("test.webp", {0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50});
+        webp_file = createTestImageFile(
+            "test.webp", {0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57,
+                          0x45, 0x42, 0x50});
         fileManager->registerTempFile(webp_file);
 
         // Create FITS test file
@@ -59,7 +61,8 @@ protected:
         fileManager->registerTempFile(fits_file);
 
         // Create unknown format file
-        unknown_file = createTestImageFile("test.unknown", {0x00, 0x01, 0x02, 0x03});
+        unknown_file =
+            createTestImageFile("test.unknown", {0x00, 0x01, 0x02, 0x03});
         fileManager->registerTempFile(unknown_file);
 
         // Create empty file
@@ -68,51 +71,65 @@ protected:
         fileManager->registerTempFile(empty_file);
     }
 
-    std::string createTestImageFile(const std::string& filename, const std::vector<uint8_t>& header) {
+    std::string createTestImageFile(const std::string& filename,
+                                    const std::vector<uint8_t>& header) {
         std::ofstream file(filename, std::ios::binary);
-        
+
         // Write magic number/header
         for (uint8_t byte : header) {
             file.put(static_cast<char>(byte));
         }
-        
+
         // Add some dummy data
         std::vector<uint8_t> dummyData(100, 0x42);
-        file.write(reinterpret_cast<const char*>(dummyData.data()), dummyData.size());
-        
+        file.write(reinterpret_cast<const char*>(dummyData.data()),
+                   dummyData.size());
+
         file.close();
         return filename;
     }
 
     std::unique_ptr<FormatDetector> detector;
     std::unique_ptr<TestFileManager> fileManager;
-    
-    std::string jpeg_file, png_file, bmp_file, tiff_file, gif_file, webp_file, fits_file, unknown_file, empty_file;
+
+    std::string jpeg_file, png_file, bmp_file, tiff_file, gif_file, webp_file,
+        fits_file, unknown_file, empty_file;
 };
 
 // Test format detection by file extension
 TEST_F(FormatDetectorTest, DetectFormatByExtension) {
-    EXPECT_EQ(detector->detectFormatByExtension("image.jpg"), ImageFormat::JPEG);
-    EXPECT_EQ(detector->detectFormatByExtension("image.jpeg"), ImageFormat::JPEG);
+    EXPECT_EQ(detector->detectFormatByExtension("image.jpg"),
+              ImageFormat::JPEG);
+    EXPECT_EQ(detector->detectFormatByExtension("image.jpeg"),
+              ImageFormat::JPEG);
     EXPECT_EQ(detector->detectFormatByExtension("image.png"), ImageFormat::PNG);
     EXPECT_EQ(detector->detectFormatByExtension("image.bmp"), ImageFormat::BMP);
-    EXPECT_EQ(detector->detectFormatByExtension("image.tiff"), ImageFormat::TIFF);
-    EXPECT_EQ(detector->detectFormatByExtension("image.tif"), ImageFormat::TIFF);
+    EXPECT_EQ(detector->detectFormatByExtension("image.tiff"),
+              ImageFormat::TIFF);
+    EXPECT_EQ(detector->detectFormatByExtension("image.tif"),
+              ImageFormat::TIFF);
     EXPECT_EQ(detector->detectFormatByExtension("image.gif"), ImageFormat::GIF);
-    EXPECT_EQ(detector->detectFormatByExtension("image.webp"), ImageFormat::WEBP);
-    EXPECT_EQ(detector->detectFormatByExtension("image.fits"), ImageFormat::FITS);
-    EXPECT_EQ(detector->detectFormatByExtension("image.unknown"), ImageFormat::UNKNOWN);
+    EXPECT_EQ(detector->detectFormatByExtension("image.webp"),
+              ImageFormat::WEBP);
+    EXPECT_EQ(detector->detectFormatByExtension("image.fits"),
+              ImageFormat::FITS);
+    EXPECT_EQ(detector->detectFormatByExtension("image.unknown"),
+              ImageFormat::UNKNOWN);
 }
 
 // Test case insensitive extension detection
 TEST_F(FormatDetectorTest, DetectFormatByExtensionCaseInsensitive) {
-    EXPECT_EQ(detector->detectFormatByExtension("image.JPG"), ImageFormat::JPEG);
+    EXPECT_EQ(detector->detectFormatByExtension("image.JPG"),
+              ImageFormat::JPEG);
     EXPECT_EQ(detector->detectFormatByExtension("image.PNG"), ImageFormat::PNG);
     EXPECT_EQ(detector->detectFormatByExtension("image.BMP"), ImageFormat::BMP);
-    EXPECT_EQ(detector->detectFormatByExtension("image.TIFF"), ImageFormat::TIFF);
+    EXPECT_EQ(detector->detectFormatByExtension("image.TIFF"),
+              ImageFormat::TIFF);
     EXPECT_EQ(detector->detectFormatByExtension("image.GIF"), ImageFormat::GIF);
-    EXPECT_EQ(detector->detectFormatByExtension("image.WEBP"), ImageFormat::WEBP);
-    EXPECT_EQ(detector->detectFormatByExtension("image.FITS"), ImageFormat::FITS);
+    EXPECT_EQ(detector->detectFormatByExtension("image.WEBP"),
+              ImageFormat::WEBP);
+    EXPECT_EQ(detector->detectFormatByExtension("image.FITS"),
+              ImageFormat::FITS);
 }
 
 // Test format detection by magic number
@@ -162,33 +179,40 @@ TEST_F(FormatDetectorTest, DetectFormatEmptyFile) {
 
 // Test detection with non-existent file
 TEST_F(FormatDetectorTest, DetectFormatNonExistentFile) {
-    EXPECT_THROW(detector->detectFormat("non_existent_file.jpg"), std::runtime_error);
+    EXPECT_THROW(detector->detectFormat("non_existent_file.jpg"),
+                 std::runtime_error);
 }
 
 // Test format detection from memory buffer
 TEST_F(FormatDetectorTest, DetectFormatFromBuffer) {
     // JPEG magic number
-    std::vector<uint8_t> jpegBuffer = {0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10, 0x4A, 0x46, 0x49, 0x46};
-    auto result = detector->detectFormatFromBuffer(jpegBuffer.data(), jpegBuffer.size());
+    std::vector<uint8_t> jpegBuffer = {0xFF, 0xD8, 0xFF, 0xE0, 0x00,
+                                       0x10, 0x4A, 0x46, 0x49, 0x46};
+    auto result =
+        detector->detectFormatFromBuffer(jpegBuffer.data(), jpegBuffer.size());
     EXPECT_EQ(result.format, ImageFormat::JPEG);
     EXPECT_GE(result.confidence, DetectionConfidence::HIGH);
 
     // PNG magic number
-    std::vector<uint8_t> pngBuffer = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
-    result = detector->detectFormatFromBuffer(pngBuffer.data(), pngBuffer.size());
+    std::vector<uint8_t> pngBuffer = {0x89, 0x50, 0x4E, 0x47,
+                                      0x0D, 0x0A, 0x1A, 0x0A};
+    result =
+        detector->detectFormatFromBuffer(pngBuffer.data(), pngBuffer.size());
     EXPECT_EQ(result.format, ImageFormat::PNG);
     EXPECT_GE(result.confidence, DetectionConfidence::HIGH);
 
     // Unknown buffer
     std::vector<uint8_t> unknownBuffer = {0x00, 0x01, 0x02, 0x03};
-    result = detector->detectFormatFromBuffer(unknownBuffer.data(), unknownBuffer.size());
+    result = detector->detectFormatFromBuffer(unknownBuffer.data(),
+                                              unknownBuffer.size());
     EXPECT_EQ(result.format, ImageFormat::UNKNOWN);
 }
 
 // Test format detection with insufficient data
 TEST_F(FormatDetectorTest, DetectFormatInsufficientData) {
     std::vector<uint8_t> smallBuffer = {0xFF};
-    auto result = detector->detectFormatFromBuffer(smallBuffer.data(), smallBuffer.size());
+    auto result = detector->detectFormatFromBuffer(smallBuffer.data(),
+                                                   smallBuffer.size());
     EXPECT_EQ(result.format, ImageFormat::UNKNOWN);
     EXPECT_EQ(result.confidence, DetectionConfidence::NONE);
 }
@@ -202,7 +226,8 @@ TEST_F(FormatDetectorTest, GetMimeType) {
     EXPECT_EQ(detector->getMimeType(ImageFormat::GIF), "image/gif");
     EXPECT_EQ(detector->getMimeType(ImageFormat::WEBP), "image/webp");
     EXPECT_EQ(detector->getMimeType(ImageFormat::FITS), "image/fits");
-    EXPECT_EQ(detector->getMimeType(ImageFormat::UNKNOWN), "application/octet-stream");
+    EXPECT_EQ(detector->getMimeType(ImageFormat::UNKNOWN),
+              "application/octet-stream");
 }
 
 // Test file extension mapping
@@ -250,7 +275,8 @@ TEST_F(FormatDetectorTest, GetSupportedFormats) {
     EXPECT_THAT(formats, ::testing::Contains(ImageFormat::PNG));
     EXPECT_THAT(formats, ::testing::Contains(ImageFormat::BMP));
     EXPECT_THAT(formats, ::testing::Contains(ImageFormat::TIFF));
-    EXPECT_THAT(formats, ::testing::Not(::testing::Contains(ImageFormat::UNKNOWN)));
+    EXPECT_THAT(formats,
+                ::testing::Not(::testing::Contains(ImageFormat::UNKNOWN)));
 }
 
 // Test custom format registration
@@ -266,7 +292,8 @@ TEST_F(FormatDetectorTest, RegisterCustomFormat) {
     detector->registerCustomFormat(customSignature);
 
     // Create test file with custom signature
-    std::string customFile = createTestImageFile("test.custom", {0xCA, 0xFE, 0xBA, 0xBE});
+    std::string customFile =
+        createTestImageFile("test.custom", {0xCA, 0xFE, 0xBA, 0xBE});
     fileManager->registerTempFile(customFile);
 
     // Test detection
@@ -308,7 +335,8 @@ TEST_F(FormatDetectorTest, DetectFormatWithOffset) {
 
 // Test batch format detection
 TEST_F(FormatDetectorTest, BatchFormatDetection) {
-    std::vector<std::string> files = {jpeg_file, png_file, bmp_file, unknown_file};
+    std::vector<std::string> files = {jpeg_file, png_file, bmp_file,
+                                      unknown_file};
     auto results = detector->detectFormats(files);
 
     EXPECT_EQ(results.size(), files.size());
@@ -323,7 +351,7 @@ TEST_F(FormatDetectorTest, DetectFormatCorruptedFile) {
     // Create file with partial JPEG header
     std::string corruptedFile = "test_corrupted.jpg";
     std::ofstream file(corruptedFile, std::ios::binary);
-    file.write("\xFF\xD8", 2); // Incomplete JPEG header
+    file.write("\xFF\xD8", 2);  // Incomplete JPEG header
     file.close();
 
     fileManager->registerTempFile(corruptedFile);
@@ -331,7 +359,8 @@ TEST_F(FormatDetectorTest, DetectFormatCorruptedFile) {
     auto result = detector->detectFormat(corruptedFile);
     // Should still detect as JPEG based on partial signature
     EXPECT_EQ(result.format, ImageFormat::JPEG);
-    EXPECT_LT(result.confidence, DetectionConfidence::HIGH); // But with lower confidence
+    EXPECT_LT(result.confidence,
+              DetectionConfidence::HIGH);  // But with lower confidence
 }
 
 // Test format detection performance
@@ -344,13 +373,15 @@ TEST_F(FormatDetectorTest, DISABLED_DetectionPerformance) {
     }
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
     double avgTime = static_cast<double>(duration.count()) / iterations;
 
     // Should be fast (less than 100 microseconds per detection on average)
     EXPECT_LT(avgTime, 100.0);
 
-    std::cout << "Average detection time: " << avgTime << " microseconds" << std::endl;
+    std::cout << "Average detection time: " << avgTime << " microseconds"
+              << std::endl;
 }
 
 // Test thread safety
@@ -362,20 +393,21 @@ TEST_F(FormatDetectorTest, ThreadSafety) {
     std::atomic<int> errorCount{0};
 
     for (int t = 0; t < numThreads; ++t) {
-        threads.emplace_back([this, operationsPerThread, &successCount, &errorCount]() {
-            for (int i = 0; i < operationsPerThread; ++i) {
-                try {
-                    auto result = detector->detectFormat(jpeg_file);
-                    if (result.format == ImageFormat::JPEG) {
-                        successCount.fetch_add(1);
-                    } else {
+        threads.emplace_back(
+            [this, operationsPerThread, &successCount, &errorCount]() {
+                for (int i = 0; i < operationsPerThread; ++i) {
+                    try {
+                        auto result = detector->detectFormat(jpeg_file);
+                        if (result.format == ImageFormat::JPEG) {
+                            successCount.fetch_add(1);
+                        } else {
+                            errorCount.fetch_add(1);
+                        }
+                    } catch (...) {
                         errorCount.fetch_add(1);
                     }
-                } catch (...) {
-                    errorCount.fetch_add(1);
                 }
-            }
-        });
+            });
     }
 
     for (auto& t : threads) {
@@ -396,7 +428,8 @@ TEST_F(FormatDetectorTest, DetectFormatLargeFile) {
 
     // Write large amount of data (1MB)
     std::vector<uint8_t> largeData(1024 * 1024, 0x42);
-    file.write(reinterpret_cast<const char*>(largeData.data()), largeData.size());
+    file.write(reinterpret_cast<const char*>(largeData.data()),
+               largeData.size());
     file.close();
 
     fileManager->registerTempFile(largeFile);
@@ -408,9 +441,10 @@ TEST_F(FormatDetectorTest, DetectFormatLargeFile) {
 
     EXPECT_EQ(result.format, ImageFormat::JPEG);
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     // Should be fast even for large files (detection only reads header)
     EXPECT_LT(duration.count(), 100);
 }
 
-} // namespace atom::image::test
+}  // namespace atom::image::test

@@ -184,7 +184,8 @@ Examples:
  * @param m The pybind11 module to bind to
  */
 void bindDnsUtilities(py::module_& m) {
-    m.def("set_dns_cache_ttl", &atom::web::setDNSCacheTTL, py::arg("ttl_seconds"),
+    m.def("set_dns_cache_ttl", &atom::web::setDNSCacheTTL,
+          py::arg("ttl_seconds"),
           R"(Set the Time-To-Live for DNS cache entries.
 
 Args:
@@ -223,7 +224,8 @@ Examples:
     >>> print(f"Local IPs: {local_ips}")
 )");
 
-    m.def("clear_dns_cache_expired_entries", &atom::web::clearDNSCacheExpiredEntries,
+    m.def("clear_dns_cache_expired_entries",
+          &atom::web::clearDNSCacheExpiredEntries,
           R"(Clear expired entries from the DNS cache.
 
 This function removes expired DNS cache entries to free memory and ensure
@@ -353,7 +355,7 @@ PYBIND11_MODULE(utils, m) {
     // Bind different categories of network utilities
     bindSystemInitialization(m);
     bindPortUtilities(m);
-    bindDnsUtilities(m);                    // DNS functions
-    bindIpValidationUtilities(m);           // IP validation functions
-    bindNetworkConnectivityUtilities(m);    // Network connectivity functions
+    bindDnsUtilities(m);                  // DNS functions
+    bindIpValidationUtilities(m);         // IP validation functions
+    bindNetworkConnectivityUtilities(m);  // Network connectivity functions
 }

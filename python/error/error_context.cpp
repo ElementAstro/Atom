@@ -1,13 +1,14 @@
 #include "atom/error/error_context.hpp"
 
+#include <pybind11/chrono.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/chrono.h>
 
 namespace py = pybind11;
 
 PYBIND11_MODULE(error_context, m) {
-    m.doc() = "Error context system for capturing additional debugging information";
+    m.doc() =
+        "Error context system for capturing additional debugging information";
 
     // ErrorId type alias
     m.attr("ErrorId") = py::type::of<std::string>();
@@ -26,7 +27,8 @@ Examples:
 )");
 
     // ErrorContext class
-    py::class_<atom::error::ErrorContext, std::shared_ptr<atom::error::ErrorContext>>(
+    py::class_<atom::error::ErrorContext,
+               std::shared_ptr<atom::error::ErrorContext>>(
         m, "ErrorContext",
         R"(Error context information for enhanced debugging.
 
@@ -40,8 +42,8 @@ Examples:
     >>> context.add_tag("configuration")
     >>> print(context.get_message())
 )")
-        .def(py::init<int, std::string>(),
-             py::arg("error_code"), py::arg("message") = "",
+        .def(py::init<int, std::string>(), py::arg("error_code"),
+             py::arg("message") = "",
              R"(Constructor with basic error information.
 
 Args:
@@ -73,13 +75,14 @@ Returns:
 Returns:
     datetime: The timestamp
 )")
-        .def("get_thread_id", 
-             [](const atom::error::ErrorContext& ctx) {
-                 std::ostringstream oss;
-                 oss << ctx.getThreadId();
-                 return oss.str();
-             },
-             R"(Get the thread ID where the error occurred.
+        .def(
+            "get_thread_id",
+            [](const atom::error::ErrorContext& ctx) {
+                std::ostringstream oss;
+                oss << ctx.getThreadId();
+                return oss.str();
+            },
+            R"(Get the thread ID where the error occurred.
 
 Returns:
     str: String representation of the thread ID
@@ -97,7 +100,8 @@ Returns:
 Returns:
     ErrorCategory: The error category
 )")
-        .def("get_recovery_strategy", &atom::error::ErrorContext::getRecoveryStrategy,
+        .def("get_recovery_strategy",
+             &atom::error::ErrorContext::getRecoveryStrategy,
              R"(Get the recovery strategy.
 
 Returns:
@@ -111,26 +115,29 @@ Returns:
     ErrorMetadata: The error metadata
 )")
         // Context information - user data
-        .def("set_user_data", 
-             [](atom::error::ErrorContext& ctx, const std::string& key, py::object value) -> atom::error::ErrorContext& {
-                 // Convert Python object to std::any
-                 if (py::isinstance<py::str>(value)) {
-                     ctx.setUserData(key, std::any(value.cast<std::string>()));
-                 } else if (py::isinstance<py::int_>(value)) {
-                     ctx.setUserData(key, std::any(value.cast<int>()));
-                 } else if (py::isinstance<py::float_>(value)) {
-                     ctx.setUserData(key, std::any(value.cast<double>()));
-                 } else if (py::isinstance<py::bool_>(value)) {
-                     ctx.setUserData(key, std::any(value.cast<bool>()));
-                 } else {
-                     // For other types, store as string representation
-                     ctx.setUserData(key, std::any(py::str(value).cast<std::string>()));
-                 }
-                 return ctx;
-             },
-             py::arg("key"), py::arg("value"),
-             py::return_value_policy::reference_internal,
-             R"(Set user-defined data.
+        .def(
+            "set_user_data",
+            [](atom::error::ErrorContext& ctx, const std::string& key,
+               py::object value) -> atom::error::ErrorContext& {
+                // Convert Python object to std::any
+                if (py::isinstance<py::str>(value)) {
+                    ctx.setUserData(key, std::any(value.cast<std::string>()));
+                } else if (py::isinstance<py::int_>(value)) {
+                    ctx.setUserData(key, std::any(value.cast<int>()));
+                } else if (py::isinstance<py::float_>(value)) {
+                    ctx.setUserData(key, std::any(value.cast<double>()));
+                } else if (py::isinstance<py::bool_>(value)) {
+                    ctx.setUserData(key, std::any(value.cast<bool>()));
+                } else {
+                    // For other types, store as string representation
+                    ctx.setUserData(
+                        key, std::any(py::str(value).cast<std::string>()));
+                }
+                return ctx;
+            },
+            py::arg("key"), py::arg("value"),
+            py::return_value_policy::reference_internal,
+            R"(Set user-defined data.
 
 Args:
     key (str): The data key
@@ -143,30 +150,33 @@ Examples:
     >>> context.set_user_data("user_id", 12345)
     >>> context.set_user_data("operation", "file_read")
 )")
-        .def("get_user_data",
-             [](const atom::error::ErrorContext& ctx, const std::string& key) -> py::object {
-                 auto data = ctx.getUserData(key);
-                 if (!data.has_value()) {
-                     return py::none();
-                 }
-                 // Try to convert back to Python types
-                 try {
-                     if (auto* str_val = std::any_cast<std::string>(&data)) {
-                         return py::cast(*str_val);
-                     } else if (auto* int_val = std::any_cast<int>(&data)) {
-                         return py::cast(*int_val);
-                     } else if (auto* double_val = std::any_cast<double>(&data)) {
-                         return py::cast(*double_val);
-                     } else if (auto* bool_val = std::any_cast<bool>(&data)) {
-                         return py::cast(*bool_val);
-                     }
-                 } catch (...) {
-                     return py::none();
-                 }
-                 return py::none();
-             },
-             py::arg("key"),
-             R"(Get user-defined data.
+        .def(
+            "get_user_data",
+            [](const atom::error::ErrorContext& ctx,
+               const std::string& key) -> py::object {
+                auto data = ctx.getUserData(key);
+                if (!data.has_value()) {
+                    return py::none();
+                }
+                // Try to convert back to Python types
+                try {
+                    if (auto* str_val = std::any_cast<std::string>(&data)) {
+                        return py::cast(*str_val);
+                    } else if (auto* int_val = std::any_cast<int>(&data)) {
+                        return py::cast(*int_val);
+                    } else if (auto* double_val =
+                                   std::any_cast<double>(&data)) {
+                        return py::cast(*double_val);
+                    } else if (auto* bool_val = std::any_cast<bool>(&data)) {
+                        return py::cast(*bool_val);
+                    }
+                } catch (...) {
+                    return py::none();
+                }
+                return py::none();
+            },
+            py::arg("key"),
+            R"(Get user-defined data.
 
 Args:
     key (str): The data key
@@ -212,8 +222,7 @@ Returns:
     str: The info value, or empty string if not found
 )")
         // Tags
-        .def("add_tag", &atom::error::ErrorContext::addTag,
-             py::arg("tag"),
+        .def("add_tag", &atom::error::ErrorContext::addTag, py::arg("tag"),
              py::return_value_policy::reference_internal,
              R"(Add a tag to the error context.
 
@@ -233,8 +242,7 @@ Examples:
 Returns:
     list[str]: List of tags
 )")
-        .def("has_tag", &atom::error::ErrorContext::hasTag,
-             py::arg("tag"),
+        .def("has_tag", &atom::error::ErrorContext::hasTag, py::arg("tag"),
              R"(Check if a tag exists.
 
 Args:
@@ -261,8 +269,8 @@ Returns:
 Returns:
     str: The correlation ID
 )")
-        .def("set_parent_error_id", &atom::error::ErrorContext::setParentErrorId,
-             py::arg("parent_id"),
+        .def("set_parent_error_id",
+             &atom::error::ErrorContext::setParentErrorId, py::arg("parent_id"),
              py::return_value_policy::reference_internal,
              R"(Set parent error ID for error chains.
 
@@ -272,15 +280,15 @@ Args:
 Returns:
     ErrorContext: Self for method chaining
 )")
-        .def("get_parent_error_id", &atom::error::ErrorContext::getParentErrorId,
+        .def("get_parent_error_id",
+             &atom::error::ErrorContext::getParentErrorId,
              R"(Get the parent error ID.
 
 Returns:
     str: The parent error ID
 )")
         .def("add_child_error_id", &atom::error::ErrorContext::addChildErrorId,
-             py::arg("child_id"),
-             py::return_value_policy::reference_internal,
+             py::arg("child_id"), py::return_value_policy::reference_internal,
              R"(Add a child error ID.
 
 Args:
@@ -289,14 +297,16 @@ Args:
 Returns:
     ErrorContext: Self for method chaining
 )")
-        .def("get_child_error_ids", &atom::error::ErrorContext::getChildErrorIds,
+        .def("get_child_error_ids",
+             &atom::error::ErrorContext::getChildErrorIds,
              R"(Get all child error IDs.
 
 Returns:
     list[str]: List of child error IDs
 )")
         // Retry information
-        .def("increment_retry_count", &atom::error::ErrorContext::incrementRetryCount,
+        .def("increment_retry_count",
+             &atom::error::ErrorContext::incrementRetryCount,
              py::return_value_policy::reference_internal,
              R"(Increment the retry count.
 
@@ -371,13 +381,13 @@ Returns:
              "Returns a string representation of the error context.")
         .def("__repr__",
              [](const atom::error::ErrorContext& ctx) {
-                 return "<ErrorContext: " + ctx.getErrorId() + ", code=" +
-                        std::to_string(ctx.getErrorCode()) + ">";
+                 return "<ErrorContext: " + ctx.getErrorId() +
+                        ", code=" + std::to_string(ctx.getErrorCode()) + ">";
              })
         // Static factory methods
         .def_static("create", &atom::error::ErrorContext::create,
-                   py::arg("error_code"), py::arg("message") = "",
-                   R"(Create a new error context.
+                    py::arg("error_code"), py::arg("message") = "",
+                    R"(Create a new error context.
 
 Args:
     error_code (int): The error code
@@ -390,9 +400,11 @@ Examples:
     >>> from atom.error import ErrorContext, NetworkError
     >>> context = ErrorContext.create(int(NetworkError.ConnectionLost), "Connection dropped")
 )")
-        .def_static("create_with_correlation", &atom::error::ErrorContext::createWithCorrelation,
-                   py::arg("error_code"), py::arg("correlation_id"), py::arg("message") = "",
-                   R"(Create a new error context with correlation ID.
+        .def_static("create_with_correlation",
+                    &atom::error::ErrorContext::createWithCorrelation,
+                    py::arg("error_code"), py::arg("correlation_id"),
+                    py::arg("message") = "",
+                    R"(Create a new error context with correlation ID.
 
 Args:
     error_code (int): The error code
@@ -418,14 +430,16 @@ Examples:
     >>> manager.register_context(context)
     >>> retrieved = manager.get_context(context.get_error_id())
 )")
-        .def_static("get_instance", &atom::error::ErrorContextManager::getInstance,
-                   py::return_value_policy::reference,
-                   R"(Get the singleton instance.
+        .def_static("get_instance",
+                    &atom::error::ErrorContextManager::getInstance,
+                    py::return_value_policy::reference,
+                    R"(Get the singleton instance.
 
 Returns:
     ErrorContextManager: The singleton instance
 )")
-        .def("register_context", &atom::error::ErrorContextManager::registerContext,
+        .def("register_context",
+             &atom::error::ErrorContextManager::registerContext,
              py::arg("context"),
              R"(Register an error context.
 
@@ -442,7 +456,8 @@ Args:
 Returns:
     ErrorContext: The error context, or None if not found
 )")
-        .def("get_contexts_by_correlation", &atom::error::ErrorContextManager::getContextsByCorrelation,
+        .def("get_contexts_by_correlation",
+             &atom::error::ErrorContextManager::getContextsByCorrelation,
              py::arg("correlation_id"),
              R"(Get all contexts with a specific correlation ID.
 
@@ -499,17 +514,17 @@ Args:
 Returns:
     ErrorContext: The error context
 )")
-        .def("__enter__",
-             [](atom::error::ScopedErrorContext& self) -> atom::error::ScopedErrorContext& {
-                 return self;
-             },
-             py::return_value_policy::reference_internal,
-             "Enter the context manager.")
-        .def("__exit__",
-             [](atom::error::ScopedErrorContext& self, py::object exc_type,
-                py::object exc_val, py::object exc_tb) {
-                 return false;  // Don't suppress exceptions
-             },
-             "Exit the context manager.");
+        .def(
+            "__enter__",
+            [](atom::error::ScopedErrorContext& self)
+                -> atom::error::ScopedErrorContext& { return self; },
+            py::return_value_policy::reference_internal,
+            "Enter the context manager.")
+        .def(
+            "__exit__",
+            [](atom::error::ScopedErrorContext& self, py::object exc_type,
+               py::object exc_val, py::object exc_tb) {
+                return false;  // Don't suppress exceptions
+            },
+            "Exit the context manager.");
 }
-

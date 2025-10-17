@@ -23,7 +23,8 @@ protected:
     }
 
     // Helper to check if a specific data pattern exists in the serialized data
-    bool containsPattern(const std::vector<char>& data, const std::string& pattern) {
+    bool containsPattern(const std::vector<char>& data,
+                         const std::string& pattern) {
         std::string data_str(data.begin(), data.end());
         return data_str.find(pattern) != std::string::npos;
     }
@@ -47,7 +48,8 @@ TEST_F(FITSHeaderTest, AddAndGetKeyword) {
     EXPECT_EQ(header.getKeywordValue("BITPIX"), "32");
 
     // Add a keyword with a longer value
-    std::string long_value = "This is a longer value with spaces and special chars: !@#$%^&*()";
+    std::string long_value =
+        "This is a longer value with spaces and special chars: !@#$%^&*()";
     header.addKeyword("COMMENT", long_value);
     EXPECT_EQ(header.getKeywordValue("COMMENT"), long_value);
 }
@@ -59,7 +61,8 @@ TEST_F(FITSHeaderTest, HasKeyword) {
     EXPECT_FALSE(header.hasKeyword("NONEXIST"));
 
     // Check case sensitivity
-    EXPECT_FALSE(header.hasKeyword("simple")); // FITS keywords should be case-sensitive
+    EXPECT_FALSE(
+        header.hasKeyword("simple"));  // FITS keywords should be case-sensitive
 }
 
 // Test removing keywords
@@ -132,8 +135,10 @@ TEST_F(FITSHeaderTest, Serialization) {
     // Check for END keyword at the end
     std::string end_pattern = "END     ";
     bool has_end = false;
-    for (size_t i = 0; i <= data.size() - end_pattern.length(); i += FITSHeader::FITS_HEADER_CARD_SIZE) {
-        if (std::strncmp(&data[i], end_pattern.c_str(), end_pattern.length()) == 0) {
+    for (size_t i = 0; i <= data.size() - end_pattern.length();
+         i += FITSHeader::FITS_HEADER_CARD_SIZE) {
+        if (std::strncmp(&data[i], end_pattern.c_str(), end_pattern.length()) ==
+            0) {
             has_end = true;
             break;
         }
@@ -170,7 +175,8 @@ TEST_F(FITSHeaderTest, DeserializationErrors) {
     EXPECT_THROW(header.deserialize(empty_data), FITSHeaderException);
 
     // Test with data that's not a multiple of FITS_HEADER_CARD_SIZE
-    std::vector<char> invalid_size_data(FITSHeader::FITS_HEADER_CARD_SIZE - 1, ' ');
+    std::vector<char> invalid_size_data(FITSHeader::FITS_HEADER_CARD_SIZE - 1,
+                                        ' ');
     EXPECT_THROW(header.deserialize(invalid_size_data), FITSHeaderException);
 
     // Test with data that doesn't contain an END keyword
@@ -246,9 +252,10 @@ TEST_F(FITSHeaderTest, ExtensiveFITSHeader) {
 
     // Check serialization size
     std::vector<char> data = large_header.serialize();
-    int expected_size = ((100 + 1) * FITSHeader::FITS_HEADER_CARD_SIZE + FITSHeader::FITS_HEADER_UNIT_SIZE - 1)
-                         / FITSHeader::FITS_HEADER_UNIT_SIZE
-                         * FITSHeader::FITS_HEADER_UNIT_SIZE;
+    int expected_size = ((100 + 1) * FITSHeader::FITS_HEADER_CARD_SIZE +
+                         FITSHeader::FITS_HEADER_UNIT_SIZE - 1) /
+                        FITSHeader::FITS_HEADER_UNIT_SIZE *
+                        FITSHeader::FITS_HEADER_UNIT_SIZE;
     EXPECT_EQ(data.size(), expected_size);
 }
 
@@ -340,7 +347,8 @@ TEST_F(FITSHeaderTest, RoundTripValues) {
     EXPECT_EQ(deserialized.getKeywordValue("STRING"), "'Hello World'");
     EXPECT_EQ(deserialized.getKeywordValue("DATE"), "'2023-01-01T12:00:00'");
     EXPECT_EQ(deserialized.getKeywordValue("EMPTY"), "");
-    EXPECT_THAT(deserialized.getComments(), ::testing::Contains("Test comment"));
+    EXPECT_THAT(deserialized.getComments(),
+                ::testing::Contains("Test comment"));
 }
 
 // Test with multi-line serialization
@@ -351,7 +359,8 @@ TEST_F(FITSHeaderTest, MultilineComment) {
     EXPECT_EQ(comments.size(), 1);
     EXPECT_EQ(comments[0], "Line 1\nLine 2\nLine 3");
 
-    // Serialize and check - should be flattened or split into multiple COMMENT lines
+    // Serialize and check - should be flattened or split into multiple COMMENT
+    // lines
     std::vector<char> data = header.serialize();
 
     // Either approach is valid, just make sure the data is preserved
@@ -362,7 +371,8 @@ TEST_F(FITSHeaderTest, MultilineComment) {
     std::string original = comments[0];
     std::string reconstructed;
     for (const auto& c : deserialized_comments) {
-        if (!reconstructed.empty()) reconstructed += "\n";
+        if (!reconstructed.empty())
+            reconstructed += "\n";
         reconstructed += c;
     }
 
@@ -372,7 +382,7 @@ TEST_F(FITSHeaderTest, MultilineComment) {
     EXPECT_TRUE(reconstructed.find("Line 3") != std::string::npos);
 }
 
-} // namespace atom::image::test
+}  // namespace atom::image::test
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

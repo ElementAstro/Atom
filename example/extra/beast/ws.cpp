@@ -14,49 +14,56 @@ complex template/concept compatibility issues.
 
 **************************************************/
 
+#include <atomic>
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
-#include <functional>
-#include <atomic>
 
 using namespace std::chrono_literals;
 
 // Minimal stub implementations since atom-extra-beast has compatibility issues
 
 namespace boost::beast {
-    struct error_code {
-        int value_ = 0;
-        error_code() = default;
-        error_code(int val) : value_(val) {}
-        operator bool() const { return value_ != 0; }
-        std::string message() const { return value_ ? "Error " + std::to_string(value_) : "Success"; }
-    };
-}
+struct error_code {
+    int value_ = 0;
+    error_code() = default;
+    error_code(int val) : value_(val) {}
+    operator bool() const { return value_ != 0; }
+    std::string message() const {
+        return value_ ? "Error " + std::to_string(value_) : "Success";
+    }
+};
+}  // namespace boost::beast
 
 // Stub WSClient class
 class WSClient {
 public:
     WSClient() {
-        std::cout << "WebSocket Client created (stub implementation)" << std::endl;
+        std::cout << "WebSocket Client created (stub implementation)"
+                  << std::endl;
     }
 
-    template<typename ConnectHandler>
-    void asyncConnect(std::string_view host, std::string_view port, ConnectHandler&& handler) {
-        std::cout << "Async connecting to " << host << ":" << port << " (stub)" << std::endl;
+    template <typename ConnectHandler>
+    void asyncConnect(std::string_view host, std::string_view port,
+                      ConnectHandler&& handler) {
+        std::cout << "Async connecting to " << host << ":" << port << " (stub)"
+                  << std::endl;
 
         // Simulate async connection
-        std::thread([handler = std::forward<ConnectHandler>(handler)]() mutable {
+        std::thread([handler =
+                         std::forward<ConnectHandler>(handler)]() mutable {
             std::this_thread::sleep_for(100ms);
-            boost::beast::error_code ec(0); // Success
+            boost::beast::error_code ec(0);  // Success
             handler(ec);
         }).detach();
     }
 
     void connect(std::string_view host, std::string_view port) {
-        std::cout << "Connecting to " << host << ":" << port << " (stub)" << std::endl;
+        std::cout << "Connecting to " << host << ":" << port << " (stub)"
+                  << std::endl;
         connected_ = true;
     }
 
@@ -64,17 +71,20 @@ public:
         if (connected_) {
             std::cout << "Sending message (stub): " << message << std::endl;
         } else {
-            std::cout << "Cannot send message: not connected (stub)" << std::endl;
+            std::cout << "Cannot send message: not connected (stub)"
+                      << std::endl;
         }
     }
 
     std::string receive() {
         if (connected_) {
-            std::string response = "Echo from WebSocket server (stub): Hello World!";
+            std::string response =
+                "Echo from WebSocket server (stub): Hello World!";
             std::cout << "Received message (stub): " << response << std::endl;
             return response;
         } else {
-            std::cout << "Cannot receive message: not connected (stub)" << std::endl;
+            std::cout << "Cannot receive message: not connected (stub)"
+                      << std::endl;
             return "";
         }
     }
@@ -84,17 +94,18 @@ public:
         connected_ = false;
     }
 
-    bool isConnected() const {
-        return connected_;
-    }
+    bool isConnected() const { return connected_; }
 
 private:
     std::atomic<bool> connected_{false};
 };
 
 int main() {
-    std::cout << "=== Beast WebSocket Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation due to template/concept compatibility issues." << std::endl;
+    std::cout << "=== Beast WebSocket Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation due to template/concept "
+                 "compatibility issues."
+              << std::endl;
 
     try {
         // 1. Async WebSocket connection
@@ -103,14 +114,18 @@ int main() {
             WSClient client;
             std::atomic<bool> connection_complete{false};
 
-            client.asyncConnect("example.com", "80", [&connection_complete](boost::beast::error_code ec) {
-                if (ec) {
-                    std::cerr << "Async connection failed: " << ec.message() << std::endl;
-                } else {
-                    std::cout << "Async connected to WebSocket server" << std::endl;
-                }
-                connection_complete = true;
-            });
+            client.asyncConnect(
+                "example.com", "80",
+                [&connection_complete](boost::beast::error_code ec) {
+                    if (ec) {
+                        std::cerr << "Async connection failed: " << ec.message()
+                                  << std::endl;
+                    } else {
+                        std::cout << "Async connected to WebSocket server"
+                                  << std::endl;
+                    }
+                    connection_complete = true;
+                });
 
             // Wait for async connection to complete
             while (!connection_complete) {
@@ -154,7 +169,9 @@ int main() {
             }
         }
 
-        std::cout << "\n=== Beast WebSocket Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout << "\n=== Beast WebSocket Example Complete (Stub "
+                     "Implementation) ==="
+                  << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error in WebSocket examples: " << e.what() << std::endl;

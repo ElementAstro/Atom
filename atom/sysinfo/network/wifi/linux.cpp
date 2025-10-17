@@ -39,7 +39,7 @@ auto isConnectedToInternet_impl() -> bool {
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
     setsockopt(sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout));
 
-    struct sockaddr_in server{};
+    struct sockaddr_in server {};
     server.sin_family = AF_INET;
     server.sin_port = htons(TEST_PORT);
 

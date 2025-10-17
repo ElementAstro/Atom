@@ -21,7 +21,7 @@ class FitsFileTest : public ::testing::Test {
 protected:
     void SetUp() override {
         fileManager = std::make_unique<TestFileManager>();
-        
+
         // Create test FITS files
         createTestFitsFiles();
     }
@@ -56,7 +56,7 @@ protected:
 
     void createCorruptedFitsFile(const std::string& filename) {
         std::ofstream file(filename, std::ios::binary);
-        
+
         // Write invalid FITS header
         file.write("INVALID_FITS_HEADER", 19);
         file.write("CORRUPTED_DATA", 14);
@@ -64,7 +64,7 @@ protected:
     }
 
     std::unique_ptr<TestFileManager> fileManager;
-    
+
     std::string simple_fits_file, multi_hdu_fits_file, large_fits_file;
     std::string empty_fits_file, corrupted_fits_file;
 };
@@ -72,7 +72,7 @@ protected:
 // Test basic FITS file reading
 TEST_F(FitsFileTest, ReadBasicFitsFile) {
     FITSFile fitsFile;
-    
+
     EXPECT_NO_THROW(fitsFile.readFITS(simple_fits_file));
     EXPECT_FALSE(fitsFile.isEmpty());
     EXPECT_GT(fitsFile.getHDUCount(), 0);
@@ -81,7 +81,7 @@ TEST_F(FitsFileTest, ReadBasicFitsFile) {
 // Test FITS file constructor
 TEST_F(FitsFileTest, ConstructorWithFilename) {
     EXPECT_NO_THROW(FITSFile fitsFile(simple_fits_file));
-    
+
     FITSFile fitsFile(simple_fits_file);
     EXPECT_FALSE(fitsFile.isEmpty());
     EXPECT_GT(fitsFile.getHDUCount(), 0);
@@ -90,12 +90,12 @@ TEST_F(FitsFileTest, ConstructorWithFilename) {
 // Test HDU access
 TEST_F(FitsFileTest, HDUAccess) {
     FITSFile fitsFile(simple_fits_file);
-    
+
     EXPECT_GT(fitsFile.getHDUCount(), 0);
-    
+
     // Test valid HDU access
     EXPECT_NO_THROW(const auto& hdu = fitsFile.getHDU(0));
-    
+
     // Test invalid HDU access
     EXPECT_THROW(fitsFile.getHDU(999), std::out_of_range);
 }
@@ -103,7 +103,7 @@ TEST_F(FitsFileTest, HDUAccess) {
 // Test HDU type casting
 TEST_F(FitsFileTest, HDUTypeCasting) {
     FITSFile fitsFile(simple_fits_file);
-    
+
     if (fitsFile.getHDUCount() > 0) {
         // Test getting HDU as specific type (assuming ImageHDU exists)
         try {
@@ -120,16 +120,16 @@ TEST_F(FitsFileTest, HDUTypeCasting) {
 TEST_F(FitsFileTest, WriteFitsFile) {
     std::string outputFile = "test_output.fits";
     fileManager->registerTempFile(outputFile);
-    
+
     // Read a FITS file
     FITSFile fitsFile(simple_fits_file);
-    
+
     // Write it to a new file
     EXPECT_NO_THROW(fitsFile.writeFITS(outputFile));
-    
+
     // Verify the written file exists and can be read
     EXPECT_TRUE(std::filesystem::exists(outputFile));
-    
+
     FITSFile writtenFile(outputFile);
     EXPECT_EQ(writtenFile.getHDUCount(), fitsFile.getHDUCount());
 }
@@ -137,12 +137,12 @@ TEST_F(FitsFileTest, WriteFitsFile) {
 // Test adding HDUs
 TEST_F(FitsFileTest, AddHDU) {
     FITSFile fitsFile;
-    
+
     size_t initialCount = fitsFile.getHDUCount();
-    
+
     // Create a new HDU (assuming we have a concrete HDU implementation)
     auto newHDU = std::make_unique<HDU>();
-    
+
     EXPECT_NO_THROW(fitsFile.addHDU(std::move(newHDU)));
     EXPECT_EQ(fitsFile.getHDUCount(), initialCount + 1);
 }
@@ -150,14 +150,14 @@ TEST_F(FitsFileTest, AddHDU) {
 // Test removing HDUs
 TEST_F(FitsFileTest, RemoveHDU) {
     FITSFile fitsFile(simple_fits_file);
-    
+
     size_t initialCount = fitsFile.getHDUCount();
-    
+
     if (initialCount > 1) {
         EXPECT_NO_THROW(fitsFile.removeHDU(initialCount - 1));
         EXPECT_EQ(fitsFile.getHDUCount(), initialCount - 1);
     }
-    
+
     // Test removing invalid index
     EXPECT_THROW(fitsFile.removeHDU(999), std::out_of_range);
 }
@@ -165,9 +165,9 @@ TEST_F(FitsFileTest, RemoveHDU) {
 // Test error handling with non-existent file
 TEST_F(FitsFileTest, HandleNonExistentFile) {
     FITSFile fitsFile;
-    
+
     EXPECT_THROW(fitsFile.readFITS("non_existent_file.fits"), FITSFileException);
-    
+
     // Test constructor with non-existent file
     EXPECT_THROW(FITSFile badFile("non_existent_file.fits"), FITSFileException);
 }
@@ -175,30 +175,30 @@ TEST_F(FitsFileTest, HandleNonExistentFile) {
 // Test error handling with empty file
 TEST_F(FitsFileTest, HandleEmptyFile) {
     FITSFile fitsFile;
-    
+
     EXPECT_THROW(fitsFile.readFITS(empty_fits_file), FITSFileException);
 }
 
 // Test error handling with corrupted file
 TEST_F(FitsFileTest, HandleCorruptedFile) {
     FITSFile fitsFile;
-    
+
     EXPECT_THROW(fitsFile.readFITS(corrupted_fits_file), FITSFileException);
 }
 
 // Test async reading
 TEST_F(FitsFileTest, AsyncReading) {
     FITSFile fitsFile;
-    
+
     auto future = fitsFile.readFITSAsync(simple_fits_file);
-    
+
     // Wait for completion with timeout
     auto status = future.wait_for(std::chrono::seconds(5));
     EXPECT_EQ(status, std::future_status::ready);
-    
+
     // Should not throw
     EXPECT_NO_THROW(future.get());
-    
+
     EXPECT_FALSE(fitsFile.isEmpty());
     EXPECT_GT(fitsFile.getHDUCount(), 0);
 }
@@ -207,18 +207,18 @@ TEST_F(FitsFileTest, AsyncReading) {
 TEST_F(FitsFileTest, AsyncWriting) {
     std::string outputFile = "test_async_output.fits";
     fileManager->registerTempFile(outputFile);
-    
+
     FITSFile fitsFile(simple_fits_file);
-    
+
     auto future = fitsFile.writeFITSAsync(outputFile);
-    
+
     // Wait for completion with timeout
     auto status = future.wait_for(std::chrono::seconds(5));
     EXPECT_EQ(status, std::future_status::ready);
-    
+
     // Should not throw
     EXPECT_NO_THROW(future.get());
-    
+
     // Verify file was written
     EXPECT_TRUE(std::filesystem::exists(outputFile));
 }
@@ -226,10 +226,10 @@ TEST_F(FitsFileTest, AsyncWriting) {
 // Test multi-HDU file handling
 TEST_F(FitsFileTest, MultiHDUHandling) {
     FITSFile fitsFile(multi_hdu_fits_file);
-    
+
     size_t hduCount = fitsFile.getHDUCount();
     EXPECT_GT(hduCount, 0);
-    
+
     // Test accessing all HDUs
     for (size_t i = 0; i < hduCount; ++i) {
         EXPECT_NO_THROW(const auto& hdu = fitsFile.getHDU(i));
@@ -239,11 +239,11 @@ TEST_F(FitsFileTest, MultiHDUHandling) {
 // Test FITS file validation
 TEST_F(FitsFileTest, FitsFileValidation) {
     FITSFile fitsFile(simple_fits_file);
-    
+
     // Test that the file is valid
     EXPECT_FALSE(fitsFile.isEmpty());
     EXPECT_GT(fitsFile.getHDUCount(), 0);
-    
+
     // Test HDU validation
     for (size_t i = 0; i < fitsFile.getHDUCount(); ++i) {
         const auto& hdu = fitsFile.getHDU(i);
@@ -256,11 +256,11 @@ TEST_F(FitsFileTest, FitsFileValidation) {
 TEST_F(FitsFileTest, MoveSemantics) {
     FITSFile originalFile(simple_fits_file);
     size_t originalCount = originalFile.getHDUCount();
-    
+
     // Test move constructor
     FITSFile movedFile = std::move(originalFile);
     EXPECT_EQ(movedFile.getHDUCount(), originalCount);
-    
+
     // Test move assignment
     FITSFile assignedFile;
     assignedFile = std::move(movedFile);
@@ -272,7 +272,7 @@ TEST_F(FitsFileTest, ErrorCodeFunctionality) {
     // Test error code creation
     auto errorCode = make_error_code(FITSErrorCode::FileNotExist);
     EXPECT_EQ(errorCode.value(), static_cast<int>(FITSErrorCode::FileNotExist));
-    
+
     // Test error category
     const auto& category = FITSErrorCategory::instance();
     EXPECT_FALSE(std::string(category.name()).empty());

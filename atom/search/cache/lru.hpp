@@ -525,7 +525,8 @@ auto ThreadSafeLRUCache<Key, Value>::getShared(const Key& key) noexcept
         }
         hit_count_++;
         if constexpr (std::is_trivially_copy_constructible_v<Value>) {
-            cache_items_list_.splice(cache_items_list_.begin(), cache_items_list_,
+            cache_items_list_.splice(cache_items_list_.begin(),
+                                     cache_items_list_,
                                      iterator->second.iterator);
         }
         return iterator->second.value;
@@ -686,7 +687,7 @@ void ThreadSafeLRUCache<Key, Value>::putBatch(
                                          iterator->second.iterator);
                 iterator->second.value = valuePtr;
                 iterator->second.expiryTime = expiryTime;
-                iterator->second.iterator->second = value; // keep list in sync
+                iterator->second.iterator->second = value;  // keep list in sync
             } else {
                 cache_items_list_.emplace_front(key, value);
                 cache_items_map_[key] = {valuePtr, expiryTime,
@@ -984,15 +985,21 @@ void ThreadSafeLRUCache<Key, Value>::saveToFile(
         }
 
         // Collect non-expired items in LRU order
-        struct ItemRec { Key key; int64_t ttl; Value value; };
+        struct ItemRec {
+            Key key;
+            int64_t ttl;
+            Value value;
+        };
         std::vector<ItemRec> items;
         items.reserve(cache_items_map_.size());
 
         auto now = Clock::now();
         for (const auto& pair : cache_items_list_) {
             auto it = cache_items_map_.find(pair.first);
-            if (it == cache_items_map_.end()) continue;
-            if (isExpired(it->second)) continue;
+            if (it == cache_items_map_.end())
+                continue;
+            if (isExpired(it->second))
+                continue;
 
             int64_t remainingTtl = -1;
             if (it->second.expiryTime != TimePoint::max()) {
@@ -1000,9 +1007,11 @@ void ThreadSafeLRUCache<Key, Value>::saveToFile(
                     std::chrono::duration_cast<std::chrono::seconds>(
                         it->second.expiryTime - now);
                 remainingTtl = ttlDuration.count();
-                if (remainingTtl <= 0) continue;
+                if (remainingTtl <= 0)
+                    continue;
             }
-            items.push_back(ItemRec{pair.first, remainingTtl, *(it->second.value)});
+            items.push_back(
+                ItemRec{pair.first, remainingTtl, *(it->second.value)});
         }
 
         size_t outSize = items.size();
@@ -1013,7 +1022,8 @@ void ThreadSafeLRUCache<Key, Value>::saveToFile(
             if constexpr (std::is_same_v<Key, std::string>) {
                 size_t len = key.size();
                 ofs.write(reinterpret_cast<const char*>(&len), sizeof(len));
-                if (len) ofs.write(key.data(), static_cast<std::streamsize>(len));
+                if (len)
+                    ofs.write(key.data(), static_cast<std::streamsize>(len));
             } else {
                 ofs.write(reinterpret_cast<const char*>(&key), sizeof(Key));
             }
@@ -1052,7 +1062,8 @@ void ThreadSafeLRUCache<Key, Value>::saveToFile(
 template <typename Key, typename Value>
 void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
     try {
-        // Read file contents without holding cache locks to avoid long critical sections
+        // Read file contents without holding cache locks to avoid long critical
+        // sections
         std::ifstream ifs(filename, std::ios::binary);
         if (!ifs) {
             throw LRUCacheIOException("Failed to open file for reading: " +
@@ -1062,7 +1073,8 @@ void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
         size_t itemCount = 0;
         size_t storedMaxSize = 0;
         ifs.read(reinterpret_cast<char*>(&itemCount), sizeof(itemCount));
-        ifs.read(reinterpret_cast<char*>(&storedMaxSize), sizeof(storedMaxSize));
+        ifs.read(reinterpret_cast<char*>(&storedMaxSize),
+                 sizeof(storedMaxSize));
         if (!ifs) {
             throw LRUCacheIOException(
                 "Failed to read cache metadata from file");
@@ -1073,13 +1085,18 @@ void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
                 size_t len = 0;
                 ifs.read(reinterpret_cast<char*>(&len), sizeof(len));
                 key.resize(len);
-                if (len) ifs.read(&key[0], static_cast<std::streamsize>(len));
+                if (len)
+                    ifs.read(&key[0], static_cast<std::streamsize>(len));
             } else {
                 ifs.read(reinterpret_cast<char*>(&key), sizeof(Key));
             }
         };
 
-        struct InItem { Key key; Value value; std::optional<std::chrono::seconds> ttl; };
+        struct InItem {
+            Key key;
+            Value value;
+            std::optional<std::chrono::seconds> ttl;
+        };
         std::vector<InItem> items;
         items.reserve(itemCount);
 
@@ -1093,10 +1110,12 @@ void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
             Value value;
             if constexpr (std::is_same_v<Value, std::string>) {
                 size_t valueSize = 0;
-                ifs.read(reinterpret_cast<char*>(&valueSize), sizeof(valueSize));
+                ifs.read(reinterpret_cast<char*>(&valueSize),
+                         sizeof(valueSize));
                 value.resize(valueSize);
                 if (valueSize)
-                    ifs.read(&value[0], static_cast<std::streamsize>(valueSize));
+                    ifs.read(&value[0],
+                             static_cast<std::streamsize>(valueSize));
             } else {
                 ifs.read(reinterpret_cast<char*>(&value), sizeof(value));
             }
@@ -1114,7 +1133,8 @@ void ThreadSafeLRUCache<Key, Value>::loadFromFile(const std::string& filename) {
             items.push_back(InItem{std::move(key), std::move(value), ttl});
         }
 
-        // Now update the cache state using public APIs (each acquires its own lock)
+        // Now update the cache state using public APIs (each acquires its own
+        // lock)
         clear();
         for (auto& it : items) {
             put(it.key, std::move(it.value), it.ttl);
@@ -1224,8 +1244,8 @@ auto ThreadSafeLRUCache<Key, Value>::asyncGet(const Key& key)
 
 template <typename Key, typename Value>
 auto ThreadSafeLRUCache<Key, Value>::asyncPut(
-    const Key& key, Value value, std::optional<std::chrono::seconds> ttl)
-    -> future<void> {
+    const Key& key, Value value,
+    std::optional<std::chrono::seconds> ttl) -> future<void> {
     return std::async(std::launch::async,
                       [this, key, value = std::move(value), ttl]() mutable {
                           put(key, std::move(value), ttl);

@@ -419,7 +419,8 @@ TEST_F(CStringTest, ConvertBase) {
 
     // Binary to decimal
     std::array<char, 6> bin = {'1', '0', '1', '0', '1', '\0'};
-    EXPECT_EQ(convertBase(bin, BASE_2, BASE_10), "21");  // 10101 binary to decimal
+    EXPECT_EQ(convertBase(bin, BASE_2, BASE_10),
+              "21");  // 10101 binary to decimal
 
     // Hex to decimal
     std::array<char, 3> hex = {'F', 'F', '\0'};
@@ -479,7 +480,7 @@ TEST_F(CStringTest, ComplexCombinations) {
     EXPECT_EQ(arrayToString(revSpecial), "?><:{}+_)(*&^%$#@!");
 
     // Unicode handling is limited in C-style strings, so these tests are basic
-    constexpr const char unicodeChars[] = "Привет"; // Russian word "hello"
+    constexpr const char unicodeChars[] = "Привет";  // Russian word "hello"
     auto revUnicode = reverse(unicodeChars);
     // This may not work correctly for multi-byte characters,
     // but we test the behavior for documentation purposes

@@ -190,8 +190,8 @@ private:
     // 添加等价区域标记，完成完整的差异表示
     auto addEqualBlocks(
         const std::vector<std::tuple<std::string, int, int, int, int>>& ops,
-        int n, int m)
-        -> std::vector<std::tuple<std::string, int, int, int, int>> {
+        int n,
+        int m) -> std::vector<std::tuple<std::string, int, int, int, int>> {
         std::vector<std::tuple<std::string, int, int, int, int>> result;
         result.reserve(ops.size() * 2);
 
@@ -706,11 +706,10 @@ auto Differ::unifiedDiff(std::span<const std::string> vec1,
                        DiffLibConfig::getDefaultOptions());
 }
 
-auto Differ::unifiedDiff(std::span<const std::string> vec1,
-                         std::span<const std::string> vec2,
-                         std::string_view label1, std::string_view label2,
-                         int context, const DiffOptions& options)
-    -> std::vector<std::string> {
+auto Differ::unifiedDiff(
+    std::span<const std::string> vec1, std::span<const std::string> vec2,
+    std::string_view label1, std::string_view label2, int context,
+    const DiffOptions& options) -> std::vector<std::string> {
     // Input validation
     if (context < 0) {
         throw std::invalid_argument("Context cannot be negative");
@@ -1570,8 +1569,8 @@ private:
 
     // 从候选匹配中选择最佳的非重叠匹配
     auto selectBestMatches(
-        const std::vector<std::tuple<int, int, int>>& candidates, int n, int m)
-        -> std::vector<std::tuple<int, int, int>> {
+        const std::vector<std::tuple<int, int, int>>& candidates, int n,
+        int m) -> std::vector<std::tuple<int, int, int>> {
         // 使用位图标记已使用的索引
         std::vector<bool> usedA(n, false);
         std::vector<bool> usedB(m, false);

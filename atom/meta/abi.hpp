@@ -21,11 +21,11 @@
 #include "atom/containers/high_performance.hpp"
 
 #ifdef _WIN32
-    #ifdef _MSC_VER
-    #include <dbghelp.h>
-    #include <windows.h>
-    #pragma comment(lib, "dbghelp.lib")
-    #endif
+#ifdef _MSC_VER
+#include <dbghelp.h>
+#include <windows.h>
+#pragma comment(lib, "dbghelp.lib")
+#endif
 #else
 #include <cxxabi.h>
 #include <dlfcn.h>
@@ -261,16 +261,16 @@ private:
             std::free);
 #else
         // On Windows, demangling is not available with MinGW
-        std::unique_ptr<char, void (*)(void*)> demangledName(
-            nullptr, std::free);
-        status = -1; // Indicate failure
+        std::unique_ptr<char, void (*)(void*)> demangledName(nullptr,
+                                                             std::free);
+        status = -1;  // Indicate failure
 #endif
 
         if (status == 0 && demangledName) {
             demangled = String(demangledName.get());
         } else {
-            // On Windows or when demangling fails, return the original mangled name
-            // instead of throwing an exception
+            // On Windows or when demangling fails, return the original mangled
+            // name instead of throwing an exception
             demangled = String(mangled_name);
         }
 #endif
@@ -310,8 +310,8 @@ private:
      * \param indent_level Indentation level for visualization
      * \return A string containing the hierarchical visualization
      */
-    static auto visualizeType(const String& type_name, int indent_level = 0)
-        -> String {
+    static auto visualizeType(const String& type_name,
+                              int indent_level = 0) -> String {
         String indent(indent_level * 4, ' ');
         String result;
 
@@ -369,8 +369,8 @@ private:
      * \param indent_level Indentation level
      * \return A visualization of the template parameters
      */
-    static auto visualizeTemplateParams(const String& params, int indent_level)
-        -> String {
+    static auto visualizeTemplateParams(const String& params,
+                                        int indent_level) -> String {
         String indent(indent_level * 4, ' ');
         String result;
         int paramIndex = 0;
@@ -425,8 +425,8 @@ private:
      * \param indent_level Indentation level
      * \return A visualization of the function parameters
      */
-    static auto visualizeFunctionParams(const String& params, int indent_level)
-        -> String {
+    static auto visualizeFunctionParams(const String& params,
+                                        int indent_level) -> String {
         if (params.empty()) {
             return String(indent_level * 4, ' ') + "    (no parameters)\n";
         }

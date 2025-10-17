@@ -14,15 +14,15 @@
  * @version 1.0.0
  */
 
-#include "../core/image_blob.hpp"
-#include "format_detector.hpp"
-#include <string>
-#include <vector>
-#include <memory>
 #include <filesystem>
 #include <functional>
 #include <future>
+#include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
+#include "../core/image_blob.hpp"
+#include "format_detector.hpp"
 
 namespace atom::image {
 
@@ -30,29 +30,32 @@ namespace atom::image {
  * @brief Image compression types
  */
 enum class CompressionType {
-    NONE,           // No compression
-    LOSSLESS,       // Lossless compression
-    LOSSY,          // Lossy compression
-    ADAPTIVE,       // Adaptive compression based on content
-    CUSTOM          // Custom compression settings
+    NONE,      // No compression
+    LOSSLESS,  // Lossless compression
+    LOSSY,     // Lossy compression
+    ADAPTIVE,  // Adaptive compression based on content
+    CUSTOM     // Custom compression settings
 };
 
 /**
  * @brief Image saving options
  */
 struct SaveOptions {
-    ImageFormat targetFormat = ImageFormat::UNKNOWN;    // Auto-detect from extension if UNKNOWN
+    ImageFormat targetFormat =
+        ImageFormat::UNKNOWN;  // Auto-detect from extension if UNKNOWN
     CompressionType compression = CompressionType::ADAPTIVE;
-    int quality = 95;                                   // Quality for lossy formats (0-100)
-    bool preserveMetadata = true;                       // Preserve original metadata
-    bool optimizeSize = false;                          // Optimize for file size
-    bool progressiveEncoding = false;                   // Use progressive encoding (JPEG)
-    int compressionLevel = 6;                          // Compression level (0-9)
-    std::unordered_map<std::string, std::string> customMetadata;  // Additional metadata
-    std::unordered_map<std::string, std::string> formatOptions;   // Format-specific options
-    bool overwriteExisting = true;                     // Overwrite existing files
-    bool createDirectories = true;                     // Create directories if needed
-    std::string backupSuffix = ".bak";                // Backup suffix for existing files
+    int quality = 95;                  // Quality for lossy formats (0-100)
+    bool preserveMetadata = true;      // Preserve original metadata
+    bool optimizeSize = false;         // Optimize for file size
+    bool progressiveEncoding = false;  // Use progressive encoding (JPEG)
+    int compressionLevel = 6;          // Compression level (0-9)
+    std::unordered_map<std::string, std::string>
+        customMetadata;  // Additional metadata
+    std::unordered_map<std::string, std::string>
+        formatOptions;                  // Format-specific options
+    bool overwriteExisting = true;      // Overwrite existing files
+    bool createDirectories = true;      // Create directories if needed
+    std::string backupSuffix = ".bak";  // Backup suffix for existing files
 
     // Default constructor
     SaveOptions() = default;
@@ -61,7 +64,8 @@ struct SaveOptions {
 /**
  * @brief Saving progress callback
  */
-using SaveProgressCallback = std::function<void(float progress, const std::string& status)>;
+using SaveProgressCallback =
+    std::function<void(float progress, const std::string& status)>;
 
 /**
  * @brief Saving result
@@ -103,10 +107,10 @@ public:
      * @param progressCallback Optional progress callback
      * @return Saving result
      */
-    virtual SaveResult saveToFile(const blob& imageData,
-                                 const std::filesystem::path& filePath,
-                                 const SaveOptions& options = {},
-                                 SaveProgressCallback progressCallback = nullptr) const;
+    virtual SaveResult saveToFile(
+        const blob& imageData, const std::filesystem::path& filePath,
+        const SaveOptions& options = {},
+        SaveProgressCallback progressCallback = nullptr) const;
 
     /**
      * @brief Save image to memory buffer
@@ -117,8 +121,7 @@ public:
      * @return Encoded image data and result
      */
     virtual std::pair<std::vector<uint8_t>, SaveResult> saveToMemory(
-        const blob& imageData,
-        ImageFormat format,
+        const blob& imageData, ImageFormat format,
         const SaveOptions& options = {},
         SaveProgressCallback progressCallback = nullptr) const;
 
@@ -131,11 +134,11 @@ public:
      * @param progressCallback Optional progress callback
      * @return Batch saving result
      */
-    virtual BatchSaveResult saveBatch(const std::vector<blob>& imageData,
-                                     const std::vector<std::filesystem::path>& filePaths,
-                                     const SaveOptions& options = {},
-                                     size_t maxConcurrency = 4,
-                                     SaveProgressCallback progressCallback = nullptr) const;
+    virtual BatchSaveResult saveBatch(
+        const std::vector<blob>& imageData,
+        const std::vector<std::filesystem::path>& filePaths,
+        const SaveOptions& options = {}, size_t maxConcurrency = 4,
+        SaveProgressCallback progressCallback = nullptr) const;
 
     /**
      * @brief Save image asynchronously
@@ -145,10 +148,10 @@ public:
      * @param progressCallback Optional progress callback
      * @return Future containing saving result
      */
-    virtual std::future<SaveResult> saveAsync(const blob& imageData,
-                                             const std::filesystem::path& filePath,
-                                             const SaveOptions& options = {},
-                                             SaveProgressCallback progressCallback = nullptr) const;
+    virtual std::future<SaveResult> saveAsync(
+        const blob& imageData, const std::filesystem::path& filePath,
+        const SaveOptions& options = {},
+        SaveProgressCallback progressCallback = nullptr) const;
 
     /**
      * @brief Check if format is supported for saving
@@ -169,7 +172,8 @@ public:
      * @param preferLossless Prefer lossless formats
      * @return Recommended format
      */
-    virtual ImageFormat getOptimalFormat(const blob& imageData, bool preferLossless = false) const;
+    virtual ImageFormat getOptimalFormat(const blob& imageData,
+                                         bool preferLossless = false) const;
 
     /**
      * @brief Estimate output size for format and options
@@ -178,17 +182,17 @@ public:
      * @param options Saving options
      * @return Estimated output size in bytes
      */
-    virtual size_t estimateOutputSize(const blob& imageData,
-                                     ImageFormat format,
-                                     const SaveOptions& options) const;
+    virtual size_t estimateOutputSize(const blob& imageData, ImageFormat format,
+                                      const SaveOptions& options) const;
 
     /**
      * @brief Register custom format saver
      * @param format Image format
      * @param saver Custom saver function
      */
-    virtual void registerCustomSaver(ImageFormat format,
-                                    std::function<SaveResult(const blob&, const SaveOptions&)> saver);
+    virtual void registerCustomSaver(
+        ImageFormat format,
+        std::function<SaveResult(const blob&, const SaveOptions&)> saver);
 
 protected:
     /**
@@ -199,7 +203,8 @@ protected:
      * @return Encoded data and result
      */
     virtual std::pair<std::vector<uint8_t>, SaveResult> saveFormat(
-        const blob& imageData, ImageFormat format, const SaveOptions& options) const;
+        const blob& imageData, ImageFormat format,
+        const SaveOptions& options) const;
 
     /**
      * @brief Apply pre-processing before saving
@@ -207,7 +212,8 @@ protected:
      * @param options Saving options
      * @return Processed image data
      */
-    virtual blob applyPreProcessing(const blob& imageData, const SaveOptions& options) const;
+    virtual blob applyPreProcessing(const blob& imageData,
+                                    const SaveOptions& options) const;
 
     /**
      * @brief Write metadata to encoded data
@@ -216,9 +222,9 @@ protected:
      * @param metadata Metadata to write
      * @return Data with embedded metadata
      */
-    virtual std::vector<uint8_t> embedMetadata(const std::vector<uint8_t>& encodedData,
-                                              ImageFormat format,
-                                              const std::unordered_map<std::string, std::string>& metadata) const;
+    virtual std::vector<uint8_t> embedMetadata(
+        const std::vector<uint8_t>& encodedData, ImageFormat format,
+        const std::unordered_map<std::string, std::string>& metadata) const;
 
     /**
      * @brief Create backup of existing file
@@ -226,11 +232,14 @@ protected:
      * @param backupSuffix Backup suffix
      * @return Success status
      */
-    virtual bool createBackup(const std::filesystem::path& filePath, const std::string& backupSuffix) const;
+    virtual bool createBackup(const std::filesystem::path& filePath,
+                              const std::string& backupSuffix) const;
 
 private:
     std::unique_ptr<FormatDetector> formatDetector_;
-    std::unordered_map<ImageFormat, std::function<SaveResult(const blob&, const SaveOptions&)>> customSavers_;
+    std::unordered_map<
+        ImageFormat, std::function<SaveResult(const blob&, const SaveOptions&)>>
+        customSavers_;
 };
 
 /**
@@ -246,7 +255,8 @@ std::unique_ptr<ImageSaver> createImageSaver();
  * @param quality Quality for lossy formats (0-100)
  * @return Success status
  */
-bool quickSaveImage(const blob& imageData, const std::filesystem::path& filePath, int quality = 95);
+bool quickSaveImage(const blob& imageData,
+                    const std::filesystem::path& filePath, int quality = 95);
 
 /**
  * @brief Quick batch image saving
@@ -257,9 +267,8 @@ bool quickSaveImage(const blob& imageData, const std::filesystem::path& filePath
  * @return Number of successfully saved images
  */
 size_t quickSaveBatch(const std::vector<blob>& imageData,
-                     const std::vector<std::filesystem::path>& filePaths,
-                     int quality = 95,
-                     size_t maxConcurrency = 4);
+                      const std::vector<std::filesystem::path>& filePaths,
+                      int quality = 95, size_t maxConcurrency = 4);
 
 }  // namespace atom::image
 

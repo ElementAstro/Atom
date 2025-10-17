@@ -456,8 +456,8 @@ template <std::integral T>
  * @return std::optional<u64> Random value in range, or nullopt if
  * generation failed
  */
-[[nodiscard]] auto randomInRange(u64 min, u64 max) noexcept
-    -> std::optional<u64>;
+[[nodiscard]] auto randomInRange(u64 min,
+                                 u64 max) noexcept -> std::optional<u64>;
 
 /**
  * @brief Custom memory pool for efficient allocation in math operations

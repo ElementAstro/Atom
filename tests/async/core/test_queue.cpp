@@ -1,6 +1,6 @@
-#include "atom/async/queue.hpp"
 #include <gtest/gtest.h>
 #include <thread>
+#include "atom/async/queue.hpp"
 
 TEST(ThreadSafeQueueTest, PutAndTake) {
     atom::async::ThreadSafeQueue<int> queue;

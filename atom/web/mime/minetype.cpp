@@ -678,5 +678,5 @@ template std::optional<std::string> MimeTypes::guessTypeByContent<const char*>(
     const char* const& filePath) const;
 
 // Add template instantiation for char arrays used in tests
-template std::optional<std::string> MimeTypes::guessTypeByContent<char [17]>(
+template std::optional<std::string> MimeTypes::guessTypeByContent<char[17]>(
     const char (&filePath)[17]) const;

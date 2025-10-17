@@ -4,12 +4,12 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 #include <chrono>
 #include <string>
 #include <thread>
 #include <vector>
-#include <spdlog/spdlog.h>
 
 #include "atom/web/utils/network.hpp"
 #include "atom/web/utils/socket.hpp"
@@ -21,9 +21,9 @@
 #pragma comment(lib, "Ws2_32.lib")
 #endif
 #elif defined(__linux__) || defined(__APPLE__)
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #endif
 
@@ -69,12 +69,12 @@ TEST_F(NetworkTest, CheckInternetConnectivityBasic) {
 TEST_F(NetworkTest, CheckInternetConnectivityRepeated) {
     // Test multiple calls to ensure consistency
     std::vector<bool> results;
-    
+
     for (int i = 0; i < 5; ++i) {
         bool result = checkInternetConnectivity();
         results.push_back(result);
     }
-    
+
     // Results should be consistent (all true or all false)
     bool firstResult = results[0];
     for (bool result : results) {
@@ -115,7 +115,7 @@ TEST_F(NetworkTest, CreateSocketBasic) {
     ASSERT_NO_THROW({
         int sockfd = createSocket();
         EXPECT_GE(sockfd, 0);
-        
+
         if (sockfd >= 0) {
 #ifdef _WIN32
             closesocket(sockfd);
@@ -128,7 +128,7 @@ TEST_F(NetworkTest, CreateSocketBasic) {
 
 TEST_F(NetworkTest, CreateMultipleSockets) {
     std::vector<int> sockets;
-    
+
     // Create multiple sockets
     for (int i = 0; i < 10; ++i) {
         int sockfd = createSocket();
@@ -137,7 +137,7 @@ TEST_F(NetworkTest, CreateMultipleSockets) {
             sockets.push_back(sockfd);
         }
     }
-    
+
     // Clean up all sockets
     for (int sockfd : sockets) {
 #ifdef _WIN32
@@ -152,14 +152,14 @@ TEST_F(NetworkTest, CreateMultipleSockets) {
 TEST_F(NetworkTest, BindSocketValidPort) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     // Try to bind to a high port number (less likely to be in use)
     bool bindResult = bindSocket(sockfd, 12345);
-    
+
     // Result depends on whether port is available
     // The important thing is that it doesn't crash
     EXPECT_NO_THROW(bindSocket(sockfd, 12345));
-    
+
 #ifdef _WIN32
     closesocket(sockfd);
 #else
@@ -176,11 +176,11 @@ TEST_F(NetworkTest, BindSocketInvalidSocket) {
 TEST_F(NetworkTest, BindSocketPortZero) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     // Port 0 should let the system choose a port
     bool result = bindSocket(sockfd, 0);
     // This might succeed or fail depending on system
-    
+
 #ifdef _WIN32
     closesocket(sockfd);
 #else
@@ -192,10 +192,10 @@ TEST_F(NetworkTest, BindSocketPortZero) {
 TEST_F(NetworkTest, SetSocketNonBlockingValid) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
+
     bool result = setSocketNonBlocking(sockfd);
     EXPECT_TRUE(result);
-    
+
 #ifdef _WIN32
     closesocket(sockfd);
 #else
@@ -211,26 +211,25 @@ TEST_F(NetworkTest, SetSocketNonBlockingInvalid) {
 
 // Connection Timeout Tests
 TEST_F(NetworkTest, ConnectWithTimeoutInvalidSocket) {
-    struct sockaddr_in addr{};
+    struct sockaddr_in addr {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(80);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
-    
-    bool result = connectWithTimeout(-1, 
-                                   reinterpret_cast<struct sockaddr*>(&addr),
-                                   sizeof(addr),
-                                   std::chrono::milliseconds(1000));
+
+    bool result =
+        connectWithTimeout(-1, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(1000));
     EXPECT_FALSE(result);
 }
 
 TEST_F(NetworkTest, ConnectWithTimeoutNullAddress) {
     int sockfd = createSocket();
     ASSERT_GE(sockfd, 0);
-    
-    bool result = connectWithTimeout(sockfd, nullptr, 0, 
-                                   std::chrono::milliseconds(1000));
+
+    bool result =
+        connectWithTimeout(sockfd, nullptr, 0, std::chrono::milliseconds(1000));
     EXPECT_FALSE(result);
-    
+
 #ifdef _WIN32
     closesocket(sockfd);
 #else
@@ -241,19 +240,20 @@ TEST_F(NetworkTest, ConnectWithTimeoutNullAddress) {
 // Performance Tests
 TEST_F(NetworkTest, InternetConnectivityPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     bool hasInternet = checkInternetConnectivity();
-    
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     // Should complete within reasonable time (10 seconds)
     EXPECT_LT(duration.count(), 10000);
 }
 
 TEST_F(NetworkTest, SocketCreationPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     std::vector<int> sockets;
     for (int i = 0; i < 100; ++i) {
         int sockfd = createSocket();
@@ -261,10 +261,11 @@ TEST_F(NetworkTest, SocketCreationPerformance) {
             sockets.push_back(sockfd);
         }
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     // Clean up
     for (int sockfd : sockets) {
 #ifdef _WIN32
@@ -273,7 +274,7 @@ TEST_F(NetworkTest, SocketCreationPerformance) {
         close(sockfd);
 #endif
     }
-    
+
     // Should complete within reasonable time (1 second)
     EXPECT_LT(duration.count(), 1000);
 }
@@ -338,11 +339,10 @@ TEST_F(NetworkTest, SocketErrorHandling) {
     EXPECT_FALSE(bindSocket(-1, 80));
     EXPECT_FALSE(setSocketNonBlocking(-1));
 
-    struct sockaddr_in addr{};
-    EXPECT_FALSE(connectWithTimeout(-1,
-                                   reinterpret_cast<struct sockaddr*>(&addr),
-                                   sizeof(addr),
-                                   std::chrono::milliseconds(100)));
+    struct sockaddr_in addr {};
+    EXPECT_FALSE(
+        connectWithTimeout(-1, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(100)));
 }
 
 // Platform-Specific Tests
@@ -359,7 +359,8 @@ TEST_F(NetworkTest, PlatformSpecificBehavior) {
     }
 #else
     // Unix-like systems tests
-    EXPECT_TRUE(initializeWindowsSocketAPI());  // Should return true on non-Windows
+    EXPECT_TRUE(
+        initializeWindowsSocketAPI());  // Should return true on non-Windows
 
     int sockfd = createSocket();
     EXPECT_GE(sockfd, 0);
@@ -404,20 +405,20 @@ TEST_F(NetworkTest, ConnectTimeoutBehavior) {
     EXPECT_TRUE(setSocketNonBlocking(sockfd));
 
     // Try to connect to a non-routable address with short timeout
-    struct sockaddr_in addr{};
+    struct sockaddr_in addr {};
     addr.sin_family = AF_INET;
     addr.sin_port = htons(12345);
     inet_pton(AF_INET, "10.255.255.1", &addr.sin_addr);  // Non-routable
 
     auto start = std::chrono::high_resolution_clock::now();
 
-    bool result = connectWithTimeout(sockfd,
-                                   reinterpret_cast<struct sockaddr*>(&addr),
-                                   sizeof(addr),
-                                   std::chrono::milliseconds(100));
+    bool result =
+        connectWithTimeout(sockfd, reinterpret_cast<struct sockaddr*>(&addr),
+                           sizeof(addr), std::chrono::milliseconds(100));
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Connection should fail (non-routable address) but not crash
     EXPECT_FALSE(result);

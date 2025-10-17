@@ -75,8 +75,8 @@ auto MatrixCompressor::compress(const Matrix& matrix) -> CompressedData {
     }
 }
 
-auto MatrixCompressor::compressParallel(const Matrix& matrix, i32 thread_count)
-    -> CompressedData {
+auto MatrixCompressor::compressParallel(const Matrix& matrix,
+                                        i32 thread_count) -> CompressedData {
     if (matrix.empty() || matrix[0].empty()) {
         return {};
     }
@@ -209,8 +209,8 @@ auto MatrixCompressor::decompress(const CompressedData& compressed, i32 rows,
 }
 
 auto MatrixCompressor::decompressParallel(const CompressedData& compressed,
-                                          i32 rows, i32 cols, i32 thread_count)
-    -> Matrix {
+                                          i32 rows, i32 cols,
+                                          i32 thread_count) -> Matrix {
     if (rows <= 0 || cols <= 0) {
         THROW_MATRIX_DECOMPRESS_EXCEPTION(
             "Invalid dimensions: rows and cols must be positive");
@@ -481,9 +481,8 @@ auto MatrixCompressor::decompressWithSIMD(const CompressedData& compressed,
     return matrix;
 }
 
-auto MatrixCompressor::generateRandomMatrix(i32 rows, i32 cols,
-                                            std::string_view charset)
-    -> Matrix {
+auto MatrixCompressor::generateRandomMatrix(
+    i32 rows, i32 cols, std::string_view charset) -> Matrix {
     std::random_device randomDevice;
     std::mt19937 generator(randomDevice());
     std::uniform_int_distribution<i32> distribution(

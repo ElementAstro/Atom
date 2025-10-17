@@ -14,14 +14,14 @@ Tests logger functionality, log management, async logging, and mmap logging.
 **************************************************/
 
 #include <gtest/gtest.h>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <thread>
-#include <chrono>
 
-#include "atom/log/logger.hpp"
-#include "atom/log/log_manager.hpp"
 #include "atom/log/async_logger.hpp"
+#include "atom/log/log_manager.hpp"
+#include "atom/log/logger.hpp"
 #include "atom/log/mmap_logger.hpp"
 
 namespace atom::log::test {
@@ -90,11 +90,14 @@ TEST_F(LoggerTest, LogAnalysis) {
     std::ofstream ofs(log_file);
     for (int i = 0; i < 100; ++i) {
         if (i % 10 == 0) {
-            ofs << "[ERROR] 2024-12-22 10:" << std::setfill('0') << std::setw(2) << i << ":00 Error " << i << "\n";
+            ofs << "[ERROR] 2024-12-22 10:" << std::setfill('0') << std::setw(2)
+                << i << ":00 Error " << i << "\n";
         } else if (i % 5 == 0) {
-            ofs << "[WARN] 2024-12-22 10:" << std::setfill('0') << std::setw(2) << i << ":00 Warning " << i << "\n";
+            ofs << "[WARN] 2024-12-22 10:" << std::setfill('0') << std::setw(2)
+                << i << ":00 Warning " << i << "\n";
         } else {
-            ofs << "[INFO] 2024-12-22 10:" << std::setfill('0') << std::setw(2) << i << ":00 Info " << i << "\n";
+            ofs << "[INFO] 2024-12-22 10:" << std::setfill('0') << std::setw(2)
+                << i << ":00 Info " << i << "\n";
         }
     }
     ofs.close();
@@ -190,7 +193,8 @@ TEST_F(AsyncLoggerTest, ConcurrentLogging) {
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
 
     // Verify all log files were created
     for (int t = 0; t < num_threads; ++t) {
@@ -245,12 +249,15 @@ TEST_F(MmapLoggerTest, HighVolumeLogging) {
     for (int i = 0; i < num_messages; ++i) {
         ofs << message_template << i << " with timestamp "
             << std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now().time_since_epoch()).count() << "\n";
+                   std::chrono::steady_clock::now().time_since_epoch())
+                   .count()
+            << "\n";
     }
     ofs.close();
 
     auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
 
     // Verify file was created and has correct size
     EXPECT_TRUE(std::filesystem::exists(log_file));
@@ -265,7 +272,7 @@ TEST_F(MmapLoggerTest, HighVolumeLogging) {
     EXPECT_EQ(line_count, num_messages);
 
     // Performance should be reasonable
-    EXPECT_LT(duration.count(), 10000); // Less than 10 seconds
+    EXPECT_LT(duration.count(), 10000);  // Less than 10 seconds
 }
 
 // ============================================================================
@@ -295,11 +302,9 @@ TEST_F(LogIntegrationTest, CompleteWorkflow) {
     // Test complete logging workflow
 
     // 1. Create multiple log files with different content
-    std::vector<std::string> log_files = {
-        test_log_dir + "/app.log",
-        test_log_dir + "/error.log",
-        test_log_dir + "/debug.log"
-    };
+    std::vector<std::string> log_files = {test_log_dir + "/app.log",
+                                          test_log_dir + "/error.log",
+                                          test_log_dir + "/debug.log"};
 
     // Create app.log
     std::ofstream app_log(log_files[0]);
@@ -341,7 +346,7 @@ TEST_F(LogIntegrationTest, CompleteWorkflow) {
     }
 }
 
-} // namespace atom::log::test
+}  // namespace atom::log::test
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

@@ -56,7 +56,7 @@ Description: Daemon process implementation (Header-Only Library)
 
 // External Dependencies (assumed to be available)
 #include "atom/utils/time/time.hpp"  // Time utilities
-#include "spdlog/spdlog.h"      // Logging library
+#include "spdlog/spdlog.h"           // Logging library
 
 namespace atom::async {
 
@@ -426,8 +426,8 @@ inline auto DaemonGuard::toString() const noexcept -> std::string {
 }
 
 template <ProcessCallback Callback>
-auto DaemonGuard::realStart(int argc, char** argv, const Callback& mainCb)
-    -> int {
+auto DaemonGuard::realStart(int argc, char** argv,
+                            const Callback& mainCb) -> int {
     try {
         if (argv == nullptr && argc > 0) {
             throw DaemonException(
@@ -459,8 +459,8 @@ auto DaemonGuard::realStart(int argc, char** argv, const Callback& mainCb)
 }
 
 template <ModernProcessCallback Callback>
-auto DaemonGuard::realStartModern(std::span<char*> args, const Callback& mainCb)
-    -> int {
+auto DaemonGuard::realStartModern(std::span<char*> args,
+                                  const Callback& mainCb) -> int {
     try {
         if (args.empty() || args[0] == nullptr) {
             throw DaemonException(
@@ -634,9 +634,8 @@ auto DaemonGuard::realDaemon(int argc, char** argv,
 }
 
 template <ModernProcessCallback Callback>
-auto DaemonGuard::realDaemonModern(std::span<char*> args,
-                                   [[maybe_unused]] const Callback& mainCb)
-    -> int {
+auto DaemonGuard::realDaemonModern(
+    std::span<char*> args, [[maybe_unused]] const Callback& mainCb) -> int {
     try {
         if (args.empty() || args[0] == nullptr) {
             throw DaemonException(
@@ -849,8 +848,8 @@ auto DaemonGuard::startDaemon(int argc, char** argv, const Callback& mainCb,
 
 template <ModernProcessCallback Callback>
 auto DaemonGuard::startDaemonModern(std::span<char*> args,
-                                    const Callback& mainCb, bool isDaemonParam)
-    -> int {
+                                    const Callback& mainCb,
+                                    bool isDaemonParam) -> int {
     try {
         if (args.empty() || args[0] == nullptr) {
             throw DaemonException(

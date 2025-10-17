@@ -26,14 +26,18 @@ TimerTask::TimerTask(std::function<void()> func, unsigned int delay,
       m_delay(delay),
       m_repeatCount(repeatCount),
       m_priority(priority) {
-    std::cout << "[DEBUG] TimerTask constructor: delay = " << delay << ", repeatCount = " << repeatCount << ", priority = " << priority << std::endl;
+    std::cout << "[DEBUG] TimerTask constructor: delay = " << delay
+              << ", repeatCount = " << repeatCount
+              << ", priority = " << priority << std::endl;
 
     if (!func) {
         throw std::invalid_argument("Function cannot be null");
     }
 
     if (delay == 0) {
-        throw std::invalid_argument("Delay must be greater than 0 (TimerTask constructor received: " + std::to_string(delay) + ")");
+        throw std::invalid_argument(
+            "Delay must be greater than 0 (TimerTask constructor received: " +
+            std::to_string(delay) + ")");
     }
 
     if (repeatCount < -1) {
@@ -84,7 +88,8 @@ void Timer::validateTaskParams([[maybe_unused]] unsigned int delay,
     // The delay>0 validation is enforced in TimerTask constructor
 
     if (repeatCount < -1) {
-        throw std::invalid_argument("RepeatCount must be >= -1 (received: " + std::to_string(repeatCount) + ")");
+        throw std::invalid_argument("RepeatCount must be >= -1 (received: " +
+                                    std::to_string(repeatCount) + ")");
     }
 }
 
@@ -116,7 +121,9 @@ Timer::Timer() noexcept(false) {
         std::cout << "[DEBUG] Using ASIO mode" << std::endl;
         try {
             m_ioContext = std::make_unique<asio::io_context>();
-            m_work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(m_ioContext->get_executor());
+            m_work = std::make_unique<
+                asio::executor_work_guard<asio::io_context::executor_type>>(
+                m_ioContext->get_executor());
             m_asioTimer = std::make_unique<asio::steady_timer>(*m_ioContext);
 
             std::thread([this]() {
@@ -127,24 +134,29 @@ Timer::Timer() noexcept(false) {
                 }
             }).detach();
 
-            std::cout << "[DEBUG] ASIO timer initialized successfully" << std::endl;
+            std::cout << "[DEBUG] ASIO timer initialized successfully"
+                      << std::endl;
         } catch (const std::exception &e) {
-            std::cout << "[DEBUG] ASIO timer initialization failed: " << e.what() << std::endl;
-            throw std::runtime_error(std::string("Failed to create asio timer: ") +
-                                     e.what());
+            std::cout << "[DEBUG] ASIO timer initialization failed: "
+                      << e.what() << std::endl;
+            throw std::runtime_error(
+                std::string("Failed to create asio timer: ") + e.what());
         }
 #else
         std::cout << "[DEBUG] Using non-ASIO mode" << std::endl;
-        // Don't start the thread immediately - start it when first task is added
-        // This prevents race conditions during object construction
+        // Don't start the thread immediately - start it when first task is
+        // added This prevents race conditions during object construction
 #endif
 
-        std::cout << "[DEBUG] Timer constructor completed successfully" << std::endl;
-    } catch (const std::exception& e) {
-        std::cout << "[DEBUG] Timer constructor failed: " << e.what() << std::endl;
+        std::cout << "[DEBUG] Timer constructor completed successfully"
+                  << std::endl;
+    } catch (const std::exception &e) {
+        std::cout << "[DEBUG] Timer constructor failed: " << e.what()
+                  << std::endl;
         throw;
     } catch (...) {
-        std::cout << "[DEBUG] Timer constructor failed with unknown exception" << std::endl;
+        std::cout << "[DEBUG] Timer constructor failed with unknown exception"
+                  << std::endl;
         throw;
     }
 }
@@ -171,7 +183,9 @@ void Timer::cancelAllTasks() noexcept {
             m_ioContext->stop();
             m_ioContext->restart();
             if (!m_stop.load(std::memory_order_acquire)) {
-                m_work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(m_ioContext->get_executor());
+                m_work = std::make_unique<
+                    asio::executor_work_guard<asio::io_context::executor_type>>(
+                    m_ioContext->get_executor());
             }
         }
 #elif defined(ATOM_USE_BOOST_LOCKFREE)

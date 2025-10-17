@@ -232,7 +232,7 @@ void demonstrateLuaComponentBinding() {
                 // auto result = component->executeCommand(
                 //     "takeDamage", {std::to_string(args[0].get<int64_t>())});
                 std::cout << "  [LUA] Damage command executed" << std::endl;
-                return ScriptValue(static_cast<int64_t>(50)); // Mock result
+                return ScriptValue(static_cast<int64_t>(50));  // Mock result
             }
             return ScriptValue(static_cast<int64_t>(0));
         });
@@ -245,7 +245,7 @@ void demonstrateLuaComponentBinding() {
                 // auto result = component->executeCommand(
                 //     "heal", {std::to_string(args[0].get<int64_t>())});
                 std::cout << "  [LUA] Heal command executed" << std::endl;
-                return ScriptValue(static_cast<int64_t>(75)); // Mock result
+                return ScriptValue(static_cast<int64_t>(75));  // Mock result
             }
             return ScriptValue(static_cast<int64_t>(0));
         });

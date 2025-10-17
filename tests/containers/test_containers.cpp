@@ -15,10 +15,10 @@ intrusive containers, and lock-free containers.
 **************************************************/
 
 #include <gtest/gtest.h>
+#include <chrono>
 #include <memory>
 #include <thread>
 #include <vector>
-#include <chrono>
 
 #include "atom/containers/boost_containers.hpp"
 #include "atom/containers/graph.hpp"
@@ -94,10 +94,11 @@ TEST_F(BoostContainersTest, PerformanceCharacteristics) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
     EXPECT_EQ(fast_map.size(), test_size);
-    EXPECT_LT(duration.count(), 50000); // Should complete within 50ms
+    EXPECT_LT(duration.count(), 50000);  // Should complete within 50ms
 
     // Test lookup performance
     start = std::chrono::high_resolution_clock::now();
@@ -106,10 +107,13 @@ TEST_F(BoostContainersTest, PerformanceCharacteristics) {
         sum += fast_map[i];
     }
     end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-    EXPECT_EQ(sum, test_size * (test_size - 1)); // Sum of 0*2 + 1*2 + ... + (n-1)*2
-    EXPECT_LT(duration.count(), 20000); // Lookup should be faster than insertion
+    EXPECT_EQ(sum,
+              test_size * (test_size - 1));  // Sum of 0*2 + 1*2 + ... + (n-1)*2
+    EXPECT_LT(duration.count(),
+              20000);  // Lookup should be faster than insertion
 }
 
 // ============================================================================
@@ -130,7 +134,8 @@ protected:
 TEST_F(GraphTest, NodeOperations) {
 #ifdef ATOM_HAS_BOOST_GRAPH
     // Test directed graph node operations
-    atom::containers::graph::Graph graph(atom::containers::graph::Graph::GraphType::Directed);
+    atom::containers::graph::Graph graph(
+        atom::containers::graph::Graph::GraphType::Directed);
 
     // Add vertices
     auto v1 = graph.add_vertex("vertex1");
@@ -156,7 +161,8 @@ TEST_F(GraphTest, NodeOperations) {
 TEST_F(GraphTest, EdgeOperations) {
 #ifdef ATOM_HAS_BOOST_GRAPH
     // Test edge creation and manipulation
-    atom::containers::graph::Graph graph(atom::containers::graph::Graph::GraphType::Undirected);
+    atom::containers::graph::Graph graph(
+        atom::containers::graph::Graph::GraphType::Undirected);
 
     // Add vertices first
     graph.add_vertex("A");
@@ -192,7 +198,8 @@ TEST_F(GraphTest, EdgeOperations) {
 TEST_F(GraphTest, GraphTraversal) {
 #ifdef ATOM_HAS_BOOST_GRAPH
     // Create a test graph for traversal
-    atom::containers::graph::Graph graph(atom::containers::graph::Graph::GraphType::Directed);
+    atom::containers::graph::Graph graph(
+        atom::containers::graph::Graph::GraphType::Directed);
 
     // Add vertices
     graph.add_vertex("A");
@@ -218,7 +225,7 @@ TEST_F(GraphTest, GraphTraversal) {
 
     // Test connectivity
     EXPECT_TRUE(graph.is_connected("A", "D"));
-    EXPECT_FALSE(graph.is_connected("D", "A")); // Directed graph
+    EXPECT_FALSE(graph.is_connected("D", "A"));  // Directed graph
 #else
     // Graph functionality not available - skip test
     GTEST_SKIP() << "Graph functionality requires ATOM_HAS_BOOST_GRAPH";
@@ -252,10 +259,11 @@ TEST_F(HighPerformanceTest, InsertionPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(hash_map.size(), test_size);
-    EXPECT_LT(duration.count(), 1000); // Should complete within 1 second
+    EXPECT_LT(duration.count(), 1000);  // Should complete within 1 second
 
     // Test Vector insertion performance
     atom::containers::Vector<int> vector;
@@ -266,10 +274,11 @@ TEST_F(HighPerformanceTest, InsertionPerformance) {
     }
 
     end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(vector.size(), test_size);
-    EXPECT_LT(duration.count(), 500); // Vector should be faster
+    EXPECT_LT(duration.count(), 500);  // Vector should be faster
 }
 
 TEST_F(HighPerformanceTest, LookupPerformance) {
@@ -291,10 +300,12 @@ TEST_F(HighPerformanceTest, LookupPerformance) {
         }
     }
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-    EXPECT_EQ(sum, test_size * (test_size - 1)); // Sum of 0*2 + 1*2 + ... + (n-1)*2
-    EXPECT_LT(duration.count(), 50000); // Should complete within 50ms
+    EXPECT_EQ(sum,
+              test_size * (test_size - 1));  // Sum of 0*2 + 1*2 + ... + (n-1)*2
+    EXPECT_LT(duration.count(), 50000);      // Should complete within 50ms
 
     // Test HashSet lookup performance
     atom::containers::HashSet<int> hash_set;
@@ -310,10 +321,11 @@ TEST_F(HighPerformanceTest, LookupPerformance) {
         }
     }
     end = std::chrono::high_resolution_clock::now();
-    duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
     EXPECT_EQ(found_count, test_size);
-    EXPECT_LT(duration.count(), 30000); // Set lookup should be very fast
+    EXPECT_LT(duration.count(), 30000);  // Set lookup should be very fast
 }
 
 TEST_F(HighPerformanceTest, MemoryEfficiency) {
@@ -322,7 +334,8 @@ TEST_F(HighPerformanceTest, MemoryEfficiency) {
 
     // Test String memory efficiency
     atom::containers::String str1("short");
-    atom::containers::String str2("this is a much longer string that should test memory allocation");
+    atom::containers::String str2(
+        "this is a much longer string that should test memory allocation");
 
     EXPECT_EQ(str1.size(), 5);
     EXPECT_GT(str2.size(), 50);
@@ -344,7 +357,7 @@ TEST_F(HighPerformanceTest, MemoryEfficiency) {
     vec.clear();
     size_t capacity_after_clear = vec.capacity();
     EXPECT_EQ(vec.size(), 0);
-    EXPECT_GT(capacity_after_clear, 0); // Capacity should be retained
+    EXPECT_GT(capacity_after_clear, 0);  // Capacity should be retained
 }
 
 // ============================================================================
@@ -480,16 +493,17 @@ TEST_F(LockFreeTest, ConcurrentAccess) {
 
     // Create producer threads
     for (int t = 0; t < num_threads; ++t) {
-        producers.emplace_back([&lf_queue, &items_produced, num_items, num_threads, t]() {
-            int start = t * (num_items / num_threads);
-            int end = (t + 1) * (num_items / num_threads);
-            for (int i = start; i < end; ++i) {
-                while (!lf_queue.push(i)) {
-                    std::this_thread::yield();
+        producers.emplace_back(
+            [&lf_queue, &items_produced, num_items, num_threads, t]() {
+                int start = t * (num_items / num_threads);
+                int end = (t + 1) * (num_items / num_threads);
+                for (int i = start; i < end; ++i) {
+                    while (!lf_queue.push(i)) {
+                        std::this_thread::yield();
+                    }
+                    items_produced.fetch_add(1);
                 }
-                items_produced.fetch_add(1);
-            }
-        });
+            });
     }
 
     // Create consumer threads
@@ -507,8 +521,10 @@ TEST_F(LockFreeTest, ConcurrentAccess) {
     }
 
     // Wait for all threads to complete
-    for (auto& t : producers) t.join();
-    for (auto& t : consumers) t.join();
+    for (auto& t : producers)
+        t.join();
+    for (auto& t : consumers)
+        t.join();
 
     EXPECT_EQ(items_produced.load(), num_items);
     EXPECT_EQ(items_consumed.load(), num_items);
@@ -593,7 +609,8 @@ TEST_F(LockFreeTest, PerformanceUnderContention) {
     consumer.join();
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time (less than 5 seconds)
     EXPECT_LT(duration.count(), 5000);
@@ -631,7 +648,8 @@ TEST_F(ContainerIntegrationTest, ContainerInteroperability) {
     atom::containers::HashSet<int> active_ids;
 
     // Add some test data
-    std::vector<std::string> names = {"Alice", "Bob", "Charlie", "Diana", "Eve"};
+    std::vector<std::string> names = {"Alice", "Bob", "Charlie", "Diana",
+                                      "Eve"};
 
     for (size_t i = 0; i < names.size(); ++i) {
         int id = static_cast<int>(i + 1);
@@ -650,7 +668,7 @@ TEST_F(ContainerIntegrationTest, ContainerInteroperability) {
         int id = name_to_id[name];
         EXPECT_GT(id, 0);
         EXPECT_LE(id, static_cast<int>(names.size()));
-        EXPECT_EQ(id_to_name[id - 1], name); // id is 1-based
+        EXPECT_EQ(id_to_name[id - 1], name);  // id is 1-based
         EXPECT_TRUE(active_ids.find(id) != active_ids.end());
     }
 
@@ -662,7 +680,8 @@ TEST_F(ContainerIntegrationTest, ContainerInteroperability) {
 
     EXPECT_EQ(name_to_id.find(removed_name), name_to_id.end());
     EXPECT_EQ(active_ids.find(removed_id), active_ids.end());
-    EXPECT_EQ(id_to_name[removed_id - 1], removed_name); // Name still in vector
+    EXPECT_EQ(id_to_name[removed_id - 1],
+              removed_name);  // Name still in vector
 }
 
 TEST_F(ContainerIntegrationTest, RealWorldScenarios) {
@@ -681,12 +700,13 @@ TEST_F(ContainerIntegrationTest, RealWorldScenarios) {
 
     // Use multiple containers for a cache implementation
     atom::containers::HashMap<std::string, CacheEntry> cache_data;
-    atom::containers::Vector<std::string> access_order; // LRU tracking
+    atom::containers::Vector<std::string> access_order;  // LRU tracking
     const size_t max_cache_size = 3;
 
     auto add_to_cache = [&](const std::string& key, const std::string& value) {
         // Remove oldest if at capacity
-        if (cache_data.size() >= max_cache_size && cache_data.find(key) == cache_data.end()) {
+        if (cache_data.size() >= max_cache_size &&
+            cache_data.find(key) == cache_data.end()) {
             std::string oldest_key = access_order.front();
             cache_data.erase(oldest_key);
             access_order.erase(access_order.begin());
@@ -701,7 +721,8 @@ TEST_F(ContainerIntegrationTest, RealWorldScenarios) {
         }
 
         // Update access order
-        auto order_it = std::find(access_order.begin(), access_order.end(), key);
+        auto order_it =
+            std::find(access_order.begin(), access_order.end(), key);
         if (order_it != access_order.end()) {
             access_order.erase(order_it);
         }
@@ -720,12 +741,12 @@ TEST_F(ContainerIntegrationTest, RealWorldScenarios) {
     add_to_cache("key4", "value4");
 
     EXPECT_EQ(cache_data.size(), 3);
-    EXPECT_EQ(cache_data.find("key1"), cache_data.end()); // Should be evicted
-    EXPECT_NE(cache_data.find("key4"), cache_data.end()); // Should be present
+    EXPECT_EQ(cache_data.find("key1"), cache_data.end());  // Should be evicted
+    EXPECT_NE(cache_data.find("key4"), cache_data.end());  // Should be present
 
     // Test access order update
-    add_to_cache("key2", "updated_value2"); // Update existing
-    EXPECT_EQ(access_order.back(), "key2"); // Should be most recent
+    add_to_cache("key2", "updated_value2");  // Update existing
+    EXPECT_EQ(access_order.back(), "key2");  // Should be most recent
     EXPECT_EQ(cache_data["key2"].value, "updated_value2");
 }
 
@@ -802,7 +823,7 @@ TEST_F(ContainerErrorTest, InvalidOperations) {
     EXPECT_EQ(vec.at(0), 42);
 
     try {
-        vec.at(1); // Out of bounds
+        vec.at(1);  // Out of bounds
         FAIL() << "Expected std::out_of_range exception";
     } catch (const std::out_of_range& e) {
         // Expected behavior
@@ -841,7 +862,7 @@ TEST_F(ContainerErrorTest, InvalidOperations) {
     EXPECT_EQ(str.substr(6), "World");
 
     try {
-        str.substr(20); // Out of bounds
+        str.substr(20);  // Out of bounds
         FAIL() << "Expected std::out_of_range exception";
     } catch (const std::out_of_range& e) {
         // Expected behavior
@@ -927,17 +948,19 @@ TEST_F(ContainerEdgeCaseTest, BoundaryConditions) {
 TEST_F(ContainerEdgeCaseTest, ConcurrencyStress) {
     // Test container behavior under concurrent stress
 
-    // Use standard containers for this test since atom containers may not be thread-safe
+    // Use standard containers for this test since atom containers may not be
+    // thread-safe
     std::unordered_map<int, int> concurrent_map;
     std::mutex map_mutex;
-    const int num_threads = 2;  // Reduced for stability
+    const int num_threads = 2;              // Reduced for stability
     const int operations_per_thread = 100;  // Reduced for faster execution
     std::vector<std::thread> threads;
     std::atomic<int> success_count{0};
 
     // Concurrent insertions with proper synchronization
     for (int t = 0; t < num_threads; ++t) {
-        threads.emplace_back([&concurrent_map, &map_mutex, &success_count, t, operations_per_thread]() {
+        threads.emplace_back([&concurrent_map, &map_mutex, &success_count, t,
+                              operations_per_thread]() {
             for (int i = 0; i < operations_per_thread; ++i) {
                 try {
                     int key = t * operations_per_thread + i;
@@ -962,7 +985,7 @@ TEST_F(ContainerEdgeCaseTest, ConcurrencyStress) {
     EXPECT_EQ(concurrent_map.size(), num_threads * operations_per_thread);
 }
 
-} // namespace atom::containers::test
+}  // namespace atom::containers::test
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

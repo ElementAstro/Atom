@@ -28,7 +28,6 @@ public:
 template <typename T>
 concept Numeric = std::integral<T> || std::floating_point<T>;
 
-
 /**
  * @class Parser
  * @brief A high-performance parser class that provides various parsing

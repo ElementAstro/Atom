@@ -129,7 +129,7 @@ auto bindSocket(int sockfd, uint16_t port) -> bool {
             return false;
         }
 
-        struct sockaddr_in addr{};
+        struct sockaddr_in addr {};
         std::memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
         addr.sin_addr.s_addr = INADDR_ANY;
@@ -191,8 +191,8 @@ auto setSocketNonBlocking(int sockfd) -> bool {
 }
 
 auto connectWithTimeout(int sockfd, const struct sockaddr* addr,
-                        socklen_t addrlen, std::chrono::milliseconds timeout)
-    -> bool {
+                        socklen_t addrlen,
+                        std::chrono::milliseconds timeout) -> bool {
     try {
         if (sockfd < 0 || !addr) {
             spdlog::error("Invalid parameters: sockfd={}, addr={}", sockfd,

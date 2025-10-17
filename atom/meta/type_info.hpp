@@ -148,7 +148,8 @@ public:
         flags.set(IS_UNBOUNDED_ARRAY_FLAG, std::is_unbounded_array_v<T>);
         // C++20 compatible scoped enum detection
         if constexpr (std::is_enum_v<T>) {
-            flags.set(IS_SCOPED_ENUM_FLAG, !std::is_convertible_v<T, std::underlying_type_t<T>>);
+            flags.set(IS_SCOPED_ENUM_FLAG,
+                      !std::is_convertible_v<T, std::underlying_type_t<T>>);
         } else {
             flags.set(IS_SCOPED_ENUM_FLAG, false);
         }
@@ -167,8 +168,8 @@ public:
      * @return TypeInfo object containing information about T
      */
     template <typename T>
-    static auto fromInstance(const T& instance [[maybe_unused]]) noexcept
-        -> TypeInfo {
+    static auto fromInstance(const T& instance
+                             [[maybe_unused]]) noexcept -> TypeInfo {
         return fromType<T>();
     }
 
@@ -681,8 +682,8 @@ public:
 
 }  // namespace atom::meta
 
-inline auto operator<<(std::ostream& oss, const atom::meta::TypeInfo& typeInfo)
-    -> std::ostream& {
+inline auto operator<<(std::ostream& oss,
+                       const atom::meta::TypeInfo& typeInfo) -> std::ostream& {
     return oss << typeInfo.name();
 }
 

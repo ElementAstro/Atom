@@ -6,22 +6,22 @@
 #include <coroutine>
 // Temporarily disable std::expected usage until compiler support is stable
 // #include <expected>
-#include <variant>
+#include <any>
 #include <functional>
 #include <future>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <string>
 #include <unordered_map>
-#include <optional>
-#include <mutex>
-#include <any>
+#include <variant>
 
 #include <uv.h>
 
 namespace msgbus {
 
 // Simple Result type as a replacement for std::expected
-template<typename T, typename E>
+template <typename T, typename E>
 class Result {
 private:
     std::variant<T, E> data_;
@@ -46,7 +46,7 @@ public:
 };
 
 // Specialization for void type
-template<typename E>
+template <typename E>
 class Result<void, E> {
 private:
     std::optional<E> error_;
@@ -163,7 +163,8 @@ struct MessageAwaiter {
     Result<MessageEnvelope<T>, MessageBusError> await_resume();
 
 private:
-    std::shared_ptr<std::promise<Result<MessageEnvelope<T>, MessageBusError>>> promise_;
+    std::shared_ptr<std::promise<Result<MessageEnvelope<T>, MessageBusError>>>
+        promise_;
 };
 
 // **MessageBus Class Declaration**
@@ -182,8 +183,8 @@ public:
     // Template-based subscription
     template <MessageType T, MessageHandler<T> Handler>
     SubscriptionHandle subscribe(const std::string& topic_pattern,
-                                Handler&& handler,
-                                MessageFilter<T> filter = nullptr);
+                                 Handler&& handler,
+                                 MessageFilter<T> filter = nullptr);
 
     // Publish message
     template <MessageType T>
@@ -205,9 +206,9 @@ public:
 
     // Get queue statistics
     QueueStats get_stats() const;
-    
+
     void shutdown();
-    void process_messages(); // Synchronous processing for examples
+    void process_messages();  // Synchronous processing for examples
 
     static MessageBus* get_instance();
 
@@ -224,13 +225,15 @@ private:
 // Template method implementations
 template <MessageType T, MessageHandler<T> Handler>
 SubscriptionHandle MessageBus::subscribe(const std::string& topic_pattern,
-                                        Handler&& handler,
-                                        MessageFilter<T> filter) {
+                                         Handler&& handler,
+                                         MessageFilter<T> filter) {
     uint64_t handler_id = handler_id_counter_++;
 
-    auto wrapper = [handler = std::forward<Handler>(handler), filter](const std::any& envelope_any) {
+    auto wrapper = [handler = std::forward<Handler>(handler),
+                    filter](const std::any& envelope_any) {
         try {
-            const auto& envelope = std::any_cast<const MessageEnvelope<T>&>(envelope_any);
+            const auto& envelope =
+                std::any_cast<const MessageEnvelope<T>&>(envelope_any);
             if (!filter || filter(envelope)) {
                 handler(envelope.payload);
             }
@@ -245,12 +248,13 @@ SubscriptionHandle MessageBus::subscribe(const std::string& topic_pattern,
         // Basic cleanup
     };
 
-    return std::make_unique<HandlerRegistration>(handler_id, topic_pattern, cleanup);
+    return std::make_unique<HandlerRegistration>(handler_id, topic_pattern,
+                                                 cleanup);
 }
 
 template <MessageType T>
-Result<void, MessageBusError> MessageBus::publish(const std::string& topic, T&& message,
-                                                  const std::string& sender_id) {
+Result<void, MessageBusError> MessageBus::publish(
+    const std::string& topic, T&& message, const std::string& sender_id) {
     if (shutdown_.load()) {
         return MessageBusError::ShutdownInProgress;
     }
@@ -260,7 +264,7 @@ Result<void, MessageBusError> MessageBus::publish(const std::string& topic, T&& 
 
         // For this basic implementation, just return success
         // In a full implementation, this would queue the message for processing
-        return {}; // Success
+        return {};  // Success
     } catch (const std::exception& e) {
         return MessageBusError::SerializationError;
     }

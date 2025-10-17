@@ -1,8 +1,8 @@
 #include "serialization.hpp"
 
+#include <ctime>
 #include <iomanip>
 #include <sstream>
-#include <ctime>
 
 namespace atom::secret {
 
@@ -12,7 +12,7 @@ namespace atom::secret {
 
 Result<std::string> JsonSerializer::serializeEntry(const PasswordEntry& entry) {
     std::ostringstream json;
-    
+
     json << "{\n";
     json << "  \"password\": \"" << escapeJsonString(entry.password) << "\",\n";
     json << "  \"username\": \"" << escapeJsonString(entry.username) << "\",\n";
@@ -22,59 +22,65 @@ Result<std::string> JsonSerializer::serializeEntry(const PasswordEntry& entry) {
     json << "  \"category\": \"" << categoryToString(entry.category) << "\",\n";
     json << "  \"tags\": " << serializeStringArray(entry.tags) << ",\n";
     json << "  \"created\": \"" << timePointToString(entry.created) << "\",\n";
-    json << "  \"modified\": \"" << timePointToString(entry.modified) << "\",\n";
+    json << "  \"modified\": \"" << timePointToString(entry.modified)
+         << "\",\n";
     json << "  \"expires\": \"" << timePointToString(entry.expires) << "\",\n";
-    json << "  \"previousPasswords\": " << serializeStringArray(entry.previousPasswords) << "\n";
+    json << "  \"previousPasswords\": "
+         << serializeStringArray(entry.previousPasswords) << "\n";
     json << "}";
-    
+
     return Result<std::string>(json.str());
 }
 
-Result<PasswordEntry> JsonSerializer::deserializeEntry(const std::string& json) {
+Result<PasswordEntry> JsonSerializer::deserializeEntry(
+    const std::string& json) {
     if (!SimpleJsonParser::isValidJson(json)) {
         return Result<PasswordEntry>::error("Invalid JSON format");
     }
-    
+
     PasswordEntry entry;
-    
+
     entry.password = SimpleJsonParser::extractString(json, "password");
     entry.username = SimpleJsonParser::extractString(json, "username");
     entry.url = SimpleJsonParser::extractString(json, "url");
     entry.notes = SimpleJsonParser::extractString(json, "notes");
     entry.title = SimpleJsonParser::extractString(json, "title");
-    
+
     std::string categoryStr = SimpleJsonParser::extractString(json, "category");
     entry.category = stringToCategory(categoryStr);
-    
+
     std::string tagsArray = SimpleJsonParser::extractArray(json, "tags");
     entry.tags = deserializeStringArray(tagsArray);
-    
+
     std::string createdStr = SimpleJsonParser::extractString(json, "created");
     entry.created = stringToTimePoint(createdStr);
-    
+
     std::string modifiedStr = SimpleJsonParser::extractString(json, "modified");
     entry.modified = stringToTimePoint(modifiedStr);
-    
+
     std::string expiresStr = SimpleJsonParser::extractString(json, "expires");
     entry.expires = stringToTimePoint(expiresStr);
-    
-    std::string previousArray = SimpleJsonParser::extractArray(json, "previousPasswords");
+
+    std::string previousArray =
+        SimpleJsonParser::extractArray(json, "previousPasswords");
     entry.previousPasswords = deserializeStringArray(previousArray);
-    
+
     return Result<PasswordEntry>(std::move(entry));
 }
 
-Result<std::string> JsonSerializer::serializeEntries(const std::vector<PasswordEntry>& entries) {
+Result<std::string> JsonSerializer::serializeEntries(
+    const std::vector<PasswordEntry>& entries) {
     std::ostringstream json;
-    
+
     json << "[\n";
     for (size_t i = 0; i < entries.size(); ++i) {
         auto entryResult = serializeEntry(entries[i]);
         if (entryResult.isError()) {
-            return Result<std::string>("Failed to serialize entry " + std::to_string(i) + 
-                                      ": " + entryResult.error());
+            return Result<std::string>("Failed to serialize entry " +
+                                       std::to_string(i) + ": " +
+                                       entryResult.error());
         }
-        
+
         json << entryResult.value();
         if (i < entries.size() - 1) {
             json << ",";
@@ -82,30 +88,32 @@ Result<std::string> JsonSerializer::serializeEntries(const std::vector<PasswordE
         json << "\n";
     }
     json << "]";
-    
+
     return Result<std::string>(json.str());
 }
 
-Result<std::vector<PasswordEntry>> JsonSerializer::deserializeEntries(const std::string& json) {
+Result<std::vector<PasswordEntry>> JsonSerializer::deserializeEntries(
+    const std::string& json) {
     if (!SimpleJsonParser::isValidJson(json)) {
         return Result<std::vector<PasswordEntry>>::error("Invalid JSON format");
     }
-    
+
     std::vector<PasswordEntry> entries;
-    
+
     // Simple array parsing - find individual objects
     size_t pos = json.find('[');
     if (pos == std::string::npos) {
-        return Result<std::vector<PasswordEntry>>::error("JSON is not an array");
+        return Result<std::vector<PasswordEntry>>::error(
+            "JSON is not an array");
     }
-    
-    pos++; // Skip opening bracket
+
+    pos++;  // Skip opening bracket
     int braceCount = 0;
     size_t objectStart = std::string::npos;
-    
+
     for (size_t i = pos; i < json.length(); ++i) {
         char c = json[i];
-        
+
         if (c == '{') {
             if (braceCount == 0) {
                 objectStart = i;
@@ -115,7 +123,8 @@ Result<std::vector<PasswordEntry>> JsonSerializer::deserializeEntries(const std:
             braceCount--;
             if (braceCount == 0 && objectStart != std::string::npos) {
                 // Extract object
-                std::string objectJson = json.substr(objectStart, i - objectStart + 1);
+                std::string objectJson =
+                    json.substr(objectStart, i - objectStart + 1);
                 auto entryResult = deserializeEntry(objectJson);
                 if (entryResult.isError()) {
                     return Result<std::vector<PasswordEntry>>::error(
@@ -126,57 +135,81 @@ Result<std::vector<PasswordEntry>> JsonSerializer::deserializeEntries(const std:
             }
         }
     }
-    
+
     return Result<std::vector<PasswordEntry>>(std::move(entries));
 }
 
-Result<std::string> JsonSerializer::serializeSettings(const PasswordManagerSettings& settings) {
+Result<std::string> JsonSerializer::serializeSettings(
+    const PasswordManagerSettings& settings) {
     std::ostringstream json;
-    
+
     json << "{\n";
-    json << "  \"autoLockTimeoutSeconds\": " << settings.autoLockTimeoutSeconds << ",\n";
-    json << "  \"notifyOnPasswordExpiry\": " << (settings.notifyOnPasswordExpiry ? "true" : "false") << ",\n";
-    json << "  \"passwordExpiryDays\": " << settings.passwordExpiryDays << ",\n";
+    json << "  \"autoLockTimeoutSeconds\": " << settings.autoLockTimeoutSeconds
+         << ",\n";
+    json << "  \"notifyOnPasswordExpiry\": "
+         << (settings.notifyOnPasswordExpiry ? "true" : "false") << ",\n";
+    json << "  \"passwordExpiryDays\": " << settings.passwordExpiryDays
+         << ",\n";
     json << "  \"minPasswordLength\": " << settings.minPasswordLength << ",\n";
-    json << "  \"requireSpecialChars\": " << (settings.requireSpecialChars ? "true" : "false") << ",\n";
-    json << "  \"requireNumbers\": " << (settings.requireNumbers ? "true" : "false") << ",\n";
-    json << "  \"requireMixedCase\": " << (settings.requireMixedCase ? "true" : "false") << ",\n";
+    json << "  \"requireSpecialChars\": "
+         << (settings.requireSpecialChars ? "true" : "false") << ",\n";
+    json << "  \"requireNumbers\": "
+         << (settings.requireNumbers ? "true" : "false") << ",\n";
+    json << "  \"requireMixedCase\": "
+         << (settings.requireMixedCase ? "true" : "false") << ",\n";
     json << "  \"encryptionOptions\": {\n";
-    json << "    \"useHardwareAcceleration\": " << (settings.encryptionOptions.useHardwareAcceleration ? "true" : "false") << ",\n";
-    json << "    \"keyIterations\": " << settings.encryptionOptions.keyIterations << ",\n";
-    json << "    \"encryptionMethod\": \"" << methodToString(settings.encryptionOptions.encryptionMethod) << "\"\n";
+    json << "    \"useHardwareAcceleration\": "
+         << (settings.encryptionOptions.useHardwareAcceleration ? "true"
+                                                                : "false")
+         << ",\n";
+    json << "    \"keyIterations\": "
+         << settings.encryptionOptions.keyIterations << ",\n";
+    json << "    \"encryptionMethod\": \""
+         << methodToString(settings.encryptionOptions.encryptionMethod)
+         << "\"\n";
     json << "  }\n";
     json << "}";
-    
+
     return Result<std::string>(json.str());
 }
 
-Result<PasswordManagerSettings> JsonSerializer::deserializeSettings(const std::string& json) {
+Result<PasswordManagerSettings> JsonSerializer::deserializeSettings(
+    const std::string& json) {
     if (!SimpleJsonParser::isValidJson(json)) {
         return Result<PasswordManagerSettings>::error("Invalid JSON format");
     }
-    
+
     PasswordManagerSettings settings;
-    
-    settings.autoLockTimeoutSeconds = SimpleJsonParser::extractInt(json, "autoLockTimeoutSeconds");
-    settings.notifyOnPasswordExpiry = SimpleJsonParser::extractBool(json, "notifyOnPasswordExpiry");
-    settings.passwordExpiryDays = SimpleJsonParser::extractInt(json, "passwordExpiryDays");
-    settings.minPasswordLength = SimpleJsonParser::extractInt(json, "minPasswordLength");
-    settings.requireSpecialChars = SimpleJsonParser::extractBool(json, "requireSpecialChars");
-    settings.requireNumbers = SimpleJsonParser::extractBool(json, "requireNumbers");
-    settings.requireMixedCase = SimpleJsonParser::extractBool(json, "requireMixedCase");
-    
-    std::string encryptionOptionsJson = SimpleJsonParser::extractObject(json, "encryptionOptions");
+
+    settings.autoLockTimeoutSeconds =
+        SimpleJsonParser::extractInt(json, "autoLockTimeoutSeconds");
+    settings.notifyOnPasswordExpiry =
+        SimpleJsonParser::extractBool(json, "notifyOnPasswordExpiry");
+    settings.passwordExpiryDays =
+        SimpleJsonParser::extractInt(json, "passwordExpiryDays");
+    settings.minPasswordLength =
+        SimpleJsonParser::extractInt(json, "minPasswordLength");
+    settings.requireSpecialChars =
+        SimpleJsonParser::extractBool(json, "requireSpecialChars");
+    settings.requireNumbers =
+        SimpleJsonParser::extractBool(json, "requireNumbers");
+    settings.requireMixedCase =
+        SimpleJsonParser::extractBool(json, "requireMixedCase");
+
+    std::string encryptionOptionsJson =
+        SimpleJsonParser::extractObject(json, "encryptionOptions");
     if (!encryptionOptionsJson.empty()) {
-        settings.encryptionOptions.useHardwareAcceleration = 
-            SimpleJsonParser::extractBool(encryptionOptionsJson, "useHardwareAcceleration");
-        settings.encryptionOptions.keyIterations = 
-            SimpleJsonParser::extractInt(encryptionOptionsJson, "keyIterations");
-        
-        std::string methodStr = SimpleJsonParser::extractString(encryptionOptionsJson, "encryptionMethod");
+        settings.encryptionOptions.useHardwareAcceleration =
+            SimpleJsonParser::extractBool(encryptionOptionsJson,
+                                          "useHardwareAcceleration");
+        settings.encryptionOptions.keyIterations = SimpleJsonParser::extractInt(
+            encryptionOptionsJson, "keyIterations");
+
+        std::string methodStr = SimpleJsonParser::extractString(
+            encryptionOptionsJson, "encryptionMethod");
         settings.encryptionOptions.encryptionMethod = stringToMethod(methodStr);
     }
-    
+
     return Result<PasswordManagerSettings>(std::move(settings));
 }
 
@@ -186,42 +219,78 @@ std::string JsonSerializer::unescapeString(const std::string& str) {
 
 std::string JsonSerializer::escapeJsonString(const std::string& str) {
     std::ostringstream escaped;
-    
+
     for (char c : str) {
         switch (c) {
-            case '"':  escaped << "\\\""; break;
-            case '\\': escaped << "\\\\"; break;
-            case '\b': escaped << "\\b"; break;
-            case '\f': escaped << "\\f"; break;
-            case '\n': escaped << "\\n"; break;
-            case '\r': escaped << "\\r"; break;
-            case '\t': escaped << "\\t"; break;
+            case '"':
+                escaped << "\\\"";
+                break;
+            case '\\':
+                escaped << "\\\\";
+                break;
+            case '\b':
+                escaped << "\\b";
+                break;
+            case '\f':
+                escaped << "\\f";
+                break;
+            case '\n':
+                escaped << "\\n";
+                break;
+            case '\r':
+                escaped << "\\r";
+                break;
+            case '\t':
+                escaped << "\\t";
+                break;
             default:
                 if (c < 0x20) {
-                    escaped << "\\u" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(c);
+                    escaped << "\\u" << std::hex << std::setw(4)
+                            << std::setfill('0') << static_cast<int>(c);
                 } else {
                     escaped << c;
                 }
                 break;
         }
     }
-    
+
     return escaped.str();
 }
 
 std::string JsonSerializer::unescapeJsonString(const std::string& str) {
     std::ostringstream unescaped;
-    
+
     for (size_t i = 0; i < str.length(); ++i) {
         if (str[i] == '\\' && i + 1 < str.length()) {
             switch (str[i + 1]) {
-                case '"':  unescaped << '"'; i++; break;
-                case '\\': unescaped << '\\'; i++; break;
-                case 'b':  unescaped << '\b'; i++; break;
-                case 'f':  unescaped << '\f'; i++; break;
-                case 'n':  unescaped << '\n'; i++; break;
-                case 'r':  unescaped << '\r'; i++; break;
-                case 't':  unescaped << '\t'; i++; break;
+                case '"':
+                    unescaped << '"';
+                    i++;
+                    break;
+                case '\\':
+                    unescaped << '\\';
+                    i++;
+                    break;
+                case 'b':
+                    unescaped << '\b';
+                    i++;
+                    break;
+                case 'f':
+                    unescaped << '\f';
+                    i++;
+                    break;
+                case 'n':
+                    unescaped << '\n';
+                    i++;
+                    break;
+                case 'r':
+                    unescaped << '\r';
+                    i++;
+                    break;
+                case 't':
+                    unescaped << '\t';
+                    i++;
+                    break;
                 case 'u':
                     if (i + 5 < str.length()) {
                         // Parse Unicode escape sequence
@@ -241,14 +310,16 @@ std::string JsonSerializer::unescapeJsonString(const std::string& str) {
             unescaped << str[i];
         }
     }
-    
+
     return unescaped.str();
 }
 
-std::string JsonSerializer::timePointToString(const std::chrono::system_clock::time_point& timePoint) {
+std::string JsonSerializer::timePointToString(
+    const std::chrono::system_clock::time_point& timePoint) {
     auto time_t = std::chrono::system_clock::to_time_t(timePoint);
     auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        timePoint.time_since_epoch()) % 1000;
+                  timePoint.time_since_epoch()) %
+              1000;
 
     std::ostringstream oss;
     oss << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%S");
@@ -257,7 +328,8 @@ std::string JsonSerializer::timePointToString(const std::chrono::system_clock::t
     return oss.str();
 }
 
-std::chrono::system_clock::time_point JsonSerializer::stringToTimePoint(const std::string& timeString) {
+std::chrono::system_clock::time_point JsonSerializer::stringToTimePoint(
+    const std::string& timeString) {
     if (timeString.empty()) {
         return std::chrono::system_clock::time_point{};
     }
@@ -277,7 +349,7 @@ std::chrono::system_clock::time_point JsonSerializer::stringToTimePoint(const st
 
     // Parse milliseconds if present
     if (ss.peek() == '.') {
-        ss.ignore(); // Skip the dot
+        ss.ignore();  // Skip the dot
         int ms = 0;
         ss >> ms;
         timePoint += std::chrono::milliseconds(ms);
@@ -288,43 +360,65 @@ std::chrono::system_clock::time_point JsonSerializer::stringToTimePoint(const st
 
 std::string JsonSerializer::categoryToString(PasswordCategory category) {
     switch (category) {
-        case PasswordCategory::General: return "General";
-        case PasswordCategory::Finance: return "Finance";
-        case PasswordCategory::Work: return "Work";
-        case PasswordCategory::Personal: return "Personal";
-        case PasswordCategory::Social: return "Social";
-        case PasswordCategory::Entertainment: return "Entertainment";
-        case PasswordCategory::Other: return "Other";
-        default: return "General";
+        case PasswordCategory::General:
+            return "General";
+        case PasswordCategory::Finance:
+            return "Finance";
+        case PasswordCategory::Work:
+            return "Work";
+        case PasswordCategory::Personal:
+            return "Personal";
+        case PasswordCategory::Social:
+            return "Social";
+        case PasswordCategory::Entertainment:
+            return "Entertainment";
+        case PasswordCategory::Other:
+            return "Other";
+        default:
+            return "General";
     }
 }
 
 PasswordCategory JsonSerializer::stringToCategory(const std::string& str) {
-    if (str == "Finance") return PasswordCategory::Finance;
-    if (str == "Work") return PasswordCategory::Work;
-    if (str == "Personal") return PasswordCategory::Personal;
-    if (str == "Social") return PasswordCategory::Social;
-    if (str == "Entertainment") return PasswordCategory::Entertainment;
-    if (str == "Other") return PasswordCategory::Other;
+    if (str == "Finance")
+        return PasswordCategory::Finance;
+    if (str == "Work")
+        return PasswordCategory::Work;
+    if (str == "Personal")
+        return PasswordCategory::Personal;
+    if (str == "Social")
+        return PasswordCategory::Social;
+    if (str == "Entertainment")
+        return PasswordCategory::Entertainment;
+    if (str == "Other")
+        return PasswordCategory::Other;
     return PasswordCategory::General;
 }
 
 std::string JsonSerializer::methodToString(EncryptionOptions::Method method) {
     switch (method) {
-        case EncryptionOptions::Method::AES_GCM: return "AES_GCM";
-        case EncryptionOptions::Method::AES_CBC: return "AES_CBC";
-        case EncryptionOptions::Method::CHACHA20_POLY1305: return "CHACHA20_POLY1305";
-        default: return "AES_GCM";
+        case EncryptionOptions::Method::AES_GCM:
+            return "AES_GCM";
+        case EncryptionOptions::Method::AES_CBC:
+            return "AES_CBC";
+        case EncryptionOptions::Method::CHACHA20_POLY1305:
+            return "CHACHA20_POLY1305";
+        default:
+            return "AES_GCM";
     }
 }
 
-EncryptionOptions::Method JsonSerializer::stringToMethod(const std::string& str) {
-    if (str == "AES_CBC") return EncryptionOptions::Method::AES_CBC;
-    if (str == "CHACHA20_POLY1305") return EncryptionOptions::Method::CHACHA20_POLY1305;
+EncryptionOptions::Method JsonSerializer::stringToMethod(
+    const std::string& str) {
+    if (str == "AES_CBC")
+        return EncryptionOptions::Method::AES_CBC;
+    if (str == "CHACHA20_POLY1305")
+        return EncryptionOptions::Method::CHACHA20_POLY1305;
     return EncryptionOptions::Method::AES_GCM;
 }
 
-std::string JsonSerializer::serializeStringArray(const std::vector<std::string>& strings) {
+std::string JsonSerializer::serializeStringArray(
+    const std::vector<std::string>& strings) {
     std::ostringstream json;
     json << "[";
 
@@ -339,7 +433,8 @@ std::string JsonSerializer::serializeStringArray(const std::vector<std::string>&
     return json.str();
 }
 
-std::vector<std::string> JsonSerializer::deserializeStringArray(const std::string& json) {
+std::vector<std::string> JsonSerializer::deserializeStringArray(
+    const std::string& json) {
     std::vector<std::string> strings;
 
     if (json.empty() || json == "[]") {
@@ -352,7 +447,7 @@ std::vector<std::string> JsonSerializer::deserializeStringArray(const std::strin
         return strings;
     }
 
-    pos++; // Skip opening bracket
+    pos++;  // Skip opening bracket
     bool inString = false;
     bool escaped = false;
     std::string currentString;
@@ -388,7 +483,8 @@ std::vector<std::string> JsonSerializer::deserializeStringArray(const std::strin
 // SimpleJsonParser Implementation
 // ============================================================================
 
-std::string SimpleJsonParser::extractString(const std::string& json, const std::string& key) {
+std::string SimpleJsonParser::extractString(const std::string& json,
+                                            const std::string& key) {
     size_t endPos;
     size_t startPos = findValue(json, key, 0, endPos);
 
@@ -399,14 +495,15 @@ std::string SimpleJsonParser::extractString(const std::string& json, const std::
     // Skip opening quote
     if (json[startPos] == '"') {
         startPos++;
-        endPos--; // Skip closing quote
+        endPos--;  // Skip closing quote
     }
 
     std::string value = json.substr(startPos, endPos - startPos);
     return JsonSerializer::unescapeString(value);
 }
 
-int SimpleJsonParser::extractInt(const std::string& json, const std::string& key) {
+int SimpleJsonParser::extractInt(const std::string& json,
+                                 const std::string& key) {
     size_t endPos;
     size_t startPos = findValue(json, key, 0, endPos);
 
@@ -422,7 +519,8 @@ int SimpleJsonParser::extractInt(const std::string& json, const std::string& key
     }
 }
 
-bool SimpleJsonParser::extractBool(const std::string& json, const std::string& key) {
+bool SimpleJsonParser::extractBool(const std::string& json,
+                                   const std::string& key) {
     size_t endPos;
     size_t startPos = findValue(json, key, 0, endPos);
 
@@ -434,7 +532,8 @@ bool SimpleJsonParser::extractBool(const std::string& json, const std::string& k
     return value == "true";
 }
 
-std::string SimpleJsonParser::extractArray(const std::string& json, const std::string& key) {
+std::string SimpleJsonParser::extractArray(const std::string& json,
+                                           const std::string& key) {
     size_t endPos;
     size_t startPos = findValue(json, key, 0, endPos);
 
@@ -445,7 +544,8 @@ std::string SimpleJsonParser::extractArray(const std::string& json, const std::s
     return json.substr(startPos, endPos - startPos);
 }
 
-std::string SimpleJsonParser::extractObject(const std::string& json, const std::string& key) {
+std::string SimpleJsonParser::extractObject(const std::string& json,
+                                            const std::string& key) {
     size_t endPos;
     size_t startPos = findValue(json, key, 0, endPos);
 
@@ -484,18 +584,23 @@ bool SimpleJsonParser::isValidJson(const std::string& json) {
         }
 
         if (!inString) {
-            if (c == '{') braceCount++;
-            else if (c == '}') braceCount--;
-            else if (c == '[') bracketCount++;
-            else if (c == ']') bracketCount--;
+            if (c == '{')
+                braceCount++;
+            else if (c == '}')
+                braceCount--;
+            else if (c == '[')
+                bracketCount++;
+            else if (c == ']')
+                bracketCount--;
         }
     }
 
     return braceCount == 0 && bracketCount == 0 && !inString;
 }
 
-size_t SimpleJsonParser::findValue(const std::string& json, const std::string& key,
-                                  size_t startPos, size_t& endPos) {
+size_t SimpleJsonParser::findValue(const std::string& json,
+                                   const std::string& key, size_t startPos,
+                                   size_t& endPos) {
     std::string searchKey = "\"" + key + "\"";
     size_t keyPos = json.find(searchKey, startPos);
 
@@ -528,7 +633,8 @@ size_t SimpleJsonParser::skipWhitespace(const std::string& json, size_t pos) {
     return pos;
 }
 
-size_t SimpleJsonParser::findValueEnd(const std::string& json, size_t startPos) {
+size_t SimpleJsonParser::findValueEnd(const std::string& json,
+                                      size_t startPos) {
     if (startPos >= json.length()) {
         return startPos;
     }
@@ -572,7 +678,8 @@ size_t SimpleJsonParser::findValueEnd(const std::string& json, size_t startPos) 
                 continue;
             }
             if (!inString) {
-                if (json[i] == '{') braceCount++;
+                if (json[i] == '{')
+                    braceCount++;
                 else if (json[i] == '}') {
                     braceCount--;
                     if (braceCount == 0) {
@@ -602,7 +709,8 @@ size_t SimpleJsonParser::findValueEnd(const std::string& json, size_t startPos) 
                 continue;
             }
             if (!inString) {
-                if (json[i] == '[') bracketCount++;
+                if (json[i] == '[')
+                    bracketCount++;
                 else if (json[i] == ']') {
                     bracketCount--;
                     if (bracketCount == 0) {

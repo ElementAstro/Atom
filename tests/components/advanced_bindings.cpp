@@ -3,8 +3,8 @@
 
 #include <gtest/gtest.h>
 #include <memory>
-#include <string>
 #include <stdexcept>
+#include <string>
 
 using namespace atom::components::scripting;
 
@@ -23,9 +23,7 @@ public:
     static int staticMethod(int x) { return x * 2; }
 
     // Method that throws exception
-    void throwException() const {
-        throw std::runtime_error("Test exception");
-    }
+    void throwException() const { throw std::runtime_error("Test exception"); }
 
     // Operator overloading
     TestBindingClass operator+(const TestBindingClass& other) const {
@@ -54,7 +52,8 @@ protected:
 class ClassBinderTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        binder_ = std::make_unique<ClassBinder<TestBindingClass>>("TestBindingClass");
+        binder_ =
+            std::make_unique<ClassBinder<TestBindingClass>>("TestBindingClass");
     }
 
     std::unique_ptr<ClassBinder<TestBindingClass>> binder_;
@@ -160,9 +159,8 @@ TEST_F(ClassBinderTest, BindStaticMethod) {
 }
 
 TEST_F(ClassBinderTest, BindProperty) {
-    binder_->bindProperty("value",
-                         &TestBindingClass::getValue,
-                         &TestBindingClass::setValue);
+    binder_->bindProperty("value", &TestBindingClass::getValue,
+                          &TestBindingClass::setValue);
 
     EXPECT_NO_THROW(binder_->finalize());
 }
@@ -201,9 +199,8 @@ TEST_F(PropertyBinderTest, BindReadOnlyProperty) {
 }
 
 TEST_F(PropertyBinderTest, BindReadWriteProperty) {
-    propertyBinder_->bindReadWrite("value",
-                                  &TestBindingClass::getValue,
-                                  &TestBindingClass::setValue);
+    propertyBinder_->bindReadWrite("value", &TestBindingClass::getValue,
+                                   &TestBindingClass::setValue);
 
     // Test getter
     auto getValue = propertyBinder_->getValue(*testObject_, "value");
@@ -225,7 +222,8 @@ TEST_F(PropertyBinderTest, BindWriteOnlyProperty) {
     propertyBinder_->bindWriteOnly("writeValue", &TestBindingClass::setValue);
 
     ScriptValue newValue(200);
-    bool setResult = propertyBinder_->setValue(*testObject_, "writeValue", newValue);
+    bool setResult =
+        propertyBinder_->setValue(*testObject_, "writeValue", newValue);
     EXPECT_TRUE(setResult);
 
     // Verify the value was set
@@ -237,7 +235,8 @@ TEST_F(PropertyBinderTest, NonexistentProperty) {
     EXPECT_FALSE(value.has_value());
 
     ScriptValue testValue(123);
-    bool setResult = propertyBinder_->setValue(*testObject_, "nonexistent", testValue);
+    bool setResult =
+        propertyBinder_->setValue(*testObject_, "nonexistent", testValue);
     EXPECT_FALSE(setResult);
 }
 
@@ -248,7 +247,8 @@ TEST_F(PropertyBinderTest, NonexistentProperty) {
 TEST_F(CallbackManagerTest, RegisterCallback) {
     bool callbackExecuted = false;
 
-    auto callbackId = callbackManager_->registerCallback("test_event",
+    auto callbackId = callbackManager_->registerCallback(
+        "test_event",
         [&callbackExecuted](const std::vector<ScriptValue>& args) {
             callbackExecuted = true;
             return ScriptValue(true);
@@ -267,14 +267,14 @@ TEST_F(CallbackManagerTest, MultipleCallbacks) {
     int callbackCount = 0;
 
     // Register multiple callbacks for the same event
-    callbackManager_->registerCallback("multi_event",
-        [&callbackCount](const std::vector<ScriptValue>&) {
+    callbackManager_->registerCallback(
+        "multi_event", [&callbackCount](const std::vector<ScriptValue>&) {
             callbackCount++;
             return ScriptValue();
         });
 
-    callbackManager_->registerCallback("multi_event",
-        [&callbackCount](const std::vector<ScriptValue>&) {
+    callbackManager_->registerCallback(
+        "multi_event", [&callbackCount](const std::vector<ScriptValue>&) {
             callbackCount++;
             return ScriptValue();
         });
@@ -289,7 +289,8 @@ TEST_F(CallbackManagerTest, MultipleCallbacks) {
 TEST_F(CallbackManagerTest, UnregisterCallback) {
     bool callbackExecuted = false;
 
-    auto callbackId = callbackManager_->registerCallback("unregister_test",
+    auto callbackId = callbackManager_->registerCallback(
+        "unregister_test",
         [&callbackExecuted](const std::vector<ScriptValue>&) {
             callbackExecuted = true;
             return ScriptValue();
@@ -309,8 +310,8 @@ TEST_F(CallbackManagerTest, UnregisterCallback) {
 TEST_F(CallbackManagerTest, CallbackWithArguments) {
     ScriptValue receivedArg;
 
-    callbackManager_->registerCallback("arg_test",
-        [&receivedArg](const std::vector<ScriptValue>& args) {
+    callbackManager_->registerCallback(
+        "arg_test", [&receivedArg](const std::vector<ScriptValue>& args) {
             if (!args.empty()) {
                 receivedArg = args[0];
             }
@@ -328,7 +329,8 @@ TEST_F(CallbackManagerTest, NonexistentEvent) {
     std::vector<ScriptValue> args;
 
     // Should handle nonexistent event gracefully
-    EXPECT_NO_THROW(callbackManager_->triggerCallback("nonexistent_event", args));
+    EXPECT_NO_THROW(
+        callbackManager_->triggerCallback("nonexistent_event", args));
 }
 
 // ============================================================================
@@ -346,7 +348,8 @@ TEST(AdvancedBindingsIntegrationTest, CompleteClassBinding) {
     binder.bindMethod("setValue", &TestBindingClass::setValue);
     binder.bindMethod("add", &TestBindingClass::add);
     binder.bindStaticMethod("staticMethod", &TestBindingClass::staticMethod);
-    binder.bindProperty("value", &TestBindingClass::getValue, &TestBindingClass::setValue);
+    binder.bindProperty("value", &TestBindingClass::getValue,
+                        &TestBindingClass::setValue);
     binder.bindOperator("+", &TestBindingClass::operator+);
 
     EXPECT_NO_THROW(binder.finalize());
@@ -378,8 +381,8 @@ TEST(AdvancedBindingsIntegrationTest, ExceptionHandling) {
 TEST(AdvancedBindingsErrorTest, InvalidMethodBinding) {
     ClassBinder<TestBindingClass> binder("TestClass");
 
-    // Try to bind a method that doesn't exist (this would be a compile-time error)
-    // So we test that valid bindings don't throw
+    // Try to bind a method that doesn't exist (this would be a compile-time
+    // error) So we test that valid bindings don't throw
     EXPECT_NO_THROW(binder.bindMethod("getValue", &TestBindingClass::getValue));
 }
 
@@ -396,8 +399,8 @@ TEST(AdvancedBindingsErrorTest, CallbackException) {
     CallbackManager manager;
 
     // Register a callback that throws
-    manager.registerCallback("exception_test",
-        [](const std::vector<ScriptValue>&) -> ScriptValue {
+    manager.registerCallback(
+        "exception_test", [](const std::vector<ScriptValue>&) -> ScriptValue {
             throw std::runtime_error("Callback exception");
         });
 

@@ -73,8 +73,8 @@ namespace atom::system {
  * nested keys separated by backslashes.
  * @return true if successful, false if failed.
  */
-[[nodiscard]] auto deleteRegistrySubKey(HKEY hRootKey, std::string_view subKey)
-    -> bool;
+[[nodiscard]] auto deleteRegistrySubKey(HKEY hRootKey,
+                                        std::string_view subKey) -> bool;
 
 /**
  * @brief Deletes the specified value under the specified registry key.
@@ -152,8 +152,8 @@ void findRegistryValue(
  * @param subKey The name of the key to create.
  * @return true if successful, false if failed.
  */
-[[nodiscard]] auto createRegistryKey(HKEY hRootKey, std::string_view subKey)
-    -> bool;
+[[nodiscard]] auto createRegistryKey(HKEY hRootKey,
+                                     std::string_view subKey) -> bool;
 
 /**
  * @brief Checks if a registry key exists.
@@ -161,8 +161,8 @@ void findRegistryValue(
  * @param subKey The name of the key to check.
  * @return true if key exists, false otherwise.
  */
-[[nodiscard]] auto registryKeyExists(HKEY hRootKey, std::string_view subKey)
-    -> bool;
+[[nodiscard]] auto registryKeyExists(HKEY hRootKey,
+                                     std::string_view subKey) -> bool;
 
 /**
  * @brief Gets the type of a registry value.

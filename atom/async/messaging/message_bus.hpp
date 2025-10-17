@@ -1023,9 +1023,9 @@ public:
      * @return A vector of messages.
      */
     template <MessageConcept MessageType>
-    [[nodiscard]] auto getMessageHistory(
-        std::string_view name_sv, std::size_t count = K_MAX_HISTORY_SIZE) const
-        -> std::vector<MessageType> {
+    [[nodiscard]] auto getMessageHistory(std::string_view name_sv,
+                                         std::size_t count = K_MAX_HISTORY_SIZE)
+        const -> std::vector<MessageType> {
         try {
             if (count == 0) {
                 return {};

@@ -110,7 +110,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
     }
 
 #elif __linux__
-    struct statfs stats{};
+    struct statfs stats {};
     if (statfs(path.c_str(), &stats) == 0) {
         info.totalSpace = static_cast<uint64_t>(stats.f_blocks) * stats.f_bsize;
         info.freeSpace = static_cast<uint64_t>(stats.f_bfree) * stats.f_bsize;
@@ -151,7 +151,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
     }
 
 #elif __APPLE__
-    struct statfs stats{};
+    struct statfs stats {};
     if (statfs(path.c_str(), &stats) == 0) {
         info.totalSpace = static_cast<uint64_t>(stats.f_blocks) * stats.f_bsize;
         info.freeSpace = static_cast<uint64_t>(stats.f_bfree) * stats.f_bsize;
@@ -198,7 +198,7 @@ DiskInfo getDiskInfoCached(const std::string& path) {
     }
 
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    struct statfs stats{};
+    struct statfs stats {};
     if (statfs(path.c_str(), &stats) == 0) {
         info.totalSpace = static_cast<uint64_t>(stats.f_blocks) * stats.f_bsize;
         info.freeSpace = static_cast<uint64_t>(stats.f_bfree) * stats.f_bsize;

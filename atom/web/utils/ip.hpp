@@ -37,8 +37,8 @@ auto isValidIPv6(const std::string& ipAddress) -> bool;
  * @param bufSize Size of the buffer
  * @return bool True if conversion succeeded, false otherwise
  */
-auto ipToString(const struct sockaddr* addr, char* strBuf, size_t bufSize)
-    -> bool;
+auto ipToString(const struct sockaddr* addr, char* strBuf,
+                size_t bufSize) -> bool;
 
 }  // namespace atom::web
 

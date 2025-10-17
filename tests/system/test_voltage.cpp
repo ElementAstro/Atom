@@ -17,8 +17,10 @@ using namespace std::chrono_literals;
 class MockVoltageMonitor : public VoltageMonitor {
 public:
     MOCK_METHOD(std::optional<double>, getInputVoltage, (), (const, override));
-    MOCK_METHOD(std::optional<double>, getBatteryVoltage, (), (const, override));
-    MOCK_METHOD(std::vector<PowerSourceInfo>, getAllPowerSources, (), (const, override));
+    MOCK_METHOD(std::optional<double>, getBatteryVoltage, (),
+                (const, override));
+    MOCK_METHOD(std::vector<PowerSourceInfo>, getAllPowerSources, (),
+                (const, override));
     MOCK_METHOD(std::string, getPlatformName, (), (const, override));
 };
 
@@ -29,7 +31,8 @@ protected:
         realMonitor = VoltageMonitor::create();
 
         // Create a mock voltage monitor for controlled tests
-        mockMonitor = std::make_unique<::testing::NiceMock<MockVoltageMonitor>>();
+        mockMonitor =
+            std::make_unique<::testing::NiceMock<MockVoltageMonitor>>();
 
         // Set up default behavior for the mock
         ON_CALL(*mockMonitor, getPlatformName())
@@ -97,9 +100,8 @@ TEST_F(VoltageMonitorTest, Create) {
 
     // Platform name should be Windows, Linux, or MacOS
     std::string platform = monitor->getPlatformName();
-    bool validPlatform = (platform == "Windows" ||
-                         platform == "Linux" ||
-                         platform == "MacOS");
+    bool validPlatform =
+        (platform == "Windows" || platform == "Linux" || platform == "MacOS");
     EXPECT_TRUE(validPlatform);
 }
 
@@ -133,7 +135,7 @@ TEST_F(VoltageMonitorTest, PowerSourceInfoToString) {
     std::string partialStr = partialInfo.toString();
     EXPECT_TRUE(partialStr.find("Partial Info") != std::string::npos);
     EXPECT_TRUE(partialStr.find("AC Power") != std::string::npos);
-    EXPECT_FALSE(partialStr.find("V") != std::string::npos); // No voltage
+    EXPECT_FALSE(partialStr.find("V") != std::string::npos);  // No voltage
 }
 
 // Test powerSourceTypeToString function
@@ -144,7 +146,8 @@ TEST_F(VoltageMonitorTest, PowerSourceTypeToString) {
     EXPECT_EQ(powerSourceTypeToString(PowerSourceType::Unknown), "Unknown");
 
     // Test with explicit cast to test default case
-    EXPECT_EQ(powerSourceTypeToString(static_cast<PowerSourceType>(999)), "Undefined");
+    EXPECT_EQ(powerSourceTypeToString(static_cast<PowerSourceType>(999)),
+              "Undefined");
 }
 
 // Test getInputVoltage method
@@ -221,9 +224,9 @@ TEST_F(VoltageMonitorTest, GetAllPowerSources) {
         EXPECT_FALSE(source.name.empty());
         // Type should be a valid enumeration value
         EXPECT_TRUE(source.type == PowerSourceType::AC ||
-                   source.type == PowerSourceType::Battery ||
-                   source.type == PowerSourceType::USB ||
-                   source.type == PowerSourceType::Unknown);
+                    source.type == PowerSourceType::Battery ||
+                    source.type == PowerSourceType::USB ||
+                    source.type == PowerSourceType::Unknown);
     }
 }
 
@@ -282,7 +285,8 @@ TEST_F(VoltageMonitorTest, GetAllPowerSourcesEmpty) {
 // Windows-specific tests
 TEST_F(VoltageMonitorTest, WindowsSpecificTests) {
     // Check that our real monitor is a WindowsVoltageMonitor
-    EXPECT_EQ(typeid(*realMonitor).name(), typeid(WindowsVoltageMonitor).name());
+    EXPECT_EQ(typeid(*realMonitor).name(),
+              typeid(WindowsVoltageMonitor).name());
 
     // Test that platform name is correctly reported
     EXPECT_EQ(realMonitor->getPlatformName(), "Windows");
@@ -402,11 +406,13 @@ TEST_F(VoltageMonitorTest, DISABLED_PerformanceTest) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
 
     std::cout << "Average time to get all power sources: "
-              << (duration / static_cast<double>(iterations))
-              << " ms" << std::endl;
+              << (duration / static_cast<double>(iterations)) << " ms"
+              << std::endl;
 
     // No specific assertion, but it shouldn't take too long
 }

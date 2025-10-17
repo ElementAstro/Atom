@@ -603,8 +603,9 @@ public:
         BatteryMonitor::stopMonitoring();
     }
 
-    [[nodiscard]] auto getHistory(unsigned int maxEntries) const -> std::vector<
-        std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
+    [[nodiscard]] auto getHistory(unsigned int maxEntries) const
+        -> std::vector<
+            std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
         std::shared_lock lock(m_mutex);
 
         if (maxEntries == 0 || maxEntries >= m_historyData.size()) {
@@ -786,8 +787,9 @@ auto BatteryManager::startMonitoring(unsigned int interval_ms) -> bool {
 
 void BatteryManager::stopMonitoring() { impl->stopMonitoring(); }
 
-auto BatteryManager::getHistory(unsigned int maxEntries) const -> std::vector<
-    std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
+auto BatteryManager::getHistory(unsigned int maxEntries) const
+    -> std::vector<
+        std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
     return impl->getHistory(maxEntries);
 }
 

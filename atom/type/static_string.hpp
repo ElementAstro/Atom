@@ -488,9 +488,8 @@ public:
      * @return A new StaticString containing the substring.
      * @throws std::out_of_range If position is out of bounds.
      */
-    [[nodiscard]] constexpr auto substr(size_type pos = 0,
-                                        size_type count = npos) const
-        -> StaticString {
+    [[nodiscard]] constexpr auto substr(
+        size_type pos = 0, size_type count = npos) const -> StaticString {
         if (pos > size_) {
             throw std::out_of_range("Substring position out of range");
         }
@@ -527,9 +526,8 @@ public:
      * @param pos The position to start the search.
      * @return The position of the substring, or npos if not found.
      */
-    [[nodiscard]] constexpr auto find(std::string_view str,
-                                      size_type pos = 0) const noexcept
-        -> size_type {
+    [[nodiscard]] constexpr auto find(
+        std::string_view str, size_type pos = 0) const noexcept -> size_type {
         if (pos >= size_ || str.empty() || str.size() > size_ - pos) {
             return npos;
         }
@@ -549,8 +547,8 @@ public:
      * @throws std::out_of_range If position is out of bounds.
      * @throws std::runtime_error If the operation would exceed capacity.
      */
-    constexpr auto replace(size_type pos, size_type count, std::string_view str)
-        -> StaticString& {
+    constexpr auto replace(size_type pos, size_type count,
+                           std::string_view str) -> StaticString& {
         if (pos > size_) {
             throw std::out_of_range("Replace position out of range");
         }
@@ -584,8 +582,8 @@ public:
      * @throws std::out_of_range If position is out of bounds
      * @throws std::runtime_error If the operation would exceed capacity
      */
-    constexpr auto insert(size_type pos, std::string_view str)
-        -> StaticString& {
+    constexpr auto insert(size_type pos,
+                          std::string_view str) -> StaticString& {
         return replace(pos, 0, str);
     }
 
@@ -597,8 +595,8 @@ public:
      * @return Reference to this object
      * @throws std::out_of_range If position is out of bounds
      */
-    constexpr auto erase(size_type pos, size_type count = npos)
-        -> StaticString& {
+    constexpr auto erase(size_type pos,
+                         size_type count = npos) -> StaticString& {
         if (pos > size_) {
             throw std::out_of_range("Erase position out of range");
         }

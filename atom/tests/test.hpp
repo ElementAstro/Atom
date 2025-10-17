@@ -650,8 +650,8 @@ ATOM_INLINE auto expectApprox(double lhs, double rhs, double epsilon,
 }
 
 template <typename T, typename U>
-auto expectEq(const T& lhs, const U& rhs, const char* file, int line)
-    -> Expect {
+auto expectEq(const T& lhs, const U& rhs, const char* file,
+              int line) -> Expect {
     if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
         return Expect(
             lhs == rhs, file, line,
@@ -664,8 +664,8 @@ auto expectEq(const T& lhs, const U& rhs, const char* file, int line)
 }
 
 template <typename T, typename U>
-auto expectNe(const T& lhs, const U& rhs, const char* file, int line)
-    -> Expect {
+auto expectNe(const T& lhs, const U& rhs, const char* file,
+              int line) -> Expect {
     if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
         return Expect(
             lhs != rhs, file, line,
@@ -678,8 +678,8 @@ auto expectNe(const T& lhs, const U& rhs, const char* file, int line)
 }
 
 template <typename T, typename U>
-auto expectGt(const T& lhs, const U& rhs, const char* file, int line)
-    -> Expect {
+auto expectGt(const T& lhs, const U& rhs, const char* file,
+              int line) -> Expect {
     if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
         return Expect(
             lhs > rhs, file, line,
@@ -725,8 +725,8 @@ ATOM_INLINE auto expectSetEq(const std::vector<T>& lhs,
 }
 
 template <typename T, typename U>
-auto expectLt(const T& lhs, const U& rhs, const char* file, int line)
-    -> Expect {
+auto expectLt(const T& lhs, const U& rhs, const char* file,
+              int line) -> Expect {
     if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
         return Expect(
             lhs < rhs, file, line,
@@ -739,8 +739,8 @@ auto expectLt(const T& lhs, const U& rhs, const char* file, int line)
 }
 
 template <typename T, typename U>
-auto expectGe(const T& lhs, const U& rhs, const char* file, int line)
-    -> Expect {
+auto expectGe(const T& lhs, const U& rhs, const char* file,
+              int line) -> Expect {
     if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
         return Expect(
             lhs >= rhs, file, line,
@@ -754,9 +754,9 @@ auto expectGe(const T& lhs, const U& rhs, const char* file, int line)
 
 template <typename T, typename U>
     requires std::is_convertible_v<
-        decltype(std::declval<T>() <= std::declval<U>()), bool>
-auto expectLe(const T& lhs, const U& rhs, const char* file, int line)
-    -> Expect {
+                 decltype(std::declval<T>() <= std::declval<U>()), bool>
+auto expectLe(const T& lhs, const U& rhs, const char* file,
+              int line) -> Expect {
     if constexpr (std::is_arithmetic_v<T> && std::is_arithmetic_v<U>) {
         return Expect(
             lhs <= rhs, file, line,

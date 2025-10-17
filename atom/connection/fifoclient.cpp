@@ -875,8 +875,9 @@ FifoClient::readAsyncWithFuture(
     return m_impl->readAsyncWithFuture(maxSize, timeout);
 }
 
-auto FifoClient::open(std::optional<std::chrono::milliseconds> timeout [[maybe_unused]])
-    -> type::expected<void, std::error_code> {
+auto FifoClient::open(
+    std::optional<std::chrono::milliseconds> timeout
+    [[maybe_unused]]) -> type::expected<void, std::error_code> {
     if (!m_impl) {
         return type::unexpected(make_error_code(FifoError::NotOpen));
     }

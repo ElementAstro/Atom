@@ -41,8 +41,8 @@ template <typename T>
  * @return True if the value is found, false otherwise
  */
 template <typename T>
-[[nodiscard]] auto contains(std::span<const T> data, const T& value) noexcept
-    -> bool {
+[[nodiscard]] auto contains(std::span<const T> data,
+                            const T& value) noexcept -> bool {
 #ifdef ATOM_USE_BOOST
     return boost::contains(data, value);
 #else
@@ -73,8 +73,8 @@ void sortSpan(std::span<T> data) noexcept {
  * @return A vector containing the filtered elements
  */
 template <typename T, typename Predicate>
-[[nodiscard]] auto filterSpan(std::span<const T> data, Predicate predicate)
-    -> std::vector<T> {
+[[nodiscard]] auto filterSpan(std::span<const T> data,
+                              Predicate predicate) -> std::vector<T> {
     std::vector<T> result;
     result.reserve(data.size());  // Optimize memory allocation
 
@@ -375,8 +375,8 @@ template <typename T>
  * @return A vector containing the top N elements in descending order
  */
 template <typename T>
-[[nodiscard]] auto topNElements(std::span<const T> data, size_t n)
-    -> std::vector<T> {
+[[nodiscard]] auto topNElements(std::span<const T> data,
+                                size_t n) -> std::vector<T> {
     std::vector<T> result(data.begin(), data.end());
     size_t actual_n = std::min(n, result.size());
 
@@ -423,8 +423,8 @@ template <typename T>
  * @return A vector containing the bottom N elements in ascending order
  */
 template <typename T>
-[[nodiscard]] auto bottomNElements(std::span<const T> data, size_t n)
-    -> std::vector<T> {
+[[nodiscard]] auto bottomNElements(std::span<const T> data,
+                                   size_t n) -> std::vector<T> {
     std::vector<T> result(data.begin(), data.end());
     size_t actual_n = std::min(n, result.size());
 
@@ -490,8 +490,8 @@ template <typename T>
  * @return The index of the value if found, std::nullopt otherwise
  */
 template <typename T>
-[[nodiscard]] auto findIndex(std::span<const T> data, const T& value) noexcept
-    -> std::optional<size_t> {
+[[nodiscard]] auto findIndex(std::span<const T> data,
+                             const T& value) noexcept -> std::optional<size_t> {
 #ifdef ATOM_USE_BOOST
     auto it = boost::find(data, value);
 #else
@@ -513,8 +513,8 @@ template <typename T>
  * @throws std::invalid_argument if spans have different sizes
  */
 template <typename T>
-[[nodiscard]] auto dotProduct(std::span<const T> lhs, std::span<const T> rhs)
-    -> T {
+[[nodiscard]] auto dotProduct(std::span<const T> lhs,
+                              std::span<const T> rhs) -> T {
     if (lhs.size() != rhs.size()) {
         throw std::invalid_argument(
             "Spans must have the same size for dot product");
@@ -532,8 +532,8 @@ template <typename T>
  * @return True if all elements satisfy the predicate, false otherwise
  */
 template <typename T, typename Predicate>
-[[nodiscard]] auto allOf(std::span<const T> data, Predicate predicate) noexcept
-    -> bool {
+[[nodiscard]] auto allOf(std::span<const T> data,
+                         Predicate predicate) noexcept -> bool {
     return std::all_of(data.begin(), data.end(), predicate);
 }
 
@@ -546,8 +546,8 @@ template <typename T, typename Predicate>
  * @return True if any element satisfies the predicate, false otherwise
  */
 template <typename T, typename Predicate>
-[[nodiscard]] auto anyOf(std::span<const T> data, Predicate predicate) noexcept
-    -> bool {
+[[nodiscard]] auto anyOf(std::span<const T> data,
+                         Predicate predicate) noexcept -> bool {
     return std::any_of(data.begin(), data.end(), predicate);
 }
 
@@ -560,8 +560,8 @@ template <typename T, typename Predicate>
  * @return True if no elements satisfy the predicate, false otherwise
  */
 template <typename T, typename Predicate>
-[[nodiscard]] auto noneOf(std::span<const T> data, Predicate predicate) noexcept
-    -> bool {
+[[nodiscard]] auto noneOf(std::span<const T> data,
+                          Predicate predicate) noexcept -> bool {
     return std::none_of(data.begin(), data.end(), predicate);
 }
 

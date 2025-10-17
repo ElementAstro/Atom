@@ -12,7 +12,7 @@ project(
 
 # Include test build options if not already included
 if(NOT DEFINED ATOM_TEST_BUILD_ALL)
-    include(${CMAKE_SOURCE_DIR}/cmake/TestsBuildOptions.cmake)
+  include(${CMAKE_SOURCE_DIR}/cmake/TestsBuildOptions.cmake)
 endif()
 
 # Find required packages
@@ -21,7 +21,7 @@ find_package(Threads REQUIRED)
 
 # Include test infrastructure first
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
-    add_subdirectory(tests)
+  add_subdirectory(tests)
 endif()
 
 # Conditionally add test subdirectories based on build options

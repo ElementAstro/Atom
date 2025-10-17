@@ -247,8 +247,8 @@ public:
      * \brief Dereferences the iterator and applies the transformation function
      * \return The transformed value
      */
-    constexpr auto operator*() const noexcept(noexcept(func_(*iter_)))
-        -> reference {
+    constexpr auto operator*() const
+        noexcept(noexcept(func_(*iter_))) -> reference {
         return func_(*iter_);
     }
 

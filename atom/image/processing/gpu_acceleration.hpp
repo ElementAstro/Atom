@@ -14,11 +14,11 @@
  * @version 1.0.0
  */
 
-#include "../core/image_blob.hpp"
-#include <vector>
-#include <string>
 #include <memory>
+#include <string>
 #include <unordered_map>
+#include <vector>
+#include "../core/image_blob.hpp"
 
 namespace atom::image {
 
@@ -40,29 +40,30 @@ enum class GPUBackend {
  * @brief GPU memory types
  */
 enum class GPUMemoryType {
-    DEVICE,         // Device memory (GPU VRAM)
-    HOST,           // Host memory (CPU RAM)
-    UNIFIED,        // Unified memory (accessible by both CPU and GPU)
-    PINNED          // Pinned host memory (faster transfers)
+    DEVICE,   // Device memory (GPU VRAM)
+    HOST,     // Host memory (CPU RAM)
+    UNIFIED,  // Unified memory (accessible by both CPU and GPU)
+    PINNED    // Pinned host memory (faster transfers)
 };
 
 /**
  * @brief GPU device information
  */
 struct GPUDeviceInfo {
-    int deviceId;                   // Device ID
-    std::string name;               // Device name
-    std::string vendor;             // Vendor name
-    GPUBackend backend;             // Backend type
-    size_t totalMemory;             // Total memory in bytes
-    size_t freeMemory;              // Free memory in bytes
-    int computeUnits;               // Number of compute units
-    int maxWorkGroupSize;           // Maximum work group size
-    std::vector<size_t> maxWorkItemSizes; // Maximum work item sizes
-    bool supportsDouble;            // Supports double precision
-    bool supportsHalf;              // Supports half precision
-    std::string version;            // Driver/runtime version
-    std::unordered_map<std::string, std::string> extensions; // Supported extensions
+    int deviceId;                          // Device ID
+    std::string name;                      // Device name
+    std::string vendor;                    // Vendor name
+    GPUBackend backend;                    // Backend type
+    size_t totalMemory;                    // Total memory in bytes
+    size_t freeMemory;                     // Free memory in bytes
+    int computeUnits;                      // Number of compute units
+    int maxWorkGroupSize;                  // Maximum work group size
+    std::vector<size_t> maxWorkItemSizes;  // Maximum work item sizes
+    bool supportsDouble;                   // Supports double precision
+    bool supportsHalf;                     // Supports half precision
+    std::string version;                   // Driver/runtime version
+    std::unordered_map<std::string, std::string>
+        extensions;  // Supported extensions
 };
 
 /**
@@ -79,7 +80,8 @@ public:
      * @param memoryType Memory type
      * @return Success status
      */
-    virtual bool allocate(size_t size, GPUMemoryType memoryType = GPUMemoryType::DEVICE) = 0;
+    virtual bool allocate(size_t size,
+                          GPUMemoryType memoryType = GPUMemoryType::DEVICE) = 0;
 
     /**
      * @brief Upload data to GPU buffer
@@ -107,7 +109,8 @@ public:
      * @param size Data size
      * @return Success status
      */
-    virtual bool copyFrom(const GPUBuffer& src, size_t srcOffset, size_t dstOffset, size_t size) = 0;
+    virtual bool copyFrom(const GPUBuffer& src, size_t srcOffset,
+                          size_t dstOffset, size_t size) = 0;
 
     /**
      * @brief Get buffer size
@@ -149,8 +152,8 @@ public:
      * @return Success status
      */
     virtual bool loadFromSource(const std::string& source,
-                               const std::string& entryPoint,
-                               const std::string& buildOptions = "") = 0;
+                                const std::string& entryPoint,
+                                const std::string& buildOptions = "") = 0;
 
     /**
      * @brief Load kernel from binary
@@ -159,7 +162,7 @@ public:
      * @return Success status
      */
     virtual bool loadFromBinary(const std::vector<uint8_t>& binary,
-                               const std::string& entryPoint) = 0;
+                                const std::string& entryPoint) = 0;
 
     /**
      * @brief Set kernel argument
@@ -185,7 +188,7 @@ public:
      * @return Success status
      */
     virtual bool execute(const std::vector<size_t>& globalWorkSize,
-                        const std::vector<size_t>& localWorkSize = {}) = 0;
+                         const std::vector<size_t>& localWorkSize = {}) = 0;
 
     /**
      * @brief Get kernel info
@@ -208,7 +211,8 @@ public:
      * @param deviceId Device ID (-1 for auto-select)
      * @return Success status
      */
-    virtual bool initialize(GPUBackend backend = GPUBackend::AUTO, int deviceId = -1) = 0;
+    virtual bool initialize(GPUBackend backend = GPUBackend::AUTO,
+                            int deviceId = -1) = 0;
 
     /**
      * @brief Create GPU buffer
@@ -216,8 +220,8 @@ public:
      * @param memoryType Memory type
      * @return GPU buffer pointer
      */
-    virtual std::unique_ptr<GPUBuffer> createBuffer(size_t size,
-                                                   GPUMemoryType memoryType = GPUMemoryType::DEVICE) = 0;
+    virtual std::unique_ptr<GPUBuffer> createBuffer(
+        size_t size, GPUMemoryType memoryType = GPUMemoryType::DEVICE) = 0;
 
     /**
      * @brief Create GPU kernel
@@ -242,7 +246,8 @@ public:
      * @param backend GPU backend
      * @return Vector of device information
      */
-    static std::vector<GPUDeviceInfo> getAvailableDevices(GPUBackend backend = GPUBackend::AUTO);
+    static std::vector<GPUDeviceInfo> getAvailableDevices(
+        GPUBackend backend = GPUBackend::AUTO);
 
     /**
      * @brief Check if backend is available
@@ -272,7 +277,8 @@ public:
      * @param deviceId Device ID
      * @return Success status
      */
-    virtual bool initialize(GPUBackend backend = GPUBackend::AUTO, int deviceId = -1);
+    virtual bool initialize(GPUBackend backend = GPUBackend::AUTO,
+                            int deviceId = -1);
 
     /**
      * @brief Upload image to GPU
@@ -289,7 +295,8 @@ public:
      * @param channels Number of channels
      * @return Downloaded image blob
      */
-    virtual blob downloadImage(const GPUBuffer& buffer, int width, int height, int channels);
+    virtual blob downloadImage(const GPUBuffer& buffer, int width, int height,
+                               int channels);
 
     /**
      * @brief Apply convolution filter on GPU
@@ -300,9 +307,9 @@ public:
      * @param channels Number of channels
      * @return Filtered image buffer
      */
-    virtual std::unique_ptr<GPUBuffer> convolve(const GPUBuffer& input,
-                                               const std::vector<std::vector<float>>& kernel,
-                                               int width, int height, int channels);
+    virtual std::unique_ptr<GPUBuffer> convolve(
+        const GPUBuffer& input, const std::vector<std::vector<float>>& kernel,
+        int width, int height, int channels);
 
     /**
      * @brief Apply Gaussian blur on GPU
@@ -315,8 +322,9 @@ public:
      * @return Blurred image buffer
      */
     virtual std::unique_ptr<GPUBuffer> gaussianBlur(const GPUBuffer& input,
-                                                   float sigma, int kernelSize,
-                                                   int width, int height, int channels);
+                                                    float sigma, int kernelSize,
+                                                    int width, int height,
+                                                    int channels);
 
     /**
      * @brief Resize image on GPU
@@ -329,11 +337,10 @@ public:
      * @param interpolation Interpolation method
      * @return Resized image buffer
      */
-    virtual std::unique_ptr<GPUBuffer> resize(const GPUBuffer& input,
-                                             int srcWidth, int srcHeight,
-                                             int dstWidth, int dstHeight,
-                                             int channels,
-                                             const std::string& interpolation = "linear");
+    virtual std::unique_ptr<GPUBuffer> resize(
+        const GPUBuffer& input, int srcWidth, int srcHeight, int dstWidth,
+        int dstHeight, int channels,
+        const std::string& interpolation = "linear");
 
     /**
      * @brief Apply color space conversion on GPU
@@ -344,10 +351,9 @@ public:
      * @param height Image height
      * @return Converted image buffer
      */
-    virtual std::unique_ptr<GPUBuffer> convertColorSpace(const GPUBuffer& input,
-                                                        const std::string& fromSpace,
-                                                        const std::string& toSpace,
-                                                        int width, int height);
+    virtual std::unique_ptr<GPUBuffer> convertColorSpace(
+        const GPUBuffer& input, const std::string& fromSpace,
+        const std::string& toSpace, int width, int height);
 
     /**
      * @brief Apply histogram equalization on GPU
@@ -358,7 +364,8 @@ public:
      * @return Equalized image buffer
      */
     virtual std::unique_ptr<GPUBuffer> equalizeHistogram(const GPUBuffer& input,
-                                                        int width, int height, int channels);
+                                                         int width, int height,
+                                                         int channels);
 
     /**
      * @brief Apply morphological operation on GPU
@@ -370,10 +377,10 @@ public:
      * @param channels Number of channels
      * @return Processed image buffer
      */
-    virtual std::unique_ptr<GPUBuffer> morphological(const GPUBuffer& input,
-                                                    const std::string& operation,
-                                                    const std::vector<std::vector<int>>& structElement,
-                                                    int width, int height, int channels);
+    virtual std::unique_ptr<GPUBuffer> morphological(
+        const GPUBuffer& input, const std::string& operation,
+        const std::vector<std::vector<int>>& structElement, int width,
+        int height, int channels);
 
     /**
      * @brief Apply edge detection on GPU
@@ -386,9 +393,10 @@ public:
      * @return Edge image buffer
      */
     virtual std::unique_ptr<GPUBuffer> detectEdges(const GPUBuffer& input,
-                                                  const std::string& method,
-                                                  float threshold1, float threshold2,
-                                                  int width, int height);
+                                                   const std::string& method,
+                                                   float threshold1,
+                                                   float threshold2, int width,
+                                                   int height);
 
     /**
      * @brief Apply custom kernel on GPU
@@ -400,12 +408,12 @@ public:
      * @param args Additional kernel arguments
      * @return Processed image buffer
      */
-    virtual std::unique_ptr<GPUBuffer> applyCustomKernel(const GPUBuffer& input,
-                                                        const std::string& kernelSource,
-                                                        const std::string& entryPoint,
-                                                        const std::vector<size_t>& globalWorkSize,
-                                                        const std::vector<size_t>& localWorkSize = {},
-                                                        const std::vector<float>& args = {});
+    virtual std::unique_ptr<GPUBuffer> applyCustomKernel(
+        const GPUBuffer& input, const std::string& kernelSource,
+        const std::string& entryPoint,
+        const std::vector<size_t>& globalWorkSize,
+        const std::vector<size_t>& localWorkSize = {},
+        const std::vector<float>& args = {});
 
     /**
      * @brief Batch process multiple images on GPU
@@ -438,9 +446,9 @@ public:
      * @param iterations Number of iterations
      * @return Benchmark results
      */
-    virtual std::unordered_map<std::string, double> benchmark(const std::string& operation,
-                                                             const std::pair<int, int>& imageSize,
-                                                             int iterations = 100);
+    virtual std::unordered_map<std::string, double> benchmark(
+        const std::string& operation, const std::pair<int, int>& imageSize,
+        int iterations = 100);
 
 protected:
     /**
@@ -478,9 +486,9 @@ private:
  * @param deviceId Device ID (-1 for auto-select)
  * @return Unique pointer to GPU processor
  */
-std::unique_ptr<GPUImageProcessor> createOptimalGPUProcessor(GPUBackend backend = GPUBackend::AUTO,
-                                                            int deviceId = -1);
+std::unique_ptr<GPUImageProcessor> createOptimalGPUProcessor(
+    GPUBackend backend = GPUBackend::AUTO, int deviceId = -1);
 
-} // namespace atom::image
+}  // namespace atom::image
 
-#endif // ATOM_IMAGE_GPU_ACCELERATION_HPP
+#endif  // ATOM_IMAGE_GPU_ACCELERATION_HPP

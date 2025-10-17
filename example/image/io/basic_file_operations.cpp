@@ -34,25 +34,33 @@ void createSampleImages() {
     try {
         // Create a simple RGB gradient image
         const int grad_width = 300, grad_height = 200, grad_channels = 3;
-        std::vector<uint8_t> gradient_data(grad_width * grad_height * grad_channels);
-        
+        std::vector<uint8_t> gradient_data(grad_width * grad_height *
+                                           grad_channels);
+
         for (int y = 0; y < grad_height; ++y) {
             for (int x = 0; x < grad_width; ++x) {
                 int pixel_idx = (y * grad_width + x) * grad_channels;
-                gradient_data[pixel_idx] = static_cast<uint8_t>((x * 255) / grad_width);  // Red gradient
-                gradient_data[pixel_idx + 1] = static_cast<uint8_t>((y * 255) / grad_height);  // Green gradient
-                gradient_data[pixel_idx + 2] = static_cast<uint8_t>(((x + y) * 255) / (grad_width + grad_height));  // Blue gradient
+                gradient_data[pixel_idx] = static_cast<uint8_t>(
+                    (x * 255) / grad_width);  // Red gradient
+                gradient_data[pixel_idx + 1] = static_cast<uint8_t>(
+                    (y * 255) / grad_height);  // Green gradient
+                gradient_data[pixel_idx + 2] = static_cast<uint8_t>(
+                    ((x + y) * 255) /
+                    (grad_width + grad_height));  // Blue gradient
             }
         }
-        
-        blob gradient(reinterpret_cast<std::byte*>(gradient_data.data()), gradient_data.size());
-        std::cout << "Created gradient image: " << grad_width << "x" << grad_height << "\n";
+
+        blob gradient(reinterpret_cast<std::byte*>(gradient_data.data()),
+                      gradient_data.size());
+        std::cout << "Created gradient image: " << grad_width << "x"
+                  << grad_height << "\n";
 
         // Create a checkerboard pattern
         const int check_size = 256, check_channels = 1;
         const int square_size = 32;
-        std::vector<uint8_t> checkerboard_data(check_size * check_size * check_channels);
-        
+        std::vector<uint8_t> checkerboard_data(check_size * check_size *
+                                               check_channels);
+
         for (int y = 0; y < check_size; ++y) {
             for (int x = 0; x < check_size; ++x) {
                 bool white = ((x / square_size) + (y / square_size)) % 2 == 0;
@@ -60,13 +68,17 @@ void createSampleImages() {
                 checkerboard_data[pixel_idx] = white ? 255 : 0;
             }
         }
-        
-        blob checkerboard(reinterpret_cast<std::byte*>(checkerboard_data.data()), checkerboard_data.size());
-        std::cout << "Created checkerboard image: " << check_size << "x" << check_size << "\n";
+
+        blob checkerboard(
+            reinterpret_cast<std::byte*>(checkerboard_data.data()),
+            checkerboard_data.size());
+        std::cout << "Created checkerboard image: " << check_size << "x"
+                  << check_size << "\n";
 
         // Create a circular pattern
         const int circle_size = 200, circle_channels = 3;
-        std::vector<uint8_t> circle_data(circle_size * circle_size * circle_channels);
+        std::vector<uint8_t> circle_data(circle_size * circle_size *
+                                         circle_channels);
         int center_x = circle_size / 2;
         int center_y = circle_size / 2;
         int max_radius = std::min(center_x, center_y);
@@ -77,13 +89,16 @@ void createSampleImages() {
                 int dy = y - center_y;
                 double distance = std::sqrt(dx * dx + dy * dy);
                 double normalized_distance = distance / max_radius;
-                
+
                 int pixel_idx = (y * circle_size + x) * circle_channels;
                 if (normalized_distance <= 1.0) {
-                    uint8_t intensity = static_cast<uint8_t>((1.0 - normalized_distance) * 255);
+                    uint8_t intensity =
+                        static_cast<uint8_t>((1.0 - normalized_distance) * 255);
                     circle_data[pixel_idx] = intensity;
-                    circle_data[pixel_idx + 1] = static_cast<uint8_t>(intensity * 0.7);
-                    circle_data[pixel_idx + 2] = static_cast<uint8_t>(intensity * 0.3);
+                    circle_data[pixel_idx + 1] =
+                        static_cast<uint8_t>(intensity * 0.7);
+                    circle_data[pixel_idx + 2] =
+                        static_cast<uint8_t>(intensity * 0.3);
                 } else {
                     circle_data[pixel_idx] = 0;
                     circle_data[pixel_idx + 1] = 0;
@@ -91,9 +106,11 @@ void createSampleImages() {
                 }
             }
         }
-        
-        blob circle(reinterpret_cast<std::byte*>(circle_data.data()), circle_data.size());
-        std::cout << "Created circle image: " << circle_size << "x" << circle_size << "\n";
+
+        blob circle(reinterpret_cast<std::byte*>(circle_data.data()),
+                    circle_data.size());
+        std::cout << "Created circle image: " << circle_size << "x"
+                  << circle_size << "\n";
 
         // Store sample images for later use (in a real implementation, these
         // would be saved to files)
@@ -302,19 +319,25 @@ void demonstrateBatchProcessing() {
 
                 // Simulate processing (resize to thumbnail)
                 const int thumb_size = 128, thumb_channels = 3;
-                std::vector<uint8_t> thumbnail_data(thumb_size * thumb_size * thumb_channels);
+                std::vector<uint8_t> thumbnail_data(thumb_size * thumb_size *
+                                                    thumb_channels);
 
                 // Fill thumbnail with sample data
                 for (int y = 0; y < thumb_size; ++y) {
                     for (int x = 0; x < thumb_size; ++x) {
                         int pixel_idx = (y * thumb_size + x) * thumb_channels;
-                        thumbnail_data[pixel_idx] = static_cast<uint8_t>((x + processed * 50) % 256);
-                        thumbnail_data[pixel_idx + 1] = static_cast<uint8_t>((y + processed * 30) % 256);
-                        thumbnail_data[pixel_idx + 2] = static_cast<uint8_t>((x + y + processed * 20) % 256);
+                        thumbnail_data[pixel_idx] =
+                            static_cast<uint8_t>((x + processed * 50) % 256);
+                        thumbnail_data[pixel_idx + 1] =
+                            static_cast<uint8_t>((y + processed * 30) % 256);
+                        thumbnail_data[pixel_idx + 2] = static_cast<uint8_t>(
+                            (x + y + processed * 20) % 256);
                     }
                 }
-                
-                blob thumbnail(reinterpret_cast<std::byte*>(thumbnail_data.data()), thumbnail_data.size());
+
+                blob thumbnail(
+                    reinterpret_cast<std::byte*>(thumbnail_data.data()),
+                    thumbnail_data.size());
 
                 // Simulate saving thumbnail
                 std::string thumb_name = "thumb_" + filename;

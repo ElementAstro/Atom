@@ -9,8 +9,8 @@
 namespace atom::system::test {
 
 using atom::system::DeviceInfo;
-using atom::system::enumerateUsbDevices;
 using atom::system::enumerateSerialPorts;
+using atom::system::enumerateUsbDevices;
 
 // Mock class for testing device enumeration without actual hardware
 class MockDeviceEnumerator {
@@ -22,20 +22,17 @@ public:
 class DeviceTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockDeviceEnumerator = std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
+        mockDeviceEnumerator =
+            std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
 
         // Set up sample device data
-        usbDevices = {
-            {"USB Mass Storage Device", "VID_1234&PID_5678"},
-            {"USB Keyboard", "VID_046D&PID_C31C"},
-            {"USB Mouse", "VID_046D&PID_C077"}
-        };
+        usbDevices = {{"USB Mass Storage Device", "VID_1234&PID_5678"},
+                      {"USB Keyboard", "VID_046D&PID_C31C"},
+                      {"USB Mouse", "VID_046D&PID_C077"}};
 
-        serialPorts = {
-            {"COM1", "Serial Port (COM1)"},
-            {"COM3", "USB Serial Port (COM3)"},
-            {"/dev/ttyUSB0", "USB-to-Serial Adapter"}
-        };
+        serialPorts = {{"COM1", "Serial Port (COM1)"},
+                       {"COM3", "USB Serial Port (COM3)"},
+                       {"/dev/ttyUSB0", "USB-to-Serial Adapter"}};
 
         // Set up default behavior for the mock
         ON_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
@@ -44,9 +41,7 @@ protected:
             .WillByDefault(::testing::Return(serialPorts));
     }
 
-    void TearDown() override {
-        mockDeviceEnumerator.reset();
-    }
+    void TearDown() override { mockDeviceEnumerator.reset(); }
 
     std::unique_ptr<MockDeviceEnumerator> mockDeviceEnumerator;
     std::vector<DeviceInfo> usbDevices;
@@ -138,24 +133,21 @@ TEST_F(DeviceTest, DeviceInfoAssignment) {
 class DeviceFilterTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockDeviceEnumerator = std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
+        mockDeviceEnumerator =
+            std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
 
         // Set up diverse device data for filtering tests
-        mixedUsbDevices = {
-            {"USB Mass Storage Device", "VID_1234&PID_5678"},
-            {"Logitech USB Keyboard", "VID_046D&PID_C31C"},
-            {"Microsoft USB Mouse", "VID_045E&PID_0040"},
-            {"Arduino Uno", "VID_2341&PID_0043"},
-            {"FTDI USB Serial", "VID_0403&PID_6001"}
-        };
+        mixedUsbDevices = {{"USB Mass Storage Device", "VID_1234&PID_5678"},
+                           {"Logitech USB Keyboard", "VID_046D&PID_C31C"},
+                           {"Microsoft USB Mouse", "VID_045E&PID_0040"},
+                           {"Arduino Uno", "VID_2341&PID_0043"},
+                           {"FTDI USB Serial", "VID_0403&PID_6001"}};
 
-        mixedSerialPorts = {
-            {"COM1", "Built-in Serial Port"},
-            {"COM3", "USB-to-Serial Adapter"},
-            {"COM5", "Bluetooth Serial Port"},
-            {"/dev/ttyUSB0", "FTDI USB Serial"},
-            {"/dev/ttyACM0", "Arduino Serial"}
-        };
+        mixedSerialPorts = {{"COM1", "Built-in Serial Port"},
+                            {"COM3", "USB-to-Serial Adapter"},
+                            {"COM5", "Bluetooth Serial Port"},
+                            {"/dev/ttyUSB0", "FTDI USB Serial"},
+                            {"/dev/ttyACM0", "Arduino Serial"}};
 
         ON_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
             .WillByDefault(::testing::Return(mixedUsbDevices));
@@ -163,16 +155,15 @@ protected:
             .WillByDefault(::testing::Return(mixedSerialPorts));
     }
 
-    void TearDown() override {
-        mockDeviceEnumerator.reset();
-    }
+    void TearDown() override { mockDeviceEnumerator.reset(); }
 
     std::unique_ptr<MockDeviceEnumerator> mockDeviceEnumerator;
     std::vector<DeviceInfo> mixedUsbDevices;
     std::vector<DeviceInfo> mixedSerialPorts;
 
     // Helper function to filter devices by description substring
-    std::vector<DeviceInfo> filterDevicesByDescription(const std::vector<DeviceInfo>& devices, const std::string& substring) {
+    std::vector<DeviceInfo> filterDevicesByDescription(
+        const std::vector<DeviceInfo>& devices, const std::string& substring) {
         std::vector<DeviceInfo> filtered;
         for (const auto& device : devices) {
             if (device.description.find(substring) != std::string::npos) {
@@ -183,7 +174,8 @@ protected:
     }
 
     // Helper function to filter devices by vendor ID
-    std::vector<DeviceInfo> filterDevicesByVendorId(const std::vector<DeviceInfo>& devices, const std::string& vendorId) {
+    std::vector<DeviceInfo> filterDevicesByVendorId(
+        const std::vector<DeviceInfo>& devices, const std::string& vendorId) {
         std::vector<DeviceInfo> filtered;
         for (const auto& device : devices) {
             if (device.address.find(vendorId) != std::string::npos) {
@@ -202,7 +194,7 @@ TEST_F(DeviceFilterTest, FilterUsbDevicesByDescription) {
     auto devices = mockDeviceEnumerator->enumerateUsbDevices();
     auto usbDevices = filterDevicesByDescription(devices, "USB");
 
-    EXPECT_EQ(usbDevices.size(), 4); // All except Arduino Uno
+    EXPECT_EQ(usbDevices.size(), 4);  // All except Arduino Uno
 
     auto logitechDevices = filterDevicesByDescription(devices, "Logitech");
     EXPECT_EQ(logitechDevices.size(), 1);
@@ -233,7 +225,7 @@ TEST_F(DeviceFilterTest, FilterSerialPortsByType) {
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     auto usbSerialPorts = filterDevicesByDescription(ports, "USB");
 
-    EXPECT_GE(usbSerialPorts.size(), 1); // At least one USB serial port
+    EXPECT_GE(usbSerialPorts.size(), 1);  // At least one USB serial port
 
     auto bluetoothPorts = filterDevicesByDescription(ports, "Bluetooth");
     EXPECT_EQ(bluetoothPorts.size(), 1);
@@ -249,7 +241,8 @@ TEST_F(DeviceFilterTest, WindowsSpecificPorts) {
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     auto comPorts = filterDevicesByDescription(ports, "COM");
 
-    EXPECT_GE(comPorts.size(), 1); // Should have at least one COM port on Windows
+    EXPECT_GE(comPorts.size(),
+              1);  // Should have at least one COM port on Windows
 }
 #elif defined(__linux__)
 TEST_F(DeviceFilterTest, LinuxSpecificPorts) {
@@ -259,7 +252,8 @@ TEST_F(DeviceFilterTest, LinuxSpecificPorts) {
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     auto ttyPorts = filterDevicesByDescription(ports, "/dev/tty");
 
-    EXPECT_GE(ttyPorts.size(), 1); // Should have at least one tty port on Linux
+    EXPECT_GE(ttyPorts.size(),
+              1);  // Should have at least one tty port on Linux
 }
 #endif
 
@@ -267,12 +261,11 @@ TEST_F(DeviceFilterTest, LinuxSpecificPorts) {
 class DeviceErrorTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockDeviceEnumerator = std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
+        mockDeviceEnumerator =
+            std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
     }
 
-    void TearDown() override {
-        mockDeviceEnumerator.reset();
-    }
+    void TearDown() override { mockDeviceEnumerator.reset(); }
 
     std::unique_ptr<MockDeviceEnumerator> mockDeviceEnumerator;
 };
@@ -295,7 +288,7 @@ TEST_F(DeviceErrorTest, EnumerationFailureHandling) {
 // Test handling of devices with empty or invalid data
 TEST_F(DeviceErrorTest, InvalidDeviceDataHandling) {
     std::vector<DeviceInfo> invalidDevices = {
-        {"", ""},  // Empty description and address
+        {"", ""},              // Empty description and address
         {"Valid Device", ""},  // Empty address
         {"", "Valid Address"}  // Empty description
     };
@@ -318,23 +311,23 @@ TEST_F(DeviceErrorTest, InvalidDeviceDataHandling) {
 class DevicePerformanceTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockDeviceEnumerator = std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
+        mockDeviceEnumerator =
+            std::make_unique<::testing::NiceMock<MockDeviceEnumerator>>();
 
         // Create large device lists for performance testing
         largeUsbDeviceList.reserve(1000);
         for (int i = 0; i < 1000; ++i) {
-            largeUsbDeviceList.push_back({
-                "USB Device " + std::to_string(i),
-                "VID_" + std::to_string(1000 + i) + "&PID_" + std::to_string(2000 + i)
-            });
+            largeUsbDeviceList.push_back({"USB Device " + std::to_string(i),
+                                          "VID_" + std::to_string(1000 + i) +
+                                              "&PID_" +
+                                              std::to_string(2000 + i)});
         }
 
         largeSerialPortList.reserve(100);
         for (int i = 0; i < 100; ++i) {
-            largeSerialPortList.push_back({
-                "COM" + std::to_string(i + 1),
-                "Serial Port " + std::to_string(i + 1)
-            });
+            largeSerialPortList.push_back(
+                {"COM" + std::to_string(i + 1),
+                 "Serial Port " + std::to_string(i + 1)});
         }
 
         ON_CALL(*mockDeviceEnumerator, enumerateUsbDevices())
@@ -343,9 +336,7 @@ protected:
             .WillByDefault(::testing::Return(largeSerialPortList));
     }
 
-    void TearDown() override {
-        mockDeviceEnumerator.reset();
-    }
+    void TearDown() override { mockDeviceEnumerator.reset(); }
 
     std::unique_ptr<MockDeviceEnumerator> mockDeviceEnumerator;
     std::vector<DeviceInfo> largeUsbDeviceList;
@@ -361,7 +352,8 @@ TEST_F(DevicePerformanceTest, LargeUsbDeviceEnumeration) {
     auto devices = mockDeviceEnumerator->enumerateUsbDevices();
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(devices.size(), 1000);
     // Enumeration should complete within reasonable time (100ms for mock)
@@ -376,7 +368,8 @@ TEST_F(DevicePerformanceTest, LargeSerialPortEnumeration) {
     auto ports = mockDeviceEnumerator->enumerateSerialPorts();
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(ports.size(), 100);
     // Enumeration should complete within reasonable time
@@ -397,7 +390,8 @@ TEST_F(DevicePerformanceTest, RepeatedEnumeration) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // 10 enumerations should complete within reasonable time
     EXPECT_LT(duration.count(), 500);
@@ -477,9 +471,8 @@ TEST_F(DeviceIntegrationTest, ThreadSafetyTest) {
 
     // Launch multiple threads that enumerate devices simultaneously
     for (int i = 0; i < 5; ++i) {
-        threads.emplace_back([&results, i]() {
-            results[i] = enumerateUsbDevices();
-        });
+        threads.emplace_back(
+            [&results, i]() { results[i] = enumerateUsbDevices(); });
     }
 
     // Wait for all threads to complete

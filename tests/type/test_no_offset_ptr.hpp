@@ -373,7 +373,6 @@ TEST(NoOffsetPtrComplexTypeTest, StdVector) {
 }
 */
 
-
 // Test with different thread safety policies
 TEST(NoOffsetPtrPolicyTest, DefaultPolicy) {
     // Default is None

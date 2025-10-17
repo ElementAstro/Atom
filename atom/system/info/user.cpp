@@ -9,11 +9,14 @@
 #ifdef _WIN32
 #include <windows.h>
 // Helper function to convert wide string to string
-inline std::string wstringToString(const std::wstring& wstr) {
-    if (wstr.empty()) return std::string();
-    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+inline std::string wstringToString(const std::wstring &wstr) {
+    if (wstr.empty())
+        return std::string();
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0,
+                                   nullptr, nullptr);
     std::string str(size - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr,
+                        nullptr);
     return str;
 }
 #endif
@@ -141,8 +144,7 @@ auto getUserGroups() -> std::vector<std::wstring> {
                              domainBuffer.data(), &domainLength, &sidUse)) {
             std::wstring nameStr(nameBuffer.begin(), nameBuffer.end());
             groups.push_back(nameStr);
-            spdlog::debug("Found group: {}",
-                          wstringToString(nameStr));
+            spdlog::debug("Found group: {}", wstringToString(nameStr));
         }
     }
 
@@ -468,8 +470,8 @@ auto getAllEnvironmentVariables()
     return envVars;
 }
 
-auto setEnvironmentVariable(const std::string &name, const std::string &value)
-    -> bool {
+auto setEnvironmentVariable(const std::string &name,
+                            const std::string &value) -> bool {
     spdlog::debug("Setting environment variable '{}' = '{}'", name, value);
     bool success = false;
 

@@ -1,8 +1,8 @@
-#include "atom/io/core/io.hpp"
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <vector>
+#include "atom/io/core/io.hpp"
 
 namespace fs = std::filesystem;
 
@@ -75,4 +75,5 @@ void demonstrateFileOperations() {
 }
 
 // Note: This file was converted from a demo to be included in the test suite
-// The demonstrateFileOperations() function can be called from actual tests if needed
+// The demonstrateFileOperations() function can be called from actual tests if
+// needed

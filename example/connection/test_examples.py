@@ -15,15 +15,15 @@ Requirements:
     - Atom Connection library built and available
 """
 
-import os
-import sys
-import subprocess
 import argparse
-import time
-import threading
+import os
 import signal
+import subprocess
+import sys
+import threading
+import time
 from pathlib import Path
-from typing import List, Dict, Optional, Tuple, cast
+from typing import Dict, List, Optional, Tuple, cast
 
 
 class Colors:

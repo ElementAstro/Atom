@@ -644,8 +644,8 @@ std::string YamlDocument::to_yaml(const YamlSerializeOptions& options) const {
 
 // YamlParser implementation
 
-auto YamlParser::parse(const std::string& str, const YamlParseOptions& options)
-    -> YamlValue {
+auto YamlParser::parse(const std::string& str,
+                       const YamlParseOptions& options) -> YamlValue {
     ParseContext ctx{str, 0, {1, 1}, options, {}};
     skip_whitespace(ctx);
 
@@ -670,9 +670,8 @@ auto YamlParser::parse(const std::string& str, const YamlParseOptions& options)
     return result;
 }
 
-auto YamlParser::parse_document(const std::string& str,
-                                const YamlParseOptions& options)
-    -> YamlDocument {
+auto YamlParser::parse_document(
+    const std::string& str, const YamlParseOptions& options) -> YamlDocument {
     return YamlDocument(parse(str, options));
 }
 
@@ -1317,8 +1316,8 @@ auto YamlParser::parse_flow_array(ParseContext& ctx) -> YamlArray {
     return arr;
 }
 
-auto YamlParser::parse_block_scalar(ParseContext& ctx, char /*style*/)
-    -> std::string {
+auto YamlParser::parse_block_scalar(ParseContext& ctx,
+                                    char /*style*/) -> std::string {
     if (ctx.str[ctx.index] != '|' && ctx.str[ctx.index] != '>') {
         throw YamlException("Expected '|' or '>'", ctx.position);
     }

@@ -19,7 +19,6 @@
 #include <string>
 #include <vector>
 
-
 // Atom Meta JSON reflection headers
 #include "atom/meta/refl_json.hpp"
 

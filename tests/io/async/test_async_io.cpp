@@ -1,6 +1,7 @@
 // filepath: atom/io/test_async_io.cpp - SIMPLIFIED VERSION
-// NOTE: This test file has been simplified to only test implemented AsyncFile functions
-// Many AsyncFile template functions are not implemented and would cause linking errors
+// NOTE: This test file has been simplified to only test implemented AsyncFile
+// functions Many AsyncFile template functions are not implemented and would
+// cause linking errors
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -35,14 +36,17 @@ protected:
 
         // Create test files
         createFile(testDir / "file1.txt", "Test file 1 content");
-        createFile(testDir / "file2.txt", "Test file 2 content\nwith multiple lines");
-        createFile(testDir / "file3.dat", "Binary file content\0with null bytes", 35);
+        createFile(testDir / "file2.txt",
+                   "Test file 2 content\nwith multiple lines");
+        createFile(testDir / "file3.dat",
+                   "Binary file content\0with null bytes", 35);
 
         // Create subdirectories
         fs::create_directory(testDir / "subdir1");
         fs::create_directory(testDir / "subdir2");
 
-        createFile(testDir / "subdir1" / "nested_file.txt", "Nested file content");
+        createFile(testDir / "subdir1" / "nested_file.txt",
+                   "Nested file content");
 
         // Create the async file instance
 #ifdef ATOM_USE_ASIO
@@ -73,7 +77,7 @@ protected:
     }
 
     // Helper for waiting on futures with timeout
-    template<typename T>
+    template <typename T>
     bool waitForFuture(std::future<T>& future, int timeoutMs = 1000) {
         return future.wait_for(std::chrono::milliseconds(timeoutMs)) ==
                std::future_status::ready;
@@ -104,9 +108,9 @@ TEST_F(AsyncIOTest, AsyncFileReadExistingFile) {
     auto future = promise.get_future();
 
     async_file->asyncRead(testDir / "file1.txt",
-        [&promise](AsyncResult<std::string> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<std::string> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -122,9 +126,9 @@ TEST_F(AsyncIOTest, AsyncFileReadNonExistentFile) {
     auto future = promise.get_future();
 
     async_file->asyncRead(testDir / "non_existent.txt",
-        [&promise](AsyncResult<std::string> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<std::string> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -141,7 +145,8 @@ TEST_F(AsyncIOTest, AsyncFileWriteNewFile) {
     std::string content = "New file content";
     fs::path newFilePath = testDir / "new_file.txt";
 
-    async_file->asyncWrite(newFilePath, std::span<const char>(content.data(), content.size()),
+    async_file->asyncWrite(
+        newFilePath, std::span<const char>(content.data(), content.size()),
         [&promise](AsyncResult<void> result) {
             promise.set_value(std::move(result));
         });
@@ -168,7 +173,8 @@ TEST_F(AsyncIOTest, AsyncFileWriteExistingFile) {
     std::string content = "Updated content";
     fs::path filePath = testDir / "file1.txt";
 
-    async_file->asyncWrite(filePath, std::span<const char>(content.data(), content.size()),
+    async_file->asyncWrite(
+        filePath, std::span<const char>(content.data(), content.size()),
         [&promise](AsyncResult<void> result) {
             promise.set_value(std::move(result));
         });
@@ -192,12 +198,11 @@ TEST_F(AsyncIOTest, AsyncFileDeleteExistingFile) {
     auto future = promise.get_future();
 
     fs::path filePath = testDir / "file2.txt";
-    ASSERT_TRUE(fs::exists(filePath)); // Ensure file exists before test
+    ASSERT_TRUE(fs::exists(filePath));  // Ensure file exists before test
 
-    async_file->asyncDelete(filePath,
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+    async_file->asyncDelete(filePath, [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -216,10 +221,9 @@ TEST_F(AsyncIOTest, AsyncFileDeleteNonExistentFile) {
 
     fs::path filePath = testDir / "non_existent.txt";
 
-    async_file->asyncDelete(filePath,
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+    async_file->asyncDelete(filePath, [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -237,9 +241,9 @@ TEST_F(AsyncIOTest, AsyncFileCopyExistingFile) {
     fs::path destPath = testDir / "file1_copy.txt";
 
     async_file->asyncCopy(srcPath.string(), destPath.string(),
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<void> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -253,11 +257,11 @@ TEST_F(AsyncIOTest, AsyncFileCopyExistingFile) {
     // Verify content is the same
     std::ifstream srcFile(srcPath);
     std::string srcContent((std::istreambuf_iterator<char>(srcFile)),
-                          std::istreambuf_iterator<char>());
+                           std::istreambuf_iterator<char>());
 
     std::ifstream destFile(destPath);
     std::string destContent((std::istreambuf_iterator<char>(destFile)),
-                           std::istreambuf_iterator<char>());
+                            std::istreambuf_iterator<char>());
 
     EXPECT_EQ(srcContent, destContent);
 }
@@ -271,9 +275,9 @@ TEST_F(AsyncIOTest, AsyncFileCopyNonExistentSource) {
     fs::path destPath = testDir / "copy_fail.txt";
 
     async_file->asyncCopy(srcPath.string(), destPath.string(),
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<void> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -290,7 +294,8 @@ TEST_F(AsyncIOTest, AsyncFileReadWithTimeoutSuccess) {
     std::promise<AsyncResult<std::string>> promise;
     auto future = promise.get_future();
 
-    async_file->asyncReadWithTimeout((testDir / "file1.txt").string(), std::chrono::milliseconds(500),
+    async_file->asyncReadWithTimeout(
+        (testDir / "file1.txt").string(), std::chrono::milliseconds(500),
         [&promise](AsyncResult<std::string> result) {
             promise.set_value(std::move(result));
         });
@@ -310,7 +315,8 @@ TEST_F(AsyncIOTest, AsyncFileReadWithTimeoutExpires) {
     auto future = promise.get_future();
 
     // Assuming implementation adds artificial delay, set very short timeout
-    async_file->asyncReadWithTimeout((testDir / "file1.txt").string(), std::chrono::milliseconds(1),
+    async_file->asyncReadWithTimeout(
+        (testDir / "file1.txt").string(), std::chrono::milliseconds(1),
         [&promise](AsyncResult<std::string> result) {
             promise.set_value(std::move(result));
         });
@@ -322,7 +328,8 @@ TEST_F(AsyncIOTest, AsyncFileReadWithTimeoutExpires) {
     if (!result.success) {
         EXPECT_THAT(result.error_message, HasSubstr("timeout"));
     } else {
-        // If it didn't time out (possible with fast execution), the operation should succeed
+        // If it didn't time out (possible with fast execution), the operation
+        // should succeed
         EXPECT_EQ(result.value, "Test file 1 content");
     }
 }
@@ -332,13 +339,11 @@ TEST_F(AsyncIOTest, AsyncFileBatchReadExistingFiles) {
     std::promise<AsyncResult<std::vector<std::string>>> promise;
     auto future = promise.get_future();
 
-    std::vector<std::string> filePaths = {
-        (testDir / "file1.txt").string(),
-        (testDir / "file2.txt").string()
-    };
+    std::vector<std::string> filePaths = {(testDir / "file1.txt").string(),
+                                          (testDir / "file2.txt").string()};
 
-    async_file->asyncBatchRead(filePaths,
-        [&promise](AsyncResult<std::vector<std::string>> result) {
+    async_file->asyncBatchRead(
+        filePaths, [&promise](AsyncResult<std::vector<std::string>> result) {
             promise.set_value(std::move(result));
         });
 
@@ -359,11 +364,10 @@ TEST_F(AsyncIOTest, AsyncFileBatchReadMixedFiles) {
 
     std::vector<std::string> filePaths = {
         (testDir / "file1.txt").string(),
-        (testDir / "non_existent.txt").string()
-    };
+        (testDir / "non_existent.txt").string()};
 
-    async_file->asyncBatchRead(filePaths,
-        [&promise](AsyncResult<std::vector<std::string>> result) {
+    async_file->asyncBatchRead(
+        filePaths, [&promise](AsyncResult<std::vector<std::string>> result) {
             promise.set_value(std::move(result));
         });
 
@@ -380,9 +384,9 @@ TEST_F(AsyncIOTest, AsyncFileStatExistingFile) {
     auto future = promise.get_future();
 
     async_file->asyncStat(testDir / "file1.txt",
-        [&promise](AsyncResult<fs::file_status> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<fs::file_status> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -398,9 +402,9 @@ TEST_F(AsyncIOTest, AsyncFileStatNonExistentFile) {
     auto future = promise.get_future();
 
     async_file->asyncStat(testDir / "non_existent.txt",
-        [&promise](AsyncResult<fs::file_status> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<fs::file_status> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -418,9 +422,9 @@ TEST_F(AsyncIOTest, AsyncFileMoveExistingFile) {
     fs::path destPath = testDir / "file1_moved.txt";
 
     async_file->asyncMove(srcPath.string(), destPath.string(),
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<void> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -442,9 +446,9 @@ TEST_F(AsyncIOTest, AsyncFileMoveNonExistentSource) {
     fs::path destPath = testDir / "move_fail.txt";
 
     async_file->asyncMove(srcPath.string(), destPath.string(),
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+                          [&promise](AsyncResult<void> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -463,7 +467,8 @@ TEST_F(AsyncIOTest, AsyncFileChangePermissionsExistingFile) {
 
     fs::path filePath = testDir / "file1.txt";
 
-    async_file->asyncChangePermissions(filePath, fs::perms::owner_read | fs::perms::owner_write,
+    async_file->asyncChangePermissions(
+        filePath, fs::perms::owner_read | fs::perms::owner_write,
         [&promise](AsyncResult<void> result) {
             promise.set_value(std::move(result));
         });
@@ -475,7 +480,8 @@ TEST_F(AsyncIOTest, AsyncFileChangePermissionsExistingFile) {
     EXPECT_TRUE(result.error_message.empty());
 
     // Verify permissions were changed (implementation-dependent)
-    // This might be system-dependent, so we're not checking the actual permissions
+    // This might be system-dependent, so we're not checking the actual
+    // permissions
 }
 
 // Test AsyncFile::asyncCreateDirectory with new directory
@@ -486,9 +492,9 @@ TEST_F(AsyncIOTest, AsyncFileCreateDirectoryNew) {
     fs::path dirPath = testDir / "new_dir";
 
     async_file->asyncCreateDirectory(dirPath,
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+                                     [&promise](AsyncResult<void> result) {
+                                         promise.set_value(std::move(result));
+                                     });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -509,9 +515,9 @@ TEST_F(AsyncIOTest, AsyncFileCreateDirectoryExisting) {
     fs::path dirPath = testDir / "subdir1";
 
     async_file->asyncCreateDirectory(dirPath,
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
+                                     [&promise](AsyncResult<void> result) {
+                                         promise.set_value(std::move(result));
+                                     });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -526,9 +532,9 @@ TEST_F(AsyncIOTest, AsyncFileExistsExistingFile) {
     auto future = promise.get_future();
 
     async_file->asyncExists(testDir / "file1.txt",
-        [&promise](AsyncResult<bool> result) {
-            promise.set_value(std::move(result));
-        });
+                            [&promise](AsyncResult<bool> result) {
+                                promise.set_value(std::move(result));
+                            });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -544,9 +550,9 @@ TEST_F(AsyncIOTest, AsyncFileExistsNonExistentFile) {
     auto future = promise.get_future();
 
     async_file->asyncExists(testDir / "non_existent.txt",
-        [&promise](AsyncResult<bool> result) {
-            promise.set_value(std::move(result));
-        });
+                            [&promise](AsyncResult<bool> result) {
+                                promise.set_value(std::move(result));
+                            });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -571,8 +577,8 @@ TEST_F(AsyncIOTest, AsyncFileWriteFileCoroutine) {
     std::string content = "Coroutine written content";
     fs::path filePath = testDir / "coroutine_written.txt";
 
-    auto writeTask = async_file->writeFile(filePath,
-                                          std::span<const char>(content.data(), content.size()));
+    auto writeTask = async_file->writeFile(
+        filePath, std::span<const char>(content.data(), content.size()));
     auto result = writeTask.get();
 
     EXPECT_TRUE(result.success);
@@ -592,10 +598,9 @@ TEST_F(AsyncIOTest, InvalidInputHandling) {
     auto readFuture = readPromise.get_future();
 
     // Empty filename
-    async_file->asyncRead("",
-        [&readPromise](AsyncResult<std::string> result) {
-            readPromise.set_value(std::move(result));
-        });
+    async_file->asyncRead("", [&readPromise](AsyncResult<std::string> result) {
+        readPromise.set_value(std::move(result));
+    });
 
     ASSERT_TRUE(waitForFuture(readFuture));
     auto readResult = readFuture.get();
@@ -607,7 +612,8 @@ TEST_F(AsyncIOTest, InvalidInputHandling) {
 // Test concurrent operations
 TEST_F(AsyncIOTest, ConcurrentOperations) {
     constexpr int numConcurrentOps = 10;
-    std::vector<std::promise<AsyncResult<std::string>>> promises(numConcurrentOps);
+    std::vector<std::promise<AsyncResult<std::string>>> promises(
+        numConcurrentOps);
     std::vector<std::future<AsyncResult<std::string>>> futures;
 
     for (int i = 0; i < numConcurrentOps; i++) {
@@ -617,9 +623,9 @@ TEST_F(AsyncIOTest, ConcurrentOperations) {
     // Start multiple reads concurrently
     for (int i = 0; i < numConcurrentOps; i++) {
         async_file->asyncRead(testDir / "file1.txt",
-            [&promises, i](AsyncResult<std::string> result) {
-                promises[i].set_value(std::move(result));
-            });
+                              [&promises, i](AsyncResult<std::string> result) {
+                                  promises[i].set_value(std::move(result));
+                              });
     }
 
     // Wait for all operations to complete
@@ -670,9 +676,10 @@ TEST_F(AsyncIOTest, AsyncReadVeryLargeFile) {
     std::promise<AsyncResult<std::string>> promise;
     auto future = promise.get_future();
 
-    async_file->asyncRead(large_file, [&promise](AsyncResult<std::string> result) {
-        promise.set_value(std::move(result));
-    });
+    async_file->asyncRead(large_file,
+                          [&promise](AsyncResult<std::string> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future, 5000));  // Longer timeout for large file
     auto result = future.get();
@@ -685,15 +692,17 @@ TEST_F(AsyncIOTest, AsyncReadVeryLargeFile) {
 TEST_F(AsyncIOTest, AsyncWriteBinaryData) {
     fs::path binary_file = testDir / "binary.dat";
 
-    std::vector<unsigned char> binary_data = {0x00, 0xFF, 0x7F, 0x80, 0xAA, 0x55};
+    std::vector<unsigned char> binary_data = {0x00, 0xFF, 0x7F,
+                                              0x80, 0xAA, 0x55};
     std::string data_str(binary_data.begin(), binary_data.end());
 
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
-    async_file->asyncWrite(binary_file, data_str, [&promise](AsyncResult<void> result) {
-        promise.set_value(std::move(result));
-    });
+    async_file->asyncWrite(binary_file, data_str,
+                           [&promise](AsyncResult<void> result) {
+                               promise.set_value(std::move(result));
+                           });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -706,7 +715,8 @@ TEST_F(AsyncIOTest, AsyncWriteBinaryData) {
 // Test concurrent async operations
 TEST_F(AsyncIOTest, ConcurrentAsyncOperations) {
     const int num_operations = 10;
-    std::vector<std::promise<AsyncResult<std::string>>> promises(num_operations);
+    std::vector<std::promise<AsyncResult<std::string>>> promises(
+        num_operations);
     std::vector<std::future<AsyncResult<std::string>>> futures;
 
     for (int i = 0; i < num_operations; ++i) {
@@ -716,9 +726,9 @@ TEST_F(AsyncIOTest, ConcurrentAsyncOperations) {
     // Launch concurrent reads
     for (int i = 0; i < num_operations; ++i) {
         async_file->asyncRead(testDir / "file1.txt",
-            [&promises, i](AsyncResult<std::string> result) {
-                promises[i].set_value(std::move(result));
-            });
+                              [&promises, i](AsyncResult<std::string> result) {
+                                  promises[i].set_value(std::move(result));
+                              });
     }
 
     // Wait for all to complete
@@ -763,9 +773,10 @@ TEST_F(AsyncIOTest, AsyncCopyOverwrite) {
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
-    async_file->asyncCopy(source.string(), dest.string(), [&promise](AsyncResult<void> result) {
-        promise.set_value(std::move(result));
-    });
+    async_file->asyncCopy(source.string(), dest.string(),
+                          [&promise](AsyncResult<void> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -775,7 +786,7 @@ TEST_F(AsyncIOTest, AsyncCopyOverwrite) {
     // Verify content was overwritten
     std::ifstream ifs(dest);
     std::string content((std::istreambuf_iterator<char>(ifs)),
-                       std::istreambuf_iterator<char>());
+                        std::istreambuf_iterator<char>());
     EXPECT_EQ(content, "Test file 1 content");
 }
 
@@ -786,9 +797,10 @@ TEST_F(AsyncIOTest, AsyncMoveToSameLocation) {
     std::promise<AsyncResult<void>> promise;
     auto future = promise.get_future();
 
-    async_file->asyncMove(file.string(), file.string(), [&promise](AsyncResult<void> result) {
-        promise.set_value(std::move(result));
-    });
+    async_file->asyncMove(file.string(), file.string(),
+                          [&promise](AsyncResult<void> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -801,9 +813,10 @@ TEST_F(AsyncIOTest, AsyncStatDirectory) {
     std::promise<AsyncResult<fs::file_status>> promise;
     auto future = promise.get_future();
 
-    async_file->asyncStat(testDir / "subdir1", [&promise](AsyncResult<fs::file_status> result) {
-        promise.set_value(std::move(result));
-    });
+    async_file->asyncStat(testDir / "subdir1",
+                          [&promise](AsyncResult<fs::file_status> result) {
+                              promise.set_value(std::move(result));
+                          });
 
     ASSERT_TRUE(waitForFuture(future));
     auto result = future.get();
@@ -814,11 +827,8 @@ TEST_F(AsyncIOTest, AsyncStatDirectory) {
 
 // Test async exists for multiple files
 TEST_F(AsyncIOTest, AsyncExistsMultipleFiles) {
-    std::vector<fs::path> files = {
-        testDir / "file1.txt",
-        testDir / "file2.txt",
-        testDir / "nonexistent.txt"
-    };
+    std::vector<fs::path> files = {testDir / "file1.txt", testDir / "file2.txt",
+                                   testDir / "nonexistent.txt"};
 
     std::vector<std::promise<AsyncResult<bool>>> promises(files.size());
     std::vector<std::future<AsyncResult<bool>>> futures;
@@ -828,9 +838,10 @@ TEST_F(AsyncIOTest, AsyncExistsMultipleFiles) {
     }
 
     for (size_t i = 0; i < files.size(); ++i) {
-        async_file->asyncExists(files[i], [&promises, i](AsyncResult<bool> result) {
-            promises[i].set_value(std::move(result));
-        });
+        async_file->asyncExists(files[i],
+                                [&promises, i](AsyncResult<bool> result) {
+                                    promises[i].set_value(std::move(result));
+                                });
     }
 
     // Check results

@@ -17,9 +17,8 @@ namespace py = pybind11;
  * @param m The pybind11 module to bind to
  */
 void bindLogLevel(py::module_& m) {
-    py::enum_<atom::connection::LogLevel>(
-        m, "LogLevel",
-        R"(Log levels for the FIFO server.
+    py::enum_<atom::connection::LogLevel>(m, "LogLevel",
+                                          R"(Log levels for the FIFO server.
 
 This enumeration defines different levels of logging verbosity for the server.
 
@@ -27,10 +26,14 @@ Examples:
     >>> from atom.connection.sync_fifoserver import LogLevel
     >>> server.set_log_level(LogLevel.Debug)
 )")
-        .value("Debug", atom::connection::LogLevel::Debug, "Debug level logging")
-        .value("Info", atom::connection::LogLevel::Info, "Information level logging")
-        .value("Warning", atom::connection::LogLevel::Warning, "Warning level logging")
-        .value("Error", atom::connection::LogLevel::Error, "Error level logging")
+        .value("Debug", atom::connection::LogLevel::Debug,
+               "Debug level logging")
+        .value("Info", atom::connection::LogLevel::Info,
+               "Information level logging")
+        .value("Warning", atom::connection::LogLevel::Warning,
+               "Warning level logging")
+        .value("Error", atom::connection::LogLevel::Error,
+               "Error level logging")
         .value("None", atom::connection::LogLevel::None, "No logging")
         .export_values();
 }
@@ -55,10 +58,14 @@ Examples:
     >>> from atom.connection.sync_fifoserver import MessagePriority
     >>> server.send_message("urgent", MessagePriority.High)
 )")
-        .value("Low", atom::connection::MessagePriority::Low, "Low priority message")
-        .value("Normal", atom::connection::MessagePriority::Normal, "Normal priority message")
-        .value("High", atom::connection::MessagePriority::High, "High priority message")
-        .value("Critical", atom::connection::MessagePriority::Critical, "Critical priority message")
+        .value("Low", atom::connection::MessagePriority::Low,
+               "Low priority message")
+        .value("Normal", atom::connection::MessagePriority::Normal,
+               "Normal priority message")
+        .value("High", atom::connection::MessagePriority::High,
+               "High priority message")
+        .value("Critical", atom::connection::MessagePriority::Critical,
+               "Critical priority message")
         .export_values();
 }
 
@@ -83,19 +90,26 @@ Examples:
     >>> print(f"Messages failed: {stats.messages_failed}")
 )")
         .def(py::init<>(), "Default constructor")
-        .def_readonly("messages_sent", &atom::connection::ServerStats::messages_sent,
+        .def_readonly("messages_sent",
+                      &atom::connection::ServerStats::messages_sent,
                       "Total number of messages sent")
-        .def_readonly("messages_failed", &atom::connection::ServerStats::messages_failed,
+        .def_readonly("messages_failed",
+                      &atom::connection::ServerStats::messages_failed,
                       "Total number of messages that failed to send")
-        .def_readonly("messages_queued", &atom::connection::ServerStats::messages_queued,
+        .def_readonly("messages_queued",
+                      &atom::connection::ServerStats::messages_queued,
                       "Current number of messages in queue")
-        .def_readonly("total_bytes_sent", &atom::connection::ServerStats::total_bytes_sent,
+        .def_readonly("total_bytes_sent",
+                      &atom::connection::ServerStats::total_bytes_sent,
                       "Total bytes sent")
-        .def_readonly("server_uptime", &atom::connection::ServerStats::server_uptime,
+        .def_readonly("server_uptime",
+                      &atom::connection::ServerStats::server_uptime,
                       "Server uptime in milliseconds")
-        .def_readonly("last_message_time", &atom::connection::ServerStats::last_message_time,
+        .def_readonly("last_message_time",
+                      &atom::connection::ServerStats::last_message_time,
                       "Time of last message sent")
-        .def_readonly("reconnection_count", &atom::connection::ServerStats::reconnection_count,
+        .def_readonly("reconnection_count",
+                      &atom::connection::ServerStats::reconnection_count,
                       "Number of reconnections performed");
 }
 
@@ -124,25 +138,34 @@ Examples:
     >>> server = FIFOServer("/tmp/myfifo", config)
 )")
         .def(py::init<>(), "Default constructor")
-        .def_readwrite("max_queue_size", &atom::connection::ServerConfig::max_queue_size,
+        .def_readwrite("max_queue_size",
+                       &atom::connection::ServerConfig::max_queue_size,
                        "Maximum number of messages in queue")
-        .def_readwrite("max_message_size", &atom::connection::ServerConfig::max_message_size,
+        .def_readwrite("max_message_size",
+                       &atom::connection::ServerConfig::max_message_size,
                        "Maximum size of a single message in bytes")
-        .def_readwrite("enable_compression", &atom::connection::ServerConfig::enable_compression,
+        .def_readwrite("enable_compression",
+                       &atom::connection::ServerConfig::enable_compression,
                        "Enable message compression")
-        .def_readwrite("enable_encryption", &atom::connection::ServerConfig::enable_encryption,
+        .def_readwrite("enable_encryption",
+                       &atom::connection::ServerConfig::enable_encryption,
                        "Enable message encryption")
-        .def_readwrite("auto_reconnect", &atom::connection::ServerConfig::auto_reconnect,
+        .def_readwrite("auto_reconnect",
+                       &atom::connection::ServerConfig::auto_reconnect,
                        "Enable automatic reconnection")
-        .def_readwrite("max_reconnect_attempts", &atom::connection::ServerConfig::max_reconnect_attempts,
+        .def_readwrite("max_reconnect_attempts",
+                       &atom::connection::ServerConfig::max_reconnect_attempts,
                        "Maximum number of reconnection attempts")
-        .def_readwrite("reconnect_delay", &atom::connection::ServerConfig::reconnect_delay,
+        .def_readwrite("reconnect_delay",
+                       &atom::connection::ServerConfig::reconnect_delay,
                        "Delay between reconnection attempts")
         .def_readwrite("log_level", &atom::connection::ServerConfig::log_level,
                        "Server logging level")
-        .def_readwrite("flush_on_stop", &atom::connection::ServerConfig::flush_on_stop,
+        .def_readwrite("flush_on_stop",
+                       &atom::connection::ServerConfig::flush_on_stop,
                        "Flush remaining messages when stopping")
-        .def_readwrite("message_ttl", &atom::connection::ServerConfig::message_ttl,
+        .def_readwrite("message_ttl",
+                       &atom::connection::ServerConfig::message_ttl,
                        "Message time-to-live (optional)");
 }
 
@@ -172,35 +195,35 @@ Classes:
 
 Quick Start Example:
     >>> from atom.connection.sync_fifoserver import FIFOServer, ServerConfig, MessagePriority
-    >>> 
+    >>>
     >>> # Create server with custom configuration
     >>> config = ServerConfig()
     >>> config.max_queue_size = 2000
     >>> config.enable_compression = True
     >>> server = FIFOServer("/tmp/myfifo", config)
-    >>> 
+    >>>
     >>> # Set up callbacks
     >>> def on_message_sent(message, success):
     ...     if success:
     ...         print(f"Message sent: {message}")
     ...     else:
     ...         print(f"Failed to send: {message}")
-    >>> 
+    >>>
     >>> def on_status_change(running):
     ...     print(f"Server {'started' if running else 'stopped'}")
-    >>> 
+    >>>
     >>> server.register_message_callback(on_message_sent)
     >>> server.register_status_callback(on_status_change)
-    >>> 
+    >>>
     >>> # Start server and send messages
     >>> server.start()
     >>> server.send_message("Hello, FIFO!", MessagePriority.High)
     >>> server.send_message("Normal message")
-    >>> 
+    >>>
     >>> # Check statistics
     >>> stats = server.get_statistics()
     >>> print(f"Messages sent: {stats.messages_sent}")
-    >>> 
+    >>>
     >>> server.stop()
 )";
 
@@ -236,8 +259,7 @@ Examples:
     >>> server.send_message("Priority message", MessagePriority.High)
     >>> server.stop()
 )")
-        .def(py::init<std::string_view>(),
-             py::arg("fifo_path"),
+        .def(py::init<std::string_view>(), py::arg("fifo_path"),
              R"(Constructs a FIFOServer with default configuration.
 
 Args:
@@ -250,9 +272,10 @@ Raises:
 Examples:
     >>> server = FIFOServer("/tmp/myfifo")
 )")
-        .def(py::init<std::string_view, const atom::connection::ServerConfig&>(),
-             py::arg("fifo_path"), py::arg("config"),
-             R"(Constructs a FIFOServer with custom configuration.
+        .def(
+            py::init<std::string_view, const atom::connection::ServerConfig&>(),
+            py::arg("fifo_path"), py::arg("config"),
+            R"(Constructs a FIFOServer with custom configuration.
 
 Args:
     fifo_path: Path to the FIFO pipe
@@ -285,7 +308,8 @@ Examples:
     ...     print("Message queued successfully")
 )")
         .def("send_message",
-             static_cast<bool (atom::connection::FIFOServer::*)(std::string, atom::connection::MessagePriority)>(
+             static_cast<bool (atom::connection::FIFOServer::*)(
+                 std::string, atom::connection::MessagePriority)>(
                  &atom::connection::FIFOServer::sendMessage),
              py::arg("message"), py::arg("priority"),
              R"(Sends a message with specified priority.
@@ -303,8 +327,8 @@ Examples:
     ...     print("Priority message queued")
 )")
         .def("send_message_async",
-             static_cast<std::future<bool> (atom::connection::FIFOServer::*)(std::string)>(
-                 &atom::connection::FIFOServer::sendMessageAsync),
+             static_cast<std::future<bool> (atom::connection::FIFOServer::*)(
+                 std::string)>(&atom::connection::FIFOServer::sendMessageAsync),
              py::arg("message"),
              R"(Sends a message asynchronously.
 
@@ -320,7 +344,8 @@ Examples:
     >>> success = future.get()  # Wait for completion
 )")
         .def("send_message_async",
-             static_cast<std::future<bool> (atom::connection::FIFOServer::*)(std::string, atom::connection::MessagePriority)>(
+             static_cast<std::future<bool> (atom::connection::FIFOServer::*)(
+                 std::string, atom::connection::MessagePriority)>(
                  &atom::connection::FIFOServer::sendMessageAsync),
              py::arg("message"), py::arg("priority"),
              R"(Sends a message asynchronously with specified priority.
@@ -336,12 +361,14 @@ Examples:
     >>> future = server.send_message_async("Urgent async!", MessagePriority.Critical)
     >>> success = future.get()
 )")
-        .def("send_messages",
-             [](atom::connection::FIFOServer& self, const std::vector<std::string>& messages) {
-                 return self.sendMessages(messages);
-             },
-             py::arg("messages"),
-             R"(Sends multiple messages from a list.
+        .def(
+            "send_messages",
+            [](atom::connection::FIFOServer& self,
+               const std::vector<std::string>& messages) {
+                return self.sendMessages(messages);
+            },
+            py::arg("messages"),
+            R"(Sends multiple messages from a list.
 
 Args:
     messages: List of messages to send
@@ -354,13 +381,15 @@ Examples:
     >>> count = server.send_messages(messages)
     >>> print(f"Queued {count} messages")
 )")
-        .def("send_messages",
-             [](atom::connection::FIFOServer& self, const std::vector<std::string>& messages,
-                atom::connection::MessagePriority priority) {
-                 return self.sendMessages(messages, priority);
-             },
-             py::arg("messages"), py::arg("priority"),
-             R"(Sends multiple messages with the same priority.
+        .def(
+            "send_messages",
+            [](atom::connection::FIFOServer& self,
+               const std::vector<std::string>& messages,
+               atom::connection::MessagePriority priority) {
+                return self.sendMessages(messages, priority);
+            },
+            py::arg("messages"), py::arg("priority"),
+            R"(Sends multiple messages with the same priority.
 
 Args:
     messages: List of messages to send
@@ -547,14 +576,16 @@ Examples:
 )")
         .def(
             "__enter__",
-            [](atom::connection::FIFOServer& self) -> atom::connection::FIFOServer& {
+            [](atom::connection::FIFOServer& self)
+                -> atom::connection::FIFOServer& {
                 self.start();
                 return self;
             },
             "Support for context manager protocol - starts server")
         .def(
             "__exit__",
-            [](atom::connection::FIFOServer& self, py::object, py::object, py::object) {
+            [](atom::connection::FIFOServer& self, py::object, py::object,
+               py::object) {
                 if (self.isRunning()) {
                     self.stop();
                 }

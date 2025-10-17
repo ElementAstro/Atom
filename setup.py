@@ -4,16 +4,15 @@ Setup script for Atom Python bindings
 """
 
 import os
-import sys
-import subprocess
 import platform
+import subprocess
+import sys
 from pathlib import Path
 
-from pybind11.setup_helpers import Pybind11Extension, build_ext
-from pybind11 import get_cmake_dir
 import pybind11
-
-from setuptools import setup, Extension, find_packages
+from pybind11 import get_cmake_dir
+from pybind11.setup_helpers import Pybind11Extension, build_ext
+from setuptools import Extension, find_packages, setup
 
 # Project information
 PROJECT_NAME = "atom"

@@ -9,7 +9,8 @@ namespace py = pybind11;
 
 // Forward declarations for AwaitableEnhancedFuture classes
 template <typename T>
-void declare_awaitable_enhanced_future(py::module& m, const std::string& type_name);
+void declare_awaitable_enhanced_future(py::module& m,
+                                       const std::string& type_name);
 void declare_awaitable_enhanced_future_void(py::module& m);
 
 // Template for declaring EnhancedFuture with different return types
@@ -215,14 +216,15 @@ void declare_enhanced_future(py::module& m, const std::string& type_name) {
 
 // AwaitableEnhancedFuture template for different return types
 template <typename T>
-void declare_awaitable_enhanced_future(py::module& m, const std::string& type_name) {
+void declare_awaitable_enhanced_future(py::module& m,
+                                       const std::string& type_name) {
     using namespace atom::async;
     using AwaitableEnhancedFutureT = AwaitableEnhancedFuture<T>;
 
     std::string class_name = "AwaitableEnhancedFuture" + type_name;
 
     py::class_<AwaitableEnhancedFutureT>(m, class_name.c_str(),
-        R"pbdoc(
+                                         R"pbdoc(
         Coroutine-compatible awaitable wrapper for EnhancedFuture.
 
         This class provides C++20 coroutine support for EnhancedFuture objects,
@@ -268,7 +270,7 @@ void declare_awaitable_enhanced_future_void(py::module& m) {
     using AwaitableEnhancedFutureVoid = AwaitableEnhancedFuture<void>;
 
     py::class_<AwaitableEnhancedFutureVoid>(m, "AwaitableEnhancedFutureVoid",
-        R"pbdoc(
+                                            R"pbdoc(
         Coroutine-compatible awaitable wrapper for EnhancedFuture<void>.
 
         This class provides C++20 coroutine support for void EnhancedFuture objects,
@@ -627,7 +629,8 @@ PYBIND11_MODULE(future, m) {
             // by creating a ready future with the given value
             auto promise = std::promise<py::object>();
             promise.set_value(value);
-            return atom::async::EnhancedFuture<py::object>(promise.get_future().share());
+            return atom::async::EnhancedFuture<py::object>(
+                promise.get_future().share());
         },
         py::arg("value"),
         R"pbdoc(
@@ -654,7 +657,8 @@ PYBIND11_MODULE(future, m) {
             // Create a ready void future
             auto promise = std::promise<void>();
             promise.set_value();
-            return atom::async::EnhancedFuture<void>(promise.get_future().share());
+            return atom::async::EnhancedFuture<void>(
+                promise.get_future().share());
         },
         R"pbdoc(
     Creates an EnhancedFuture<void> using coroutine-style syntax.
@@ -750,9 +754,11 @@ PYBIND11_MODULE(future, m) {
 
             size_t items_per_task = (total_size + num_tasks - 1) / num_tasks;
 
-            for (size_t i = 0; i < num_tasks && i * items_per_task < total_size; ++i) {
+            for (size_t i = 0; i < num_tasks && i * items_per_task < total_size;
+                 ++i) {
                 size_t start_idx = i * items_per_task;
-                size_t end_idx = std::min(start_idx + items_per_task, total_size);
+                size_t end_idx =
+                    std::min(start_idx + items_per_task, total_size);
 
                 std::vector<py::object> chunk(items_vec.begin() + start_idx,
                                               items_vec.begin() + end_idx);
@@ -854,7 +860,8 @@ PYBIND11_MODULE(future, m) {
         [](py::object value) {
             auto promise = std::promise<py::object>();
             promise.set_value(value);
-            return atom::async::EnhancedFuture<py::object>(promise.get_future().share());
+            return atom::async::EnhancedFuture<py::object>(
+                promise.get_future().share());
         },
         py::arg("value"),
         R"pbdoc(
@@ -877,7 +884,8 @@ PYBIND11_MODULE(future, m) {
         []() {
             auto promise = std::promise<void>();
             promise.set_value();
-            return atom::async::EnhancedFuture<void>(promise.get_future().share());
+            return atom::async::EnhancedFuture<void>(
+                promise.get_future().share());
         },
         R"pbdoc(
         Creates an EnhancedFuture<void> that is immediately ready.
@@ -900,7 +908,8 @@ PYBIND11_MODULE(future, m) {
             } catch (...) {
                 promise.set_exception(std::current_exception());
             }
-            return atom::async::EnhancedFuture<py::object>(promise.get_future().share());
+            return atom::async::EnhancedFuture<py::object>(
+                promise.get_future().share());
         },
         py::arg("exception"),
         R"pbdoc(

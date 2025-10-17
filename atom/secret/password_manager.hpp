@@ -42,7 +42,8 @@
 namespace atom::secret {
 
 /**
- * @brief Main password manager class providing secure password storage and management.
+ * @brief Main password manager class providing secure password storage and
+ * management.
  */
 class PasswordManager {
 public:
@@ -71,7 +72,7 @@ public:
      * @return True if initialization succeeded, false otherwise.
      */
     bool initialize(std::string_view masterPassword,
-                   const PasswordManagerSettings& settings = {});
+                    const PasswordManagerSettings& settings = {});
 
     /**
      * @brief Locks the password manager, clearing sensitive data from memory.
@@ -98,7 +99,7 @@ public:
      * @return True if change succeeded, false otherwise.
      */
     bool changeMasterPassword(std::string_view currentPassword,
-                             std::string_view newPassword);
+                              std::string_view newPassword);
 
     /**
      * @brief Stores a password entry.
@@ -139,12 +140,9 @@ public:
      * @return Vector of matching password entries with their keys.
      */
     std::vector<std::pair<std::string, PasswordEntry>> searchPasswords(
-        std::string_view query,
-        bool searchInTitle = true,
-        bool searchInUsername = true,
-        bool searchInUrl = true,
-        bool searchInNotes = false,
-        bool searchInTags = true);
+        std::string_view query, bool searchInTitle = true,
+        bool searchInUsername = true, bool searchInUrl = true,
+        bool searchInNotes = false, bool searchInTags = true);
 
     /**
      * @brief Filters password entries by category.
@@ -170,17 +168,17 @@ public:
      * @param includeSpecial Include special characters.
      * @return Generated password or empty string on failure.
      */
-    std::string generatePassword(int length = 0,
-                                bool includeUppercase = true,
-                                bool includeNumbers = true,
-                                bool includeSpecial = true);
+    std::string generatePassword(int length = 0, bool includeUppercase = true,
+                                 bool includeNumbers = true,
+                                 bool includeSpecial = true);
 
     /**
      * @brief Analyzes password strength.
      * @param password Password to analyze.
      * @return Password analysis results.
      */
-    PasswordValidator::AnalysisResult analyzePassword(std::string_view password);
+    PasswordValidator::AnalysisResult analyzePassword(
+        std::string_view password);
 
     /**
      * @brief Exports all password entries to JSON.
@@ -194,7 +192,8 @@ public:
      * @param overwriteExisting Whether to overwrite existing entries.
      * @return Result containing number of imported entries or error message.
      */
-    Result<int> importFromJson(const std::string& json, bool overwriteExisting = false);
+    Result<int> importFromJson(const std::string& json,
+                               bool overwriteExisting = false);
 
     /**
      * @brief Gets the current password manager settings.
@@ -228,7 +227,8 @@ private:
      * @param masterPassword Master password.
      * @return Result containing derived key or error message.
      */
-    Result<std::vector<uint8_t>> deriveMasterKey(std::string_view masterPassword);
+    Result<std::vector<uint8_t>> deriveMasterKey(
+        std::string_view masterPassword);
 
     /**
      * @brief Encrypts data using the master key.

@@ -777,15 +777,13 @@ TEST_F(RingBufferTest, ForEachExceptionSafety) {
     buffer.push(3);
 
     // Test forEach with exception
-    EXPECT_THROW(
-        buffer.forEach([](int& value) {
-            if (value == 2) {
-                throw std::runtime_error("test exception");
-            }
-            value *= 2;
-        }),
-        std::runtime_error
-    );
+    EXPECT_THROW(buffer.forEach([](int& value) {
+        if (value == 2) {
+            throw std::runtime_error("test exception");
+        }
+        value *= 2;
+    }),
+                 std::runtime_error);
 
     // Buffer should still be functional
     EXPECT_EQ(buffer.size(), 3);
@@ -801,15 +799,13 @@ TEST_F(RingBufferTest, RemoveIfExceptionSafety) {
     buffer.push(4);
 
     // Test removeIf with exception
-    EXPECT_THROW(
-        buffer.removeIf([](const int& value) -> bool {
-            if (value == 3) {
-                throw std::runtime_error("test exception");
-            }
-            return value % 2 == 0;
-        }),
-        std::runtime_error
-    );
+    EXPECT_THROW(buffer.removeIf([](const int& value) -> bool {
+        if (value == 3) {
+            throw std::runtime_error("test exception");
+        }
+        return value % 2 == 0;
+    }),
+                 std::runtime_error);
 
     // Buffer should still be functional
     EXPECT_GT(buffer.size(), 0);

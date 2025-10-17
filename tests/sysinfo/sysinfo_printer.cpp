@@ -14,14 +14,14 @@ Tests formatting functions and report generation.
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <string>
 #include <memory>
+#include <string>
 
-#include "atom/sysinfo/sysinfo_printer.hpp"
 #include "atom/sysinfo/battery.hpp"
 #include "atom/sysinfo/cpu.hpp"
 #include "atom/sysinfo/memory.hpp"
 #include "atom/sysinfo/os.hpp"
+#include "atom/sysinfo/sysinfo_printer.hpp"
 
 using namespace atom::system;
 
@@ -51,7 +51,8 @@ TEST_F(SysInfoPrinterTest, FormatBatteryInfo) {
     auto batteryInfo = getBatteryInfo();
 
     if (batteryInfo.has_value()) {
-        std::string formatted = SystemInfoPrinter::formatBatteryInfo(batteryInfo.value());
+        std::string formatted =
+            SystemInfoPrinter::formatBatteryInfo(batteryInfo.value());
 
         // Formatted output should not be empty
         EXPECT_FALSE(formatted.empty());
@@ -59,13 +60,14 @@ TEST_F(SysInfoPrinterTest, FormatBatteryInfo) {
 
         // Should contain some expected keywords
         EXPECT_TRUE(formatted.find("Battery") != std::string::npos ||
-                   formatted.find("Power") != std::string::npos ||
-                   formatted.find("Charge") != std::string::npos);
+                    formatted.find("Power") != std::string::npos ||
+                    formatted.find("Charge") != std::string::npos);
     } else {
         // If no battery is present, formatting should handle gracefully
         BatteryInfo emptyInfo;
         EXPECT_NO_THROW({
-            std::string formatted = SystemInfoPrinter::formatBatteryInfo(emptyInfo);
+            std::string formatted =
+                SystemInfoPrinter::formatBatteryInfo(emptyInfo);
         });
     }
 }
@@ -81,8 +83,8 @@ TEST_F(SysInfoPrinterTest, FormatCpuInfo) {
 
     // Should contain some expected keywords
     EXPECT_TRUE(formatted.find("CPU") != std::string::npos ||
-               formatted.find("Processor") != std::string::npos ||
-               formatted.find("Core") != std::string::npos);
+                formatted.find("Processor") != std::string::npos ||
+                formatted.find("Core") != std::string::npos);
 
     // Should contain CPU model if available
     if (!cpuInfo.model.empty()) {
@@ -101,8 +103,8 @@ TEST_F(SysInfoPrinterTest, FormatMemoryInfo) {
 
     // Should contain some expected keywords
     EXPECT_TRUE(formatted.find("Memory") != std::string::npos ||
-               formatted.find("RAM") != std::string::npos ||
-               formatted.find("Physical") != std::string::npos);
+                formatted.find("RAM") != std::string::npos ||
+                formatted.find("Physical") != std::string::npos);
 }
 
 TEST_F(SysInfoPrinterTest, FormatOsInfo) {
@@ -116,8 +118,8 @@ TEST_F(SysInfoPrinterTest, FormatOsInfo) {
 
     // Should contain some expected keywords
     EXPECT_TRUE(formatted.find("Operating System") != std::string::npos ||
-               formatted.find("OS") != std::string::npos ||
-               formatted.find("System") != std::string::npos);
+                formatted.find("OS") != std::string::npos ||
+                formatted.find("System") != std::string::npos);
 
     // Should contain OS name if available
     if (!osInfo.osName.empty()) {
@@ -135,9 +137,9 @@ TEST_F(SysInfoPrinterTest, FormatGpuInfo) {
 
     // Should contain some expected keywords
     EXPECT_TRUE(formatted.find("GPU") != std::string::npos ||
-               formatted.find("Graphics") != std::string::npos ||
-               formatted.find("Video") != std::string::npos ||
-               formatted.find("Display") != std::string::npos);
+                formatted.find("Graphics") != std::string::npos ||
+                formatted.find("Video") != std::string::npos ||
+                formatted.find("Display") != std::string::npos);
 }
 
 // ============================================================================
@@ -150,15 +152,15 @@ TEST_F(SysInfoPrinterTest, GenerateFullReport) {
 
     // Report should not be empty
     EXPECT_FALSE(report.empty());
-    EXPECT_GT(report.length(), 100); // Should be substantial
+    EXPECT_GT(report.length(), 100);  // Should be substantial
 
     // Should contain sections for different components
     EXPECT_TRUE(report.find("CPU") != std::string::npos ||
-               report.find("Processor") != std::string::npos);
+                report.find("Processor") != std::string::npos);
     EXPECT_TRUE(report.find("Memory") != std::string::npos ||
-               report.find("RAM") != std::string::npos);
+                report.find("RAM") != std::string::npos);
     EXPECT_TRUE(report.find("Operating System") != std::string::npos ||
-               report.find("OS") != std::string::npos);
+                report.find("OS") != std::string::npos);
 }
 
 TEST_F(SysInfoPrinterTest, GenerateSimpleReport) {
@@ -167,7 +169,7 @@ TEST_F(SysInfoPrinterTest, GenerateSimpleReport) {
 
     // Report should not be empty
     EXPECT_FALSE(report.empty());
-    EXPECT_GT(report.length(), 50); // Should have some content
+    EXPECT_GT(report.length(), 50);  // Should have some content
 
     // Simple report should be shorter than full report
     std::string fullReport = SystemInfoPrinter::generateFullReport();
@@ -184,9 +186,9 @@ TEST_F(SysInfoPrinterTest, GeneratePerformanceReport) {
 
     // Should contain performance-related keywords
     EXPECT_TRUE(report.find("Performance") != std::string::npos ||
-               report.find("Usage") != std::string::npos ||
-               report.find("Load") != std::string::npos ||
-               report.find("Speed") != std::string::npos);
+                report.find("Usage") != std::string::npos ||
+                report.find("Load") != std::string::npos ||
+                report.find("Speed") != std::string::npos);
 }
 
 TEST_F(SysInfoPrinterTest, GenerateSecurityReport) {
@@ -199,9 +201,9 @@ TEST_F(SysInfoPrinterTest, GenerateSecurityReport) {
 
     // Should contain security-related keywords
     EXPECT_TRUE(report.find("Security") != std::string::npos ||
-               report.find("Secure") != std::string::npos ||
-               report.find("Protection") != std::string::npos ||
-               report.find("Encryption") != std::string::npos);
+                report.find("Secure") != std::string::npos ||
+                report.find("Protection") != std::string::npos ||
+                report.find("Encryption") != std::string::npos);
 }
 
 // ============================================================================
@@ -224,9 +226,9 @@ TEST_F(SysInfoPrinterTest, ReportStructure) {
 
     // Should have some structure indicators (headers, sections, etc.)
     EXPECT_TRUE(fullReport.find("=") != std::string::npos ||
-               fullReport.find("-") != std::string::npos ||
-               fullReport.find("*") != std::string::npos ||
-               fullReport.find(":") != std::string::npos);
+                fullReport.find("-") != std::string::npos ||
+                fullReport.find("*") != std::string::npos ||
+                fullReport.find(":") != std::string::npos);
 
     // Should have line breaks for readability
     EXPECT_TRUE(fullReport.find("\n") != std::string::npos);
@@ -240,7 +242,8 @@ TEST_F(SysInfoPrinterTest, NoSensitiveInformation) {
     EXPECT_TRUE(fullReport.find("password") == std::string::npos);
     EXPECT_TRUE(fullReport.find("secret") == std::string::npos);
     EXPECT_TRUE(fullReport.find("key") == std::string::npos ||
-               fullReport.find("keyboard") != std::string::npos); // "keyboard" is OK
+                fullReport.find("keyboard") !=
+                    std::string::npos);  // "keyboard" is OK
 }
 
 // ============================================================================
@@ -254,21 +257,13 @@ TEST_F(SysInfoPrinterTest, EmptyDataHandling) {
     MemoryInfo emptyMemory;
     OperatingSystemInfo emptyOs;
 
-    EXPECT_NO_THROW({
-        SystemInfoPrinter::formatBatteryInfo(emptyBattery);
-    });
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatBatteryInfo(emptyBattery); });
 
-    EXPECT_NO_THROW({
-        SystemInfoPrinter::formatCpuInfo(emptyCpu);
-    });
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatCpuInfo(emptyCpu); });
 
-    EXPECT_NO_THROW({
-        SystemInfoPrinter::formatMemoryInfo(emptyMemory);
-    });
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatMemoryInfo(emptyMemory); });
 
-    EXPECT_NO_THROW({
-        SystemInfoPrinter::formatOsInfo(emptyOs);
-    });
+    EXPECT_NO_THROW({ SystemInfoPrinter::formatOsInfo(emptyOs); });
 }
 
 TEST_F(SysInfoPrinterTest, NoThrowGuarantee) {
@@ -284,9 +279,10 @@ TEST_F(SysInfoPrinterTest, LargeDataHandling) {
     // Test handling of potentially large data
     std::string fullReport = SystemInfoPrinter::generateFullReport();
 
-    // Report should be reasonable in size (not empty, but not excessively large)
+    // Report should be reasonable in size (not empty, but not excessively
+    // large)
     EXPECT_GT(fullReport.length(), 100);
-    EXPECT_LT(fullReport.length(), 1000000); // 1MB limit for sanity
+    EXPECT_LT(fullReport.length(), 1000000);  // 1MB limit for sanity
 }
 
 // ============================================================================
@@ -306,4 +302,4 @@ TEST_F(SysInfoPrinterTest, StaticMethodsWork) {
     });
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

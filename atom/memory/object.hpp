@@ -17,12 +17,14 @@
  * - Thread-safe with shared_mutex
  *
  * COMPARISON WITH OTHER POOLS:
- * - Use ObjectPool when you need advanced features like priorities, validation, statistics
+ * - Use ObjectPool when you need advanced features like priorities, validation,
+ * statistics
  * - Use SimpleObjectPool (memory_pool.hpp) for simpler object pooling with RAII
  * - Use FixedBlockPool (memory_pool.hpp) for low-level fixed-size allocations
  * - Use MemoryPool (memory.hpp) for variable-size allocations with PMR support
  *
- * For a complete overview of memory pool types, see documentation in memory.hpp.
+ * For a complete overview of memory pool types, see documentation in
+ * memory.hpp.
  *
  * @author Max Qian
  * @copyright Copyright (C) 2023-2024 Max Qian <lightapt.com>

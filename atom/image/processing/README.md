@@ -200,10 +200,12 @@ try {
 ## Dependencies
 
 ### Required
+
 - atom-error: Error handling framework
 - atom-image-core: Core image functionality
 
 ### Optional
+
 - OpenCV: Advanced computer vision operations
 - Tesseract: OCR text recognition
 - Leptonica: Image preprocessing for OCR

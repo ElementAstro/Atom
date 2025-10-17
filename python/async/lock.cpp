@@ -99,7 +99,7 @@ void init_lock(py::module_& m) {
     py::class_<Spinlock>(m, "Spinlock",
         R"pbdoc(
         Simple spinlock implementation using atomic_flag with C++20 features.
-        
+
         A spinlock is a lock that causes a thread trying to acquire it to simply wait
         in a loop ("spin") while repeatedly checking if the lock is available.
         )pbdoc")
@@ -110,7 +110,7 @@ void init_lock(py::module_& m) {
         .def("lock", &Spinlock::lock,
              R"pbdoc(
              Acquire the lock.
-             
+
              This method will block until the lock is acquired.
              )pbdoc")
         .def("unlock", &Spinlock::unlock,
@@ -120,7 +120,7 @@ void init_lock(py::module_& m) {
         .def("try_lock", &Spinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc")
@@ -132,10 +132,10 @@ void init_lock(py::module_& m) {
             py::arg("timeout"),
             R"pbdoc(
             Try to acquire the lock with a timeout.
-            
+
             Args:
                 timeout: Maximum time to wait for the lock.
-                
+
             Returns:
                 bool: True if the lock was acquired within the timeout, False otherwise.
             )pbdoc");
@@ -144,7 +144,7 @@ void init_lock(py::module_& m) {
     py::class_<TicketSpinlock>(m, "TicketSpinlock",
         R"pbdoc(
         Fair spinlock implementation using ticket-based ordering.
-        
+
         Provides fair locking in first-come, first-served order.
         )pbdoc")
         .def(py::init<>(),
@@ -162,7 +162,7 @@ void init_lock(py::module_& m) {
         .def("try_lock", &TicketSpinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc");
@@ -171,14 +171,14 @@ void init_lock(py::module_& m) {
     py::class_<TicketSpinlock::LockGuard>(m, "TicketSpinlockGuard",
         R"pbdoc(
         RAII lock guard for TicketSpinlock.
-        
+
         Automatically acquires the lock on construction and releases it on destruction.
         )pbdoc")
         .def(py::init<TicketSpinlock&>(),
              py::arg("spinlock"),
              R"pbdoc(
              Construct the lock guard and acquire the lock.
-             
+
              Args:
                  spinlock: The TicketSpinlock to guard.
              )pbdoc")
@@ -189,7 +189,7 @@ void init_lock(py::module_& m) {
         .def("is_locked", &TicketSpinlock::LockGuard::isLocked,
              R"pbdoc(
              Check if the lock is currently held.
-             
+
              Returns:
                  bool: True if the lock is held, False otherwise.
              )pbdoc");
@@ -198,7 +198,7 @@ void init_lock(py::module_& m) {
     py::class_<UnfairSpinlock>(m, "UnfairSpinlock",
         R"pbdoc(
         Unfair spinlock implementation for maximum performance.
-        
+
         May cause starvation but has lower overhead than fair locks.
         )pbdoc")
         .def(py::init<>(),
@@ -216,7 +216,7 @@ void init_lock(py::module_& m) {
         .def("try_lock", &UnfairSpinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc");
@@ -225,7 +225,7 @@ void init_lock(py::module_& m) {
     py::class_<AdaptiveSpinlock>(m, "AdaptiveSpinlock",
         R"pbdoc(
         Adaptive spinlock that switches between spinning and yielding.
-        
+
         Spins for a short time, then yields to reduce CPU usage.
         )pbdoc")
         .def(py::init<>(),
@@ -243,7 +243,7 @@ void init_lock(py::module_& m) {
         .def("try_lock", &AdaptiveSpinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc");

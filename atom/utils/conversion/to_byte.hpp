@@ -476,8 +476,8 @@ inline auto deserializeString(const std::span<const uint8_t>& bytes,
  * @throws SerializationException if deserialization fails
  */
 template <typename T>
-auto deserializeVector(const std::span<const uint8_t>& bytes, size_t& offset)
-    -> std::vector<T> {
+auto deserializeVector(const std::span<const uint8_t>& bytes,
+                       size_t& offset) -> std::vector<T> {
     auto size = deserialize<size_t>(bytes, offset);
     std::vector<T> vec;
     vec.reserve(size);
@@ -505,8 +505,8 @@ auto deserializeVector(const std::span<const uint8_t>& bytes, size_t& offset)
  * @throws SerializationException if deserialization fails
  */
 template <typename T>
-auto deserializeList(const std::span<const uint8_t>& bytes, size_t& offset)
-    -> std::list<T> {
+auto deserializeList(const std::span<const uint8_t>& bytes,
+                     size_t& offset) -> std::list<T> {
     auto size = deserialize<size_t>(bytes, offset);
     std::list<T> list;
 
@@ -535,8 +535,8 @@ auto deserializeList(const std::span<const uint8_t>& bytes, size_t& offset)
  * @throws SerializationException if deserialization fails
  */
 template <typename Key, typename Value>
-auto deserializeMap(const std::span<const uint8_t>& bytes, size_t& offset)
-    -> std::map<Key, Value> {
+auto deserializeMap(const std::span<const uint8_t>& bytes,
+                    size_t& offset) -> std::map<Key, Value> {
     auto size = deserialize<size_t>(bytes, offset);
     std::map<Key, Value> map;
 
@@ -574,8 +574,8 @@ auto deserializeMap(const std::span<const uint8_t>& bytes, size_t& offset)
  * @throws SerializationException if deserialization fails
  */
 template <typename T>
-auto deserializeOptional(const std::span<const uint8_t>& bytes, size_t& offset)
-    -> std::optional<T> {
+auto deserializeOptional(const std::span<const uint8_t>& bytes,
+                         size_t& offset) -> std::optional<T> {
     bool hasValue = deserialize<bool>(bytes, offset);
     if (hasValue) {
         if constexpr (StringType<T>) {
@@ -635,8 +635,8 @@ auto constructVariant(const std::span<const uint8_t>& bytes, size_t& offset,
  * @throws SerializationException if the index of the variant is out of range
  */
 template <typename... Ts>
-auto deserializeVariant(const std::span<const uint8_t>& bytes, size_t& offset)
-    -> std::variant<Ts...> {
+auto deserializeVariant(const std::span<const uint8_t>& bytes,
+                        size_t& offset) -> std::variant<Ts...> {
     auto index = deserialize<size_t>(bytes, offset);
     if (index >= sizeof...(Ts)) {
         detail::throwSerializationError("Invalid variant index: ", index,
@@ -659,8 +659,8 @@ auto deserializeVariant(const std::span<const uint8_t>& bytes, size_t& offset)
  * @throws SerializationException if deserialization fails
  */
 template <typename... Ts>
-auto deserializeTuple(const std::span<const uint8_t>& bytes, size_t& offset)
-    -> std::tuple<Ts...> {
+auto deserializeTuple(const std::span<const uint8_t>& bytes,
+                      size_t& offset) -> std::tuple<Ts...> {
     return std::make_tuple(deserialize<Ts>(bytes, offset)...);
 }
 

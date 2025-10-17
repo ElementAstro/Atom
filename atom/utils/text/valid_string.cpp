@@ -134,8 +134,9 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
             std::max(2u, std::thread::hardware_concurrency());
         const size_t chunkSize = length / numThreads;
 
-        std::vector<::atom::type::compat::expected<ValidationResult, std::string>> results(
-            numThreads);
+        std::vector<
+            ::atom::type::compat::expected<ValidationResult, std::string>>
+            results(numThreads);
         std::vector<std::thread> threads;
         std::latch completion_latch(
             numThreads);  // C++20 thread synchronization primitive
@@ -241,12 +242,10 @@ template <StringLike T>
 auto validateImpl(T&& str, const ValidationOptions& options)
     -> std::expected<ValidationResult, std::string> {
     // Input validation result
-    ValidationResult result{
-        .isValid = true,
-        .invalidBrackets = {},
-        .errorMessages = {},
-        .sourceLocation = {}
-    };
+    ValidationResult result{.isValid = true,
+                            .invalidBrackets = {},
+                            .errorMessages = {},
+                            .sourceLocation = {}};
 
     try {
         auto span = getDataSpan(str);
@@ -490,8 +489,8 @@ template auto isValidBracket<std::u8string_view>(std::u8string_view&&,
                                                  const ValidationOptions&)
     -> std::expected<ValidationResult, std::string>;
 template auto isValidBracket<const std::u8string_view&>(
-    const std::u8string_view&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    const std::u8string_view&,
+    const ValidationOptions&) -> std::expected<ValidationResult, std::string>;
 template auto isValidBracket<std::u8string_view&>(std::u8string_view&,
                                                   const ValidationOptions&)
     -> std::expected<ValidationResult, std::string>;

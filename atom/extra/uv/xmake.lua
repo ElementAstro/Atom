@@ -27,28 +27,28 @@ local headers = {
 
 target("atom-extra-uv")
     set_kind("static")
-    
+
     -- Add files
     for _, src in ipairs(sources) do
         add_files(src)
     end
-    
+
     for _, hdr in ipairs(headers) do
         add_headerfiles(hdr)
     end
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("libuv")
-    
+
     -- Add system libraries
     add_syslinks("pthread")
-    
+
     -- Set C++ standard
     set_languages("c++23")
-    
+
     -- Installation
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -59,4 +59,3 @@ target("atom-extra-uv")
             os.cp(hdr, headerdir)
         end
     end)
-

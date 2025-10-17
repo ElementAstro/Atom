@@ -1102,4 +1102,3 @@ Examples:
     encodings.attr("EUC_JP") = iconv_cpp::encodings::EUC_JP;
     encodings.attr("EUC_KR") = iconv_cpp::encodings::EUC_KR;
 }
-

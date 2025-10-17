@@ -20,12 +20,12 @@ Description: Memory-mapped File Logger for Atom with C++20 Features
 #include "atomlog.hpp"
 
 #include <concepts>
-#include "atom/type/compat.hpp"
 #include <filesystem>
 #include <memory>
 #include <source_location>
 #include <span>
 #include <string_view>
+#include "atom/type/compat.hpp"
 
 namespace fs = std::filesystem;
 

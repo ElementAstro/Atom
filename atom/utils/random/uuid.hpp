@@ -153,8 +153,8 @@ public:
      * @return A version 3 UUID.
      * @throws std::runtime_error If the hash generation fails
      */
-    static auto generateV3(const UUID& namespace_uuid, std::string_view name)
-        -> UUID;
+    static auto generateV3(const UUID& namespace_uuid,
+                           std::string_view name) -> UUID;
 
     /**
      * @brief Generates a version 5 UUID using the SHA-1 hashing algorithm.
@@ -163,8 +163,8 @@ public:
      * @return A version 5 UUID.
      * @throws std::runtime_error If the hash generation fails
      */
-    static auto generateV5(const UUID& namespace_uuid, std::string_view name)
-        -> UUID;
+    static auto generateV5(const UUID& namespace_uuid,
+                           std::string_view name) -> UUID;
 
     /**
      * @brief Generates a version 1, time-based UUID.

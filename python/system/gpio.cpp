@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(gpio, m) {
@@ -56,8 +55,10 @@ PYBIND11_MODULE(gpio, m) {
     // Define PwmMode enum
     py::enum_<atom::system::GPIO::PwmMode>(
         m, "PwmMode", "PWM (Pulse Width Modulation) operation mode")
-        .value("HARDWARE", atom::system::GPIO::PwmMode::HARDWARE, "Use hardware PWM if available")
-        .value("SOFTWARE", atom::system::GPIO::PwmMode::SOFTWARE, "Use software PWM implementation")
+        .value("HARDWARE", atom::system::GPIO::PwmMode::HARDWARE,
+               "Use hardware PWM if available")
+        .value("SOFTWARE", atom::system::GPIO::PwmMode::SOFTWARE,
+               "Use software PWM implementation")
         .export_values();
 
     // Define GPIO class
@@ -200,8 +201,8 @@ Returns:
              R"(Stops all callbacks on this pin.)")
 
         // PWM methods
-        .def("set_pwm", &atom::system::GPIO::setPwm,
-             py::arg("frequency"), py::arg("duty_cycle"),
+        .def("set_pwm", &atom::system::GPIO::setPwm, py::arg("frequency"),
+             py::arg("duty_cycle"),
              py::arg("mode") = atom::system::GPIO::PwmMode::HARDWARE,
              R"(Sets up PWM (Pulse Width Modulation) on the pin.
 
@@ -257,7 +258,8 @@ Examples:
 )")
 
         // Interrupt counting
-        .def("setup_interrupt_counter", &atom::system::GPIO::setupInterruptCounter,
+        .def("setup_interrupt_counter",
+             &atom::system::GPIO::setupInterruptCounter,
              py::arg("edge") = atom::system::GPIO::Edge::RISING,
              R"(Sets up an interrupt counter for this pin.
 
@@ -366,8 +368,10 @@ Examples:
     >>> shift_reg.shift_out(0b10101010)  # Output pattern
     >>> shift_reg.set_bit(3, True)      # Set bit 3
 )")
-        .def(py::init<const std::string&, const std::string&, const std::string&, uint8_t>(),
-             py::arg("data_pin"), py::arg("clock_pin"), py::arg("latch_pin"), py::arg("num_bits") = 8,
+        .def(py::init<const std::string&, const std::string&,
+                      const std::string&, uint8_t>(),
+             py::arg("data_pin"), py::arg("clock_pin"), py::arg("latch_pin"),
+             py::arg("num_bits") = 8,
              "Constructs a ShiftRegister with specified pins and bit count.")
         .def("shift_out", &atom::system::GPIO::ShiftRegister::shiftOut,
              py::arg("data"), py::arg("msb_first") = true,

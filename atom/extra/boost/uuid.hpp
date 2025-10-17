@@ -62,17 +62,14 @@ public:
      * @brief Checks if UUID is nil (all zeros)
      * @return True if UUID is nil
      */
-    [[nodiscard]] bool isNil() const noexcept {
-        return uuid_.is_nil();
-    }
+    [[nodiscard]] bool isNil() const noexcept { return uuid_.is_nil(); }
 
     /**
      * @brief Three-way comparison operator
      * @param other UUID to compare with
      * @return Comparison result
      */
-    std::strong_ordering operator<=>(
-        const UUID& other) const noexcept {
+    std::strong_ordering operator<=>(const UUID& other) const noexcept {
         if (uuid_ < other.uuid_) [[likely]] {
             return std::strong_ordering::less;
         }
@@ -183,17 +180,13 @@ public:
      * @brief Gets UUID version
      * @return Version number
      */
-    [[nodiscard]] int version() const noexcept {
-        return uuid_.version();
-    }
+    [[nodiscard]] int version() const noexcept { return uuid_.version(); }
 
     /**
      * @brief Gets UUID variant
      * @return Variant number
      */
-    [[nodiscard]] int variant() const noexcept {
-        return uuid_.variant();
-    }
+    [[nodiscard]] int variant() const noexcept { return uuid_.variant(); }
 
     /**
      * @brief Generates version 1 (timestamp-based) UUID

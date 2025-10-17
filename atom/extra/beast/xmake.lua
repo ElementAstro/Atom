@@ -30,25 +30,25 @@ local headers = {
 
 target("atom-extra-beast")
     set_kind("static")
-    
+
     -- Add files
     for _, src in ipairs(sources) do
         add_files(src)
     end
-    
+
     for _, hdr in ipairs(headers) do
         add_headerfiles(hdr)
     end
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("boost", "nlohmann_json", "fmt", "spdlog")
-    
+
     -- Set C++ standard
     set_languages("c++20")
-    
+
     -- Installation
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -59,4 +59,3 @@ target("atom-extra-beast")
             os.cp(hdr, headerdir)
         end
     end)
-

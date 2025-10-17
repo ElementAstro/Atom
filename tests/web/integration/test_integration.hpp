@@ -4,6 +4,7 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
@@ -11,7 +12,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <spdlog/spdlog.h>
 
 #include "atom/web/address.hpp"
 #include "atom/web/http/curl.hpp"
@@ -78,7 +78,8 @@ TEST_F(WebIntegrationTest, WebCrawlerIntegration) {
         // Step 2: Resolve target domain
         std::string domain = "httpbin.org";
         auto ipAddresses = getIPAddresses(domain);
-        EXPECT_FALSE(ipAddresses.empty()) << "Failed to resolve domain: " << domain;
+        EXPECT_FALSE(ipAddresses.empty())
+            << "Failed to resolve domain: " << domain;
 
         // Validate resolved IP addresses
         for (const auto& ip : ipAddresses) {
@@ -101,7 +102,8 @@ TEST_F(WebIntegrationTest, WebCrawlerIntegration) {
         // Step 4: Parse HTTP headers
         HttpHeaderParser parser;
         parser.setHeaderValue("Content-Type", "text/html; charset=utf-8");
-        parser.setHeaderValue("Content-Length", std::to_string(htmlContent.length()));
+        parser.setHeaderValue("Content-Length",
+                              std::to_string(htmlContent.length()));
         parser.setHeaderValue("Server", "nginx/1.18.0");
 
         EXPECT_TRUE(parser.hasHeader("Content-Type"));
@@ -156,7 +158,8 @@ TEST_F(WebIntegrationTest, APIClientIntegration) {
         apiClient.setUrl(TEST_POST_URL);
         apiClient.setRequestMethod("POST");
         apiClient.addHeader("Content-Type", "application/json");
-        apiClient.setRequestBody(R"({"name": "test", "value": 123, "active": true})");
+        apiClient.setRequestBody(
+            R"({"name": "test", "value": 123, "active": true})");
 
         std::string postResponse = apiClient.perform();
         EXPECT_FALSE(postResponse.empty());
@@ -174,7 +177,8 @@ TEST_F(WebIntegrationTest, APIClientIntegration) {
         EXPECT_EQ(status.description, "OK");
 
         // Step 5: Validate JSON response format
-        auto [mimeType, charset] = MimeTypes({}, true).guessType("response.json");
+        auto [mimeType, charset] =
+            MimeTypes({}, true).guessType("response.json");
         EXPECT_TRUE(mimeType.has_value());
         EXPECT_EQ(*mimeType, "application/json");
 
@@ -209,14 +213,12 @@ TEST_F(WebIntegrationTest, DownloadManagerIntegration) {
 
         // Step 2: Add multiple download tasks
         std::vector<fs::path> outputFiles;
-        std::vector<std::string> urls = {
-            TEST_BYTES_URL,
-            TEST_JSON_URL,
-            TEST_HTML_URL
-        };
+        std::vector<std::string> urls = {TEST_BYTES_URL, TEST_JSON_URL,
+                                         TEST_HTML_URL};
 
         for (size_t i = 0; i < urls.size(); ++i) {
-            fs::path outputFile = tempDir / ("download_" + std::to_string(i) + ".dat");
+            fs::path outputFile =
+                tempDir / ("download_" + std::to_string(i) + ".dat");
             outputFiles.push_back(outputFile);
             dm.addTask(urls[i], outputFile.string());
         }
@@ -232,7 +234,8 @@ TEST_F(WebIntegrationTest, DownloadManagerIntegration) {
         while (dm.getActiveTaskCount() > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
             auto now = std::chrono::steady_clock::now();
-            if (std::chrono::duration_cast<std::chrono::seconds>(now - start).count() > 30) {
+            if (std::chrono::duration_cast<std::chrono::seconds>(now - start)
+                    .count() > 30) {
                 break;  // Timeout after 30 seconds
             }
         }
@@ -241,13 +244,15 @@ TEST_F(WebIntegrationTest, DownloadManagerIntegration) {
         EXPECT_FALSE(dm.isRunning());
 
         // Step 4: Verify downloads
-        EXPECT_GT(completedDownloads.load(), 0) << "No downloads completed successfully";
+        EXPECT_GT(completedDownloads.load(), 0)
+            << "No downloads completed successfully";
         EXPECT_FALSE(hasError.load()) << "Download errors occurred";
 
         // Check downloaded files
         for (const auto& file : outputFiles) {
             if (fs::exists(file)) {
-                EXPECT_GT(fs::file_size(file), 0) << "Downloaded file is empty: " << file;
+                EXPECT_GT(fs::file_size(file), 0)
+                    << "Downloaded file is empty: " << file;
 
                 // Step 5: Analyze downloaded content with MIME types
                 std::string extension = file.extension().string();
@@ -255,9 +260,11 @@ TEST_F(WebIntegrationTest, DownloadManagerIntegration) {
                     extension = ".dat";
                 }
 
-                auto [mimeType, charset] = MimeTypes({}, true).guessType("file" + extension);
+                auto [mimeType, charset] =
+                    MimeTypes({}, true).guessType("file" + extension);
                 // MIME type detection may vary, just ensure no crash
-                EXPECT_NO_THROW(MimeTypes({}, true).guessType("file" + extension));
+                EXPECT_NO_THROW(
+                    MimeTypes({}, true).guessType("file" + extension));
             }
         }
 
@@ -275,7 +282,8 @@ TEST_F(WebIntegrationTest, NetworkServiceDiscoveryIntegration) {
 
         // Validate local IPs
         for (const auto& ip : localIPs) {
-            EXPECT_TRUE(isValidIPv4(ip) || isValidIPv6(ip)) << "Invalid local IP: " << ip;
+            EXPECT_TRUE(isValidIPv4(ip) || isValidIPv6(ip))
+                << "Invalid local IP: " << ip;
 
             // Create address objects
             auto addr = Address::createFromString(ip);
@@ -292,31 +300,34 @@ TEST_F(WebIntegrationTest, NetworkServiceDiscoveryIntegration) {
             }
         }
 
-        // Step 3: Test connectivity to external services (if internet available)
+        // Step 3: Test connectivity to external services (if internet
+        // available)
         if (checkInternetConnectivity()) {
             std::vector<std::pair<std::string, uint16_t>> externalServices = {
-                {"google.com", 80},
-                {"github.com", 443}
-            };
+                {"google.com", 80}, {"github.com", 443}};
 
             for (const auto& [host, port] : externalServices) {
-                bool isReachable = scanPort(host, port, std::chrono::milliseconds(5000));
+                bool isReachable =
+                    scanPort(host, port, std::chrono::milliseconds(5000));
 
                 if (isReachable) {
                     // Get IP addresses for reachable hosts
                     auto ips = getIPAddresses(host);
-                    EXPECT_FALSE(ips.empty()) << "Failed to resolve reachable host: " << host;
+                    EXPECT_FALSE(ips.empty())
+                        << "Failed to resolve reachable host: " << host;
 
                     // Validate resolved IPs
                     for (const auto& ip : ips) {
-                        EXPECT_TRUE(isValidIPv4(ip) || isValidIPv6(ip)) << "Invalid resolved IP: " << ip;
+                        EXPECT_TRUE(isValidIPv4(ip) || isValidIPv6(ip))
+                            << "Invalid resolved IP: " << ip;
                     }
                 }
             }
         }
 
         // Step 4: Port range scanning
-        auto scannedPorts = scanPortRange("127.0.0.1", 65530, 65535, std::chrono::milliseconds(500));
+        auto scannedPorts = scanPortRange("127.0.0.1", 65530, 65535,
+                                          std::chrono::milliseconds(500));
         // Results may vary, just ensure no crash
         EXPECT_TRUE(scannedPorts.empty() || !scannedPorts.empty());
 
@@ -351,13 +362,15 @@ TEST_F(WebIntegrationTest, HTTPParserCurlIntegration) {
         sessionCookie.httpOnly = true;
         requestParser.addCookie(sessionCookie);
 
-        std::string requestBody = R"({"integration": "test", "timestamp": 1234567890})";
+        std::string requestBody =
+            R"({"integration": "test", "timestamp": 1234567890})";
         requestParser.setBody(requestBody);
 
         // Step 2: Build complete HTTP request
         std::string httpRequest = requestParser.buildRequest();
         EXPECT_THAT(httpRequest, ::testing::HasSubstr("POST /post HTTP/1.1"));
-        EXPECT_THAT(httpRequest, ::testing::HasSubstr("Content-Type: application/json"));
+        EXPECT_THAT(httpRequest,
+                    ::testing::HasSubstr("Content-Type: application/json"));
         EXPECT_THAT(httpRequest, ::testing::HasSubstr("integration"));
 
         // Step 3: Use CURL to make the actual request
@@ -389,7 +402,9 @@ TEST_F(WebIntegrationTest, HTTPParserCurlIntegration) {
         EXPECT_THAT(*contentType, ::testing::HasSubstr("application/json"));
 
         // Step 5: URL parameter parsing
-        std::string testUrl = "https://httpbin.org/get?param1=value1&param2=value2&encoded=hello%20world";
+        std::string testUrl =
+            "https://httpbin.org/"
+            "get?param1=value1&param2=value2&encoded=hello%20world";
         auto params = responseParser.parseUrlParameters(testUrl);
         EXPECT_EQ(params.size(), 3);
         EXPECT_EQ(params["param1"], "value1");
@@ -409,9 +424,9 @@ TEST_F(WebIntegrationTest, MimeTypeContentAnalysisIntegration) {
             {"test.html", "<html><body><h1>Test HTML</h1></body></html>"},
             {"test.json", R"({"name": "test", "value": 123})"},
             {"test.txt", "This is a plain text file for testing."},
-            {"test.xml", "<?xml version=\"1.0\"?><root><item>test</item></root>"},
-            {"test.css", "body { color: red; font-size: 14px; }"}
-        };
+            {"test.xml",
+             "<?xml version=\"1.0\"?><root><item>test</item></root>"},
+            {"test.css", "body { color: red; font-size: 14px; }"}};
 
         std::vector<fs::path> createdFiles;
         for (const auto& [filename, content] : testFiles) {
@@ -431,7 +446,8 @@ TEST_F(WebIntegrationTest, MimeTypeContentAnalysisIntegration) {
 
             // Guess MIME type by extension
             auto [mimeType, charset] = mimeTypes.guessType(filename);
-            EXPECT_TRUE(mimeType.has_value()) << "Failed to detect MIME type for: " << filename;
+            EXPECT_TRUE(mimeType.has_value())
+                << "Failed to detect MIME type for: " << filename;
 
             // Verify expected MIME types
             if (filename.ends_with(".html")) {
@@ -448,8 +464,10 @@ TEST_F(WebIntegrationTest, MimeTypeContentAnalysisIntegration) {
 
             // Test content-based detection
             if (mimeTypes.getConfig().enableDeepScanning) {
-                auto contentType = mimeTypes.guessTypeByContent(filePath.string());
-                EXPECT_TRUE(contentType.has_value()) << "Content-based detection failed for: " << filename;
+                auto contentType =
+                    mimeTypes.guessTypeByContent(filePath.string());
+                EXPECT_TRUE(contentType.has_value())
+                    << "Content-based detection failed for: " << filename;
             }
 
             // Test with HTTP headers
@@ -471,13 +489,15 @@ TEST_F(WebIntegrationTest, MimeTypeContentAnalysisIntegration) {
         }
 
         auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
         // Should complete quickly due to caching
         EXPECT_LT(duration.count(), 1000);  // Less than 1 second
 
     } catch (const std::exception& e) {
-        FAIL() << "MIME type and content analysis integration failed: " << e.what();
+        FAIL() << "MIME type and content analysis integration failed: "
+               << e.what();
     }
 }
 
@@ -501,9 +521,13 @@ TEST_F(WebIntegrationTest, TimeManagementIntegration) {
             EXPECT_FALSE(response.empty());
 
             // Calculate request duration
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-            EXPECT_GT(duration.count(), 0) << "Request should take measurable time";
-            EXPECT_LT(duration.count(), 10000) << "Request should complete within 10 seconds";
+            auto duration =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    endTime - startTime);
+            EXPECT_GT(duration.count(), 0)
+                << "Request should take measurable time";
+            EXPECT_LT(duration.count(), 10000)
+                << "Request should complete within 10 seconds";
 
             // Step 3: Test TimeManager system time functionality
             auto systemTime = timeManager.getSystemTime();
@@ -513,18 +537,24 @@ TEST_F(WebIntegrationTest, TimeManagementIntegration) {
             auto currentTime = std::chrono::system_clock::now();
             auto timeDiff = std::chrono::duration_cast<std::chrono::seconds>(
                 systemTimePoint - currentTime);
-            EXPECT_LT(std::abs(timeDiff.count()), 60) << "System time should be within 1 minute of current time";
+            EXPECT_LT(std::abs(timeDiff.count()), 60)
+                << "System time should be within 1 minute of current time";
 
             // Step 4: Test NTP time functionality (if available)
-            auto ntpTime = timeManager.getNtpTime("pool.ntp.org", std::chrono::milliseconds(5000));
+            auto ntpTime = timeManager.getNtpTime(
+                "pool.ntp.org", std::chrono::milliseconds(5000));
             if (ntpTime.has_value()) {
-                EXPECT_GT(*ntpTime, 0) << "NTP time should be valid if retrieved";
+                EXPECT_GT(*ntpTime, 0)
+                    << "NTP time should be valid if retrieved";
 
                 // NTP time should be reasonably close to system time
-                auto ntpTimeDiff = std::abs(static_cast<long>(*ntpTime - systemTime));
-                EXPECT_LT(ntpTimeDiff, 300) << "NTP time should be within 5 minutes of system time";
+                auto ntpTimeDiff =
+                    std::abs(static_cast<long>(*ntpTime - systemTime));
+                EXPECT_LT(ntpTimeDiff, 300)
+                    << "NTP time should be within 5 minutes of system time";
             }
-            // Note: NTP may fail due to network restrictions, which is acceptable
+            // Note: NTP may fail due to network restrictions, which is
+            // acceptable
         }
 
         // Step 5: Test time-based download scheduling
@@ -542,13 +572,12 @@ TEST_F(WebIntegrationTest, TimeManagementIntegration) {
             });
 
             // Schedule downloads
-            std::vector<std::string> downloadUrls = {
-                TEST_BYTES_URL,
-                TEST_JSON_URL
-            };
+            std::vector<std::string> downloadUrls = {TEST_BYTES_URL,
+                                                     TEST_JSON_URL};
 
             for (size_t i = 0; i < downloadUrls.size(); ++i) {
-                fs::path outputFile = tempDir / ("timed_download_" + std::to_string(i) + ".dat");
+                fs::path outputFile =
+                    tempDir / ("timed_download_" + std::to_string(i) + ".dat");
                 dm.addTask(downloadUrls[i], outputFile.string());
             }
 
@@ -559,7 +588,9 @@ TEST_F(WebIntegrationTest, TimeManagementIntegration) {
             while (dm.getActiveTaskCount() > 0) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 auto waitCurrent = std::chrono::high_resolution_clock::now();
-                auto waitDuration = std::chrono::duration_cast<std::chrono::milliseconds>(waitCurrent - waitStart);
+                auto waitDuration =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        waitCurrent - waitStart);
                 if (waitDuration.count() > 30000) {
                     break;  // 30 second timeout
                 }
@@ -567,11 +598,14 @@ TEST_F(WebIntegrationTest, TimeManagementIntegration) {
 
             dm.stop();
             auto downloadEndTime = std::chrono::high_resolution_clock::now();
-            auto totalDownloadTime = std::chrono::duration_cast<std::chrono::milliseconds>(downloadEndTime - downloadStartTime);
+            auto totalDownloadTime =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    downloadEndTime - downloadStartTime);
 
             EXPECT_GT(completedDownloads.load(), 0);
             EXPECT_GT(totalDownloadTime.count(), 0);
-            EXPECT_LT(totalDownloadTime.count(), 30000) << "Downloads should complete within 30 seconds";
+            EXPECT_LT(totalDownloadTime.count(), 30000)
+                << "Downloads should complete within 30 seconds";
         }
 
     } catch (const std::exception& e) {
@@ -583,13 +617,16 @@ TEST_F(WebIntegrationTest, TimeManagementIntegration) {
 TEST_F(WebIntegrationTest, AddressModuleCrossIntegration) {
     try {
         // Step 1: Test IPv4 and IPv6 address resolution and usage
-        std::vector<std::string> testDomains = {"localhost", "127.0.0.1", "::1"};
+        std::vector<std::string> testDomains = {"localhost", "127.0.0.1",
+                                                "::1"};
 
         for (const auto& domain : testDomains) {
             // Create address object
             auto addr = Address::createFromString(domain);
             if (addr) {
-                EXPECT_TRUE(addr->getType() == "IPv4" || addr->getType() == "IPv6" || addr->getType() == "UnixDomain");
+                EXPECT_TRUE(addr->getType() == "IPv4" ||
+                            addr->getType() == "IPv6" ||
+                            addr->getType() == "UnixDomain");
 
                 // Test address in network operations
                 if (addr->getType() == "IPv4" || addr->getType() == "IPv6") {
@@ -597,7 +634,8 @@ TEST_F(WebIntegrationTest, AddressModuleCrossIntegration) {
                     std::string addrStr = domain;
 
                     // Test port scanning with address
-                    bool portOpen = scanPort(addrStr, 80, std::chrono::milliseconds(1000));
+                    bool portOpen =
+                        scanPort(addrStr, 80, std::chrono::milliseconds(1000));
                     // Result may vary, just ensure no crash
                     EXPECT_TRUE(portOpen || !portOpen);
 
@@ -616,16 +654,17 @@ TEST_F(WebIntegrationTest, AddressModuleCrossIntegration) {
             {"192.168.1.1", "IPv4"},
             {"2001:db8::1", "IPv6"},
             {"127.0.0.1", "IPv4"},
-            {"::1", "IPv6"}
-        };
+            {"::1", "IPv6"}};
 
         for (const auto& [addrStr, expectedType] : addressPairs) {
             auto addr = Address::createFromString(addrStr);
-            ASSERT_NE(addr, nullptr) << "Failed to create address from: " << addrStr;
+            ASSERT_NE(addr, nullptr)
+                << "Failed to create address from: " << addrStr;
             EXPECT_EQ(addr->getType(), expectedType);
 
             // Test address in HTTP context
-            if (checkInternetConnectivity() && (addrStr == "127.0.0.1" || addrStr == "::1")) {
+            if (checkInternetConnectivity() &&
+                (addrStr == "127.0.0.1" || addrStr == "::1")) {
                 // Test local addresses only to avoid external dependencies
                 HttpHeaderParser parser;
                 parser.setHeaderValue("Host", addrStr);
@@ -656,12 +695,14 @@ TEST_F(WebIntegrationTest, AddressModuleCrossIntegration) {
                         std::string domainResponse = curlDomain.perform();
                         EXPECT_FALSE(domainResponse.empty());
 
-                        // Note: Direct IP access to HTTPS sites often fails due to certificate mismatch
-                        // This is expected behavior, not a test failure
+                        // Note: Direct IP access to HTTPS sites often fails due
+                        // to certificate mismatch This is expected behavior,
+                        // not a test failure
 
                     } catch (const std::exception& e) {
-                        // HTTPS with IP addresses often fails due to certificate validation
-                        // This is expected and not a test failure
+                        // HTTPS with IP addresses often fails due to
+                        // certificate validation This is expected and not a
+                        // test failure
                     }
                 }
             }
@@ -686,9 +727,9 @@ TEST_F(WebIntegrationTest, ErrorRecoveryResilienceIntegration) {
         for (const auto& url : timeoutUrls) {
             curl.setUrl(url);
 
-            EXPECT_THROW({
-                std::string response = curl.perform();
-            }, std::exception) << "Should timeout for URL: " << url;
+            EXPECT_THROW(
+                { std::string response = curl.perform(); }, std::exception)
+                << "Should timeout for URL: " << url;
         }
 
         // Step 2: Test retry mechanism with download manager
@@ -709,13 +750,14 @@ TEST_F(WebIntegrationTest, ErrorRecoveryResilienceIntegration) {
 
             // Mix of valid and invalid URLs
             std::vector<std::string> mixedUrls = {
-                TEST_JSON_URL,  // Should succeed
+                TEST_JSON_URL,                     // Should succeed
                 "https://httpbin.org/status/404",  // Should fail
-                TEST_BYTES_URL,  // Should succeed
+                TEST_BYTES_URL,                    // Should succeed
             };
 
             for (size_t i = 0; i < mixedUrls.size(); ++i) {
-                fs::path outputFile = tempDir / ("retry_download_" + std::to_string(i) + ".dat");
+                fs::path outputFile =
+                    tempDir / ("retry_download_" + std::to_string(i) + ".dat");
                 dm.addTask(mixedUrls[i], outputFile.string());
             }
 
@@ -726,7 +768,9 @@ TEST_F(WebIntegrationTest, ErrorRecoveryResilienceIntegration) {
             while (dm.getActiveTaskCount() > 0) {
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
                 auto now = std::chrono::steady_clock::now();
-                if (std::chrono::duration_cast<std::chrono::seconds>(now - start).count() > 30) {
+                if (std::chrono::duration_cast<std::chrono::seconds>(now -
+                                                                     start)
+                        .count() > 30) {
                     break;
                 }
             }
@@ -744,32 +788,31 @@ TEST_F(WebIntegrationTest, ErrorRecoveryResilienceIntegration) {
             "HTTP/1.1 200\r\n\r\n",  // Missing reason phrase
             "HTTP/1.1\r\n\r\n",      // Missing status code
             "200 OK\r\n\r\n",        // Missing HTTP version
-            "",                       // Empty response
-            "Invalid response format"
-        };
+            "",                      // Empty response
+            "Invalid response format"};
 
         for (const auto& response : malformedResponses) {
             EXPECT_NO_THROW({
                 bool result = parser.parseResponse(response);
-                (void)result; // Suppress unused variable warning
+                (void)result;  // Suppress unused variable warning
                 // Should handle gracefully without crashing
-            }) << "Parser should handle malformed response gracefully: " << response;
+            }) << "Parser should handle malformed response gracefully: "
+               << response;
         }
 
         // Step 4: Test address resolution failures
-        std::vector<std::string> invalidDomains = {
-            "invalid-domain-12345.com",
-            "non-existent-host.invalid",
-            "..invalid.domain..",
-            ""
-        };
+        std::vector<std::string> invalidDomains = {"invalid-domain-12345.com",
+                                                   "non-existent-host.invalid",
+                                                   "..invalid.domain..", ""};
 
         for (const auto& domain : invalidDomains) {
             EXPECT_NO_THROW({
                 auto ips = getIPAddresses(domain);
                 // Should return empty vector for invalid domains
-                EXPECT_TRUE(ips.empty()) << "Should not resolve invalid domain: " << domain;
-            }) << "DNS resolution should handle invalid domains gracefully: " << domain;
+                EXPECT_TRUE(ips.empty())
+                    << "Should not resolve invalid domain: " << domain;
+            }) << "DNS resolution should handle invalid domains gracefully: "
+               << domain;
         }
 
         // Step 5: Test MIME type error handling
@@ -781,8 +824,7 @@ TEST_F(WebIntegrationTest, ErrorRecoveryResilienceIntegration) {
             "file.unknown_extension",
             ".hidden_file",
             "file with spaces.txt",
-            "file@with#special$chars%.dat"
-        };
+            "file@with#special$chars%.dat"};
 
         for (const auto& filename : problematicFiles) {
             try {
@@ -790,12 +832,14 @@ TEST_F(WebIntegrationTest, ErrorRecoveryResilienceIntegration) {
                 // Should handle gracefully, may or may not detect type
                 EXPECT_TRUE(mimeType.has_value() || !mimeType.has_value());
             } catch (const std::exception& e) {
-                FAIL() << "MIME type detection should not throw for filename: " << filename << ", error: " << e.what();
+                FAIL() << "MIME type detection should not throw for filename: "
+                       << filename << ", error: " << e.what();
             }
         }
 
     } catch (const std::exception& e) {
-        FAIL() << "Error recovery and resilience integration failed: " << e.what();
+        FAIL() << "Error recovery and resilience integration failed: "
+               << e.what();
     }
 }
 
@@ -820,14 +864,12 @@ TEST_F(WebIntegrationTest, RealWorldWorkflowIntegration) {
                 addressObjects.push_back(std::move(addr));
             }
         }
-        EXPECT_FALSE(addressObjects.empty()) << "Failed to create address objects";
+        EXPECT_FALSE(addressObjects.empty())
+            << "Failed to create address objects";
 
         // Step 3: Fetch multiple resources concurrently
-        std::vector<std::string> resourceUrls = {
-            TEST_JSON_URL,
-            TEST_HTML_URL,
-            TEST_GET_URL + "?param=test"
-        };
+        std::vector<std::string> resourceUrls = {TEST_JSON_URL, TEST_HTML_URL,
+                                                 TEST_GET_URL + "?param=test"};
 
         std::vector<std::pair<std::string, std::string>> fetchedContent;
 
@@ -848,7 +890,8 @@ TEST_F(WebIntegrationTest, RealWorldWorkflowIntegration) {
             }
         }
 
-        EXPECT_GT(fetchedContent.size(), 0) << "Should fetch at least one resource";
+        EXPECT_GT(fetchedContent.size(), 0)
+            << "Should fetch at least one resource";
 
         // Step 4: Process and analyze fetched content
         MimeTypes mimeTypes({}, true);
@@ -863,25 +906,35 @@ TEST_F(WebIntegrationTest, RealWorldWorkflowIntegration) {
                 extension = ".json";  // httpbin /get returns JSON
             }
 
-            auto [mimeType, charset] = mimeTypes.guessType("content" + extension);
-            EXPECT_TRUE(mimeType.has_value()) << "Should detect MIME type for: " << url;
+            auto [mimeType, charset] =
+                mimeTypes.guessType("content" + extension);
+            EXPECT_TRUE(mimeType.has_value())
+                << "Should detect MIME type for: " << url;
 
             // Parse as HTTP response (simulate)
-            parser.setHeaderValue("Content-Type", mimeType.value_or("text/plain"));
-            parser.setHeaderValue("Content-Length", std::to_string(content.length()));
+            parser.setHeaderValue("Content-Type",
+                                  mimeType.value_or("text/plain"));
+            parser.setHeaderValue("Content-Length",
+                                  std::to_string(content.length()));
             parser.setBody(content);
 
             // Validate content
-            EXPECT_GT(content.length(), 10) << "Content should not be empty for: " << url;
+            EXPECT_GT(content.length(), 10)
+                << "Content should not be empty for: " << url;
 
             // Save processed content
-            fs::path outputFile = tempDir / ("processed_" + std::to_string(std::hash<std::string>{}(url)) + extension);
+            fs::path outputFile =
+                tempDir /
+                ("processed_" + std::to_string(std::hash<std::string>{}(url)) +
+                 extension);
             std::ofstream file(outputFile);
             file << content;
             file.close();
 
-            EXPECT_TRUE(fs::exists(outputFile)) << "Should save processed content";
-            EXPECT_EQ(fs::file_size(outputFile), content.length()) << "Saved file should match content size";
+            EXPECT_TRUE(fs::exists(outputFile))
+                << "Should save processed content";
+            EXPECT_EQ(fs::file_size(outputFile), content.length())
+                << "Saved file should match content size";
         }
 
         // Step 5: Generate summary report
@@ -903,7 +956,8 @@ TEST_F(WebIntegrationTest, RealWorldWorkflowIntegration) {
 
         report.close();
 
-        EXPECT_TRUE(fs::exists(reportFile)) << "Should generate workflow report";
+        EXPECT_TRUE(fs::exists(reportFile))
+            << "Should generate workflow report";
         EXPECT_GT(fs::file_size(reportFile), 0) << "Report should not be empty";
 
     } catch (const std::exception& e) {

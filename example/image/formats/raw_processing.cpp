@@ -17,7 +17,7 @@
 
 /**
  * @brief Demonstrates RAW image format processing
- * 
+ *
  * This example shows how to process RAW image formats commonly used
  * in astronomical imaging and photography.
  */
@@ -39,10 +39,12 @@ int main() {
 
         // Create a simulated Bayer pattern image
         cv::Mat bayer_image = cv::Mat::zeros(512, 512, CV_16UC1);
-        cv::randu(bayer_image, cv::Scalar(0), cv::Scalar(4095)); // 12-bit depth
+        cv::randu(bayer_image, cv::Scalar(0),
+                  cv::Scalar(4095));  // 12-bit depth
 
         std::cout << "1. Loading RAW image (simulated Bayer pattern)\n";
-        std::cout << "   Image size: " << bayer_image.cols << "x" << bayer_image.rows << std::endl;
+        std::cout << "   Image size: " << bayer_image.cols << "x"
+                  << bayer_image.rows << std::endl;
         std::cout << "   Bit depth: 12-bit\n";
 
         // Debayering
@@ -52,17 +54,17 @@ int main() {
 
         // Convert to 8-bit for further processing
         cv::Mat image_8bit;
-        debayered.convertTo(image_8bit, CV_8UC3, 255.0/4095.0);
+        debayered.convertTo(image_8bit, CV_8UC3, 255.0 / 4095.0);
 
         // White balance correction (simplified)
         std::vector<cv::Mat> channels;
         cv::split(image_8bit, channels);
-        
+
         // Apply simple white balance gains
-        channels[0] *= 1.2; // Red gain
-        channels[1] *= 1.0; // Green gain (reference)
-        channels[2] *= 1.1; // Blue gain
-        
+        channels[0] *= 1.2;  // Red gain
+        channels[1] *= 1.0;  // Green gain (reference)
+        channels[2] *= 1.1;  // Blue gain
+
         cv::Mat white_balanced;
         cv::merge(channels, white_balanced);
         std::cout << "3. White balance correction applied\n";
@@ -84,7 +86,8 @@ int main() {
 
         std::cout << "\nRAW processing pipeline completed successfully!\n";
         std::cout << "Final image properties:\n";
-        std::cout << "- Size: " << final_image.cols << "x" << final_image.rows << std::endl;
+        std::cout << "- Size: " << final_image.cols << "x" << final_image.rows
+                  << std::endl;
         std::cout << "- Channels: " << final_image.channels() << std::endl;
         std::cout << "- Depth: " << final_image.depth() << std::endl;
 
@@ -93,9 +96,10 @@ int main() {
         return 1;
     }
 #else
-    std::cout << "OpenCV not available. RAW processing example cannot run." << std::endl;
+    std::cout << "OpenCV not available. RAW processing example cannot run."
+              << std::endl;
     std::cout << "This is a placeholder implementation." << std::endl;
-    
+
     std::cout << "\nRAW processing would typically include:\n";
     std::cout << "- Reading RAW files (CR2, NEF, ARW, etc.)\n";
     std::cout << "- Debayering algorithms\n";

@@ -34,11 +34,12 @@ and performance optimization techniques for component systems.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/iteration.hpp"
 #include "atom/components/core/registry.hpp"
+#include "atom/components/iteration.hpp"
 
-// Note: Registry and Component are in the global namespace, not atom::components
-// ComponentIterator is not available in the current implementation
+// Note: Registry and Component are in the global namespace, not
+// atom::components ComponentIterator is not available in the current
+// implementation
 
 /**
  * @brief Transform component with SIMD-friendly data layout
@@ -98,7 +99,9 @@ public:
     const Transform& getTransform() const { return transform_; }
 
     // Batch processing interface
-    void batchUpdate() { [[maybe_unused]] auto result = runCommand("update", {}); }
+    void batchUpdate() {
+        [[maybe_unused]] auto result = runCommand("update", {});
+    }
 
     float* getUpdateData() { return transform_.position; }
     size_t getUpdateDataSize() const { return 3; }
@@ -160,7 +163,9 @@ public:
     const PhysicsData& getPhysicsData() const { return physics_; }
 
     // Batch processing interface
-    void batchUpdate() { [[maybe_unused]] auto result = runCommand("updatePhysics", {}); }
+    void batchUpdate() {
+        [[maybe_unused]] auto result = runCommand("updatePhysics", {});
+    }
 
     float* getUpdateData() { return physics_.velocity; }
     size_t getUpdateDataSize() const { return 3; }
@@ -214,7 +219,8 @@ void demonstrateBasicIteration() {
 
         // Update all physics components
         for (auto& physicsComp : physics) {
-            [[maybe_unused]] auto result = physicsComp->runCommand("updatePhysics", {});
+            [[maybe_unused]] auto result =
+                physicsComp->runCommand("updatePhysics", {});
         }
     }
 

@@ -60,8 +60,8 @@ auto setDiskReadOnly(const std::string& path) -> bool;
  * @param scanDepth How many directory levels to scan (0 for unlimited)
  * @return A pair containing success status and number of suspicious files found
  */
-auto scanDiskForThreats(const std::string& path, int scanDepth = 0)
-    -> std::pair<bool, int>;
+auto scanDiskForThreats(const std::string& path,
+                        int scanDepth = 0) -> std::pair<bool, int>;
 
 }  // namespace atom::system
 

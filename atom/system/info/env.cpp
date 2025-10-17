@@ -456,8 +456,8 @@ auto Env::saveToFile(const std::filesystem::path& filePath,
     }
 }
 
-auto Env::loadFromFile(const std::filesystem::path& filePath, bool overwrite)
-    -> bool {
+auto Env::loadFromFile(const std::filesystem::path& filePath,
+                       bool overwrite) -> bool {
     spdlog::debug("Loading environment variables from file: {}, overwrite: {}",
                   filePath.string(), overwrite);
 
@@ -562,8 +562,8 @@ Env::ScopedEnv::~ScopedEnv() {
     }
 }
 
-auto Env::createScopedEnv(const String& key, const String& value)
-    -> std::shared_ptr<ScopedEnv> {
+auto Env::createScopedEnv(const String& key,
+                          const String& value) -> std::shared_ptr<ScopedEnv> {
     return std::make_shared<ScopedEnv>(key, value);
 }
 

@@ -1,14 +1,14 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
+#include <atomic>
 #include <chrono>
 #include <future>
 #include <random>
 #include <string>
 #include <string_view>
-#include <vector>
 #include <thread>
-#include <atomic>
-#include <spdlog/spdlog.h>
+#include <vector>
 #include "atom/algorithm/md5.hpp"
 
 using namespace atom::algorithm;
@@ -257,7 +257,8 @@ TEST_F(MD5Test, Performance) {
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    spdlog::info("MD5 hash of {} MB took {} ms", dataSize / (1024 * 1024), duration.count());
+    spdlog::info("MD5 hash of {} MB took {} ms", dataSize / (1024 * 1024),
+                 duration.count());
 
     // No specific performance requirement, just for information
     EXPECT_EQ(hash.length(), 32);
@@ -460,8 +461,8 @@ TEST_F(MD5Test, BinaryPatterns) {
 // Test memory-mapped file simulation
 TEST_F(MD5Test, LargeDataStreaming) {
     // Simulate processing very large data in chunks
-    const size_t chunk_size = 8192;  // 8KB chunks
-    const size_t total_chunks = 128; // Total 1MB
+    const size_t chunk_size = 8192;   // 8KB chunks
+    const size_t total_chunks = 128;  // Total 1MB
 
     // Generate consistent test data
     std::vector<std::byte> full_data;
@@ -469,7 +470,8 @@ TEST_F(MD5Test, LargeDataStreaming) {
 
     for (size_t chunk = 0; chunk < total_chunks; ++chunk) {
         for (size_t i = 0; i < chunk_size; ++i) {
-            full_data.push_back(std::byte{static_cast<unsigned char>((chunk + i) % 256)});
+            full_data.push_back(
+                std::byte{static_cast<unsigned char>((chunk + i) % 256)});
         }
     }
 
@@ -481,8 +483,8 @@ TEST_F(MD5Test, LargeDataStreaming) {
     std::vector<std::string> chunk_hashes;
     for (size_t chunk = 0; chunk < total_chunks; ++chunk) {
         size_t start = chunk * chunk_size;
-        std::vector<std::byte> chunk_data(full_data.begin() + start,
-                                         full_data.begin() + start + chunk_size);
+        std::vector<std::byte> chunk_data(
+            full_data.begin() + start, full_data.begin() + start + chunk_size);
         chunk_hashes.push_back(MD5::encryptBinary(chunk_data));
     }
 
@@ -530,9 +532,11 @@ TEST_F(MD5Test, VerificationEdgeCases) {
     std::string correct_hash = MD5::encrypt(input);
     std::string wrong_case_hash = correct_hash;
     if (wrong_case_hash[0] >= 'a' && wrong_case_hash[0] <= 'f') {
-        wrong_case_hash[0] = wrong_case_hash[0] - 'a' + 'A'; // Convert to uppercase
+        wrong_case_hash[0] =
+            wrong_case_hash[0] - 'a' + 'A';  // Convert to uppercase
     } else if (wrong_case_hash[0] >= 'A' && wrong_case_hash[0] <= 'F') {
-        wrong_case_hash[0] = wrong_case_hash[0] - 'A' + 'a'; // Convert to lowercase
+        wrong_case_hash[0] =
+            wrong_case_hash[0] - 'A' + 'a';  // Convert to lowercase
     }
 
     EXPECT_TRUE(MD5::verify(input, correct_hash));
@@ -544,6 +548,6 @@ TEST_F(MD5Test, VerificationEdgeCases) {
 
     // Test with invalid hex characters
     std::string invalid_hash = correct_hash;
-    invalid_hash[0] = 'g'; // Invalid hex character
+    invalid_hash[0] = 'g';  // Invalid hex character
     EXPECT_FALSE(MD5::verify(input, invalid_hash));
 }

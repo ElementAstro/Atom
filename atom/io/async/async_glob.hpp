@@ -569,5 +569,3 @@ inline AsyncGlob::Task<std::vector<fs::path>> AsyncGlob::glob_async(
 
 }  // namespace atom::io
 #endif // ATOM_USE_ASIO
-
-

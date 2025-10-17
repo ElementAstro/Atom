@@ -6,7 +6,8 @@
 #include <string>
 #include <unordered_map>
 
-// Minimal stub implementations since atom-extra-curl has API compatibility issues
+// Minimal stub implementations since atom-extra-curl has API compatibility
+// issues
 
 namespace atom::extra::curl {
 
@@ -22,13 +23,9 @@ public:
         headers["Set-Cookie"] = "session_id=abc123; Path=/";
     }
 
-    std::string text() const {
-        return body;
-    }
+    std::string text() const { return body; }
 
-    std::string url() const {
-        return "https://httpbin.org/cookies (stub)";
-    }
+    std::string url() const { return "https://httpbin.org/cookies (stub)"; }
 };
 
 // Stub Session class
@@ -58,14 +55,20 @@ public:
     }
 
     void set_cookie(const std::string& name, const std::string& value,
-                   const std::string& domain = "", const std::string& path = "",
-                   bool secure = false, bool http_only = false, int max_age = 0) {
+                    const std::string& domain = "",
+                    const std::string& path = "", bool secure = false,
+                    bool http_only = false, int max_age = 0) {
         std::cout << "Setting cookie (stub): " << name << " = " << value;
-        if (!domain.empty()) std::cout << " (domain: " << domain << ")";
-        if (!path.empty()) std::cout << " (path: " << path << ")";
-        if (secure) std::cout << " (secure)";
-        if (http_only) std::cout << " (httponly)";
-        if (max_age > 0) std::cout << " (max-age: " << max_age << ")";
+        if (!domain.empty())
+            std::cout << " (domain: " << domain << ")";
+        if (!path.empty())
+            std::cout << " (path: " << path << ")";
+        if (secure)
+            std::cout << " (secure)";
+        if (http_only)
+            std::cout << " (httponly)";
+        if (max_age > 0)
+            std::cout << " (max-age: " << max_age << ")";
         std::cout << std::endl;
 
         cookies_[name] = value;
@@ -77,7 +80,8 @@ public:
     }
 
     void set_follow_redirects(bool follow) {
-        std::cout << "Setting follow redirects (stub): " << (follow ? "true" : "false") << std::endl;
+        std::cout << "Setting follow redirects (stub): "
+                  << (follow ? "true" : "false") << std::endl;
         follow_redirects_ = follow;
     }
 
@@ -87,13 +91,16 @@ private:
     bool follow_redirects_ = false;
 };
 
-} // namespace atom::extra::curl
+}  // namespace atom::extra::curl
 
 using namespace atom::extra::curl;
 
 int main() {
-    std::cout << "=== CURL Cookie Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation due to API compatibility issues." << std::endl;
+    std::cout << "=== CURL Cookie Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation due to API compatibility "
+                 "issues."
+              << std::endl;
 
     try {
         // 1. Basic cookie handling
@@ -103,8 +110,10 @@ int main() {
             session.set_cookie_jar("cookies.txt");
 
             // First request to set cookies
-            auto response1 = session.get("https://httpbin.org/cookies/set/test_cookie/test_value");
-            std::cout << "First request status: " << response1.status_code << std::endl;
+            auto response1 = session.get(
+                "https://httpbin.org/cookies/set/test_cookie/test_value");
+            std::cout << "First request status: " << response1.status_code
+                      << std::endl;
 
             // Second request should include the cookie
             auto response2 = session.get("https://httpbin.org/cookies");
@@ -136,8 +145,11 @@ int main() {
                 session1.set_cookie_jar("persistent_cookies.txt");
                 session1.set_cookie("persistent_cookie", "persistent_value");
 
-                auto response = session1.get("https://httpbin.org/cookies/set/session_cookie/session_value");
-                std::cout << "First session status: " << response.status_code << std::endl;
+                auto response = session1.get(
+                    "https://httpbin.org/cookies/set/session_cookie/"
+                    "session_value");
+                std::cout << "First session status: " << response.status_code
+                          << std::endl;
             }
 
             // Second session - load cookies
@@ -157,7 +169,8 @@ int main() {
         {
             Session session;
             session.set_cookie("domain_cookie", "value1", "httpbin.org", "/");
-            session.set_cookie("path_cookie", "value2", "httpbin.org", "/cookies");
+            session.set_cookie("path_cookie", "value2", "httpbin.org",
+                               "/cookies");
 
             auto response = session.get("https://httpbin.org/cookies");
             if (response.status_code == 200) {
@@ -169,8 +182,10 @@ int main() {
         std::cout << "\n5. Secure and HttpOnly Cookies:" << std::endl;
         {
             Session session;
-            session.set_cookie("secure_cookie", "secure_value", "", "", true, false);
-            session.set_cookie("httponly_cookie", "httponly_value", "", "", false, true);
+            session.set_cookie("secure_cookie", "secure_value", "", "", true,
+                               false);
+            session.set_cookie("httponly_cookie", "httponly_value", "", "",
+                               false, true);
 
             auto response = session.get("https://httpbin.org/cookies");
             if (response.status_code == 200) {
@@ -182,14 +197,19 @@ int main() {
         std::cout << "\n6. Cookie Expiration:" << std::endl;
         {
             Session session;
-            session.set_cookie("temp_cookie", "temp_value", "", "", false, false, 3600); // 1 hour
-            session.set_cookie("expired_cookie", "expired_value", "", "", false, false, -1); // Expired
+            session.set_cookie("temp_cookie", "temp_value", "", "", false,
+                               false, 3600);  // 1 hour
+            session.set_cookie("expired_cookie", "expired_value", "", "", false,
+                               false, -1);  // Expired
 
             auto response = session.get("https://httpbin.org/cookies");
-            std::cout << "Response with expiring cookies: " << response.text() << std::endl;
+            std::cout << "Response with expiring cookies: " << response.text()
+                      << std::endl;
         }
 
-        std::cout << "\n=== CURL Cookie Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout
+            << "\n=== CURL Cookie Example Complete (Stub Implementation) ==="
+            << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error in CURL cookie examples: " << e.what() << std::endl;

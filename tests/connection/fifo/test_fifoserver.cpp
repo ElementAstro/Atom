@@ -1,10 +1,10 @@
-#include "atom/connection/fifoserver.hpp"
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <chrono>
 #include <filesystem>
 #include <future>
 #include <thread>
+#include "atom/connection/fifoserver.hpp"
 
 using namespace atom::connection;
 
@@ -76,13 +76,15 @@ TEST_F(FIFOServerTest, SendEmptyMessage) {
 
         char buffer[1024];
         ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
-        promise.set_value(bytes_read >= 0);  // Empty message should still trigger read
+        promise.set_value(bytes_read >=
+                          0);  // Empty message should still trigger read
         close(fd);
     });
 
     server_->sendMessage(emptyMessage);
 
-    ASSERT_EQ(future.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    ASSERT_EQ(future.wait_for(std::chrono::seconds(5)),
+              std::future_status::ready);
     EXPECT_TRUE(future.get());
 
     reader_thread.join();
@@ -119,7 +121,8 @@ TEST_F(FIFOServerTest, SendLargeMessage) {
 
     server_->sendMessage(largeMessage);
 
-    ASSERT_EQ(future.wait_for(std::chrono::seconds(10)), std::future_status::ready);
+    ASSERT_EQ(future.wait_for(std::chrono::seconds(10)),
+              std::future_status::ready);
     EXPECT_EQ(future.get(), largeMessage);
 
     reader_thread.join();
@@ -162,11 +165,13 @@ TEST_F(FIFOServerTest, MultipleMessages) {
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
     }
 
-    ASSERT_EQ(future.wait_for(std::chrono::seconds(10)), std::future_status::ready);
+    ASSERT_EQ(future.wait_for(std::chrono::seconds(10)),
+              std::future_status::ready);
     auto receivedMessages = future.get();
 
     EXPECT_EQ(receivedMessages.size(), messages.size());
-    for (size_t i = 0; i < messages.size() && i < receivedMessages.size(); ++i) {
+    for (size_t i = 0; i < messages.size() && i < receivedMessages.size();
+         ++i) {
         EXPECT_EQ(receivedMessages[i], messages[i]);
     }
 
@@ -216,7 +221,8 @@ TEST_F(FIFOServerTest, RestartServer) {
 
     server_->sendMessage(message);
 
-    ASSERT_EQ(future.wait_for(std::chrono::seconds(5)), std::future_status::ready);
+    ASSERT_EQ(future.wait_for(std::chrono::seconds(5)),
+              std::future_status::ready);
     EXPECT_EQ(future.get(), message);
 
     reader_thread.join();

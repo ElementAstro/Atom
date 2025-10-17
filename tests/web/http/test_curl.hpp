@@ -2,17 +2,17 @@
 #ifndef TEST_CURL_HPP
 #define TEST_CURL_HPP
 
+#include <curl/curl.h>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <curl/curl.h>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <string>
 
-#include <vector>
 #include <spdlog/spdlog.h>
+#include <vector>
 
 #include "atom/web/http/curl.hpp"
 
@@ -35,10 +35,12 @@ protected:
 
         // Create test files
         testFile = tempDir / "test.txt";
-        createTestFile(testFile, "This is a test file for upload testing.\nLine 2\nLine 3");
+        createTestFile(
+            testFile,
+            "This is a test file for upload testing.\nLine 2\nLine 3");
 
         largeTestFile = tempDir / "large_test.txt";
-        createLargeTestFile(largeTestFile, 1024); // 1KB file
+        createLargeTestFile(largeTestFile, 1024);  // 1KB file
 
         // Reset callback flags
         errorCallbackCalled = false;
@@ -63,7 +65,7 @@ protected:
 
     void createLargeTestFile(const fs::path& path, size_t sizeKB) {
         std::ofstream file(path);
-        std::string chunk(1024, 'A'); // 1KB of 'A' characters
+        std::string chunk(1024, 'A');  // 1KB of 'A' characters
         for (size_t i = 0; i < sizeKB; ++i) {
             file << chunk;
         }
@@ -108,9 +110,7 @@ protected:
 
 // Basic Constructor/Destructor Tests
 TEST_F(CurlWrapperTest, ConstructorDestructor) {
-    ASSERT_NO_THROW({
-        CurlWrapper curl;
-    });
+    ASSERT_NO_THROW({ CurlWrapper curl; });
 }
 
 // URL Setting Tests
@@ -181,9 +181,9 @@ TEST_F(CurlWrapperTest, SetTimeout) {
     CurlWrapper curl;
 
     ASSERT_NO_THROW(curl.setTimeout(30L));
-    ASSERT_NO_THROW(curl.setTimeout(0L));   // No timeout
-    ASSERT_NO_THROW(curl.setTimeout(1L));   // Very short timeout
-    ASSERT_NO_THROW(curl.setTimeout(3600L)); // Long timeout
+    ASSERT_NO_THROW(curl.setTimeout(0L));     // No timeout
+    ASSERT_NO_THROW(curl.setTimeout(1L));     // Very short timeout
+    ASSERT_NO_THROW(curl.setTimeout(3600L));  // Long timeout
 }
 
 // Follow Location Tests
@@ -234,10 +234,10 @@ TEST_F(CurlWrapperTest, SetProxy) {
 TEST_F(CurlWrapperTest, SetSSLOptions) {
     CurlWrapper curl;
 
-    ASSERT_NO_THROW(curl.setSSLOptions(true, true));   // Verify both
-    ASSERT_NO_THROW(curl.setSSLOptions(false, false)); // Verify neither
-    ASSERT_NO_THROW(curl.setSSLOptions(true, false));  // Verify peer only
-    ASSERT_NO_THROW(curl.setSSLOptions(false, true));  // Verify host only
+    ASSERT_NO_THROW(curl.setSSLOptions(true, true));    // Verify both
+    ASSERT_NO_THROW(curl.setSSLOptions(false, false));  // Verify neither
+    ASSERT_NO_THROW(curl.setSSLOptions(true, false));   // Verify peer only
+    ASSERT_NO_THROW(curl.setSSLOptions(false, true));   // Verify host only
 }
 
 // Download Speed Tests
@@ -465,7 +465,7 @@ TEST_F(CurlWrapperTest, DownloadSpeedLimit) {
     curl.setUrl(TEST_GET_URL);
     curl.setRequestMethod("GET");
     curl.setMaxDownloadSpeed(1024);  // 1KB/s limit
-    curl.setTimeout(30L);  // Longer timeout for speed-limited request
+    curl.setTimeout(30L);            // Longer timeout for speed-limited request
 
     auto start = std::chrono::high_resolution_clock::now();
     std::string response;
@@ -475,7 +475,8 @@ TEST_F(CurlWrapperTest, DownloadSpeedLimit) {
     EXPECT_FALSE(response.empty());
 
     // The request should take some time due to speed limiting
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     // Note: This is a rough test, actual timing may vary
     EXPECT_GT(duration.count(), 0);  // Should take some time
 }
@@ -562,9 +563,8 @@ TEST_F(CurlWrapperTest, CallbackExceptions) {
     curl.setTimeout(10L);
 
     // Set callbacks that throw exceptions
-    curl.setOnErrorCallback([](CURLcode) {
-        throw std::runtime_error("Error callback exception");
-    });
+    curl.setOnErrorCallback(
+        [](CURLcode) { throw std::runtime_error("Error callback exception"); });
 
     curl.setOnResponseCallback([](const std::string&) {
         throw std::runtime_error("Response callback exception");

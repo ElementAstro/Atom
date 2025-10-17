@@ -27,8 +27,6 @@ inline auto splitPath(const std::string& path) -> std::vector<std::string> {
     return parts;
 }
 
-
-
 #if INICPP_CONFIG_EVENT_LISTENERS
 /**
  * @brief Event types for section events.

@@ -157,8 +157,8 @@ public:
      */
     template <std::ranges::range Range>
         requires Hashable<std::ranges::range_value_t<Range>>
-    [[nodiscard]] auto computeSignature(const Range& set) const noexcept(false)
-        -> HashSignature {
+    [[nodiscard]] auto computeSignature(const Range& set) const
+        noexcept(false) -> HashSignature {
         if (hash_functions_.empty()) {
             return {};
         }

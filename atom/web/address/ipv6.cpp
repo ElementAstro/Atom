@@ -348,8 +348,8 @@ auto IPv6::getBroadcastAddress(std::string_view mask) const -> std::string {
     }
 }
 
-auto IPv6::isSameSubnet(const Address& other, std::string_view mask) const
-    -> bool {
+auto IPv6::isSameSubnet(const Address& other,
+                        std::string_view mask) const -> bool {
     try {
         if (other.getType() != "IPv6") {
             return false;

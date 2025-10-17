@@ -235,9 +235,8 @@ public:
      * @param filterFunc The function to use for filtering.
      * @return A vector of quotes that pass the filter.
      */
-    [[nodiscard]] auto filterQuotes(
-        std::function<bool(const Quote&)> filterFunc) const
-        -> std::vector<Quote>;
+    [[nodiscard]] auto filterQuotes(std::function<bool(const Quote&)>
+                                        filterFunc) const -> std::vector<Quote>;
 
     /**
      * @brief Gets a random quote from the collection.

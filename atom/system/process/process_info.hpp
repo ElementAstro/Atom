@@ -42,7 +42,7 @@ struct Process {
     int priority;          ///< 进程优先级
 
     std::chrono::system_clock::time_point startTime;  ///< 进程启动时间
-    ProcessResource resources;                        ///< 进程资源使用情况
+    ProcessResource resources;  ///< 进程资源使用情况
 
     std::unordered_map<std::string, std::string> environment;  ///< 进程环境变量
 

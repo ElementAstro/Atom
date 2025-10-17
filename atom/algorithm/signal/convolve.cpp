@@ -199,8 +199,8 @@ auto extend2D(const std::vector<std::vector<T>>& input, usize newRows,
 // Helper function to extend 2D vectors with proper padding modes
 template <typename T>
 auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
-           usize padBottom, usize padLeft, usize padRight, PaddingMode mode)
-    -> std::vector<std::vector<T>> {
+           usize padBottom, usize padLeft, usize padRight,
+           PaddingMode mode) -> std::vector<std::vector<T>> {
     if (input.empty() || input[0].empty()) {
         THROW_CONVOLVE_ERROR("Cannot pad empty matrix");
     }
@@ -312,11 +312,10 @@ auto pad2D(const std::vector<std::vector<T>>& input, usize padTop,
 }
 
 // Helper function to get output dimensions for convolution
-auto getConvolutionOutputDimensions(usize inputHeight, usize inputWidth,
-                                    usize kernelHeight, usize kernelWidth,
-                                    usize strideY, usize strideX,
-                                    PaddingMode paddingMode)
-    -> std::pair<usize, usize> {
+auto getConvolutionOutputDimensions(
+    usize inputHeight, usize inputWidth, usize kernelHeight, usize kernelWidth,
+    usize strideY, usize strideX,
+    PaddingMode paddingMode) -> std::pair<usize, usize> {
     if (kernelHeight > inputHeight || kernelWidth > inputWidth) {
         THROW_CONVOLVE_ERROR(
             "Kernel dimensions ({},{}) cannot be larger than input dimensions "
@@ -390,8 +389,8 @@ auto createCommandQueue(cl_context context) -> CLCmdQueuePtr {
     return CLCmdQueuePtr(commandQueue);
 }
 
-auto createProgram(const std::string& source, cl_context context)
-    -> CLProgramPtr {
+auto createProgram(const std::string& source,
+                   cl_context context) -> CLProgramPtr {
     const char* sourceStr = source.c_str();
     cl_int err;
     cl_program program =
@@ -613,8 +612,8 @@ auto deconvolve2DOpenCL(const std::vector<std::vector<f64>>& signal,
 // Function to convolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
 auto convolve2D(const std::vector<std::vector<f64>>& input,
-                const std::vector<std::vector<f64>>& kernel, i32 numThreads)
-    -> std::vector<std::vector<f64>> {
+                const std::vector<std::vector<f64>>& kernel,
+                i32 numThreads) -> std::vector<std::vector<f64>> {
     try {
         // 输入验证
         if (input.empty() || input[0].empty()) {
@@ -679,12 +678,18 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
                     // 使用SIMD加速内循环计算
                     for (usize ki = 0; ki < kernelRows; ++ki) {
                         for (usize kj = 0; kj < kernelCols; ++kj) {
-                            // Access input centered at (i, j) with kernel offset
-                            i32 ii = static_cast<i32>(i) + static_cast<i32>(ki) - static_cast<i32>(halfKernelRows);
-                            i32 jj = static_cast<i32>(j) + static_cast<i32>(kj) - static_cast<i32>(halfKernelCols);
+                            // Access input centered at (i, j) with kernel
+                            // offset
+                            i32 ii = static_cast<i32>(i) +
+                                     static_cast<i32>(ki) -
+                                     static_cast<i32>(halfKernelRows);
+                            i32 jj = static_cast<i32>(j) +
+                                     static_cast<i32>(kj) -
+                                     static_cast<i32>(halfKernelCols);
                             if (ii >= 0 && ii < static_cast<i32>(inputRows) &&
                                 jj >= 0 && jj < static_cast<i32>(inputCols)) {
-                                sum += input[static_cast<usize>(ii)][static_cast<usize>(jj)] *
+                                sum += input[static_cast<usize>(ii)]
+                                            [static_cast<usize>(jj)] *
                                        kernel[ki][kj];
                             }
                         }
@@ -693,12 +698,18 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
                     // 标准实现
                     for (usize ki = 0; ki < kernelRows; ++ki) {
                         for (usize kj = 0; kj < kernelCols; ++kj) {
-                            // Access input centered at (i, j) with kernel offset
-                            i32 ii = static_cast<i32>(i) + static_cast<i32>(ki) - static_cast<i32>(halfKernelRows);
-                            i32 jj = static_cast<i32>(j) + static_cast<i32>(kj) - static_cast<i32>(halfKernelCols);
+                            // Access input centered at (i, j) with kernel
+                            // offset
+                            i32 ii = static_cast<i32>(i) +
+                                     static_cast<i32>(ki) -
+                                     static_cast<i32>(halfKernelRows);
+                            i32 jj = static_cast<i32>(j) +
+                                     static_cast<i32>(kj) -
+                                     static_cast<i32>(halfKernelCols);
                             if (ii >= 0 && ii < static_cast<i32>(inputRows) &&
                                 jj >= 0 && jj < static_cast<i32>(inputCols)) {
-                                sum += input[static_cast<usize>(ii)][static_cast<usize>(jj)] *
+                                sum += input[static_cast<usize>(ii)]
+                                            [static_cast<usize>(jj)] *
                                        kernel[ki][kj];
                             }
                         }
@@ -739,8 +750,8 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
 // Function to deconvolve a 2D input with a 2D kernel using multithreading or
 // OpenCL
 auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
-                  const std::vector<std::vector<f64>>& kernel, i32 numThreads)
-    -> std::vector<std::vector<f64>> {
+                  const std::vector<std::vector<f64>>& kernel,
+                  i32 numThreads) -> std::vector<std::vector<f64>> {
     try {
         // 输入验证
         if (signal.empty() || signal[0].empty()) {
@@ -891,8 +902,8 @@ auto deconvolve2D(const std::vector<std::vector<f64>>& signal,
 }
 
 // 2D Discrete Fourier Transform (2D DFT)
-auto dfT2D(const std::vector<std::vector<f64>>& signal, i32 numThreads)
-    -> std::vector<std::vector<std::complex<f64>>> {
+auto dfT2D(const std::vector<std::vector<f64>>& signal,
+           i32 numThreads) -> std::vector<std::vector<std::complex<f64>>> {
     const usize M = signal.size();
     const usize N = signal[0].size();
     std::vector<std::vector<std::complex<f64>>> frequency(
@@ -1094,8 +1105,8 @@ auto idfT2D(const std::vector<std::vector<std::complex<f64>>>& spectrum,
 }
 
 // Function to generate a Gaussian kernel
-auto generateGaussianKernel(i32 size, f64 sigma)
-    -> std::vector<std::vector<f64>> {
+auto generateGaussianKernel(i32 size,
+                            f64 sigma) -> std::vector<std::vector<f64>> {
     std::vector<std::vector<f64>> kernel(
         static_cast<usize>(size), std::vector<f64>(static_cast<usize>(size)));
     f64 sum = 0.0;
@@ -1195,10 +1206,14 @@ auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
 
                     for (i32 m = 0; m < SIMD_WIDTH; ++m) {
                         // Center the kernel at position (i, j+m)
-                        i32 x = I32::clamp(static_cast<i32>(i) + static_cast<i32>(k) - static_cast<i32>(kernelRadius), 0,
-                                           static_cast<i32>(imageHeight) - 1);
-                        i32 y = I32::clamp(static_cast<i32>(j) + static_cast<i32>(l) + m - static_cast<i32>(kernelRadius), 0,
-                                           static_cast<i32>(imageWidth) - 1);
+                        i32 x = I32::clamp(
+                            static_cast<i32>(i) + static_cast<i32>(k) -
+                                static_cast<i32>(kernelRadius),
+                            0, static_cast<i32>(imageHeight) - 1);
+                        i32 y = I32::clamp(static_cast<i32>(j) +
+                                               static_cast<i32>(l) + m -
+                                               static_cast<i32>(kernelRadius),
+                                           0, static_cast<i32>(imageWidth) - 1);
                         tempBuffer[m] =
                             image[static_cast<usize>(x)][static_cast<usize>(y)];
                     }
@@ -1224,10 +1239,14 @@ auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
             for (usize k = 0; k < kernelSize; ++k) {
                 for (usize l = 0; l < kernelSize; ++l) {
                     // Center the kernel at position (i, j)
-                    i32 x = I32::clamp(static_cast<i32>(i) + static_cast<i32>(k) - static_cast<i32>(kernelRadius), 0,
-                                       static_cast<i32>(imageHeight) - 1);
-                    i32 y = I32::clamp(static_cast<i32>(j) + static_cast<i32>(l) - static_cast<i32>(kernelRadius), 0,
-                                       static_cast<i32>(imageWidth) - 1);
+                    i32 x =
+                        I32::clamp(static_cast<i32>(i) + static_cast<i32>(k) -
+                                       static_cast<i32>(kernelRadius),
+                                   0, static_cast<i32>(imageHeight) - 1);
+                    i32 y =
+                        I32::clamp(static_cast<i32>(j) + static_cast<i32>(l) -
+                                       static_cast<i32>(kernelRadius),
+                                   0, static_cast<i32>(imageWidth) - 1);
                     sum += image[static_cast<usize>(x)][static_cast<usize>(y)] *
                            kernel[k][l];
                 }

@@ -24,9 +24,7 @@ protected:
         engine->addDocument(doc3);
     }
 
-    void TearDown() override {
-        engine.reset();
-    }
+    void TearDown() override { engine.reset(); }
 
     std::unique_ptr<SearchEngine> engine;
 };
@@ -72,24 +70,30 @@ TEST_F(SearchEngineTest, SearchByTag) {
 TEST_F(SearchEngineTest, FuzzySearchByTag) {
     // First test exact search to ensure tags are indexed
     auto exactResult = engine->searchByTag("world");
-    EXPECT_EQ(exactResult.size(), 2) << "Exact search for 'world' should find 2 documents";
+    EXPECT_EQ(exactResult.size(), 2)
+        << "Exact search for 'world' should find 2 documents";
 
     // If exact search fails, skip fuzzy search
     if (exactResult.size() != 2) {
         GTEST_SKIP() << "Exact search failed, skipping fuzzy search test";
     }
 
-    // Test fuzzy search with tolerance 1 - "wrold" vs "world" has distance 2, so should not match
+    // Test fuzzy search with tolerance 1 - "wrold" vs "world" has distance 2,
+    // so should not match
     auto result1 = engine->fuzzySearchByTag("wrold", 1);
-    EXPECT_EQ(result1.size(), 0) << "Fuzzy search for 'wrold' with tolerance 1 should find 0 documents (distance=2)";
+    EXPECT_EQ(result1.size(), 0) << "Fuzzy search for 'wrold' with tolerance 1 "
+                                    "should find 0 documents (distance=2)";
 
     // Test fuzzy search with tolerance 2 - should match "world"
     auto result2 = engine->fuzzySearchByTag("wrold", 2);
-    EXPECT_EQ(result2.size(), 2) << "Fuzzy search for 'wrold' with tolerance 2 should find 2 documents";
+    EXPECT_EQ(result2.size(), 2)
+        << "Fuzzy search for 'wrold' with tolerance 2 should find 2 documents";
 
-    // Test fuzzy search with tolerance 1 for a closer match - "worl" vs "world" has distance 1
+    // Test fuzzy search with tolerance 1 for a closer match - "worl" vs "world"
+    // has distance 1
     auto result3 = engine->fuzzySearchByTag("worl", 1);
-    EXPECT_EQ(result3.size(), 2) << "Fuzzy search for 'worl' with tolerance 1 should find 2 documents";
+    EXPECT_EQ(result3.size(), 2)
+        << "Fuzzy search for 'worl' with tolerance 1 should find 2 documents";
 }
 
 TEST_F(SearchEngineTest, SearchByTags) {
@@ -97,13 +101,16 @@ TEST_F(SearchEngineTest, SearchByTags) {
     auto greetingResult = engine->searchByTag("greeting");
     auto worldResult = engine->searchByTag("world");
 
-    EXPECT_GT(greetingResult.size(), 0) << "Should find documents with 'greeting' tag";
-    EXPECT_GT(worldResult.size(), 0) << "Should find documents with 'world' tag";
+    EXPECT_GT(greetingResult.size(), 0)
+        << "Should find documents with 'greeting' tag";
+    EXPECT_GT(worldResult.size(), 0)
+        << "Should find documents with 'world' tag";
 
     // Now test multi-tag search (documents that have ALL specified tags)
     auto result = engine->searchByTags({"greeting", "world"});
     // Only doc1 has both "greeting" and "world" tags
-    EXPECT_EQ(result.size(), 1) << "Should find 1 document with both 'greeting' and 'world' tags";
+    EXPECT_EQ(result.size(), 1)
+        << "Should find 1 document with both 'greeting' and 'world' tags";
     if (result.size() > 0) {
         EXPECT_EQ(result[0]->getId(), "1");
     }
@@ -119,7 +126,8 @@ TEST_F(SearchEngineTest, BooleanSearch) {
     auto result = engine->booleanSearch("Hello AND world");
     // Only doc1 has both "Hello" and "world" in content/tags
     // If getting 2 results, the boolean logic might not be working correctly
-    EXPECT_EQ(result.size(), 1) << "Boolean search 'Hello AND world' should find exactly 1 document";
+    EXPECT_EQ(result.size(), 1)
+        << "Boolean search 'Hello AND world' should find exactly 1 document";
     if (result.size() > 0) {
         EXPECT_EQ(result[0]->getId(), "1");
     }
@@ -129,7 +137,8 @@ TEST_F(SearchEngineTest, AutoComplete) {
     auto suggestions = engine->autoComplete("wo");
     ASSERT_GE(suggestions.size(), 1);
     // Check if "world" is in suggestions
-    bool found_world = std::find(suggestions.begin(), suggestions.end(), "world") != suggestions.end();
+    bool found_world = std::find(suggestions.begin(), suggestions.end(),
+                                 "world") != suggestions.end();
     ASSERT_TRUE(found_world);
 }
 
@@ -162,11 +171,13 @@ TEST_F(SearchEngineTest, EdgeCases) {
     auto empty_result = engine->searchByContent("");
     ASSERT_EQ(empty_result.size(), 0);
 
-    // Test fuzzy search with high tolerance - with high tolerance, it might match anything
-    // So we just test that it doesn't crash and returns a reasonable number
+    // Test fuzzy search with high tolerance - with high tolerance, it might
+    // match anything So we just test that it doesn't crash and returns a
+    // reasonable number
     auto fuzzy_result = engine->fuzzySearchByTag("xyz", 10);
     EXPECT_GE(fuzzy_result.size(), 0) << "Fuzzy search should not crash";
-    EXPECT_LE(fuzzy_result.size(), 10) << "Fuzzy search should not return excessive results";
+    EXPECT_LE(fuzzy_result.size(), 10)
+        << "Fuzzy search should not return excessive results";
 }
 
 TEST_F(SearchEngineTest, ConcurrentOperations) {
@@ -178,8 +189,8 @@ TEST_F(SearchEngineTest, ConcurrentOperations) {
         threads.emplace_back([this, i, &success_count]() {
             try {
                 Document doc("thread_" + std::to_string(i),
-                           "Content " + std::to_string(i),
-                           {"thread", "test"});
+                             "Content " + std::to_string(i),
+                             {"thread", "test"});
                 engine->addDocument(doc);
                 success_count.fetch_add(1);
             } catch (...) {

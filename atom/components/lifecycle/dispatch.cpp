@@ -72,10 +72,9 @@ void CommandDispatcher::checkPostcondition(const Command& cmd,
     }
 }
 
-auto CommandDispatcher::executeCommand(const Command& cmd,
-                                       const std::string& name,
-                                       const std::vector<std::any>& args)
-    -> std::any {
+auto CommandDispatcher::executeCommand(
+    const Command& cmd, const std::string& name,
+    const std::vector<std::any>& args) -> std::any {
     // spdlog::trace("Entering function: {}", __func__); // Replaced
     // LOG_SCOPE_FUNCTION
 
@@ -108,8 +107,8 @@ auto CommandDispatcher::executeCommand(const Command& cmd,
 
 auto CommandDispatcher::executeWithTimeout(
     const Command& cmd, const std::string& name,
-    const std::vector<std::any>& args, const std::chrono::milliseconds& timeout)
-    -> std::any {
+    const std::vector<std::any>& args,
+    const std::chrono::milliseconds& timeout) -> std::any {
     // spdlog::trace("Entering function: {}", __func__); // Replaced
     // LOG_SCOPE_FUNCTION
 
@@ -163,10 +162,9 @@ auto CommandDispatcher::executeWithTimeout(
     }
 }
 
-auto CommandDispatcher::executeWithoutTimeout(const Command& cmd,
-                                              const std::string& name,
-                                              const std::vector<std::any>& args)
-    -> std::any {
+auto CommandDispatcher::executeWithoutTimeout(
+    const Command& cmd, const std::string& name,
+    const std::vector<std::any>& args) -> std::any {
     // spdlog::trace("Entering function: {}", __func__); // Replaced
     // LOG_SCOPE_FUNCTION Check for nested arguments
     if (!args.empty() && args.size() == 1 &&
@@ -180,13 +178,13 @@ auto CommandDispatcher::executeWithoutTimeout(const Command& cmd,
     return executeFunctions(cmd, args);
 }
 
-auto CommandDispatcher::executeFunctions(const Command& cmd,
-                                         const std::vector<std::any>& args)
-    -> std::any {
+auto CommandDispatcher::executeFunctions(
+    const Command& cmd, const std::vector<std::any>& args) -> std::any {
     // We already selected the correct overload earlier by signature.
     // Directly invoke the stored proxy function and surface any type errors.
     try {
-        spdlog::info("Executing function for command (skipping hash validation)");
+        spdlog::info(
+            "Executing function for command (skipping hash validation)");
         return std::invoke(cmd.func, const_cast<std::vector<std::any>&>(args));
     } catch (const std::bad_any_cast& e) {
         spdlog::error("Failed to call function: {}", e.what());
@@ -626,10 +624,10 @@ CommandDispatcher::getCommandArgAndReturnType(std::string_view name) const {
     return {};
 }
 
-auto CommandDispatcher::dispatchHelper(const std::string& name,
-                                       const std::vector<std::any>& args)
-    -> std::any {
+auto CommandDispatcher::dispatchHelper(
+    const std::string& name, const std::vector<std::any>& args) -> std::any {
     // Delegate to the template-based dispatcher which uses signature matching
-    // and default argument completion for consistent behavior across call sites.
+    // and default argument completion for consistent behavior across call
+    // sites.
     return dispatchHelper<std::vector<std::any>>(name, args);
 }

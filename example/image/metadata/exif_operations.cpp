@@ -7,11 +7,11 @@
  * License: GPL3
  */
 
-#include <iostream>
-#include <string>
-#include <map>
-#include <vector>
 #include <cmath>
+#include <iostream>
+#include <map>
+#include <string>
+#include <vector>
 
 #ifdef HAVE_OPENCV
 #include <opencv2/opencv.hpp>
@@ -19,7 +19,7 @@
 
 /**
  * @brief Demonstrates EXIF metadata operations
- * 
+ *
  * This example shows how to read, write, and manipulate EXIF metadata
  * in image files, which is crucial for astronomical and scientific imaging.
  */
@@ -75,8 +75,7 @@ int main() {
         {"Contrast", "0"},
         {"Saturation", "0"},
         {"Sharpness", "0"},
-        {"SubjectDistanceRange", "3"}
-    };
+        {"SubjectDistanceRange", "3"}};
 
     // Add astronomical-specific EXIF fields
     exif_data["ObjectName"] = "M31 Andromeda Galaxy";
@@ -102,7 +101,8 @@ int main() {
 
     std::cout << "1. Reading EXIF metadata (simulated):\n";
     std::cout << "   Basic camera information:\n";
-    std::cout << "   - Camera: " << exif_data["Make"] << " " << exif_data["Model"] << std::endl;
+    std::cout << "   - Camera: " << exif_data["Make"] << " "
+              << exif_data["Model"] << std::endl;
     std::cout << "   - Date/Time: " << exif_data["DateTime"] << std::endl;
     std::cout << "   - Exposure: " << exif_data["ExposureTime"] << "s\n";
     std::cout << "   - ISO: " << exif_data["ISO"] << std::endl;
@@ -112,68 +112,78 @@ int main() {
     std::cout << "   - Object: " << exif_data["ObjectName"] << std::endl;
     std::cout << "   - Telescope: " << exif_data["TelescopeModel"] << std::endl;
     std::cout << "   - Filter: " << exif_data["Filter"] << std::endl;
-    std::cout << "   - Coordinates: RA=" << exif_data["RA"] << ", DEC=" << exif_data["DEC"] << std::endl;
+    std::cout << "   - Coordinates: RA=" << exif_data["RA"]
+              << ", DEC=" << exif_data["DEC"] << std::endl;
     std::cout << "   - Sky Quality: " << exif_data["SkyQuality"] << std::endl;
 
     std::cout << "\n2. EXIF data validation:\n";
-    
+
     // Validate essential fields
     std::vector<std::string> required_fields = {
-        "Make", "Model", "DateTime", "ExposureTime", "ISO", "ImageWidth", "ImageHeight"
-    };
-    
+        "Make", "Model",      "DateTime",   "ExposureTime",
+        "ISO",  "ImageWidth", "ImageHeight"};
+
     bool validation_passed = true;
     for (const auto& field : required_fields) {
-        if (exif_data.find(field) == exif_data.end() || exif_data[field].empty()) {
+        if (exif_data.find(field) == exif_data.end() ||
+            exif_data[field].empty()) {
             std::cout << "   ❌ Missing required field: " << field << std::endl;
             validation_passed = false;
         } else {
-            std::cout << "   ✓ " << field << ": " << exif_data[field] << std::endl;
+            std::cout << "   ✓ " << field << ": " << exif_data[field]
+                      << std::endl;
         }
     }
-    
+
     if (validation_passed) {
         std::cout << "   All required EXIF fields are present.\n";
     }
 
     std::cout << "\n3. EXIF data modification:\n";
-    
+
     // Update processing information
     exif_data["Software"] = "Atom Image Processing v1.1";
     exif_data["ProcessingDate"] = "2024:10:03 11:00:00";
-    exif_data["ProcessingSteps"] = "Dark subtraction, Flat correction, Calibration";
+    exif_data["ProcessingSteps"] =
+        "Dark subtraction, Flat correction, Calibration";
     exif_data["StackedFrames"] = "15";
     exif_data["TotalExposure"] = "450s";
-    
+
     std::cout << "   Updated processing information:\n";
     std::cout << "   - Software: " << exif_data["Software"] << std::endl;
-    std::cout << "   - Processing Date: " << exif_data["ProcessingDate"] << std::endl;
-    std::cout << "   - Stacked Frames: " << exif_data["StackedFrames"] << std::endl;
-    std::cout << "   - Total Exposure: " << exif_data["TotalExposure"] << std::endl;
+    std::cout << "   - Processing Date: " << exif_data["ProcessingDate"]
+              << std::endl;
+    std::cout << "   - Stacked Frames: " << exif_data["StackedFrames"]
+              << std::endl;
+    std::cout << "   - Total Exposure: " << exif_data["TotalExposure"]
+              << std::endl;
 
     std::cout << "\n4. EXIF data analysis:\n";
-    
+
     // Analyze exposure settings
-    double exposure_time = std::stod(exif_data["ExposureTime"].substr(0, exif_data["ExposureTime"].find('/')));
+    double exposure_time = std::stod(exif_data["ExposureTime"].substr(
+        0, exif_data["ExposureTime"].find('/')));
     int iso_value = std::stoi(exif_data["ISO"]);
-    double f_number = std::stod(exif_data["FNumber"].substr(0, exif_data["FNumber"].find('/'))) / 10.0;
-    
+    double f_number = std::stod(exif_data["FNumber"].substr(
+                          0, exif_data["FNumber"].find('/'))) /
+                      10.0;
+
     // Calculate exposure value (EV)
     double ev = std::log2((f_number * f_number) / exposure_time);
-    
+
     std::cout << "   Exposure analysis:\n";
     std::cout << "   - Exposure time: " << exposure_time << " seconds\n";
     std::cout << "   - ISO: " << iso_value << std::endl;
     std::cout << "   - F-number: f/" << f_number << std::endl;
     std::cout << "   - Exposure Value (EV): " << ev << std::endl;
-    
+
     // Assess settings for astronomical imaging
     if (exposure_time >= 30.0) {
         std::cout << "   ✓ Good exposure time for deep-sky imaging\n";
     } else {
         std::cout << "   ⚠ Short exposure time - consider longer exposures\n";
     }
-    
+
     if (iso_value <= 1600) {
         std::cout << "   ✓ Reasonable ISO for low noise\n";
     } else {
@@ -181,7 +191,7 @@ int main() {
     }
 
     std::cout << "\n5. EXIF data export:\n";
-    
+
     // Simulate writing EXIF data to different formats
     std::cout << "   Exporting EXIF data to various formats:\n";
     std::cout << "   - JPEG with embedded EXIF ✓\n";
@@ -202,14 +212,16 @@ int main() {
         // Create a sample image
         cv::Mat image = cv::Mat::zeros(512, 512, CV_16UC1);
         cv::randu(image, cv::Scalar(1000), cv::Scalar(4000));
-        
+
         // Add some astronomical features
         cv::circle(image, cv::Point(256, 256), 50, cv::Scalar(8000), -1);
-        
-        std::cout << "   Image created with dimensions: " << image.cols << "x" << image.rows << std::endl;
+
+        std::cout << "   Image created with dimensions: " << image.cols << "x"
+                  << image.rows << std::endl;
         std::cout << "   Bit depth: " << image.depth() << std::endl;
-        std::cout << "   EXIF metadata would be embedded during save operation\n";
-        
+        std::cout
+            << "   EXIF metadata would be embedded during save operation\n";
+
     } catch (const cv::Exception& e) {
         std::cerr << "   OpenCV error: " << e.what() << std::endl;
     }

@@ -147,9 +147,12 @@ TEST(RegistryTest, GetAllComponentNames) {
     EXPECT_GE(names.size(), 3);
 
     // Check that our components are in the list
-    bool hasComp1 = std::find(names.begin(), names.end(), "Comp1") != names.end();
-    bool hasComp2 = std::find(names.begin(), names.end(), "Comp2") != names.end();
-    bool hasComp3 = std::find(names.begin(), names.end(), "Comp3") != names.end();
+    bool hasComp1 =
+        std::find(names.begin(), names.end(), "Comp1") != names.end();
+    bool hasComp2 =
+        std::find(names.begin(), names.end(), "Comp2") != names.end();
+    bool hasComp3 =
+        std::find(names.begin(), names.end(), "Comp3") != names.end();
 
     EXPECT_TRUE(hasComp1);
     EXPECT_TRUE(hasComp2);
@@ -179,7 +182,8 @@ TEST(RegistryTest, RemoveComponent) {
     EXPECT_TRUE(registry.removeComponent("ToRemove"));
 
     // Should no longer exist
-    EXPECT_THROW(registry.getComponent("ToRemove"), Registry::RegistryException);
+    EXPECT_THROW(registry.getComponent("ToRemove"),
+                 Registry::RegistryException);
 }
 
 // ============================================================================
@@ -205,14 +209,14 @@ TEST(RegistryTest, MultipleDependencies) {
     registry.cleanupAll();
     std::vector<std::string> init_order;
 
-    registry.addInitializer("Root",
-        [&](Component&) { init_order.push_back("Root"); }, []() {});
-    registry.addInitializer("Dep1",
-        [&](Component&) { init_order.push_back("Dep1"); }, []() {});
-    registry.addInitializer("Dep2",
-        [&](Component&) { init_order.push_back("Dep2"); }, []() {});
-    registry.addInitializer("Dep3",
-        [&](Component&) { init_order.push_back("Dep3"); }, []() {});
+    registry.addInitializer(
+        "Root", [&](Component&) { init_order.push_back("Root"); }, []() {});
+    registry.addInitializer(
+        "Dep1", [&](Component&) { init_order.push_back("Dep1"); }, []() {});
+    registry.addInitializer(
+        "Dep2", [&](Component&) { init_order.push_back("Dep2"); }, []() {});
+    registry.addInitializer(
+        "Dep3", [&](Component&) { init_order.push_back("Dep3"); }, []() {});
 
     // Root depends on all three
     registry.addDependency("Root", "Dep1");
@@ -231,14 +235,14 @@ TEST(RegistryTest, DiamondDependency) {
     std::vector<std::string> init_order;
 
     // Diamond: A depends on B and C, both B and C depend on D
-    registry.addInitializer("A",
-        [&](Component&) { init_order.push_back("A"); }, []() {});
-    registry.addInitializer("B",
-        [&](Component&) { init_order.push_back("B"); }, []() {});
-    registry.addInitializer("C",
-        [&](Component&) { init_order.push_back("C"); }, []() {});
-    registry.addInitializer("D",
-        [&](Component&) { init_order.push_back("D"); }, []() {});
+    registry.addInitializer(
+        "A", [&](Component&) { init_order.push_back("A"); }, []() {});
+    registry.addInitializer(
+        "B", [&](Component&) { init_order.push_back("B"); }, []() {});
+    registry.addInitializer(
+        "C", [&](Component&) { init_order.push_back("C"); }, []() {});
+    registry.addInitializer(
+        "D", [&](Component&) { init_order.push_back("D"); }, []() {});
 
     registry.addDependency("A", "B");
     registry.addDependency("A", "C");
@@ -258,7 +262,8 @@ TEST(RegistryTest, DiamondDependency) {
 
 TEST(RegistryTest, GetNonExistentComponent) {
     auto& registry = Registry::instance();
-    EXPECT_THROW(registry.getComponent("NonExistent"), Registry::RegistryException);
+    EXPECT_THROW(registry.getComponent("NonExistent"),
+                 Registry::RegistryException);
 }
 
 TEST(RegistryTest, AddDependencyToNonExistentComponent) {
@@ -286,8 +291,8 @@ TEST(RegistryTest, InitializeAllWithForceReload) {
     registry.cleanupAll();
 
     std::atomic<int> initCount{0};
-    registry.addInitializer("ReloadTest",
-        [&](Component&) { initCount++; }, []() {});
+    registry.addInitializer(
+        "ReloadTest", [&](Component&) { initCount++; }, []() {});
 
     registry.initializeAll(false);
     EXPECT_EQ(initCount.load(), 1);
@@ -306,9 +311,8 @@ TEST(RegistryTest, CleanupAllWithForce) {
     registry.cleanupAll();
 
     std::atomic<int> cleanupCount{0};
-    registry.addInitializer("CleanupTest",
-        [](Component&) {},
-        [&]() { cleanupCount++; });
+    registry.addInitializer(
+        "CleanupTest", [](Component&) {}, [&]() { cleanupCount++; });
 
     registry.initializeAll();
     registry.cleanupAll(false);
@@ -487,7 +491,8 @@ TEST(RegistryTest, HasCircularDependencies) {
 
     // Adding reverse dependency creates circular dependency
     // This should be caught by addDependency
-    EXPECT_THROW(registry.addDependency("CircB", "CircA"), atom::error::RuntimeError);
+    EXPECT_THROW(registry.addDependency("CircB", "CircA"),
+atom::error::RuntimeError);
 }
 
 TEST(RegistryTest, GetLifecycleEvents) {

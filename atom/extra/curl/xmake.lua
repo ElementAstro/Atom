@@ -48,25 +48,25 @@ local headers = {
 
 target("atom-extra-curl")
     set_kind("static")
-    
+
     -- Add files
     for _, src in ipairs(sources) do
         add_files(src)
     end
-    
+
     for _, hdr in ipairs(headers) do
         add_headerfiles(hdr)
     end
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("libcurl")
-    
+
     -- Set C++ standard
     set_languages("c++20")
-    
+
     -- Installation
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -77,4 +77,3 @@ target("atom-extra-curl")
             os.cp(hdr, headerdir)
         end
     end)
-

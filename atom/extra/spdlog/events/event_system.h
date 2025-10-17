@@ -7,7 +7,6 @@
 #include <vector>
 #include "../core/types.h"
 
-
 namespace modern_log {
 
 /**

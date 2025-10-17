@@ -5,8 +5,8 @@
 #include <functional>
 #include <memory>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "../core/image_blob.hpp"
 #include "../io/format_detector.hpp"
@@ -47,7 +47,8 @@ struct ProcessingOptions {
 
 /**
  * @class ImageProcessor
- * @brief High-performance image processing pipeline with format conversion and filtering
+ * @brief High-performance image processing pipeline with format conversion and
+ * filtering
  */
 class ImageProcessor {
 public:
@@ -55,7 +56,8 @@ public:
      * @brief Construct a new ImageProcessor
      * @param options Processing configuration options
      */
-    explicit ImageProcessor(const ProcessingOptions& options = ProcessingOptions{});
+    explicit ImageProcessor(
+        const ProcessingOptions& options = ProcessingOptions{});
 
     /**
      * @brief Destructor
@@ -76,18 +78,20 @@ public:
      * @param targetFormat Target format
      * @return Converted image blob
      */
-    [[nodiscard]] blob convertFormat(const blob& input, ImageFormat targetFormat) const;
+    [[nodiscard]] blob convertFormat(const blob& input,
+                                     ImageFormat targetFormat) const;
 
     /**
      * @brief Resize image with various algorithms
      * @param input Input image blob
      * @param newWidth Target width
      * @param newHeight Target height
-     * @param algorithm Resize algorithm ("nearest", "linear", "cubic", "lanczos")
+     * @param algorithm Resize algorithm ("nearest", "linear", "cubic",
+     * "lanczos")
      * @return Resized image blob
      */
     [[nodiscard]] blob resize(const blob& input, int newWidth, int newHeight,
-                             const std::string& algorithm = "cubic") const;
+                              const std::string& algorithm = "cubic") const;
 
     /**
      * @brief Rotate image by specified angle
@@ -96,7 +100,8 @@ public:
      * @param expandCanvas Whether to expand canvas to fit rotated image
      * @return Rotated image blob
      */
-    [[nodiscard]] blob rotate(const blob& input, double angle, bool expandCanvas = true) const;
+    [[nodiscard]] blob rotate(const blob& input, double angle,
+                              bool expandCanvas = true) const;
 
     /**
      * @brief Crop image to specified rectangle
@@ -107,7 +112,8 @@ public:
      * @param height Height of crop area
      * @return Cropped image blob
      */
-    [[nodiscard]] blob crop(const blob& input, int x, int y, int width, int height) const;
+    [[nodiscard]] blob crop(const blob& input, int x, int y, int width,
+                            int height) const;
 
     /**
      * @brief Apply filter to image
@@ -116,8 +122,9 @@ public:
      * @param parameters Filter-specific parameters
      * @return Filtered image blob
      */
-    [[nodiscard]] blob applyFilter(const blob& input, FilterType filterType,
-                                  const std::unordered_map<std::string, double>& parameters = {}) const;
+    [[nodiscard]] blob applyFilter(
+        const blob& input, FilterType filterType,
+        const std::unordered_map<std::string, double>& parameters = {}) const;
 
     /**
      * @brief Apply custom convolution kernel
@@ -127,8 +134,8 @@ public:
      * @return Filtered image blob
      */
     [[nodiscard]] blob applyCustomKernel(const blob& input,
-                                        const std::vector<float>& kernel,
-                                        int kernelSize) const;
+                                         const std::vector<float>& kernel,
+                                         int kernelSize) const;
 
     /**
      * @brief Adjust image brightness and contrast
@@ -138,8 +145,8 @@ public:
      * @return Adjusted image blob
      */
     [[nodiscard]] blob adjustBrightnessContrast(const blob& input,
-                                               double brightness,
-                                               double contrast) const;
+                                                double brightness,
+                                                double contrast) const;
 
     /**
      * @brief Apply gamma correction
@@ -155,7 +162,8 @@ public:
      * @param adaptive Whether to use adaptive histogram equalization
      * @return Enhanced image blob
      */
-    [[nodiscard]] blob enhanceHistogram(const blob& input, bool adaptive = false) const;
+    [[nodiscard]] blob enhanceHistogram(const blob& input,
+                                        bool adaptive = false) const;
 
     /**
      * @brief Detect edges in image
@@ -165,19 +173,21 @@ public:
      * @return Edge-detected image blob
      */
     [[nodiscard]] blob detectEdges(const blob& input,
-                                  const std::string& algorithm = "canny",
-                                  const std::vector<double>& threshold = {50.0, 150.0}) const;
+                                   const std::string& algorithm = "canny",
+                                   const std::vector<double>& threshold = {
+                                       50.0, 150.0}) const;
 
     /**
      * @brief Remove noise from image
      * @param input Input image blob
-     * @param algorithm Denoising algorithm ("gaussian", "median", "bilateral", "nlmeans")
+     * @param algorithm Denoising algorithm ("gaussian", "median", "bilateral",
+     * "nlmeans")
      * @param strength Denoising strength (0.0 to 1.0)
      * @return Denoised image blob
      */
     [[nodiscard]] blob denoise(const blob& input,
-                              const std::string& algorithm = "bilateral",
-                              double strength = 0.5) const;
+                               const std::string& algorithm = "bilateral",
+                               double strength = 0.5) const;
 
     /**
      * @brief Process batch of images with the same operation
@@ -194,7 +204,8 @@ public:
      * @param input Input image blob
      * @return Map of statistics (mean, std, min, max, etc.)
      */
-    [[nodiscard]] std::unordered_map<std::string, double> getStatistics(const blob& input) const;
+    [[nodiscard]] std::unordered_map<std::string, double> getStatistics(
+        const blob& input) const;
 
     /**
      * @brief Calculate image quality metrics
@@ -202,9 +213,9 @@ public:
      * @param reference Optional reference image for comparison metrics
      * @return Map of quality metrics
      */
-    [[nodiscard]] std::unordered_map<std::string, double> calculateQualityMetrics(
-        const blob& input,
-        const blob* reference = nullptr) const;
+    [[nodiscard]] std::unordered_map<std::string, double>
+    calculateQualityMetrics(const blob& input,
+                            const blob* reference = nullptr) const;
 
     /**
      * @brief Set processing options
@@ -224,7 +235,8 @@ private:
     // Internal helper methods
     [[nodiscard]] blob applyGaussianBlur(const blob& input, double sigma) const;
     [[nodiscard]] blob applySharpen(const blob& input, double strength) const;
-    [[nodiscard]] blob applyMedianFilter(const blob& input, int kernelSize) const;
+    [[nodiscard]] blob applyMedianFilter(const blob& input,
+                                         int kernelSize) const;
 
     // Format-specific converters
     [[nodiscard]] blob convertToJPEG(const blob& input) const;
@@ -234,7 +246,8 @@ private:
     // Validation helpers
     void validateImageDimensions(int width, int height) const;
     void validateKernel(const std::vector<float>& kernel, int kernelSize) const;
-    void validateCropParameters(const blob& input, int x, int y, int width, int height) const;
+    void validateCropParameters(const blob& input, int x, int y, int width,
+                                int height) const;
 };
 
 /**
@@ -242,8 +255,9 @@ private:
  * @param useGPU Whether to enable GPU acceleration if available
  * @return Configured ImageProcessor instance
  */
-[[nodiscard]] std::unique_ptr<ImageProcessor> createOptimalProcessor(bool useGPU = false);
+[[nodiscard]] std::unique_ptr<ImageProcessor> createOptimalProcessor(
+    bool useGPU = false);
 
-} // namespace atom::image
+}  // namespace atom::image
 
-#endif // ATOM_IMAGE_PROCESSOR_HPP
+#endif  // ATOM_IMAGE_PROCESSOR_HPP

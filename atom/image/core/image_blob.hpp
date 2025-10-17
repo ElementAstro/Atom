@@ -3,15 +3,14 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <cstring>
-#include <span>
-#include <vector>
-#include <cmath>
 #include <limits>
+#include <span>
 #include <stdexcept>
-
+#include <vector>
 
 // Forward declare error macros - actual definitions in source files
 #ifndef THROW_RUNTIME_ERROR
@@ -91,7 +90,8 @@ public:
 
     Blob(std::nullptr_t, size_t n) {
         if (n != 0) {
-            THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+            THROW_RUNTIME_ERROR(
+                "Cannot create Blob from null pointer with non-zero size");
         }
         if constexpr (Mode == BlobMode::FAST) {
             storage_ = std::span<T>();
@@ -109,10 +109,12 @@ public:
     }
 
     Blob(void* ptr, size_t n)
-        requires(Mode == BlobMode::FAST) {
+        requires(Mode == BlobMode::FAST)
+    {
         if (ptr == nullptr) {
             if (n != 0) {
-                THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+                THROW_RUNTIME_ERROR(
+                    "Cannot create Blob from null pointer with non-zero size");
             }
             storage_ = std::span<T>();
             return;
@@ -129,7 +131,8 @@ public:
     Blob(U* ptr, size_t n) {
         if (ptr == nullptr) {
             if (n != 0) {
-                THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+                THROW_RUNTIME_ERROR(
+                    "Cannot create Blob from null pointer with non-zero size");
             }
             if constexpr (Mode == BlobMode::FAST) {
                 storage_ = std::span<T>();
@@ -143,7 +146,8 @@ public:
 
         if constexpr (Mode == BlobMode::FAST) {
             if constexpr (std::is_const_v<U>) {
-                THROW_RUNTIME_ERROR("Cannot create fast blob from const data source");
+                THROW_RUNTIME_ERROR(
+                    "Cannot create fast blob from const data source");
             }
             auto* byte_ptr = reinterpret_cast<T*>(ptr);
             storage_ = std::span<T>(byte_ptr, byte_count);
@@ -156,7 +160,8 @@ public:
     template <BlobValueType U, size_t N>
     explicit Blob(const std::array<U, N>& arr) {
         if constexpr (Mode == BlobMode::FAST) {
-            storage_ = std::span<T>(reinterpret_cast<const T*>(arr.data()), N * sizeof(U));
+            storage_ = std::span<T>(reinterpret_cast<const T*>(arr.data()),
+                                    N * sizeof(U));
         } else {
             storage_.resize(N * sizeof(U));
             std::memcpy(storage_.data(), arr.data(), N * sizeof(U));
@@ -164,10 +169,12 @@ public:
     }
 
     // Constructor from raw data with dimensions
-    Blob(void* ptr, size_t size, int rows, int cols, int channels = 1, int depth = DEFAULT_DEPTH) {
+    Blob(void* ptr, size_t size, int rows, int cols, int channels = 1,
+         int depth = DEFAULT_DEPTH) {
         if (ptr == nullptr) {
             if (size != 0) {
-                THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+                THROW_RUNTIME_ERROR(
+                    "Cannot create Blob from null pointer with non-zero size");
             }
             if constexpr (Mode == BlobMode::FAST) {
                 storage_ = std::span<T>();
@@ -189,10 +196,12 @@ public:
     template <BlobValueType U, size_t N>
     explicit Blob(std::array<U, N>& arr) {
         if constexpr (Mode == BlobMode::FAST) {
-            storage_ = std::span<T>(reinterpret_cast<T*>(arr.data()), sizeof(U) * N);
+            storage_ =
+                std::span<T>(reinterpret_cast<T*>(arr.data()), sizeof(U) * N);
         } else {
-            storage_ = std::vector<T>(reinterpret_cast<T*>(arr.data()),
-                                     reinterpret_cast<T*>(arr.data()) + sizeof(U) * N);
+            storage_ = std::vector<T>(
+                reinterpret_cast<T*>(arr.data()),
+                reinterpret_cast<T*>(arr.data()) + sizeof(U) * N);
         }
     }
 
@@ -323,17 +332,20 @@ public:
             THROW_OUT_OF_RANGE("Slice range out of bounds");
         }
         Blob result;
-        // Preserve original geometry if possible: infer rows from current row width
+        // Preserve original geometry if possible: infer rows from current row
+        // width
         result.channels_ = channels_;
         result.depth_ = depth_;
         if (cols_ > 0 && channels_ > 0) {
-            const size_t row_bytes = static_cast<size_t>(cols_) * static_cast<size_t>(channels_);
+            const size_t row_bytes =
+                static_cast<size_t>(cols_) * static_cast<size_t>(channels_);
             if (length % row_bytes == 0) {
                 result.rows_ = static_cast<int>(length / row_bytes);
                 result.cols_ = cols_;
             } else {
                 result.rows_ = 1;
-                result.cols_ = static_cast<int>(length / std::max<size_t>(channels_, 1));
+                result.cols_ =
+                    static_cast<int>(length / std::max<size_t>(channels_, 1));
             }
         } else {
             result.rows_ = 1;
@@ -373,15 +385,18 @@ public:
             const auto* bytePtr = reinterpret_cast<const T*>(ptr);
             storage_.insert(storage_.end(), bytePtr, bytePtr + n);
             // Update dimensions only when they are meaningful and consistent
-            size_t denom = static_cast<size_t>(cols_) * static_cast<size_t>(channels_);
+            size_t denom =
+                static_cast<size_t>(cols_) * static_cast<size_t>(channels_);
             if (denom > 0 && n % denom == 0) {
                 rows_ += static_cast<int>(n / denom);
             } else if (cols_ == 0 || channels_ == 0) {
                 // Initialize a sane default to avoid division by zero later
                 channels_ = channels_ == 0 ? 1 : channels_;
                 cols_ = cols_ == 0 ? static_cast<int>(n) : cols_;
-                // With this initialization, the current buffer represents one row
-                if (n == static_cast<size_t>(cols_) * static_cast<size_t>(channels_)) {
+                // With this initialization, the current buffer represents one
+                // row
+                if (n == static_cast<size_t>(cols_) *
+                             static_cast<size_t>(channels_)) {
                     rows_ = std::max(1, rows_);
                 }
             }
@@ -571,14 +586,16 @@ public:
         return channels_ * (depth_ == 8 ? 1 : depth_ == 16 ? 2 : 4);
     }
     [[nodiscard]] auto getImageSize() const -> size_t {
-        return static_cast<size_t>(rows_) * static_cast<size_t>(cols_) * getPixelSize();
+        return static_cast<size_t>(rows_) * static_cast<size_t>(cols_) *
+               getPixelSize();
     }
 
     // Memory alignment for performance
     void alignMemory(size_t alignment = 64) {
         if constexpr (Mode == BlobMode::NORMAL) {
             if (storage_.size() % alignment != 0) {
-                size_t newSize = ((storage_.size() + alignment - 1) / alignment) * alignment;
+                size_t newSize =
+                    ((storage_.size() + alignment - 1) / alignment) * alignment;
                 storage_.resize(newSize);
             }
         }
@@ -613,18 +630,21 @@ public:
         result.depth_ = depth_;
 
         if constexpr (Mode == BlobMode::NORMAL) {
-            result.storage_.reserve(static_cast<size_t>(width) * static_cast<size_t>(height) *
-                                   static_cast<size_t>(channels_));
+            result.storage_.reserve(static_cast<size_t>(width) *
+                                    static_cast<size_t>(height) *
+                                    static_cast<size_t>(channels_));
 
             size_t pixelSize = getPixelSize();
             for (int row = y; row < y + height; ++row) {
-                size_t srcOffset = (static_cast<size_t>(row) * static_cast<size_t>(cols_) +
-                                   static_cast<size_t>(x)) * pixelSize;
+                size_t srcOffset =
+                    (static_cast<size_t>(row) * static_cast<size_t>(cols_) +
+                     static_cast<size_t>(x)) *
+                    pixelSize;
                 size_t copySize = static_cast<size_t>(width) * pixelSize;
 
                 result.storage_.insert(result.storage_.end(),
-                                     storage_.begin() + srcOffset,
-                                     storage_.begin() + srcOffset + copySize);
+                                       storage_.begin() + srcOffset,
+                                       storage_.begin() + srcOffset + copySize);
             }
         }
 

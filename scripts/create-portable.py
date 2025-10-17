@@ -5,16 +5,16 @@ Creates self-contained, portable distributions that don't require installation.
 """
 
 import argparse
+import json
+import logging
 import os
-import sys
+import platform
 import shutil
 import subprocess
-import platform
+import sys
 import tempfile
-import json
 from pathlib import Path
-from typing import Dict, List, Set, Optional
-import logging
+from typing import Dict, List, Optional, Set
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')

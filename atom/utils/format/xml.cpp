@@ -266,9 +266,8 @@ auto XMLReader::getAttributeValueByPath(std::string_view path,
     }
 }
 
-auto XMLReader::hasChildElementByPath(std::string_view path,
-                                      std::string_view childElementName) const
-    -> bool {
+auto XMLReader::hasChildElementByPath(
+    std::string_view path, std::string_view childElementName) const -> bool {
     spdlog::debug("Checking if path: {} has child element: {}", path,
                   childElementName);
 

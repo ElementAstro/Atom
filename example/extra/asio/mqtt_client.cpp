@@ -14,14 +14,14 @@ is not configured in the current build system.
 
 **************************************************/
 
+#include <atomic>
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
-#include <functional>
-#include <atomic>
 
 using namespace std::chrono_literals;
 
@@ -76,8 +76,10 @@ public:
         message_handler_ = std::move(handler);
     }
 
-    void async_connect(const std::string& host, uint16_t port, const ConnectionOptions& options) {
-        std::cout << "Connecting to " << host << ":" << port << " (stub)" << std::endl;
+    void async_connect(const std::string& host, uint16_t port,
+                       const ConnectionOptions& options) {
+        std::cout << "Connecting to " << host << ":" << port << " (stub)"
+                  << std::endl;
         std::cout << "  Client ID: " << options.client_id << std::endl;
 
         // Simulate connection
@@ -90,7 +92,8 @@ public:
     }
 
     void async_subscribe(const std::string& topic, QoS qos) {
-        std::cout << "Subscribing to topic: " << topic << " with QoS " << static_cast<int>(qos) << " (stub)" << std::endl;
+        std::cout << "Subscribing to topic: " << topic << " with QoS "
+                  << static_cast<int>(qos) << " (stub)" << std::endl;
 
         // Simulate receiving messages
         std::thread([this, topic]() {
@@ -106,8 +109,10 @@ public:
     }
 
     void async_publish(const Message& message) {
-        std::cout << "Publishing to topic: " << message.topic << " (stub)" << std::endl;
-        std::cout << "  Payload: " << message.payload.substr(0, 50) << "..." << std::endl;
+        std::cout << "Publishing to topic: " << message.topic << " (stub)"
+                  << std::endl;
+        std::cout << "  Payload: " << message.payload.substr(0, 50) << "..."
+                  << std::endl;
     }
 
     void disconnect() {
@@ -119,13 +124,16 @@ private:
     std::function<void(const Message&)> message_handler_;
 };
 
-} // namespace atom::extra::asio::mqtt
+}  // namespace atom::extra::asio::mqtt
 
 using namespace atom::extra::asio::mqtt;
 
 int main() {
-    std::cout << "=== ASIO MQTT Client Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation since atom-extra-asio library is not linked." << std::endl;
+    std::cout << "=== ASIO MQTT Client Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation since atom-extra-asio "
+                 "library is not linked."
+              << std::endl;
 
     try {
         // 1. Basic MQTT client connection
@@ -154,7 +162,8 @@ int main() {
                 std::cout << "Message received (stub):" << std::endl;
                 std::cout << "  Topic: " << msg.topic << std::endl;
                 std::cout << "  Payload: " << msg.payload << std::endl;
-                std::cout << "  QoS: " << static_cast<int>(msg.qos) << std::endl;
+                std::cout << "  QoS: " << static_cast<int>(msg.qos)
+                          << std::endl;
                 message_received++;
             });
 
@@ -178,10 +187,13 @@ int main() {
             }
 
             client.disconnect();
-            std::cout << "Total messages received: " << message_received.load() << std::endl;
+            std::cout << "Total messages received: " << message_received.load()
+                      << std::endl;
         }
 
-        std::cout << "\n=== MQTT Client Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout
+            << "\n=== MQTT Client Example Complete (Stub Implementation) ==="
+            << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error in MQTT client examples: " << e.what() << std::endl;

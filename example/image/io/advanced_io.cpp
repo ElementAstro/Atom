@@ -16,13 +16,13 @@
  * - Error handling and recovery
  */
 
-#include <iostream>
-#include <vector>
-#include <string>
-#include <filesystem>
-#include <thread>
-#include <future>
 #include <chrono>
+#include <filesystem>
+#include <future>
+#include <iostream>
+#include <string>
+#include <thread>
+#include <vector>
 
 // Atom Image includes (conditional based on available backends)
 #ifdef ATOM_IMAGE_HAS_OPENCV
@@ -47,7 +47,8 @@ private:
     size_t max_threads_;
 
 public:
-    explicit AdvancedImageLoader(size_t max_threads = std::thread::hardware_concurrency())
+    explicit AdvancedImageLoader(
+        size_t max_threads = std::thread::hardware_concurrency())
         : max_threads_(max_threads) {}
 
     /**
@@ -89,15 +90,17 @@ private:
             }
 
             auto end = chrono::high_resolution_clock::now();
-            auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+            auto duration =
+                chrono::duration_cast<chrono::milliseconds>(end - start);
 
-            return "Success: Loaded " + path + " (" +
-                   to_string(image.cols) + "x" + to_string(image.rows) +
-                   ") in " + to_string(duration.count()) + "ms";
+            return "Success: Loaded " + path + " (" + to_string(image.cols) +
+                   "x" + to_string(image.rows) + ") in " +
+                   to_string(duration.count()) + "ms";
 
 #elif defined(ATOM_IMAGE_HAS_STB)
             int width, height, channels;
-            unsigned char* data = stbi_load(path.c_str(), &width, &height, &channels, 0);
+            unsigned char* data =
+                stbi_load(path.c_str(), &width, &height, &channels, 0);
 
             if (!data) {
                 return "Error: Failed to load with STB - " + path;
@@ -106,11 +109,12 @@ private:
             stbi_image_free(data);
 
             auto end = chrono::high_resolution_clock::now();
-            auto duration = chrono::duration_cast<chrono::milliseconds>(end - start);
+            auto duration =
+                chrono::duration_cast<chrono::milliseconds>(end - start);
 
-            return "Success: Loaded " + path + " (" +
-                   to_string(width) + "x" + to_string(height) +
-                   ") in " + to_string(duration.count()) + "ms";
+            return "Success: Loaded " + path + " (" + to_string(width) + "x" +
+                   to_string(height) + ") in " + to_string(duration.count()) +
+                   "ms";
 #else
             return "Warning: No image backend available - " + path;
 #endif
@@ -161,7 +165,8 @@ public:
 
         for (size_t i = 0; i < image_paths.size(); ++i) {
             cout << "Processing image " << (i + 1) << "/" << image_paths.size()
-                 << ": " << fs::path(image_paths[i]).filename().string() << endl;
+                 << ": " << fs::path(image_paths[i]).filename().string()
+                 << endl;
 
             // Simulate processing
             this_thread::sleep_for(chrono::milliseconds(100));
@@ -178,12 +183,8 @@ void demonstrateAdvancedIO() {
     cout << "=== Advanced Image I/O Operations Demo ===" << endl;
 
     // Create sample image paths (these would be real images in practice)
-    vector<string> sample_paths = {
-        "sample1.jpg",
-        "sample2.png",
-        "sample3.bmp",
-        "sample4.tiff"
-    };
+    vector<string> sample_paths = {"sample1.jpg", "sample2.png", "sample3.bmp",
+                                   "sample4.tiff"};
 
     // 1. Multi-threaded batch loading
     cout << "\n1. Multi-threaded Batch Loading:" << endl;

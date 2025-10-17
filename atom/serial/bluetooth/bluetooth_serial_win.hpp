@@ -129,71 +129,72 @@ public:
         }
 
         stopScan_ = false;
-        scanThread_ = std::thread([this, onDeviceFound, onScanComplete,
-                                   timeout]() {
-            std::unordered_set<std::string> discoveredAddresses;
+        scanThread_ =
+            std::thread([this, onDeviceFound, onScanComplete, timeout]() {
+                std::unordered_set<std::string> discoveredAddresses;
 
-            BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {};
-            searchParams.dwSize = sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS);
-            searchParams.fReturnAuthenticated = 1;
-            searchParams.fReturnRemembered = 1;
-            searchParams.fReturnUnknown = 1;
-            searchParams.fReturnConnected = 1;
-            searchParams.fIssueInquiry = 1;
-            searchParams.cTimeoutMultiplier = static_cast<UCHAR>(timeout.count());
+                BLUETOOTH_DEVICE_SEARCH_PARAMS searchParams = {};
+                searchParams.dwSize = sizeof(BLUETOOTH_DEVICE_SEARCH_PARAMS);
+                searchParams.fReturnAuthenticated = 1;
+                searchParams.fReturnRemembered = 1;
+                searchParams.fReturnUnknown = 1;
+                searchParams.fReturnConnected = 1;
+                searchParams.fIssueInquiry = 1;
+                searchParams.cTimeoutMultiplier =
+                    static_cast<UCHAR>(timeout.count());
 
-            BLUETOOTH_DEVICE_INFO deviceInfo = {};
-            deviceInfo.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
+                BLUETOOTH_DEVICE_INFO deviceInfo = {};
+                deviceInfo.dwSize = sizeof(BLUETOOTH_DEVICE_INFO);
 
-            auto startTime = std::chrono::steady_clock::now();
+                auto startTime = std::chrono::steady_clock::now();
 
-            while (!stopScan_ &&
-                   (std::chrono::steady_clock::now() - startTime) < timeout) {
-                HBLUETOOTH_DEVICE_FIND hFind =
-                    BluetoothFindFirstDevice(&searchParams, &deviceInfo);
-                if (hFind) {
-                    do {
-                        if (stopScan_)
-                            break;
+                while (!stopScan_ && (std::chrono::steady_clock::now() -
+                                      startTime) < timeout) {
+                    HBLUETOOTH_DEVICE_FIND hFind =
+                        BluetoothFindFirstDevice(&searchParams, &deviceInfo);
+                    if (hFind) {
+                        do {
+                            if (stopScan_)
+                                break;
 
-                        BluetoothDeviceInfo info;
-                        char addressStr[18] = {0};
-                        sprintf_s(addressStr, sizeof(addressStr),
-                                  "%02X:%02X:%02X:%02X:%02X:%02X",
-                                  deviceInfo.Address.rgBytes[5],
-                                  deviceInfo.Address.rgBytes[4],
-                                  deviceInfo.Address.rgBytes[3],
-                                  deviceInfo.Address.rgBytes[2],
-                                  deviceInfo.Address.rgBytes[1],
-                                  deviceInfo.Address.rgBytes[0]);
-                        info.address = addressStr;
+                            BluetoothDeviceInfo info;
+                            char addressStr[18] = {0};
+                            sprintf_s(addressStr, sizeof(addressStr),
+                                      "%02X:%02X:%02X:%02X:%02X:%02X",
+                                      deviceInfo.Address.rgBytes[5],
+                                      deviceInfo.Address.rgBytes[4],
+                                      deviceInfo.Address.rgBytes[3],
+                                      deviceInfo.Address.rgBytes[2],
+                                      deviceInfo.Address.rgBytes[1],
+                                      deviceInfo.Address.rgBytes[0]);
+                            info.address = addressStr;
 
-                        if (discoveredAddresses.find(info.address) ==
-                            discoveredAddresses.end()) {
-                            char narrowName[248] = {0};
-                            wcstombs(narrowName, deviceInfo.szName, 248);
-                            info.name = narrowName;
+                            if (discoveredAddresses.find(info.address) ==
+                                discoveredAddresses.end()) {
+                                char narrowName[248] = {0};
+                                wcstombs(narrowName, deviceInfo.szName, 248);
+                                info.name = narrowName;
 
-                            info.paired = (deviceInfo.fAuthenticated != 0);
-                            info.connected = (deviceInfo.fConnected != 0);
-                            info.rssi = 0;
+                                info.paired = (deviceInfo.fAuthenticated != 0);
+                                info.connected = (deviceInfo.fConnected != 0);
+                                info.rssi = 0;
 
-                            discoveredAddresses.insert(info.address);
-                            onDeviceFound(info);
-                        }
-                    } while (!stopScan_ &&
-                             BluetoothFindNextDevice(hFind, &deviceInfo));
+                                discoveredAddresses.insert(info.address);
+                                onDeviceFound(info);
+                            }
+                        } while (!stopScan_ &&
+                                 BluetoothFindNextDevice(hFind, &deviceInfo));
 
-                    BluetoothFindDeviceClose(hFind);
+                        BluetoothFindDeviceClose(hFind);
+                    }
+
+                    std::this_thread::sleep_for(std::chrono::milliseconds(500));
                 }
 
-                std::this_thread::sleep_for(std::chrono::milliseconds(500));
-            }
-
-            if (!stopScan_) {
-                onScanComplete();
-            }
-        });
+                if (!stopScan_) {
+                    onScanComplete();
+                }
+            });
     }
 
     void stopScan() {

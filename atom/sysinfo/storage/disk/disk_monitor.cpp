@@ -49,20 +49,25 @@ struct MonitorContext {
 };
 
 #ifdef _WIN32
-static LRESULT CALLBACK DeviceMonitorWndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
+static LRESULT CALLBACK DeviceMonitorWndProc(HWND hwnd, UINT msg, WPARAM wParam,
+                                             LPARAM lParam) {
     MonitorContext* context = nullptr;
     if (msg == WM_CREATE) {
         const CREATESTRUCT* cs = reinterpret_cast<CREATESTRUCT*>(lParam);
         context = reinterpret_cast<MonitorContext*>(cs->lpCreateParams);
-        SetWindowLongPtr(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(context));
+        SetWindowLongPtr(hwnd, GWLP_USERDATA,
+                         reinterpret_cast<LONG_PTR>(context));
     } else {
-        context = reinterpret_cast<MonitorContext*>(GetWindowLongPtr(hwnd, GWLP_USERDATA));
+        context = reinterpret_cast<MonitorContext*>(
+            GetWindowLongPtr(hwnd, GWLP_USERDATA));
     }
 
     if (msg == WM_DEVICECHANGE && context && wParam == DBT_DEVICEARRIVAL) {
-        const DEV_BROADCAST_HDR* header = reinterpret_cast<DEV_BROADCAST_HDR*>(lParam);
+        const DEV_BROADCAST_HDR* header =
+            reinterpret_cast<DEV_BROADCAST_HDR*>(lParam);
         if (header->dbch_devicetype == DBT_DEVTYP_VOLUME) {
-            const DEV_BROADCAST_VOLUME* vol = reinterpret_cast<DEV_BROADCAST_VOLUME*>(lParam);
+            const DEV_BROADCAST_VOLUME* vol =
+                reinterpret_cast<DEV_BROADCAST_VOLUME*>(lParam);
 
             char driveLetter = 'A';
             DWORD mask = vol->dbcv_unitmask;
@@ -75,18 +80,21 @@ static LRESULT CALLBACK DeviceMonitorWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 
             StorageDevice device;
             device.devicePath = drivePath;
-            device.isRemovable = (GetDriveTypeA(drivePath.c_str()) == DRIVE_REMOVABLE);
+            device.isRemovable =
+                (GetDriveTypeA(drivePath.c_str()) == DRIVE_REMOVABLE);
 
             try {
                 if (context->securityPolicy == SecurityPolicy::READ_ONLY) {
                     setDiskReadOnly(drivePath);
-                } else if (context->securityPolicy == SecurityPolicy::SCAN_BEFORE_USE) {
+                } else if (context->securityPolicy ==
+                           SecurityPolicy::SCAN_BEFORE_USE) {
                     scanDiskForThreats(drivePath);
                 }
 
                 context->callback(device);
             } catch (const std::exception& e) {
-                spdlog::error("Error processing device insertion for {}: {}", drivePath, e.what());
+                spdlog::error("Error processing device insertion for {}: {}",
+                              drivePath, e.what());
             }
         }
     }
@@ -94,12 +102,15 @@ static LRESULT CALLBACK DeviceMonitorWndProc(HWND hwnd, UINT msg, WPARAM wParam,
 }
 #endif
 
-std::future<void> startDeviceMonitoring(std::function<void(const StorageDevice&)> callback,
-                                       SecurityPolicy securityPolicy) {
+std::future<void> startDeviceMonitoring(
+    std::function<void(const StorageDevice&)> callback,
+    SecurityPolicy securityPolicy) {
     g_monitoringActive = true;
 
-    return std::async(std::launch::async, [callback = std::move(callback), securityPolicy]() {
-        spdlog::info("Starting device monitoring with security policy: {}", static_cast<int>(securityPolicy));
+    return std::async(std::launch::async, [callback = std::move(callback),
+                                           securityPolicy]() {
+        spdlog::info("Starting device monitoring with security policy: {}",
+                     static_cast<int>(securityPolicy));
 
 #ifdef _WIN32
         WNDCLASSEXA wc{};
@@ -109,14 +120,15 @@ std::future<void> startDeviceMonitoring(std::function<void(const StorageDevice&)
         wc.lpszClassName = "DeviceMonitorClass";
 
         if (!RegisterClassExA(&wc)) {
-            spdlog::error("Failed to register window class: {}", GetLastError());
+            spdlog::error("Failed to register window class: {}",
+                          GetLastError());
             return;
         }
 
         MonitorContext context{securityPolicy, callback};
-        const HWND hwnd = CreateWindowExA(0, "DeviceMonitorClass", "DeviceMonitor", 0,
-                                         0, 0, 0, 0, HWND_MESSAGE, nullptr,
-                                         GetModuleHandleA(nullptr), &context);
+        const HWND hwnd = CreateWindowExA(
+            0, "DeviceMonitorClass", "DeviceMonitor", 0, 0, 0, 0, 0,
+            HWND_MESSAGE, nullptr, GetModuleHandleA(nullptr), &context);
         if (!hwnd) {
             spdlog::error("Failed to create hidden window: {}", GetLastError());
             UnregisterClassA("DeviceMonitorClass", GetModuleHandleA(nullptr));
@@ -127,10 +139,12 @@ std::future<void> startDeviceMonitoring(std::function<void(const StorageDevice&)
         notificationFilter.dbcc_size = sizeof(notificationFilter);
         notificationFilter.dbcc_devicetype = DBT_DEVTYP_DEVICEINTERFACE;
 
-        const HDEVNOTIFY hDevNotify = RegisterDeviceNotificationA(hwnd, &notificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
+        const HDEVNOTIFY hDevNotify = RegisterDeviceNotificationA(
+            hwnd, &notificationFilter, DEVICE_NOTIFY_WINDOW_HANDLE);
 
         if (!hDevNotify) {
-            spdlog::error("Failed to register for device notifications: {}", GetLastError());
+            spdlog::error("Failed to register for device notifications: {}",
+                          GetLastError());
             DestroyWindow(hwnd);
             UnregisterClassA("DeviceMonitorClass", GetModuleHandleA(nullptr));
             return;

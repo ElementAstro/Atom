@@ -9,6 +9,7 @@ The formats module provides comprehensive support for reading, writing, and mani
 ## Supported Formats
 
 ### Standard Formats
+
 - **JPEG**: Lossy compression, widely supported
 - **PNG**: Lossless compression, transparency support
 - **TIFF**: Flexible format, multiple compression options
@@ -16,6 +17,7 @@ The formats module provides comprehensive support for reading, writing, and mani
 - **TGA**: Targa format, gaming industry standard
 
 ### Specialized Formats
+
 - **FITS**: Flexible Image Transport System (astronomy)
 - **SER**: Simple Extensible Recorder (astronomical video)
 
@@ -26,6 +28,7 @@ The formats module provides comprehensive support for reading, writing, and mani
 FITS (Flexible Image Transport System) is the standard format for astronomical images and data.
 
 #### Files
+
 - `fits_file.hpp/cpp`: Main FITS file handling
 - `fits_header.hpp/cpp`: FITS header management
 - `fits_data.hpp/cpp`: FITS data access and manipulation
@@ -33,6 +36,7 @@ FITS (Flexible Image Transport System) is the standard format for astronomical i
 - `hdu.hpp/cpp`: Header Data Unit (HDU) management
 
 #### Features
+
 - **Multi-HDU Support**: Primary and extension HDUs
 - **Data Types**: Support for all FITS data types
 - **Compression**: Rice, GZIP, and other compression algorithms
@@ -68,6 +72,7 @@ fits.writeFITS("processed_data.fits");
 SER (Simple Extensible Recorder) is a format for astronomical video sequences.
 
 #### Components
+
 - **SERReader**: Reading SER video files
 - **SERWriter**: Writing SER video files
 - **FrameProcessor**: Frame processing and analysis
@@ -76,6 +81,7 @@ SER (Simple Extensible Recorder) is a format for astronomical video sequences.
 - **Stacking**: Frame combination techniques
 
 #### Features
+
 - **High Performance**: Optimized for large video sequences
 - **Frame Caching**: Intelligent caching for random access
 - **Quality Assessment**: Automatic frame quality evaluation
@@ -127,12 +133,14 @@ auto image = reader->load("image.fits");
 ## Compression Support
 
 ### FITS Compression
+
 - **Rice**: Lossless compression for integer data
 - **GZIP**: General-purpose compression
 - **HCOMPRESS**: Specialized astronomical image compression
 - **PLIO**: Pixel list compression
 
 ### Standard Format Compression
+
 - **JPEG**: Quality-based lossy compression
 - **PNG**: Lossless compression with multiple levels
 - **TIFF**: Multiple compression algorithms (LZW, ZIP, etc.)
@@ -190,11 +198,13 @@ try {
 ## Performance Considerations
 
 ### Large File Handling
+
 - Use memory mapping for files > 100MB
 - Enable tiled access for images > 4K resolution
 - Consider streaming for video sequences
 
 ### Batch Processing
+
 - Process multiple files in parallel
 - Use format-specific optimizations
 - Cache frequently accessed metadata
@@ -219,10 +229,12 @@ output.writeFITS();
 ## Dependencies
 
 ### Required
+
 - atom-error: Error handling framework
 - atom-image-core: Core image functionality
 
 ### Optional
+
 - CFITSIO: FITS file I/O library
 - OpenCV: Additional format support
 - LibTIFF: Enhanced TIFF support

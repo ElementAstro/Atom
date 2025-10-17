@@ -129,11 +129,14 @@ public:
         bool isExplicit = false) noexcept
         : name_(name),
           parameters_(parameters.begin(), parameters.end()),
-          returnType_(returnType ? std::make_optional(std::string(*returnType)) : std::nullopt),
+          returnType_(returnType ? std::make_optional(std::string(*returnType))
+                                 : std::nullopt),
           modifiers_(modifiers),
           docComment_(docComment),
           isTemplated_(isTemplated),
-          templateParams_(templateParams ? std::make_optional(std::string(*templateParams)) : std::nullopt),
+          templateParams_(templateParams
+                              ? std::make_optional(std::string(*templateParams))
+                              : std::nullopt),
           isInline_(isInline),
           isStatic_(isStatic),
           isExplicit_(isExplicit) {}
@@ -334,7 +337,8 @@ private:
         if (tagEnd == std::string_view::npos)
             break;
 
-        std::string tagName = std::string(comment.substr(tagStart, tagEnd - tagStart));
+        std::string tagName =
+            std::string(comment.substr(tagStart, tagEnd - tagStart));
 
         size_t valueStart = comment.find_first_not_of(" \t\n\r", tagEnd);
         if (valueStart == std::string_view::npos)
@@ -358,8 +362,10 @@ private:
         }
         tagValue = atom::utils::trim(tagValue);
 
-        // For param tags, store only the first one found (for backward compatibility)
-        if (tagName == "param" && result.tags.find("param") == result.tags.end()) {
+        // For param tags, store only the first one found (for backward
+        // compatibility)
+        if (tagName == "param" &&
+            result.tags.find("param") == result.tags.end()) {
             result.tags[tagName] = tagValue;
         } else if (tagName != "param") {
             result.tags[tagName] = tagValue;
@@ -399,13 +405,17 @@ private:
 
     // Check for specifiers that come before 'def'
     bool isInline = definition.find(INLINE_MODIFIER) == 0 ||
-                    definition.find(" " + std::string(INLINE_MODIFIER)) != std::string_view::npos;
+                    definition.find(" " + std::string(INLINE_MODIFIER)) !=
+                        std::string_view::npos;
     bool isStatic = definition.find(STATIC_MODIFIER) == 0 ||
-                    definition.find(" " + std::string(STATIC_MODIFIER)) != std::string_view::npos;
+                    definition.find(" " + std::string(STATIC_MODIFIER)) !=
+                        std::string_view::npos;
     bool isExplicit = definition.find(EXPLICIT_MODIFIER) == 0 ||
-                      definition.find(" " + std::string(EXPLICIT_MODIFIER)) != std::string_view::npos;
+                      definition.find(" " + std::string(EXPLICIT_MODIFIER)) !=
+                          std::string_view::npos;
     bool isVirtual = definition.find(VIRTUAL_MODIFIER) == 0 ||
-                     definition.find(" " + std::string(VIRTUAL_MODIFIER)) != std::string_view::npos;
+                     definition.find(" " + std::string(VIRTUAL_MODIFIER)) !=
+                         std::string_view::npos;
 
     if (definition.find(TEMPLATE_PREFIX) == 0) {
         isTemplated = true;
@@ -517,15 +527,15 @@ private:
                 ++braceCount;
             else if (c == '}') {
                 if (braceCount == 0) {
-                    return type::unexpected(
-                        ParsingError{UnbalancedBrackets,
-                                     "Unbalanced braces in parameters",
-                                     paramsStart + i});
+                    return type::unexpected(ParsingError{
+                        UnbalancedBrackets, "Unbalanced braces in parameters",
+                        paramsStart + i});
                 }
                 --braceCount;
             }
 
-            if (c == ',' && bracketCount == 0 && angleCount == 0 && braceCount == 0) {
+            if (c == ',' && bracketCount == 0 && angleCount == 0 &&
+                braceCount == 0) {
                 paramEnd = i;
                 break;
             }
@@ -568,12 +578,13 @@ private:
                     squareBracketDepth++;
                 } else if (c == ']') {
                     squareBracketDepth--;
-                } else if (c == '=' && braceDepth == 0 && squareBracketDepth == 0) {
+                } else if (c == '=' && braceDepth == 0 &&
+                           squareBracketDepth == 0) {
                     equalsPos = i;
                     break;
                 }
             } else {
-                if (c == quoteChar && (i == 0 || param[i-1] != '\\')) {
+                if (c == quoteChar && (i == 0 || param[i - 1] != '\\')) {
                     inQuotes = false;
                     quoteChar = '\0';
                 }

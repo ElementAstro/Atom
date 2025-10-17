@@ -208,7 +208,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct sockaddr_in address{};
+            struct sockaddr_in address {};
             address.sin_family = AF_INET;
             address.sin_addr.s_addr = INADDR_ANY;
             address.sin_port = htons(port);
@@ -368,7 +368,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct addrinfo hints{};
+            struct addrinfo hints {};
             struct addrinfo* result = nullptr;
 
             hints.ai_family = AF_INET;
@@ -425,7 +425,7 @@ public:
                 return type::unexpected(UdpError::BroadcastError);
             }
 
-            struct sockaddr_in broadcastAddr{};
+            struct sockaddr_in broadcastAddr {};
             broadcastAddr.sin_family = AF_INET;
             broadcastAddr.sin_port = htons(port);
 
@@ -503,7 +503,7 @@ public:
                 }
 #else
                 // Use epoll for timeout on Linux/Unix
-                struct epoll_event event{};
+                struct epoll_event event {};
                 event.events = EPOLLIN;
                 event.data.fd = socket_;
 
@@ -528,7 +528,7 @@ public:
             }
 
             std::vector<char> data(maxSize);
-            struct sockaddr_in clientAddress{};
+            struct sockaddr_in clientAddress {};
             socklen_t clientAddressLength = sizeof(clientAddress);
 
             ssize_t bytesRead =
@@ -577,7 +577,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct ip_mreq mreq{};
+            struct ip_mreq mreq {};
 
             // Set the multicast IP address
             if (inet_pton(AF_INET, groupAddress.c_str(), &mreq.imr_multiaddr) <=
@@ -618,7 +618,7 @@ public:
                 return type::unexpected(UdpError::InvalidParameter);
             }
 
-            struct ip_mreq mreq{};
+            struct ip_mreq mreq {};
 
             // Set the multicast IP address
             if (inet_pton(AF_INET, groupAddress.c_str(), &mreq.imr_multiaddr) <=
@@ -668,7 +668,7 @@ public:
                 return type::unexpected(UdpError::MulticastError);
             }
 
-            struct sockaddr_in multicastAddr{};
+            struct sockaddr_in multicastAddr {};
             multicastAddr.sin_family = AF_INET;
             multicastAddr.sin_port = htons(port);
 
@@ -822,7 +822,7 @@ private:
         std::vector<char> buffer(bufferSize);
 
         while (!receivingStopped_ && !stopToken.stop_requested()) {
-            struct sockaddr_in clientAddress{};
+            struct sockaddr_in clientAddress {};
             socklen_t clientAddressLength = sizeof(clientAddress);
 
             ssize_t bytesRead =

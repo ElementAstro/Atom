@@ -20,7 +20,6 @@ Description: Enhanced Asynchronous Logger using C++20/23 Coroutines
 
 #include <concepts>
 #include <coroutine>
-#include "atom/type/compat.hpp"
 #include <filesystem>
 #include <format>
 #include <memory>
@@ -28,6 +27,7 @@ Description: Enhanced Asynchronous Logger using C++20/23 Coroutines
 #include <string>
 #include <string_view>
 #include <utility>
+#include "atom/type/compat.hpp"
 
 namespace fs = std::filesystem;
 
@@ -83,7 +83,8 @@ class Task {
 public:
     // Promise type that satisfies C++20 coroutine promise concept
     struct promise_type {
-        atom::type::expected<T, LogErrorCode> result{T{}, LogErrorCode::Success};
+        atom::type::expected<T, LogErrorCode> result{T{},
+                                                     LogErrorCode::Success};
 
         Task get_return_object() {
             return Task(
@@ -291,8 +292,8 @@ public:
             co_return co_await logAsync(LogLevel::DEBUG_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::DEBUG_LEVEL, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::DEBUG_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -314,8 +315,8 @@ public:
             co_return co_await logAsync(LogLevel::INFO_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::INFO_LEVEL, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::INFO_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -337,8 +338,8 @@ public:
             co_return co_await logAsync(LogLevel::WARN_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::WARN_LEVEL, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::WARN_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -360,8 +361,8 @@ public:
             co_return co_await logAsync(LogLevel::ERROR_LEVEL, std::move(msg),
                                         location);
         } else {
-            co_return co_await logAsync(LogLevel::ERROR_LEVEL, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::ERROR_LEVEL,
+                                        std::string(format), location);
         }
     }
 
@@ -380,11 +381,11 @@ public:
                                           std::source_location::current()) {
         if constexpr (sizeof...(args) > 0) {
             auto msg = std::format(format.c_str(), std::forward<Args>(args)...);
-            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL, std::move(msg),
-                                        location);
+            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL,
+                                        std::move(msg), location);
         } else {
-            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL, std::string(format),
-                                        location);
+            co_return co_await logAsync(LogLevel::CRITICAL_LEVEL,
+                                        std::string(format), location);
         }
     }
 

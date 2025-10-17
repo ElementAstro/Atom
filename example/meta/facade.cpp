@@ -21,7 +21,6 @@
 #include <string>
 #include <vector>
 
-
 // Atom Meta facade headers
 #include "atom/meta/facade.hpp"
 

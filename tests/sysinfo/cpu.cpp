@@ -1,10 +1,10 @@
 #include "atom/sysinfo/cpu.hpp"
 #include <gtest/gtest.h>
-#include <vector>
-#include <string>
 #include <algorithm>
-#include <thread>
 #include <chrono>
+#include <string>
+#include <thread>
+#include <vector>
 
 using namespace atom::system;
 
@@ -95,16 +95,11 @@ TEST_F(CpuTest, GetCpuVendor) {
     CpuVendor vendor = getCpuVendor();
 
     // Should be a valid vendor (might be UNKNOWN on some systems)
-    EXPECT_TRUE(vendor == CpuVendor::INTEL ||
-                vendor == CpuVendor::AMD ||
-                vendor == CpuVendor::ARM ||
-                vendor == CpuVendor::APPLE ||
-                vendor == CpuVendor::QUALCOMM ||
-                vendor == CpuVendor::IBM ||
-                vendor == CpuVendor::MEDIATEK ||
-                vendor == CpuVendor::SAMSUNG ||
-                vendor == CpuVendor::OTHER ||
-                vendor == CpuVendor::UNKNOWN);
+    EXPECT_TRUE(vendor == CpuVendor::INTEL || vendor == CpuVendor::AMD ||
+                vendor == CpuVendor::ARM || vendor == CpuVendor::APPLE ||
+                vendor == CpuVendor::QUALCOMM || vendor == CpuVendor::IBM ||
+                vendor == CpuVendor::MEDIATEK || vendor == CpuVendor::SAMSUNG ||
+                vendor == CpuVendor::OTHER || vendor == CpuVendor::UNKNOWN);
 
     // Convert to string and verify
     std::string vendorStr = cpuVendorToString(vendor);
@@ -126,16 +121,15 @@ TEST_F(CpuTest, IsCpuFeatureSupported) {
     // Test common CPU features
     std::vector<std::string> commonFeatures = {
         "sse", "sse2", "sse3", "ssse3", "sse4_1", "sse4_2",
-        "avx", "avx2", "aes", "fma", "mmx"
-    };
+        "avx", "avx2", "aes",  "fma",   "mmx"};
 
     for (const auto& feature : commonFeatures) {
         CpuFeatureSupport support = isCpuFeatureSupported(feature);
 
         // Should return a valid enum value
         EXPECT_TRUE(support == CpuFeatureSupport::SUPPORTED ||
-                   support == CpuFeatureSupport::NOT_SUPPORTED ||
-                   support == CpuFeatureSupport::UNKNOWN);
+                    support == CpuFeatureSupport::NOT_SUPPORTED ||
+                    support == CpuFeatureSupport::UNKNOWN);
     }
 }
 
@@ -164,7 +158,7 @@ TEST_F(CpuTest, GetPerCoreCpuTemperature) {
     // Might be empty if temperature sensors are not available
     for (float temp : perCoreTemp) {
         EXPECT_GE(temp, 0.0f);
-        EXPECT_LE(temp, 150.0f); // Reasonable upper bound for CPU temperature
+        EXPECT_LE(temp, 150.0f);  // Reasonable upper bound for CPU temperature
     }
 }
 
@@ -182,8 +176,8 @@ TEST_F(CpuTest, GetMinMaxProcessorFrequency) {
     EXPECT_LE(minFreq, maxFreq);
 
     // Current should be within min/max range (with some tolerance)
-    EXPECT_GE(currentFreq, minFreq * 0.8); // Allow some tolerance
-    EXPECT_LE(currentFreq, maxFreq * 1.2); // Allow some tolerance for boost
+    EXPECT_GE(currentFreq, minFreq * 0.8);  // Allow some tolerance
+    EXPECT_LE(currentFreq, maxFreq * 1.2);  // Allow some tolerance for boost
 }
 
 TEST_F(CpuTest, GetPerCoreFrequencies) {
@@ -195,7 +189,7 @@ TEST_F(CpuTest, GetPerCoreFrequencies) {
     // Each frequency should be positive
     for (double freq : perCoreFreq) {
         EXPECT_GT(freq, 0.0);
-        EXPECT_LT(freq, 10000.0); // Reasonable upper bound (10 GHz)
+        EXPECT_LT(freq, 10000.0);  // Reasonable upper bound (10 GHz)
     }
 }
 
@@ -223,7 +217,8 @@ TEST_F(CpuTest, GetCpuPowerInfo) {
 
     // Current power should not exceed max TDP significantly
     if (powerInfo.maxTDP > 0) {
-        EXPECT_LE(powerInfo.currentWatts, powerInfo.maxTDP * 2.0); // Allow some tolerance
+        EXPECT_LE(powerInfo.currentWatts,
+                  powerInfo.maxTDP * 2.0);  // Allow some tolerance
     }
 }
 
@@ -233,7 +228,7 @@ TEST_F(CpuTest, GetCpuSocketType) {
     // Socket type might be empty on some systems
     if (!socketType.empty()) {
         EXPECT_GT(socketType.length(), 0);
-        EXPECT_LT(socketType.length(), 50); // Reasonable upper bound
+        EXPECT_LT(socketType.length(), 50);  // Reasonable upper bound
     }
 }
 
@@ -245,13 +240,13 @@ TEST_F(CpuTest, GetCpuScalingGovernor) {
         EXPECT_GT(governor.length(), 0);
 
         // Common governors on Linux
-        std::vector<std::string> commonGovernors = {
-            "performance", "powersave", "ondemand", "conservative", "schedutil"
-        };
+        std::vector<std::string> commonGovernors = {"performance", "powersave",
+                                                    "ondemand", "conservative",
+                                                    "schedutil"};
 
-        bool isKnownGovernor = std::find(commonGovernors.begin(),
-                                        commonGovernors.end(),
-                                        governor) != commonGovernors.end();
+        bool isKnownGovernor =
+            std::find(commonGovernors.begin(), commonGovernors.end(),
+                      governor) != commonGovernors.end();
 
         // Note: Might be a custom governor, so this is not a hard requirement
         if (isKnownGovernor) {
@@ -331,7 +326,8 @@ TEST_F(CpuTest, GetCompleteCpuInfo) {
 
     // Per-core information should match core count
     if (!cpuInfo.cores.empty()) {
-        EXPECT_EQ(cpuInfo.cores.size(), static_cast<size_t>(cpuInfo.numLogicalCores));
+        EXPECT_EQ(cpuInfo.cores.size(),
+                  static_cast<size_t>(cpuInfo.numLogicalCores));
 
         for (const auto& core : cpuInfo.cores) {
             EXPECT_GE(core.id, 0);
@@ -420,7 +416,8 @@ TEST_F(CpuTest, TemperatureMonitoring) {
     // Temperature shouldn't change drastically in 100ms
     if (temp1 > 0 && temp2 > 0) {
         float tempDiff = std::abs(temp2 - temp1);
-        EXPECT_LT(tempDiff, 10.0f); // Should not change by more than 10°C in 100ms
+        EXPECT_LT(tempDiff,
+                  10.0f);  // Should not change by more than 10°C in 100ms
     }
 }
 

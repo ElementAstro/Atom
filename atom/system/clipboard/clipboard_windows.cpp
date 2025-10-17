@@ -17,7 +17,8 @@ namespace {
  * @param bits Raw bitmap pixel data
  * @return HBITMAP handle if successful, nullptr on failure
  */
-[[maybe_unused]] HBITMAP CreateBitmapFromDIB(const BITMAPINFO* bmi, const void* bits) {
+[[maybe_unused]] HBITMAP CreateBitmapFromDIB(const BITMAPINFO* bmi,
+                                             const void* bits) {
     return CreateDIBitmap(GetDC(nullptr), &bmi->bmiHeader, CBM_INIT, bits, bmi,
                           DIB_RGB_COLORS);
 }
@@ -28,7 +29,8 @@ namespace {
  * @return Pair containing bitmap info structure and raw pixel data
  * @throws std::runtime_error If bitmap data cannot be accessed
  */
-[[maybe_unused]] std::pair<std::unique_ptr<BITMAPINFO>, std::unique_ptr<std::byte[]>>
+[[maybe_unused]] std::pair<std::unique_ptr<BITMAPINFO>,
+                           std::unique_ptr<std::byte[]>>
 GetDIBFromClipboard(HBITMAP hBitmap) {
     if (!hBitmap) {
         throw std::runtime_error("Invalid bitmap handle");

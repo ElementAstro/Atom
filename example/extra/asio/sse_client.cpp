@@ -14,14 +14,14 @@ is not configured in the current build system.
 
 **************************************************/
 
+#include <atomic>
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
 #include <vector>
-#include <functional>
-#include <atomic>
 
 using namespace std::chrono_literals;
 
@@ -33,7 +33,9 @@ namespace atom::extra::asio::sse {
 class Event {
 public:
     Event(std::string id, std::string event_type, std::string data)
-        : id_(std::move(id)), event_type_(std::move(event_type)), data_(std::move(data)) {}
+        : id_(std::move(id)),
+          event_type_(std::move(event_type)),
+          data_(std::move(data)) {}
 
     const std::string& id() const noexcept { return id_; }
     const std::string& event_type() const noexcept { return event_type_; }
@@ -70,7 +72,8 @@ class Client {
 public:
     Client(auto& io_context, const ClientConfig& config) {
         std::cout << "SSE Client created (stub implementation)" << std::endl;
-        std::cout << "  Host: " << config.host << ":" << config.port << std::endl;
+        std::cout << "  Host: " << config.host << ":" << config.port
+                  << std::endl;
         std::cout << "  Path: " << config.path << std::endl;
     }
 
@@ -78,7 +81,8 @@ public:
         event_handler_ = std::move(handler);
     }
 
-    void set_connection_handler(std::function<void(bool, const std::string&)> handler) {
+    void set_connection_handler(
+        std::function<void(bool, const std::string&)> handler) {
         connection_handler_ = std::move(handler);
     }
 
@@ -105,9 +109,7 @@ public:
         }
     }
 
-    void stop() {
-        std::cout << "Stopping SSE client (stub)..." << std::endl;
-    }
+    void stop() { std::cout << "Stopping SSE client (stub)..." << std::endl; }
 
     void reconnect() {
         std::cout << "Reconnecting SSE client (stub)..." << std::endl;
@@ -118,7 +120,7 @@ private:
     std::function<void(bool, const std::string&)> connection_handler_;
 };
 
-} // namespace atom::extra::asio::sse
+}  // namespace atom::extra::asio::sse
 
 // Stub io_context
 namespace asio {
@@ -130,21 +132,23 @@ public:
     }
 
     void run_for(std::chrono::milliseconds duration) {
-        std::cout << "Running io_context for " << duration.count() << "ms (stub)..." << std::endl;
+        std::cout << "Running io_context for " << duration.count()
+                  << "ms (stub)..." << std::endl;
         std::this_thread::sleep_for(duration);
     }
 
-    void stop() {
-        std::cout << "Stopping io_context (stub)..." << std::endl;
-    }
+    void stop() { std::cout << "Stopping io_context (stub)..." << std::endl; }
 };
-} // namespace asio
+}  // namespace asio
 
 using namespace atom::extra::asio::sse;
 
 int main() {
-    std::cout << "=== ASIO SSE Client Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation since atom-extra-asio library is not linked." << std::endl;
+    std::cout << "=== ASIO SSE Client Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation since atom-extra-asio "
+                 "library is not linked."
+              << std::endl;
 
     try {
         asio::io_context io_context;
@@ -173,19 +177,24 @@ int main() {
                 events_received++;
             });
 
-            client.set_connection_handler([](bool connected, const std::string& message) {
-                std::cout << "Connection status: " << (connected ? "Connected" : "Disconnected")
-                          << " - " << message << std::endl;
-            });
+            client.set_connection_handler(
+                [](bool connected, const std::string& message) {
+                    std::cout << "Connection status: "
+                              << (connected ? "Connected" : "Disconnected")
+                              << " - " << message << std::endl;
+                });
 
             client.start();
             io_context.run_for(2s);
             client.stop();
 
-            std::cout << "Total events received: " << events_received.load() << std::endl;
+            std::cout << "Total events received: " << events_received.load()
+                      << std::endl;
         }
 
-        std::cout << "\n=== SSE Client Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout
+            << "\n=== SSE Client Example Complete (Stub Implementation) ==="
+            << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error in SSE client examples: " << e.what() << std::endl;

@@ -16,13 +16,13 @@ struct MessageBus::Impl {
     using HandlerMap = std::unordered_map<uint64_t, std::function<void(const std::any&)>>;
     using TopicHandlers = std::unordered_map<std::string, HandlerMap>;
     using TypeHandlers = std::unordered_map<std::type_index, TopicHandlers>;
-    
+
     mutable std::shared_mutex handlers_mutex;
     TypeHandlers handlers;
-    
+
     mutable std::mutex message_queue_mutex;
     std::queue<std::function<void()>> message_queue;
-    
+
     std::atomic<std::chrono::milliseconds> avg_delivery_time{std::chrono::milliseconds(0)};
 };
 
@@ -32,8 +32,8 @@ MessageBus::MessageBus(const BackPressureConfig& config)
     spdlog::info("MessageBus initialized with max queue size: {}",
                  config_.max_queue_size);
 }
-MessageBus::~MessageBus() { 
-    shutdown(); 
+MessageBus::~MessageBus() {
+    shutdown();
 }
 
 void MessageBus::shutdown() {

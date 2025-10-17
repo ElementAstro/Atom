@@ -3,8 +3,8 @@
 
 #include <stdexcept>
 #include <string>
-#include <variant>
 #include <type_traits>
+#include <variant>
 
 namespace atom::secret {
 
@@ -15,7 +15,7 @@ struct Error {
     explicit Error(std::string&& msg) : message(std::move(msg)) {}
 };
 
-}
+}  // namespace atom::secret
 
 namespace atom::secret {
 
@@ -60,18 +60,14 @@ public:
      * @param value The success value.
      * @return A Result containing the success value.
      */
-    static Result success(const T& value) {
-        return Result(value);
-    }
+    static Result success(const T& value) { return Result(value); }
 
     /**
      * @brief Creates a successful Result (move version).
      * @param value The success value.
      * @return A Result containing the success value.
      */
-    static Result success(T&& value) {
-        return Result(std::move(value));
-    }
+    static Result success(T&& value) { return Result(std::move(value)); }
 
     /**
      * @brief Creates an error Result.

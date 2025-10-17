@@ -789,8 +789,8 @@ auto enhancedVar(T&& value) -> EnhancedBoxedValue {
  * \return EnhancedBoxedValue containing the value and description
  */
 template <typename T>
-auto enhancedVarWithDesc(T&& value, std::string_view description)
-    -> EnhancedBoxedValue {
+auto enhancedVarWithDesc(T&& value,
+                         std::string_view description) -> EnhancedBoxedValue {
     return EnhancedBoxedValue(std::forward<T>(value), description);
 }
 

@@ -4,13 +4,13 @@
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 #include <atomic>
 #include <chrono>
 #include <future>
 #include <string>
 #include <thread>
 #include <vector>
-#include <spdlog/spdlog.h>
 
 #include "atom/web/utils/port.hpp"
 #include "atom/web/utils/socket.hpp"
@@ -22,9 +22,9 @@
 #pragma comment(lib, "Ws2_32.lib")
 #endif
 #elif defined(__linux__) || defined(__APPLE__)
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #endif
 
@@ -101,7 +101,7 @@ protected:
 TEST_F(PortTest, IsPortInUseAvailablePort) {
     // Test with a high port number that's likely to be available
     uint16_t testPort = 54321;
-    
+
     ASSERT_NO_THROW({
         bool inUse = isPortInUse(testPort);
         // Port should be available (false) or in use (true)
@@ -111,20 +111,20 @@ TEST_F(PortTest, IsPortInUseAvailablePort) {
 
 TEST_F(PortTest, IsPortInUseWithBoundSocket) {
     uint16_t testPort = 54322;
-    
+
     // Create a test server to occupy the port
     int serverSocket = createTestServer(testPort);
     if (serverSocket >= 0) {
         // Port should now be in use
         EXPECT_TRUE(isPortInUse(testPort));
-        
+
         closeSocket(serverSocket);
-        
+
         // Give the system time to release the port
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        
-        // Port should now be available (though this might be flaky due to TIME_WAIT)
-        // So we just test that the function doesn't crash
+
+        // Port should now be available (though this might be flaky due to
+        // TIME_WAIT) So we just test that the function doesn't crash
         EXPECT_NO_THROW(isPortInUse(testPort));
     }
 }
@@ -139,15 +139,15 @@ TEST_F(PortTest, IsPortInUseInvalidPorts) {
 // Async Port Usage Tests
 TEST_F(PortTest, IsPortInUseAsyncBasic) {
     uint16_t testPort = 54323;
-    
+
     ASSERT_NO_THROW({
         auto future = isPortInUseAsync(testPort);
         EXPECT_TRUE(future.valid());
-        
+
         // Wait for result with timeout
         auto status = future.wait_for(std::chrono::seconds(5));
         EXPECT_EQ(status, std::future_status::ready);
-        
+
         if (status == std::future_status::ready) {
             bool result = future.get();
             // Result can be true or false, just ensure it completes
@@ -158,18 +158,18 @@ TEST_F(PortTest, IsPortInUseAsyncBasic) {
 TEST_F(PortTest, IsPortInUseAsyncMultiple) {
     std::vector<std::future<bool>> futures;
     std::vector<uint16_t> testPorts = {54324, 54325, 54326, 54327, 54328};
-    
+
     // Launch async checks for multiple ports
     for (uint16_t port : testPorts) {
         futures.push_back(isPortInUseAsync(port));
     }
-    
+
     // Wait for all results
     for (auto& future : futures) {
         EXPECT_TRUE(future.valid());
         auto status = future.wait_for(std::chrono::seconds(5));
         EXPECT_EQ(status, std::future_status::ready);
-        
+
         if (status == std::future_status::ready) {
             EXPECT_NO_THROW(future.get());
         }
@@ -179,7 +179,7 @@ TEST_F(PortTest, IsPortInUseAsyncMultiple) {
 // Process ID Tests
 TEST_F(PortTest, GetProcessIDOnPortUnusedPort) {
     uint16_t testPort = 54329;
-    
+
     ASSERT_NO_THROW({
         auto processID = getProcessIDOnPort(testPort);
         // Should return empty optional for unused port
@@ -196,7 +196,8 @@ TEST_F(PortTest, GetProcessIDOnPortInvalidPort) {
 TEST_F(PortTest, ScanPortLocalhost) {
     // Test scanning localhost on a commonly closed port
     ASSERT_NO_THROW({
-        bool isOpen = scanPort("127.0.0.1", 54330, std::chrono::milliseconds(1000));
+        bool isOpen =
+            scanPort("127.0.0.1", 54330, std::chrono::milliseconds(1000));
         // Port should be closed (false), but function shouldn't crash
         EXPECT_FALSE(isOpen);
     });
@@ -204,14 +205,15 @@ TEST_F(PortTest, ScanPortLocalhost) {
 
 TEST_F(PortTest, ScanPortWithServer) {
     uint16_t testPort = 54331;
-    
+
     // Create a test server
     int serverSocket = createTestServer(testPort);
     if (serverSocket >= 0) {
         // Port should be detected as open
-        bool isOpen = scanPort("127.0.0.1", testPort, std::chrono::milliseconds(1000));
+        bool isOpen =
+            scanPort("127.0.0.1", testPort, std::chrono::milliseconds(1000));
         EXPECT_TRUE(isOpen);
-        
+
         closeSocket(serverSocket);
     }
 }
@@ -222,33 +224,37 @@ TEST_F(PortTest, ScanPortEmptyHost) {
 }
 
 TEST_F(PortTest, ScanPortInvalidHost) {
-    bool result = scanPort("invalid.nonexistent.host.xyz", 80, std::chrono::milliseconds(1000));
+    bool result = scanPort("invalid.nonexistent.host.xyz", 80,
+                           std::chrono::milliseconds(1000));
     EXPECT_FALSE(result);
 }
 
 // Port Range Scanning Tests
 TEST_F(PortTest, ScanPortRangeBasic) {
     ASSERT_NO_THROW({
-        auto openPorts = scanPortRange("127.0.0.1", 54340, 54345, std::chrono::milliseconds(500));
+        auto openPorts = scanPortRange("127.0.0.1", 54340, 54345,
+                                       std::chrono::milliseconds(500));
         // Should return empty vector for closed ports
         EXPECT_TRUE(openPorts.empty() || !openPorts.empty());  // Either is fine
     });
 }
 
 TEST_F(PortTest, ScanPortRangeInvalidRange) {
-    EXPECT_THROW(scanPortRange("127.0.0.1", 54350, 54340, std::chrono::milliseconds(500)), 
+    EXPECT_THROW(scanPortRange("127.0.0.1", 54350, 54340,
+                               std::chrono::milliseconds(500)),
                  std::invalid_argument);
 }
 
 TEST_F(PortTest, ScanPortRangeEmptyHost) {
-    EXPECT_THROW(scanPortRange("", 54350, 54355, std::chrono::milliseconds(500)), 
-                 std::invalid_argument);
+    EXPECT_THROW(
+        scanPortRange("", 54350, 54355, std::chrono::milliseconds(500)),
+        std::invalid_argument);
 }
 
 TEST_F(PortTest, ScanPortRangeWithServers) {
     std::vector<int> serverSockets;
     std::vector<uint16_t> testPorts = {54360, 54361, 54362};
-    
+
     // Create test servers on some ports
     for (uint16_t port : testPorts) {
         int serverSocket = createTestServer(port);
@@ -256,14 +262,15 @@ TEST_F(PortTest, ScanPortRangeWithServers) {
             serverSockets.push_back(serverSocket);
         }
     }
-    
+
     if (!serverSockets.empty()) {
         // Scan the range
-        auto openPorts = scanPortRange("127.0.0.1", 54360, 54365, std::chrono::milliseconds(500));
-        
+        auto openPorts = scanPortRange("127.0.0.1", 54360, 54365,
+                                       std::chrono::milliseconds(500));
+
         // Should find at least some of the open ports
         EXPECT_FALSE(openPorts.empty());
-        
+
         // Clean up servers
         for (int sockfd : serverSockets) {
             closeSocket(sockfd);
@@ -274,12 +281,13 @@ TEST_F(PortTest, ScanPortRangeWithServers) {
 // Async Port Range Scanning Tests
 TEST_F(PortTest, ScanPortRangeAsyncBasic) {
     ASSERT_NO_THROW({
-        auto future = scanPortRangeAsync("127.0.0.1", 54370, 54375, std::chrono::milliseconds(500));
+        auto future = scanPortRangeAsync("127.0.0.1", 54370, 54375,
+                                         std::chrono::milliseconds(500));
         EXPECT_TRUE(future.valid());
-        
+
         auto status = future.wait_for(std::chrono::seconds(10));
         EXPECT_EQ(status, std::future_status::ready);
-        
+
         if (status == std::future_status::ready) {
             auto openPorts = future.get();
             // Result can be empty or contain ports
@@ -290,15 +298,16 @@ TEST_F(PortTest, ScanPortRangeAsyncBasic) {
 // Performance Tests
 TEST_F(PortTest, PortCheckPerformance) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     // Check multiple ports quickly
     for (uint16_t port = 54400; port < 54410; ++port) {
         isPortInUse(port);
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     // Should complete within reasonable time (5 seconds for 10 ports)
     EXPECT_LT(duration.count(), 5000);
 }
@@ -334,9 +343,8 @@ TEST_F(PortTest, EdgeCasePortNumbers) {
     std::vector<uint16_t> edgePorts = {1, 1023, 1024, 49151, 49152, 65535};
 
     for (uint16_t port : edgePorts) {
-        EXPECT_NO_THROW({
-            isPortInUse(port);
-        }) << "Failed for edge case port: " << port;
+        EXPECT_NO_THROW({ isPortInUse(port); })
+            << "Failed for edge case port: " << port;
     }
 }
 
@@ -347,7 +355,8 @@ TEST_F(PortTest, ScanPortTimeout) {
     bool result = scanPort("127.0.0.1", 54600, std::chrono::milliseconds(10));
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Port should be closed and function should not crash
     EXPECT_FALSE(result);
@@ -356,13 +365,16 @@ TEST_F(PortTest, ScanPortTimeout) {
 }
 
 TEST_F(PortTest, ScanPortRangeLargeRange) {
-    // Test with larger range but short timeout to ensure it doesn't take too long
+    // Test with larger range but short timeout to ensure it doesn't take too
+    // long
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto openPorts = scanPortRange("127.0.0.1", 54700, 54710, std::chrono::milliseconds(50));
+    auto openPorts =
+        scanPortRange("127.0.0.1", 54700, 54710, std::chrono::milliseconds(50));
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::seconds>(end - start);
 
     // Should complete within reasonable time even for larger range
     EXPECT_LT(duration.count(), 30);
@@ -407,7 +419,8 @@ TEST_F(PortTest, StressTestPortScanning) {
     // Rapid port scanning
     for (int i = 0; i < 50; ++i) {
         uint16_t port = 55100 + i;
-        EXPECT_NO_THROW(scanPort("127.0.0.1", port, std::chrono::milliseconds(10)));
+        EXPECT_NO_THROW(
+            scanPort("127.0.0.1", port, std::chrono::milliseconds(10)));
     }
     SUCCEED();
 }
@@ -473,7 +486,8 @@ TEST_F(PortTest, PortLifecycleIntegration) {
             EXPECT_TRUE(isPortInUse(testPort));
 
             // Should be detected by port scan
-            EXPECT_TRUE(scanPort("127.0.0.1", testPort, std::chrono::milliseconds(1000)));
+            EXPECT_TRUE(scanPort("127.0.0.1", testPort,
+                                 std::chrono::milliseconds(1000)));
 
             // Clean up
             closeSocket(serverSocket);
@@ -508,7 +522,8 @@ TEST_F(PortTest, RobustnessUnderLoad) {
                         successCount++;
                     } else {
                         // Port scanning
-                        scanPort("127.0.0.1", port, std::chrono::milliseconds(10));
+                        scanPort("127.0.0.1", port,
+                                 std::chrono::milliseconds(10));
                         successCount++;
                     }
                 } catch (const std::exception&) {
@@ -531,10 +546,8 @@ TEST_F(PortTest, RobustnessUnderLoad) {
 TEST_F(PortTest, TimeoutValidation) {
     // Test that timeouts are respected
     std::vector<std::chrono::milliseconds> timeouts = {
-        std::chrono::milliseconds(10),
-        std::chrono::milliseconds(100),
-        std::chrono::milliseconds(1000)
-    };
+        std::chrono::milliseconds(10), std::chrono::milliseconds(100),
+        std::chrono::milliseconds(1000)};
 
     for (auto timeout : timeouts) {
         auto start = std::chrono::high_resolution_clock::now();
@@ -543,9 +556,11 @@ TEST_F(PortTest, TimeoutValidation) {
         scanPort("127.0.0.1", 55600, timeout);
 
         auto end = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-        // Should not exceed timeout by too much (allow 500ms margin for system overhead)
+        // Should not exceed timeout by too much (allow 500ms margin for system
+        // overhead)
         EXPECT_LT(duration.count(), timeout.count() + 500);
     }
 }

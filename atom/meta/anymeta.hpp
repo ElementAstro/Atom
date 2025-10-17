@@ -288,8 +288,8 @@ inline auto callMethod(BoxedValue& obj, const std::string& method_name,
  * \return Property value
  * \throws atom::error::NotFound if property not found
  */
-inline auto getProperty(const BoxedValue& obj, const std::string& property_name)
-    -> BoxedValue {
+inline auto getProperty(const BoxedValue& obj,
+                        const std::string& property_name) -> BoxedValue {
     if (auto metadata =
             TypeRegistry::instance().getMetadata(obj.getTypeInfo().name())) {
         if (auto property = metadata->getProperty(property_name)) {

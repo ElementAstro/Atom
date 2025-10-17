@@ -16,7 +16,7 @@ PYBIND11_MODULE(virtual_network, m) {
 
         Examples:
             >>> from atom.system import virtual_network
-            >>> 
+            >>>
             >>> # Create adapter configuration
             >>> config = virtual_network.VirtualAdapterConfig()
             >>> config.adapter_name = "MyVirtualAdapter"
@@ -27,7 +27,7 @@ PYBIND11_MODULE(virtual_network, m) {
             >>> config.gateway = "192.168.100.254"
             >>> config.primary_dns = "8.8.8.8"
             >>> config.secondary_dns = "8.8.4.4"
-            >>> 
+            >>>
             >>> # Create virtual network adapter
             >>> adapter = virtual_network.VirtualNetworkAdapter()
             >>> if adapter.create(config):
@@ -79,10 +79,9 @@ Examples:
     >>> config.ip_address = "10.0.0.1"
     >>> config.subnet_mask = "255.255.255.0"
 )")
-        .def(py::init<>(),
-             "Constructs an empty VirtualAdapterConfig object.")
+        .def(py::init<>(), "Constructs an empty VirtualAdapterConfig object.")
         .def_readwrite("adapter_name", &VirtualAdapterConfig::adapterName,
-                      R"(Name of the virtual adapter.
+                       R"(Name of the virtual adapter.
 
 This is the display name that will appear in network interface listings.
 Should be unique and descriptive.
@@ -91,7 +90,7 @@ Examples:
     >>> config.adapter_name = "MyVPN_Adapter"
 )")
         .def_readwrite("hardware_id", &VirtualAdapterConfig::hardwareID,
-                      R"(Hardware ID for the adapter.
+                       R"(Hardware ID for the adapter.
 
 This identifies the type of virtual adapter to create. Common values:
 - "TAP0901" for TAP adapters
@@ -101,7 +100,7 @@ Examples:
     >>> config.hardware_id = "TAP0901"
 )")
         .def_readwrite("description", &VirtualAdapterConfig::description,
-                      R"(Description of the adapter.
+                       R"(Description of the adapter.
 
 A human-readable description that appears in network adapter properties.
 
@@ -109,7 +108,7 @@ Examples:
     >>> config.description = "Virtual Adapter for VPN Connection"
 )")
         .def_readwrite("ip_address", &VirtualAdapterConfig::ipAddress,
-                      R"(IP address to assign to the adapter.
+                       R"(IP address to assign to the adapter.
 
 The IPv4 address that will be assigned to this virtual interface.
 
@@ -117,7 +116,7 @@ Examples:
     >>> config.ip_address = "192.168.1.100"
 )")
         .def_readwrite("subnet_mask", &VirtualAdapterConfig::subnetMask,
-                      R"(Subnet mask to assign to the adapter.
+                       R"(Subnet mask to assign to the adapter.
 
 The subnet mask that defines the network portion of the IP address.
 
@@ -125,7 +124,7 @@ Examples:
     >>> config.subnet_mask = "255.255.255.0"  # /24 network
 )")
         .def_readwrite("gateway", &VirtualAdapterConfig::gateway,
-                      R"(Default gateway to assign to the adapter.
+                       R"(Default gateway to assign to the adapter.
 
 The IP address of the default gateway for this network interface.
 
@@ -133,7 +132,7 @@ Examples:
     >>> config.gateway = "192.168.1.1"
 )")
         .def_readwrite("primary_dns", &VirtualAdapterConfig::primaryDNS,
-                      R"(Primary DNS server address.
+                       R"(Primary DNS server address.
 
 The IP address of the primary DNS server for name resolution.
 
@@ -141,7 +140,7 @@ Examples:
     >>> config.primary_dns = "8.8.8.8"  # Google DNS
 )")
         .def_readwrite("secondary_dns", &VirtualAdapterConfig::secondaryDNS,
-                      R"(Secondary DNS server address.
+                       R"(Secondary DNS server address.
 
 The IP address of the secondary DNS server for backup name resolution.
 
@@ -149,8 +148,10 @@ Examples:
     >>> config.secondary_dns = "8.8.4.4"  # Google DNS secondary
 )")
         .def("__repr__", [](const VirtualAdapterConfig& self) {
-            return "<VirtualAdapterConfig(name='" + 
-                   std::string(self.adapterName.begin(), self.adapterName.end()) + "')>";
+            return "<VirtualAdapterConfig(name='" +
+                   std::string(self.adapterName.begin(),
+                               self.adapterName.end()) +
+                   "')>";
         });
 
     // VirtualNetworkAdapter class binding
@@ -164,18 +165,18 @@ details and provide a clean interface.
 
 Examples:
     >>> adapter = virtual_network.VirtualNetworkAdapter()
-    >>> 
+    >>>
     >>> # Create a new virtual adapter
     >>> config = virtual_network.VirtualAdapterConfig()
     >>> # ... configure settings ...
     >>> if adapter.create(config):
     ...     print("Adapter created successfully")
-    >>> 
+    >>>
     >>> # Configure IP settings
     >>> success = adapter.configure_ip(
     ...     "MyAdapter", "10.0.0.1", "255.255.255.0", "10.0.0.254"
     ... )
-    >>> 
+    >>>
     >>> # Remove the adapter when done
     >>> adapter.remove("MyAdapter")
 
@@ -183,10 +184,8 @@ Warning:
     Virtual network adapter operations typically require administrator
     privileges and may affect system network configuration.
 )")
-        .def(py::init<>(),
-             "Construct a new Virtual Network Adapter manager.")
-        .def("create", &VirtualNetworkAdapter::Create,
-             py::arg("config"),
+        .def(py::init<>(), "Construct a new Virtual Network Adapter manager.")
+        .def("create", &VirtualNetworkAdapter::Create, py::arg("config"),
              R"(Creates a virtual network adapter.
 
 Args:
@@ -201,7 +200,7 @@ Examples:
     >>> config.hardware_id = "TAP0901"
     >>> config.ip_address = "192.168.100.1"
     >>> config.subnet_mask = "255.255.255.0"
-    >>> 
+    >>>
     >>> adapter = virtual_network.VirtualNetworkAdapter()
     >>> if adapter.create(config):
     ...     print("Virtual adapter created successfully")
@@ -215,8 +214,7 @@ Note:
     - Adapter name must be unique on the system
     - Some antivirus software may interfere with virtual adapters
 )")
-        .def("remove", &VirtualNetworkAdapter::Remove,
-             py::arg("adapter_name"),
+        .def("remove", &VirtualNetworkAdapter::Remove, py::arg("adapter_name"),
              R"(Removes a virtual network adapter.
 
 Args:
@@ -237,7 +235,7 @@ Warning:
     using that adapter and may disrupt network services.
 )")
         .def("configure_ip", &VirtualNetworkAdapter::ConfigureIP,
-             py::arg("adapter_name"), py::arg("ip_address"), 
+             py::arg("adapter_name"), py::arg("ip_address"),
              py::arg("subnet_mask"), py::arg("gateway"),
              R"(Configures IP settings for an adapter.
 
@@ -254,7 +252,7 @@ Examples:
     >>> success = adapter.configure_ip(
     ...     "MyAdapter",
     ...     "10.0.0.100",
-    ...     "255.255.255.0", 
+    ...     "255.255.255.0",
     ...     "10.0.0.1"
     ... )
     >>> if success:
@@ -269,7 +267,8 @@ Note:
     - May require administrator privileges
 )")
         .def("configure_dns", &VirtualNetworkAdapter::ConfigureDNS,
-             py::arg("adapter_name"), py::arg("primary_dns"), py::arg("secondary_dns"),
+             py::arg("adapter_name"), py::arg("primary_dns"),
+             py::arg("secondary_dns"),
              R"(Configures DNS settings for an adapter.
 
 Args:
@@ -294,7 +293,8 @@ Note:
     - Secondary DNS is optional but recommended
     - Changes may require network restart to take full effect
 )")
-        .def("get_last_error_message", &VirtualNetworkAdapter::GetLastErrorMessage,
+        .def("get_last_error_message",
+             &VirtualNetworkAdapter::GetLastErrorMessage,
              R"(Gets the last error message.
 
 Returns:
@@ -304,7 +304,7 @@ Examples:
     >>> if not adapter.create(config):
     ...     error = adapter.get_last_error_message()
     ...     print(f"Error: {error}")
-    ...     
+    ...
     ...     # Common error messages:
     ...     # - "Access denied" - Need administrator privileges
     ...     # - "Driver not found" - Virtual adapter driver not installed
@@ -316,24 +316,27 @@ Note:
 )");
 
     // Utility functions for virtual network management
-    m.def("create_simple_adapter", [](const std::string& name, const std::string& ip, 
-                                     const std::string& mask) -> bool {
-        VirtualAdapterConfig config;
-        
-        // Convert strings to wide strings for Windows API
-        config.adapterName = std::wstring(name.begin(), name.end());
-        config.hardwareID = L"TAP0901";  // Default TAP adapter
-        config.description = L"Simple Virtual Adapter";
-        config.ipAddress = std::wstring(ip.begin(), ip.end());
-        config.subnetMask = std::wstring(mask.begin(), mask.end());
-        config.gateway = L"";  // No gateway by default
-        config.primaryDNS = L"8.8.8.8";
-        config.secondaryDNS = L"8.8.4.4";
-        
-        VirtualNetworkAdapter adapter;
-        return adapter.Create(config);
-    }, py::arg("name"), py::arg("ip_address"), py::arg("subnet_mask"),
-          R"(Create a simple virtual adapter with basic configuration.
+    m.def(
+        "create_simple_adapter",
+        [](const std::string& name, const std::string& ip,
+           const std::string& mask) -> bool {
+            VirtualAdapterConfig config;
+
+            // Convert strings to wide strings for Windows API
+            config.adapterName = std::wstring(name.begin(), name.end());
+            config.hardwareID = L"TAP0901";  // Default TAP adapter
+            config.description = L"Simple Virtual Adapter";
+            config.ipAddress = std::wstring(ip.begin(), ip.end());
+            config.subnetMask = std::wstring(mask.begin(), mask.end());
+            config.gateway = L"";  // No gateway by default
+            config.primaryDNS = L"8.8.8.8";
+            config.secondaryDNS = L"8.8.4.4";
+
+            VirtualNetworkAdapter adapter;
+            return adapter.Create(config);
+        },
+        py::arg("name"), py::arg("ip_address"), py::arg("subnet_mask"),
+        R"(Create a simple virtual adapter with basic configuration.
 
 Args:
     name: Name for the virtual adapter.
@@ -356,12 +359,15 @@ Note:
     default settings and Google DNS servers.
 )");
 
-    m.def("remove_adapter_by_name", [](const std::string& name) -> bool {
-        VirtualNetworkAdapter adapter;
-        std::wstring wide_name(name.begin(), name.end());
-        return adapter.Remove(wide_name);
-    }, py::arg("adapter_name"),
-          R"(Remove a virtual adapter by name.
+    m.def(
+        "remove_adapter_by_name",
+        [](const std::string& name) -> bool {
+            VirtualNetworkAdapter adapter;
+            std::wstring wide_name(name.begin(), name.end());
+            return adapter.Remove(wide_name);
+        },
+        py::arg("adapter_name"),
+        R"(Remove a virtual adapter by name.
 
 Args:
     adapter_name: Name of the adapter to remove.
@@ -378,18 +384,21 @@ Note:
     creating a VirtualNetworkAdapter instance.
 )");
 
-    m.def("get_adapter_info", [](const std::string& name) -> py::dict {
-        py::dict info;
-        info["name"] = name;
-        info["exists"] = false;  // Would need system query to determine
-        info["type"] = "virtual";
-        
-        // Note: Actual implementation would query system for adapter details
-        // This is a placeholder that shows the expected structure
-        
-        return info;
-    }, py::arg("adapter_name"),
-          R"(Get information about a virtual adapter.
+    m.def(
+        "get_adapter_info",
+        [](const std::string& name) -> py::dict {
+            py::dict info;
+            info["name"] = name;
+            info["exists"] = false;  // Would need system query to determine
+            info["type"] = "virtual";
+
+            // Note: Actual implementation would query system for adapter
+            // details This is a placeholder that shows the expected structure
+
+            return info;
+        },
+        py::arg("adapter_name"),
+        R"(Get information about a virtual adapter.
 
 Args:
     adapter_name: Name of the adapter to query.

@@ -9,8 +9,8 @@
 #include <future>
 #include <mutex>
 #include <optional>
-#include <sstream>
 #include <span>
+#include <sstream>
 #include <string>
 #include <thread>
 #include <type_traits>
@@ -40,8 +40,9 @@
 namespace atom::memory {
 
 // Import concepts and types from other namespaces
-template<typename T>
-concept TriviallyCopyable = std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>;
+template <typename T>
+concept TriviallyCopyable =
+    std::is_trivially_copyable_v<T> && std::is_standard_layout_v<T>;
 
 /**
  * @brief Exception class for shared memory errors.
@@ -76,7 +77,10 @@ public:
     SharedMemoryException(const char* file, int line, const char* func,
                           const std::string& message, ErrorCode code)
         : std::runtime_error(formatMessage(file, line, func, message, code)),
-          code_(code), file_(file), line_(line), func_(func) {}
+          code_(code),
+          file_(file),
+          line_(line),
+          func_(func) {}
 
     /**
      * @brief Gets the specific error code.
@@ -115,7 +119,8 @@ public:
 
 private:
     static auto formatMessage(const char* file, int line, const char* func,
-                             const std::string& message, ErrorCode code) -> std::string {
+                              const std::string& message,
+                              ErrorCode code) -> std::string {
         std::ostringstream oss;
         oss << "SharedMemoryException occurred:\n";
         oss << "  File: " << file << "\n";
@@ -158,24 +163,25 @@ private:
     const char* func_{nullptr};
 };
 
-#define THROW_SHARED_MEMORY_ERROR_WITH_CODE(message, code) \
+#define THROW_SHARED_MEMORY_ERROR_WITH_CODE(message, code)                    \
     throw atom::memory::SharedMemoryException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
                                               ATOM_FUNC_NAME, message, code)
 
-#define THROW_SHARED_MEMORY_ERROR(message) \
-    throw atom::memory::SharedMemoryException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
-                                              ATOM_FUNC_NAME, message, \
-                                              atom::memory::SharedMemoryException::ErrorCode::UNKNOWN)
+#define THROW_SHARED_MEMORY_ERROR(message)                       \
+    throw atom::memory::SharedMemoryException(                   \
+        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, message, \
+        atom::memory::SharedMemoryException::ErrorCode::UNKNOWN)
 
-#define THROW_NESTED_SHARED_MEMORY_ERROR(message) \
-    std::throw_with_nested(atom::memory::SharedMemoryException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
-                                                               ATOM_FUNC_NAME, message, \
-                                                               atom::memory::SharedMemoryException::ErrorCode::UNKNOWN))
+#define THROW_NESTED_SHARED_MEMORY_ERROR(message)                \
+    std::throw_with_nested(atom::memory::SharedMemoryException(  \
+        ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, message, \
+        atom::memory::SharedMemoryException::ErrorCode::UNKNOWN))
 
 /**
  * @brief Stream operator for SharedMemoryException::ErrorCode
  */
-inline std::ostream& operator<<(std::ostream& os, const SharedMemoryException::ErrorCode& code) {
+inline std::ostream& operator<<(std::ostream& os,
+                                const SharedMemoryException::ErrorCode& code) {
     switch (code) {
         case SharedMemoryException::ErrorCode::CREATION_FAILED:
             return os << "CREATION_FAILED";
@@ -328,9 +334,8 @@ public:
      */
     template <typename U>
     ATOM_NODISCARD auto readPartial(
-        std::size_t offset,
-        std::chrono::milliseconds timeout = std::chrono::milliseconds(0)) const
-        -> U;
+        std::size_t offset, std::chrono::milliseconds timeout =
+                                std::chrono::milliseconds(0)) const -> U;
 
     /**
      * @brief Tries to read data from shared memory without throwing exceptions.
@@ -400,9 +405,9 @@ public:
      * @param timeout The operation timeout.
      * @return A future indicating the completion of the operation.
      */
-    auto writeAsync(const T& data, std::chrono::milliseconds timeout =
-                                       std::chrono::milliseconds(0))
-        -> std::future<void>;
+    auto writeAsync(const T& data,
+                    std::chrono::milliseconds timeout =
+                        std::chrono::milliseconds(0)) -> std::future<void>;
 
     /**
      * @brief Registers a change callback.
@@ -505,7 +510,9 @@ SharedMemory<T>::SharedMemory(std::string_view name, bool create,
                     std::memcpy(getDataPtr(), &(*initialData), sizeof(T));
                     header_->initialized.store(true, std::memory_order_release);
                     header_->version.fetch_add(1, std::memory_order_release);
-                    spdlog::info("Initialized shared memory with initial data: " + name_);
+                    spdlog::info(
+                        "Initialized shared memory with initial data: " +
+                        name_);
                 },
                 std::chrono::milliseconds(100));
         }
@@ -535,13 +542,15 @@ void SharedMemory<T>::platformSpecificInit() {
     std::string eventName = name_ + "_event";
     changeEvent_ = CreateEventA(nullptr, TRUE, FALSE, eventName.c_str());
     if (!changeEvent_) {
-        spdlog::warn("Failed to create change event for shared memory: " + getLastErrorMessage());
+        spdlog::warn("Failed to create change event for shared memory: " +
+                     getLastErrorMessage());
     }
 #else
     std::string semName = "/" + name_ + "_sem";
     semId_ = sem_open(semName.c_str(), O_CREAT, 0666, 0);
     if (semId_ == SEM_FAILED) {
-        spdlog::warn("Failed to create semaphore for shared memory: " + std::string(strerror(errno)));
+        spdlog::warn("Failed to create semaphore for shared memory: " +
+                     std::string(strerror(errno)));
     }
 #endif
 }
@@ -814,9 +823,8 @@ ATOM_NODISCARD bool SharedMemory<T>::exists(std::string_view name) {
 
 template <TriviallyCopyable T>
 template <typename Func>
-auto SharedMemory<T>::withLock(Func&& func,
-                               std::chrono::milliseconds timeout) const
-    -> decltype(std::forward<Func>(func)()) {
+auto SharedMemory<T>::withLock(Func&& func, std::chrono::milliseconds timeout)
+    const -> decltype(std::forward<Func>(func)()) {
     std::unique_lock lock(mutex_);
     auto startTime = std::chrono::steady_clock::now();
 
@@ -995,9 +1003,8 @@ void SharedMemory<T>::writePartial(const U& data, std::size_t offset,
 
 template <TriviallyCopyable T>
 template <typename U>
-auto SharedMemory<T>::readPartial(std::size_t offset,
-                                  std::chrono::milliseconds timeout) const
-    -> U {
+auto SharedMemory<T>::readPartial(
+    std::size_t offset, std::chrono::milliseconds timeout) const -> U {
     static_assert(std::is_trivially_copyable_v<U>,
                   "U must be trivially copyable");
 
@@ -1103,9 +1110,8 @@ auto SharedMemory<T>::readAsync(std::chrono::milliseconds timeout)
 }
 
 template <TriviallyCopyable T>
-auto SharedMemory<T>::writeAsync(const T& data,
-                                 std::chrono::milliseconds timeout)
-    -> std::future<void> {
+auto SharedMemory<T>::writeAsync(
+    const T& data, std::chrono::milliseconds timeout) -> std::future<void> {
     return std::async(std::launch::async,
                       [this, data, timeout]() { this->write(data, timeout); });
 }
@@ -1180,8 +1186,10 @@ auto SharedMemory<T>::waitForChange(std::chrono::milliseconds timeout) -> bool {
 
 template <TriviallyCopyable T>
 void SharedMemory<T>::startWatchThread() {
-    watchThread_ = std::jthread(
-        [this]([[maybe_unused]] std::stop_token stoken) { this->watchForChanges(); });
+    watchThread_ =
+        std::jthread([this]([[maybe_unused]] std::stop_token stoken) {
+            this->watchForChanges();
+        });
 }
 
 template <TriviallyCopyable T>
@@ -1282,7 +1290,7 @@ auto SharedMemory<T>::getNativeHandle() const -> void* {
 
 // Backward compatibility alias
 namespace atom::connection {
-template<typename T>
+template <typename T>
 using SharedMemory = atom::memory::SharedMemory<T>;
 using SharedMemoryException = atom::memory::SharedMemoryException;
 }  // namespace atom::connection

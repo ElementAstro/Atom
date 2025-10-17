@@ -125,11 +125,11 @@ TEST_F(AsyncGlobTest, GlobWithCallback) {
     std::promise<void> callbackPromise;
     auto callbackFuture = callbackPromise.get_future();
 
-    glob.glob((testDir / "*.txt").string(),
-              [&callbackResult, &callbackPromise](std::vector<fs::path> result) {
-                  callbackResult = std::move(result);
-                  callbackPromise.set_value();
-              });
+    glob.glob((testDir / "*.txt").string(), [&callbackResult, &callbackPromise](
+                                                std::vector<fs::path> result) {
+        callbackResult = std::move(result);
+        callbackPromise.set_value();
+    });
 
     runContext();
 
@@ -216,7 +216,8 @@ TEST_F(AsyncGlobTest, RecursivePattern) {
 TEST_F(AsyncGlobTest, NonExistentDirectory) {
     AsyncGlob glob(*io_context);
 
-    auto result = glob.glob_sync((testDir / "non_existent_dir" / "*.txt").string());
+    auto result =
+        glob.glob_sync((testDir / "non_existent_dir" / "*.txt").string());
 
     EXPECT_TRUE(result.empty());
 }
@@ -387,12 +388,15 @@ TEST_F(AsyncGlobTest, PerformanceWithManyFiles) {
     auto result = glob.glob_sync((manyFilesDir / "*.txt").string());
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
 
     ASSERT_EQ(result.size(), numFiles);
 
     // Performance check - should be reasonably fast
-    std::cout << "Time to glob " << numFiles << " files: " << duration << "ms" << std::endl;
+    std::cout << "Time to glob " << numFiles << " files: " << duration << "ms"
+              << std::endl;
 
     // This is not a strict test as timing depends on the system,
     // but we can output the timing for information
@@ -430,8 +434,9 @@ TEST_F(AsyncGlobTest, ConcurrentModification) {
     auto result = resultFuture.get();
     globThread.join();
 
-    // We can't make strict assertions about what should be returned, as it depends
-    // on timing, but we can verify it didn't crash and returned something reasonable
+    // We can't make strict assertions about what should be returned, as it
+    // depends on timing, but we can verify it didn't crash and returned
+    // something reasonable
     for (const auto& path : result) {
         std::cout << "Found in concurrent test: " << path << std::endl;
     }
@@ -466,7 +471,7 @@ TEST_F(AsyncGlobTest, SpecialCharacters) {
 
     // Test glob with various special characters
     auto mixedResult = glob.glob_sync((testDir / "file*").string());
-    ASSERT_EQ(mixedResult.size(), 8); // Includes the original files
+    ASSERT_EQ(mixedResult.size(), 8);  // Includes the original files
     EXPECT_THAT(mixedResult, Contains(testDir / "file-with-dashes.txt"));
     EXPECT_THAT(mixedResult, Contains(testDir / "file+with+plus.txt"));
     EXPECT_THAT(mixedResult, Contains(testDir / "file.with.dots.txt"));
@@ -574,11 +579,9 @@ TEST_F(AsyncGlobTest, ExpandTilde) {
 TEST_F(AsyncGlobTest, FilterFunctionality) {
     AsyncGlob glob(*io_context);
 
-    std::vector<std::string> paths = {
-        (testDir / "file1.txt").string(),
-        (testDir / "file2.txt").string(),
-        (testDir / "file3.dat").string()
-    };
+    std::vector<std::string> paths = {(testDir / "file1.txt").string(),
+                                      (testDir / "file2.txt").string(),
+                                      (testDir / "file3.dat").string()};
 
     auto filtered = glob.filter(paths, "*.txt");
     EXPECT_EQ(filtered.size(), 2);

@@ -712,9 +712,8 @@ public:
      * is being destroyed
      */
     template <typename Clock, typename Duration>
-    [[nodiscard]] auto takeUntil(
-        const std::chrono::time_point<Clock, Duration>& timeout_time)
-        -> std::optional<T> {
+    [[nodiscard]] auto takeUntil(const std::chrono::time_point<Clock, Duration>&
+                                     timeout_time) -> std::optional<T> {
         std::unique_lock<HybridMutex> lock(m_mutex);
         if (m_conditionVariable_.wait_until(lock, timeout_time, [this] {
                 return !m_queue_.empty() || m_mustReturnNullptr_;

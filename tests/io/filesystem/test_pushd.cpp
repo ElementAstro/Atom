@@ -17,7 +17,8 @@ namespace fs = std::filesystem;
 class DirectoryStackTest : public ::testing::Test {
 protected:
     asio::io_context io_context;
-    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> work;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>>
+        work;
     std::thread io_thread;
     atom::io::DirectoryStack dir_stack;
     fs::path original_path;
@@ -26,7 +27,8 @@ protected:
 
     DirectoryStackTest() : dir_stack(io_context) {
         // Keep io_context running
-        work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
+        work = std::make_unique<
+            asio::executor_work_guard<asio::io_context::executor_type>>(
             asio::make_work_guard(io_context));
         io_thread = std::thread([this]() { io_context.run(); });
     }
@@ -77,7 +79,7 @@ protected:
     }
 
     // Helper functions for specific async operations
-    template<typename P>
+    template <typename P>
     std::error_code asyncPushd(const P& path) {
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
@@ -86,7 +88,8 @@ protected:
             promise.set_value(ec);
         });
 
-        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+        if (future.wait_for(std::chrono::seconds(5)) ==
+            std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
@@ -96,11 +99,11 @@ protected:
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
 
-        dir_stack.asyncPopd([&promise](const std::error_code& ec) {
-            promise.set_value(ec);
-        });
+        dir_stack.asyncPopd(
+            [&promise](const std::error_code& ec) { promise.set_value(ec); });
 
-        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+        if (future.wait_for(std::chrono::seconds(5)) ==
+            std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
@@ -114,7 +117,8 @@ protected:
             promise.set_value(ec);
         });
 
-        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+        if (future.wait_for(std::chrono::seconds(5)) ==
+            std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
@@ -124,11 +128,12 @@ protected:
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
 
-        dir_stack.asyncSaveStackToFile(filename, [&promise](const std::error_code& ec) {
-            promise.set_value(ec);
-        });
+        dir_stack.asyncSaveStackToFile(
+            filename,
+            [&promise](const std::error_code& ec) { promise.set_value(ec); });
 
-        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+        if (future.wait_for(std::chrono::seconds(5)) ==
+            std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
@@ -138,11 +143,12 @@ protected:
         std::promise<std::error_code> promise;
         std::future<std::error_code> future = promise.get_future();
 
-        dir_stack.asyncLoadStackFromFile(filename, [&promise](const std::error_code& ec) {
-            promise.set_value(ec);
-        });
+        dir_stack.asyncLoadStackFromFile(
+            filename,
+            [&promise](const std::error_code& ec) { promise.set_value(ec); });
 
-        if (future.wait_for(std::chrono::seconds(5)) == std::future_status::timeout) {
+        if (future.wait_for(std::chrono::seconds(5)) ==
+            std::future_status::timeout) {
             return std::make_error_code(std::errc::timed_out);
         }
         return future.get();
@@ -483,7 +489,8 @@ TEST_F(DirectoryStackTest, ConcurrentOperations) {
                     // Odd threads get current directory
                     fs::path current;
                     dir_stack.asyncGetCurrentDirectory(
-                        [&current](const fs::path& path, const std::error_code& ec) {
+                        [&current](const fs::path& path,
+                                   const std::error_code& ec) {
                             if (!ec) {
                                 current = path;
                             }
@@ -592,7 +599,8 @@ TEST_F(DirectoryStackTest, MoveOperations) {
 
     // Create new io_context for new DirectoryStack
     asio::io_context new_io_context;
-    auto new_work = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
+    auto new_work = std::make_unique<
+        asio::executor_work_guard<asio::io_context::executor_type>>(
         asio::make_work_guard(new_io_context));
     std::thread new_thread([&new_io_context]() { new_io_context.run(); });
 
@@ -729,10 +737,11 @@ TEST_F(DirectoryStackTest, SaveLoadEmptyStack) {
 
     // Save empty stack - using async version with callback
     bool save_completed = false;
-    dir_stack.asyncSaveStackToFile(stack_file.string(), [&](const std::error_code& ec) {
-        EXPECT_FALSE(ec);
-        save_completed = true;
-    });
+    dir_stack.asyncSaveStackToFile(stack_file.string(),
+                                   [&](const std::error_code& ec) {
+                                       EXPECT_FALSE(ec);
+                                       save_completed = true;
+                                   });
 
     // Wait for async operation
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -741,10 +750,11 @@ TEST_F(DirectoryStackTest, SaveLoadEmptyStack) {
 
     // Load empty stack - using async version with callback
     bool load_completed = false;
-    dir_stack.asyncLoadStackFromFile(stack_file.string(), [&](const std::error_code& ec) {
-        EXPECT_FALSE(ec);
-        load_completed = true;
-    });
+    dir_stack.asyncLoadStackFromFile(stack_file.string(),
+                                     [&](const std::error_code& ec) {
+                                         EXPECT_FALSE(ec);
+                                         load_completed = true;
+                                     });
 
     // Wait for async operation
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -764,10 +774,12 @@ TEST_F(DirectoryStackTest, LoadCorruptedStackFile) {
 
     // Try to load corrupted file - using async version with callback
     bool load_completed = false;
-    dir_stack.asyncLoadStackFromFile(corrupted_file.string(), [&](const std::error_code& ec) {
-        // Should handle gracefully (implementation-dependent)
-        load_completed = true;
-    });
+    dir_stack.asyncLoadStackFromFile(corrupted_file.string(),
+                                     [&](const std::error_code& ec) {
+                                         // Should handle gracefully
+                                         // (implementation-dependent)
+                                         load_completed = true;
+                                     });
 
     // Wait for async operation
     std::this_thread::sleep_for(std::chrono::milliseconds(100));

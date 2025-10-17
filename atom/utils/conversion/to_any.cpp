@@ -66,8 +66,8 @@ private:
     template <typename K, typename V>
     auto parseMapOf(std::string_view str) -> std::optional<std::map<K, V>>;
 
-    static auto split(std::string_view str, char delimiter)
-        -> std::vector<std::string>;
+    static auto split(std::string_view str,
+                      char delimiter) -> std::vector<std::string>;
     static auto parseDateTime(std::string_view str)
         -> std::optional<std::chrono::system_clock::time_point>;
 
@@ -353,8 +353,10 @@ auto Parser::Impl::fromString(std::string_view str) -> std::optional<std::any> {
     }
 
     // Check if this looks like a container format before falling back to string
-    if (trimmed.find(',') != std::string_view::npos || trimmed.find(':') != std::string_view::npos) {
-        // Don't parse as string if it contains comma or colon - let container parsers handle it
+    if (trimmed.find(',') != std::string_view::npos ||
+        trimmed.find(':') != std::string_view::npos) {
+        // Don't parse as string if it contains comma or colon - let container
+        // parsers handle it
         return std::nullopt;
     }
 
@@ -436,8 +438,8 @@ auto Parser::Impl::parseMapOf(std::string_view str)
     return result;
 }
 
-auto Parser::Impl::split(std::string_view str, char delimiter)
-    -> std::vector<std::string> {
+auto Parser::Impl::split(std::string_view str,
+                         char delimiter) -> std::vector<std::string> {
     std::vector<std::string> result;
     if (str.empty()) {
         return result;

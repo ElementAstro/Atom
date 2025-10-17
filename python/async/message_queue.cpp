@@ -260,9 +260,8 @@ Examples:
     >>> print(f"Messages in queue: {count}")
 )")
 
-        .def(
-            "get_subscriber_count", &MQ::getSubscriberCount,
-            R"(Get the number of subscribers currently subscribed to the queue.
+        .def("get_subscriber_count", &MQ::getSubscriberCount,
+             R"(Get the number of subscribers currently subscribed to the queue.
 
 Returns:
     The number of subscribers
@@ -457,13 +456,15 @@ Examples:
 )")
 
         // Queue state and statistics methods
-        .def("is_running",
-             [](const MQ& mq) -> bool {
-                 // Access private member through reflection or add public getter
-                 // For now, we'll use a workaround
-                 return mq.getSubscriberCount() >= 0; // Always true, placeholder
-             },
-             R"(Check if the message queue is currently running.
+        .def(
+            "is_running",
+            [](const MQ& mq) -> bool {
+                // Access private member through reflection or add public getter
+                // For now, we'll use a workaround
+                return mq.getSubscriberCount() >=
+                       0;  // Always true, placeholder
+            },
+            R"(Check if the message queue is currently running.
 
 Returns:
     bool: True if the queue is processing messages
@@ -473,15 +474,16 @@ Examples:
     >>>     print("Queue is active")
 )")
 
-        .def("has_lockfree_support",
-             []() -> bool {
+        .def(
+            "has_lockfree_support",
+            []() -> bool {
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-                 return true;
+                return true;
 #else
-                 return false;
+                return false;
 #endif
-             },
-             R"(Check if lockfree queue support is enabled.
+            },
+            R"(Check if lockfree queue support is enabled.
 
 Returns:
     bool: True if lockfree queue support is compiled in
@@ -491,15 +493,16 @@ Examples:
     >>>     print("Lockfree queues are supported")
 )")
 
-        .def("has_asio_support",
-             []() -> bool {
+        .def(
+            "has_asio_support",
+            []() -> bool {
 #ifdef ATOM_USE_ASIO
-                 return true;
+                return true;
 #else
-                 return false;
+                return false;
 #endif
-             },
-             R"(Check if ASIO support is enabled.
+            },
+            R"(Check if ASIO support is enabled.
 
 Returns:
     bool: True if ASIO support is compiled in
@@ -618,11 +621,9 @@ PYBIND11_MODULE(message_queue, m) {
         m, "StringDict");
 
     // Utility functions for message queue management
-    m.def("create_io_context",
-          []() {
-              return std::make_unique<PyIOContext>();
-          },
-          R"(Create a new PyIOContext instance.
+    m.def(
+        "create_io_context", []() { return std::make_unique<PyIOContext>(); },
+        R"(Create a new PyIOContext instance.
 
 Returns:
     A new PyIOContext for use with MessageQueue.
@@ -634,29 +635,30 @@ Examples:
     >>> queue = MessageQueueString(io_context)
 )");
 
-    m.def("get_feature_info",
-          []() -> py::dict {
-              py::dict features;
+    m.def(
+        "get_feature_info",
+        []() -> py::dict {
+            py::dict features;
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-              features["lockfree_queue"] = true;
+            features["lockfree_queue"] = true;
 #ifdef ATOM_USE_SPSC_QUEUE
-              features["queue_type"] = "spsc";
+            features["queue_type"] = "spsc";
 #else
-              features["queue_type"] = "mpmc";
+            features["queue_type"] = "mpmc";
 #endif
 #else
-              features["lockfree_queue"] = false;
-              features["queue_type"] = "standard";
+            features["lockfree_queue"] = false;
+            features["queue_type"] = "standard";
 #endif
 
 #ifdef ATOM_USE_ASIO
-              features["asio_support"] = true;
+            features["asio_support"] = true;
 #else
-              features["asio_support"] = false;
+            features["asio_support"] = false;
 #endif
-              return features;
-          },
-          R"(Get information about compiled features.
+            return features;
+        },
+        R"(Get information about compiled features.
 
 Returns:
     dict: Dictionary containing feature information:
@@ -671,91 +673,103 @@ Examples:
 )");
 
     // Advanced utility functions for message queue management
-    m.def("benchmark_message_queue_performance",
-          [](PyIOContext& io_context, int num_publishers, int num_subscribers,
-             int messages_per_publisher) -> py::dict {
-              using namespace std::chrono;
-              using MQ = atom::async::MessageQueue<std::string>;
+    m.def(
+         "benchmark_message_queue_performance",
+         [](PyIOContext& io_context, int num_publishers, int num_subscribers,
+            int messages_per_publisher) -> py::dict {
+             using namespace std::chrono;
+             using MQ = atom::async::MessageQueue<std::string>;
 
-              py::dict results;
-              std::vector<std::thread> publisher_threads;
-              std::atomic<int> messages_received{0};
-              std::vector<double> publisher_times(num_publishers);
+             py::dict results;
+             std::vector<std::thread> publisher_threads;
+             std::atomic<int> messages_received{0};
+             std::vector<double> publisher_times(num_publishers);
 
-              // Create message queue
-              auto queue = std::make_unique<MQ>(io_context.get_io_context());
+             // Create message queue
+             auto queue = std::make_unique<MQ>(io_context.get_io_context());
 
-              // Create subscribers
-              for (int i = 0; i < num_subscribers; ++i) {
-                  queue->subscribe(
-                      [&messages_received](const std::string& msg) {
-                          messages_received.fetch_add(1, std::memory_order_relaxed);
-                      },
-                      "benchmark_subscriber_" + std::to_string(i));
-              }
+             // Create subscribers
+             for (int i = 0; i < num_subscribers; ++i) {
+                 queue->subscribe(
+                     [&messages_received](const std::string& msg) {
+                         messages_received.fetch_add(1,
+                                                     std::memory_order_relaxed);
+                     },
+                     "benchmark_subscriber_" + std::to_string(i));
+             }
 
-              // Start processing
-              queue->startProcessing();
+             // Start processing
+             queue->startProcessing();
 
-              auto start_time = high_resolution_clock::now();
+             auto start_time = high_resolution_clock::now();
 
-              // Create publishers
-              for (int i = 0; i < num_publishers; ++i) {
-                  publisher_threads.emplace_back([&queue, &publisher_times, i, messages_per_publisher]() {
-                      auto thread_start = high_resolution_clock::now();
+             // Create publishers
+             for (int i = 0; i < num_publishers; ++i) {
+                 publisher_threads.emplace_back([&queue, &publisher_times, i,
+                                                 messages_per_publisher]() {
+                     auto thread_start = high_resolution_clock::now();
 
-                      for (int j = 0; j < messages_per_publisher; ++j) {
-                          queue->publish("Message " + std::to_string(j), j % 10);
-                      }
+                     for (int j = 0; j < messages_per_publisher; ++j) {
+                         queue->publish("Message " + std::to_string(j), j % 10);
+                     }
 
-                      auto thread_end = high_resolution_clock::now();
-                      auto duration = duration_cast<microseconds>(thread_end - thread_start);
-                      publisher_times[i] = duration.count();
-                  });
-              }
+                     auto thread_end = high_resolution_clock::now();
+                     auto duration =
+                         duration_cast<microseconds>(thread_end - thread_start);
+                     publisher_times[i] = duration.count();
+                 });
+             }
 
-              // Wait for all publishers to complete
-              for (auto& thread : publisher_threads) {
-                  thread.join();
-              }
+             // Wait for all publishers to complete
+             for (auto& thread : publisher_threads) {
+                 thread.join();
+             }
 
-              // Wait a bit for message processing
-              std::this_thread::sleep_for(std::chrono::milliseconds(200));
+             // Wait a bit for message processing
+             std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-              auto end_time = high_resolution_clock::now();
-              auto total_duration = duration_cast<microseconds>(end_time - start_time);
+             auto end_time = high_resolution_clock::now();
+             auto total_duration =
+                 duration_cast<microseconds>(end_time - start_time);
 
-              // Stop processing
-              queue->stopProcessing();
+             // Stop processing
+             queue->stopProcessing();
 
-              // Calculate statistics
-              double total_messages = num_publishers * messages_per_publisher;
-              double avg_publisher_time = 0;
-              for (double time : publisher_times) {
-                  avg_publisher_time += time;
-              }
-              avg_publisher_time /= num_publishers;
+             // Calculate statistics
+             double total_messages = num_publishers * messages_per_publisher;
+             double avg_publisher_time = 0;
+             for (double time : publisher_times) {
+                 avg_publisher_time += time;
+             }
+             avg_publisher_time /= num_publishers;
 
-              double min_time = *std::min_element(publisher_times.begin(), publisher_times.end());
-              double max_time = *std::max_element(publisher_times.begin(), publisher_times.end());
+             double min_time = *std::min_element(publisher_times.begin(),
+                                                 publisher_times.end());
+             double max_time = *std::max_element(publisher_times.begin(),
+                                                 publisher_times.end());
 
-              results[py::str("num_publishers")] = num_publishers;
-              results[py::str("num_subscribers")] = num_subscribers;
-              results[py::str("messages_per_publisher")] = messages_per_publisher;
-              results[py::str("total_messages_sent")] = total_messages;
-              results[py::str("total_messages_received")] = messages_received.load();
-              results[py::str("total_time_us")] = total_duration.count();
-              results[py::str("avg_publisher_time_us")] = avg_publisher_time;
-              results[py::str("min_publisher_time_us")] = min_time;
-              results[py::str("max_publisher_time_us")] = max_time;
-              results[py::str("messages_per_second")] = (total_messages * 1000000.0) / total_duration.count();
-              results[py::str("delivery_rate")] = (double)messages_received.load() / total_messages;
+             results[py::str("num_publishers")] = num_publishers;
+             results[py::str("num_subscribers")] = num_subscribers;
+             results[py::str("messages_per_publisher")] =
+                 messages_per_publisher;
+             results[py::str("total_messages_sent")] = total_messages;
+             results[py::str("total_messages_received")] =
+                 messages_received.load();
+             results[py::str("total_time_us")] = total_duration.count();
+             results[py::str("avg_publisher_time_us")] = avg_publisher_time;
+             results[py::str("min_publisher_time_us")] = min_time;
+             results[py::str("max_publisher_time_us")] = max_time;
+             results[py::str("messages_per_second")] =
+                 (total_messages * 1000000.0) / total_duration.count();
+             results[py::str("delivery_rate")] =
+                 (double)messages_received.load() / total_messages;
 
-              return results;
-          },
-          py::arg("io_context"), py::arg("num_publishers") = 4, py::arg("num_subscribers") = 4,
-          py::arg("messages_per_publisher") = 1000,
-          R"pbdoc(
+             return results;
+         },
+         py::arg("io_context"), py::arg("num_publishers") = 4,
+         py::arg("num_subscribers") = 4,
+         py::arg("messages_per_publisher") = 1000,
+         R"pbdoc(
           Benchmark message queue performance with multiple publishers and subscribers.
 
           Args:
@@ -774,33 +788,37 @@ Examples:
               >>> print(f"Delivery rate: {results['delivery_rate']:.2%}")
           )pbdoc")
 
-    .def("create_message_queue_pool",
-         [](PyIOContext& io_context, size_t pool_size) -> py::dict {
-             py::dict pool;
+        .def(
+            "create_message_queue_pool",
+            [](PyIOContext& io_context, size_t pool_size) -> py::dict {
+                py::dict pool;
 
-             // Create string queues
-             py::list string_queues;
-             for (size_t i = 0; i < pool_size; ++i) {
-                 string_queues.append(std::make_unique<atom::async::MessageQueue<std::string>>(
-                     io_context.get_io_context()));
-             }
-             pool[py::str("string")] = string_queues;
+                // Create string queues
+                py::list string_queues;
+                for (size_t i = 0; i < pool_size; ++i) {
+                    string_queues.append(
+                        std::make_unique<
+                            atom::async::MessageQueue<std::string>>(
+                            io_context.get_io_context()));
+                }
+                pool[py::str("string")] = string_queues;
 
-             // Create int queues
-             py::list int_queues;
-             for (size_t i = 0; i < pool_size; ++i) {
-                 int_queues.append(std::make_unique<atom::async::MessageQueue<int>>(
-                     io_context.get_io_context()));
-             }
-             pool[py::str("int")] = int_queues;
+                // Create int queues
+                py::list int_queues;
+                for (size_t i = 0; i < pool_size; ++i) {
+                    int_queues.append(
+                        std::make_unique<atom::async::MessageQueue<int>>(
+                            io_context.get_io_context()));
+                }
+                pool[py::str("int")] = int_queues;
 
-             pool[py::str("pool_size")] = pool_size;
-             pool[py::str("current_index")] = 0;
+                pool[py::str("pool_size")] = pool_size;
+                pool[py::str("current_index")] = 0;
 
-             return pool;
-         },
-         py::arg("io_context"), py::arg("pool_size"),
-         R"pbdoc(
+                return pool;
+            },
+            py::arg("io_context"), py::arg("pool_size"),
+            R"pbdoc(
          Create a pool of MessageQueue instances for load distribution.
 
          Args:
@@ -817,16 +835,19 @@ Examples:
              >>> int_queue = pool["int"][0]
          )pbdoc")
 
-    .def("create_queue_statistics_collector",
-         []() -> py::dict {
-             py::dict collector;
-             collector[py::str("queues")] = py::list();
-             collector[py::str("start_time")] = std::chrono::duration_cast<std::chrono::milliseconds>(
-                 std::chrono::steady_clock::now().time_since_epoch()).count();
+        .def(
+            "create_queue_statistics_collector",
+            []() -> py::dict {
+                py::dict collector;
+                collector[py::str("queues")] = py::list();
+                collector[py::str("start_time")] =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch())
+                        .count();
 
-             return collector;
-         },
-         R"pbdoc(
+                return collector;
+            },
+            R"pbdoc(
          Create a statistics collector for monitoring multiple queues.
 
          Returns:

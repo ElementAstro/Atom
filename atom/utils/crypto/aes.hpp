@@ -46,11 +46,10 @@ concept StringLike = requires(T t) {
  * @throws std::invalid_argument If inputs are invalid
  * @throws std::runtime_error If decryption fails
  */
-[[nodiscard]] auto decryptAES(StringLike auto&& ciphertext,
-                              StringLike auto&& key,
-                              std::span<const unsigned char> iv,
-                              std::span<const unsigned char> tag)
-    -> std::string;
+[[nodiscard]] auto decryptAES(
+    StringLike auto&& ciphertext, StringLike auto&& key,
+    std::span<const unsigned char> iv,
+    std::span<const unsigned char> tag) -> std::string;
 
 /**
  * @brief Compresses the input data using the Zlib library.

@@ -20,7 +20,6 @@
 #include <sstream>
 #include <string>
 
-
 // Atom Meta time utilities
 #include "atom/meta/time.hpp"
 

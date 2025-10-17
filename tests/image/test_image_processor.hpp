@@ -3,16 +3,16 @@
 
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include <vector>
+#include <atomic>
 #include <chrono>
 #include <thread>
-#include <atomic>
+#include <vector>
 
-#include "atom/image/processing/image_processor.hpp"
 #include "atom/image/core/image_blob.hpp"
+#include "atom/image/processing/image_processor.hpp"
 
 namespace atom::image::test {
 
@@ -55,10 +55,12 @@ protected:
         }
 
         // Create blob from test data
-        test_blob = atom::image::blob(test_image_data.data(), test_image_data.size());
+        test_blob =
+            atom::image::blob(test_image_data.data(), test_image_data.size());
         // Set image dimensions
-        test_blob = atom::image::blob(); // Reset and configure properly
-        // Note: In a real implementation, we'd need to set the dimensions properly
+        test_blob = atom::image::blob();  // Reset and configure properly
+        // Note: In a real implementation, we'd need to set the dimensions
+        // properly
     }
 
     std::unique_ptr<atom::image::ImageProcessor> processor;
@@ -80,8 +82,8 @@ TEST_F(ImageProcessorTest, ProcessorCreation) {
 
 // Test resize operation
 TEST_F(ImageProcessorTest, ResizeOperation) {
-    // Skip if OpenCV not available
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+// Skip if OpenCV not available
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test basic resize
     auto resized = processor->resize(test_blob, 16, 16);
@@ -100,16 +102,17 @@ TEST_F(ImageProcessorTest, ResizeOperation) {
     // Test invalid dimensions
     EXPECT_THROW((void)processor->resize(test_blob, 0, 10), std::runtime_error);
     EXPECT_THROW((void)processor->resize(test_blob, 10, 0), std::runtime_error);
-    EXPECT_THROW((void)processor->resize(test_blob, -5, 10), std::runtime_error);
+    EXPECT_THROW((void)processor->resize(test_blob, -5, 10),
+                 std::runtime_error);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping resize tests";
-    #endif
+#endif
 }
 
 // Test rotation operation
 TEST_F(ImageProcessorTest, RotationOperation) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test 90-degree rotation
     auto rotated90 = processor->rotate(test_blob, 90.0);
@@ -131,14 +134,14 @@ TEST_F(ImageProcessorTest, RotationOperation) {
     EXPECT_GE(rotated_expand.getWidth() * rotated_expand.getHeight(),
               rotated_no_expand.getWidth() * rotated_no_expand.getHeight());
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping rotation tests";
-    #endif
+#endif
 }
 
 // Test crop operation
 TEST_F(ImageProcessorTest, CropOperation) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test valid crop
     auto cropped = processor->crop(test_blob, 2, 2, 4, 4);
@@ -151,85 +154,92 @@ TEST_F(ImageProcessorTest, CropOperation) {
     EXPECT_EQ(edge_crop.getHeight(), 4);
 
     // Test invalid crop parameters
-    EXPECT_THROW((void)processor->crop(test_blob, -1, 0, 4, 4), std::runtime_error);
-    EXPECT_THROW((void)processor->crop(test_blob, 0, -1, 4, 4), std::runtime_error);
-    EXPECT_THROW((void)processor->crop(test_blob, 0, 0, 0, 4), std::runtime_error);
-    EXPECT_THROW((void)processor->crop(test_blob, 0, 0, 4, 0), std::runtime_error);
+    EXPECT_THROW((void)processor->crop(test_blob, -1, 0, 4, 4),
+                 std::runtime_error);
+    EXPECT_THROW((void)processor->crop(test_blob, 0, -1, 4, 4),
+                 std::runtime_error);
+    EXPECT_THROW((void)processor->crop(test_blob, 0, 0, 0, 4),
+                 std::runtime_error);
+    EXPECT_THROW((void)processor->crop(test_blob, 0, 0, 4, 0),
+                 std::runtime_error);
 
     // Test crop exceeding image bounds
-    EXPECT_THROW((void)processor->crop(test_blob, 5, 5, 10, 10), std::runtime_error);
+    EXPECT_THROW((void)processor->crop(test_blob, 5, 5, 10, 10),
+                 std::runtime_error);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping crop tests";
-    #endif
+#endif
 }
 
 // Test filter operations
 TEST_F(ImageProcessorTest, FilterOperations) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test Gaussian blur
     std::unordered_map<std::string, double> blur_params = {{"sigma", 1.0}};
-    auto blurred = processor->applyFilter(test_blob, atom::image::FilterType::GAUSSIAN_BLUR, blur_params);
+    auto blurred = processor->applyFilter(
+        test_blob, atom::image::FilterType::GAUSSIAN_BLUR, blur_params);
     EXPECT_NE(blurred, test_blob);
 
     // Test sharpen filter
-    std::unordered_map<std::string, double> sharpen_params = {{"strength", 1.0}};
-    auto sharpened = processor->applyFilter(test_blob, atom::image::FilterType::SHARPEN, sharpen_params);
+    std::unordered_map<std::string, double> sharpen_params = {
+        {"strength", 1.0}};
+    auto sharpened = processor->applyFilter(
+        test_blob, atom::image::FilterType::SHARPEN, sharpen_params);
     EXPECT_NE(sharpened, test_blob);
 
     // Test median filter
     std::unordered_map<std::string, double> median_params = {{"kernelSize", 3}};
-    auto median_filtered = processor->applyFilter(test_blob, atom::image::FilterType::MEDIAN, median_params);
+    auto median_filtered = processor->applyFilter(
+        test_blob, atom::image::FilterType::MEDIAN, median_params);
     EXPECT_NE(median_filtered, test_blob);
 
     // Test edge detection
-    auto edges = processor->applyFilter(test_blob, atom::image::FilterType::EDGE_DETECT);
+    auto edges =
+        processor->applyFilter(test_blob, atom::image::FilterType::EDGE_DETECT);
     EXPECT_NE(edges, test_blob);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping filter tests";
-    #endif
+#endif
 }
 
 // Test custom kernel application
 TEST_F(ImageProcessorTest, CustomKernelOperation) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test identity kernel (should preserve image)
-    std::vector<float> identity_kernel = {
-        0, 0, 0,
-        0, 1, 0,
-        0, 0, 0
-    };
-    auto identity_result = processor->applyCustomKernel(test_blob, identity_kernel, 3);
-    // Should be very similar to original (allowing for minor differences due to processing)
+    std::vector<float> identity_kernel = {0, 0, 0, 0, 1, 0, 0, 0, 0};
+    auto identity_result =
+        processor->applyCustomKernel(test_blob, identity_kernel, 3);
+    // Should be very similar to original (allowing for minor differences due to
+    // processing)
 
     // Test edge detection kernel
-    std::vector<float> edge_kernel = {
-        -1, -1, -1,
-        -1,  8, -1,
-        -1, -1, -1
-    };
+    std::vector<float> edge_kernel = {-1, -1, -1, -1, 8, -1, -1, -1, -1};
     auto edge_result = processor->applyCustomKernel(test_blob, edge_kernel, 3);
     EXPECT_NE(edge_result, test_blob);
 
     // Test invalid kernel parameters
-    std::vector<float> invalid_kernel = {1, 2, 3, 4}; // Wrong size for 3x3
-    EXPECT_THROW((void)processor->applyCustomKernel(test_blob, invalid_kernel, 3), std::runtime_error);
+    std::vector<float> invalid_kernel = {1, 2, 3, 4};  // Wrong size for 3x3
+    EXPECT_THROW(
+        (void)processor->applyCustomKernel(test_blob, invalid_kernel, 3),
+        std::runtime_error);
 
     // Test even kernel size (should fail)
-    std::vector<float> even_kernel(16, 1.0f); // 4x4 kernel
-    EXPECT_THROW((void)processor->applyCustomKernel(test_blob, even_kernel, 4), std::runtime_error);
+    std::vector<float> even_kernel(16, 1.0f);  // 4x4 kernel
+    EXPECT_THROW((void)processor->applyCustomKernel(test_blob, even_kernel, 4),
+                 std::runtime_error);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping custom kernel tests";
-    #endif
+#endif
 }
 
 // Test brightness and contrast adjustment
 TEST_F(ImageProcessorTest, BrightnessContrastAdjustment) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test brightness increase
     auto brighter = processor->adjustBrightnessContrast(test_blob, 50, 0);
@@ -240,11 +250,13 @@ TEST_F(ImageProcessorTest, BrightnessContrastAdjustment) {
     EXPECT_NE(darker, test_blob);
 
     // Test contrast increase
-    auto higher_contrast = processor->adjustBrightnessContrast(test_blob, 0, 50);
+    auto higher_contrast =
+        processor->adjustBrightnessContrast(test_blob, 0, 50);
     EXPECT_NE(higher_contrast, test_blob);
 
     // Test contrast decrease
-    auto lower_contrast = processor->adjustBrightnessContrast(test_blob, 0, -50);
+    auto lower_contrast =
+        processor->adjustBrightnessContrast(test_blob, 0, -50);
     EXPECT_NE(lower_contrast, test_blob);
 
     // Test combined adjustment
@@ -252,17 +264,19 @@ TEST_F(ImageProcessorTest, BrightnessContrastAdjustment) {
     EXPECT_NE(adjusted, test_blob);
 
     // Test extreme values
-    auto extreme_bright = processor->adjustBrightnessContrast(test_blob, 100, 100);
-    auto extreme_dark = processor->adjustBrightnessContrast(test_blob, -100, -100);
+    auto extreme_bright =
+        processor->adjustBrightnessContrast(test_blob, 100, 100);
+    auto extreme_dark =
+        processor->adjustBrightnessContrast(test_blob, -100, -100);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping brightness/contrast tests";
-    #endif
+#endif
 }
 
 // Test gamma correction
 TEST_F(ImageProcessorTest, GammaCorrection) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test gamma > 1 (darker)
     auto gamma_high = processor->adjustGamma(test_blob, 2.0);
@@ -277,17 +291,19 @@ TEST_F(ImageProcessorTest, GammaCorrection) {
     // Should be very similar to original
 
     // Test invalid gamma values
-    EXPECT_THROW((void)processor->adjustGamma(test_blob, 0.0), std::runtime_error);
-    EXPECT_THROW((void)processor->adjustGamma(test_blob, -1.0), std::runtime_error);
+    EXPECT_THROW((void)processor->adjustGamma(test_blob, 0.0),
+                 std::runtime_error);
+    EXPECT_THROW((void)processor->adjustGamma(test_blob, -1.0),
+                 std::runtime_error);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping gamma correction tests";
-    #endif
+#endif
 }
 
 // Test histogram enhancement
 TEST_F(ImageProcessorTest, HistogramEnhancement) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Test standard histogram equalization
     auto equalized = processor->enhanceHistogram(test_blob, false);
@@ -300,14 +316,15 @@ TEST_F(ImageProcessorTest, HistogramEnhancement) {
     // Results should be different
     EXPECT_NE(equalized, adaptive_equalized);
 
-    #else
-    GTEST_SKIP() << "OpenCV not available, skipping histogram enhancement tests";
-    #endif
+#else
+    GTEST_SKIP()
+        << "OpenCV not available, skipping histogram enhancement tests";
+#endif
 }
 
 // Test batch processing
 TEST_F(ImageProcessorTest, BatchProcessing) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Create multiple test images
     std::vector<atom::image::blob> input_images;
@@ -331,14 +348,14 @@ TEST_F(ImageProcessorTest, BatchProcessing) {
         EXPECT_EQ(result.getHeight(), 4);
     }
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping batch processing tests";
-    #endif
+#endif
 }
 
 // Test image statistics
 TEST_F(ImageProcessorTest, ImageStatistics) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     auto stats = processor->getStatistics(test_blob);
 
@@ -361,9 +378,9 @@ TEST_F(ImageProcessorTest, ImageStatistics) {
     EXPECT_GT(stats["height"], 0.0);
     EXPECT_GT(stats["channels"], 0.0);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping statistics tests";
-    #endif
+#endif
 }
 
 // Test processing options
@@ -372,7 +389,7 @@ TEST_F(ImageProcessorTest, ProcessingOptions) {
     options.useMultithreading = false;
     options.enableSIMD = false;
     options.quality = 80;
-    options.maxMemoryUsage = 512 * 1024 * 1024; // 512MB
+    options.maxMemoryUsage = 512 * 1024 * 1024;  // 512MB
 
     processor->setOptions(options);
 
@@ -385,7 +402,7 @@ TEST_F(ImageProcessorTest, ProcessingOptions) {
 
 // Performance test for batch processing
 TEST_F(ImageProcessorTest, DISABLED_PerformanceBatchProcessing) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
 
     // Create a larger set of test images
     std::vector<atom::image::blob> large_batch;
@@ -402,66 +419,72 @@ TEST_F(ImageProcessorTest, DISABLED_PerformanceBatchProcessing) {
     auto results = processor->processBatch(large_batch, resize_operation);
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(results.size(), large_batch.size());
 
-    // Log performance (this is a performance test, so we just verify it completes)
+    // Log performance (this is a performance test, so we just verify it
+    // completes)
     std::cout << "Processed " << large_batch.size() << " images in "
               << duration.count() << " ms" << std::endl;
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping performance tests";
-    #endif
+#endif
 }
 
 // Additional comprehensive tests for edge cases and error handling
 TEST_F(ImageProcessorTest, EdgeCaseHandling) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
     // Test with empty image data
     std::vector<std::byte> empty_data;
     atom::image::blob empty_blob(empty_data.data(), empty_data.size());
     EXPECT_EQ(empty_blob.size(), 0);
 
-    // Test with invalid dimensions (blob doesn't validate dimensions at construction)
-    // This is expected behavior - blob is a low-level container
-    atom::image::blob invalid_blob(test_image_data.data(), test_image_data.size());
+    // Test with invalid dimensions (blob doesn't validate dimensions at
+    // construction) This is expected behavior - blob is a low-level container
+    atom::image::blob invalid_blob(test_image_data.data(),
+                                   test_image_data.size());
     EXPECT_GT(invalid_blob.size(), 0);
 
     // Test with mismatched data size and dimensions
-    std::vector<std::byte> small_data(10); // Too small for 8x8 RGB
+    std::vector<std::byte> small_data(10);  // Too small for 8x8 RGB
     atom::image::blob mismatched_blob(small_data.data(), small_data.size());
     EXPECT_EQ(mismatched_blob.size(), 10);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping edge case tests";
-    #endif
+#endif
 }
 
 TEST_F(ImageProcessorTest, ErrorHandling) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
     // Test processing with null processor
     atom::image::ImageProcessor* null_processor = nullptr;
-    EXPECT_THROW({
-        if (null_processor) {
-            (void)null_processor->resize(test_blob, 16, 16);
-        }
-    }, std::exception);
+    EXPECT_THROW(
+        {
+            if (null_processor) {
+                (void)null_processor->resize(test_blob, 16, 16);
+            }
+        },
+        std::exception);
 
     // Test with invalid file paths
     // Note: blob::load throws on failure, doesn't return optional
-    EXPECT_THROW(atom::image::blob::load("nonexistent_file.png"), std::runtime_error);
+    EXPECT_THROW(atom::image::blob::load("nonexistent_file.png"),
+                 std::runtime_error);
 
     // Test with invalid resize dimensions
     EXPECT_THROW((void)processor->resize(test_blob, 0, 0), std::runtime_error);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping error handling tests";
-    #endif
+#endif
 }
 
 TEST_F(ImageProcessorTest, MemoryStressTest) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
     // Test with large image processing to check memory handling
     const int large_size = 1000;
 
@@ -472,10 +495,8 @@ TEST_F(ImageProcessorTest, MemoryStressTest) {
     for (int y = 0; y < large_size; ++y) {
         for (int x = 0; x < large_size; ++x) {
             large_mat.at<cv::Vec3b>(y, x) = cv::Vec3b(
-                static_cast<uint8_t>(x % 256),
-                static_cast<uint8_t>(y % 256),
-                static_cast<uint8_t>((x + y) % 256)
-            );
+                static_cast<uint8_t>(x % 256), static_cast<uint8_t>(y % 256),
+                static_cast<uint8_t>((x + y) % 256));
         }
     }
 
@@ -483,17 +504,18 @@ TEST_F(ImageProcessorTest, MemoryStressTest) {
     atom::image::blob large_blob(large_mat);
 
     // Test multiple operations on large image
-    auto resized = processor->resize(large_blob, large_size / 2, large_size / 2);
+    auto resized =
+        processor->resize(large_blob, large_size / 2, large_size / 2);
     EXPECT_EQ(resized.getRows(), large_size / 2);
     EXPECT_EQ(resized.getCols(), large_size / 2);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping memory stress tests";
-    #endif
+#endif
 }
 
 TEST_F(ImageProcessorTest, ThreadSafetyTest) {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
     // Test concurrent processing with multiple threads
     const int num_threads = 4;
     const int operations_per_thread = 10;
@@ -519,16 +541,17 @@ TEST_F(ImageProcessorTest, ThreadSafetyTest) {
     }
 
     EXPECT_GT(success_count.load(), 0);
-    EXPECT_LT(error_count.load(), num_threads * operations_per_thread / 2); // Allow some errors but not too many
+    EXPECT_LT(error_count.load(), num_threads * operations_per_thread /
+                                      2);  // Allow some errors but not too many
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping thread safety tests";
-    #endif
+#endif
 }
 
 // Test edge case: processing very small images
 TEST_F(ImageProcessorTest, VerySmallImageProcessing) {
-    #if __has_include(<opencv2/core.hpp>)
+#if __has_include(<opencv2/core.hpp>)
     // Create a 1x1 pixel image
     cv::Mat tiny_mat(1, 1, CV_8UC3, cv::Scalar(255, 128, 64));
     blob tiny_blob(tiny_mat);
@@ -542,17 +565,18 @@ TEST_F(ImageProcessorTest, VerySmallImageProcessing) {
     auto rotated = processor->rotate(tiny_blob, 90.0);
     EXPECT_GT(rotated.size(), 0);
 
-    auto filtered = processor->applyFilter(tiny_blob, FilterType::GAUSSIAN_BLUR);
+    auto filtered =
+        processor->applyFilter(tiny_blob, FilterType::GAUSSIAN_BLUR);
     EXPECT_GT(filtered.size(), 0);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping tiny image tests";
-    #endif
+#endif
 }
 
 // Test edge case: processing very large images
 TEST_F(ImageProcessorTest, DISABLED_VeryLargeImageProcessing) {
-    #if __has_include(<opencv2/core.hpp>)
+#if __has_include(<opencv2/core.hpp>)
     // Create a large image (1000x1000)
     const int large_size = 1000;
     cv::Mat large_mat(large_size, large_size, CV_8UC3);
@@ -561,10 +585,8 @@ TEST_F(ImageProcessorTest, DISABLED_VeryLargeImageProcessing) {
     for (int y = 0; y < large_size; ++y) {
         for (int x = 0; x < large_size; ++x) {
             large_mat.at<cv::Vec3b>(y, x) = cv::Vec3b(
-                static_cast<uint8_t>(x % 256),
-                static_cast<uint8_t>(y % 256),
-                static_cast<uint8_t>((x + y) % 256)
-            );
+                static_cast<uint8_t>(x % 256), static_cast<uint8_t>(y % 256),
+                static_cast<uint8_t>((x + y) % 256));
         }
     }
 
@@ -573,10 +595,12 @@ TEST_F(ImageProcessorTest, DISABLED_VeryLargeImageProcessing) {
     auto start = std::chrono::high_resolution_clock::now();
 
     // Test resize on large image
-    auto resized = processor->resize(large_blob, large_size / 2, large_size / 2);
+    auto resized =
+        processor->resize(large_blob, large_size / 2, large_size / 2);
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(resized.getRows(), large_size / 2);
     EXPECT_EQ(resized.getCols(), large_size / 2);
@@ -584,14 +608,14 @@ TEST_F(ImageProcessorTest, DISABLED_VeryLargeImageProcessing) {
     // Should complete in reasonable time (less than 10 seconds)
     EXPECT_LT(duration.count(), 10000);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping large image tests";
-    #endif
+#endif
 }
 
 // Test boundary conditions for resize operations
 TEST_F(ImageProcessorTest, ResizeBoundaryConditions) {
-    #if __has_include(<opencv2/core.hpp>)
+#if __has_include(<opencv2/core.hpp>)
     if (test_blob.size() == 0) {
         GTEST_SKIP() << "Test blob not available";
     }
@@ -611,23 +635,23 @@ TEST_F(ImageProcessorTest, ResizeBoundaryConditions) {
     // Test invalid dimensions - these should throw
     EXPECT_THROW((void)processor->resize(test_blob, 0, 10), std::runtime_error);
     EXPECT_THROW((void)processor->resize(test_blob, 10, 0), std::runtime_error);
-    EXPECT_THROW((void)processor->resize(test_blob, -5, 10), std::runtime_error);
+    EXPECT_THROW((void)processor->resize(test_blob, -5, 10),
+                 std::runtime_error);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping resize boundary tests";
-    #endif
+#endif
 }
 
 // Test rotation with extreme angles
 TEST_F(ImageProcessorTest, RotationExtremeAngles) {
-    #if __has_include(<opencv2/core.hpp>)
+#if __has_include(<opencv2/core.hpp>)
     if (test_blob.size() == 0) {
         GTEST_SKIP() << "Test blob not available";
     }
 
-    std::vector<double> extreme_angles = {
-        -720.0, -360.0, -180.0, 0.0, 180.0, 360.0, 720.0, 1080.0
-    };
+    std::vector<double> extreme_angles = {-720.0, -360.0, -180.0, 0.0,
+                                          180.0,  360.0,  720.0,  1080.0};
 
     for (double angle : extreme_angles) {
         auto rotated = processor->rotate(test_blob, angle);
@@ -640,14 +664,14 @@ TEST_F(ImageProcessorTest, RotationExtremeAngles) {
         EXPECT_GT(rotated.size(), 0) << "Failed at small angle: " << angle;
     }
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping extreme rotation tests";
-    #endif
+#endif
 }
 
 // Test filter chaining
 TEST_F(ImageProcessorTest, FilterChaining) {
-    #if __has_include(<opencv2/core.hpp>)
+#if __has_include(<opencv2/core.hpp>)
     if (test_blob.size() == 0) {
         GTEST_SKIP() << "Test blob not available";
     }
@@ -665,22 +689,24 @@ TEST_F(ImageProcessorTest, FilterChaining) {
     auto final = processor->applyFilter(step3, FilterType::EMBOSS);
     EXPECT_GT(final.size(), 0);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping filter chaining tests";
-    #endif
+#endif
 }
 
 // Test error recovery and robustness
 TEST_F(ImageProcessorTest, ErrorRecoveryAndRobustness) {
-    #if __has_include(<opencv2/core.hpp>)
+#if __has_include(<opencv2/core.hpp>)
 
     // Test with empty blob
     blob empty_blob;
-    EXPECT_THROW((void)processor->resize(empty_blob, 10, 10), std::runtime_error);
+    EXPECT_THROW((void)processor->resize(empty_blob, 10, 10),
+                 std::runtime_error);
 
     // Test with corrupted blob data
     std::vector<std::byte> corrupted_data(100, std::byte{0});
-    blob corrupted_blob(corrupted_data.data(), corrupted_data.size(), 10, 10, 1);
+    blob corrupted_blob(corrupted_data.data(), corrupted_data.size(), 10, 10,
+                        1);
 
     // Operations should handle corrupted data gracefully
     auto result2 = processor->resize(corrupted_blob, 5, 5);
@@ -688,27 +714,31 @@ TEST_F(ImageProcessorTest, ErrorRecoveryAndRobustness) {
 
     // Test with mismatched dimensions
     std::vector<std::byte> mismatch_data(50, std::byte{128});
-    blob mismatch_blob(mismatch_data.data(), mismatch_data.size(), 10, 10, 3); // Claims 3 channels but data is too small
+    blob mismatch_blob(mismatch_data.data(), mismatch_data.size(), 10, 10,
+                       3);  // Claims 3 channels but data is too small
 
-    auto result3 = processor->applyFilter(mismatch_blob, FilterType::GAUSSIAN_BLUR);
+    auto result3 =
+        processor->applyFilter(mismatch_blob, FilterType::GAUSSIAN_BLUR);
     // Should handle gracefully
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping error recovery tests";
-    #endif
+#endif
 }
 
 // Test memory usage and cleanup
 TEST_F(ImageProcessorTest, MemoryUsageAndCleanup) {
-    #if __has_include(<opencv2/core.hpp>)
+#if __has_include(<opencv2/core.hpp>)
     if (test_blob.size() == 0) {
         GTEST_SKIP() << "Test blob not available";
     }
 
     // Perform many operations to test memory cleanup
     for (int i = 0; i < 100; ++i) {
-        auto resized = processor->resize(test_blob, 16 + (i % 10), 16 + (i % 10));
-        auto filtered = processor->applyFilter(resized, FilterType::GAUSSIAN_BLUR);
+        auto resized =
+            processor->resize(test_blob, 16 + (i % 10), 16 + (i % 10));
+        auto filtered =
+            processor->applyFilter(resized, FilterType::GAUSSIAN_BLUR);
         auto rotated = processor->rotate(filtered, i * 3.6);
         // Results should be automatically cleaned up
     }
@@ -716,9 +746,9 @@ TEST_F(ImageProcessorTest, MemoryUsageAndCleanup) {
     // Test should complete without memory issues
     EXPECT_TRUE(true);
 
-    #else
+#else
     GTEST_SKIP() << "OpenCV not available, skipping memory tests";
-    #endif
+#endif
 }
 
 // Test processor configuration and options
@@ -730,8 +760,8 @@ TEST_F(ImageProcessorTest, ProcessorConfiguration) {
     auto gpu_processor = atom::image::createOptimalProcessor(true);
     EXPECT_TRUE(gpu_processor != nullptr);
 
-    // Test that both processors can handle basic operations
-    #if __has_include(<opencv2/core.hpp>)
+// Test that both processors can handle basic operations
+#if __has_include(<opencv2/core.hpp>)
     if (test_blob.size() > 0) {
         auto cpu_result = cpu_processor->resize(test_blob, 16, 16);
         auto gpu_result = gpu_processor->resize(test_blob, 16, 16);
@@ -740,9 +770,9 @@ TEST_F(ImageProcessorTest, ProcessorConfiguration) {
         EXPECT_GT(cpu_result.size(), 0);
         EXPECT_GT(gpu_result.size(), 0);
     }
-    #endif
+#endif
 }
 
-} // namespace atom::image::test
+}  // namespace atom::image::test
 
-#endif // ATOM_IMAGE_TEST_IMAGE_PROCESSOR_HPP
+#endif  // ATOM_IMAGE_TEST_IMAGE_PROCESSOR_HPP

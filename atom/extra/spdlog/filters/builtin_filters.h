@@ -5,7 +5,6 @@
 #include <chrono>
 #include <regex>
 
-
 namespace modern_log {
 
 /**

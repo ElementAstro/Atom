@@ -51,7 +51,8 @@ Description: Advanced async task executor with thread pooling
 #include <sched.h>
 #endif
 
-// Cache line size definition - to avoid false sharing (if not already defined in macro.hpp)
+// Cache line size definition - to avoid false sharing (if not already defined
+// in macro.hpp)
 #ifndef ATOM_CACHE_LINE_SIZE
 #if defined(ATOM_PLATFORM_WINDOWS)
 #define ATOM_CACHE_LINE_SIZE 64
@@ -375,7 +376,7 @@ public:
      */
     template <typename Func>
         requires std::invocable<Func> &&
-                 (!std::same_as<void, std::invoke_result_t<Func>>)
+                     (!std::same_as<void, std::invoke_result_t<Func>>)
     auto execute(Func&& func, Priority priority = Priority::Normal)
         -> std::future<std::invoke_result_t<Func>> {
         if (!isRunning()) {

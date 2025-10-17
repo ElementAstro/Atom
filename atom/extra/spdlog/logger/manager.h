@@ -6,7 +6,6 @@
 #include "../utils/archiver.h"
 #include "logger.h"
 
-
 #include <spdlog/async.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/daily_file_sink.h>
@@ -14,12 +13,10 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-
 #include <memory>
 #include <shared_mutex>
 #include <thread>
 #include <unordered_map>
-
 
 namespace modern_log {
 
@@ -75,14 +72,16 @@ public:
      * @param config LogConfig structure describing logger settings.
      * @return Result containing the created Logger or an error.
      */
-    Result<std::shared_ptr<Logger>, LogError> create_logger(const LogConfig& config);
+    Result<std::shared_ptr<Logger>, LogError> create_logger(
+        const LogConfig& config);
 
     /**
      * @brief Retrieve a logger by name.
      * @param name Name of the logger.
      * @return Result containing the Logger or an error if not found.
      */
-    Result<std::shared_ptr<Logger>, LogError> get_logger(const std::string& name);
+    Result<std::shared_ptr<Logger>, LogError> get_logger(
+        const std::string& name);
 
     /**
      * @brief Remove a logger by name.

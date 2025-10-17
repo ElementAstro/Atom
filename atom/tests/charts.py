@@ -3,15 +3,16 @@ This module provides functions to generate bar, line, scatter, pie, histogram, a
 Enhanced for flexibility, usability and customization.
 """
 
-import sys
-import json
 import argparse
+import json
 import os
+import sys
+from datetime import datetime
+
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
 from matplotlib.colors import LinearSegmentedColormap
-from datetime import datetime
 
 
 def load_data(file_path):

@@ -2,9 +2,9 @@
 #include "atom/components/core/component.hpp"
 
 #include <gtest/gtest.h>
+#include <atomic>
 #include <chrono>
 #include <thread>
-#include <atomic>
 
 using namespace atom::components;
 
@@ -53,7 +53,8 @@ protected:
 class ComponentLifecycleGuardTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        component_ = std::make_shared<TestLifecycleComponent>("GuardTestComponent");
+        component_ =
+            std::make_shared<TestLifecycleComponent>("GuardTestComponent");
     }
 
     std::shared_ptr<TestLifecycleComponent> component_;
@@ -72,12 +73,12 @@ TEST_F(LifecycleManagerTest, Singleton) {
 TEST_F(LifecycleManagerTest, RegisterAndExecuteHook) {
     std::atomic<bool> hookExecuted{false};
 
-    manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization,
-                          [&hookExecuted](Component&, LifecyclePhase) {
-                              hookExecuted = true;
-                          });
+    manager_->registerHook(
+        "TestComponent", LifecyclePhase::PostInitialization,
+        [&hookExecuted](Component&, LifecyclePhase) { hookExecuted = true; });
 
-    bool result = manager_->executePhase(*component_, LifecyclePhase::PostInitialization);
+    bool result =
+        manager_->executePhase(*component_, LifecyclePhase::PostInitialization);
     EXPECT_TRUE(result);
     EXPECT_TRUE(hookExecuted.load());
 }
@@ -85,12 +86,14 @@ TEST_F(LifecycleManagerTest, RegisterAndExecuteHook) {
 TEST_F(LifecycleManagerTest, RegisterGlobalHook) {
     std::atomic<bool> globalHookExecuted{false};
 
-    manager_->registerGlobalHook(LifecyclePhase::PreInitialization,
-                                [&globalHookExecuted](Component&, LifecyclePhase) {
-                                    globalHookExecuted = true;
-                                });
+    manager_->registerGlobalHook(
+        LifecyclePhase::PreInitialization,
+        [&globalHookExecuted](Component&, LifecyclePhase) {
+            globalHookExecuted = true;
+        });
 
-    bool result = manager_->executePhase(*component_, LifecyclePhase::PreInitialization);
+    bool result =
+        manager_->executePhase(*component_, LifecyclePhase::PreInitialization);
     EXPECT_TRUE(result);
     EXPECT_TRUE(globalHookExecuted.load());
 }
@@ -108,14 +111,22 @@ TEST_F(LifecycleManagerTest, AllLifecyclePhases) {
         return true;
     };
 
-    manager_->registerHook("TestComponent", LifecyclePhase::PreInitialization, hookFunc);
-    manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization, hookFunc);
-    manager_->registerHook("TestComponent", LifecyclePhase::PreActivation, hookFunc);
-    manager_->registerHook("TestComponent", LifecyclePhase::PostActivation, hookFunc);
-    manager_->registerHook("TestComponent", LifecyclePhase::PreDeactivation, hookFunc);
-    manager_->registerHook("TestComponent", LifecyclePhase::PostDeactivation, hookFunc);
-    manager_->registerHook("TestComponent", LifecyclePhase::PreDestruction, hookFunc);
-    manager_->registerHook("TestComponent", LifecyclePhase::PostDestruction, hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PreInitialization,
+                           hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization,
+                           hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PreActivation,
+                           hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PostActivation,
+                           hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PreDeactivation,
+                           hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PostDeactivation,
+                           hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PreDestruction,
+                           hookFunc);
+    manager_->registerHook("TestComponent", LifecyclePhase::PostDestruction,
+                           hookFunc);
 
     // Execute all phases
     manager_->executePhase(*component_, LifecyclePhase::PreInitialization);
@@ -135,19 +146,19 @@ TEST_F(LifecycleManagerTest, MultipleHooksExecutionOrder) {
     std::vector<int> executionOrder;
 
     manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization,
-                          [&executionOrder](Component&, LifecyclePhase) {
-                              executionOrder.push_back(1);
-                          });
+                           [&executionOrder](Component&, LifecyclePhase) {
+                               executionOrder.push_back(1);
+                           });
 
     manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization,
-                          [&executionOrder](Component&, LifecyclePhase) {
-                              executionOrder.push_back(2);
-                          });
+                           [&executionOrder](Component&, LifecyclePhase) {
+                               executionOrder.push_back(2);
+                           });
 
     manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization,
-                          [&executionOrder](Component&, LifecyclePhase) {
-                              executionOrder.push_back(3);
-                          });
+                           [&executionOrder](Component&, LifecyclePhase) {
+                               executionOrder.push_back(3);
+                           });
 
     manager_->executePhase(*component_, LifecyclePhase::PostInitialization);
 
@@ -161,12 +172,12 @@ TEST_F(LifecycleManagerTest, MultipleHooksExecutionOrder) {
 TEST_F(LifecycleManagerTest, HookErrorHandling) {
     std::atomic<bool> hookExecuted{false};
 
-    manager_->registerHook("TestComponent", LifecyclePhase::PreInitialization,
-                          [&hookExecuted](Component&, LifecyclePhase) {
-                              hookExecuted = true;
-                          });
+    manager_->registerHook(
+        "TestComponent", LifecyclePhase::PreInitialization,
+        [&hookExecuted](Component&, LifecyclePhase) { hookExecuted = true; });
 
-    bool result = manager_->executePhase(*component_, LifecyclePhase::PreInitialization);
+    bool result =
+        manager_->executePhase(*component_, LifecyclePhase::PreInitialization);
     EXPECT_TRUE(result);
     EXPECT_TRUE(hookExecuted.load());
 }
@@ -174,12 +185,13 @@ TEST_F(LifecycleManagerTest, HookErrorHandling) {
 // Test hook throwing exception
 TEST_F(LifecycleManagerTest, HookThrowsException) {
     manager_->registerHook("TestComponent", LifecyclePhase::PreInitialization,
-                          [](Component&, LifecyclePhase) {
-                              throw std::runtime_error("Hook error");
-                          });
+                           [](Component&, LifecyclePhase) {
+                               throw std::runtime_error("Hook error");
+                           });
 
     // Should catch exception and continue
-    EXPECT_NO_THROW(manager_->executePhase(*component_, LifecyclePhase::PreInitialization));
+    EXPECT_NO_THROW(
+        manager_->executePhase(*component_, LifecyclePhase::PreInitialization));
 }
 
 // Test global and component-specific hooks together
@@ -187,14 +199,14 @@ TEST_F(LifecycleManagerTest, GlobalAndComponentHooks) {
     std::vector<std::string> executionOrder;
 
     manager_->registerGlobalHook(LifecyclePhase::PostInitialization,
-                                [&executionOrder](Component&, LifecyclePhase) {
-                                    executionOrder.push_back("global");
-                                });
+                                 [&executionOrder](Component&, LifecyclePhase) {
+                                     executionOrder.push_back("global");
+                                 });
 
     manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization,
-                          [&executionOrder](Component&, LifecyclePhase) {
-                              executionOrder.push_back("component");
-                          });
+                           [&executionOrder](Component&, LifecyclePhase) {
+                               executionOrder.push_back("component");
+                           });
 
     manager_->executePhase(*component_, LifecyclePhase::PostInitialization);
 
@@ -205,7 +217,8 @@ TEST_F(LifecycleManagerTest, GlobalAndComponentHooks) {
 
 // Test dependency resolution with optional dependencies
 TEST_F(LifecycleManagerTest, OptionalDependencies) {
-    DependencyConstraint optionalDep("OptionalComponent", DependencyType::Optional);
+    DependencyConstraint optionalDep("OptionalComponent",
+                                     DependencyType::Optional);
     manager_->addDependency("TestComponent", optionalDep);
 
     // Should resolve successfully even if optional dependency doesn't exist
@@ -234,15 +247,15 @@ TEST_F(LifecycleManagerTest, ComplexDependencyChain) {
 TEST_F(LifecycleManagerTest, ConcurrentHookExecution) {
     std::atomic<int> hookCount{0};
 
-    manager_->registerHook("TestComponent", LifecyclePhase::PostInitialization,
-                          [&hookCount](Component&, LifecyclePhase) {
-                              hookCount++;
-                          });
+    manager_->registerHook(
+        "TestComponent", LifecyclePhase::PostInitialization,
+        [&hookCount](Component&, LifecyclePhase) { hookCount++; });
 
     std::vector<std::thread> threads;
     for (int i = 0; i < 10; ++i) {
         threads.emplace_back([this]() {
-            manager_->executePhase(*component_, LifecyclePhase::PostInitialization);
+            manager_->executePhase(*component_,
+                                   LifecyclePhase::PostInitialization);
         });
     }
 
@@ -258,13 +271,13 @@ TEST_F(LifecycleManagerTest, MultipleHooksExecution) {
 
     // Register multiple hooks for the same phase
     for (int i = 0; i < 3; ++i) {
-        manager_->registerHook("TestComponent", LifecyclePhase::PostConstruction,
-                              [&hookCount](Component&, LifecyclePhase) {
-                                  hookCount++;
-                              });
+        manager_->registerHook(
+            "TestComponent", LifecyclePhase::PostConstruction,
+            [&hookCount](Component&, LifecyclePhase) { hookCount++; });
     }
 
-    bool result = manager_->executePhase(*component_, LifecyclePhase::PostConstruction);
+    bool result =
+        manager_->executePhase(*component_, LifecyclePhase::PostConstruction);
     EXPECT_TRUE(result);
     EXPECT_EQ(hookCount.load(), 3);
 }
@@ -274,7 +287,8 @@ TEST_F(LifecycleManagerTest, DependencyManagement) {
     manager_->addDependency("TestComponent", dep);
 
     auto dependencies = manager_->resolveDependencies("TestComponent");
-    // Dependencies may or may not be resolved depending on whether DependencyComponent exists
+    // Dependencies may or may not be resolved depending on whether
+    // DependencyComponent exists
     EXPECT_TRUE(dependencies.empty() || dependencies.size() >= 1);
 }
 
@@ -285,7 +299,7 @@ TEST_F(LifecycleManagerTest, CircularDependencyDetection) {
 
     manager_->addDependency("ComponentA", depB);
     manager_->addDependency("ComponentB", depC);
-    manager_->addDependency("ComponentC", depA); // Creates circular dependency
+    manager_->addDependency("ComponentC", depA);  // Creates circular dependency
 
     bool hasCircular = manager_->hasCircularDependencies("ComponentA");
     EXPECT_TRUE(hasCircular);
@@ -301,7 +315,8 @@ TEST_F(LifecycleManagerTest, DependencyGraphRetrieval) {
     auto graph = manager_->getDependencyGraph();
 
     // Verify graph contains our dependencies
-    EXPECT_TRUE(graph.find("ComponentC") != graph.end() || graph.find("ComponentB") != graph.end());
+    EXPECT_TRUE(graph.find("ComponentC") != graph.end() ||
+                graph.find("ComponentB") != graph.end());
 }
 
 TEST_F(LifecycleManagerTest, LifecycleHistoryTracking) {
@@ -329,7 +344,8 @@ TEST_F(LifecycleManagerTest, MultipleComponentPhaseExecution) {
     manager_->executePhase(*comp1, LifecyclePhase::PostInitialization);
     manager_->executePhase(*comp2, LifecyclePhase::PostInitialization);
 
-    EXPECT_EQ(comp1->initializeCallCount.load(), 0); // Hooks don't call initialize
+    EXPECT_EQ(comp1->initializeCallCount.load(),
+              0);  // Hooks don't call initialize
     EXPECT_EQ(comp2->initializeCallCount.load(), 0);
 }
 
@@ -344,7 +360,7 @@ TEST_F(LifecycleManagerTest, ComponentDestructionPhases) {
     manager_->executePhase(*comp1, LifecyclePhase::PostDestruction);
     manager_->executePhase(*comp2, LifecyclePhase::PostDestruction);
 
-    EXPECT_EQ(comp1->destroyCallCount.load(), 0); // Hooks don't call destroy
+    EXPECT_EQ(comp1->destroyCallCount.load(), 0);  // Hooks don't call destroy
     EXPECT_EQ(comp2->destroyCallCount.load(), 0);
 }
 
@@ -354,7 +370,8 @@ TEST_F(LifecycleManagerTest, LifecycleHistoryRetrieval) {
     manager_->executePhase(*component_, LifecyclePhase::PostInitialization);
 
     auto events = manager_->getLifecycleHistory("TestComponent");
-    EXPECT_GE(events.size(), 0); // May or may not have events depending on implementation
+    EXPECT_GE(events.size(),
+              0);  // May or may not have events depending on implementation
 }
 
 TEST_F(LifecycleManagerTest, DependencyValidation) {
@@ -370,10 +387,9 @@ TEST_F(LifecycleManagerTest, DependencyValidation) {
 TEST_F(LifecycleManagerTest, HookRegistrationAndExecution) {
     std::atomic<bool> hookExecuted{false};
 
-    manager_->registerHook("TestComponent", LifecyclePhase::PostActivation,
-                          [&hookExecuted](Component&, LifecyclePhase) {
-                              hookExecuted = true;
-                          });
+    manager_->registerHook(
+        "TestComponent", LifecyclePhase::PostActivation,
+        [&hookExecuted](Component&, LifecyclePhase) { hookExecuted = true; });
 
     manager_->executePhase(*component_, LifecyclePhase::PostActivation);
     EXPECT_TRUE(hookExecuted.load());
@@ -389,15 +405,20 @@ TEST_F(LifecycleManagerTest, ThreadSafety) {
     for (int t = 0; t < numThreads; ++t) {
         threads.emplace_back([this, t, hooksPerThread, &totalHooksExecuted]() {
             for (int i = 0; i < hooksPerThread; ++i) {
-                std::string componentName = "ThreadComponent" + std::to_string(t) + "_" + std::to_string(i);
+                std::string componentName = "ThreadComponent" +
+                                            std::to_string(t) + "_" +
+                                            std::to_string(i);
 
-                manager_->registerHook(componentName, LifecyclePhase::PostConstruction,
-                                      [&totalHooksExecuted](Component&, LifecyclePhase) {
-                                          totalHooksExecuted++;
-                                      });
+                manager_->registerHook(
+                    componentName, LifecyclePhase::PostConstruction,
+                    [&totalHooksExecuted](Component&, LifecyclePhase) {
+                        totalHooksExecuted++;
+                    });
 
-                auto testComp = std::make_shared<TestLifecycleComponent>(componentName);
-                manager_->executePhase(*testComp, LifecyclePhase::PostConstruction);
+                auto testComp =
+                    std::make_shared<TestLifecycleComponent>(componentName);
+                manager_->executePhase(*testComp,
+                                       LifecyclePhase::PostConstruction);
             }
         });
     }
@@ -417,8 +438,8 @@ TEST_F(LifecycleManagerTest, ThreadSafety) {
 TEST_F(ComponentLifecycleGuardTest, BasicGuardUsage) {
     {
         ComponentLifecycleGuard guard(*component_,
-                                     LifecyclePhase::PreInitialization,
-                                     LifecyclePhase::PostDestruction);
+                                      LifecyclePhase::PreInitialization,
+                                      LifecyclePhase::PostDestruction);
 
         // Guard should execute start phase
         // Component should be in initialized state during guard lifetime
@@ -431,8 +452,8 @@ TEST_F(ComponentLifecycleGuardTest, GuardWithFailure) {
 
     {
         ComponentLifecycleGuard guard(*component_,
-                                     LifecyclePhase::PreInitialization,
-                                     LifecyclePhase::PostDestruction);
+                                      LifecyclePhase::PreInitialization,
+                                      LifecyclePhase::PostDestruction);
 
         // Even with failure, guard should handle cleanup properly
     }
@@ -462,14 +483,16 @@ TEST(LifecyclePhaseTest, PhaseEnumValues) {
 
 TEST_F(LifecycleManagerTest, InvalidComponentName) {
     // Test with empty component name
-    bool result = manager_->executePhase(*component_, LifecyclePhase::PreInitialization);
-    EXPECT_TRUE(result); // Should handle gracefully
+    bool result =
+        manager_->executePhase(*component_, LifecyclePhase::PreInitialization);
+    EXPECT_TRUE(result);  // Should handle gracefully
 }
 
 TEST_F(LifecycleManagerTest, NullComponentHandling) {
     // Test behavior with component that might have null state
     // This tests the robustness of the lifecycle system
     auto nullNameComponent = std::make_shared<TestLifecycleComponent>("");
-    bool result = manager_->executePhase(*nullNameComponent, LifecyclePhase::PreInitialization);
-    EXPECT_TRUE(result); // Should handle gracefully
+    bool result = manager_->executePhase(*nullNameComponent,
+                                         LifecyclePhase::PreInitialization);
+    EXPECT_TRUE(result);  // Should handle gracefully
 }

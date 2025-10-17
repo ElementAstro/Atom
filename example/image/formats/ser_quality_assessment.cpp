@@ -42,7 +42,7 @@ vector<cv::Mat> generateQualityTestFrames() {
     vector<cv::Mat> frames;
     const int width = 640;
     const int height = 480;
-    
+
     // Frame 1: High quality - sharp with low noise
     cv::Mat frame1(height, width, CV_8UC1);
     for (int y = 0; y < height; ++y) {
@@ -57,7 +57,7 @@ vector<cv::Mat> generateQualityTestFrames() {
     cv::randu(noise1, 0, 10);
     frame1 += noise1;
     frames.push_back(frame1);
-    
+
     // Frame 2: Medium quality - less sharp, moderate noise
     cv::Mat frame2(height, width, CV_8UC1);
     for (int y = 0; y < height; ++y) {
@@ -75,7 +75,7 @@ vector<cv::Mat> generateQualityTestFrames() {
     cv::randu(noise2, 0, 30);
     frame2 += noise2;
     frames.push_back(frame2);
-    
+
     // Frame 3: Low quality - blurry with high noise
     cv::Mat frame3(height, width, CV_8UC1);
     frame3.setTo(128); // Uniform background
@@ -89,23 +89,23 @@ vector<cv::Mat> generateQualityTestFrames() {
     cv::randu(noise3, 0, 60);
     frame3 += noise3;
     frames.push_back(frame3);
-    
+
     // Frame 4: Very low quality - mostly noise
     cv::Mat frame4(height, width, CV_8UC1);
     cv::randu(frame4, 50, 200); // Random noise
     frames.push_back(frame4);
-    
+
     // Frame 5: Good quality with stars (astronomical simulation)
     cv::Mat frame5(height, width, CV_8UC1);
     frame5.setTo(20); // Dark sky background
-    
+
     // Add "stars" at random positions
     cv::RNG rng(42); // Fixed seed for reproducibility
     for (int i = 0; i < 50; ++i) {
         int x = rng.uniform(10, width - 10);
         int y = rng.uniform(10, height - 10);
         int brightness = rng.uniform(150, 255);
-        
+
         // Create star with Gaussian profile
         for (int dy = -2; dy <= 2; ++dy) {
             for (int dx = -2; dx <= 2; ++dx) {
@@ -118,13 +118,13 @@ vector<cv::Mat> generateQualityTestFrames() {
             }
         }
     }
-    
+
     // Add minimal noise to astronomical frame
     cv::Mat noise5(height, width, CV_8UC1);
     cv::randu(noise5, 0, 15);
     frame5 += noise5;
     frames.push_back(frame5);
-    
+
     return frames;
 }
 
@@ -133,24 +133,24 @@ vector<cv::Mat> generateQualityTestFrames() {
  */
 void demonstrateBasicQualityAssessment() {
     cout << "\n=== Basic Quality Assessment ===\n";
-    
+
     try {
         // Create quality assessor with default parameters
         QualityAssessor assessor;
-        
+
         // Generate test frames
         auto frames = generateQualityTestFrames();
-        
+
         cout << "Assessing quality of " << frames.size() << " test frames:\n";
-        
+
         vector<pair<int, QualityMetrics>> frameQualities;
-        
+
         for (size_t i = 0; i < frames.size(); ++i) {
             cout << "\nFrame " << i << ":\n";
-            
+
             QualityMetrics metrics = assessor.assessFrame(frames[i]);
             frameQualities.push_back({static_cast<int>(i), metrics});
-            
+
             cout << "  Sharpness: " << fixed << setprecision(3) << metrics.sharpness << "\n";
             cout << "  SNR: " << metrics.snr << "\n";
             cout << "  Entropy: " << metrics.entropy << "\n";
@@ -158,7 +158,7 @@ void demonstrateBasicQualityAssessment() {
             cout << "  Contrast: " << metrics.contrast << "\n";
             cout << "  Star count: " << metrics.starCount << "\n";
             cout << "  Overall score: " << metrics.overallScore << "\n";
-            
+
             // Classify quality
             string qualityClass;
             if (metrics.overallScore > 0.8) qualityClass = "Excellent";
@@ -166,23 +166,23 @@ void demonstrateBasicQualityAssessment() {
             else if (metrics.overallScore > 0.4) qualityClass = "Fair";
             else if (metrics.overallScore > 0.2) qualityClass = "Poor";
             else qualityClass = "Very Poor";
-            
+
             cout << "  Quality class: " << qualityClass << "\n";
         }
-        
+
         // Rank frames by quality
         cout << "\n=== Frame Ranking ===\n";
-        
+
         auto rankedFrames = assessor.rankFramesByQuality(frames);
-        
+
         cout << "Frames ranked by quality (best to worst):\n";
         for (size_t i = 0; i < rankedFrames.size(); ++i) {
             int frameIndex = rankedFrames[i].first;
             double score = rankedFrames[i].second;
-            cout << "  Rank " << (i + 1) << ": Frame " << frameIndex 
+            cout << "  Rank " << (i + 1) << ": Frame " << frameIndex
                  << " (score: " << fixed << setprecision(3) << score << ")\n";
         }
-        
+
     } catch (const exception& e) {
         cerr << "Error in basic quality assessment: " << e.what() << "\n";
     }
@@ -193,7 +193,7 @@ void demonstrateBasicQualityAssessment() {
  */
 void demonstrateCustomQualityParameters() {
     cout << "\n=== Custom Quality Parameters ===\n";
-    
+
     try {
         // Create assessor with custom parameters
         QualityParameters params;
@@ -203,51 +203,51 @@ void demonstrateCustomQualityParameters() {
         params.enableBrightness = false;  // Disable brightness for dark astronomical images
         params.enableContrast = true;
         params.enableStarCount = true;    // Enable for astronomical images
-        
+
         // Adjust weights for astronomical imaging
         params.sharpnessWeight = 0.3;
         params.snrWeight = 0.3;
         params.entropyWeight = 0.1;
         params.contrastWeight = 0.1;
         params.starCountWeight = 0.2;     // Higher weight for star count
-        
+
         // Set ROI for quality assessment (center region)
         params.useROI = true;
         params.roiX = 0.25;  // 25% from left
         params.roiY = 0.25;  // 25% from top
         params.roiWidth = 0.5;   // 50% width
         params.roiHeight = 0.5;  // 50% height
-        
+
         QualityAssessor customAssessor(params);
-        
+
         auto frames = generateQualityTestFrames();
-        
+
         cout << "Custom quality assessment (optimized for astronomy):\n";
-        
+
         for (size_t i = 0; i < frames.size(); ++i) {
             QualityMetrics metrics = customAssessor.assessFrame(frames[i]);
-            
+
             cout << "Frame " << i << ": ";
             cout << "Score=" << fixed << setprecision(3) << metrics.overallScore;
             cout << ", Stars=" << metrics.starCount;
             cout << ", Sharpness=" << metrics.sharpness;
             cout << ", SNR=" << metrics.snr << "\n";
         }
-        
+
         // Compare with default assessment
         cout << "\nComparison with default parameters:\n";
         QualityAssessor defaultAssessor;
-        
+
         for (size_t i = 0; i < frames.size(); ++i) {
             QualityMetrics defaultMetrics = defaultAssessor.assessFrame(frames[i]);
             QualityMetrics customMetrics = customAssessor.assessFrame(frames[i]);
-            
+
             cout << "Frame " << i << ": ";
             cout << "Default=" << fixed << setprecision(3) << defaultMetrics.overallScore;
             cout << ", Custom=" << customMetrics.overallScore;
             cout << " (diff=" << (customMetrics.overallScore - defaultMetrics.overallScore) << ")\n";
         }
-        
+
     } catch (const exception& e) {
         cerr << "Error in custom quality parameters: " << e.what() << "\n";
     }
@@ -258,17 +258,17 @@ void demonstrateCustomQualityParameters() {
  */
 void demonstrateFrameSelection() {
     cout << "\n=== Quality-Based Frame Selection ===\n";
-    
+
     try {
         QualityAssessor assessor;
         auto frames = generateQualityTestFrames();
-        
+
         // Select best frames with different criteria
         vector<double> thresholds = {0.8, 0.6, 0.4, 0.2};
-        
+
         for (double threshold : thresholds) {
             cout << "Selecting frames with quality > " << threshold << ":\n";
-            
+
             vector<int> selectedFrames;
             for (size_t i = 0; i < frames.size(); ++i) {
                 QualityMetrics metrics = assessor.assessFrame(frames[i]);
@@ -276,29 +276,29 @@ void demonstrateFrameSelection() {
                     selectedFrames.push_back(static_cast<int>(i));
                 }
             }
-            
+
             cout << "  Selected " << selectedFrames.size() << " frames: ";
             for (int frameIndex : selectedFrames) {
                 cout << frameIndex << " ";
             }
             cout << "\n";
         }
-        
+
         // Select top N frames
         vector<int> topCounts = {1, 2, 3};
-        
+
         for (int topN : topCounts) {
             cout << "\nSelecting top " << topN << " frames:\n";
-            
+
             auto rankedFrames = assessor.rankFramesByQuality(frames);
-            
+
             cout << "  Selected frames: ";
             for (int i = 0; i < min(topN, static_cast<int>(rankedFrames.size())); ++i) {
                 cout << rankedFrames[i].first << " ";
             }
             cout << "\n";
         }
-        
+
     } catch (const exception& e) {
         cerr << "Error in frame selection: " << e.what() << "\n";
     }
@@ -309,43 +309,43 @@ void demonstrateFrameSelection() {
  */
 void demonstrateStatisticalAnalysis() {
     cout << "\n=== Statistical Quality Analysis ===\n";
-    
+
     try {
         QualityAssessor assessor;
         auto frames = generateQualityTestFrames();
-        
+
         // Collect all quality metrics
         vector<QualityMetrics> allMetrics;
         for (const auto& frame : frames) {
             allMetrics.push_back(assessor.assessFrame(frame));
         }
-        
+
         // Calculate statistics for each metric
         auto calculateStats = [](const vector<double>& values) {
             if (values.empty()) return make_tuple(0.0, 0.0, 0.0, 0.0);
-            
+
             double sum = 0.0;
             double minVal = values[0];
             double maxVal = values[0];
-            
+
             for (double val : values) {
                 sum += val;
                 minVal = min(minVal, val);
                 maxVal = max(maxVal, val);
             }
-            
+
             double mean = sum / values.size();
-            
+
             // Calculate standard deviation
             double variance = 0.0;
             for (double val : values) {
                 variance += (val - mean) * (val - mean);
             }
             double stddev = sqrt(variance / values.size());
-            
+
             return make_tuple(mean, stddev, minVal, maxVal);
         };
-        
+
         // Extract individual metrics
         vector<double> sharpnessValues, snrValues, entropyValues, overallScores;
         for (const auto& metrics : allMetrics) {
@@ -354,26 +354,26 @@ void demonstrateStatisticalAnalysis() {
             entropyValues.push_back(metrics.entropy);
             overallScores.push_back(metrics.overallScore);
         }
-        
+
         cout << "Quality Statistics Summary:\n";
         cout << fixed << setprecision(3);
-        
+
         auto [sharpMean, sharpStd, sharpMin, sharpMax] = calculateStats(sharpnessValues);
-        cout << "Sharpness: mean=" << sharpMean << ", std=" << sharpStd 
+        cout << "Sharpness: mean=" << sharpMean << ", std=" << sharpStd
              << ", range=[" << sharpMin << ", " << sharpMax << "]\n";
-        
+
         auto [snrMean, snrStd, snrMin, snrMax] = calculateStats(snrValues);
-        cout << "SNR: mean=" << snrMean << ", std=" << snrStd 
+        cout << "SNR: mean=" << snrMean << ", std=" << snrStd
              << ", range=[" << snrMin << ", " << snrMax << "]\n";
-        
+
         auto [entMean, entStd, entMin, entMax] = calculateStats(entropyValues);
-        cout << "Entropy: mean=" << entMean << ", std=" << entStd 
+        cout << "Entropy: mean=" << entMean << ", std=" << entStd
              << ", range=[" << entMin << ", " << entMax << "]\n";
-        
+
         auto [scoreMean, scoreStd, scoreMin, scoreMax] = calculateStats(overallScores);
-        cout << "Overall Score: mean=" << scoreMean << ", std=" << scoreStd 
+        cout << "Overall Score: mean=" << scoreMean << ", std=" << scoreStd
              << ", range=[" << scoreMin << ", " << scoreMax << "]\n";
-        
+
         // Quality distribution
         cout << "\nQuality Distribution:\n";
         map<string, int> qualityDistribution;
@@ -384,11 +384,11 @@ void demonstrateStatisticalAnalysis() {
             else if (score > 0.2) qualityDistribution["Poor"]++;
             else qualityDistribution["Very Poor"]++;
         }
-        
+
         for (const auto& [quality, count] : qualityDistribution) {
             cout << "  " << quality << ": " << count << " frames\n";
         }
-        
+
     } catch (const exception& e) {
         cerr << "Error in statistical analysis: " << e.what() << "\n";
     }
@@ -399,11 +399,11 @@ void demonstrateStatisticalAnalysis() {
  */
 void demonstratePerformanceCharacteristics() {
     cout << "\n=== Performance Characteristics ===\n";
-    
+
     try {
         QualityAssessor assessor;
         auto frames = generateQualityTestFrames();
-        
+
         // Measure assessment time for different frame sizes
         vector<cv::Size> testSizes = {
             cv::Size(320, 240),   // Small
@@ -411,32 +411,32 @@ void demonstratePerformanceCharacteristics() {
             cv::Size(1280, 960),  // Large
             cv::Size(1920, 1080)  // HD
         };
-        
+
         for (const auto& size : testSizes) {
             cout << "Testing " << size.width << "x" << size.height << " frames:\n";
-            
+
             // Create test frame of specified size
             cv::Mat testFrame(size.height, size.width, CV_8UC1);
             cv::randu(testFrame, 0, 255);
-            
+
             // Measure assessment time
             const int iterations = 10;
             auto start = chrono::high_resolution_clock::now();
-            
+
             for (int i = 0; i < iterations; ++i) {
                 QualityMetrics metrics = assessor.assessFrame(testFrame);
             }
-            
+
             auto end = chrono::high_resolution_clock::now();
             auto duration = chrono::duration_cast<chrono::microseconds>(end - start);
-            
+
             double avgTime = static_cast<double>(duration.count()) / iterations;
             double pixelsPerSecond = (size.width * size.height * iterations * 1000000.0) / duration.count();
-            
+
             cout << "  Average assessment time: " << fixed << setprecision(2) << avgTime << " μs\n";
             cout << "  Processing rate: " << (pixelsPerSecond / 1000000.0) << " Mpixels/s\n";
         }
-        
+
     } catch (const exception& e) {
         cerr << "Error in performance testing: " << e.what() << "\n";
     }

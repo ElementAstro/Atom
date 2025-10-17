@@ -5,7 +5,6 @@
 #include <optional>
 #include "address.hpp"
 
-
 namespace atom::web {
 
 /**
@@ -32,8 +31,8 @@ public:
     auto parse(std::string_view address) -> bool override;
 
     void printAddressType() const override;
-    auto isInRange(std::string_view start, std::string_view end)
-        -> bool override;
+    auto isInRange(std::string_view start,
+                   std::string_view end) -> bool override;
     [[nodiscard]] auto toBinary() const -> std::string override;
     [[nodiscard]] auto isEqual(const Address& other) const -> bool override;
     [[nodiscard]] auto getType() const -> std::string_view override;
@@ -41,9 +40,8 @@ public:
         -> std::string override;
     [[nodiscard]] auto getBroadcastAddress(std::string_view mask) const
         -> std::string override;
-    [[nodiscard]] auto isSameSubnet(const Address& other,
-                                    std::string_view mask) const
-        -> bool override;
+    [[nodiscard]] auto isSameSubnet(
+        const Address& other, std::string_view mask) const -> bool override;
     [[nodiscard]] auto toHex() const -> std::string override;
 
     /**

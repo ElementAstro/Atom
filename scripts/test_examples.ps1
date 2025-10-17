@@ -32,7 +32,7 @@ Write-Host "Timeout: $TimeoutSeconds seconds" -ForegroundColor Cyan
 Write-Host "Results will be saved to: $resultsFile`n" -ForegroundColor Cyan
 
 # Get all example executables
-$exes = Get-ChildItem -Recurse build/example -Filter *.exe | 
+$exes = Get-ChildItem -Recurse build/example -Filter *.exe |
     Where-Object { $_.Directory.Name -notmatch "CMakeFiles|CompilerId" } |
     Sort-Object Directory, Name
 
@@ -59,9 +59,9 @@ foreach ($exe in $exes) {
     $moduleName = $exe.Directory.Name
     $exeName = $exe.Name
     $exePath = $exe.FullName
-    
+
     Write-Host "[$testNumber/$($exes.Count)] Testing: $moduleName/$exeName" -ForegroundColor Yellow
-    
+
     $testResult = @{
         Module = $moduleName
         Name = $exeName
@@ -73,9 +73,9 @@ foreach ($exe in $exes) {
         Error = ""
         Message = ""
     }
-    
+
     $startTime = Get-Date
-    
+
     try {
         # Create a job to run the executable with timeout
         $job = Start-Job -ScriptBlock {
@@ -88,16 +88,16 @@ foreach ($exe in $exes) {
                 StdErr = Get-Content "temp_stderr.txt" -Raw -ErrorAction SilentlyContinue
             }
         } -ArgumentList $exePath, $exe.DirectoryName
-        
+
         # Wait for job with timeout
         $completed = Wait-Job -Job $job -Timeout $TimeoutSeconds
-        
+
         if ($completed) {
             $jobResult = Receive-Job -Job $job
             $testResult.ExitCode = $jobResult.ExitCode
             $testResult.Output = $jobResult.StdOut
             $testResult.Error = $jobResult.StdErr
-            
+
             if ($jobResult.ExitCode -eq 0) {
                 $testResult.Status = "PASSED"
                 $testResult.Message = "Executed successfully"
@@ -117,9 +117,9 @@ foreach ($exe in $exes) {
             Write-Host "  ⏱ TIMEOUT (exceeded $TimeoutSeconds seconds)" -ForegroundColor Magenta
             Stop-Job -Job $job
         }
-        
+
         Remove-Job -Job $job -Force
-        
+
     } catch {
         $testResult.Status = "CRASHED"
         $testResult.Message = $_.Exception.Message
@@ -127,10 +127,10 @@ foreach ($exe in $exes) {
         $results.Crashed++
         Write-Host "  ✗ CRASHED: $($_.Exception.Message)" -ForegroundColor Red
     }
-    
+
     $endTime = Get-Date
     $testResult.Duration = ($endTime - $startTime).TotalSeconds
-    
+
     if ($Verbose -and $testResult.Output) {
         $outputStr = [string]$testResult.Output
         if ($outputStr.Length -gt 200) {
@@ -139,9 +139,9 @@ foreach ($exe in $exes) {
             Write-Host "  Output: $outputStr" -ForegroundColor Gray
         }
     }
-    
+
     $results.Tests += $testResult
-    
+
     # Clean up temp files
     Remove-Item -Path "$($exe.DirectoryName)/temp_stdout.txt" -ErrorAction SilentlyContinue
     Remove-Item -Path "$($exe.DirectoryName)/temp_stderr.txt" -ErrorAction SilentlyContinue
@@ -197,4 +197,3 @@ if ($results.Failed -gt 0 -or $results.Timeout -gt 0 -or $results.Crashed -gt 0)
 } else {
     exit 0
 }
-

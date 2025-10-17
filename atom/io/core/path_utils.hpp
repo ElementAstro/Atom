@@ -29,16 +29,16 @@ namespace fs = std::filesystem;
 
 // Platform-specific path validation regexes
 #ifdef _WIN32
-// Windows: disallow ?, *, :, ;, {}, \ in folder names (except drive letter colon)
+// Windows: disallow ?, *, :, ;, {}, \ in folder names (except drive letter
+// colon)
 inline const std::regex FOLDER_NAME_REGEX(R"(^[^\/?*:;{}\\]+[^\\]*$)");
 // Windows: disallow \, /, :, *, ?, ", <, >, | in file names
 inline const std::regex FILE_NAME_REGEX("^[^\\/:*?\"<>|]+$");
 // Windows reserved names
 inline const std::array<std::string_view, 22> RESERVED_NAMES = {
-    "CON", "PRN", "AUX", "NUL",
-    "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-    "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-};
+    "CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3", "COM4",
+    "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
+    "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
 #else
 // Unix/Linux: disallow / in folder and file names
 inline const std::regex FOLDER_NAME_REGEX("^[^/]+$");
@@ -71,7 +71,8 @@ inline bool validatePath(std::string_view path) noexcept {
     }
 
     // Check for excessively long paths
-    constexpr size_t MAX_PATH_LENGTH = 4096;  // Reasonable limit for most systems
+    constexpr size_t MAX_PATH_LENGTH =
+        4096;  // Reasonable limit for most systems
     if (path.length() > MAX_PATH_LENGTH) {
         spdlog::warn("Path exceeds maximum length: {}", path.length());
         return false;
@@ -99,14 +100,14 @@ inline bool validatePath(std::string_view path) noexcept {
     try {
         fs::path p(path);
         std::string filename = p.filename().string();
-        
+
         // Convert to uppercase for comparison
         std::string upper_filename = filename;
         std::transform(upper_filename.begin(), upper_filename.end(),
-                      upper_filename.begin(), ::toupper);
-        
+                       upper_filename.begin(), ::toupper);
+
         for (const auto& reserved : RESERVED_NAMES) {
-            if (upper_filename == reserved || 
+            if (upper_filename == reserved ||
                 upper_filename.starts_with(std::string(reserved) + ".")) {
                 spdlog::warn("Path uses Windows reserved name: {}", filename);
                 return false;
@@ -143,7 +144,7 @@ inline bool isFolderNameValid(std::string_view folderName) noexcept {
 
     try {
         return std::regex_match(folderName.begin(), folderName.end(),
-                               FOLDER_NAME_REGEX);
+                                FOLDER_NAME_REGEX);
     } catch (const std::exception& e) {
         spdlog::error("Error checking folder name validity: {}", e.what());
         return false;
@@ -164,7 +165,7 @@ inline bool isFileNameValid(std::string_view fileName) noexcept {
 
     try {
         return std::regex_match(fileName.begin(), fileName.end(),
-                               FILE_NAME_REGEX);
+                                FILE_NAME_REGEX);
     } catch (const std::exception& e) {
         spdlog::error("Error checking file name validity: {}", e.what());
         return false;
@@ -198,8 +199,8 @@ inline bool isValidPath(const fs::path& path) noexcept {
  * @param write_access Whether write access is required
  * @return true if permissions are valid, false otherwise
  */
-inline bool validatePermissions(std::string_view path, 
-                               bool write_access = false) noexcept {
+inline bool validatePermissions(std::string_view path,
+                                bool write_access = false) noexcept {
     if (!validatePath(path)) {
         return false;
     }
@@ -207,7 +208,7 @@ inline bool validatePermissions(std::string_view path,
     try {
         fs::path p(path);
         std::error_code ec;
-        
+
         // Check if path exists
         if (!fs::exists(p, ec) || ec) {
             return false;
@@ -225,7 +226,7 @@ inline bool validatePermissions(std::string_view path,
         }
 
         // Check write permission if required
-        if (write_access && 
+        if (write_access &&
             (perms & fs::perms::owner_write) == fs::perms::none) {
             return false;
         }
@@ -240,4 +241,3 @@ inline bool validatePermissions(std::string_view path,
 }  // namespace atom::io::path_utils
 
 #endif  // ATOM_IO_CORE_PATH_UTILS_HPP
-

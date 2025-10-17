@@ -12,6 +12,7 @@ Build all examples in the project completely and fix any issues encountered duri
 6. Document any changes made to fix build issues
 
 Please provide a summary of:
+
 - Which examples were built
 - What issues were encountered and how they were resolved
 - Verification that all functionality is working properly

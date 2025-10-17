@@ -51,17 +51,17 @@ local asio_headers = {
 
 target("atom-extra-asio")
     set_kind("static")
-    
+
     -- Add MQTT sources
     for _, src in ipairs(mqtt_sources) do
         add_files(src)
     end
-    
+
     -- Add SSE sources
     for _, src in ipairs(sse_sources) do
         add_files(src)
     end
-    
+
     -- Add all headers
     for _, hdr in ipairs(mqtt_headers) do
         add_headerfiles(hdr)
@@ -72,19 +72,19 @@ target("atom-extra-asio")
     for _, hdr in ipairs(asio_headers) do
         add_headerfiles(hdr)
     end
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("asio", "boost")
-    
+
     -- Add system libraries
     add_syslinks("pthread")
-    
+
     -- Set C++ standard
     set_languages("c++23")
-    
+
     -- Installation
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -103,4 +103,3 @@ target("atom-extra-asio")
             os.cp(hdr, path.join(headerdir, "sse"))
         end
     end)
-

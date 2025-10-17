@@ -587,7 +587,8 @@ usize FloodFill::fillParallel(
         auto directions = getDirections(config.connectivity);
 
         // First BFS phase to find initial seed points for parallel processing
-        // We don't fill cells here, just identify starting points for worker threads
+        // We don't fill cells here, just identify starting points for worker
+        // threads
         std::vector<std::pair<i32, i32>> seeds;
         std::queue<std::pair<i32, i32>> queue;
         std::vector<std::vector<bool>> visited(
@@ -597,7 +598,8 @@ usize FloodFill::fillParallel(
         queue.emplace(start_x, start_y);
         visited[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
             true;
-        seeds.emplace_back(start_x, start_y);  // Add starting point as first seed
+        seeds.emplace_back(start_x,
+                           start_y);  // Add starting point as first seed
 
         // Find additional seed points for parallel processing
         while (!queue.empty() && seeds.size() < config.numThreads) {

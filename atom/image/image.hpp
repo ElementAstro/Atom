@@ -5,8 +5,9 @@
  * @file image.hpp
  * @brief Comprehensive image processing library for the Atom framework
  *
- * This header provides a unified interface to all image processing functionality
- * including format support, processing operations, and metadata handling.
+ * This header provides a unified interface to all image processing
+ * functionality including format support, processing operations, and metadata
+ * handling.
  *
  * @author Atom Framework Team
  * @date 2025
@@ -17,33 +18,33 @@
 #include "core/image_blob.hpp"
 
 // Image processing operations
-#include "processing/image_processor.hpp"
-#include "processing/filters.hpp"
-#include "processing/transforms.hpp"
-#include "processing/enhancement.hpp"
 #include "processing/computer_vision.hpp"
+#include "processing/enhancement.hpp"
+#include "processing/filters.hpp"
+#include "processing/gpu_acceleration.hpp"
+#include "processing/image_processor.hpp"
 #include "processing/ml_processing.hpp"
 #include "processing/realtime.hpp"
-#include "processing/gpu_acceleration.hpp"
+#include "processing/transforms.hpp"
 
 #ifdef ATOM_IMAGE_HAS_OCR
 #include "processing/ocr/ocr.hpp"
 #endif
 
 // Format support
+#include "formats/advanced_formats.hpp"
+#include "formats/fits_data.hpp"
 #include "formats/fits_file.hpp"
 #include "formats/fits_header.hpp"
-#include "formats/fits_data.hpp"
 #include "formats/fits_utils.hpp"
 #include "formats/hdu.hpp"
-#include "formats/advanced_formats.hpp"
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
+#include "formats/ser/frame_processor.h"
+#include "formats/ser/quality.h"
 #include "formats/ser/ser.hpp"
 #include "formats/ser/ser_reader.h"
 #include "formats/ser/ser_writer.h"
-#include "formats/ser/frame_processor.h"
-#include "formats/ser/quality.h"
 #endif
 
 // Metadata handling
@@ -69,23 +70,23 @@ struct Version {
  * @brief Feature availability flags
  */
 struct Features {
-    #ifdef ATOM_IMAGE_HAS_OPENCV
+#ifdef ATOM_IMAGE_HAS_OPENCV
     static constexpr bool HAS_OPENCV = true;
-    #else
+#else
     static constexpr bool HAS_OPENCV = false;
-    #endif
+#endif
 
-    #ifdef ATOM_IMAGE_HAS_CFITSIO
+#ifdef ATOM_IMAGE_HAS_CFITSIO
     static constexpr bool HAS_CFITSIO = true;
-    #else
+#else
     static constexpr bool HAS_CFITSIO = false;
-    #endif
+#endif
 
-    #ifdef ATOM_IMAGE_HAS_OCR
+#ifdef ATOM_IMAGE_HAS_OCR
     static constexpr bool HAS_OCR = true;
-    #else
+#else
     static constexpr bool HAS_OCR = false;
-    #endif
+#endif
 };
 
 /**
@@ -103,18 +104,14 @@ void cleanup();
  * @brief Get module version information
  * @return Version structure with version details
  */
-constexpr Version getVersion() {
-    return Version{};
-}
+constexpr Version getVersion() { return Version{}; }
 
 /**
  * @brief Get available features
  * @return Features structure with capability flags
  */
-constexpr Features getFeatures() {
-    return Features{};
-}
+constexpr Features getFeatures() { return Features{}; }
 
-} // namespace atom::image
+}  // namespace atom::image
 
-#endif // ATOM_IMAGE_HPP
+#endif  // ATOM_IMAGE_HPP

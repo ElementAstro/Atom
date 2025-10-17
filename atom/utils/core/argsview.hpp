@@ -754,8 +754,8 @@ inline auto ArgumentParser::detectType(const std::any& value) -> ArgType {
     return ArgType::STRING;
 }
 
-inline auto ArgumentParser::parseValue(ArgType type, const String& value)
-    -> std::any {
+inline auto ArgumentParser::parseValue(ArgType type,
+                                       const String& value) -> std::any {
     try {
         const char* str = value.c_str();
         size_t len = value.length();
