@@ -16,89 +16,92 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+# Include example build options if not already included
+if(NOT DEFINED ATOM_EXAMPLE_BUILD_ALL)
+    include(${CMAKE_SOURCE_DIR}/cmake/ExamplesBuildOptions.cmake)
+endif()
+
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-# 示例构建选项在 cmake/ExamplesBuildOptions.cmake 中定义
-
 # 有条件地添加子目录
-if(ATOM_EXAMPLE_BUILD_ALGORITHM)
+if(ATOM_EXAMPLE_BUILD_ALGORITHM AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/algorithm/CMakeLists.txt")
     add_subdirectory(algorithm)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_ASYNC)
+if(ATOM_EXAMPLE_BUILD_ASYNC AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/async/CMakeLists.txt")
     add_subdirectory(async)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_COMPONENTS)
+if(ATOM_EXAMPLE_BUILD_COMPONENTS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/components/CMakeLists.txt")
     add_subdirectory(components)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_CONNECTION)
+if(ATOM_EXAMPLE_BUILD_CONNECTION AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/connection/CMakeLists.txt")
     add_subdirectory(connection)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_CONTAINERS)
+if(ATOM_EXAMPLE_BUILD_CONTAINERS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/containers/CMakeLists.txt")
     add_subdirectory(containers)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_ERROR)
+if(ATOM_EXAMPLE_BUILD_ERROR AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/error/CMakeLists.txt")
     add_subdirectory(error)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_EXTRA)
+if(ATOM_EXAMPLE_BUILD_EXTRA AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extra/CMakeLists.txt")
     add_subdirectory(extra)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_IMAGE)
+if(ATOM_EXAMPLE_BUILD_IMAGE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/image/CMakeLists.txt")
     add_subdirectory(image)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_IO)
+if(ATOM_EXAMPLE_BUILD_IO AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/io/CMakeLists.txt")
     add_subdirectory(io)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_LOG)
+if(ATOM_EXAMPLE_BUILD_LOG AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/log/CMakeLists.txt")
     add_subdirectory(log)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_MEMORY)
+if(ATOM_EXAMPLE_BUILD_MEMORY AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/memory/CMakeLists.txt")
     add_subdirectory(memory)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_META)
+if(ATOM_EXAMPLE_BUILD_META AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/meta/CMakeLists.txt")
     add_subdirectory(meta)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SEARCH)
+if(ATOM_EXAMPLE_BUILD_SEARCH AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/search/CMakeLists.txt")
     add_subdirectory(search)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SECRET)
+if(ATOM_EXAMPLE_BUILD_SECRET AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/secret/CMakeLists.txt")
     add_subdirectory(secret)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SERIAL)
+if(ATOM_EXAMPLE_BUILD_SERIAL AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/serial/CMakeLists.txt")
     add_subdirectory(serial)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SYSINFO)
+if(ATOM_EXAMPLE_BUILD_SYSINFO AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/sysinfo/CMakeLists.txt")
     add_subdirectory(sysinfo)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_SYSTEM)
+if(ATOM_EXAMPLE_BUILD_SYSTEM AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/system/CMakeLists.txt")
     add_subdirectory(system)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_TYPE)
+if(ATOM_EXAMPLE_BUILD_TYPE AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/type/CMakeLists.txt")
     add_subdirectory(type)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_UTILS)
+if(ATOM_EXAMPLE_BUILD_UTILS AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/utils/CMakeLists.txt")
     add_subdirectory(utils)
 endif()
 
-if(ATOM_EXAMPLE_BUILD_WEB)
+if(ATOM_EXAMPLE_BUILD_WEB AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/web/CMakeLists.txt")
     add_subdirectory(web)
 endif()
 

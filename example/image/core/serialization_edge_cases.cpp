@@ -32,18 +32,18 @@ using namespace std::chrono;
  * @brief Create test blob with specific pattern
  */
 blob createTestBlob(size_t size, uint8_t pattern = 0) {
-    std::vector<uint8_t> data(size);
-    
+    std::vector<std::byte> data(size);
+
     if (pattern == 0) {
         // Sequential pattern
         for (size_t i = 0; i < size; ++i) {
-            data[i] = static_cast<uint8_t>(i % 256);
+            data[i] = static_cast<std::byte>(i % 256);
         }
     } else {
         // Fill with specific pattern
-        std::fill(data.begin(), data.end(), pattern);
+        std::fill(data.begin(), data.end(), static_cast<std::byte>(pattern));
     }
-    
+
     return blob(data.data(), data.size());
 }
 
@@ -137,10 +137,10 @@ void testCorruptionHandling() {
                 
             case 1: // Modified header
                 if (corruptedData.size() > 4) {
-                    corruptedData[0] = 0xFF;
-                    corruptedData[1] = 0xFF;
-                    corruptedData[2] = 0xFF;
-                    corruptedData[3] = 0xFF;
+                    corruptedData[0] = std::byte{0xFF};
+                    corruptedData[1] = std::byte{0xFF};
+                    corruptedData[2] = std::byte{0xFF};
+                    corruptedData[3] = std::byte{0xFF};
                 }
                 break;
                 
@@ -153,7 +153,7 @@ void testCorruptionHandling() {
                 break;
                 
             case 3: // Extra data
-                corruptedData.insert(corruptedData.end(), 100, 0xAA);
+                corruptedData.insert(corruptedData.end(), 100, std::byte{0xAA});
                 break;
                 
             case 4: // Completely random data
@@ -161,7 +161,7 @@ void testCorruptionHandling() {
                 std::mt19937 gen(rd());
                 std::uniform_int_distribution<uint8_t> dis(0, 255);
                 for (auto& byte : corruptedData) {
-                    byte = dis(gen);
+                    byte = std::byte{dis(gen)};
                 }
                 break;
         }
@@ -198,10 +198,10 @@ void testSerializationPerformance() {
             
             // Measure serialization performance
             const int iterations = (size > 1024 * 1024) ? 5 : 50;
-            
+
             auto start = high_resolution_clock::now();
-            std::vector<uint8_t> lastSerialized;
-            
+            std::vector<std::byte> lastSerialized;
+
             for (int i = 0; i < iterations; ++i) {
                 lastSerialized = testBlob.serialize();
             }
@@ -242,33 +242,33 @@ void testCrossPlatformCompatibility() {
     std::cout << "\n=== Cross-Platform Compatibility Testing ===\n";
     
     // Test different data patterns that might expose endianness issues
-    std::vector<std::pair<std::string, std::vector<uint8_t>>> testPatterns = {
-        {"All zeros", std::vector<uint8_t>(1024, 0x00)},
-        {"All ones", std::vector<uint8_t>(1024, 0xFF)},
+    std::vector<std::pair<std::string, std::vector<std::byte>>> testPatterns = {
+        {"All zeros", std::vector<std::byte>(1024, std::byte{0x00})},
+        {"All ones", std::vector<std::byte>(1024, std::byte{0xFF})},
         {"Alternating", {}},
         {"Sequential", {}},
         {"Random", {}}
     };
-    
+
     // Generate alternating pattern
     testPatterns[2].second.resize(1024);
     for (size_t i = 0; i < 1024; ++i) {
-        testPatterns[2].second[i] = (i % 2) ? 0xFF : 0x00;
+        testPatterns[2].second[i] = (i % 2) ? std::byte{0xFF} : std::byte{0x00};
     }
-    
+
     // Generate sequential pattern
     testPatterns[3].second.resize(1024);
     for (size_t i = 0; i < 1024; ++i) {
-        testPatterns[3].second[i] = static_cast<uint8_t>(i % 256);
+        testPatterns[3].second[i] = static_cast<std::byte>(i % 256);
     }
-    
+
     // Generate random pattern
     testPatterns[4].second.resize(1024);
     std::random_device rd;
     std::mt19937 gen(42); // Fixed seed for reproducibility
     std::uniform_int_distribution<uint8_t> dis(0, 255);
     for (size_t i = 0; i < 1024; ++i) {
-        testPatterns[4].second[i] = dis(gen);
+        testPatterns[4].second[i] = static_cast<std::byte>(dis(gen));
     }
     
     for (const auto& [name, data] : testPatterns) {
@@ -297,16 +297,20 @@ void testCrossPlatformCompatibility() {
                 // Read from file
                 std::ifstream inFile(filename, std::ios::binary);
                 if (inFile) {
-                    std::vector<uint8_t> fileData((std::istreambuf_iterator<char>(inFile)),
-                                                  std::istreambuf_iterator<char>());
+                    std::vector<std::byte> fileData;
+                    inFile.seekg(0, std::ios::end);
+                    size_t fileSize = inFile.tellg();
+                    inFile.seekg(0, std::ios::beg);
+                    fileData.resize(fileSize);
+                    inFile.read(reinterpret_cast<char*>(fileData.data()), fileSize);
                     inFile.close();
-                    
+
                     auto fileDeserialized = blob::deserialize(fileData);
                     bool fileIdentical = (originalBlob.size() == fileDeserialized.size()) &&
                                         (std::memcmp(originalBlob.data(), fileDeserialized.data(), originalBlob.size()) == 0);
-                    
+
                     std::cout << "  File I/O test: " << (fileIdentical ? "PASS" : "FAIL") << "\n";
-                    
+
                     // Clean up
                     std::remove(filename.c_str());
                 } else {
@@ -333,16 +337,16 @@ void testErrorRecovery() {
     
     try {
         // Test with empty data
-        std::vector<uint8_t> emptyData;
+        std::vector<std::byte> emptyData;
         try {
             auto emptyBlob = blob::deserialize(emptyData);
             std::cout << "  Empty data: Unexpectedly succeeded\n";
         } catch (const std::exception& e) {
             std::cout << "  Empty data: Correctly failed - " << e.what() << "\n";
         }
-        
+
         // Test with minimal data
-        std::vector<uint8_t> minimalData = {0x01, 0x02};
+        std::vector<std::byte> minimalData = {std::byte{0x01}, std::byte{0x02}};
         try {
             auto minimalBlob = blob::deserialize(minimalData);
             std::cout << "  Minimal data: Unexpectedly succeeded\n";
@@ -353,11 +357,11 @@ void testErrorRecovery() {
         // Test recovery after failed deserialization
         auto validBlob = createTestBlob(1024);
         auto validSerialized = validBlob.serialize();
-        
+
         // Corrupt and try to deserialize
         auto corruptedData = validSerialized;
         if (corruptedData.size() > 4) {
-            corruptedData[0] = 0xFF;
+            corruptedData[0] = std::byte{0xFF};
         }
         
         try {

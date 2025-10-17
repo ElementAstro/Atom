@@ -36,11 +36,11 @@ endif()
 # =============================================================================
 # Test sources
 set(TEST_SOURCES
-    comprehensive_test.cpp
-    test_comprehensive_error_system.cpp
+    test_error.cpp
+    test_error_system.cpp
     test_error_formatting.cpp
     test_error_integration.cpp
-    test_enhanced_stacktrace.cpp
+    test_stacktrace.cpp
 )
 
 # =============================================================================

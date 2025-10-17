@@ -925,48 +925,50 @@ public:
     auto submitWithPromise(F&& f, Args&&... args) {
         using ResultType = std::invoke_result_t<F, Args...>;
 
-        // Create Promise
-        Promise<ResultType> promise;
+        auto promisePtr = std::make_shared<Promise<ResultType>>();
+        auto future = promisePtr->getEnhancedFuture();
 
 #ifdef ATOM_USE_ASIO
         // If using ASIO and context is available, use ASIO for execution
         if (options_.useAsioContext && asioContext_) {
             asio::post(*asioContext_->getContext(),
-                       [promise, func = std::forward<F>(f),
+                       [promise = promisePtr, func = std::forward<F>(f),
                         ... largs = std::forward<Args>(args)]() mutable {
                            try {
                                if constexpr (std::is_void_v<ResultType>) {
                                    std::invoke(std::forward<F>(func),
                                                std::forward<Args>(largs)...);
-                                   promise.setValue();
+                                   promise->setValue();
                                } else {
-                                   promise.setValue(std::invoke(
+                                   promise->setValue(std::invoke(
                                        std::forward<F>(func),
                                        std::forward<Args>(largs)...));
                                }
                            } catch (...) {
-                               promise.setException(std::current_exception());
+                               promise->setException(
+                                   std::current_exception());
                            }
                        });
 
-            return promise;
+            return future;
         }
 #endif
 
         // Create task
-        auto task = [promise, func = std::forward<F>(f),
+        auto task = [promise = promisePtr, func = std::forward<F>(f),
                      ... largs = std::forward<Args>(args)]() mutable {
             try {
                 if constexpr (std::is_void_v<ResultType>) {
                     std::invoke(std::forward<F>(func),
                                 std::forward<Args>(largs)...);
-                    promise.setValue();
+                    promise->setValue();
                 } else {
-                    promise.setValue(std::invoke(std::forward<F>(func),
-                                                 std::forward<Args>(largs)...));
+                    promise->setValue(std::invoke(
+                        std::forward<F>(func),
+                        std::forward<Args>(largs)...));
                 }
             } catch (...) {
-                promise.setException(std::current_exception());
+                promise->setException(std::current_exception());
             }
         };
 
@@ -993,7 +995,7 @@ public:
         // Notify a waiting thread
         condition_.notify_one();
 
-        return promise;
+        return future;
     }
 
     /**

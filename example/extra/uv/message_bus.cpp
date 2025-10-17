@@ -164,17 +164,17 @@ int main() {
             AuditService audit_service("AuditService");
 
             // Subscribe to messages
-            bus.subscribe<UserLoginMessage>(
+            bus.subscribe<UserLoginMessage>("user.login",
                 [&user_service](const UserLoginMessage& msg) {
                     user_service.on_user_login(msg);
                 });
 
-            bus.subscribe<OrderCreatedMessage>(
+            bus.subscribe<OrderCreatedMessage>("order.created",
                 [&order_service](const OrderCreatedMessage& msg) {
                     order_service.on_order_created(msg);
                 });
 
-            bus.subscribe<SystemStatusMessage>(
+            bus.subscribe<SystemStatusMessage>("system.status",
                 [&user_service](const SystemStatusMessage& msg) {
                     user_service.on_system_status(msg);
                 });
@@ -207,28 +207,28 @@ int main() {
             AuditService audit_service("AuditService");
 
             // Multiple subscribers for UserLoginMessage
-            bus.subscribe<UserLoginMessage>(
+            bus.subscribe<UserLoginMessage>("user.login",
                 [&user_service](const UserLoginMessage& msg) {
                     user_service.on_user_login(msg);
                 });
 
-            bus.subscribe<UserLoginMessage>(
+            bus.subscribe<UserLoginMessage>("user.login",
                 [&order_service](const UserLoginMessage& msg) {
                     order_service.on_user_login(msg);
                 });
 
-            bus.subscribe<UserLoginMessage>(
+            bus.subscribe<UserLoginMessage>("user.login",
                 [&audit_service](const UserLoginMessage& msg) {
                     audit_service.on_user_login(msg);
                 });
 
             // Multiple subscribers for OrderCreatedMessage
-            bus.subscribe<OrderCreatedMessage>(
+            bus.subscribe<OrderCreatedMessage>("order.created",
                 [&order_service](const OrderCreatedMessage& msg) {
                     order_service.on_order_created(msg);
                 });
 
-            bus.subscribe<OrderCreatedMessage>(
+            bus.subscribe<OrderCreatedMessage>("order.created",
                 [&audit_service](const OrderCreatedMessage& msg) {
                     audit_service.on_order_created(msg);
                 });
@@ -260,12 +260,13 @@ int main() {
         std::cout << "\n3. Asynchronous Message Processing:" << std::endl;
         {
             MessageBus bus;
-            bus.set_async_processing(true);
+            // Note: set_async_processing is not yet implemented
+            // bus.set_async_processing(true);
 
             std::atomic<int> messages_processed{0};
 
             // Subscribe with async processing
-            bus.subscribe<UserLoginMessage>([&messages_processed](
+            bus.subscribe<UserLoginMessage>("user.login", [&messages_processed](
                                                 const UserLoginMessage& msg) {
                 std::cout << "Async processing: " << msg.to_string()
                           << std::endl;
@@ -310,7 +311,7 @@ int main() {
             std::atomic<int> low_value_orders{0};
 
             // Filter for high-value orders only
-            bus.subscribe<OrderCreatedMessage>(
+            bus.subscribe<OrderCreatedMessage>("order.high_value",
                 [&high_value_orders](const OrderCreatedMessage& msg) {
                     if (msg.amount >= 100.0) {
                         high_value_orders++;
@@ -321,7 +322,7 @@ int main() {
                 });
 
             // Filter for low-value orders
-            bus.subscribe<OrderCreatedMessage>(
+            bus.subscribe<OrderCreatedMessage>("order.low_value",
                 [&low_value_orders](const OrderCreatedMessage& msg) {
                     if (msg.amount < 100.0) {
                         low_value_orders++;
@@ -356,12 +357,13 @@ int main() {
         std::cout << "\n5. Message Priorities:" << std::endl;
         {
             MessageBus bus;
-            bus.enable_priority_queue(true);
+            // Note: enable_priority_queue is not yet implemented
+            // bus.enable_priority_queue(true);
 
             std::vector<std::string> processing_order;
             std::mutex order_mutex;
 
-            bus.subscribe<SystemStatusMessage>(
+            bus.subscribe<SystemStatusMessage>("system.status",
                 [&processing_order,
                  &order_mutex](const SystemStatusMessage& msg) {
                     std::lock_guard<std::mutex> lock(order_mutex);
@@ -378,15 +380,13 @@ int main() {
             SystemStatusMessage medium_priority{"api", "error",
                                                 "Rate limit exceeded"};
 
-            bus.publish(low_priority, MessagePriority::LOW);
-            bus.publish(high_priority, MessagePriority::HIGH);
-            bus.publish(medium_priority, MessagePriority::MEDIUM);
+            bus.publish(low_priority);
+            bus.publish(high_priority);
+            bus.publish(medium_priority);
 
             // Add more messages
-            bus.publish({"logging", "info", "Log rotation completed"},
-                        MessagePriority::LOW);
-            bus.publish({"security", "critical", "Unauthorized access attempt"},
-                        MessagePriority::HIGH);
+            bus.publish(SystemStatusMessage{"logging", "info", "Log rotation completed"});
+            bus.publish(SystemStatusMessage{"security", "critical", "Unauthorized access attempt"});
 
             bus.process_messages();
 
@@ -405,12 +405,12 @@ int main() {
             UserService user_service("UserService");
             OrderService order_service("OrderService");
 
-            bus.subscribe<UserLoginMessage>(
+            bus.subscribe<UserLoginMessage>("user.login",
                 [&user_service](const UserLoginMessage& msg) {
                     user_service.on_user_login(msg);
                 });
 
-            bus.subscribe<OrderCreatedMessage>(
+            bus.subscribe<OrderCreatedMessage>("order.created",
                 [&order_service](const OrderCreatedMessage& msg) {
                     order_service.on_order_created(msg);
                 });
@@ -433,18 +433,16 @@ int main() {
             bus.process_messages();
 
             // Get statistics
-            auto stats = bus.get_statistics();
+            auto stats = bus.get_stats();
             std::cout << "Message Bus Statistics:" << std::endl;
-            std::cout << "  Total messages published: " << stats.total_published
+            std::cout << "  Pending messages: " << stats.pending_messages
                       << std::endl;
-            std::cout << "  Total messages processed: " << stats.total_processed
+            std::cout << "  Max queue size: " << stats.max_queue_size
                       << std::endl;
-            std::cout << "  Messages in queue: " << stats.queue_size
+            std::cout << "  Total handlers: " << stats.total_handlers
                       << std::endl;
-            std::cout << "  Active subscribers: " << stats.subscriber_count
-                      << std::endl;
-            std::cout << "  Average processing time: "
-                      << stats.average_processing_time.count() << "ms"
+            std::cout << "  Average delivery time: "
+                      << stats.avg_delivery_time.count() << "ms"
                       << std::endl;
         }
 
@@ -452,13 +450,14 @@ int main() {
         std::cout << "\n7. Error Handling and Dead Letter Queue:" << std::endl;
         {
             MessageBus bus;
-            bus.enable_dead_letter_queue(true);
+            // Note: enable_dead_letter_queue is not yet implemented
+            // bus.enable_dead_letter_queue(true);
 
             std::atomic<int> successful_processing{0};
             std::atomic<int> failed_processing{0};
 
             // Subscribe with error-prone handler
-            bus.subscribe<OrderCreatedMessage>(
+            bus.subscribe<OrderCreatedMessage>("order.created",
                 [&successful_processing,
                  &failed_processing](const OrderCreatedMessage& msg) {
                     // Simulate random failures
@@ -476,11 +475,14 @@ int main() {
                 });
 
             // Set up dead letter handler
+            // Note: set_dead_letter_handler is not yet implemented
+            /*
             bus.set_dead_letter_handler(
                 [](const auto& failed_message, const std::string& error) {
                     std::cout << "Message sent to dead letter queue: " << error
                               << std::endl;
                 });
+            */
 
             // Publish messages (some will fail)
             std::vector<OrderCreatedMessage> orders = {
@@ -502,9 +504,12 @@ int main() {
             std::cout << "  Failed processing: " << failed_processing.load()
                       << std::endl;
 
+            // Note: get_dead_letter_count is not yet implemented
+            /*
             auto dead_letter_count = bus.get_dead_letter_count();
             std::cout << "  Messages in dead letter queue: "
                       << dead_letter_count << std::endl;
+            */
         }
 
         std::cout << "\n=== UV Message Bus Example Completed ===" << std::endl;

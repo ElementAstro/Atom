@@ -62,7 +62,7 @@ endforeach()
 # Create examples for each subdirectory
 create_examples_from_directory("asio")
 create_examples_from_directory("beast")
-create_examples_from_directory("boost")
+# create_examples_from_directory("boost")  # Disabled: Boost not available
 create_examples_from_directory("curl")
 create_examples_from_directory("dotenv")
 create_examples_from_directory("iconv")

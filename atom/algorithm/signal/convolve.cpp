@@ -668,27 +668,24 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
 
         // 使用C++20 ranges提高可读性，用std::execution提高性能
         auto computeBlock = [&](usize blockStartRow, usize blockEndRow) {
+            const usize halfKernelRows = kernelRows / 2;
+            const usize halfKernelCols = kernelCols / 2;
+
             for (usize i = blockStartRow; i < blockEndRow; ++i) {
                 for (usize j = 0; j < inputCols; ++j) {
                     f64 sum = 0.0;
 
 #ifdef ATOM_ATOM_USE_SIMD
                     // 使用SIMD加速内循环计算
-                    const usize kernelRowMid = kernelRows / 2;
-                    const usize kernelColMid = kernelCols / 2;
-
-                    // SIMD_ALIGNED double simdSum[SIMD_WIDTH] = {0.0};
-                    // __m256d sum_vec = _mm256_setzero_pd();
-
                     for (usize ki = 0; ki < kernelRows; ++ki) {
                         for (usize kj = 0; kj < kernelCols; ++kj) {
-                            usize ii = i + ki;
-                            usize jj = j + kj;
-                            if (ii < inputRows + kernelRows - 1 &&
-                                jj < inputCols + kernelCols - 1) {
-                                sum += extendedInput[ii][jj] *
-                                       extendedKernel[kernelRows - 1 - ki]
-                                                     [kernelCols - 1 - kj];
+                            // Access input centered at (i, j) with kernel offset
+                            i32 ii = static_cast<i32>(i) + static_cast<i32>(ki) - static_cast<i32>(halfKernelRows);
+                            i32 jj = static_cast<i32>(j) + static_cast<i32>(kj) - static_cast<i32>(halfKernelCols);
+                            if (ii >= 0 && ii < static_cast<i32>(inputRows) &&
+                                jj >= 0 && jj < static_cast<i32>(inputCols)) {
+                                sum += input[static_cast<usize>(ii)][static_cast<usize>(jj)] *
+                                       kernel[ki][kj];
                             }
                         }
                     }
@@ -696,18 +693,18 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
                     // 标准实现
                     for (usize ki = 0; ki < kernelRows; ++ki) {
                         for (usize kj = 0; kj < kernelCols; ++kj) {
-                            usize ii = i + ki;
-                            usize jj = j + kj;
-                            if (ii < inputRows + kernelRows - 1 &&
-                                jj < inputCols + kernelCols - 1) {
-                                sum += extendedInput[ii][jj] *
-                                       extendedKernel[kernelRows - 1 - ki]
-                                                     [kernelCols - 1 - kj];
+                            // Access input centered at (i, j) with kernel offset
+                            i32 ii = static_cast<i32>(i) + static_cast<i32>(ki) - static_cast<i32>(halfKernelRows);
+                            i32 jj = static_cast<i32>(j) + static_cast<i32>(kj) - static_cast<i32>(halfKernelCols);
+                            if (ii >= 0 && ii < static_cast<i32>(inputRows) &&
+                                jj >= 0 && jj < static_cast<i32>(inputCols)) {
+                                sum += input[static_cast<usize>(ii)][static_cast<usize>(jj)] *
+                                       kernel[ki][kj];
                             }
                         }
                     }
 #endif
-                    output[i - kernelRows / 2][j] = sum;
+                    output[i][j] = sum;
                 }
             }
         };
@@ -717,13 +714,10 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
             std::vector<std::jthread> threadPool;
             usize blockSize = (inputRows + static_cast<usize>(numThreads) - 1) /
                               static_cast<usize>(numThreads);
-            usize blockStartRow = kernelRows / 2;
 
             for (i32 threadIndex = 0; threadIndex < numThreads; ++threadIndex) {
-                usize startRow =
-                    blockStartRow + static_cast<usize>(threadIndex) * blockSize;
-                usize endRow = Usize::min(startRow + blockSize,
-                                          inputRows + kernelRows / 2);
+                usize startRow = static_cast<usize>(threadIndex) * blockSize;
+                usize endRow = Usize::min(startRow + blockSize, inputRows);
 
                 // 使用C++20 jthread自动管理线程生命周期
                 threadPool.emplace_back(computeBlock, startRow, endRow);
@@ -732,7 +726,7 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
             // jthread会在作用域结束时自动join
         } else {
             // 单线程执行
-            computeBlock(kernelRows / 2, inputRows + kernelRows / 2);
+            computeBlock(0, inputRows);
         }
 
         return output;
@@ -1155,7 +1149,7 @@ auto generateGaussianKernel(i32 size, f64 sigma)
     }
 #else
     for (i32 i = 0; i < size; ++i) {
-        for (i32 j = 0; i < size; ++j) {
+        for (i32 j = 0; j < size; ++j) {
             kernel[static_cast<usize>(i)][static_cast<usize>(j)] =
                 F64::exp(
                     -0.5 *
@@ -1197,15 +1191,14 @@ auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
 
             for (usize k = 0; k < kernelSize; ++k) {
                 for (usize l = 0; l < kernelSize; ++l) {
-                    __m256d kernelVal = _mm256_set1_pd(
-                        kernel[kernelRadius + k][kernelRadius + l]);
+                    __m256d kernelVal = _mm256_set1_pd(kernel[k][l]);
 
                     for (i32 m = 0; m < SIMD_WIDTH; ++m) {
-                        i32 x = I32::clamp(static_cast<i32>(i + k), 0,
+                        // Center the kernel at position (i, j+m)
+                        i32 x = I32::clamp(static_cast<i32>(i) + static_cast<i32>(k) - static_cast<i32>(kernelRadius), 0,
                                            static_cast<i32>(imageHeight) - 1);
-                        i32 y = I32::clamp(
-                            static_cast<i32>(j + l + static_cast<usize>(m)), 0,
-                            static_cast<i32>(imageWidth) - 1);
+                        i32 y = I32::clamp(static_cast<i32>(j) + static_cast<i32>(l) + m - static_cast<i32>(kernelRadius), 0,
+                                           static_cast<i32>(imageWidth) - 1);
                         tempBuffer[m] =
                             image[static_cast<usize>(x)][static_cast<usize>(y)];
                     }
@@ -1230,12 +1223,13 @@ auto applyGaussianFilter(const std::vector<std::vector<f64>>& image,
             f64 sum = 0.0;
             for (usize k = 0; k < kernelSize; ++k) {
                 for (usize l = 0; l < kernelSize; ++l) {
-                    i32 x = I32::clamp(static_cast<i32>(i + k), 0,
+                    // Center the kernel at position (i, j)
+                    i32 x = I32::clamp(static_cast<i32>(i) + static_cast<i32>(k) - static_cast<i32>(kernelRadius), 0,
                                        static_cast<i32>(imageHeight) - 1);
-                    i32 y = I32::clamp(static_cast<i32>(j + l), 0,
+                    i32 y = I32::clamp(static_cast<i32>(j) + static_cast<i32>(l) - static_cast<i32>(kernelRadius), 0,
                                        static_cast<i32>(imageWidth) - 1);
                     sum += image[static_cast<usize>(x)][static_cast<usize>(y)] *
-                           kernel[kernelRadius + k][kernelRadius + l];
+                           kernel[k][l];
                 }
             }
             filteredImage[i][j] = sum;

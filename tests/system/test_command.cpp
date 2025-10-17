@@ -13,9 +13,29 @@
 #include <processthreadsapi.h>
 #endif
 
-#include "atom/system/command.hpp"
+#include "atom/system/process/command.hpp"
 
 namespace atom::system::test {
+
+// Bring command functions into scope
+using atom::system::isCommandAvailable;
+using atom::system::executeCommand;
+using atom::system::executeCommandWithStatus;
+using atom::system::executeCommandSimple;
+using atom::system::executeCommandWithInput;
+using atom::system::executeCommandWithEnv;
+using atom::system::executeCommandAsync;
+using atom::system::executeCommandWithTimeout;
+using atom::system::executeCommandStream;
+using atom::system::executeCommands;
+using atom::system::executeCommandsWithCommonEnv;
+using atom::system::executeCommandGetLines;
+using atom::system::pipeCommands;
+using atom::system::startProcess;
+using atom::system::getProcessesBySubstring;
+using atom::system::killProcessByPID;
+using atom::system::createCommandHistory;
+using atom::system::CommandHistory;
 
 // 命令行可用性的测试
 class CommandAvailableTest : public ::testing::Test {

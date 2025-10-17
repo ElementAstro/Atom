@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "../core/image_blob.hpp"
+#include "../io/format_detector.hpp"
 
 // Forward declare error macros for header
 #ifndef THROW_RUNTIME_ERROR
@@ -16,20 +17,6 @@
 #endif
 
 namespace atom::image {
-
-/**
- * @enum ImageFormat
- * @brief Supported image formats for conversion
- */
-enum class ImageFormat {
-    JPEG,
-    PNG,
-    TIFF,
-    BMP,
-    TGA,
-    FITS,
-    RAW
-};
 
 /**
  * @enum FilterType

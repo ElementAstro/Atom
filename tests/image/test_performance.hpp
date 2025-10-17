@@ -19,7 +19,7 @@
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
 #include "atom/image/processing/image_processor.hpp"
-#include "atom/image/processing/filters.hpp"
+// Note: filters.hpp is included by image_processor.hpp, don't include it again to avoid duplicate enum definitions
 #include "atom/image/processing/transforms.hpp"
 #include "atom/image/processing/enhancement.hpp"
 #endif
@@ -184,9 +184,9 @@ TEST_F(PerformanceTest, ImageProcessingPerformance) {
     });
     
     // Test filter performance
-    auto filter_time = measureExecutionTime([this, iterations]() {
-        for (int i = 0; i < iterations; ++i) {
-            auto result = processor->applyFilter(medium_image, "gaussian_blur");
+    auto filter_time = measureExecutionTime([this]() {
+        for (int i = 0; i < 50; ++i) {
+            auto result = processor->applyFilter(medium_image, FilterType::GAUSSIAN_BLUR);
             (void)result;
         }
     });

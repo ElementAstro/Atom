@@ -2,6 +2,7 @@
 // NOTE: This test file has been simplified to only test implemented AsyncFile functions
 // Many AsyncFile template functions are not implemented and would cause linking errors
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <filesystem>
@@ -18,8 +19,6 @@
 using namespace atom::async::io;
 namespace fs = std::filesystem;
 using ::testing::HasSubstr;
-using ::testing::IsEmpty;
-using ::testing::Not;
 
 class AsyncIOTest : public ::testing::Test {
 protected:
@@ -49,10 +48,8 @@ protected:
 #ifdef ATOM_USE_ASIO
         io_context = std::make_unique<asio::io_context>();
         async_file = std::make_unique<AsyncFile>(*io_context);
-        async_dir = std::make_unique<AsyncDirectory>(*io_context);
 #else
         async_file = std::make_unique<AsyncFile>();
-        async_dir = std::make_unique<AsyncDirectory>();
 #endif
     }
 
@@ -87,7 +84,6 @@ protected:
     std::unique_ptr<asio::io_context> io_context;
 #endif
     std::unique_ptr<AsyncFile> async_file;
-    std::unique_ptr<AsyncDirectory> async_dir;
 };
 
 // Test AsyncFile constructor
@@ -100,15 +96,7 @@ TEST_F(AsyncIOTest, AsyncFileConstructor) {
 #endif
 }
 
-// Test AsyncDirectory constructor
-TEST_F(AsyncIOTest, AsyncDirectoryConstructor) {
-#ifdef ATOM_USE_ASIO
-    asio::io_context test_context;
-    ASSERT_NO_THROW(AsyncDirectory dir(test_context));
-#else
-    ASSERT_NO_THROW(AsyncDirectory dir());
-#endif
-}
+// AsyncDirectory is deprecated - use AsyncFile for directory operations
 
 // Test AsyncFile::asyncRead with existing file
 TEST_F(AsyncIOTest, AsyncFileReadExistingFile) {
@@ -142,7 +130,7 @@ TEST_F(AsyncIOTest, AsyncFileReadNonExistentFile) {
     auto result = future.get();
 
     EXPECT_FALSE(result.success);
-    EXPECT_THAT(result.error_message, HasSubstr("does not exist"));
+    EXPECT_NE(result.error_message.find("does not exist"), std::string::npos);
 }
 
 // Test AsyncFile::asyncWrite with new file
@@ -248,7 +236,7 @@ TEST_F(AsyncIOTest, AsyncFileCopyExistingFile) {
     fs::path srcPath = testDir / "file1.txt";
     fs::path destPath = testDir / "file1_copy.txt";
 
-    async_file->asyncCopy(srcPath, destPath,
+    async_file->asyncCopy(srcPath.string(), destPath.string(),
         [&promise](AsyncResult<void> result) {
             promise.set_value(std::move(result));
         });
@@ -282,7 +270,7 @@ TEST_F(AsyncIOTest, AsyncFileCopyNonExistentSource) {
     fs::path srcPath = testDir / "non_existent.txt";
     fs::path destPath = testDir / "copy_fail.txt";
 
-    async_file->asyncCopy(srcPath, destPath,
+    async_file->asyncCopy(srcPath.string(), destPath.string(),
         [&promise](AsyncResult<void> result) {
             promise.set_value(std::move(result));
         });
@@ -302,7 +290,7 @@ TEST_F(AsyncIOTest, AsyncFileReadWithTimeoutSuccess) {
     std::promise<AsyncResult<std::string>> promise;
     auto future = promise.get_future();
 
-    async_file->asyncReadWithTimeout(testDir / "file1.txt", std::chrono::milliseconds(500),
+    async_file->asyncReadWithTimeout((testDir / "file1.txt").string(), std::chrono::milliseconds(500),
         [&promise](AsyncResult<std::string> result) {
             promise.set_value(std::move(result));
         });
@@ -322,7 +310,7 @@ TEST_F(AsyncIOTest, AsyncFileReadWithTimeoutExpires) {
     auto future = promise.get_future();
 
     // Assuming implementation adds artificial delay, set very short timeout
-    async_file->asyncReadWithTimeout(testDir / "file1.txt", std::chrono::milliseconds(1),
+    async_file->asyncReadWithTimeout((testDir / "file1.txt").string(), std::chrono::milliseconds(1),
         [&promise](AsyncResult<std::string> result) {
             promise.set_value(std::move(result));
         });
@@ -429,7 +417,7 @@ TEST_F(AsyncIOTest, AsyncFileMoveExistingFile) {
     fs::path srcPath = testDir / "file1.txt";
     fs::path destPath = testDir / "file1_moved.txt";
 
-    async_file->asyncMove(srcPath, destPath,
+    async_file->asyncMove(srcPath.string(), destPath.string(),
         [&promise](AsyncResult<void> result) {
             promise.set_value(std::move(result));
         });
@@ -453,7 +441,7 @@ TEST_F(AsyncIOTest, AsyncFileMoveNonExistentSource) {
     fs::path srcPath = testDir / "non_existent.txt";
     fs::path destPath = testDir / "move_fail.txt";
 
-    async_file->asyncMove(srcPath, destPath,
+    async_file->asyncMove(srcPath.string(), destPath.string(),
         [&promise](AsyncResult<void> result) {
             promise.set_value(std::move(result));
         });
@@ -598,160 +586,6 @@ TEST_F(AsyncIOTest, AsyncFileWriteFileCoroutine) {
     EXPECT_EQ(fileContent, content);
 }
 
-// Test AsyncDirectory::asyncCreate with new directory
-TEST_F(AsyncIOTest, AsyncDirectoryCreateNew) {
-    std::promise<AsyncResult<void>> promise;
-    auto future = promise.get_future();
-
-    fs::path dirPath = testDir / "async_dir_new";
-
-    async_dir->asyncCreate(dirPath,
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
-
-    ASSERT_TRUE(waitForFuture(future));
-    auto result = future.get();
-
-    EXPECT_TRUE(result.success);
-    EXPECT_TRUE(result.error_message.empty());
-
-    // Verify directory was created
-    EXPECT_TRUE(fs::exists(dirPath));
-    EXPECT_TRUE(fs::is_directory(dirPath));
-}
-
-// Test AsyncDirectory::asyncRemove with existing directory
-TEST_F(AsyncIOTest, AsyncDirectoryRemoveExisting) {
-    std::promise<AsyncResult<void>> promise;
-    auto future = promise.get_future();
-
-    fs::path dirPath = testDir / "subdir2";
-
-    async_dir->asyncRemove(dirPath,
-        [&promise](AsyncResult<void> result) {
-            promise.set_value(std::move(result));
-        });
-
-    ASSERT_TRUE(waitForFuture(future));
-    auto result = future.get();
-
-    EXPECT_TRUE(result.success);
-    EXPECT_TRUE(result.error_message.empty());
-
-    // Verify directory was removed
-    EXPECT_FALSE(fs::exists(dirPath));
-}
-
-// Test AsyncDirectory::asyncListContents with existing directory
-TEST_F(AsyncIOTest, AsyncDirectoryListContentsExisting) {
-    std::promise<AsyncResult<std::vector<fs::path>>> promise;
-    auto future = promise.get_future();
-
-    async_dir->asyncListContents(testDir,
-        [&promise](AsyncResult<std::vector<fs::path>> result) {
-            promise.set_value(std::move(result));
-        });
-
-    ASSERT_TRUE(waitForFuture(future));
-    auto result = future.get();
-
-    EXPECT_TRUE(result.success);
-    EXPECT_TRUE(result.error_message.empty());
-
-    // Verify we have the expected number of entries
-    EXPECT_GE(result.value.size(), 5); // At least 5 entries (files and dirs)
-
-    // Check for known files and directories
-    bool foundFile1 = false;
-    bool foundSubdir1 = false;
-
-    for (const auto& entry : result.value) {
-        if (entry.filename() == "file1.txt") foundFile1 = true;
-        if (entry.filename() == "subdir1") foundSubdir1 = true;
-    }
-
-    EXPECT_TRUE(foundFile1);
-    EXPECT_TRUE(foundSubdir1);
-}
-
-// Test AsyncDirectory::asyncListContents with non-existent directory
-TEST_F(AsyncIOTest, AsyncDirectoryListContentsNonExistent) {
-    std::promise<AsyncResult<std::vector<fs::path>>> promise;
-    auto future = promise.get_future();
-
-    async_dir->asyncListContents(testDir / "non_existent_dir",
-        [&promise](AsyncResult<std::vector<fs::path>> result) {
-            promise.set_value(std::move(result));
-        });
-
-    ASSERT_TRUE(waitForFuture(future));
-    auto result = future.get();
-
-    EXPECT_FALSE(result.success);
-    EXPECT_THAT(result.error_message, HasSubstr("does not exist"));
-}
-
-// Test AsyncDirectory::asyncExists with existing directory
-TEST_F(AsyncIOTest, AsyncDirectoryExistsExisting) {
-    std::promise<AsyncResult<bool>> promise;
-    auto future = promise.get_future();
-
-    async_dir->asyncExists(testDir / "subdir1",
-        [&promise](AsyncResult<bool> result) {
-            promise.set_value(std::move(result));
-        });
-
-    ASSERT_TRUE(waitForFuture(future));
-    auto result = future.get();
-
-    EXPECT_TRUE(result.success);
-    EXPECT_TRUE(result.error_message.empty());
-    EXPECT_TRUE(result.value);
-}
-
-// Test AsyncDirectory::asyncExists with non-existent directory
-TEST_F(AsyncIOTest, AsyncDirectoryExistsNonExistent) {
-    std::promise<AsyncResult<bool>> promise;
-    auto future = promise.get_future();
-
-    async_dir->asyncExists(testDir / "non_existent_dir",
-        [&promise](AsyncResult<bool> result) {
-            promise.set_value(std::move(result));
-        });
-
-    ASSERT_TRUE(waitForFuture(future));
-    auto result = future.get();
-
-    EXPECT_TRUE(result.success);
-    EXPECT_TRUE(result.error_message.empty());
-    EXPECT_FALSE(result.value);
-}
-
-// Test AsyncDirectory::listContents coroutine
-TEST_F(AsyncIOTest, AsyncDirectoryListContentsCoroutine) {
-    auto listTask = async_dir->listContents(testDir);
-    auto result = listTask.get();
-
-    EXPECT_TRUE(result.success);
-    EXPECT_TRUE(result.error_message.empty());
-
-    // Verify we have the expected number of entries
-    EXPECT_GE(result.value.size(), 5); // At least 5 entries (files and dirs)
-
-    // Check for known files and directories
-    bool foundFile1 = false;
-    bool foundSubdir1 = false;
-
-    for (const auto& entry : result.value) {
-        if (entry.filename() == "file1.txt") foundFile1 = true;
-        if (entry.filename() == "subdir1") foundSubdir1 = true;
-    }
-
-    EXPECT_TRUE(foundFile1);
-    EXPECT_TRUE(foundSubdir1);
-}
-
 // Test error handling with invalid inputs
 TEST_F(AsyncIOTest, InvalidInputHandling) {
     std::promise<AsyncResult<std::string>> readPromise;
@@ -820,4 +654,192 @@ TEST_F(AsyncIOTest, TaskFunctionality) {
     auto result = task.get();
     EXPECT_TRUE(result.success);
     EXPECT_EQ(result.value, "Task test value");
+}
+
+// Test async read with very large file
+TEST_F(AsyncIOTest, AsyncReadVeryLargeFile) {
+    // Create a large file (10 MB)
+    fs::path large_file = testDir / "large.txt";
+    std::ofstream ofs(large_file);
+    std::string chunk(1024, 'X');
+    for (int i = 0; i < 10240; ++i) {
+        ofs << chunk;
+    }
+    ofs.close();
+
+    std::promise<AsyncResult<std::string>> promise;
+    auto future = promise.get_future();
+
+    async_file->asyncRead(large_file, [&promise](AsyncResult<std::string> result) {
+        promise.set_value(std::move(result));
+    });
+
+    ASSERT_TRUE(waitForFuture(future, 5000));  // Longer timeout for large file
+    auto result = future.get();
+
+    EXPECT_TRUE(result.success);
+    EXPECT_GT(result.value.size(), 10 * 1024 * 1024);
+}
+
+// Test async write with binary data
+TEST_F(AsyncIOTest, AsyncWriteBinaryData) {
+    fs::path binary_file = testDir / "binary.dat";
+
+    std::vector<unsigned char> binary_data = {0x00, 0xFF, 0x7F, 0x80, 0xAA, 0x55};
+    std::string data_str(binary_data.begin(), binary_data.end());
+
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    async_file->asyncWrite(binary_file, data_str, [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    ASSERT_TRUE(waitForFuture(future));
+    auto result = future.get();
+
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(fs::exists(binary_file));
+    EXPECT_EQ(fs::file_size(binary_file), binary_data.size());
+}
+
+// Test concurrent async operations
+TEST_F(AsyncIOTest, ConcurrentAsyncOperations) {
+    const int num_operations = 10;
+    std::vector<std::promise<AsyncResult<std::string>>> promises(num_operations);
+    std::vector<std::future<AsyncResult<std::string>>> futures;
+
+    for (int i = 0; i < num_operations; ++i) {
+        futures.push_back(promises[i].get_future());
+    }
+
+    // Launch concurrent reads
+    for (int i = 0; i < num_operations; ++i) {
+        async_file->asyncRead(testDir / "file1.txt",
+            [&promises, i](AsyncResult<std::string> result) {
+                promises[i].set_value(std::move(result));
+            });
+    }
+
+    // Wait for all to complete
+    int success_count = 0;
+    for (auto& future : futures) {
+        if (waitForFuture(future)) {
+            auto result = future.get();
+            if (result.success) {
+                success_count++;
+            }
+        }
+    }
+
+    EXPECT_EQ(success_count, num_operations);
+}
+
+// Test async delete with non-existent file
+TEST_F(AsyncIOTest, AsyncDeleteNonExistent) {
+    fs::path non_existent = testDir / "does_not_exist.txt";
+
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    async_file->asyncDelete(non_existent, [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    ASSERT_TRUE(waitForFuture(future));
+    auto result = future.get();
+
+    EXPECT_FALSE(result.success);  // Should fail for non-existent file
+}
+
+// Test async copy with overwrite
+TEST_F(AsyncIOTest, AsyncCopyOverwrite) {
+    fs::path source = testDir / "file1.txt";
+    fs::path dest = testDir / "copy_overwrite.txt";
+
+    // Create destination file
+    createFile(dest, "Old content");
+
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    async_file->asyncCopy(source.string(), dest.string(), [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    ASSERT_TRUE(waitForFuture(future));
+    auto result = future.get();
+
+    EXPECT_TRUE(result.success);
+
+    // Verify content was overwritten
+    std::ifstream ifs(dest);
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                       std::istreambuf_iterator<char>());
+    EXPECT_EQ(content, "Test file 1 content");
+}
+
+// Test async move to same location
+TEST_F(AsyncIOTest, AsyncMoveToSameLocation) {
+    fs::path file = testDir / "file1.txt";
+
+    std::promise<AsyncResult<void>> promise;
+    auto future = promise.get_future();
+
+    async_file->asyncMove(file.string(), file.string(), [&promise](AsyncResult<void> result) {
+        promise.set_value(std::move(result));
+    });
+
+    ASSERT_TRUE(waitForFuture(future));
+    auto result = future.get();
+
+    EXPECT_FALSE(result.success);  // Should fail
+}
+
+// Test async stat for directory
+TEST_F(AsyncIOTest, AsyncStatDirectory) {
+    std::promise<AsyncResult<fs::file_status>> promise;
+    auto future = promise.get_future();
+
+    async_file->asyncStat(testDir / "subdir1", [&promise](AsyncResult<fs::file_status> result) {
+        promise.set_value(std::move(result));
+    });
+
+    ASSERT_TRUE(waitForFuture(future));
+    auto result = future.get();
+
+    EXPECT_TRUE(result.success);
+    EXPECT_TRUE(fs::is_directory(result.value));
+}
+
+// Test async exists for multiple files
+TEST_F(AsyncIOTest, AsyncExistsMultipleFiles) {
+    std::vector<fs::path> files = {
+        testDir / "file1.txt",
+        testDir / "file2.txt",
+        testDir / "nonexistent.txt"
+    };
+
+    std::vector<std::promise<AsyncResult<bool>>> promises(files.size());
+    std::vector<std::future<AsyncResult<bool>>> futures;
+
+    for (size_t i = 0; i < files.size(); ++i) {
+        futures.push_back(promises[i].get_future());
+    }
+
+    for (size_t i = 0; i < files.size(); ++i) {
+        async_file->asyncExists(files[i], [&promises, i](AsyncResult<bool> result) {
+            promises[i].set_value(std::move(result));
+        });
+    }
+
+    // Check results
+    ASSERT_TRUE(waitForFuture(futures[0]));
+    EXPECT_TRUE(futures[0].get().value);  // file1.txt exists
+
+    ASSERT_TRUE(waitForFuture(futures[1]));
+    EXPECT_TRUE(futures[1].get().value);  // file2.txt exists
+
+    ASSERT_TRUE(waitForFuture(futures[2]));
+    EXPECT_FALSE(futures[2].get().value);  // nonexistent.txt doesn't exist
 }

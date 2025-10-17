@@ -8,13 +8,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/system/voltage.hpp"
-
-#ifdef _WIN32
-#include "atom/system/voltage_windows.hpp"
-#elif defined(__linux__)
-#include "atom/system/voltage_linux.hpp"
-#endif
+#include "atom/system/hardware/voltage.hpp"
 
 using namespace atom::system;
 using namespace std::chrono_literals;

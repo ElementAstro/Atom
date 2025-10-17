@@ -409,6 +409,46 @@ TEST_F(ErrorIntegrationTest, ErrorRecovery) {
     EXPECT_EQ(attempt_count, max_attempts);
 }
 
+TEST_F(ErrorIntegrationTest, AtomNetworkExceptions) {
+    // Test network-related exceptions
+    EXPECT_THROW(THROW_JSON_PARSE_ERROR("JSON parse error"), atom::error::JsonParseError);
+    EXPECT_THROW(THROW_JSON_VALUE_ERROR("JSON value error"), atom::error::JsonValueError);
+    EXPECT_THROW(THROW_CURL_INITIALIZATION_ERROR("CURL init error"), atom::error::CurlInitializationError);
+    EXPECT_THROW(THROW_CURL_RUNTIME_ERROR("CURL runtime error"), atom::error::CurlRuntimeError);
+}
+
+TEST_F(ErrorIntegrationTest, AllExceptionTypesCoverage) {
+    // Comprehensive test for all exception types
+
+    // Basic exceptions
+    EXPECT_THROW(THROW_EXCEPTION("Basic exception"), atom::error::Exception);
+    EXPECT_THROW(THROW_RUNTIME_ERROR("Runtime error"), atom::error::RuntimeError);
+    EXPECT_THROW(THROW_LOGIC_ERROR("Logic error"), atom::error::LogicError);
+    EXPECT_THROW(THROW_UNLAWFUL_OPERATION("Unlawful operation"), atom::error::UnlawfulOperation);
+
+    // Range and overflow exceptions
+    EXPECT_THROW(THROW_OUT_OF_RANGE("Out of range"), atom::error::OutOfRange);
+    EXPECT_THROW(THROW_OVERFLOW("Overflow"), atom::error::OverflowException);
+    EXPECT_THROW(THROW_UNDERFLOW("Underflow"), atom::error::UnderflowException);
+    EXPECT_THROW(THROW_LENGTH("Length error"), atom::error::LengthException);
+
+    // Object state exceptions
+    EXPECT_THROW(THROW_OBJ_ALREADY_EXIST("Object exists"), atom::error::ObjectAlreadyExist);
+    EXPECT_THROW(THROW_OBJ_ALREADY_INITIALIZED("Object initialized"), atom::error::ObjectAlreadyInitialized);
+    EXPECT_THROW(THROW_OBJ_NOT_EXIST("Object not exist"), atom::error::ObjectNotExist);
+    EXPECT_THROW(THROW_OBJ_UNINITIALIZED("Object uninitialized"), atom::error::ObjectUninitialized);
+
+    // Pointer and search exceptions
+    EXPECT_THROW(THROW_NULL_POINTER("Null pointer"), atom::error::NullPointer);
+    EXPECT_THROW(THROW_NOT_FOUND("Not found"), atom::error::NotFound);
+    EXPECT_THROW(THROW_UNKOWN("Unknown error"), atom::error::Unkown);
+
+    // Argument exceptions
+    EXPECT_THROW(THROW_WRONG_ARGUMENT("Wrong argument"), atom::error::WrongArgument);
+    EXPECT_THROW(THROW_INVALID_ARGUMENT("Invalid argument"), atom::error::InvalidArgument);
+    EXPECT_THROW(THROW_MISSING_ARGUMENT("Missing argument"), atom::error::MissingArgument);
+}
+
 } // namespace atom::error::test
 
 int main(int argc, char** argv) {

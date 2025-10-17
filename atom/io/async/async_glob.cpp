@@ -454,7 +454,7 @@ auto AsyncGlob::filter(std::span<const fs::path> names,
     }
 }
 
-auto AsyncGlob::expandTilde(const fs::path& path) const -> fs::path {
+auto AsyncGlob::expandTildeImpl(const fs::path& path) const -> fs::path {
     spdlog::info("AsyncGlob::expandTilde called with path: {}", path.string());
 
     if (path.empty()) {

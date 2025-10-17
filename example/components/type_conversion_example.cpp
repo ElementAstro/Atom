@@ -8,151 +8,284 @@
 
 Date: 2024-12-25
 
-Description: Type Conversion System Example (Minimal Stub Implementation)
-This is a stub implementation since the TypeConverter API is not available
-in the current codebase.
+Description: Type Conversion System Example
+Demonstrates type conversion capabilities using the component system's
+built-in type handling through std::any and component variables.
+Shows conversion between different types, validation, and error handling.
 
 **************************************************/
 
+#include <any>
 #include <chrono>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
+#include <iomanip>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 
-using namespace atom::components;
-
-// Minimal stub implementation of TypeConverter since it's not available in current API
-class TypeConverter {
-public:
-    static TypeConverter& instance() {
-        static TypeConverter instance;
-        return instance;
-    }
-
-    struct Statistics {
-        uint64_t totalConversions = 0;
-        uint64_t successfulConversions = 0;
-        uint64_t failedConversions = 0;
-        uint64_t registeredConverters = 0;
-    };
-
-    Statistics getStatistics() const {
-        return Statistics{};
-    }
-};
+// Note: Registry and Component are in the global namespace
 
 /**
- * @brief Custom data structure for type conversion testing
- */
-struct PlayerData {
-    int id;
-    std::string name;
-    double score;
-    bool active;
-
-    PlayerData() : id(0), name(""), score(0.0), active(false) {}
-    PlayerData(int i, const std::string& n, double s, bool a)
-        : id(i), name(n), score(s), active(a) {}
-
-    std::string toString() const {
-        return "PlayerData{id=" + std::to_string(id) + ", name='" + name + "'" +
-               ", score=" + std::to_string(score) +
-               ", active=" + (active ? "true" : "false") + "}";
-    }
-
-    bool operator==(const PlayerData& other) const {
-        return id == other.id && name == other.name && score == other.score &&
-               active == other.active;
-    }
-
-    bool operator<(const PlayerData& other) const {
-        if (id != other.id) return id < other.id;
-        if (name != other.name) return name < other.name;
-        if (score != other.score) return score < other.score;
-        return active < other.active;
-    }
-
-    bool operator>(const PlayerData& other) const {
-        return other < *this;
-    }
-};
-
-/**
- * @brief Custom point class for geometric operations
- */
-class Point2D {
-public:
-    Point2D() : x_(0.0), y_(0.0) {}
-    Point2D(double x, double y) : x_(x), y_(y) {}
-
-    double getX() const { return x_; }
-    double getY() const { return y_; }
-    void setX(double x) { x_ = x; }
-    void setY(double y) { y_ = y; }
-
-    std::string toString() const {
-        return "Point2D(" + std::to_string(x_) + ", " + std::to_string(y_) + ")";
-    }
-
-    bool operator==(const Point2D& other) const {
-        const double epsilon = 1e-9;
-        return std::abs(x_ - other.x_) < epsilon &&
-               std::abs(y_ - other.y_) < epsilon;
-    }
-
-    bool operator<(const Point2D& other) const {
-        if (x_ != other.x_) return x_ < other.x_;
-        return y_ < other.y_;
-    }
-
-    bool operator>(const Point2D& other) const {
-        return other < *this;
-    }
-
-private:
-    double x_, y_;
-};
-
-/**
- * @brief Component demonstrating type conversion features (stub implementation)
+ * @brief Component demonstrating type conversion capabilities
  */
 class TypeConversionComponent : public Component {
 public:
-    explicit TypeConversionComponent(const std::string& name)
-        : Component(name) {
-        std::cout << "TypeConversionComponent '" << name << "' created (stub implementation)" << std::endl;
+    explicit TypeConversionComponent(const std::string& name) : Component(name) {
+        std::cout << "TypeConversionComponent '" << name << "' created" << std::endl;
+        setupVariables();
+        setupCommands();
+    }
+
+private:
+    void setupVariables() {
+        // Add variables of different types
+        addVariable<int>("int_value", 42);
+        addVariable<double>("double_value", 3.14159);
+        addVariable<std::string>("string_value", "Hello");
+        addVariable<bool>("bool_value", true);
+
+        // Add vector variables
+        addVariable<std::vector<int>>("int_vector", std::vector<int>{1, 2, 3, 4, 5});
+        addVariable<std::vector<double>>("double_vector", std::vector<double>{1.1, 2.2, 3.3});
+    }
+
+    void setupCommands() {
+        // String to numeric conversions
+        def("stringToInt", [](const std::string& str) -> int {
+            try {
+                return std::stoi(str);
+            } catch (const std::exception& e) {
+                std::cerr << "Error converting string to int: " << e.what() << std::endl;
+                return 0;
+            }
+        });
+
+        def("stringToDouble", [](const std::string& str) -> double {
+            try {
+                return std::stod(str);
+            } catch (const std::exception& e) {
+                std::cerr << "Error converting string to double: " << e.what() << std::endl;
+                return 0.0;
+            }
+        });
+
+        def("stringToBool", [](const std::string& str) -> bool {
+            std::string lower = str;
+            std::transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+            return lower == "true" || lower == "1" || lower == "yes";
+        });
+
+        // Numeric to string conversions
+        def("intToString", [](int value) -> std::string {
+            return std::to_string(value);
+        });
+
+        def("doubleToString", [](double value) -> std::string {
+            std::ostringstream oss;
+            oss << std::fixed << std::setprecision(6) << value;
+            return oss.str();
+        });
+
+        def("boolToString", [](bool value) -> std::string {
+            return value ? "true" : "false";
+        });
+
+        // Type casting conversions
+        def("intToDouble", [](int value) -> double {
+            return static_cast<double>(value);
+        });
+
+        def("doubleToInt", [](double value) -> int {
+            return static_cast<int>(value);
+        });
+
+        // Vector conversions
+        def("intVectorToDoubleVector", [this]() -> std::vector<double> {
+            auto intVec = getVariable<std::vector<int>>("int_vector");
+            if (intVec) {
+                const auto& vec = intVec->get();
+                std::vector<double> result;
+                result.reserve(vec.size());
+                for (int val : vec) {
+                    result.push_back(static_cast<double>(val));
+                }
+                return result;
+            }
+            return {};
+        });
+
+        def("doubleVectorToIntVector", [this]() -> std::vector<int> {
+            auto doubleVec = getVariable<std::vector<double>>("double_vector");
+            if (doubleVec) {
+                const auto& vec = doubleVec->get();
+                std::vector<int> result;
+                result.reserve(vec.size());
+                for (double val : vec) {
+                    result.push_back(static_cast<int>(val));
+                }
+                return result;
+            }
+            return {};
+        });
+
+        // JSON-like string conversion
+        def("vectorToString", [this]() -> std::string {
+            auto intVec = getVariable<std::vector<int>>("int_vector");
+            if (intVec) {
+                const auto& vec = intVec->get();
+                std::ostringstream oss;
+                oss << "[";
+                for (size_t i = 0; i < vec.size(); ++i) {
+                    oss << vec[i];
+                    if (i < vec.size() - 1) oss << ", ";
+                }
+                oss << "]";
+                return oss.str();
+            }
+            return "[]";
+        });
+
+        // Safe conversion with validation
+        def("safeStringToInt", [](const std::string& str) -> std::pair<bool, int> {
+            try {
+                size_t pos;
+                int value = std::stoi(str, &pos);
+                // Check if entire string was converted
+                bool success = (pos == str.length());
+                return {success, value};
+            } catch (const std::exception&) {
+                return {false, 0};
+            }
+        });
     }
 };
 
 int main() {
     std::cout << "=== Atom Component Type Conversion Examples ===" << std::endl;
-    std::cout << "Note: This is a stub implementation since TypeConverter API is not available." << std::endl;
 
     try {
-        // Create a simple component to demonstrate basic functionality
-        auto component = std::make_shared<TypeConversionComponent>("TypeConversionDemo");
+        auto& registry = Registry::instance();
 
-        std::cout << "\n1. Component created successfully" << std::endl;
-        std::cout << "2. TypeConverter stub is functional" << std::endl;
-        std::cout << "3. Custom types have comparison operators" << std::endl;
+        // Create type conversion component
+        auto component = registry.createComponent<TypeConversionComponent>("TypeConversionDemo");
 
-        // Test basic functionality
-        PlayerData player(1, "TestPlayer", 100.0, true);
-        Point2D point(3.14, 2.71);
+        std::cout << "\n1. String to Numeric Conversions" << std::endl;
+        std::cout << "-----------------------------------" << std::endl;
 
-        std::cout << "4. PlayerData: " << player.toString() << std::endl;
-        std::cout << "5. Point2D: " << point.toString() << std::endl;
+        // Test string to int
+        std::vector<std::any> stringToIntArgs = {std::string("42")};
+        auto intResult = std::any_cast<int>(component->runCommand("stringToInt", stringToIntArgs));
+        std::cout << "String '42' to int: " << intResult << std::endl;
 
-        // Test TypeConverter stub
-        auto& converter = TypeConverter::instance();
-        auto stats = converter.getStatistics();
-        std::cout << "6. TypeConverter statistics: " << stats.totalConversions << " conversions" << std::endl;
+        // Test string to double
+        std::vector<std::any> stringToDoubleArgs = {std::string("3.14159")};
+        auto doubleResult = std::any_cast<double>(component->runCommand("stringToDouble", stringToDoubleArgs));
+        std::cout << "String '3.14159' to double: " << doubleResult << std::endl;
 
-        std::cout << "\n=== Type Conversion Example Complete (Stub Implementation) ===" << std::endl;
+        // Test string to bool
+        std::vector<std::any> stringToBoolArgs = {std::string("true")};
+        auto boolResult = std::any_cast<bool>(component->runCommand("stringToBool", stringToBoolArgs));
+        std::cout << "String 'true' to bool: " << (boolResult ? "true" : "false") << std::endl;
+
+        std::cout << "\n2. Numeric to String Conversions" << std::endl;
+        std::cout << "-----------------------------------" << std::endl;
+
+        // Test int to string
+        std::vector<std::any> intToStringArgs = {100};
+        auto intStr = std::any_cast<std::string>(component->runCommand("intToString", intToStringArgs));
+        std::cout << "Int 100 to string: '" << intStr << "'" << std::endl;
+
+        // Test double to string
+        std::vector<std::any> doubleToStringArgs = {2.71828};
+        auto doubleStr = std::any_cast<std::string>(component->runCommand("doubleToString", doubleToStringArgs));
+        std::cout << "Double 2.71828 to string: '" << doubleStr << "'" << std::endl;
+
+        // Test bool to string
+        std::vector<std::any> boolToStringArgs = {false};
+        auto boolStr = std::any_cast<std::string>(component->runCommand("boolToString", boolToStringArgs));
+        std::cout << "Bool false to string: '" << boolStr << "'" << std::endl;
+
+        std::cout << "\n3. Type Casting Conversions" << std::endl;
+        std::cout << "-----------------------------------" << std::endl;
+
+        // Test int to double
+        std::vector<std::any> intToDoubleArgs = {42};
+        auto intToDouble = std::any_cast<double>(component->runCommand("intToDouble", intToDoubleArgs));
+        std::cout << "Int 42 to double: " << intToDouble << std::endl;
+
+        // Test double to int
+        std::vector<std::any> doubleToIntArgs = {3.14159};
+        auto doubleToInt = std::any_cast<int>(component->runCommand("doubleToInt", doubleToIntArgs));
+        std::cout << "Double 3.14159 to int: " << doubleToInt << std::endl;
+
+        std::cout << "\n4. Vector Conversions" << std::endl;
+        std::cout << "-----------------------------------" << std::endl;
+
+        // Test int vector to double vector
+        auto doubleVec = std::any_cast<std::vector<double>>(component->runCommand("intVectorToDoubleVector", {}));
+        std::cout << "Int vector to double vector: [";
+        for (size_t i = 0; i < doubleVec.size(); ++i) {
+            std::cout << doubleVec[i];
+            if (i < doubleVec.size() - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+
+        // Test double vector to int vector
+        auto intVec = std::any_cast<std::vector<int>>(component->runCommand("doubleVectorToIntVector", {}));
+        std::cout << "Double vector to int vector: [";
+        for (size_t i = 0; i < intVec.size(); ++i) {
+            std::cout << intVec[i];
+            if (i < intVec.size() - 1) std::cout << ", ";
+        }
+        std::cout << "]" << std::endl;
+
+        // Test vector to string
+        auto vecStr = std::any_cast<std::string>(component->runCommand("vectorToString", {}));
+        std::cout << "Vector to string: " << vecStr << std::endl;
+
+        std::cout << "\n5. Safe Conversion with Validation" << std::endl;
+        std::cout << "-----------------------------------" << std::endl;
+
+        // Test safe string to int with valid input
+        std::vector<std::any> safeArgs1 = {std::string("123")};
+        auto safeResult1 = std::any_cast<std::pair<bool, int>>(
+            component->runCommand("safeStringToInt", safeArgs1));
+        std::cout << "Safe convert '123': success=" << (safeResult1.first ? "true" : "false")
+                  << ", value=" << safeResult1.second << std::endl;
+
+        // Test safe string to int with invalid input
+        std::vector<std::any> safeArgs2 = {std::string("abc")};
+        auto safeResult2 = std::any_cast<std::pair<bool, int>>(
+            component->runCommand("safeStringToInt", safeArgs2));
+        std::cout << "Safe convert 'abc': success=" << (safeResult2.first ? "true" : "false")
+                  << ", value=" << safeResult2.second << std::endl;
+
+        // Test safe string to int with partial number
+        std::vector<std::any> safeArgs3 = {std::string("123abc")};
+        auto safeResult3 = std::any_cast<std::pair<bool, int>>(
+            component->runCommand("safeStringToInt", safeArgs3));
+        std::cout << "Safe convert '123abc': success=" << (safeResult3.first ? "true" : "false")
+                  << ", value=" << safeResult3.second << std::endl;
+
+        std::cout << "\n6. Component Variable Access" << std::endl;
+        std::cout << "-----------------------------------" << std::endl;
+
+        // Access and display component variables
+        auto intVar = component->getVariable<int>("int_value");
+        auto doubleVar = component->getVariable<double>("double_value");
+        auto stringVar = component->getVariable<std::string>("string_value");
+        auto boolVar = component->getVariable<bool>("bool_value");
+
+        if (intVar) std::cout << "int_value: " << intVar->get() << std::endl;
+        if (doubleVar) std::cout << "double_value: " << doubleVar->get() << std::endl;
+        if (stringVar) std::cout << "string_value: " << stringVar->get() << std::endl;
+        if (boolVar) std::cout << "bool_value: " << (boolVar->get() ? "true" : "false") << std::endl;
+
+        std::cout << "\n=== All Type Conversion Examples Completed Successfully! ===" << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error in type conversion examples: " << e.what() << std::endl;

@@ -24,16 +24,30 @@ project(
 # Include CMake Modules
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-include(cmake/GitVersion.cmake)
-include(cmake/VersionConfig.cmake)
-include(cmake/PlatformSpecifics.cmake)
-include(cmake/CompilerOptions.cmake)
-include(cmake/module_dependencies.cmake)
-include(cmake/ExamplesBuildOptions.cmake)
-include(cmake/TestsBuildOptions.cmake)
-include(cmake/ScanModule.cmake)
-include(cmake/PackagingConfig.cmake)
-include(cmake/ModularInstall.cmake)
+
+# Check if required cmake modules exist before including them
+set(REQUIRED_CMAKE_MODULES
+    GitVersion.cmake
+    VersionConfig.cmake
+    PlatformSpecifics.cmake
+    CompilerOptions.cmake
+    ModuleDependencies.cmake
+    ExamplesBuildOptions.cmake
+    TestsBuildOptions.cmake
+    ScanModule.cmake
+    PackagingConfig.cmake
+    ModularInstall.cmake
+)
+
+foreach(MODULE ${REQUIRED_CMAKE_MODULES})
+    set(MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${MODULE}")
+    if(EXISTS "${MODULE_PATH}")
+        include(cmake/${MODULE})
+        message(STATUS "Included CMake module: ${MODULE}")
+    else()
+        message(WARNING "CMake module not found: ${MODULE_PATH}")
+    endif()
+endforeach()
 
 # -----------------------------------------------------------------------------
 # Options
@@ -239,6 +253,10 @@ endif()
 # -----------------------------------------------------------------------------
 # Version Info Header
 # -----------------------------------------------------------------------------
+# Configure version information
+configure_atom_version(VERSION_VARIABLE PROJECT_VERSION)
+
+# Also configure the version info header
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_info.h.in
   ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h
@@ -335,28 +353,34 @@ endif()
 # Component Registration
 # -----------------------------------------------------------------------------
 
-# Register all Atom components for modular installation
-foreach(MODULE ${ATOM_MODULES})
-    string(TOLOWER ${MODULE} MODULE_LOWER)
-    atom_register_component(${MODULE_LOWER}
-        DESCRIPTION "Atom ${MODULE} module"
-        VERSION ${PROJECT_VERSION}
-        DEPENDS ${ATOM_MODULE_DEPS_${MODULE}}
-    )
-endforeach()
+# Register all Atom components for modular installation (if function exists)
+if(COMMAND atom_register_component)
+    foreach(MODULE ${ATOM_MODULES})
+        string(TOLOWER ${MODULE} MODULE_LOWER)
+        atom_register_component(${MODULE_LOWER}
+            DESCRIPTION "Atom ${MODULE} module"
+            VERSION ${PROJECT_VERSION}
+            DEPENDS ${ATOM_MODULE_DEPS_${MODULE}}
+        )
+    endforeach()
 
-# Setup modular installation system
-atom_setup_modular_installation()
+    # Setup modular installation system
+    if(COMMAND atom_setup_modular_installation)
+        atom_setup_modular_installation()
+    endif()
+endif()
 
 # -----------------------------------------------------------------------------
 # Packaging Configuration
 # -----------------------------------------------------------------------------
 
-# Setup CPack for package generation
-atom_setup_cpack()
+# Setup CPack for package generation (if function exists)
+if(COMMAND atom_setup_cpack)
+    atom_setup_cpack()
+endif()
 
 # Create modular packages
-if(ATOM_INSTALL_COMPONENT_PACKAGES)
+if(ATOM_INSTALL_COMPONENT_PACKAGES AND COMMAND atom_create_modular_packages)
     atom_create_modular_packages()
 endif()
 
@@ -373,8 +397,7 @@ install(
   PATTERN "**/example" EXCLUDE
 )
 install(
-  FILES ${CMAKE_CURRENT_BINARY_DIR}/atom_version.h
-        ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h
+  FILES ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h
   DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom
 )
 

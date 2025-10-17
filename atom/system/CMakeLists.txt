@@ -193,7 +193,7 @@ target_link_libraries(atom-system PRIVATE ${LIBS})
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(atom-system PRIVATE pdh wlanapi userenv version)
+    target_link_libraries(atom-system PRIVATE pdh wlanapi userenv version advapi32 hid setupapi)
 endif()
 
 # Add shortcut subdirectory

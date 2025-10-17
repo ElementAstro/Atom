@@ -2031,11 +2031,11 @@ auto get_error_context_for(const EcEntryBase* ec_head) -> Text {
     if (!stack.empty()) {
         result.str += "------------------------------------------------\n";
         for (const auto* entry : stack) {
-            const auto DESCRIPTION = std::string(entry->_descr) + ":";
+            const std::string description = std::string(entry->_descr) + ":";
 #if LOGURU_USE_FMTLIB
             auto prefix = textprintf(
                 "[ErrorContext] {.{}s}:{:-5u} {:-20s} ", filename(entry->_file),
-                LOGURU_FILENAME_WIDTH, entry->_line, DESCRIPTION.c_str());
+                LOGURU_FILENAME_WIDTH, entry->_line, description.c_str());
 #else
             auto prefix = textprintf(
                 "[ErrorContext] %*s:%-5u %-20s ", LOGURU_FILENAME_WIDTH,

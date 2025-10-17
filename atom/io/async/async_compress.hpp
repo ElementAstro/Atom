@@ -7,7 +7,9 @@
 #include <concepts>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <mutex>
+#include <system_error>
 #include <vector>
 
 #include <spdlog/spdlog.h>
@@ -41,6 +43,9 @@ constexpr std::size_t CHUNK = 32768;
  */
 class BaseCompressor {
 public:
+    using CompletionHandler =
+        std::function<void(const std::error_code&, std::size_t)>;
+
     /**
      * @brief Constructs a BaseCompressor.
      * @param io_context The ASIO I/O context.
@@ -57,6 +62,10 @@ public:
     virtual void start() = 0;
 
 protected:
+    void setCompletionHandler(CompletionHandler handler);
+    void notifyCompletion(const std::error_code& ec = {},
+                          std::size_t bytes = 0);
+
     /**
      * @brief Opens the output file for writing.
      * @param output_file The path to the output file.
@@ -84,6 +93,8 @@ protected:
     std::array<char, CHUNK> out_buffer_{};  ///< Buffer for compressed data.
     z_stream zlib_stream_{};                ///< Zlib stream for compression.
     bool is_initialized_ = false;  ///< Flag to track initialization status.
+    CompletionHandler completion_handler_{};
+    std::atomic<bool> completion_notified_{false};
 };
 
 /**
@@ -106,6 +117,11 @@ public:
      * @brief Starts the compression process.
      */
     void start() override;
+
+    void start(CompletionHandler handler) {
+        setCompletionHandler(std::move(handler));
+        start();
+    }
 
 private:
     /**
@@ -149,6 +165,11 @@ public:
      */
     void start() override;
 
+    void start(CompletionHandler handler) {
+        setCompletionHandler(std::move(handler));
+        start();
+    }
+
 private:
     /**
      * @brief Compresses the next file in the directory.
@@ -178,6 +199,9 @@ private:
  */
 class BaseDecompressor {
 public:
+    using CompletionHandler =
+        std::function<void(const std::error_code&, std::size_t)>;
+
     /**
      * @brief Constructs a BaseDecompressor.
      * @param io_context The ASIO I/O context.
@@ -192,6 +216,10 @@ public:
     virtual void start() = 0;
 
 protected:
+    void setCompletionHandler(CompletionHandler handler);
+    void notifyCompletion(const std::error_code& ec = {},
+                          std::size_t bytes = 0);
+
     /**
      * @brief Decompresses data from the source file to the output stream.
      * @param source The source gzFile.
@@ -213,6 +241,8 @@ protected:
     StreamHandle* out_stream_{};           ///< The output stream handle.
     std::array<char, CHUNK> in_buffer_{};  ///< Buffer for input data.
     gzFile in_file_{};                     ///< The input gzFile.
+    CompletionHandler completion_handler_{};
+    std::atomic<bool> completion_notified_{false};
 };
 
 /**
@@ -235,6 +265,11 @@ public:
      * @brief Starts the decompression process.
      */
     void start() override;
+
+    void start(CompletionHandler handler) {
+        setCompletionHandler(std::move(handler));
+        start();
+    }
 
 private:
     /**
@@ -267,6 +302,11 @@ public:
      * @brief Starts the decompression process.
      */
     void start() override;
+
+    void start(CompletionHandler handler) {
+        setCompletionHandler(std::move(handler));
+        start();
+    }
 
 private:
     /**

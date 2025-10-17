@@ -14,11 +14,12 @@ namespace atom::meta {
  * \tparam F Function type
  * \tparam Args Argument types
  */
-template <typename F, typename... Args>
+template <typename Function, typename... StoredArgs>
 class SimpleAwaitable {
 public:
-    using result_type = std::invoke_result_t<F, Args...>;
+    using result_type = std::invoke_result_t<Function&, StoredArgs...>;
 
+    template <typename F, typename... Args>
     SimpleAwaitable(F&& func, Args&&... args)
         : func_(std::forward<F>(func)), args_(std::forward<Args>(args)...) {}
 
@@ -34,8 +35,8 @@ public:
     }
 
 private:
-    F func_;
-    std::tuple<Args...> args_;
+    Function func_;
+    std::tuple<StoredArgs...> args_;
 };
 
 /*!
@@ -48,8 +49,13 @@ private:
  */
 template <typename F, typename... Args>
 [[nodiscard]] auto makeAwaitable(F&& func, Args&&... args) {
-    return SimpleAwaitable<F, Args...>(std::forward<F>(func), std::forward<Args>(args)...);
+    return SimpleAwaitable<std::decay_t<F>, std::decay_t<Args>...>(
+        std::forward<F>(func), std::forward<Args>(args)...);
 }
+
+template <typename F, typename... Args>
+SimpleAwaitable(F&&, Args&&...)
+    -> SimpleAwaitable<std::decay_t<F>, std::decay_t<Args>...>;
 
 }  // namespace atom::meta
 

@@ -1,5 +1,5 @@
-#include "atom/components/iteration.hpp"
-#include "atom/components/component.hpp"
+#include "atom/components/lifecycle/iteration.hpp"
+#include "atom/components/core/component.hpp"
 
 #include <gtest/gtest.h>
 #include <vector>
@@ -33,8 +33,8 @@ private:
     std::chrono::steady_clock::time_point lastProcessTime_;
 };
 
-// Test fixture for ComponentIterator tests
-class ComponentIteratorTest : public ::testing::Test {
+// Test fixture for CacheOptimizedIterator tests
+class CacheOptimizedIteratorTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Create test components
@@ -44,24 +44,24 @@ protected:
             components_.push_back(component);
         }
 
-        IteratorConfig config;
-        config.batchSize = 4;
-        config.enablePrefetching = true;
-        config.enableSIMD = true;
-        config.cacheLineAlignment = true;
-
-        iterator_ = std::make_unique<ComponentIterator<TestIterationComponent>>(config);
+        // CacheOptimizedIterator doesn't use a config, just prefetch distance
+        // We'll create iterators as needed in tests
     }
 
     std::vector<std::shared_ptr<TestIterationComponent>> components_;
-    std::unique_ptr<ComponentIterator<TestIterationComponent>> iterator_;
 };
 
-// Test fixture for SIMDProcessor tests
-class SIMDProcessorTest : public ::testing::Test {
+// Test fixture for ComponentBatchProcessor tests
+class ComponentBatchProcessorTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        processor_ = std::make_unique<SIMDProcessor>();
+        ComponentBatchProcessor::Config config;
+        config.batchSize = 4;
+        config.enableSIMD = true;
+        config.enablePrefetch = true;
+        config.prefetchDistance = 2;
+
+        processor_ = std::make_unique<ComponentBatchProcessor>(config);
 
         // Create test data
         for (int i = 0; i < 16; ++i) {
@@ -69,7 +69,7 @@ protected:
         }
     }
 
-    std::unique_ptr<SIMDProcessor> processor_;
+    std::unique_ptr<ComponentBatchProcessor> processor_;
     std::vector<float> testData_;
 };
 

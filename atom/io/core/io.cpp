@@ -5,10 +5,10 @@
  */
 
 #include "io.hpp"
+#include "path_utils.hpp"
 
 #include <algorithm>
 #include <filesystem>
-#include <regex>
 #include <string_view>
 
 #include <spdlog/spdlog.h>
@@ -22,15 +22,6 @@
 
 namespace fs = std::filesystem;
 using json = nlohmann::json;
-
-#ifdef _WIN32
-#include <windows.h>
-const std::regex FOLDER_NAME_REGEX(R"(^[^\/?*:;{}\\]+[^\\]*$)");
-const std::regex FILE_NAME_REGEX("^[^\\/:*?\"<>|]+$");
-#else
-const std::regex FOLDER_NAME_REGEX("^[^/]+$");
-const std::regex FILE_NAME_REGEX("^[^/]+$");
-#endif
 
 namespace atom::io {
 
@@ -132,40 +123,16 @@ auto normPath(std::string_view raw_path) -> std::string {
 
 auto isFolderNameValid(std::string_view folderName) -> bool {
     spdlog::info("isFolderNameValid called with folderName: {}", folderName);
-
-    try {
-        if (folderName.empty()) {
-            spdlog::warn("Empty folder name is invalid");
-            return false;
-        }
-
-        bool result = std::regex_match(folderName.begin(), folderName.end(),
-                                       FOLDER_NAME_REGEX);
-        spdlog::info("isFolderNameValid returning: {}", result);
-        return result;
-    } catch (const std::exception& e) {
-        spdlog::error("Error checking folder name validity: {}", e.what());
-        return false;
-    }
+    bool result = path_utils::isFolderNameValid(folderName);
+    spdlog::info("isFolderNameValid returning: {}", result);
+    return result;
 }
 
 auto isFileNameValid(std::string_view fileName) -> bool {
     spdlog::info("isFileNameValid called with fileName: {}", fileName);
-
-    try {
-        if (fileName.empty()) {
-            spdlog::warn("Empty file name is invalid");
-            return false;
-        }
-
-        bool result =
-            std::regex_match(fileName.begin(), fileName.end(), FILE_NAME_REGEX);
-        spdlog::info("isFileNameValid returning: {}", result);
-        return result;
-    } catch (const std::exception& e) {
-        spdlog::error("Error checking file name validity: {}", e.what());
-        return false;
-    }
+    bool result = path_utils::isFileNameValid(fileName);
+    spdlog::info("isFileNameValid returning: {}", result);
+    return result;
 }
 
 auto getExecutableNameFromPath(std::string_view path) -> std::string {

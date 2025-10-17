@@ -233,46 +233,12 @@ private:
     std::shared_ptr<Vector3D> velocity_;
 
     void setupBindings() {
-        // Note: AdvancedBinder class is not implemented in the current codebase
-        // Commenting out the binding code to allow compilation
-        /*
-        // Bind MathUtils class
-        auto& binder = AdvancedBinder::instance();
+        // Note: The advanced_bindings.hpp provides template-based binding utilities
+        // that require integration with specific script engines (Lua/Python).
+        // This example demonstrates component-level bindings using the Component::def() API
+        // which provides similar functionality for command registration.
 
-        // Register MathUtils class
-        binder.registerClass<MathUtils>("MathUtils")
-            .constructor<>()
-            .constructor<int>()
-            .method("add", &MathUtils::add)
-            .method("multiply", &MathUtils::multiply)
-            .method("power", &MathUtils::power)
-            .method("sqrt", &MathUtils::sqrt)
-            .method("addVectors", &MathUtils::addVectors)
-            .method("dotProduct", &MathUtils::dotProduct)
-            .property("precision", &MathUtils::getPrecision,
-                      &MathUtils::setPrecision)
-            .staticMethod("pi", &MathUtils::pi)
-            .staticMethod("e", &MathUtils::e)
-            .method("toString", &MathUtils::toString);
-
-        // Register Vector3D class
-        binder.registerClass<Vector3D>("Vector3D")
-            .constructor<>()
-            .constructor<double, double, double>()
-            .property("x", &Vector3D::getX, &Vector3D::setX)
-            .property("y", &Vector3D::getY, &Vector3D::setY)
-            .property("z", &Vector3D::getZ, &Vector3D::setZ)
-            .method("add", &Vector3D::add)
-            .method("subtract", &Vector3D::subtract)
-            .method("multiply", &Vector3D::multiply)
-            .method("dot", &Vector3D::dot)
-            .method("cross", &Vector3D::cross)
-            .method("magnitude", &Vector3D::magnitude)
-            .method("normalize", &Vector3D::normalize)
-            .method("toString", &Vector3D::toString);
-        */
-
-        // Register component commands that use bound classes
+        // Register component commands that provide access to bound classes
         def("getMathUtils",
             [this]() -> std::shared_ptr<MathUtils> { return mathUtils_; });
 
@@ -320,7 +286,6 @@ void demonstrateBasicBindings() {
     std::cout << "\n=== Basic Bindings Demo ===" << std::endl;
 
     auto& registry = Registry::instance();
-    // auto& binder = AdvancedBinder::instance(); // AdvancedBinder not implemented
 
     std::cout << "\n1. Creating component with bound classes..." << std::endl;
     auto component =
@@ -550,7 +515,7 @@ void demonstrateAdvancedFeatures() {
     // Update position using bound objects
     std::cout << "Updating position with deltaTime = 0.5..." << std::endl;
     std::vector<std::any> updateArgs = {std::string("0.5")};
-    component->runCommand("updatePosition", updateArgs);
+    [[maybe_unused]] auto updateResult = component->runCommand("updatePosition", updateArgs);
 
     // Calculate distance to a target
     std::vector<std::any> distanceArgs = {std::string("5.0"), std::string("5.0"), std::string("5.0")};
@@ -580,11 +545,23 @@ void demonstrateAdvancedFeatures() {
 void demonstrateBindingStatistics() {
     std::cout << "\n=== Binding Statistics Demo ===" << std::endl;
 
-    // auto& binder = AdvancedBinder::instance(); // AdvancedBinder not implemented
+    std::cout << "\n7. Component binding statistics..." << std::endl;
 
-    std::cout << "\n7. Binding system statistics..." << std::endl;
-    std::cout << "AdvancedBinder not implemented in this version" << std::endl;
-    std::cout << "Statistics functionality would be available with AdvancedBinder" << std::endl;
+    auto& registry = Registry::instance();
+    auto component = registry.getComponent("BindingsDemo");
+
+    if (component) {
+        auto stats = component->getPerformanceStats();
+        std::cout << "Component Performance Statistics:" << std::endl;
+        std::cout << "  Command Call Count: " << stats.commandCallCount.load() << std::endl;
+        std::cout << "  Command Error Count: " << stats.commandErrorCount.load() << std::endl;
+        std::cout << "  Event Count: " << stats.eventCount.load() << std::endl;
+        std::cout << "  Memory Allocations: " << stats.memoryAllocations.load() << std::endl;
+        std::cout << "  Total Execution Time: " << stats.timing.totalExecutionTimeNs.load() / 1000000.0 << " ms" << std::endl;
+        std::cout << "  Average Execution Time: " << stats.timing.avgExecutionTimeNs.load() / 1000000.0 << " ms" << std::endl;
+        std::cout << "  Max Execution Time: " << stats.timing.maxExecutionTimeNs.load() / 1000000.0 << " ms" << std::endl;
+        std::cout << "  Min Execution Time: " << (stats.timing.minExecutionTimeNs.load() == UINT64_MAX ? 0 : stats.timing.minExecutionTimeNs.load() / 1000000.0) << " ms" << std::endl;
+    }
 }
 
 int main() {

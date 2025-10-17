@@ -4,9 +4,13 @@
 #include <string>
 #include <vector>
 
-#include "atom/system/device.hpp"
+#include "atom/system/hardware/device.hpp"
 
 namespace atom::system::test {
+
+using atom::system::DeviceInfo;
+using atom::system::enumerateUsbDevices;
+using atom::system::enumerateSerialPorts;
 
 // Mock class for testing device enumeration without actual hardware
 class MockDeviceEnumerator {

@@ -263,9 +263,13 @@ endif()
 # Dependency Resolution
 # =============================================================================
 
-# Process module dependencies
-scan_module_dependencies()
-process_module_dependencies()
+# Process module dependencies (if functions are available)
+if(COMMAND scan_module_dependencies)
+    scan_module_dependencies()
+endif()
+if(COMMAND process_module_dependencies)
+    process_module_dependencies()
+endif()
 
 # =============================================================================
 # Add Subdirectories
@@ -324,6 +328,8 @@ if(ATOM_BUILD_UNIFIED_LIBRARY)
                 ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
                 RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
                 INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+    else()
+        message(STATUS "No module targets found for unified library")
     endif()
 endif()
 

@@ -1,7 +1,20 @@
-/*
- * atom/memory/memory_pool.hpp
+/**
+ * @file memory_pool.hpp
+ * @brief Fixed-size block memory pool and simple object pool implementations
  *
- * Copyright (C) 2024 Max Qian <lightapt.com>
+ * This file provides FixedBlockPool and SimpleObjectPool classes for efficient
+ * fixed-size memory allocations. These are simpler and faster than the variable-size
+ * MemoryPool when all allocations are the same size.
+ *
+ * CLASSES PROVIDED:
+ * - FixedBlockPool: Low-level fixed-size block allocator
+ * - SimpleObjectPool: Object-oriented wrapper with RAII smart pointers
+ * - PoolPtr: Smart pointer for automatic object return to pool
+ *
+ * For other memory pool types in atom::memory, see the documentation in memory.hpp.
+ *
+ * @author Max Qian
+ * @copyright Copyright (C) 2024 Max Qian <lightapt.com>
  */
 
 #pragma once
@@ -22,6 +35,10 @@ namespace memory {
  * Specialized for efficiently allocating and deallocating fixed-size memory
  * blocks. Reduces memory fragmentation and system call overhead for frequent
  * small object operations.
+ *
+ * This is a FIXED-SIZE memory pool optimized for uniform allocations.
+ * All allocations return blocks of exactly BlockSize bytes. For variable-size
+ * allocations with growth strategies, see MemoryPool in memory.hpp.
  *
  * @tparam BlockSize Size of each memory block in bytes
  * @tparam BlocksPerChunk Number of blocks per chunk
@@ -345,10 +362,6 @@ template <typename T, typename... Args>
                                        Args&&... args) {
     return PoolPtr<T>(pool.allocate(std::forward<Args>(args)...), &pool);
 }
-
-// Backward compatibility alias
-template <std::size_t BlockSize = 64, std::size_t BlocksPerChunk = 1024>
-using MemoryPool [[deprecated("Use FixedBlockPool instead")]] = FixedBlockPool<BlockSize, BlocksPerChunk>;
 
 }  // namespace memory
 }  // namespace atom

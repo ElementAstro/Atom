@@ -33,18 +33,26 @@ void demonstrateOpenCVBackend() {
 #if __has_include(<opencv2/core.hpp>)
     try {
         // Create a blob and convert to OpenCV Mat
-        blob<uint8_t> img(200, 300, 3);
+        blob img;
+        std::vector<std::byte> img_data(200 * 300 * 3);
+        img.allocate(img_data.size());
+
+        // Set dimensions
+        // Note: We need to manually set dimensions since we're creating from raw data
+        // For now, let's create it from a properly sized vector
 
         // Fill with test pattern
-        for (int y = 0; y < img.rows(); ++y) {
-            for (int x = 0; x < img.cols(); ++x) {
-                img.at(y, x, 0) = static_cast<uint8_t>((x + y) % 256);
-                img.at(y, x, 1) = static_cast<uint8_t>(x % 256);
-                img.at(y, x, 2) = static_cast<uint8_t>(y % 256);
+        auto* data = reinterpret_cast<uint8_t*>(img.data());
+        for (int y = 0; y < 200; ++y) {
+            for (int x = 0; x < 300; ++x) {
+                int idx = (y * 300 + x) * 3;
+                data[idx] = static_cast<uint8_t>((x + y) % 256);
+                data[idx + 1] = static_cast<uint8_t>(x % 256);
+                data[idx + 2] = static_cast<uint8_t>(y % 256);
             }
         }
 
-        std::cout << "Created blob: " << img.cols() << "x" << img.rows()
+        std::cout << "Created blob: " << img.getCols() << "x" << img.getRows()
                   << "\n";
 
         // Convert to OpenCV Mat
@@ -65,7 +73,7 @@ void demonstrateOpenCVBackend() {
 
         std::cout << "Applying OpenCV resize...\n";
         img.resize(150, 100);
-        std::cout << "After resize: " << img.cols() << "x" << img.rows()
+        std::cout << "After resize: " << img.getCols() << "x" << img.getRows()
                   << "\n";
 
         // Color space conversion
@@ -77,9 +85,9 @@ void demonstrateOpenCVBackend() {
         cv::Mat testMat(100, 150, CV_8UC3);
         testMat.setTo(cv::Scalar(128, 64, 192));
 
-        blob<uint8_t> fromMat(testMat);
-        std::cout << "Created blob from OpenCV Mat: " << fromMat.cols() << "x"
-                  << fromMat.rows() << "\n";
+        blob fromMat(testMat);
+        std::cout << "Created blob from OpenCV Mat: " << fromMat.getCols() << "x"
+                  << fromMat.getRows() << "\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in OpenCV backend: " << e.what() << "\n";

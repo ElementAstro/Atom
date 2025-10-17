@@ -13,17 +13,17 @@
 //   ./run_all_tests --help             - Show help information
 // =============================================================================
 
+#include <algorithm>
+#include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <map>
+#include <regex>
+#include <sstream>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <map>
-#include <regex>
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <algorithm>
-#include <stdexcept>
 
 // Include the Atom test framework
 #include "atom/tests/test.hpp"
@@ -130,7 +130,8 @@ TestRunnerOptions parseCommandLine(int argc, char* argv[]) {
                 try {
                     options.numThreads = std::stoi(argv[++i]);
                 } catch (...) {
-                    throw std::invalid_argument("Invalid thread count for --parallel");
+                    throw std::invalid_argument(
+                        "Invalid thread count for --parallel");
                 }
             }
         } else if (arg == "--module" || arg == "-m") {
@@ -143,7 +144,8 @@ TestRunnerOptions parseCommandLine(int argc, char* argv[]) {
             if (i + 1 < argc) {
                 options.categoryFilter = argv[++i];
             } else {
-                throw std::invalid_argument("--category requires a category name");
+                throw std::invalid_argument(
+                    "--category requires a category name");
             }
         } else if (arg == "--filter" || arg == "-f") {
             if (i + 1 < argc) {
@@ -155,7 +157,8 @@ TestRunnerOptions parseCommandLine(int argc, char* argv[]) {
             if (i + 1 < argc) {
                 options.outputFormat = argv[++i];
             } else {
-                throw std::invalid_argument("--output-format requires a format");
+                throw std::invalid_argument(
+                    "--output-format requires a format");
             }
         } else if (arg == "--output" || arg == "-o") {
             if (i + 1 < argc) {
@@ -168,7 +171,8 @@ TestRunnerOptions parseCommandLine(int argc, char* argv[]) {
                 try {
                     options.maxRetries = std::stoi(argv[++i]);
                 } catch (...) {
-                    throw std::invalid_argument("Invalid retry count for --retry");
+                    throw std::invalid_argument(
+                        "Invalid retry count for --retry");
                 }
             } else {
                 throw std::invalid_argument("--retry requires a number");
@@ -191,15 +195,18 @@ TestRunnerOptions parseCommandLine(int argc, char* argv[]) {
             if (i + 1 < argc) {
                 try {
                     int timeoutMs = std::stoi(argv[++i]);
-                    options.globalTimeout = std::chrono::milliseconds(timeoutMs);
+                    options.globalTimeout =
+                        std::chrono::milliseconds(timeoutMs);
                 } catch (...) {
-                    throw std::invalid_argument("Invalid timeout for --timeout");
+                    throw std::invalid_argument(
+                        "Invalid timeout for --timeout");
                 }
             } else {
                 throw std::invalid_argument("--timeout requires a number");
             }
         } else {
-            throw std::invalid_argument(std::string("Unknown argument: ") + std::string(arg));
+            throw std::invalid_argument(std::string("Unknown argument: ") +
+                                        std::string(arg));
         }
     }
 
@@ -271,7 +278,8 @@ void listTests(const TestRunnerOptions& options) {
         std::cout << "Module: " << name << "\n";
         std::cout << "  Path: " << module.path << "\n";
         std::cout << "  Executable: " << module.executable << "\n";
-        std::cout << "  Status: " << (module.enabled ? "Enabled" : "Disabled") << "\n";
+        std::cout << "  Status: " << (module.enabled ? "Enabled" : "Disabled")
+                  << "\n";
 
         if (!module.description.empty()) {
             std::cout << "  Description: " << module.description << "\n";
@@ -280,7 +288,8 @@ void listTests(const TestRunnerOptions& options) {
         if (!module.dependencies.empty()) {
             std::cout << "  Dependencies: ";
             for (size_t i = 0; i < module.dependencies.size(); ++i) {
-                if (i > 0) std::cout << ", ";
+                if (i > 0)
+                    std::cout << ", ";
                 std::cout << module.dependencies[i];
             }
             std::cout << "\n";
@@ -302,27 +311,126 @@ void discoverTestModules() {
 
     // Known test modules with their descriptions
     std::vector<TestModuleInfo> knownModules = {
-        {"algorithm", "tests/algorithm", "atom_algorithm_tests", {"atom-error"}, true, "Mathematical algorithms, cryptography, signal processing"},
-        {"async", "tests/async", "atom_async_tests", {"atom-error", "fmt"}, true, "Asynchronous programming primitives and concurrency"},
-        {"components", "tests/components", "atom_components_tests", {"atom-error"}, true, "Component system and scripting engines"},
-        {"connection", "tests/connection", "atom_connection_tests", {"atom-error"}, true, "Network communication (TCP, UDP, SSH)"},
-        {"containers", "tests/containers", "atom_containers_tests", {"atom-error"}, true, "Container data structures"},
-        {"error", "tests/error", "comprehensive_test", {}, true, "Comprehensive error handling and stack traces"},
-        {"extra", "tests/extra", "atom_extra_tests", {"atom-error"}, true, "Additional utilities and experimental features"},
-        {"image", "tests/image", "atom_image_tests", {"atom-error"}, true, "Image processing and computer vision"},
-        {"io", "tests/io", "atom_io_tests", {"atom-error"}, true, "Input/output operations and file system utilities"},
-        {"log", "tests/log", "atom_log_tests", {"atom-error"}, true, "Logging framework"},
-        {"memory", "tests/memory", "atom_memory_tests", {"atom-error"}, true, "Memory management and allocation"},
-        {"meta", "tests/meta", "atom_meta_tests", {"atom-error"}, true, "Metaprogramming utilities"},
-        {"search", "tests/search", "atom_search_tests", {"atom-error"}, true, "Search algorithms and data structures"},
-        {"secret", "tests/secret", "test_secret", {"atom-error"}, true, "Cryptographic operations"},
-        {"serial", "tests/serial", "atom_serial_tests", {"atom-error"}, true, "Serial communication"},
-        {"sysinfo", "tests/sysinfo", "atom_sysinfo_tests", {"atom-error"}, true, "System information utilities"},
-        {"system", "tests/system", "atom_system_tests", {"atom-error"}, true, "System-level integration"},
-        {"type", "tests/type", "atom_type_tests", {"atom-error"}, true, "Type system and utilities"},
-        {"utils", "tests/utils", "atom_utils_tests", {"atom-error"}, true, "General utility functions"},
-        {"web", "tests/web", "atom_web_tests", {"atom-error"}, true, "HTTP client and web utilities"}
-    };
+        {"algorithm",
+         "tests/algorithm",
+         "atom_algorithm_tests",
+         {"atom-error"},
+         true,
+         "Mathematical algorithms, cryptography, signal processing"},
+        {"async",
+         "tests/async",
+         "atom_async_tests",
+         {"atom-error", "fmt"},
+         true,
+         "Asynchronous programming primitives and concurrency"},
+        {"components",
+         "tests/components",
+         "atom_components_tests",
+         {"atom-error"},
+         true,
+         "Component system and scripting engines"},
+        {"connection",
+         "tests/connection",
+         "atom_connection_tests",
+         {"atom-error"},
+         true,
+         "Network communication (TCP, UDP, SSH)"},
+        {"containers",
+         "tests/containers",
+         "atom_containers_tests",
+         {"atom-error"},
+         true,
+         "Container data structures"},
+        {"error",
+         "tests/error",
+         "comprehensive_test",
+         {},
+         true,
+         "Comprehensive error handling and stack traces"},
+        {"extra",
+         "tests/extra",
+         "atom_extra_tests",
+         {"atom-error"},
+         true,
+         "Additional utilities and experimental features"},
+        {"image",
+         "tests/image",
+         "atom_image_tests",
+         {"atom-error"},
+         true,
+         "Image processing and computer vision"},
+        {"io",
+         "tests/io",
+         "atom_io_tests",
+         {"atom-error"},
+         true,
+         "Input/output operations and file system utilities"},
+        {"log",
+         "tests/log",
+         "atom_log_tests",
+         {"atom-error"},
+         true,
+         "Logging framework"},
+        {"memory",
+         "tests/memory",
+         "atom_memory_tests",
+         {"atom-error"},
+         true,
+         "Memory management and allocation"},
+        {"meta",
+         "tests/meta",
+         "atom_meta_tests",
+         {"atom-error"},
+         true,
+         "Metaprogramming utilities"},
+        {"search",
+         "tests/search",
+         "atom_search_tests",
+         {"atom-error"},
+         true,
+         "Search algorithms and data structures"},
+        {"secret",
+         "tests/secret",
+         "test_secret",
+         {"atom-error"},
+         true,
+         "Cryptographic operations"},
+        {"serial",
+         "tests/serial",
+         "atom_serial_tests",
+         {"atom-error"},
+         true,
+         "Serial communication"},
+        {"sysinfo",
+         "tests/sysinfo",
+         "atom_sysinfo_tests",
+         {"atom-error"},
+         true,
+         "System information utilities"},
+        {"system",
+         "tests/system",
+         "atom_system_tests",
+         {"atom-error"},
+         true,
+         "System-level integration"},
+        {"type",
+         "tests/type",
+         "atom_type_tests",
+         {"atom-error"},
+         true,
+         "Type system and utilities"},
+        {"utils",
+         "tests/utils",
+         "atom_utils_tests",
+         {"atom-error"},
+         true,
+         "General utility functions"},
+        {"web",
+         "tests/web",
+         "atom_web_tests",
+         {"atom-error"},
+         true,
+         "HTTP client and web utilities"}};
 
     for (const auto& module : knownModules) {
         // Check if the module actually exists on the filesystem
@@ -335,16 +443,17 @@ void discoverTestModules() {
 /**
  * @brief Configure test runner based on command line options
  */
-atom::test::TestRunnerConfig createRunnerConfig(const TestRunnerOptions& options) {
+atom::test::TestRunnerConfig createRunnerConfig(
+    const TestRunnerOptions& options) {
     atom::test::TestRunnerConfig config;
 
     config.withParallel(options.parallel)
-          .withThreads(options.numThreads)
-          .withRetries(options.maxRetries)
-          .withFailFast(options.failFast)
-          .withVerboseOutput(options.verbose)
-          .withShuffleTests(options.shuffle)
-          .withGlobalTimeout(options.globalTimeout);
+        .withThreads(options.numThreads)
+        .withRetries(options.maxRetries)
+        .withFailFast(options.failFast)
+        .withVerboseOutput(options.verbose)
+        .withShuffleTests(options.shuffle)
+        .withGlobalTimeout(options.globalTimeout);
 
     if (options.randomSeed != 0) {
         config.withRandomSeed(options.randomSeed);
@@ -368,7 +477,8 @@ atom::test::TestRunnerConfig createRunnerConfig(const TestRunnerOptions& options
 /**
  * @brief Run tests for a specific module
  */
-atom::test::TestStats runModuleTests(const std::string& moduleName, const TestRunnerOptions& options) {
+atom::test::TestStats runModuleTests(const std::string& moduleName,
+                                     const TestRunnerOptions& options) {
     auto& registry = TestModuleRegistry::getInstance();
     auto* module = registry.findModule(moduleName);
 
@@ -410,7 +520,8 @@ atom::test::TestStats runAllTests(const TestRunnerOptions& options) {
     atom::test::TestRunner runner(config);
 
     if (options.verbose) {
-        std::cout << "Running tests from " << enabledModules.size() << " modules:" << std::endl;
+        std::cout << "Running tests from " << enabledModules.size()
+                  << " modules:" << std::endl;
         for (const auto& module : enabledModules) {
             std::cout << "  - " << module.name << std::endl;
         }

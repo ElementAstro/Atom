@@ -21,11 +21,17 @@
 #include <vector>
 #include <cmath>
 #include <algorithm>
+#include <numbers>
 
 #include "atom/image/core/image_blob.hpp"
 
 using namespace atom::image;
 using namespace std::chrono;
+
+// Define M_PI if not available
+#ifndef M_PI
+#define M_PI std::numbers::pi
+#endif
 
 /**
  * @brief Structure to hold format conversion parameters

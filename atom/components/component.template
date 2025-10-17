@@ -1,5 +1,4 @@
 if constexpr (Traits::arity == 0) {
-
     (void)m_CommandDispatcher_->def(
         name, group, description,
         std::function<typename Traits::return_type()>(std::forward<Callable>(func)));
@@ -96,3 +95,4 @@ if constexpr (Traits::arity == 8) {
         name, group, description,
         std::function<typename Traits::return_type(ArgType_0, ArgType_1, ArgType_2, ArgType_3, ArgType_4, ArgType_5, ArgType_6, ArgType_7)>(std::forward<Callable>(func)));
 }
+

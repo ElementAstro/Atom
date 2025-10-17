@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
-#include <thread>
-#include <chrono>
 #include <atomic>
+#include <chrono>
+#include <thread>
 #include <vector>
 
 #include "atom/async/promise.hpp"
@@ -213,10 +213,9 @@ TEST_F(EnhancedPromiseTest, DoubleSetException) {
     promise.setException(std::make_exception_ptr(std::runtime_error("first")));
 
     // Second setException should throw
-    EXPECT_THROW(
-        promise.setException(std::make_exception_ptr(std::runtime_error("second"))),
-        PromiseCancelledException
-    );
+    EXPECT_THROW(promise.setException(
+                     std::make_exception_ptr(std::runtime_error("second"))),
+                 PromiseCancelledException);
 }
 
 TEST_F(EnhancedPromiseTest, SetValueAfterException) {
@@ -232,10 +231,9 @@ TEST_F(EnhancedPromiseTest, SetExceptionAfterValue) {
     promise.setValue(42);
 
     // setException after setValue should throw
-    EXPECT_THROW(
-        promise.setException(std::make_exception_ptr(std::runtime_error("error"))),
-        PromiseCancelledException
-    );
+    EXPECT_THROW(promise.setException(
+                     std::make_exception_ptr(std::runtime_error("error"))),
+                 PromiseCancelledException);
 }
 
 // ============================================================================
@@ -267,10 +265,9 @@ TEST_F(EnhancedPromiseTest, SetExceptionAfterCancel) {
     Promise<int> promise;
     promise.cancel();
 
-    EXPECT_THROW(
-        promise.setException(std::make_exception_ptr(std::runtime_error("error"))),
-        PromiseCancelledException
-    );
+    EXPECT_THROW(promise.setException(
+                     std::make_exception_ptr(std::runtime_error("error"))),
+                 PromiseCancelledException);
 }
 
 // ============================================================================

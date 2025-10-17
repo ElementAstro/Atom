@@ -22,8 +22,8 @@ and efficient component allocation/deallocation patterns.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/component_pool.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/component_pool.hpp"
+#include "atom/components/core/registry.hpp"
 
 // Note: Registry and Component are in the global namespace, not atom::components
 using atom::components::ComponentPool;

@@ -623,3 +623,248 @@ TEST_F(DirectoryStackTest, MoveOperations) {
         new_thread.join();
     }
 }
+
+// Test pushd with non-existent directory
+TEST_F(DirectoryStackTest, PushdNonExistentDirectory) {
+    fs::path non_existent = test_dir / "does_not_exist";
+
+    auto ec = asyncPushd(non_existent);
+    EXPECT_TRUE(ec);  // Should have error
+    EXPECT_EQ(dir_stack.size(), 0);
+}
+
+// Test popd on empty stack
+TEST_F(DirectoryStackTest, PopdEmptyStack) {
+    EXPECT_EQ(dir_stack.size(), 0);
+
+    auto ec = asyncPopd();
+    EXPECT_TRUE(ec);  // Should have error
+}
+
+// Test peek on empty stack
+TEST_F(DirectoryStackTest, PeekEmptyStack) {
+    EXPECT_EQ(dir_stack.size(), 0);
+
+    auto path = dir_stack.peek();
+    EXPECT_TRUE(path.empty());
+}
+
+// Test stack overflow prevention
+TEST_F(DirectoryStackTest, StackOverflowPrevention) {
+    // Push many directories
+    const int max_pushes = 100;
+
+    for (int i = 0; i < max_pushes; ++i) {
+        auto ec = asyncPushd(test_subdirs[i % test_subdirs.size()]);
+        EXPECT_FALSE(ec);
+    }
+
+    EXPECT_EQ(dir_stack.size(), max_pushes);
+
+    // Pop all
+    for (int i = 0; i < max_pushes; ++i) {
+        auto ec = asyncPopd();
+        EXPECT_FALSE(ec);
+    }
+
+    EXPECT_EQ(dir_stack.size(), 0);
+}
+
+// Test concurrent pushd operations
+TEST_F(DirectoryStackTest, ConcurrentPushdOperations) {
+    const int num_threads = 5;
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count{0};
+
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([this, i, &success_count]() {
+            auto ec = asyncPushd(test_subdirs[i % test_subdirs.size()]);
+            if (!ec) {
+                success_count++;
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(success_count, num_threads);
+    EXPECT_EQ(dir_stack.size(), num_threads);
+}
+
+// Test remove with invalid index
+TEST_F(DirectoryStackTest, RemoveInvalidIndex) {
+    asyncPushd(test_subdirs[0]);
+    asyncPushd(test_subdirs[1]);
+
+    // Try to remove invalid index - should throw
+    EXPECT_THROW(dir_stack.remove(999), std::out_of_range);
+
+    EXPECT_EQ(dir_stack.size(), 2);
+}
+
+// Test gotoIndex with invalid index
+TEST_F(DirectoryStackTest, GotoInvalidIndex) {
+    asyncPushd(test_subdirs[0]);
+    asyncPushd(test_subdirs[1]);
+
+    // Try to goto invalid index - using async version with callback
+    bool goto_completed = false;
+    bool had_error = false;
+    dir_stack.asyncGotoIndex(999, [&](const std::error_code& ec) {
+        had_error = (bool)ec;
+        goto_completed = true;
+    });
+
+    // Wait for async operation
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(goto_completed);
+    EXPECT_TRUE(had_error);  // Should have error
+}
+
+// Test stack persistence with empty stack
+TEST_F(DirectoryStackTest, SaveLoadEmptyStack) {
+    fs::path stack_file = test_dir / "empty_stack.txt";
+
+    // Save empty stack - using async version with callback
+    bool save_completed = false;
+    dir_stack.asyncSaveStackToFile(stack_file.string(), [&](const std::error_code& ec) {
+        EXPECT_FALSE(ec);
+        save_completed = true;
+    });
+
+    // Wait for async operation
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(save_completed);
+    EXPECT_TRUE(fs::exists(stack_file));
+
+    // Load empty stack - using async version with callback
+    bool load_completed = false;
+    dir_stack.asyncLoadStackFromFile(stack_file.string(), [&](const std::error_code& ec) {
+        EXPECT_FALSE(ec);
+        load_completed = true;
+    });
+
+    // Wait for async operation
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(load_completed);
+    EXPECT_EQ(dir_stack.size(), 0);
+}
+
+// Test stack persistence with corrupted file
+TEST_F(DirectoryStackTest, LoadCorruptedStackFile) {
+    fs::path corrupted_file = test_dir / "corrupted_stack.txt";
+
+    // Create corrupted file
+    std::ofstream ofs(corrupted_file);
+    ofs << "This is not a valid stack file\n";
+    ofs << "Random garbage data\n";
+    ofs.close();
+
+    // Try to load corrupted file - using async version with callback
+    bool load_completed = false;
+    dir_stack.asyncLoadStackFromFile(corrupted_file.string(), [&](const std::error_code& ec) {
+        // Should handle gracefully (implementation-dependent)
+        load_completed = true;
+    });
+
+    // Wait for async operation
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    EXPECT_TRUE(load_completed);
+}
+
+// Test dirs() method
+TEST_F(DirectoryStackTest, DirsMethod) {
+    asyncPushd(test_subdirs[0]);
+    asyncPushd(test_subdirs[1]);
+    asyncPushd(test_subdirs[2]);
+
+    auto dirs = dir_stack.dirs();
+    EXPECT_EQ(dirs.size(), 3);
+
+    // Verify order (top to bottom)
+    EXPECT_EQ(dirs[0], test_subdirs[2]);
+    EXPECT_EQ(dirs[1], test_subdirs[1]);
+    EXPECT_EQ(dirs[2], test_subdirs[0]);
+}
+
+// Test swap with insufficient entries
+TEST_F(DirectoryStackTest, SwapInsufficientEntries) {
+    asyncPushd(test_subdirs[0]);
+
+    // Try to swap with only one entry - should throw or handle gracefully
+    EXPECT_THROW(dir_stack.swap(0, 1), std::out_of_range);
+}
+
+// Test multiple swap operations
+TEST_F(DirectoryStackTest, MultipleSwapOperations) {
+    asyncPushd(test_subdirs[0]);
+    asyncPushd(test_subdirs[1]);
+    asyncPushd(test_subdirs[2]);
+
+    auto top_before = dir_stack.peek();
+
+    // First swap - swap top two entries (indices 0 and 1)
+    EXPECT_NO_THROW(dir_stack.swap(0, 1));
+
+    auto top_after_first = dir_stack.peek();
+    EXPECT_NE(top_before, top_after_first);
+
+    // Second swap (should restore original order)
+    EXPECT_NO_THROW(dir_stack.swap(0, 1));
+
+    auto top_after_second = dir_stack.peek();
+    EXPECT_EQ(top_before, top_after_second);
+}
+
+// Test stack with symbolic links
+TEST_F(DirectoryStackTest, StackWithSymbolicLinks) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping symlink tests on Windows";
+#endif
+
+    fs::path link_dir = test_dir / "link_to_subdir";
+    std::error_code ec_fs;
+    fs::create_directory_symlink(test_subdirs[0], link_dir, ec_fs);
+
+    if (!ec_fs) {
+        auto ec = asyncPushd(link_dir);
+        EXPECT_FALSE(ec);
+        EXPECT_EQ(dir_stack.size(), 1);
+
+        // Verify we can navigate to the symlink
+        auto top = dir_stack.peek();
+        EXPECT_FALSE(top.empty());
+    }
+}
+
+// Test clear method
+TEST_F(DirectoryStackTest, ClearMethod) {
+    asyncPushd(test_subdirs[0]);
+    asyncPushd(test_subdirs[1]);
+    asyncPushd(test_subdirs[2]);
+
+    EXPECT_EQ(dir_stack.size(), 3);
+
+    dir_stack.clear();
+
+    EXPECT_EQ(dir_stack.size(), 0);
+    EXPECT_TRUE(dir_stack.peek().empty());
+}
+
+// Test stack behavior with relative paths
+TEST_F(DirectoryStackTest, RelativePathHandling) {
+    // Save current directory
+    fs::path original = fs::current_path();
+
+    // Change to test directory
+    fs::current_path(test_dir);
+
+    // Push relative path
+    auto ec = asyncPushd("subdir_0");
+    EXPECT_FALSE(ec);
+
+    // Restore original directory
+    fs::current_path(original);
+}

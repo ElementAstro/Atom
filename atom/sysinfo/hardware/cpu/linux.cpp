@@ -1221,12 +1221,111 @@ auto getCpuSocketType() -> std::string {
 
     std::string socketType = "Unknown";
 
-    // Linux doesn't provide socket type directly
-    // We would need to use external tools like dmidecode (requires root)
-    // or parse hardware database files
+    // Try to read from DMI information (doesn't require root on most systems)
+    std::ifstream dmiFile("/sys/class/dmi/id/board_name");
+    if (dmiFile.is_open()) {
+        std::string boardName;
+        std::getline(dmiFile, boardName);
+        dmiFile.close();
 
-    // This is a placeholder implementation
-    spdlog::info("Linux CPU Socket Type: {} (placeholder)", socketType);
+        if (!boardName.empty()) {
+            spdlog::debug("Linux Board Name: {}", boardName);
+            // Board name might give us hints about the socket
+            socketType = "Board: " + boardName;
+        }
+    }
+
+    // Try to infer socket type from CPU model in /proc/cpuinfo
+    std::ifstream cpuinfo("/proc/cpuinfo");
+    if (cpuinfo.is_open()) {
+        std::string line;
+        std::string modelName;
+
+        while (std::getline(cpuinfo, line)) {
+            if (line.find("model name") != std::string::npos) {
+                size_t colonPos = line.find(':');
+                if (colonPos != std::string::npos) {
+                    modelName = line.substr(colonPos + 1);
+                    // Trim leading whitespace
+                    modelName.erase(0, modelName.find_first_not_of(" \t"));
+                    break;
+                }
+            }
+        }
+        cpuinfo.close();
+
+        if (!modelName.empty()) {
+            spdlog::debug("Linux CPU Model: {}", modelName);
+
+            // Infer socket type from CPU model
+            if (modelName.find("Intel") != std::string::npos) {
+                if (modelName.find("Core i9") != std::string::npos ||
+                    modelName.find("Core i7") != std::string::npos ||
+                    modelName.find("Core i5") != std::string::npos ||
+                    modelName.find("Core i3") != std::string::npos) {
+
+                    if (modelName.find("12th Gen") != std::string::npos ||
+                        modelName.find("13th Gen") != std::string::npos ||
+                        modelName.find("14th Gen") != std::string::npos) {
+                        socketType = "LGA1700";
+                    } else if (modelName.find("10th Gen") != std::string::npos ||
+                               modelName.find("11th Gen") != std::string::npos) {
+                        socketType = "LGA1200";
+                    } else if (modelName.find("8th Gen") != std::string::npos ||
+                               modelName.find("9th Gen") != std::string::npos) {
+                        socketType = "LGA1151";
+                    } else if (modelName.find("6th Gen") != std::string::npos ||
+                               modelName.find("7th Gen") != std::string::npos) {
+                        socketType = "LGA1151";
+                    } else {
+                        socketType = "Intel Socket (Unknown Generation)";
+                    }
+                } else if (modelName.find("Xeon") != std::string::npos) {
+                    if (modelName.find("Scalable") != std::string::npos) {
+                        socketType = "LGA3647";
+                    } else {
+                        socketType = "Intel Xeon Socket";
+                    }
+                }
+            } else if (modelName.find("AMD") != std::string::npos) {
+                if (modelName.find("Ryzen") != std::string::npos) {
+                    if (modelName.find("7000") != std::string::npos) {
+                        socketType = "AM5";
+                    } else if (modelName.find("5000") != std::string::npos ||
+                               modelName.find("3000") != std::string::npos) {
+                        socketType = "AM4";
+                    } else if (modelName.find("2000") != std::string::npos ||
+                               modelName.find("1000") != std::string::npos) {
+                        socketType = "AM4";
+                    } else {
+                        socketType = "AMD Socket (Unknown Generation)";
+                    }
+                } else if (modelName.find("EPYC") != std::string::npos) {
+                    if (modelName.find("7003") != std::string::npos ||
+                        modelName.find("7002") != std::string::npos) {
+                        socketType = "SP3";
+                    } else {
+                        socketType = "AMD EPYC Socket";
+                    }
+                } else if (modelName.find("Threadripper") != std::string::npos) {
+                    if (modelName.find("3000") != std::string::npos) {
+                        socketType = "sTRX4";
+                    } else if (modelName.find("2000") != std::string::npos ||
+                               modelName.find("1000") != std::string::npos) {
+                        socketType = "TR4";
+                    } else {
+                        socketType = "AMD Threadripper Socket";
+                    }
+                }
+            }
+        }
+    }
+
+    spdlog::info("Linux CPU Socket Type: {} (inferred from CPU model)", socketType);
+
+    std::lock_guard<std::mutex> lock(g_cacheMutex);
+    g_cpuInfoCache.socketType = socketType;
+
     return socketType;
 }
 

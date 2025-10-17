@@ -42,11 +42,11 @@ class. Demonstrates advanced asynchronous UDP server functionality including:
 using namespace atom::async::connection;
 
 // Enhanced utility class for formatted logging with thread safety
-class Logger {
+class ExampleLogger {
 public:
     enum Level { LOG_INFO, LOG_SUCCESS, LOG_WARNING, LOG_ERROR, LOG_DEBUG };
 
-    static void log(Level level, const std::string& component,
+    static void write(Level level, const std::string& component,
                     const std::string& message) {
         static std::mutex log_mutex;
         std::lock_guard<std::mutex> lock(log_mutex);
@@ -117,36 +117,36 @@ public:
         auto seconds =
             std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 
-        Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                     "=== Async UDP Server Statistics ===");
-        Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                     "Runtime: " + std::to_string(seconds) + " seconds");
-        Logger::log(
-            Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncServerStats",
             "Messages received: " + std::to_string(messages_received.load()));
-        Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                     "Messages sent: " + std::to_string(messages_sent.load()));
-        Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                     "Bytes received: " + std::to_string(bytes_received.load()));
-        Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                     "Bytes sent: " + std::to_string(bytes_sent.load()));
-        Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                     "Unique clients: " + std::to_string(unique_clients.load()));
-        Logger::log(
-            Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncServerStats",
             "Active sessions: " + std::to_string(active_sessions.load()));
-        Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                     "Handler invocations: " +
                         std::to_string(handler_invocations.load()));
-        Logger::log(
-            Logger::LOG_INFO, "AsyncServerStats",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncServerStats",
             "Broadcast messages: " + std::to_string(broadcast_messages.load()));
 
         if (seconds > 0) {
-            Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                         "Messages/sec received: " +
                             std::to_string(messages_received.load() / seconds));
-            Logger::log(Logger::LOG_INFO, "AsyncServerStats",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncServerStats",
                         "Bytes/sec received: " +
                             std::to_string(bytes_received.load() / seconds));
         }
@@ -181,7 +181,7 @@ public:
         auto it = sessions_.find(endpoint);
         if (it == sessions_.end()) {
             sessions_.emplace(endpoint, ClientSession(endpoint));
-            Logger::log(Logger::LOG_INFO, "AsyncSessionMgr",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncSessionMgr",
                         "New client session: " + endpoint);
         }
 
@@ -214,7 +214,7 @@ public:
 
     void print_sessions() const {
         auto active = get_active_sessions();
-        Logger::log(Logger::LOG_INFO, "AsyncSessionMgr",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncSessionMgr",
                     "Active sessions (" + std::to_string(active.size()) + "):");
 
         std::lock_guard<std::mutex> lock(
@@ -223,8 +223,8 @@ public:
             auto it = sessions_.find(endpoint);
             if (it != sessions_.end()) {
                 const auto& session = it->second;
-                Logger::log(
-                    Logger::LOG_INFO, "AsyncSessionMgr",
+                ExampleLogger::write(
+                    ExampleLogger::LOG_INFO, "AsyncSessionMgr",
                     "  " + endpoint + " - Messages: " +
                         std::to_string(session.message_count) +
                         ", Bytes: " + std::to_string(session.bytes_received));
@@ -239,7 +239,7 @@ AsyncClientSessionManager globalAsyncSessionManager;
 
 // Example 1: Enhanced basic async UDP server
 void basicAsyncServerExample() {
-    Logger::log(Logger::LOG_INFO, "Example1",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                 "Starting enhanced basic async UDP server example");
 
     try {
@@ -251,7 +251,7 @@ void basicAsyncServerExample() {
                                                   unsigned short remotePort) {
             std::string clientEndpoint =
                 remoteIp + ":" + std::to_string(remotePort);
-            Logger::log(Logger::LOG_INFO, "Example1",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                         "Received from " + clientEndpoint + ": " + message +
                             " (" + std::to_string(message.length()) +
                             " bytes)");
@@ -267,7 +267,7 @@ void basicAsyncServerExample() {
                 std::string response = "ECHO_RESPONSE:" + message.substr(5);
                 // Note: In a real implementation, you would send the response
                 // back
-                Logger::log(Logger::LOG_INFO, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                             "Would echo back: " + response);
                 globalAsyncServerStats.record_sent_message(response.length());
 
@@ -278,7 +278,7 @@ void basicAsyncServerExample() {
                 std::string statusResponse =
                     "SERVER_STATUS:ACTIVE_SESSIONS=" +
                     std::to_string(activeSessions.size());
-                Logger::log(Logger::LOG_INFO, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                             "Status response: " + statusResponse);
                 globalAsyncServerStats.record_sent_message(
                     statusResponse.length());
@@ -286,14 +286,14 @@ void basicAsyncServerExample() {
             } else if (message.find("BROADCAST:") == 0) {
                 // Handle broadcast request
                 std::string broadcastMsg = message.substr(10);
-                Logger::log(Logger::LOG_INFO, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                             "Broadcasting: " + broadcastMsg);
                 globalAsyncServerStats.record_sent_message(
                     broadcastMsg.length(), true);
 
             } else {
                 // Regular message processing
-                Logger::log(Logger::LOG_DEBUG, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_DEBUG, "Example1",
                             "Processing regular message");
             }
         };
@@ -305,26 +305,26 @@ void basicAsyncServerExample() {
         unsigned short port = 12345;
         bool result = server.start(port);
         if (!result) {
-            Logger::log(
-                Logger::LOG_ERROR, "Example1",
+            ExampleLogger::write(
+                ExampleLogger::LOG_ERROR, "Example1",
                 "Failed to start server on port " + std::to_string(port));
             return;
         }
-        Logger::log(Logger::LOG_SUCCESS, "Example1",
+        ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example1",
                     "Server started on port " + std::to_string(port));
 
         // Check server status
         if (server.isRunning()) {
-            Logger::log(Logger::LOG_SUCCESS, "Example1",
+            ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example1",
                         "Server is running and ready to accept connections");
         } else {
-            Logger::log(Logger::LOG_ERROR, "Example1",
+            ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
                         "Server failed to start properly");
             return;
         }
 
         // Simulate server operation
-        Logger::log(Logger::LOG_INFO, "Example1",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                     "Server running for 8 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(8));
 
@@ -333,20 +333,20 @@ void basicAsyncServerExample() {
 
         // Stop the server
         server.stop();
-        Logger::log(Logger::LOG_INFO, "Example1", "Server stopped");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1", "Server stopped");
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Example1",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                 "Enhanced basic async UDP server example completed");
 }
 
 // Example 2: Multi-handler server with message routing
 void multiHandlerServerExample() {
-    Logger::log(Logger::LOG_INFO, "Example2",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                 "Starting multi-handler server example");
 
     try {
@@ -357,7 +357,7 @@ void multiHandlerServerExample() {
             [](const std::string& message, const std::string& remoteIp,
                unsigned short remotePort) {
                 if (message.find("GENERAL:") == 0) {
-                    Logger::log(Logger::LOG_INFO, "GeneralHandler",
+                    ExampleLogger::write(ExampleLogger::LOG_INFO, "GeneralHandler",
                                 "Processing general message from " + remoteIp +
                                     ":" + std::to_string(remotePort));
                     globalAsyncServerStats.record_received_message(
@@ -373,7 +373,7 @@ void multiHandlerServerExample() {
                unsigned short remotePort) {
                 if (message.find("CMD:") == 0) {
                     std::string command = message.substr(4);
-                    Logger::log(Logger::LOG_INFO, "CommandHandler",
+                    ExampleLogger::write(ExampleLogger::LOG_INFO, "CommandHandler",
                                 "Executing command '" + command + "' from " +
                                     remoteIp + ":" +
                                     std::to_string(remotePort));
@@ -389,7 +389,7 @@ void multiHandlerServerExample() {
             [](const std::string& message, const std::string& remoteIp,
                unsigned short remotePort) {
                 if (message.find("STATS") == 0) {
-                    Logger::log(Logger::LOG_INFO, "StatsHandler",
+                    ExampleLogger::write(ExampleLogger::LOG_INFO, "StatsHandler",
                                 "Statistics request from " + remoteIp + ":" +
                                     std::to_string(remotePort));
                     globalAsyncServerStats.record_received_message(
@@ -400,7 +400,7 @@ void multiHandlerServerExample() {
                         "STATS_RESPONSE:MSG_COUNT=" +
                         std::to_string(
                             globalAsyncServerStats.messages_received.load());
-                    Logger::log(Logger::LOG_INFO, "StatsHandler",
+                    ExampleLogger::write(ExampleLogger::LOG_INFO, "StatsHandler",
                                 "Response: " + statsResponse);
                     globalAsyncServerStats.record_sent_message(
                         statsResponse.length());
@@ -416,35 +416,35 @@ void multiHandlerServerExample() {
         unsigned short port = 12346;
         bool result = server.start(port);
         if (!result) {
-            Logger::log(Logger::LOG_ERROR, "Example2",
+            ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example2",
                         "Failed to start multi-handler server");
             return;
         }
-        Logger::log(
-            Logger::LOG_SUCCESS, "Example2",
+        ExampleLogger::write(
+            ExampleLogger::LOG_SUCCESS, "Example2",
             "Multi-handler server started on port " + std::to_string(port));
 
         // Run server for demonstration
-        Logger::log(Logger::LOG_INFO, "Example2",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                     "Multi-handler server running for 6 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(6));
 
         server.stop();
-        Logger::log(Logger::LOG_INFO, "Example2",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                     "Multi-handler server stopped");
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Example2",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example2",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                 "Multi-handler server example completed");
 }
 
 // Example 3: Performance monitoring and load testing
 void performanceMonitoringExample() {
-    Logger::log(Logger::LOG_INFO, "Example3",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
                 "Starting performance monitoring example");
 
     try {
@@ -476,7 +476,7 @@ void performanceMonitoringExample() {
                     std::chrono::duration_cast<std::chrono::microseconds>(
                         end - start);
 
-                Logger::log(Logger::LOG_DEBUG, "PerfHandler",
+                ExampleLogger::write(ExampleLogger::LOG_DEBUG, "PerfHandler",
                             "Processed message from " + remoteIp + ":" +
                                 std::to_string(remotePort) + " in " +
                                 std::to_string(duration.count()) + " μs");
@@ -488,11 +488,11 @@ void performanceMonitoringExample() {
         unsigned short port = 12347;
         bool result = server.start(port);
         if (!result) {
-            Logger::log(Logger::LOG_ERROR, "Example3",
+            ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example3",
                         "Failed to start performance monitoring server");
             return;
         }
-        Logger::log(Logger::LOG_SUCCESS, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example3",
                     "Performance monitoring server started on port " +
                         std::to_string(port));
 
@@ -518,7 +518,7 @@ void performanceMonitoringExample() {
                             std::chrono::milliseconds(50));
                     }
                 } catch (const std::exception& e) {
-                    Logger::log(Logger::LOG_ERROR, "LoadGen",
+                    ExampleLogger::write(ExampleLogger::LOG_ERROR, "LoadGen",
                                 "Load generator " + std::to_string(i) +
                                     " error: " + std::string(e.what()));
                 }
@@ -532,7 +532,7 @@ void performanceMonitoringExample() {
 
         auto duration = std::chrono::duration_cast<std::chrono::seconds>(
             endTime - startTime);
-        Logger::log(Logger::LOG_INFO, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
                     "Performance monitoring completed in " +
                         std::to_string(duration.count()) + " seconds");
 
@@ -542,39 +542,39 @@ void performanceMonitoringExample() {
         }
 
         server.stop();
-        Logger::log(Logger::LOG_INFO, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
                     "Performance monitoring server stopped");
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example3",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
                 "Performance monitoring example completed");
 }
 
 int main() {
     try {
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "Starting Enhanced Async UDP Server Examples");
-        Logger::log(Logger::LOG_INFO, "Main", "");
-        Logger::log(Logger::LOG_INFO, "Main", "Features demonstrated:");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "Features demonstrated:");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Enhanced basic async UDP server operations");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Multi-handler message routing and processing");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Performance monitoring and load testing");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Client session management and tracking");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Advanced error handling and recovery");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Real-time statistics monitoring");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Comprehensive message processing patterns");
-        Logger::log(Logger::LOG_INFO, "Main", "");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
 
         // Run all examples with proper spacing
         basicAsyncServerExample();
@@ -586,22 +586,22 @@ int main() {
         performanceMonitoringExample();
 
         // Print comprehensive statistics
-        Logger::log(Logger::LOG_INFO, "Main", "");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
         globalAsyncServerStats.print_summary();
         globalAsyncSessionManager.print_sessions();
 
-        Logger::log(
-            Logger::LOG_SUCCESS, "Main",
+        ExampleLogger::write(
+            ExampleLogger::LOG_SUCCESS, "Main",
             "All enhanced async UDP server examples completed successfully");
-        Logger::log(Logger::LOG_INFO, "Main", "");
-        Logger::log(
-            Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "Main",
             "Example completed. Check the output above for detailed results.");
 
         return 0;
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Main",
                     "Fatal error: " + std::string(e.what()));
         globalAsyncServerStats.print_summary();
         return 1;

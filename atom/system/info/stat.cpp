@@ -18,7 +18,9 @@ Description: Python like stat for Windows & Linux
 
 #ifdef _WIN32
 #include <windows.h>
-// Helper function to convert string to wide string
+// Local helper functions for string conversion
+// Note: Centralized versions exist in atom/utils/text/string.hpp
+// but are kept local here to avoid linking dependencies
 inline std::wstring stringToWString(const std::string& str) {
     if (str.empty()) return std::wstring();
     int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
@@ -27,7 +29,6 @@ inline std::wstring stringToWString(const std::string& str) {
     return wstr;
 }
 
-// Helper function to convert wide string to string
 inline std::string wstringToString(const std::wstring& wstr) {
     if (wstr.empty()) return std::string();
     int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
@@ -51,9 +52,12 @@ inline std::string wstringToString(const std::wstring& wstr) {
 #include <Lmcons.h>
 #include <io.h>
 #include <shlwapi.h>
+#include <aclapi.h>
+#include <sddl.h>
 // clang-format on
 #ifdef _MSC_VER
 #pragma comment(lib, "shlwapi.lib")
+#pragma comment(lib, "advapi32.lib")
 #endif
 #else
 #include <fcntl.h>
@@ -62,6 +66,7 @@ inline std::string wstringToString(const std::wstring& wstr) {
 #include <unistd.h>
 #endif
 
+#include <spdlog/spdlog.h>
 #include "atom/utils/string.hpp"
 
 namespace atom::system {
@@ -318,9 +323,41 @@ int Stat::uid() const {
 
     if (!statInfo_->userId.has_value()) {
 #ifdef _WIN32
-        // Windows doesn't use UID in the same way as Unix-like systems
-        // Return 0 as a placeholder
-        statInfo_->userId = 0;
+        // Windows: Get the owner SID and convert to a numeric ID
+        // This provides a consistent numeric identifier for the file owner
+        PSID pSidOwner = nullptr;
+        PSECURITY_DESCRIPTOR pSD = nullptr;
+
+        DWORD result = GetNamedSecurityInfoW(
+            path_.wstring().c_str(),
+            SE_FILE_OBJECT,
+            OWNER_SECURITY_INFORMATION,
+            &pSidOwner,
+            nullptr,
+            nullptr,
+            nullptr,
+            &pSD
+        );
+
+        if (result == ERROR_SUCCESS && pSidOwner != nullptr) {
+            // Convert SID to a numeric value by hashing the SID
+            // This provides a consistent numeric ID for cross-platform compatibility
+            DWORD sidLength = GetLengthSid(pSidOwner);
+            BYTE* sidBytes = reinterpret_cast<BYTE*>(pSidOwner);
+
+            // Simple hash to convert SID to integer
+            int userId = 0;
+            for (DWORD i = 0; i < sidLength; ++i) {
+                userId = (userId * 31 + sidBytes[i]) & 0x7FFFFFFF; // Keep positive
+            }
+
+            statInfo_->userId = userId;
+            LocalFree(pSD);
+        } else {
+            // Fallback to 0 if we can't get owner information
+            spdlog::warn("Failed to get file owner for: {}, using default UID 0", path_.string());
+            statInfo_->userId = 0;
+        }
 #else
         struct stat attr;
         if (stat(path_.c_str(), &attr) != 0) {
@@ -341,9 +378,39 @@ int Stat::gid() const {
 
     if (!statInfo_->groupId.has_value()) {
 #ifdef _WIN32
-        // Windows doesn't use GID in the same way as Unix-like systems
-        // Return 0 as a placeholder
-        statInfo_->groupId = 0;
+        // Windows: Get the primary group SID and convert to a numeric ID
+        PSID pSidGroup = nullptr;
+        PSECURITY_DESCRIPTOR pSD = nullptr;
+
+        DWORD result = GetNamedSecurityInfoW(
+            path_.wstring().c_str(),
+            SE_FILE_OBJECT,
+            GROUP_SECURITY_INFORMATION,
+            nullptr,
+            &pSidGroup,
+            nullptr,
+            nullptr,
+            &pSD
+        );
+
+        if (result == ERROR_SUCCESS && pSidGroup != nullptr) {
+            // Convert SID to a numeric value by hashing the SID
+            DWORD sidLength = GetLengthSid(pSidGroup);
+            BYTE* sidBytes = reinterpret_cast<BYTE*>(pSidGroup);
+
+            // Simple hash to convert SID to integer
+            int groupId = 0;
+            for (DWORD i = 0; i < sidLength; ++i) {
+                groupId = (groupId * 31 + sidBytes[i]) & 0x7FFFFFFF; // Keep positive
+            }
+
+            statInfo_->groupId = groupId;
+            LocalFree(pSD);
+        } else {
+            // Fallback to 0 if we can't get group information
+            spdlog::warn("Failed to get file group for: {}, using default GID 0", path_.string());
+            statInfo_->groupId = 0;
+        }
 #else
         struct stat attr;
         if (stat(path_.c_str(), &attr) != 0) {

@@ -785,10 +785,71 @@ RegistryResult Registry::RegistryImpl::saveRegistryToFile(
             }
 #endif
 
-            case RegistryFormat::BINARY:
-                lastError = "Binary format not fully implemented";
-                spdlog::error("Binary format not implemented");
-                return RegistryResult::INVALID_FORMAT;
+            case RegistryFormat::BINARY: {
+                // Binary format: Simple serialization of registry tree
+                // Format: [magic][version][node_data]
+                // Magic: "ATOMREG\0" (8 bytes)
+                // Version: uint32_t (4 bytes)
+                // Node data: recursive serialization
+
+                const char magic[8] = {'A', 'T', 'O', 'M', 'R', 'E', 'G', '\0'};
+                const uint32_t version = 1;
+
+                file.write(magic, 8);
+                file.write(reinterpret_cast<const char*>(&version), sizeof(version));
+
+                // Helper lambda to serialize a node recursively
+                std::function<void(const RegistryNode&)> serializeNode;
+                serializeNode = [&](const RegistryNode& node) {
+                    // Write timestamps
+                    file.write(reinterpret_cast<const char*>(&node.created), sizeof(node.created));
+                    file.write(reinterpret_cast<const char*>(&node.lastModified), sizeof(node.lastModified));
+
+                    // Write values count
+                    uint32_t valueCount = static_cast<uint32_t>(node.values.size());
+                    file.write(reinterpret_cast<const char*>(&valueCount), sizeof(valueCount));
+
+                    // Write each value
+                    for (const auto& [name, value] : node.values) {
+                        // Write name length and name
+                        uint32_t nameLen = static_cast<uint32_t>(name.size());
+                        file.write(reinterpret_cast<const char*>(&nameLen), sizeof(nameLen));
+                        file.write(name.c_str(), nameLen);
+
+                        // Write type length and type
+                        uint32_t typeLen = static_cast<uint32_t>(value.type.size());
+                        file.write(reinterpret_cast<const char*>(&typeLen), sizeof(typeLen));
+                        file.write(value.type.c_str(), typeLen);
+
+                        // Write data length and data
+                        uint32_t dataLen = static_cast<uint32_t>(value.data.size());
+                        file.write(reinterpret_cast<const char*>(&dataLen), sizeof(dataLen));
+                        file.write(value.data.c_str(), dataLen);
+
+                        // Write timestamp
+                        file.write(reinterpret_cast<const char*>(&value.lastModified), sizeof(value.lastModified));
+                    }
+
+                    // Write children count
+                    uint32_t childCount = static_cast<uint32_t>(node.children.size());
+                    file.write(reinterpret_cast<const char*>(&childCount), sizeof(childCount));
+
+                    // Write each child
+                    for (const auto& [childName, childNode] : node.children) {
+                        // Write child name length and name
+                        uint32_t childNameLen = static_cast<uint32_t>(childName.size());
+                        file.write(reinterpret_cast<const char*>(&childNameLen), sizeof(childNameLen));
+                        file.write(childName.c_str(), childNameLen);
+
+                        // Recursively serialize child
+                        serializeNode(childNode);
+                    }
+                };
+
+                serializeNode(rootNode);
+                spdlog::debug("Registry saved in binary format to: {}", actualFilePath);
+                break;
+            }
 
             default:
                 lastError = "Unsupported registry format";
@@ -898,10 +959,92 @@ RegistryResult Registry::RegistryImpl::loadRegistryFromFile(
             }
 #endif
 
-            case RegistryFormat::BINARY:
-                lastError = "Binary format not fully implemented";
-                spdlog::error("Binary format not implemented");
-                return RegistryResult::INVALID_FORMAT;
+            case RegistryFormat::BINARY: {
+                // Binary format deserialization
+                // Read and verify magic number
+                char magic[8];
+                file.read(magic, 8);
+                if (std::string(magic, 8) != std::string("ATOMREG\0", 8)) {
+                    lastError = "Invalid binary registry file: bad magic number";
+                    spdlog::error("Invalid binary registry file format");
+                    return RegistryResult::INVALID_FORMAT;
+                }
+
+                // Read version
+                uint32_t version;
+                file.read(reinterpret_cast<char*>(&version), sizeof(version));
+                if (version != 1) {
+                    lastError = "Unsupported binary registry version: " + std::to_string(version);
+                    spdlog::error("Unsupported binary registry version: {}", version);
+                    return RegistryResult::INVALID_FORMAT;
+                }
+
+                // Helper lambda to deserialize a node recursively
+                std::function<RegistryNode()> deserializeNode;
+                deserializeNode = [&]() -> RegistryNode {
+                    RegistryNode node;
+
+                    // Read timestamps
+                    file.read(reinterpret_cast<char*>(&node.created), sizeof(node.created));
+                    file.read(reinterpret_cast<char*>(&node.lastModified), sizeof(node.lastModified));
+
+                    // Read values count
+                    uint32_t valueCount;
+                    file.read(reinterpret_cast<char*>(&valueCount), sizeof(valueCount));
+
+                    // Read each value
+                    for (uint32_t i = 0; i < valueCount; ++i) {
+                        // Read name
+                        uint32_t nameLen;
+                        file.read(reinterpret_cast<char*>(&nameLen), sizeof(nameLen));
+                        std::string name(nameLen, '\0');
+                        file.read(&name[0], nameLen);
+
+                        // Read type
+                        uint32_t typeLen;
+                        file.read(reinterpret_cast<char*>(&typeLen), sizeof(typeLen));
+                        std::string type(typeLen, '\0');
+                        file.read(&type[0], typeLen);
+
+                        // Read data
+                        uint32_t dataLen;
+                        file.read(reinterpret_cast<char*>(&dataLen), sizeof(dataLen));
+                        std::string data(dataLen, '\0');
+                        file.read(&data[0], dataLen);
+
+                        // Read timestamp
+                        std::time_t lastModified;
+                        file.read(reinterpret_cast<char*>(&lastModified), sizeof(lastModified));
+
+                        // Create value
+                        RegistryValue value(data, type);
+                        value.lastModified = lastModified;
+                        node.values[name] = value;
+                    }
+
+                    // Read children count
+                    uint32_t childCount;
+                    file.read(reinterpret_cast<char*>(&childCount), sizeof(childCount));
+
+                    // Read each child
+                    for (uint32_t i = 0; i < childCount; ++i) {
+                        // Read child name
+                        uint32_t childNameLen;
+                        file.read(reinterpret_cast<char*>(&childNameLen), sizeof(childNameLen));
+                        std::string childName(childNameLen, '\0');
+                        file.read(&childName[0], childNameLen);
+
+                        // Recursively deserialize child
+                        node.children[childName] = deserializeNode();
+                    }
+
+                    return node;
+                };
+
+                rootNode = deserializeNode();
+                spdlog::debug("Registry loaded from binary format: {}", filePath);
+                return RegistryResult::SUCCESS;
+            }
 
             default:
                 lastError = "Unsupported registry format";

@@ -15,6 +15,16 @@ project(atom-serial-tests VERSION 1.0.0 LANGUAGES C CXX)
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(LIBUSB QUIET libusb-1.0)
+endif()
+
+if(NOT LIBUSB_FOUND)
+    message(WARNING "libusb-1.0 not found; skipping serial tests")
+    return()
+endif()
+
 # =============================================================================
 # Include Test Infrastructure
 # =============================================================================
@@ -83,9 +93,20 @@ endif()
 enable_testing()
 
 include(GoogleTest)
-gtest_discover_tests(atom_serial_tests
+# Temporarily disabled due to DLL dependency issues during test discovery
+# gtest_discover_tests(atom_serial_tests
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#     PROPERTIES
+#     LABELS "serial"
+#     TIMEOUT 300
+# )
+
+# Manual test registration as workaround
+add_test(NAME atom_serial_tests
+    COMMAND atom_serial_tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
+)
+set_tests_properties(atom_serial_tests PROPERTIES
     LABELS "serial"
     TIMEOUT 300
 )

@@ -27,7 +27,7 @@
 #include <vector>
 #include <ostream>
 
-#ifdef _MSC_VER
+#if defined(_WIN32)
 #include <windows.h>
 #else
 #include <dlfcn.h>
@@ -489,7 +489,7 @@ public:
     [[nodiscard]] auto load(std::string_view path) -> FFIResult<void> {
         unload();
 
-#ifdef _MSC_VER
+#if defined(_WIN32)
         handle_ = LoadLibraryA(path.data());
         if (handle_ == nullptr) {
             return type::unexpected(FFIError::LibraryLoadFailed);
@@ -508,7 +508,7 @@ public:
      */
     void unload() {
         if (handle_ != nullptr) {
-#ifdef _MSC_VER
+#if defined(_WIN32)
             FreeLibrary(static_cast<HMODULE>(handle_));
 #else
             dlclose(handle_);
@@ -542,9 +542,10 @@ public:
             return type::unexpected(FFIError::LibraryLoadFailed);
         }
 
-#ifdef _MSC_VER
-        void* symbol =
+#if defined(_WIN32)
+        FARPROC rawSymbol =
             GetProcAddress(static_cast<HMODULE>(handle_), name.data());
+        void* symbol = reinterpret_cast<void*>(rawSymbol);
 #else
         void* symbol = dlsym(handle_, name.data());
 #endif

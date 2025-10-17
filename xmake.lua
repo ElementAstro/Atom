@@ -36,13 +36,39 @@ option("build_tests")
     set_description("Build tests")
 option_end()
 
--- Add required packages
+-- Module build options (matching CMake)
+local modules = {
+    "algorithm", "async", "components", "connection", "containers",
+    "error", "image", "io", "log", "memory", "meta", "search", "secret",
+    "serial", "sysinfo", "system", "type", "utils", "web"
+}
+
+-- Global build all option
+option("build_all")
+    set_default(true)
+    set_showmenu(true)
+    set_description("Build all Atom modules")
+option_end()
+
+for _, module in ipairs(modules) do
+    option("build_" .. module)
+        set_default(has_config("build_all"))
+        set_showmenu(true)
+        set_description("Build " .. module .. " module")
+    option_end()
+end
+
+-- Add required packages (matching CMake dependencies)
+add_requires("openssl", {system = false})
 add_requires("asio", {system = false})
 add_requires("loguru", {system = false})
 add_requires("zlib", {system = false})
 add_requires("libzippp", {system = false})
 add_requires("cpp-httplib", {system = false})
 add_requires("tinyxml2", {system = false})
+
+-- Add threading support (always required)
+add_requires("threads")
 
 -- Optional packages
 add_requires("cfitsio", {optional = true})

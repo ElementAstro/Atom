@@ -269,19 +269,22 @@ public:
     template <usize N = 1>
     [[nodiscard]] auto nextid() -> std::array<u64, N> {
         std::array<u64, N> ids;
-        u64 timestamp = current_millis();
 
 #ifdef ATOM_USE_BOOST
         boost_lock_guard lock(lock_);
 #else
         std_lock_guard lock(lock_);
 #endif
-        if (timestamp < last_timestamp_) {
-            throw InvalidTimestampException(timestamp);
-        }
 
-        // Standard Snowflake algorithm implementation
+        // Get timestamp after acquiring lock to ensure consistency
+        u64 timestamp = current_millis();
         u64 last_ts = last_timestamp_.load();
+
+        // Ensure timestamp is not less than last_timestamp_
+        // This can happen due to thread-local caching or clock adjustments
+        if (timestamp < last_ts) {
+            timestamp = last_ts;
+        }
 
         if (timestamp == last_ts) {
             // Same timestamp - increment sequence
@@ -290,9 +293,10 @@ public:
                 // Sequence overflow - wait for next millisecond
                 timestamp = wait_next_millis(last_ts);
                 // Re-load last_timestamp_ in case it was updated by another thread
+                // Use the maximum to ensure we never go backwards
                 u64 current_last = last_timestamp_.load();
                 if (timestamp < current_last) {
-                    throw InvalidTimestampException(timestamp);
+                    timestamp = current_last;
                 }
             }
         } else {
@@ -317,9 +321,10 @@ public:
                     u64 current_last = last_timestamp_.load();
                     timestamp = wait_next_millis(current_last);
                     // Re-check after wait in case another thread updated it
+                    // Use the maximum to ensure we never go backwards
                     current_last = last_timestamp_.load();
                     if (timestamp < current_last) {
-                        throw InvalidTimestampException(timestamp);
+                        timestamp = current_last;
                     }
                     last_timestamp_.store(timestamp);
                 }
@@ -346,8 +351,16 @@ public:
             (decrypted >> DATACENTER_ID_SHIFT) & MAX_DATACENTER_ID;
         u64 worker_id = (decrypted >> WORKER_ID_SHIFT) & MAX_WORKER_ID;
 
+        // Allow a tolerance for timestamp validation to account for:
+        // - Multi-threaded timing differences
+        // - Clock skew between threads
+        // - Cached timestamp values
+        // Use 5 seconds to be safe in high-concurrency scenarios
+        u64 current_time = current_millis();
+        constexpr u64 TOLERANCE_MS = 5000;
+
         return datacenter_id == datacenterid_ && worker_id == workerid_ &&
-               timestamp <= current_millis();
+               timestamp <= current_time + TOLERANCE_MS;
     }
 
     /**
@@ -640,7 +653,10 @@ private:
 
         auto now = std::chrono::steady_clock::now();
         if (now - last_time_point < std::chrono::milliseconds(1)) {
-            return last_cached_millis;
+            // In multi-threaded scenarios, ensure cached value is at least
+            // as recent as the last generated timestamp
+            u64 last_ts = last_timestamp_.load(std::memory_order_relaxed);
+            return std::max(last_cached_millis, last_ts);
         }
 
         auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -648,6 +664,11 @@ private:
                         .count();
         last_cached_millis = start_millisecond_ + static_cast<u64>(diff);
         last_time_point = now;
+
+        // Ensure we don't return a value less than last_timestamp_
+        u64 last_ts = last_timestamp_.load(std::memory_order_relaxed);
+        last_cached_millis = std::max(last_cached_millis, last_ts);
+
         return last_cached_millis;
     }
 

@@ -128,6 +128,44 @@ public:
                                                   bool recursive = false,
                                                   bool dironly = false);
 
+    /**
+     * @brief Filters a list of file names against a glob pattern.
+     * @param names The list of file names.
+     * @param pattern The glob pattern.
+     * @return The filtered list of file names.
+     */
+    [[nodiscard]] auto filter(std::span<const fs::path> names,
+                              std::string_view pattern) const
+        -> std::vector<fs::path>;
+
+    /**
+     * @brief Filters string-based file names against a glob pattern.
+     * @param names Collection of names convertible to paths.
+     * @param pattern Glob pattern to apply.
+     */
+    [[nodiscard]] auto filter(std::span<const std::string> names,
+                              std::string_view pattern) const
+        -> std::vector<fs::path> {
+        std::vector<fs::path> paths;
+        paths.reserve(names.size());
+        for (const auto& name : names) {
+            paths.emplace_back(name);
+        }
+        return filter(std::span<const fs::path>(paths.data(), paths.size()),
+                      pattern);
+    }
+
+    /**
+     * @brief Public wrapper for tilde expansion utilities.
+     */
+    [[nodiscard]] auto expandTilde(const fs::path& path) const -> fs::path {
+        return expandTildeImpl(path);
+    }
+
+    [[nodiscard]] auto expandTilde(std::string_view path) const -> fs::path {
+        return expandTildeImpl(fs::path(path));
+    }
+
 private:
     /**
      * @brief Translates a glob pattern to a regular expression.
@@ -208,22 +246,12 @@ private:
                                std::string_view pattern) const noexcept -> bool;
 
     /**
-     * @brief Filters a list of file names against a glob pattern.
-     * @param names The list of file names.
-     * @param pattern The glob pattern.
-     * @return The filtered list of file names.
-     */
-    [[nodiscard]] auto filter(std::span<const fs::path> names,
-                              std::string_view pattern) const
-        -> std::vector<fs::path>;
-
-    /**
      * @brief Expands a tilde in a file path to the home directory.
      * @param path The file path.
      * @return The expanded file path.
      * @throws atom::error::Exception if home directory expansion fails
      */
-    [[nodiscard]] auto expandTilde(const fs::path& path) const -> fs::path;
+    [[nodiscard]] auto expandTildeImpl(const fs::path& path) const -> fs::path;
 
     /**
      * @brief Checks if a pathname contains glob magic characters.

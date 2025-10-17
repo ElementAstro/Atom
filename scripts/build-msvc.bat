@@ -13,8 +13,18 @@ set DIST_DIR=%PROJECT_ROOT%\dist
 set LOG_DIR=%PROJECT_ROOT%\logs
 
 REM Create timestamp for logging
-for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value') do set "dt=%%a"
-set TIMESTAMP=%dt:~0,8%_%dt:~8,6%
+set "TIMESTAMP="
+for /f "tokens=2 delims==" %%a in ('wmic OS Get localdatetime /value 2^>nul') do set "TIMESTAMP=%%a"
+if defined TIMESTAMP (
+    set "TIMESTAMP=%TIMESTAMP:~0,8%_%TIMESTAMP:~8,6%"
+) else (
+    for /f "usebackq delims=" %%a in (`powershell -NoProfile -Command "Get-Date -Format yyyyMMdd_HHmmss"`) do set "TIMESTAMP=%%a"
+    if not defined TIMESTAMP (
+        set "TIMESTAMP=%date:~10,4%%date:~4,2%%date:~7,2%_%time:~0,2%%time:~3,2%%time:~6,2%"
+        set "TIMESTAMP=%TIMESTAMP: =0%"
+        set "TIMESTAMP=%TIMESTAMP::=%"
+    )
+)
 set LOG_FILE=%LOG_DIR%\build_msvc_%TIMESTAMP%.log
 
 REM Ensure log directory exists
@@ -133,35 +143,7 @@ goto parse_args
 :end_parse_args
 
 REM Show help if requested
-if "%SHOW_HELP%"=="y" (
-    echo Usage: build-msvc.bat [options]
-    echo.
-    echo Build Options:
-    echo   --debug        Build in debug mode
-    echo   --release      Build in release mode (default)
-    echo   --relwithdebinfo Build in release with debug info mode
-    echo   --python       Enable Python bindings
-    echo   --shared       Build shared libraries
-    echo   --examples     Build examples (default ON)
-    echo   --tests        Build tests
-    echo   --ssh          Enable SSH support
-    echo   --clean        Clean build directory before building
-    echo   --vcpkg        Use vcpkg for dependency management
-    echo.
-    echo MSVC Options:
-    echo   --vs2019       Force Visual Studio 2019 (v16)
-    echo   --vs2022       Force Visual Studio 2022 (v17)
-    echo   --x86          Build for x86 architecture
-    echo   --x64          Build for x64 architecture (default)
-    echo.
-    echo Other Options:
-    echo   --jobs N       Use N parallel jobs for building
-    echo   --prefix PATH  Set installation prefix
-    echo   --verbose      Enable verbose output
-    echo   --help         Show this help message
-    echo.
-    exit /b 0
-)
+if /i "%SHOW_HELP%"=="y" goto show_help
 
 echo Build configuration:
 echo   Build type: %BUILD_TYPE%
@@ -279,6 +261,35 @@ echo Build directory: %BUILD_DIR%
 echo Configuration: %BUILD_TYPE%
 echo Architecture: %ARCHITECTURE%
 echo ===============================================
+exit /b 0
+
+:show_help
+echo Usage: build-msvc.bat [options]
+echo.
+echo Build Options:
+echo   --debug        Build in debug mode
+echo   --release      Build in release mode (default)
+echo   --relwithdebinfo Build in release with debug info mode
+echo   --python       Enable Python bindings
+echo   --shared       Build shared libraries
+echo   --examples     Build examples (default ON)
+echo   --tests        Build tests
+echo   --ssh          Enable SSH support
+echo   --clean        Clean build directory before building
+echo   --vcpkg        Use vcpkg for dependency management
+echo.
+echo MSVC Options:
+echo   --vs2019       Force Visual Studio 2019 (v16)
+echo   --vs2022       Force Visual Studio 2022 (v17)
+echo   --x86          Build for x86 architecture
+echo   --x64          Build for x64 architecture (default)
+echo.
+echo Other Options:
+echo   --jobs N       Use N parallel jobs for building
+echo   --prefix PATH  Set installation prefix
+echo   --verbose      Enable verbose output
+echo   --help         Show this help message
+echo.
 exit /b 0
 
 REM =============================================================================

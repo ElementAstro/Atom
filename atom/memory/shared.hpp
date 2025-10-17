@@ -9,6 +9,7 @@
 #include <future>
 #include <mutex>
 #include <optional>
+#include <sstream>
 #include <span>
 #include <string>
 #include <thread>
@@ -74,7 +75,8 @@ public:
      */
     SharedMemoryException(const char* file, int line, const char* func,
                           const std::string& message, ErrorCode code)
-        : std::runtime_error(message), code_(code) {}
+        : std::runtime_error(formatMessage(file, line, func, message, code)),
+          code_(code), file_(file), line_(line), func_(func) {}
 
     /**
      * @brief Gets the specific error code.
@@ -112,17 +114,63 @@ public:
     }
 
 private:
+    static auto formatMessage(const char* file, int line, const char* func,
+                             const std::string& message, ErrorCode code) -> std::string {
+        std::ostringstream oss;
+        oss << "SharedMemoryException occurred:\n";
+        oss << "  File: " << file << "\n";
+        oss << "  Line: " << line << "\n";
+        oss << "  Function: " << func << "()\n";
+        oss << "  Error Code: ";
+        switch (code) {
+            case ErrorCode::CREATION_FAILED:
+                oss << "CREATION_FAILED";
+                break;
+            case ErrorCode::MAPPING_FAILED:
+                oss << "MAPPING_FAILED";
+                break;
+            case ErrorCode::ACCESS_DENIED:
+                oss << "ACCESS_DENIED";
+                break;
+            case ErrorCode::TIMEOUT:
+                oss << "TIMEOUT";
+                break;
+            case ErrorCode::SIZE_ERROR:
+                oss << "SIZE_ERROR";
+                break;
+            case ErrorCode::ALREADY_EXISTS:
+                oss << "ALREADY_EXISTS";
+                break;
+            case ErrorCode::NOT_FOUND:
+                oss << "NOT_FOUND";
+                break;
+            default:
+                oss << "UNKNOWN";
+                break;
+        }
+        oss << "\n  Message: " << message << "\n";
+        return oss.str();
+    }
+
     ErrorCode code_{ErrorCode::UNKNOWN};
+    const char* file_{nullptr};
+    int line_{0};
+    const char* func_{nullptr};
 };
 
 #define THROW_SHARED_MEMORY_ERROR_WITH_CODE(message, code) \
-    throw atom::memory::SharedMemoryException(message)
+    throw atom::memory::SharedMemoryException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
+                                              ATOM_FUNC_NAME, message, code)
 
 #define THROW_SHARED_MEMORY_ERROR(message) \
-    throw atom::memory::SharedMemoryException(message)
+    throw atom::memory::SharedMemoryException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
+                                              ATOM_FUNC_NAME, message, \
+                                              atom::memory::SharedMemoryException::ErrorCode::UNKNOWN)
 
 #define THROW_NESTED_SHARED_MEMORY_ERROR(message) \
-    throw atom::memory::SharedMemoryException(message)
+    std::throw_with_nested(atom::memory::SharedMemoryException(ATOM_FILE_NAME, ATOM_FILE_LINE, \
+                                                               ATOM_FUNC_NAME, message, \
+                                                               atom::memory::SharedMemoryException::ErrorCode::UNKNOWN))
 
 /**
  * @brief Stream operator for SharedMemoryException::ErrorCode
@@ -1133,7 +1181,7 @@ auto SharedMemory<T>::waitForChange(std::chrono::milliseconds timeout) -> bool {
 template <TriviallyCopyable T>
 void SharedMemory<T>::startWatchThread() {
     watchThread_ = std::jthread(
-        [this](std::stop_token stoken) { this->watchForChanges(); });
+        [this]([[maybe_unused]] std::stop_token stoken) { this->watchForChanges(); });
 }
 
 template <TriviallyCopyable T>

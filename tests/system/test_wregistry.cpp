@@ -8,23 +8,16 @@
 #include <thread>
 #include <vector>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "atom/system/wregistry.hpp"
 
 #ifdef _WIN32
 // Only run tests on Windows platforms
 using namespace atom::system;
 using namespace std::chrono_literals;
-
-// Define Windows registry constants if needed
-#ifndef HKEY_CLASSES_ROOT
-#define HKEY_CLASSES_ROOT ((HKEY)(ULONG_PTR)((LONG)0x80000000))
-#endif
-#ifndef HKEY_CURRENT_USER
-#define HKEY_CURRENT_USER ((HKEY)(ULONG_PTR)((LONG)0x80000001))
-#endif
-#ifndef HKEY_LOCAL_MACHINE
-#define HKEY_LOCAL_MACHINE ((HKEY)(ULONG_PTR)((LONG)0x80000002))
-#endif
 
 class WRegistryTest : public ::testing::Test {
 protected:
@@ -388,7 +381,8 @@ TEST_F(WRegistryTest, RecursivelyEnumerateRegistrySubKeys) {
 // doesn't crash
 TEST_F(WRegistryTest, FindRegistryKey) {
     // This should not throw or crash
-    EXPECT_NO_THROW(findRegistryKey(HKEY_CURRENT_USER, test_key, "SubKey1"));
+    std::vector<std::string> foundKeys;
+    EXPECT_NO_THROW(findRegistryKey(HKEY_CURRENT_USER, test_key, "SubKey1", foundKeys));
 }
 
 // Test findRegistryValue function
@@ -396,8 +390,9 @@ TEST_F(WRegistryTest, FindRegistryKey) {
 // doesn't crash
 TEST_F(WRegistryTest, FindRegistryValue) {
     // This should not throw or crash
+    std::vector<std::pair<std::string, std::string>> foundValues;
     EXPECT_NO_THROW(
-        findRegistryValue(HKEY_CURRENT_USER, test_key, "TestString"));
+        findRegistryValue(HKEY_CURRENT_USER, test_key, "TestString", foundValues));
 }
 
 // Edge case: test with empty subkey

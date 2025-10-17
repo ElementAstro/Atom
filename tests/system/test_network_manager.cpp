@@ -6,12 +6,12 @@
 #include <thread>
 #include <chrono>
 
-#include "atom/system/network_manager.hpp"
+#include "atom/system/network/network_manager.hpp"
 
 namespace atom::system::test {
 
-using NetworkInterface = atom::system::NetworkInterface;
-using InterfaceType = atom::system::InterfaceType;
+using atom::system::NetworkInterface;
+using atom::system::NetworkManager;
 
 // Mock class for testing network operations without actual network access
 class MockNetworkManager {

@@ -57,7 +57,7 @@ target("atom-system-object")
     if is_plat("linux") then
         add_syslinks("pthread")
     elseif is_plat("windows") then
-        add_syslinks("pdh", "wlanapi")
+        add_syslinks("pdh", "wlanapi", "userenv", "version", "advapi32", "hid", "setupapi")
     end
 
     -- Set C++ standard
@@ -77,7 +77,7 @@ target("atom-system")
     if is_plat("linux") then
         add_syslinks("pthread")
     elseif is_plat("windows") then
-        add_syslinks("pdh", "wlanapi")
+        add_syslinks("pdh", "wlanapi", "userenv", "version", "advapi32", "hid", "setupapi")
     end
 
     -- Set output directories

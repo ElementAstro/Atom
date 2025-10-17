@@ -104,9 +104,20 @@ endif()
 enable_testing()
 
 include(GoogleTest)
-gtest_discover_tests(atom_connection_tests
+# Temporarily disabled due to DLL dependency issues during test discovery
+# gtest_discover_tests(atom_connection_tests
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#     PROPERTIES
+#     LABELS "connection"
+#     TIMEOUT 300
+# )
+
+# Manual test registration as workaround
+add_test(NAME atom_connection_tests
+    COMMAND atom_connection_tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
+)
+set_tests_properties(atom_connection_tests PROPERTIES
     LABELS "connection"
     TIMEOUT 300
 )

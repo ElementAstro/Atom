@@ -41,6 +41,8 @@ set(ATOM_IMAGE_SOURCES
     processing/enhancement.cpp
     processing/computer_vision.cpp  # Uncommented
     processing/ml_processing.cpp
+    processing/gpu_acceleration.cpp
+    processing/realtime_stub.cpp
 )
 
 # Define header files
@@ -74,6 +76,8 @@ set(ATOM_IMAGE_HEADERS
     processing/enhancement.hpp
     processing/computer_vision.hpp  # Added
     processing/ml_processing.hpp
+    processing/gpu_acceleration.hpp
+    processing/realtime.hpp
 )
 
 # Add OCR sources if Tesseract is available

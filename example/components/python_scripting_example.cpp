@@ -21,15 +21,16 @@ and Python scripting features with the component system.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
+#include "atom/components/core/registry.hpp"
 
 // Conditional compilation for Python support
 #if ATOM_ENABLE_PYTHON
-#include "atom/components/python_engine.hpp"
-#include "atom/components/scripting_api.hpp"
+#include "atom/components/scripting/python_engine.hpp"
+#include "atom/components/scripting/scripting_api.hpp"
 #endif
 
-using namespace atom::components;
+// Note: Component and Registry are in global namespace, not atom::components
+// Only use atom::components for scripting-related types
 
 /**
  * @brief Component that can be controlled via Python scripts
@@ -221,7 +222,7 @@ void demonstratePythonComponentBinding() {
 
     using namespace atom::components::scripting;
 
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
 
     std::cout << "\n4. Creating Python scriptable component..." << std::endl;
     auto component =

@@ -6,10 +6,11 @@
 #include <string>
 #include <thread>
 
-#include "atom/system/gpio.hpp"
+#include "atom/system/hardware/gpio.hpp"
 
 namespace atom::system::test {
 
+using atom::system::GPIO;
 using Direction = GPIO::Direction;
 using Edge = GPIO::Edge;
 using PullMode = GPIO::PullMode;
@@ -221,25 +222,25 @@ TEST_F(GPIOTest, OnValueChange) {
 
 // Test pull mode
 TEST_F(GPIOTest, SetPullMode) {
-    EXPECT_CALL(*mockGPIO, setPullMode(PullMode::PULL_UP))
+    EXPECT_CALL(*mockGPIO, setPullMode(PullMode::UP))
         .Times(1);
 
-    mockGPIO->setPullMode(PullMode::PULL_UP);
+    mockGPIO->setPullMode(PullMode::UP);
 }
 
 TEST_F(GPIOTest, GetPullMode) {
     EXPECT_CALL(*mockGPIO, getPullMode())
-        .WillOnce(::testing::Return(PullMode::PULL_DOWN));
+        .WillOnce(::testing::Return(PullMode::DOWN));
 
     PullMode mode = mockGPIO->getPullMode();
-    EXPECT_EQ(mode, PullMode::PULL_DOWN);
+    EXPECT_EQ(mode, PullMode::DOWN);
 }
 
 TEST_F(GPIOTest, SetPullModeAllTypes) {
     std::vector<PullMode> modes = {
         PullMode::NONE,
-        PullMode::PULL_UP,
-        PullMode::PULL_DOWN
+        PullMode::UP,
+        PullMode::DOWN
     };
 
     for (auto mode : modes) {
@@ -426,14 +427,14 @@ TEST_F(GPIOIntegrationTest, PullModeWithInputDirection) {
         .WillRepeatedly(::testing::Return(Direction::INPUT));
 
     // Set pull mode for input pin
-    EXPECT_CALL(*mockGPIO, setPullMode(PullMode::PULL_UP))
+    EXPECT_CALL(*mockGPIO, setPullMode(PullMode::UP))
         .Times(1);
-    mockGPIO->setPullMode(PullMode::PULL_UP);
+    mockGPIO->setPullMode(PullMode::UP);
 
     // Verify pull mode is set
     EXPECT_CALL(*mockGPIO, getPullMode())
-        .WillOnce(::testing::Return(PullMode::PULL_UP));
-    EXPECT_EQ(mockGPIO->getPullMode(), PullMode::PULL_UP);
+        .WillOnce(::testing::Return(PullMode::UP));
+    EXPECT_EQ(mockGPIO->getPullMode(), PullMode::UP);
 }
 
 // Performance tests

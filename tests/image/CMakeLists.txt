@@ -81,6 +81,10 @@ set(TEST_HEADERS
     test_performance.hpp
     test_ocr.hpp
     test_ser.hpp
+    test_computer_vision.hpp
+    test_gpu_acceleration.hpp
+    test_realtime.hpp
+    test_advanced_formats.hpp
 )
 
 # =============================================================================
@@ -161,9 +165,20 @@ enable_testing()
 
 # Include GoogleTest for standardized test discovery
 include(GoogleTest)
-gtest_discover_tests(atom_image_tests
+# Temporarily disabled due to DLL dependency issues during test discovery
+# gtest_discover_tests(atom_image_tests
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#     PROPERTIES
+#     LABELS "image"
+#     TIMEOUT 300
+# )
+
+# Manual test registration as workaround
+add_test(NAME atom_image_tests
+    COMMAND atom_image_tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
+)
+set_tests_properties(atom_image_tests PROPERTIES
     LABELS "image"
     TIMEOUT 300
 )
@@ -219,6 +234,18 @@ add_test(NAME OCRTests
 
 add_test(NAME SERTests
          COMMAND atom-image-tests --gtest_filter="SERTest.*")
+
+add_test(NAME ComputerVisionTests
+         COMMAND atom-image-tests --gtest_filter="ComputerVisionTest.*")
+
+add_test(NAME GPUAccelerationTests
+         COMMAND atom-image-tests --gtest_filter="GPUAccelerationTest.*")
+
+add_test(NAME RealtimeProcessingTests
+         COMMAND atom-image-tests --gtest_filter="RealtimeProcessingTest.*")
+
+add_test(NAME AdvancedFormatsTests
+         COMMAND atom-image-tests --gtest_filter="AdvancedFormatsTest.*")
 
 # Add comprehensive test that runs all tests
 add_test(NAME AllImageTests
@@ -303,6 +330,26 @@ set_tests_properties(OCRTests PROPERTIES
 set_tests_properties(SERTests PROPERTIES
     LABELS "ser;video;astronomy"
     TIMEOUT 90
+)
+
+set_tests_properties(ComputerVisionTests PROPERTIES
+    LABELS "processing;cv;opencv;ai"
+    TIMEOUT 180
+)
+
+set_tests_properties(GPUAccelerationTests PROPERTIES
+    LABELS "processing;gpu;cuda;opencl"
+    TIMEOUT 120
+)
+
+set_tests_properties(RealtimeProcessingTests PROPERTIES
+    LABELS "processing;realtime;video"
+    TIMEOUT 120
+)
+
+set_tests_properties(AdvancedFormatsTests PROPERTIES
+    LABELS "formats;raw;dicom;hdr;advanced"
+    TIMEOUT 180
 )
 
 set_tests_properties(AllImageTests PROPERTIES
@@ -407,6 +454,30 @@ add_custom_target(test-ser
     COMMAND atom-image-tests --gtest_filter="SERTest.*"
     DEPENDS atom-image-tests
     COMMENT "Running SER format tests"
+)
+
+add_custom_target(test-cv
+    COMMAND atom-image-tests --gtest_filter="ComputerVisionTest.*"
+    DEPENDS atom-image-tests
+    COMMENT "Running computer vision tests"
+)
+
+add_custom_target(test-gpu
+    COMMAND atom-image-tests --gtest_filter="GPUAccelerationTest.*"
+    DEPENDS atom-image-tests
+    COMMENT "Running GPU acceleration tests"
+)
+
+add_custom_target(test-realtime
+    COMMAND atom-image-tests --gtest_filter="RealtimeProcessingTest.*"
+    DEPENDS atom-image-tests
+    COMMENT "Running real-time processing tests"
+)
+
+add_custom_target(test-advanced-formats
+    COMMAND atom-image-tests --gtest_filter="AdvancedFormatsTest.*"
+    DEPENDS atom-image-tests
+    COMMENT "Running advanced formats tests"
 )
 
 # Benchmark target

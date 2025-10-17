@@ -24,10 +24,11 @@ unloaded, and managed at runtime.
 #include <functional>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
-#include "atom/components/lifecycle.hpp"
+#include "atom/components/core/registry.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
 
-using namespace atom::components;
+// Note: Component and Registry are in global namespace, not atom::components
+namespace ac = atom::components;
 
 /**
  * @brief Plugin interface for loadable components

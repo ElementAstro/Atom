@@ -5,28 +5,24 @@
 #include <thread>
 #include <vector>
 
-#include "atom/system/priority.hpp"
+#include "atom/system/core/priority.hpp"
 
 namespace atom::system::test {
 
-using PriorityLevel = PriorityManager::PriorityLevel;
-using SchedulingPolicy = PriorityManager::SchedulingPolicy;
+using PriorityLevel = atom::system::PriorityManager::PriorityLevel;
+using SchedulingPolicy = atom::system::PriorityManager::SchedulingPolicy;
 
 // Mock class for testing priority operations without affecting the system
 class MockPriorityManager {
 public:
     MOCK_METHOD(void, setProcessPriority, (PriorityLevel level, int pid), (const));
-    MOCK_METHOD(void, setThreadPriority, (PriorityLevel level, std::thread::id tid), (const));
+    MOCK_METHOD(void, setThreadPriority, (PriorityLevel level, std::thread::native_handle_type thread), (const));
     MOCK_METHOD(PriorityLevel, getProcessPriority, (int pid), (const));
-    MOCK_METHOD(PriorityLevel, getThreadPriority, (std::thread::id tid), (const));
-    MOCK_METHOD(void, setSchedulingPolicy, (SchedulingPolicy policy, int pid), (const));
-    MOCK_METHOD(SchedulingPolicy, getSchedulingPolicy, (int pid), (const));
+    MOCK_METHOD(PriorityLevel, getThreadPriority, (std::thread::native_handle_type thread), (const));
+    MOCK_METHOD(void, setThreadSchedulingPolicy, (SchedulingPolicy policy, std::thread::native_handle_type thread), (const));
     MOCK_METHOD(void, setProcessAffinity, (const std::vector<int>& cpus, int pid), (const));
     MOCK_METHOD(std::vector<int>, getProcessAffinity, (int pid), (const));
-    MOCK_METHOD(void, setThreadAffinity, (const std::vector<int>& cpus, std::thread::id tid), (const));
-    MOCK_METHOD(std::vector<int>, getThreadAffinity, (std::thread::id tid), (const));
-    MOCK_METHOD(void, startPriorityMonitor, (int pid, std::function<void(PriorityLevel)> callback, std::chrono::seconds interval), (const));
-    MOCK_METHOD(void, stopPriorityMonitor, (int pid), (const));
+    MOCK_METHOD(void, startPriorityMonitor, (int pid, const std::function<void(PriorityLevel)>& callback, std::chrono::milliseconds interval), (const));
 };
 
 class PriorityTest : public ::testing::Test {
@@ -39,11 +35,7 @@ protected:
             .WillByDefault(::testing::Return(PriorityLevel::NORMAL));
         ON_CALL(*mockPriorityManager, getThreadPriority(::testing::_))
             .WillByDefault(::testing::Return(PriorityLevel::NORMAL));
-        ON_CALL(*mockPriorityManager, getSchedulingPolicy(::testing::_))
-            .WillByDefault(::testing::Return(SchedulingPolicy::NORMAL));
         ON_CALL(*mockPriorityManager, getProcessAffinity(::testing::_))
-            .WillByDefault(::testing::Return(std::vector<int>{0, 1}));
-        ON_CALL(*mockPriorityManager, getThreadAffinity(::testing::_))
             .WillByDefault(::testing::Return(std::vector<int>{0, 1}));
     }
 
@@ -56,10 +48,10 @@ protected:
 
 // Test process priority setting
 TEST_F(PriorityTest, SetProcessPrioritySuccess) {
-    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGH, 0))
+    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGHEST, 0))
         .Times(1);
 
-    mockPriorityManager->setProcessPriority(PriorityLevel::HIGH, 0);
+    mockPriorityManager->setProcessPriority(PriorityLevel::HIGHEST, 0);
 }
 
 TEST_F(PriorityTest, SetProcessPriorityAllLevels) {
@@ -82,12 +74,12 @@ TEST_F(PriorityTest, SetProcessPriorityAllLevels) {
 
 // Test thread priority setting
 TEST_F(PriorityTest, SetThreadPrioritySuccess) {
-    std::thread::id tid = std::this_thread::get_id();
+    std::thread::native_handle_type thread = 0; // 0 means current thread
 
-    EXPECT_CALL(*mockPriorityManager, setThreadPriority(PriorityLevel::HIGH, tid))
+    EXPECT_CALL(*mockPriorityManager, setThreadPriority(PriorityLevel::HIGHEST, thread))
         .Times(1);
 
-    mockPriorityManager->setThreadPriority(PriorityLevel::HIGH, tid);
+    mockPriorityManager->setThreadPriority(PriorityLevel::HIGHEST, thread);
 }
 
 // Test priority getting
@@ -100,16 +92,20 @@ TEST_F(PriorityTest, GetProcessPriority) {
 }
 
 TEST_F(PriorityTest, GetThreadPriority) {
-    std::thread::id tid = std::this_thread::get_id();
+    std::thread::native_handle_type thread = 0; // 0 means current thread
 
-    EXPECT_CALL(*mockPriorityManager, getThreadPriority(tid))
-        .WillOnce(::testing::Return(PriorityLevel::HIGH));
+    EXPECT_CALL(*mockPriorityManager, getThreadPriority(thread))
+        .WillOnce(::testing::Return(PriorityLevel::HIGHEST));
 
-    PriorityLevel level = mockPriorityManager->getThreadPriority(tid);
-    EXPECT_EQ(level, PriorityLevel::HIGH);
+    PriorityLevel level = mockPriorityManager->getThreadPriority(thread);
+    EXPECT_EQ(level, PriorityLevel::HIGHEST);
 }
 
 // Test scheduling policy
+// NOTE: These tests are commented out because the actual PriorityManager API
+// only has setThreadSchedulingPolicy, not setSchedulingPolicy for processes,
+// and there's no getSchedulingPolicy method
+/*
 TEST_F(PriorityTest, SetSchedulingPolicy) {
     EXPECT_CALL(*mockPriorityManager, setSchedulingPolicy(SchedulingPolicy::FIFO, 0))
         .Times(1);
@@ -138,6 +134,7 @@ TEST_F(PriorityTest, SetSchedulingPolicyAllTypes) {
         mockPriorityManager->setSchedulingPolicy(policy, 0);
     }
 }
+*/
 
 // Test CPU affinity
 TEST_F(PriorityTest, SetProcessAffinity) {
@@ -159,6 +156,9 @@ TEST_F(PriorityTest, GetProcessAffinity) {
     EXPECT_EQ(cpus, expectedCpus);
 }
 
+// NOTE: Thread affinity tests commented out because the actual PriorityManager API
+// doesn't have setThreadAffinity or getThreadAffinity methods
+/*
 TEST_F(PriorityTest, SetThreadAffinity) {
     std::thread::id tid = std::this_thread::get_id();
     std::vector<int> cpus = {1, 3};
@@ -179,6 +179,7 @@ TEST_F(PriorityTest, GetThreadAffinity) {
     std::vector<int> cpus = mockPriorityManager->getThreadAffinity(tid);
     EXPECT_EQ(cpus, expectedCpus);
 }
+*/
 
 // Test priority monitoring
 TEST_F(PriorityTest, StartPriorityMonitor) {
@@ -186,18 +187,22 @@ TEST_F(PriorityTest, StartPriorityMonitor) {
         // Mock callback function
     };
 
-    EXPECT_CALL(*mockPriorityManager, startPriorityMonitor(1234, ::testing::_, std::chrono::seconds(1)))
+    EXPECT_CALL(*mockPriorityManager, startPriorityMonitor(1234, ::testing::_, std::chrono::milliseconds(1000)))
         .Times(1);
 
-    mockPriorityManager->startPriorityMonitor(1234, callback, std::chrono::seconds(1));
+    mockPriorityManager->startPriorityMonitor(1234, callback, std::chrono::milliseconds(1000));
 }
 
+// NOTE: StopPriorityMonitor test commented out because the actual PriorityManager API
+// doesn't have a stopPriorityMonitor method
+/*
 TEST_F(PriorityTest, StopPriorityMonitor) {
     EXPECT_CALL(*mockPriorityManager, stopPriorityMonitor(1234))
         .Times(1);
 
     mockPriorityManager->stopPriorityMonitor(1234);
 }
+*/
 
 // Test edge cases
 class PriorityEdgeCaseTest : public ::testing::Test {
@@ -258,6 +263,8 @@ TEST_F(PriorityTest, WindowsSpecificPriorities) {
 }
 #elif defined(__linux__)
 // Linux-specific priority tests
+// NOTE: Commented out because setSchedulingPolicy doesn't exist for processes
+/*
 TEST_F(PriorityTest, LinuxSpecificPriorities) {
     // Test Linux nice values and real-time priorities
     EXPECT_CALL(*mockPriorityManager, setSchedulingPolicy(SchedulingPolicy::FIFO, 0))
@@ -265,14 +272,15 @@ TEST_F(PriorityTest, LinuxSpecificPriorities) {
 
     mockPriorityManager->setSchedulingPolicy(SchedulingPolicy::FIFO, 0);
 }
+*/
 #elif defined(__APPLE__)
 // macOS-specific priority tests
 TEST_F(PriorityTest, MacOSSpecificPriorities) {
     // Test macOS-specific priority handling
-    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGH, 0))
+    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGHEST, 0))
         .Times(1);
 
-    mockPriorityManager->setProcessPriority(PriorityLevel::HIGH, 0);
+    mockPriorityManager->setProcessPriority(PriorityLevel::HIGHEST, 0);
 }
 #endif
 
@@ -292,13 +300,13 @@ protected:
 
 // Test priority operation performance
 TEST_F(PriorityPerformanceTest, PriorityOperationSpeed) {
-    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGH, 0))
+    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGHEST, 0))
         .Times(100);
 
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < 100; ++i) {
-        mockPriorityManager->setProcessPriority(PriorityLevel::HIGH, 0);
+        mockPriorityManager->setProcessPriority(PriorityLevel::HIGHEST, 0);
     }
 
     auto end = std::chrono::high_resolution_clock::now();
@@ -350,22 +358,24 @@ TEST_F(PriorityIntegrationTest, PriorityAffinityInteraction) {
     std::vector<int> cpus = {0, 2};
 
     // Set priority first, then affinity
-    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGH, 0))
+    EXPECT_CALL(*mockPriorityManager, setProcessPriority(PriorityLevel::HIGHEST, 0))
         .Times(1);
     EXPECT_CALL(*mockPriorityManager, setProcessAffinity(cpus, 0))
         .Times(1);
     EXPECT_CALL(*mockPriorityManager, getProcessPriority(0))
-        .WillOnce(::testing::Return(PriorityLevel::HIGH));
+        .WillOnce(::testing::Return(PriorityLevel::HIGHEST));
 
-    mockPriorityManager->setProcessPriority(PriorityLevel::HIGH, 0);
+    mockPriorityManager->setProcessPriority(PriorityLevel::HIGHEST, 0);
     mockPriorityManager->setProcessAffinity(cpus, 0);
 
     // Verify priority is maintained after affinity change
     PriorityLevel level = mockPriorityManager->getProcessPriority(0);
-    EXPECT_EQ(level, PriorityLevel::HIGH);
+    EXPECT_EQ(level, PriorityLevel::HIGHEST);
 }
 
 // Test scheduling policy and priority interaction
+// NOTE: Commented out because setSchedulingPolicy and getSchedulingPolicy don't exist for processes
+/*
 TEST_F(PriorityIntegrationTest, SchedulingPolicyPriorityInteraction) {
     EXPECT_CALL(*mockPriorityManager, setSchedulingPolicy(SchedulingPolicy::FIFO, 0))
         .Times(1);
@@ -381,5 +391,6 @@ TEST_F(PriorityIntegrationTest, SchedulingPolicyPriorityInteraction) {
     SchedulingPolicy policy = mockPriorityManager->getSchedulingPolicy(0);
     EXPECT_EQ(policy, SchedulingPolicy::FIFO);
 }
+*/
 
 }  // namespace atom::system::test

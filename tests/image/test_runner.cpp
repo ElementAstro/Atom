@@ -12,7 +12,11 @@
 #include "test_ocr.hpp"
 #ifdef ATOM_IMAGE_HAS_OPENCV
 #include "test_ser.hpp"
+#include "test_computer_vision.hpp"
+#include "test_realtime.hpp"
 #endif
+#include "test_gpu_acceleration.hpp"
+#include "test_advanced_formats.hpp"
 
 // Custom test listener for better output formatting
 class ImageTestListener : public ::testing::EmptyTestEventListener {
@@ -119,7 +123,7 @@ namespace {
         std::vector<std::string> dependencies;
     };
 
-    std::vector<TestSuiteInfo> getTestSuites() {
+    [[maybe_unused]] std::vector<TestSuiteInfo> getTestSuites() {
         return {
             {
                 "BlobTest",
@@ -150,6 +154,30 @@ namespace {
                 "Tests for SER (Simple Extensible Recorder) format support including "
                 "reading, writing, frame processing, and quality assessment",
                 {"atom-error", "OpenCV (optional)"}
+            },
+            {
+                "ComputerVisionTest",
+                "Tests for computer vision operations including feature detection, "
+                "object detection, face detection, segmentation, tracking, and image analysis",
+                {"atom-error", "OpenCV (optional)"}
+            },
+            {
+                "GPUAccelerationTest",
+                "Tests for GPU-accelerated image processing including buffer management, "
+                "kernel execution, and GPU operations across multiple backends",
+                {"atom-error", "CUDA/OpenCL/Vulkan (optional)"}
+            },
+            {
+                "RealtimeProcessingTest",
+                "Tests for real-time video processing including capture, frame processing, "
+                "callbacks, threading, and performance monitoring",
+                {"atom-error", "OpenCV (optional)"}
+            },
+            {
+                "AdvancedFormatsTest",
+                "Tests for advanced image format support including RAW, DICOM, HDR, "
+                "animations, vector formats, and specialized scientific formats",
+                {"atom-error", "LibRaw/DCMTK/OpenEXR (optional)"}
             }
         };
     }

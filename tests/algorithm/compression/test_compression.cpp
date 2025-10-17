@@ -15,12 +15,11 @@ Tests Huffman coding, matrix compression, and other compression algorithms.
 
 #include <gtest/gtest.h>
 #include <memory>
+#include <random>
 #include <string>
 #include <vector>
-#include <random>
 
 #include "atom/algorithm/huffman.hpp"
-#include "atom/algorithm/matrix_compress.hpp"
 
 namespace atom::algorithm::compression::test {
 
@@ -33,7 +32,8 @@ protected:
     void SetUp() override {
         // Setup test data
         test_string_ = "This is a test string for Huffman compression testing";
-        test_data_ = std::vector<uint8_t>(test_string_.begin(), test_string_.end());
+        test_data_ =
+            std::vector<uint8_t>(test_string_.begin(), test_string_.end());
     }
 
     void TearDown() override {
@@ -112,9 +112,10 @@ TEST_F(HuffmanTest, SingleCharacterData) {
     atom::algorithm::generateHuffmanCodes(tree.get(), "", huffmanCodes);
 
     ASSERT_EQ(huffmanCodes.size(), 1);
-    EXPECT_EQ(huffmanCodes['A'], "0"); // Single character gets code "0"
+    EXPECT_EQ(huffmanCodes['A'], "0");  // Single character gets code "0"
 
-    auto compressed = atom::algorithm::compressData(single_char_data, huffmanCodes);
+    auto compressed =
+        atom::algorithm::compressData(single_char_data, huffmanCodes);
     auto decompressed = atom::algorithm::decompressData(compressed, tree.get());
 
     EXPECT_EQ(single_char_data, decompressed);
@@ -180,7 +181,8 @@ TEST_F(HuffmanTest, TreeSerialization) {
 
     // Deserialize the tree
     size_t index = 0;
-    auto deserialized_tree = atom::algorithm::deserializeTree(serialized, index);
+    auto deserialized_tree =
+        atom::algorithm::deserializeTree(serialized, index);
     ASSERT_NE(deserialized_tree, nullptr);
 
     // Verify both trees produce same codes
@@ -197,15 +199,19 @@ TEST_F(HuffmanTest, NullTreeHandling) {
     EXPECT_THROW(atom::algorithm::generateHuffmanCodes(nullptr, "", codes),
                  atom::algorithm::HuffmanException);
 
-    EXPECT_THROW({
-        auto result = atom::algorithm::decompressData("0101", nullptr);
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::decompressData("0101", nullptr);
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 
-    EXPECT_THROW({
-        auto result = atom::algorithm::serializeTree(nullptr);
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::serializeTree(nullptr);
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 }
 
 TEST_F(HuffmanTest, InvalidCompressedData) {
@@ -217,16 +223,20 @@ TEST_F(HuffmanTest, InvalidCompressedData) {
     auto tree = atom::algorithm::createHuffmanTree(frequencies);
 
     // Invalid bit characters
-    EXPECT_THROW({
-        auto result = atom::algorithm::decompressData("01X01", tree.get());
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::decompressData("01X01", tree.get());
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 
     // Incomplete compressed data (doesn't end at leaf)
-    EXPECT_THROW({
-        auto result = atom::algorithm::decompressData("0", tree.get());
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::decompressData("0", tree.get());
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 }
 
 TEST_F(HuffmanTest, MissingHuffmanCode) {
@@ -237,15 +247,18 @@ TEST_F(HuffmanTest, MissingHuffmanCode) {
     incomplete_codes['B'] = "10";
     // Missing code for 'C'
 
-    EXPECT_THROW({
-        auto result = atom::algorithm::compressData(data, incomplete_codes);
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::compressData(data, incomplete_codes);
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 }
 
 TEST_F(HuffmanTest, BinaryDataCompression) {
     // Test with binary data including null bytes
-    std::vector<unsigned char> binary_data = {0x00, 0xFF, 0x7F, 0x80, 0x00, 0xFF};
+    std::vector<unsigned char> binary_data = {0x00, 0xFF, 0x7F,
+                                              0x80, 0x00, 0xFF};
 
     std::unordered_map<unsigned char, int> frequencies;
     for (unsigned char byte : binary_data) {
@@ -350,149 +363,16 @@ TEST_F(HuffmanTest, InputValidation) {
     // Empty data should throw
     std::vector<unsigned char> empty_data;
     EXPECT_THROW(huffman_optimized::validateInput(
-        std::span<const unsigned char>(empty_data), codes),
-        atom::algorithm::HuffmanException);
+                     std::span<const unsigned char>(empty_data), codes),
+                 atom::algorithm::HuffmanException);
 
     // Empty codes should throw
     std::unordered_map<unsigned char, std::string> empty_codes;
     EXPECT_THROW(huffman_optimized::validateInput(
-        std::span<const unsigned char>(data), empty_codes),
-        atom::algorithm::HuffmanException);
+                     std::span<const unsigned char>(data), empty_codes),
+                 atom::algorithm::HuffmanException);
 }
 
-// ============================================================================
-// Matrix Compression Tests
-// ============================================================================
-
-class MatrixCompressionTest : public ::testing::Test {
-protected:
-    void SetUp() override {
-        // Setup test matrices
-        test_matrix_size_ = 100;
-        generateTestMatrix();
-    }
-
-    void TearDown() override {
-        // Cleanup
-    }
-
-    void generateTestMatrix() {
-        // Generate test matrix with known patterns
-        test_matrix_.resize(test_matrix_size_);
-        for (auto& row : test_matrix_) {
-            row.resize(test_matrix_size_);
-        }
-
-        // Fill with test data
-        std::random_device rd;
-        std::mt19937 gen(rd());
-        std::uniform_real_distribution<> dis(0.0, 1.0);
-
-        for (size_t i = 0; i < test_matrix_size_; ++i) {
-            for (size_t j = 0; j < test_matrix_size_; ++j) {
-                test_matrix_[i][j] = dis(gen);
-            }
-        }
-    }
-
-    size_t test_matrix_size_;
-    std::vector<std::vector<double>> test_matrix_;
-};
-
-TEST_F(MatrixCompressionTest, BasicMatrixCompression) {
-    // Test basic matrix compression - already covered in test_matrix_compress.cpp
-    // This is a simplified version for integration testing
-    MatrixCompressor::Matrix matrix = {
-        {'A', 'A', 'B', 'B'},
-        {'C', 'C', 'C', 'D'}
-    };
-
-    auto compressed = MatrixCompressor::compress(matrix);
-    EXPECT_FALSE(compressed.empty());
-
-    // Verify compression reduces size
-    EXPECT_LT(compressed.size(), matrix.size() * matrix[0].size());
-}
-
-TEST_F(MatrixCompressionTest, SparseMatrixCompression) {
-    // Test compression of sparse matrices (mostly zeros/same value)
-    MatrixCompressor::Matrix sparse_matrix(50, std::vector<char>(50, 'A'));
-
-    // Add a few different values
-    sparse_matrix[10][10] = 'B';
-    sparse_matrix[20][20] = 'C';
-    sparse_matrix[30][30] = 'D';
-
-    auto compressed = MatrixCompressor::compress(sparse_matrix);
-
-    // Sparse matrix should compress very well
-    EXPECT_LT(compressed.size(), 10);
-
-    auto decompressed = MatrixCompressor::decompress(compressed, 50, 50);
-    EXPECT_EQ(sparse_matrix, decompressed);
-}
-
-TEST_F(MatrixCompressionTest, DenseMatrixCompression) {
-    // Test compression of dense matrices (many different values)
-    MatrixCompressor::Matrix dense_matrix(10, std::vector<char>(10));
-
-    // Fill with alternating pattern
-    for (size_t i = 0; i < 10; ++i) {
-        for (size_t j = 0; j < 10; ++j) {
-            dense_matrix[i][j] = static_cast<char>('A' + ((i + j) % 26));
-        }
-    }
-
-    auto compressed = MatrixCompressor::compress(dense_matrix);
-    auto decompressed = MatrixCompressor::decompress(compressed, 10, 10);
-
-    EXPECT_EQ(dense_matrix, decompressed);
-}
-
-TEST_F(MatrixCompressionTest, CompressionAccuracy) {
-    // Test accuracy of compressed matrix representation
-    MatrixCompressor::Matrix char_matrix(test_matrix_size_,
-                                         std::vector<char>(test_matrix_size_));
-
-    for (size_t i = 0; i < char_matrix.size(); ++i) {
-        for (size_t j = 0; j < char_matrix[i].size(); ++j) {
-            char_matrix[i][j] = static_cast<char>('A' + (i + j) % 5);
-        }
-    }
-
-    auto compressed = MatrixCompressor::compress(char_matrix);
-    auto decompressed = MatrixCompressor::decompress(
-        compressed, test_matrix_size_, test_matrix_size_);
-
-    // Verify exact match
-    ASSERT_EQ(char_matrix.size(), decompressed.size());
-    for (size_t i = 0; i < char_matrix.size(); ++i) {
-        ASSERT_EQ(char_matrix[i].size(), decompressed[i].size());
-        for (size_t j = 0; j < char_matrix[i].size(); ++j) {
-            EXPECT_EQ(char_matrix[i][j], decompressed[i][j])
-                << "Mismatch at (" << i << ", " << j << ")";
-        }
-    }
-}
-
-TEST_F(MatrixCompressionTest, LargeMatrixHandling) {
-    // Test handling of large matrices
-    int large_size = 500;
-    MatrixCompressor::Matrix large_matrix(large_size, std::vector<char>(large_size));
-
-    // Fill with pattern
-    for (int i = 0; i < large_size; ++i) {
-        for (int j = 0; j < large_size; ++j) {
-            large_matrix[i][j] = static_cast<char>('A' + ((i / 10 + j / 10) % 4));
-        }
-    }
-
-    auto compressed = MatrixCompressor::compress(large_matrix);
-    EXPECT_FALSE(compressed.empty());
-
-    auto decompressed = MatrixCompressor::decompress(compressed, large_size, large_size);
-    EXPECT_EQ(large_matrix, decompressed);
-}
 
 // ============================================================================
 // General Compression Tests
@@ -510,37 +390,49 @@ protected:
 };
 
 TEST_F(GeneralCompressionTest, CompressionAlgorithmComparison) {
-    // Compare Huffman vs Matrix compression on appropriate data
-    std::string text_data = "This is a test string with repeated characters aaaaabbbbcccc";
+    // Compare Huffman compression performance on different data types
+    std::string text_data =
+        "This is a test string with repeated characters aaaaabbbbcccc";
     std::vector<unsigned char> text_bytes(text_data.begin(), text_data.end());
 
-    // Huffman compression
+    // Huffman compression on text data
     std::unordered_map<unsigned char, int> frequencies;
     for (unsigned char byte : text_bytes) {
         frequencies[byte]++;
     }
     auto huffman_tree = atom::algorithm::createHuffmanTree(frequencies);
     std::unordered_map<unsigned char, std::string> huffman_codes;
-    atom::algorithm::generateHuffmanCodes(huffman_tree.get(), "", huffman_codes);
-    auto huffman_compressed = atom::algorithm::compressData(text_bytes, huffman_codes);
+    atom::algorithm::generateHuffmanCodes(huffman_tree.get(), "",
+                                          huffman_codes);
+    auto huffman_compressed =
+        atom::algorithm::compressData(text_bytes, huffman_codes);
 
-    // Matrix compression (convert to matrix format)
-    int rows = 8;
-    int cols = static_cast<int>(text_bytes.size()) / rows;
-    MatrixCompressor::Matrix matrix(rows, std::vector<char>(cols));
-    for (int i = 0; i < rows; ++i) {
-        for (int j = 0; j < cols; ++j) {
-            int idx = i * cols + j;
-            if (idx < static_cast<int>(text_bytes.size())) {
-                matrix[i][j] = static_cast<char>(text_bytes[idx]);
-            }
-        }
+    // Test on binary data
+    std::vector<unsigned char> binary_data;
+    for (int i = 0; i < 1000; ++i) {
+        binary_data.push_back(static_cast<unsigned char>(i % 256));
     }
-    auto matrix_compressed = MatrixCompressor::compress(matrix);
+
+    std::unordered_map<unsigned char, int> binary_frequencies;
+    for (unsigned char byte : binary_data) {
+        binary_frequencies[byte]++;
+    }
+    auto binary_tree = atom::algorithm::createHuffmanTree(binary_frequencies);
+    std::unordered_map<unsigned char, std::string> binary_codes;
+    atom::algorithm::generateHuffmanCodes(binary_tree.get(), "", binary_codes);
+    auto binary_compressed = atom::algorithm::compressData(binary_data, binary_codes);
 
     // Both should successfully compress
     EXPECT_FALSE(huffman_compressed.empty());
-    EXPECT_FALSE(matrix_compressed.empty());
+    EXPECT_FALSE(binary_compressed.empty());
+
+    // Text data should compress better than random binary data
+    double text_compression_ratio = static_cast<double>(huffman_compressed.size()) /
+                                   static_cast<double>(text_bytes.size() * 8);
+    double binary_compression_ratio = static_cast<double>(binary_compressed.size()) /
+                                      static_cast<double>(binary_data.size() * 8);
+
+    EXPECT_LT(text_compression_ratio, binary_compression_ratio);
 }
 
 TEST_F(GeneralCompressionTest, PerformanceBenchmarks) {
@@ -563,7 +455,8 @@ TEST_F(GeneralCompressionTest, PerformanceBenchmarks) {
     auto compressed = atom::algorithm::compressData(large_data, codes);
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete in reasonable time (less than 1 second for 10k bytes)
     EXPECT_LT(duration.count(), 1000);
@@ -590,7 +483,8 @@ TEST_F(GeneralCompressionTest, MemoryUsage) {
         std::unordered_map<unsigned char, std::string> codes;
         atom::algorithm::generateHuffmanCodes(tree.get(), "", codes);
         auto compressed = atom::algorithm::compressData(data, codes);
-        auto decompressed = atom::algorithm::decompressData(compressed, tree.get());
+        auto decompressed =
+            atom::algorithm::decompressData(compressed, tree.get());
         success = true;
     } catch (...) {
         success = false;
@@ -622,16 +516,20 @@ TEST_F(CompressionErrorTest, CorruptedDataHandling) {
     auto tree = atom::algorithm::createHuffmanTree(frequencies);
 
     // Corrupted data with invalid bits
-    EXPECT_THROW({
-        auto result = atom::algorithm::decompressData("01X01", tree.get());
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::decompressData("01X01", tree.get());
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 
     // Data that doesn't end at a leaf node
-    EXPECT_THROW({
-        auto result = atom::algorithm::decompressData("0", tree.get());
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::decompressData("0", tree.get());
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 }
 
 TEST_F(CompressionErrorTest, InvalidInputHandling) {
@@ -639,25 +537,25 @@ TEST_F(CompressionErrorTest, InvalidInputHandling) {
 
     // Empty frequency map
     std::unordered_map<unsigned char, int> empty_freq;
-    EXPECT_THROW({
-        auto result = atom::algorithm::createHuffmanTree(empty_freq);
-        (void)result;
-    }, atom::algorithm::HuffmanException);
+    EXPECT_THROW(
+        {
+            auto result = atom::algorithm::createHuffmanTree(empty_freq);
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 
     // Null tree for code generation
     std::unordered_map<unsigned char, std::string> codes;
-    EXPECT_THROW(
-        atom::algorithm::generateHuffmanCodes(nullptr, "", codes),
-        atom::algorithm::HuffmanException);
+    EXPECT_THROW(atom::algorithm::generateHuffmanCodes(nullptr, "", codes),
+                 atom::algorithm::HuffmanException);
 
-    // Invalid matrix dimensions for decompression
-    MatrixCompressor::CompressedData compressed = {{'A', 10}};
+    // Invalid compressed data format
     EXPECT_THROW(
-        MatrixCompressor::decompress(compressed, 0, 5),
-        MatrixDecompressException);
-    EXPECT_THROW(
-        MatrixCompressor::decompress(compressed, 5, 0),
-        MatrixDecompressException);
+        {
+            auto result = atom::algorithm::decompressData("", nullptr);
+            (void)result;
+        },
+        atom::algorithm::HuffmanException);
 }
 
 TEST_F(CompressionErrorTest, MemoryLimitHandling) {
@@ -695,11 +593,14 @@ protected:
 };
 
 TEST_F(CompressionIntegrationTest, EndToEndCompression) {
-    // Test complete compression workflow from data to compressed to decompressed
-    std::string original_text = "The quick brown fox jumps over the lazy dog. "
-                                "This is a test of the Huffman compression algorithm. "
-                                "It should compress repeated characters efficiently.";
-    std::vector<unsigned char> original_data(original_text.begin(), original_text.end());
+    // Test complete compression workflow from data to compressed to
+    // decompressed
+    std::string original_text =
+        "The quick brown fox jumps over the lazy dog. "
+        "This is a test of the Huffman compression algorithm. "
+        "It should compress repeated characters efficiently.";
+    std::vector<unsigned char> original_data(original_text.begin(),
+                                             original_text.end());
 
     // Step 1: Build frequency map
     std::unordered_map<unsigned char, int> frequencies;
@@ -716,7 +617,8 @@ TEST_F(CompressionIntegrationTest, EndToEndCompression) {
     atom::algorithm::generateHuffmanCodes(tree.get(), "", huffman_codes);
 
     // Step 4: Compress
-    auto compressed = atom::algorithm::compressData(original_data, huffman_codes);
+    auto compressed =
+        atom::algorithm::compressData(original_data, huffman_codes);
     EXPECT_FALSE(compressed.empty());
 
     // Step 5: Serialize tree for storage/transmission
@@ -725,64 +627,51 @@ TEST_F(CompressionIntegrationTest, EndToEndCompression) {
 
     // Step 6: Deserialize tree
     size_t index = 0;
-    auto deserialized_tree = atom::algorithm::deserializeTree(serialized_tree, index);
+    auto deserialized_tree =
+        atom::algorithm::deserializeTree(serialized_tree, index);
     ASSERT_NE(deserialized_tree, nullptr);
 
     // Step 7: Decompress
-    auto decompressed = atom::algorithm::decompressData(compressed, deserialized_tree.get());
+    auto decompressed =
+        atom::algorithm::decompressData(compressed, deserialized_tree.get());
 
     // Step 8: Verify
     ASSERT_EQ(original_data.size(), decompressed.size());
     EXPECT_EQ(original_data, decompressed);
 }
 
-TEST_F(CompressionIntegrationTest, MultipleAlgorithmChaining) {
-    // Test chaining Huffman and Matrix compression
+TEST_F(CompressionIntegrationTest, MultipleDataFormatCompression) {
+    // Test Huffman compression on different data formats
     std::string text = "AAAABBBBCCCCDDDD";
     std::vector<unsigned char> data(text.begin(), text.end());
 
-    // First: Huffman compression
+    // Build frequency map manually (buildFrequencyMap doesn't exist)
     std::unordered_map<unsigned char, int> frequencies;
     for (unsigned char byte : data) {
         frequencies[byte]++;
     }
+
+    // Test with string input
     auto tree = atom::algorithm::createHuffmanTree(frequencies);
     std::unordered_map<unsigned char, std::string> codes;
     atom::algorithm::generateHuffmanCodes(tree.get(), "", codes);
-    auto huffman_compressed = atom::algorithm::compressData(data, codes);
+    auto compressed_from_string = atom::algorithm::compressData(data, codes);
 
-    // Convert Huffman output to matrix format
-    int rows = 4;
-    int cols = static_cast<int>(huffman_compressed.size()) / rows;
-    if (cols * rows < static_cast<int>(huffman_compressed.size())) cols++;
+    // Test with vector input
+    std::vector<unsigned char> vector_data(data.begin(), data.end());
+    auto compressed_from_vector = atom::algorithm::compressData(vector_data, codes);
 
-    MatrixCompressor::Matrix matrix(rows, std::vector<char>(cols, '0'));
-    for (size_t i = 0; i < huffman_compressed.size(); ++i) {
-        matrix[i / cols][i % cols] = huffman_compressed[i];
-    }
+    // Both should produce same result
+    EXPECT_EQ(compressed_from_string, compressed_from_vector);
 
-    // Second: Matrix compression
-    auto matrix_compressed = MatrixCompressor::compress(matrix);
-    EXPECT_FALSE(matrix_compressed.empty());
+    // Verify decompression works for both
+    auto decompressed_from_string =
+        atom::algorithm::decompressData(compressed_from_string, tree.get());
+    auto decompressed_from_vector =
+        atom::algorithm::decompressData(compressed_from_vector, tree.get());
 
-    // Decompress in reverse order
-    auto matrix_decompressed = MatrixCompressor::decompress(matrix_compressed, rows, cols);
-
-    // Reconstruct Huffman compressed string
-    std::string huffman_reconstructed;
-    for (const auto& row : matrix_decompressed) {
-        for (char c : row) {
-            if (c == '0' || c == '1') {
-                huffman_reconstructed += c;
-            }
-        }
-    }
-
-    // Decompress Huffman
-    auto final_decompressed = atom::algorithm::decompressData(
-        huffman_reconstructed.substr(0, huffman_compressed.size()), tree.get());
-
-    EXPECT_EQ(data, final_decompressed);
+    EXPECT_EQ(data, decompressed_from_string);
+    EXPECT_EQ(data, decompressed_from_vector);
 }
 
 TEST_F(CompressionIntegrationTest, RealWorldDataCompression) {
@@ -819,6 +708,6 @@ TEST_F(CompressionIntegrationTest, RealWorldDataCompression) {
     EXPECT_LT(ratio, 1.0);
 }
 
-} // namespace atom::algorithm::compression::test
+}  // namespace atom::algorithm::compression::test
 
 // Main function removed - using gtest_main

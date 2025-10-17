@@ -218,11 +218,16 @@ public:
     bool is_ready() const noexcept { return handle_.done(); }
 
     R get_result() {
+        if (handle_ && !handle_.done()) {
+            handle_.resume();
+        }
         if (handle_.promise().exception_) {
             std::rethrow_exception(handle_.promise().exception_);
         }
         return std::move(handle_.promise().result_);
     }
+
+    R get() { return get_result(); }
 
     // Coroutine awaiter support
     struct Awaiter {

@@ -118,28 +118,86 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
 }
 
 auto getCurrentCpuTemperature() -> float {
-    spdlog::info( "Starting getCurrentCpuTemperature function on FreeBSD");
+    spdlog::info("Starting getCurrentCpuTemperature function on FreeBSD");
 
     float temperature = 0.0f;
+    bool found = false;
 
-    // FreeBSD typically uses ACPI or hardware-specific drivers for temperature
-    // This would require access to /dev/acpi or similar
-    // This is a placeholder implementation
+    // Try to read from ACPI thermal zone
+    int temp_value = 0;
+    size_t len = sizeof(temp_value);
 
-    spdlog::info( "FreeBSD CPU Temperature: {}°C (placeholder)", temperature);
+    // Try hw.acpi.thermal.tz0.temperature first
+    if (sysctlbyname("hw.acpi.thermal.tz0.temperature", &temp_value, &len, nullptr, 0) == 0) {
+        // Temperature is in tenths of Kelvin, convert to Celsius
+        temperature = (temp_value / 10.0f) - 273.15f;
+        found = true;
+        spdlog::debug("FreeBSD CPU Temperature from ACPI thermal zone: {}°C", temperature);
+    }
+
+    // Try dev.cpu.0.temperature (requires coretemp module)
+    if (!found) {
+        len = sizeof(temp_value);
+        if (sysctlbyname("dev.cpu.0.temperature", &temp_value, &len, nullptr, 0) == 0) {
+            // Temperature is in tenths of Kelvin, convert to Celsius
+            temperature = (temp_value / 10.0f) - 273.15f;
+            found = true;
+            spdlog::debug("FreeBSD CPU Temperature from dev.cpu.0: {}°C", temperature);
+        }
+    }
+
+    // Try dev.pchtherm.0.temperature as fallback
+    if (!found) {
+        len = sizeof(temp_value);
+        if (sysctlbyname("dev.pchtherm.0.temperature", &temp_value, &len, nullptr, 0) == 0) {
+            // Temperature is in tenths of Kelvin, convert to Celsius
+            temperature = (temp_value / 10.0f) - 273.15f;
+            found = true;
+            spdlog::debug("FreeBSD CPU Temperature from PCH thermal: {}°C", temperature);
+        }
+    }
+
+    if (!found) {
+        spdlog::warn("FreeBSD: No CPU temperature sensor found. Ensure coretemp module is loaded or ACPI thermal zones are available.");
+    } else {
+        spdlog::info("FreeBSD CPU Temperature: {}°C", temperature);
+    }
+
     return temperature;
 }
 
 auto getPerCoreCpuTemperature() -> std::vector<float> {
-    spdlog::info( "Starting getPerCoreCpuTemperature function on FreeBSD");
+    spdlog::info("Starting getPerCoreCpuTemperature function on FreeBSD");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<float> temperatures(numCores, 0.0f);
+    int foundCount = 0;
 
-    // FreeBSD doesn't have a standard way to get per-core temperatures
-    // This is a placeholder implementation
+    // Try to read per-core temperatures from dev.cpu.X.temperature
+    for (int i = 0; i < numCores; ++i) {
+        std::string sysctl_name = "dev.cpu." + std::to_string(i) + ".temperature";
+        int temp_value = 0;
+        size_t len = sizeof(temp_value);
 
-    spdlog::info( "FreeBSD Per-Core CPU Temperature: placeholder values for {} cores", numCores);
+        if (sysctlbyname(sysctl_name.c_str(), &temp_value, &len, nullptr, 0) == 0) {
+            // Temperature is in tenths of Kelvin, convert to Celsius
+            temperatures[i] = (temp_value / 10.0f) - 273.15f;
+            foundCount++;
+            spdlog::debug("FreeBSD Core {} Temperature: {}°C", i, temperatures[i]);
+        } else {
+            spdlog::debug("FreeBSD: Could not read temperature for core {}", i);
+        }
+    }
+
+    if (foundCount == 0) {
+        spdlog::warn("FreeBSD: No per-core temperature sensors found. Ensure coretemp module is loaded.");
+        // Fallback: use overall CPU temperature for all cores
+        float overallTemp = getCurrentCpuTemperature();
+        std::fill(temperatures.begin(), temperatures.end(), overallTemp);
+    } else {
+        spdlog::info("FreeBSD Per-Core CPU Temperature: Retrieved {} of {} core temperatures", foundCount, numCores);
+    }
+
     return temperatures;
 }
 
@@ -635,7 +693,7 @@ auto getCpuVendor() -> CpuVendor {
 }
 
 auto getCpuSocketType() -> std::string {
-    spdlog::info( "Starting getCpuSocketType function on FreeBSD");
+    spdlog::info("Starting getCpuSocketType function on FreeBSD");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.socketType.empty()) {
         return g_cpuInfoCache.socketType;
@@ -643,9 +701,49 @@ auto getCpuSocketType() -> std::string {
 
     std::string socketType = "Unknown";
 
-    // FreeBSD doesn't provide socket type directly
+    // FreeBSD doesn't provide socket type directly through sysctl
+    // We can try to infer it from the CPU model string
+    std::string model = getCPUModel();
 
-    spdlog::info( "FreeBSD CPU Socket Type: {} (placeholder)", socketType);
+    // Common socket type patterns based on CPU model
+    if (model.find("Intel") != std::string::npos) {
+        if (model.find("Core i9") != std::string::npos || model.find("Core i7") != std::string::npos ||
+            model.find("Core i5") != std::string::npos || model.find("Core i3") != std::string::npos) {
+            // Modern Intel desktop/laptop CPUs
+            if (model.find("12th Gen") != std::string::npos || model.find("13th Gen") != std::string::npos ||
+                model.find("14th Gen") != std::string::npos) {
+                socketType = "LGA1700";
+            } else if (model.find("10th Gen") != std::string::npos || model.find("11th Gen") != std::string::npos) {
+                socketType = "LGA1200";
+            } else if (model.find("8th Gen") != std::string::npos || model.find("9th Gen") != std::string::npos) {
+                socketType = "LGA1151";
+            } else {
+                socketType = "Intel Socket (Unknown Generation)";
+            }
+        } else if (model.find("Xeon") != std::string::npos) {
+            socketType = "Intel Xeon Socket";
+        }
+    } else if (model.find("AMD") != std::string::npos) {
+        if (model.find("Ryzen") != std::string::npos) {
+            if (model.find("7000") != std::string::npos) {
+                socketType = "AM5";
+            } else if (model.find("5000") != std::string::npos || model.find("3000") != std::string::npos) {
+                socketType = "AM4";
+            } else {
+                socketType = "AMD Socket (Unknown Generation)";
+            }
+        } else if (model.find("EPYC") != std::string::npos) {
+            socketType = "AMD EPYC Socket";
+        } else if (model.find("Threadripper") != std::string::npos) {
+            socketType = "sTRX4/TRX40";
+        }
+    }
+
+    spdlog::info("FreeBSD CPU Socket Type: {} (inferred from model)", socketType);
+
+    std::lock_guard<std::mutex> lock(g_cacheMutex);
+    g_cpuInfoCache.socketType = socketType;
+
     return socketType;
 }
 

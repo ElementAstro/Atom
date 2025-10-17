@@ -32,7 +32,7 @@ function(create_extra_test_executable MODULE_NAME)
         "${CMAKE_CURRENT_SOURCE_DIR}/${MODULE_NAME}/*.hpp"
     )
 
-    if(TEST_SOURCES)
+    if(TEST_SOURCES AND TARGET atom-extra-${MODULE_NAME})
         # Create test executable
         add_executable(${TEST_TARGET} ${TEST_SOURCES})
 

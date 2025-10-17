@@ -15,7 +15,7 @@ set_version("1.0.0", {build = "%Y%m%d%H%M"})
 set_license("GPL-3.0")
 
 -- Set languages
-set_languages("c11", "cxx17")
+set_languages("c11", "cxx20")
 
 -- Add build modes
 add_rules("mode.debug", "mode.release")
@@ -53,6 +53,7 @@ local base_sources = {
     "fifoserver.cpp",
     "sockethub.cpp",
     "tcpclient.cpp",
+    "ttybase.cpp",
     "udpclient.cpp",
     "udpserver.cpp"
 }
@@ -68,6 +69,7 @@ local base_headers = {
     "fifoserver.hpp",
     "sockethub.hpp",
     "tcpclient.hpp",
+    "ttybase.hpp",
     "udpclient.hpp",
     "udpserver.hpp"
 }

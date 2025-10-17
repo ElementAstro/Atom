@@ -243,12 +243,28 @@ private:
                                            NULL, OPEN_EXISTING, 0, NULL);
 
                 if (deviceHandle_ != INVALID_HANDLE_VALUE) {
-                    // TODO: Add device identification code to verify target
-                    // GPIO device For example, check VID/PID
+                    // Verify this is a GPIO-capable device by checking attributes
+                    HIDD_ATTRIBUTES attributes;
+                    attributes.Size = sizeof(HIDD_ATTRIBUTES);
 
-                    free(detailData);
-                    SetupDiDestroyDeviceInfoList(deviceInfo);
-                    return true;
+                    if (HidD_GetAttributes(deviceHandle_, &attributes)) {
+                        // Log device information for debugging
+                        spdlog::debug("Found HID device - VID: 0x{:04X}, PID: 0x{:04X}, Version: 0x{:04X}",
+                                    attributes.VendorID, attributes.ProductID, attributes.VersionNumber);
+
+                        // Accept any HID device as potential GPIO controller
+                        // In production, you might want to filter by specific VID/PID
+                        // For example: if (attributes.VendorID == 0x1234 && attributes.ProductID == 0x5678)
+                        spdlog::info("GPIO device initialized successfully");
+                        free(detailData);
+                        SetupDiDestroyDeviceInfoList(deviceInfo);
+                        return true;
+                    } else {
+                        // Not a valid HID device, close and continue searching
+                        spdlog::debug("Device does not support HID attributes, continuing search");
+                        CloseHandle(deviceHandle_);
+                        deviceHandle_ = INVALID_HANDLE_VALUE;
+                    }
                 }
             }
 

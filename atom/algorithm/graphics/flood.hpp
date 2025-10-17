@@ -586,7 +586,8 @@ usize FloodFill::fillParallel(
         i32 cols = static_cast<i32>(grid[0].size());
         auto directions = getDirections(config.connectivity);
 
-        // First BFS phase to find initial points to process in parallel
+        // First BFS phase to find initial seed points for parallel processing
+        // We don't fill cells here, just identify starting points for worker threads
         std::vector<std::pair<i32, i32>> seeds;
         std::queue<std::pair<i32, i32>> queue;
         std::vector<std::vector<bool>> visited(
@@ -596,19 +597,12 @@ usize FloodFill::fillParallel(
         queue.emplace(start_x, start_y);
         visited[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
             true;
-        grid[static_cast<usize>(start_x)][static_cast<usize>(start_y)] =
-            fill_color;
-        filled_cells++;  // Count filled cells
+        seeds.emplace_back(start_x, start_y);  // Add starting point as first seed
 
-        // Find seed points for parallel processing
+        // Find additional seed points for parallel processing
         while (!queue.empty() && seeds.size() < config.numThreads) {
             auto [x, y] = queue.front();
             queue.pop();
-
-            // Add current point as a seed if it's not the starting point
-            if (x != start_x || y != start_y) {
-                seeds.emplace_back(x, y);
-            }
 
             // Explore neighbors to find more potential seeds
             for (auto [dx, dy] : directions) {
@@ -622,19 +616,14 @@ usize FloodFill::fillParallel(
                             [static_cast<usize>(newY)]) {
                     visited[static_cast<usize>(newX)]
                            [static_cast<usize>(newY)] = true;
-                    grid[static_cast<usize>(newX)][static_cast<usize>(newY)] =
-                        fill_color;
-                    filled_cells++;  // Count filled cells
                     queue.emplace(newX, newY);
+
+                    // Add as seed if we need more seeds
+                    if (seeds.size() < config.numThreads) {
+                        seeds.emplace_back(newX, newY);
+                    }
                 }
             }
-        }
-
-        // If we didn't find enough seeds, use what we have
-        if (seeds.empty()) {
-            spdlog::info(
-                "Area too small for parallel fill, using single thread");
-            return filled_cells;  // Already filled by the seed finding phase
         }
 
         // Use mutex to protect concurrent access to the grid
@@ -645,8 +634,19 @@ usize FloodFill::fillParallel(
         // Worker function for each thread
         auto worker = [&](const std::pair<i32, i32>& seed) {
             std::queue<std::pair<i32, i32>> localQueue;
-            localQueue.push(seed);
             usize localFilledCells = 0;
+
+            // Fill the seed point first
+            {
+                std::lock_guard<std::mutex> lock(gridMutex);
+                if (grid[static_cast<usize>(seed.first)]
+                        [static_cast<usize>(seed.second)] == target_color) {
+                    grid[static_cast<usize>(seed.first)]
+                        [static_cast<usize>(seed.second)] = fill_color;
+                    localFilledCells++;
+                    localQueue.push(seed);
+                }
+            }
 
             while (!localQueue.empty() && !shouldTerminate) {
                 auto [x, y] = localQueue.front();

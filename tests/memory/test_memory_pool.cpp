@@ -39,9 +39,9 @@ protected:
     }
 };
 
-// MemoryPool Tests
+// FixedBlockPool Tests
 TEST_F(MemoryPoolTest, DefaultConstructor) {
-    MemoryPool<64, 1024> pool;
+    FixedBlockPool<64, 1024> pool;
     auto stats = pool.get_stats();
     EXPECT_EQ(stats.first, 0);  // allocated_blocks
     EXPECT_EQ(stats.second, 0); // total_blocks (no chunks allocated yet)
@@ -67,7 +67,7 @@ TEST_F(MemoryPoolTest, BasicAllocation) {
 }
 
 TEST_F(MemoryPoolTest, MultipleAllocations) {
-    MemoryPool<64, 1024> pool;
+    FixedBlockPool<64, 1024> pool;
     std::vector<void*> ptrs;
 
     // Allocate multiple blocks
@@ -93,7 +93,7 @@ TEST_F(MemoryPoolTest, MultipleAllocations) {
 }
 
 TEST_F(MemoryPoolTest, AllocationExceedsChunk) {
-    MemoryPool<64, 10> pool; // Small chunk size
+    FixedBlockPool<64, 10> pool; // Small chunk size
     std::vector<void*> ptrs;
 
     // Allocate more than one chunk
@@ -114,7 +114,7 @@ TEST_F(MemoryPoolTest, AllocationExceedsChunk) {
 }
 
 TEST_F(MemoryPoolTest, DeallocateNullptr) {
-    MemoryPool<64, 1024> pool;
+    FixedBlockPool<64, 1024> pool;
 
     // Should not crash or affect statistics
     pool.deallocate(nullptr);
@@ -126,7 +126,7 @@ TEST_F(MemoryPoolTest, DeallocateNullptr) {
 }
 
 TEST_F(MemoryPoolTest, MemoryPoolReset) {
-    MemoryPool<64, 1024> pool;
+    FixedBlockPool<64, 1024> pool;
     std::vector<void*> ptrs;
 
     // Allocate some blocks
@@ -153,7 +153,7 @@ TEST_F(MemoryPoolTest, MemoryPoolReset) {
 }
 
 TEST_F(MemoryPoolTest, MemoryPoolThreadSafety) {
-    MemoryPool<64, 1024> pool;
+    FixedBlockPool<64, 1024> pool;
     std::vector<std::thread> threads;
     std::vector<std::vector<void*>> thread_ptrs(4);
 
@@ -418,20 +418,20 @@ TEST_F(MemoryPoolTest, MakePoolPtr) {
 TEST_F(MemoryPoolTest, MemoryPoolDifferentBlockSizes) {
     // Test with minimum aligned block size
     constexpr size_t min_size = std::max(sizeof(void*), alignof(std::max_align_t));
-    MemoryPool<min_size, 10> small_pool;
+    FixedBlockPool<min_size, 10> small_pool;
     void* ptr1 = small_pool.allocate();
     EXPECT_NE(ptr1, nullptr);
     small_pool.deallocate(ptr1);
 
     // Test with large block size
-    MemoryPool<1024, 10> large_pool;
+    FixedBlockPool<1024, 10> large_pool;
     void* ptr2 = large_pool.allocate();
     EXPECT_NE(ptr2, nullptr);
     large_pool.deallocate(ptr2);
 }
 
 TEST_F(MemoryPoolTest, MemoryPoolAlignment) {
-    MemoryPool<128, 10> pool;
+    FixedBlockPool<128, 10> pool;
 
     // Allocate multiple blocks and check alignment
     for (int i = 0; i < 5; ++i) {
@@ -505,7 +505,7 @@ TEST_F(MemoryPoolTest, PoolPtrNullOperations) {
 }
 
 TEST_F(MemoryPoolTest, MemoryPoolStressTest) {
-    MemoryPool<128, 100> pool;
+    FixedBlockPool<128, 100> pool;
     std::vector<void*> ptrs;
 
     // Allocate many blocks
@@ -551,7 +551,7 @@ TEST_F(MemoryPoolTest, SimpleObjectPoolStressTest) {
 }
 
 TEST_F(MemoryPoolTest, MemoryPoolFragmentation) {
-    MemoryPool<64, 20> pool;
+    FixedBlockPool<64, 20> pool;
     std::vector<void*> ptrs;
 
     // Allocate blocks

@@ -340,24 +340,34 @@ TEST_F(FloodFillTest, EmptyGrid) {
     std::vector<std::vector<int>> emptyGrid;
 
     // Should throw an exception
-    EXPECT_THROW(FloodFill::fillBFS(emptyGrid, 0, 0, 0, 1),
-                 atom::error::InvalidArgument);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = FloodFill::fillBFS(emptyGrid, 0, 0, 0, 1);
+    }, atom::error::InvalidArgument);
 
-    EXPECT_THROW(FloodFill::fillDFS(emptyGrid, 0, 0, 0, 1),
-                 atom::error::InvalidArgument);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = FloodFill::fillDFS(emptyGrid, 0, 0, 0, 1);
+    }, atom::error::InvalidArgument);
 }
 
 TEST_F(FloodFillTest, OutOfBoundsCoordinates) {
     auto grid = createSimpleGrid();
 
     // Out of bounds starting points should throw
-    EXPECT_THROW(FloodFill::fillBFS(grid, -1, 0, 0, 1), atom::error::InvalidArgument);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = FloodFill::fillBFS(grid, -1, 0, 0, 1);
+    }, atom::error::InvalidArgument);
 
-    EXPECT_THROW(FloodFill::fillDFS(grid, 0, -1, 0, 1), atom::error::InvalidArgument);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = FloodFill::fillDFS(grid, 0, -1, 0, 1);
+    }, atom::error::InvalidArgument);
 
-    EXPECT_THROW(FloodFill::fillBFS(grid, 5, 0, 0, 1), atom::error::InvalidArgument);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = FloodFill::fillBFS(grid, 5, 0, 0, 1);
+    }, atom::error::InvalidArgument);
 
-    EXPECT_THROW(FloodFill::fillDFS(grid, 0, 5, 0, 1), atom::error::InvalidArgument);
+    EXPECT_THROW({
+        [[maybe_unused]] auto result = FloodFill::fillDFS(grid, 0, 5, 0, 1);
+    }, atom::error::InvalidArgument);
 }
 
 TEST_F(FloodFillTest, SameTargetAndFillColor) {
@@ -456,7 +466,7 @@ TEST_F(FloodFillTest, ParallelFillLargeGrid) {
     int fillColor = 2;
 
     // Fill using parallel method with different thread counts
-    FloodFill::fillParallel(
+    [[maybe_unused]] auto result = FloodFill::fillParallel(
         grid, size / 2, size / 2, targetColor, fillColor,
         FloodFill::FloodFillConfig{Connectivity::Four, 4});
 
@@ -492,25 +502,25 @@ TEST_F(FloodFillTest, ParallelFillWithDifferentThreadCounts) {
 
     // Test with 1 thread (should be similar to sequential)
     auto grid1 = grid;
-    FloodFill::fillParallel(
+    [[maybe_unused]] auto result1 = FloodFill::fillParallel(
         grid1, size / 2, size / 2, targetColor, fillColor,
         FloodFill::FloodFillConfig{Connectivity::Four, 1});
 
     // Test with 2 threads
     auto grid2 = grid;
-    FloodFill::fillParallel(
+    [[maybe_unused]] auto result2 = FloodFill::fillParallel(
         grid2, size / 2, size / 2, targetColor, fillColor,
         FloodFill::FloodFillConfig{Connectivity::Four, 2});
 
     // Test with 4 threads
     auto grid4 = grid;
-    FloodFill::fillParallel(
+    [[maybe_unused]] auto result4 = FloodFill::fillParallel(
         grid4, size / 2, size / 2, targetColor, fillColor,
         FloodFill::FloodFillConfig{Connectivity::Four, 4});
 
     // Test with default threads
     auto gridDefault = grid;
-    FloodFill::fillParallel(
+    [[maybe_unused]] auto resultDefault = FloodFill::fillParallel(
         gridDefault, size / 2, size / 2, targetColor, fillColor,
         FloodFill::FloodFillConfig{});
 
@@ -547,7 +557,7 @@ TEST_F(FloodFillTest, PerformanceComparisonLargeGrid) {
     // BFS timing
     auto gridBFS = grid;
     auto startBFS = std::chrono::high_resolution_clock::now();
-    FloodFill::fillBFS(gridBFS, size / 2, size / 2, targetColor, fillColor);
+    [[maybe_unused]] auto resultBFS = FloodFill::fillBFS(gridBFS, size / 2, size / 2, targetColor, fillColor);
     auto endBFS = std::chrono::high_resolution_clock::now();
     auto durationBFS =
         std::chrono::duration_cast<std::chrono::milliseconds>(endBFS - startBFS)
@@ -556,7 +566,7 @@ TEST_F(FloodFillTest, PerformanceComparisonLargeGrid) {
     // DFS timing
     auto gridDFS = grid;
     auto startDFS = std::chrono::high_resolution_clock::now();
-    FloodFill::fillDFS(gridDFS, size / 2, size / 2, targetColor, fillColor);
+    [[maybe_unused]] auto resultDFS = FloodFill::fillDFS(gridDFS, size / 2, size / 2, targetColor, fillColor);
     auto endDFS = std::chrono::high_resolution_clock::now();
     auto durationDFS =
         std::chrono::duration_cast<std::chrono::milliseconds>(endDFS - startDFS)
@@ -565,7 +575,7 @@ TEST_F(FloodFillTest, PerformanceComparisonLargeGrid) {
     // Parallel timing
     auto gridPar = grid;
     auto startPar = std::chrono::high_resolution_clock::now();
-    FloodFill::fillParallel(gridPar, size / 2, size / 2, targetColor,
+    [[maybe_unused]] auto resultPar = FloodFill::fillParallel(gridPar, size / 2, size / 2, targetColor,
                             fillColor, FloodFill::FloodFillConfig{});
     auto endPar = std::chrono::high_resolution_clock::now();
     auto durationPar =
@@ -598,7 +608,7 @@ TEST_F(FloodFillTest, CustomGridTypes) {
                                                    {1.0, 1.0, 1.0, 1.0, 1.0}};
 
     // Using template version directly
-    FloodFill::fillBFS<std::vector<std::vector<double>>>(
+    [[maybe_unused]] auto resultDouble = FloodFill::fillBFS<std::vector<std::vector<double>>>(
         doubleGrid, 2, 2, 0.0, 2.0, Connectivity::Four);
 
     // Check that all inner cells (0.0s) are now filled with 2.0s
@@ -629,9 +639,9 @@ TEST_F(FloodFillTest, IntegrationTestComplexGrid) {
     auto mazeParallel = maze;
 
     // Apply different fill methods
-    FloodFill::fillBFS(mazeBFS, 1, 1, targetColor, fillColor);
-    FloodFill::fillDFS(mazeDFS, 1, 1, targetColor, fillColor);
-    FloodFill::fillParallel(mazeParallel, 1, 1, targetColor, fillColor, FloodFill::FloodFillConfig{});
+    [[maybe_unused]] auto resultBFS = FloodFill::fillBFS(mazeBFS, 1, 1, targetColor, fillColor);
+    [[maybe_unused]] auto resultDFS = FloodFill::fillDFS(mazeDFS, 1, 1, targetColor, fillColor);
+    [[maybe_unused]] auto resultParallel = FloodFill::fillParallel(mazeParallel, 1, 1, targetColor, fillColor, FloodFill::FloodFillConfig{});
 
     // All methods should produce the same result
     for (size_t i = 0; i < maze.size(); ++i) {

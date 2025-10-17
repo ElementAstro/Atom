@@ -119,9 +119,10 @@ public:
         uuid.data_[5] = static_cast<u8>((timestamp >> 40) & 0xFF);
         
         // Time high and version (16 bits)
+        // Version 1 goes in upper nibble of byte 6, time_hi_and_version uses 12 bits
         u16 time_hi = static_cast<u16>((timestamp >> 48) & 0x0FFF);
-        uuid.data_[6] = static_cast<u8>(time_hi & 0xFF);
-        uuid.data_[7] = static_cast<u8>((time_hi >> 8) | 0x10);  // Version 1
+        uuid.data_[6] = static_cast<u8>(((time_hi >> 8) & 0x0F) | 0x10);  // Version 1 in upper nibble
+        uuid.data_[7] = static_cast<u8>(time_hi & 0xFF);  // Lower 8 bits of time_hi
         
         // Clock sequence and variant
         uuid.data_[8] = static_cast<u8>((clock_seq >> 8) | 0x80);  // Variant 10
@@ -167,34 +168,43 @@ public:
      */
     [[nodiscard]] auto fromString(std::string_view uuid_str) -> bool {
         if (uuid_str.length() != 36) {
+            data_.fill(0);  // Set to nil on failure
             return false;
         }
-        
+
         // Check hyphen positions
-        if (uuid_str[8] != '-' || uuid_str[13] != '-' || 
+        if (uuid_str[8] != '-' || uuid_str[13] != '-' ||
             uuid_str[18] != '-' || uuid_str[23] != '-') {
+            data_.fill(0);  // Set to nil on failure
             return false;
         }
-        
+
         // Parse hex digits
         std::string hex_str;
         hex_str.reserve(32);
-        
+
         for (char c : uuid_str) {
             if (c != '-') {
                 if (!std::isxdigit(c)) {
+                    data_.fill(0);  // Set to nil on failure
                     return false;
                 }
                 hex_str += c;
             }
         }
-        
+
+        // Must have exactly 32 hex digits
+        if (hex_str.length() != 32) {
+            data_.fill(0);  // Set to nil on failure
+            return false;
+        }
+
         // Convert hex string to bytes
         for (usize i = 0; i < 16; ++i) {
             std::string byte_str = hex_str.substr(i * 2, 2);
             data_[i] = static_cast<u8>(std::stoul(byte_str, nullptr, 16));
         }
-        
+
         return true;
     }
     
@@ -203,7 +213,7 @@ public:
      * @return UUID version
      */
     [[nodiscard]] auto getVersion() const -> Version {
-        return static_cast<Version>((data_[7] & 0xF0) >> 4);
+        return static_cast<Version>((data_[6] & 0xF0) >> 4);
     }
     
     /**

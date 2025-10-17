@@ -150,7 +150,6 @@ TEST_F(ThreadSafeLRUCacheTest, ClearCallback) {
     EXPECT_TRUE(callbackCalled);
 }
 
-#endif  // ATOM_SEARCH_TEST_LRU_HPP
 TEST_F(ThreadSafeLRUCacheTest, GetSharedPointer) {
     cache->put("key1", 1);
     auto valuePtr = cache->getShared("key1");
@@ -487,3 +486,125 @@ TEST_F(ThreadSafeLRUCacheTest, AccessOrder) {
     EXPECT_TRUE(cache->get("key3").has_value());
     EXPECT_TRUE(cache->get("key4").has_value());
 }
+
+// ============================================================================
+// Additional Concurrency and Performance Tests
+// ============================================================================
+
+TEST_F(ThreadSafeLRUCacheTest, ConcurrentReadWrite) {
+    std::vector<std::thread> threads;
+    std::atomic<int> readCount{0};
+    std::atomic<int> writeCount{0};
+    std::atomic<bool> stopFlag{false};
+
+    // Reader threads
+    for (int i = 0; i < 3; ++i) {
+        threads.emplace_back([this, &readCount, &stopFlag]() {
+            while (!stopFlag.load()) {
+                for (int j = 0; j < 10; ++j) {
+                    auto value = cache->get("key" + std::to_string(j));
+                    if (value.has_value()) {
+                        readCount++;
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::microseconds(100));
+            }
+        });
+    }
+
+    // Writer threads
+    for (int i = 0; i < 2; ++i) {
+        threads.emplace_back([this, i, &writeCount, &stopFlag]() {
+            int count = 0;
+            while (!stopFlag.load() && count < 50) {
+                std::string key = "writer" + std::to_string(i) + "_" + std::to_string(count);
+                cache->put(key, count);
+                writeCount++;
+                count++;
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+        });
+    }
+
+    // Let threads run for a short time
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    stopFlag.store(true);
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(readCount, 0);
+    EXPECT_GT(writeCount, 0);
+}
+
+TEST_F(ThreadSafeLRUCacheTest, ConcurrentEviction) {
+    std::vector<std::thread> threads;
+    std::atomic<int> evictionCount{0};
+
+    // Launch threads that will cause evictions
+    for (int i = 0; i < 5; ++i) {
+        threads.emplace_back([this, i, &evictionCount]() {
+            for (int j = 0; j < 10; ++j) {
+                std::string key = "evict_thread" + std::to_string(i) + "_" + std::to_string(j);
+                size_t sizeBefore = cache->size();
+                cache->put(key, i * 10 + j);
+                size_t sizeAfter = cache->size();
+
+                // If size didn't increase, an eviction occurred
+                if (sizeBefore == 3 && sizeAfter == sizeBefore) {
+                    evictionCount++;
+                }
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(evictionCount, 0); // Should have had evictions
+}
+
+TEST_F(ThreadSafeLRUCacheTest, PerformanceUnderLoad) {
+    auto largeCache = std::make_unique<ThreadSafeLRUCache<std::string, int>>(1000);
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Perform many operations
+    for (int i = 0; i < 10000; ++i) {
+        std::string key = "perf_key_" + std::to_string(i);
+        largeCache->put(key, i);
+
+        if (i % 2 == 0) {
+            (void)largeCache->get(key);
+        }
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+    EXPECT_EQ(largeCache->size(), 1000); // Should be at capacity
+    EXPECT_LT(duration.count(), 5000); // Should complete within 5 seconds
+}
+
+TEST_F(ThreadSafeLRUCacheTest, MemoryUsageWithLargeValues) {
+    auto stringCache = std::make_unique<ThreadSafeLRUCache<std::string, std::string>>(100);
+
+    // Add large string values
+    for (int i = 0; i < 100; ++i) {
+        std::string key = "large_key_" + std::to_string(i);
+        std::string value(10000, 'A' + (i % 26)); // 10KB strings
+        stringCache->put(key, value);
+    }
+
+    EXPECT_EQ(stringCache->size(), 100);
+
+    // Verify values are correct
+    auto value = stringCache->get("large_key_50");
+    ASSERT_TRUE(value.has_value());
+    EXPECT_EQ(value->size(), 10000);
+    EXPECT_EQ((*value)[0], 'A' + (50 % 26));
+}
+
+#endif  // ATOM_SEARCH_TEST_LRU_HPP

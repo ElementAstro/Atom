@@ -1,4 +1,5 @@
 #include "async_io.hpp"
+#include "../core/path_utils.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -29,78 +30,13 @@ AsyncFile::AsyncFile(std::shared_ptr<AsyncContext> context) noexcept
 /**
  * @brief Validates a file path for security and format compliance
  *
- * Performs comprehensive validation including:
- * - Empty path check
- * - Null byte detection (security)
- * - Path length limits
- * - Path traversal pattern detection
- * - Windows-specific invalid characters
- * - Filesystem path validation
+ * Delegates to centralized path validation utility.
  *
  * @param path The path to validate
  * @return true if path is valid and safe, false otherwise
  */
 bool AsyncFile::validatePath(std::string_view path) noexcept {
-    if (path.empty()) {
-        return false;
-    }
-
-    // Check for null bytes (security vulnerability)
-    if (path.find('\0') != std::string_view::npos) {
-        return false;
-    }
-
-    // Check for excessively long paths
-    if (path.length() > 4096) {  // Reasonable limit for most systems
-        return false;
-    }
-
-    // Check for dangerous path traversal patterns
-    if (path.find("..") != std::string_view::npos) {
-        // Allow .. only if it's part of a legitimate relative path
-        // More sophisticated check could be added here
-        spdlog::warn("Path contains '..' which may indicate path traversal: {}", path);
-    }
-
-    try {
-        std::filesystem::path fs_path(path);
-
-        // Check if path is valid and not empty
-        if (fs_path.empty()) {
-            return false;
-        }
-
-        // Check for invalid characters on Windows
-#ifdef _WIN32
-        std::string path_str = fs_path.string();
-        const std::string invalid_chars = "<>:\"|?*";
-        for (char c : invalid_chars) {
-            if (path_str.find(c) != std::string::npos) {
-                return false;
-            }
-        }
-
-        // Check for reserved names on Windows
-        std::string filename = fs_path.filename().string();
-        std::transform(filename.begin(), filename.end(), filename.begin(), ::toupper);
-        const std::vector<std::string> reserved_names = {
-            "CON", "PRN", "AUX", "NUL",
-            "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-            "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-        };
-
-        for (const auto& reserved : reserved_names) {
-            if (filename == reserved || filename.starts_with(reserved + ".")) {
-                return false;
-            }
-        }
-#endif
-
-        return true;
-    } catch (const std::exception& e) {
-        spdlog::error("Path validation failed: {}", e.what());
-        return false;
-    }
+    return ::atom::io::path_utils::validatePath(path);
 }
 
 

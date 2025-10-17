@@ -133,21 +133,35 @@ TEST_F(FnmatchTest, BasicFilter) {
 TEST_F(FnmatchTest, MultiplePatternFilter) {
     std::vector<std::string> patterns = {"*.txt", "*.jpg", "*.md"};
     auto matched = filter(filenames, patterns);
-    ASSERT_EQ(matched.size(), 3);
+    // *.txt matches: file.txt, CMakeLists.txt, file with spaces.txt (3)
+    // *.jpg matches: file.jpg (1)
+    // *.md matches: readme.md (1)
+    // Total: 5 matches
+    ASSERT_EQ(matched.size(), 5);
     EXPECT_TRUE(std::find(matched.begin(), matched.end(), "file.txt") !=
                 matched.end());
     EXPECT_TRUE(std::find(matched.begin(), matched.end(), "file.jpg") !=
                 matched.end());
     EXPECT_TRUE(std::find(matched.begin(), matched.end(), "readme.md") !=
                 matched.end());
+    EXPECT_TRUE(std::find(matched.begin(), matched.end(), "CMakeLists.txt") !=
+                matched.end());
+    EXPECT_TRUE(std::find(matched.begin(), matched.end(), "file with spaces.txt") !=
+                matched.end());
     std::vector<std::string> empty_patterns;
     auto empty_matched = filter(filenames, empty_patterns);
     EXPECT_TRUE(empty_matched.empty());
     std::vector<std::string> case_patterns = {"*.TXT", "*.JPG"};
     auto case_matched = filter(filenames, case_patterns, flags::CASEFOLD);
-    ASSERT_EQ(case_matched.size(), 2);
+    // With CASEFOLD:
+    // *.TXT matches: file.txt, CMakeLists.txt, file with spaces.txt (3)
+    // *.JPG matches: file.jpg (1)
+    // Total: 4 matches
+    ASSERT_EQ(case_matched.size(), 4);
     EXPECT_TRUE(std::find(case_matched.begin(), case_matched.end(),
                           "file.txt") != case_matched.end());
+    EXPECT_TRUE(std::find(case_matched.begin(), case_matched.end(),
+                          "file.jpg") != case_matched.end());
 }
 
 TEST_F(FnmatchTest, FilterParallelExecution) {
@@ -196,10 +210,13 @@ TEST_F(FnmatchTest, TranslateBasicPattern) {
 TEST_F(FnmatchTest, TranslateComplexPatterns) {
     auto result = translate("*[a-z]file?.txt");
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value(), ".*[a-z]file\\.\\.txt");
+    // ? in fnmatch translates to . in regex (matches any character)
+    // The dot before txt is escaped to match literal dot
+    EXPECT_EQ(result.value(), ".*[a-z]file.\\.txt");
     result = translate("File.txt", flags::CASEFOLD);
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value(), "[Ff][Ii][Ll][Ee]\\.[Tt][Xx][Tt]");
+    // CASEFOLD generates [lowercase][uppercase] for each letter
+    EXPECT_EQ(result.value(), "[fF][iI][lL][eE]\\.[tT][xX][tT]");
     result = translate("file\\*.txt");
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(result.value(), "file\\*\\.txt");
@@ -218,20 +235,26 @@ TEST_F(FnmatchTest, TranslateInvalidPatterns) {
 }
 
 TEST_F(FnmatchTest, ErrorHandlingInFnmatch) {
+    // Test that invalid patterns throw FnmatchException
     EXPECT_THROW(
         { ATOM_UNUSED_RESULT(fnmatch("[abc", "abc")); }, FnmatchException);
+
+    // Verify the exception message for unmatched bracket
     try {
-        EXPECT_THROW(
-            { ATOM_UNUSED_RESULT(fnmatch("[abc", "abc")); }, FnmatchException);
+        ATOM_UNUSED_RESULT(fnmatch("[abc", "abc"));
         FAIL() << "Expected FnmatchException";
     } catch (const FnmatchException& e) {
         EXPECT_STREQ(e.what(), "Unmatched bracket in pattern");
     }
+
+    // Test escape at end of pattern
     EXPECT_THROW(
         { ATOM_UNUSED_RESULT(fnmatch("abc\\", "abc")); }, FnmatchException);
+
+    // Verify the exception message for escape at end
     try {
-        EXPECT_THROW(
-            { ATOM_UNUSED_RESULT(fnmatch("abc\\", "abc")); }, FnmatchException);
+        ATOM_UNUSED_RESULT(fnmatch("abc\\", "abc"));
+        FAIL() << "Expected FnmatchException";
     } catch (const FnmatchException& e) {
         EXPECT_STREQ(e.what(), "Escape character at end of pattern");
     }
@@ -262,8 +285,13 @@ TEST_F(FnmatchTest, EdgeCases) {
     EXPECT_FALSE(fnmatch("[a]", "b"));
     EXPECT_TRUE(fnmatch("[!a]", "b"));
     EXPECT_FALSE(fnmatch("[!a]", "a"));
-    EXPECT_TRUE(fnmatch("[[]]", "["));
+    // []] = bracket with ] as first char (literal), then ] to close
+    // Matches: ]
     EXPECT_TRUE(fnmatch("[]]", "]"));
+    // [[]] = bracket with [ as first char, ] closes bracket, then ] literal
+    // Matches: [] (the string containing [ followed by ])
+    EXPECT_TRUE(fnmatch("[[]]", "[]"));
+    // To match just [ or ], use: [\[] or [\]]
     EXPECT_TRUE(fnmatch("**", "anything"));
     EXPECT_TRUE(fnmatch("a**b", "ab"));
     EXPECT_TRUE(fnmatch("a**b", "axyzb"));

@@ -26,6 +26,7 @@
 #include <mutex>
 #include <atomic>
 #include <algorithm>
+#include <random>
 #include <iomanip>
 
 #include "atom/image/core/image_blob.hpp"
@@ -497,7 +498,9 @@ void demonstrateLRUCache() {
         }
         
         // Shuffle for random access
-        std::random_shuffle(keys.begin(), keys.end());
+        std::random_device rd;
+        std::mt19937 g(rd());
+        std::shuffle(keys.begin(), keys.end(), g);
         
         size_t accessCount = 100;
         for (size_t i = 0; i < accessCount; ++i) {

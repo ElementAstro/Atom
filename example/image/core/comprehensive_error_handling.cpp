@@ -31,8 +31,8 @@
 #include "atom/image/core/image_blob.hpp"
 #include "atom/image/core/exceptions.hpp"
 #include "atom/image/processing/image_processor.hpp"
-#include "atom/image/io/image_file_reader.hpp"
-#include "atom/image/io/image_file_writer.hpp"
+#include "atom/image/io/image_loader.hpp"
+#include "atom/image/io/image_saver.hpp"
 
 using namespace atom::image;
 using namespace std::chrono;
@@ -157,7 +157,7 @@ public:
     }
     
     std::vector<std::string> getLogs(Level minLevel = Level::DEBUG) const {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(mutex_));
         
         std::vector<std::string> result;
         for (const auto& [level, message] : logs_) {
@@ -281,7 +281,7 @@ public:
             throw exceptions::ProcessingException(operation, "Simulated processing failure");
         }
         
-        if (input.empty()) {
+        if (input.isEmpty()) {
             throw exceptions::InvalidImageDataException("Empty input data", 0, 1);
         }
         
@@ -487,7 +487,7 @@ void demonstrateGracefulDegradation() {
             "minimal_processing"
         };
         
-        for (int i = strategy; i < strategies.size(); ++i) {
+        for (size_t i = static_cast<size_t>(strategy); i < strategies.size(); ++i) {
             try {
                 g_errorLogger.log(ErrorLogger::Level::INFO, 
                                 "Attempting " + strategies[i]);
@@ -621,19 +621,20 @@ void demonstrateErrorRecovery() {
     // Test 2: Circuit breaker pattern
     std::cout << "\nTesting circuit breaker pattern:\n";
     
-    class CircuitBreaker {
-    private:
-        enum class State { CLOSED, OPEN, HALF_OPEN };
-        
-        State state_ = State::CLOSED;
-        int failureCount_ = 0;
-        int failureThreshold_ = 3;
-        steady_clock::time_point lastFailureTime_;
-        std::chrono::milliseconds timeout_{5000}; // 5 seconds
-        
-    public:
-        template<typename F>
-        auto execute(F&& func) -> decltype(func()) {
+    // Move CircuitBreaker outside function scope
+class CircuitBreaker {
+private:
+    enum class State { CLOSED, OPEN, HALF_OPEN };
+
+    State state_ = State::CLOSED;
+    int failureCount_ = 0;
+    int failureThreshold_ = 3;
+    steady_clock::time_point lastFailureTime_;
+    std::chrono::milliseconds timeout_{5000}; // 5 seconds
+
+public:
+    template<typename F>
+    auto execute(F&& func) -> decltype(func()) {
             if (state_ == State::OPEN) {
                 if (steady_clock::now() - lastFailureTime_ > timeout_) {
                     state_ = State::HALF_OPEN;
@@ -665,11 +666,11 @@ void demonstrateErrorRecovery() {
                 
                 throw;
             }
-        }
-        
+              }
+
         State getState() const { return state_; }
     };
-    
+
     CircuitBreaker breaker;
     
     // Simulate multiple failures to trip the breaker

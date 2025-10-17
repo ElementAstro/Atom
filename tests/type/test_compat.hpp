@@ -7,6 +7,8 @@
 #include "atom/type/compat.hpp"
 
 using namespace atom::type;
+using atom::type::compat::expected;
+using atom::type::compat::unexpected;
 
 // Test fixture for compatibility layer tests
 class CompatTest : public ::testing::Test {

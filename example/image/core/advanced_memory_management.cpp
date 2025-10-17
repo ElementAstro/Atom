@@ -22,6 +22,48 @@
 #include <algorithm>
 #include <iomanip>
 #include <cstdlib>
+#include <cstring>
+
+// Portable aligned allocation fallback
+inline void* aligned_alloc_impl(size_t alignment, size_t size) {
+#if defined(_WIN32) || defined(_WIN64)
+    return _aligned_malloc(size, alignment);
+#elif defined(__APPLE__)
+    // macOS doesn't have aligned_alloc, use posix_memalign
+    void* ptr = nullptr;
+    if (posix_memalign(&ptr, alignment, size) != 0) {
+        return nullptr;
+    }
+    return ptr;
+#elif defined(__linux__)
+    // Linux has aligned_alloc but with stricter requirements
+    if (size % alignment == 0) {
+        return std::aligned_alloc(alignment, size);
+    } else {
+        // Fall back to posix_memalign
+        void* ptr = nullptr;
+        if (posix_memalign(&ptr, alignment, size) != 0) {
+            return nullptr;
+        }
+        return ptr;
+    }
+#else
+    // Generic fallback - use posix_memalign if available
+    void* ptr = nullptr;
+    if (posix_memalign(&ptr, alignment, size) != 0) {
+        return nullptr;
+    }
+    return ptr;
+#endif
+}
+
+inline void aligned_free_impl(void* ptr) {
+#if defined(_WIN32) || defined(_WIN64)
+    _aligned_free(ptr);
+#else
+    std::free(ptr);
+#endif
+}
 
 #include "atom/image/core/image_blob.hpp"
 
@@ -34,17 +76,17 @@ using namespace std::chrono;
 class BlobMemoryPool {
 public:
     BlobMemoryPool(size_t poolSize = 100 * 1024 * 1024) : poolSize_(poolSize) {
-        pool_ = std::aligned_alloc(64, poolSize_);
+        pool_ = aligned_alloc_impl(64, poolSize_);
         if (!pool_) {
             throw std::bad_alloc();
         }
         freeBlocks_.push_back({pool_, poolSize_});
         std::cout << "Memory pool created: " << (poolSize_ / (1024 * 1024)) << "MB\n";
     }
-    
+
     ~BlobMemoryPool() {
         if (pool_) {
-            std::free(pool_);
+            aligned_free_impl(pool_);
         }
     }
     
@@ -215,30 +257,30 @@ void demonstrateMemoryAlignment() {
         std::cout << "Testing " << alignment << "-byte alignment:\n";
         
         // Allocate aligned memory
-        void* alignedPtr = std::aligned_alloc(alignment, dataSize);
+        void* alignedPtr = aligned_alloc_impl(alignment, dataSize);
         if (alignedPtr) {
             // Check alignment
             uintptr_t addr = reinterpret_cast<uintptr_t>(alignedPtr);
             bool isAligned = (addr % alignment) == 0;
-            
+
             std::cout << "  Address: " << alignedPtr << "\n";
             std::cout << "  Aligned: " << (isAligned ? "YES" : "NO") << "\n";
-            
+
             // Performance test with aligned memory
             auto start = high_resolution_clock::now();
-            
+
             // Simulate memory-intensive operation
             uint8_t* data = static_cast<uint8_t*>(alignedPtr);
             for (size_t i = 0; i < dataSize; i += alignment) {
                 data[i] = static_cast<uint8_t>(i % 256);
             }
-            
+
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<microseconds>(end - start);
-            
+
             std::cout << "  Write time: " << duration.count() << " μs\n";
-            
-            std::free(alignedPtr);
+
+            aligned_free_impl(alignedPtr);
         } else {
             std::cout << "  Failed to allocate aligned memory\n";
         }

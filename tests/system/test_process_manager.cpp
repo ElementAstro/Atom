@@ -7,11 +7,12 @@
 #include <chrono>
 #include <thread>
 
-#include "atom/system/process_manager.hpp"
+#include "atom/system/process/process_manager.hpp"
 
 namespace atom::system::test {
 
-using Process = atom::system::Process;
+using atom::system::Process;
+using atom::system::ProcessManager;
 
 // Mock class for testing process operations without actual process creation
 class MockProcessManager {

@@ -41,11 +41,26 @@ struct BatteryInfo {
     float currentNow = 0.0f;
     float temperature = 0.0f;
     int cycleCounts = 0;
-    std::string manufacturer;
-    std::string model;
-    std::string serialNumber;
+    std::string manufacturer{};
+    std::string model{};
+    std::string serialNumber{};
 
-    BatteryInfo() = default;
+    BatteryInfo() noexcept
+        : isBatteryPresent(false),
+          isCharging(false),
+          batteryLifePercent(0.0f),
+          batteryLifeTime(0.0f),
+          batteryFullLifeTime(0.0f),
+          energyNow(0.0f),
+          energyFull(0.0f),
+          energyDesign(0.0f),
+          voltageNow(0.0f),
+          currentNow(0.0f),
+          temperature(0.0f),
+          cycleCounts(0),
+          manufacturer{},
+          model{},
+          serialNumber{} {}
     BatteryInfo(const BatteryInfo&) = default;
     BatteryInfo(BatteryInfo&&) noexcept = default;
     auto operator=(const BatteryInfo&) -> BatteryInfo& = default;
@@ -76,7 +91,7 @@ struct BatteryInfo {
      * @return Estimated time remaining in hours.
      */
     [[nodiscard]] auto getEstimatedTimeRemaining() const -> float;
-} ATOM_ALIGNAS(64);
+};
 
 /**
  * @brief Result type for battery data operations, containing either BatteryInfo

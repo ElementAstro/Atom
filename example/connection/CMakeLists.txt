@@ -22,6 +22,9 @@ set(FIFO_EXAMPLES "fifoclient;fifoserver;async_fifoclient;async_fifoserver")
 set(SSH_EXAMPLES "sshclient;sshserver")
 set(TTY_EXAMPLES "ttybase")
 
+# Track the connection example targets that are actually created
+set(CONNECTION_EXAMPLE_TARGETS)
+
 # Create executable for each CPP file
 foreach(CPP_FILE ${CPP_FILES})
     # Get filename without extension
@@ -34,9 +37,18 @@ foreach(CPP_FILE ${CPP_FILES})
     string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
     option(ATOM_EXAMPLE_CONNECTION_${EXAMPLE_NAME_UPPER} "Build connection example: ${EXAMPLE_NAME}" ${ATOM_EXAMPLE_CONNECTION_BUILD_ALL})
 
+    # Skip SSH examples if SSH support is not enabled
+    set(SKIP_EXAMPLE FALSE)
+    if(EXAMPLE_NAME IN_LIST SSH_EXAMPLES AND NOT ATOM_USE_SSH)
+        set(SKIP_EXAMPLE TRUE)
+        message(STATUS "Skipping SSH example '${EXAMPLE_NAME}' - SSH support not enabled (ATOM_USE_SSH=OFF)")
+    endif()
+
     # Conditionally add executable
-    if(ATOM_EXAMPLE_CONNECTION_${EXAMPLE_NAME_UPPER})
+    if(ATOM_EXAMPLE_CONNECTION_${EXAMPLE_NAME_UPPER} AND NOT SKIP_EXAMPLE)
         add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
+
+        list(APPEND CONNECTION_EXAMPLE_TARGETS ${EXECUTABLE_NAME})
 
         # Base dependencies for all connection examples
         # Link against the unified atom library which handles all transitive dependencies
@@ -68,9 +80,11 @@ foreach(CPP_FILE ${CPP_FILES})
         if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")
             target_compile_options(${EXECUTABLE_NAME} PRIVATE
                 -Wall -Wextra -Wpedantic
-                $<$<CONFIG:Debug>:-g -O0 -fsanitize=address>
+                $<$<CONFIG:Debug>:-g -O0>
                 $<$<CONFIG:Release>:-O3 -DNDEBUG>
             )
+            # Note: AddressSanitizer disabled for compatibility with MinGW on Windows
+            # where libasan is not available. Enable manually if your toolchain supports it.
             if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
                 target_compile_options(${EXECUTABLE_NAME} PRIVATE -fconcepts)
             endif()
@@ -171,14 +185,8 @@ add_custom_target(connection_examples_all
 )
 
 # Make all connection examples depend on this target
-foreach(CPP_FILE ${CPP_FILES})
-    get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
-    set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
-    string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
-
-    if(ATOM_EXAMPLE_CONNECTION_${EXAMPLE_NAME_UPPER})
-        add_dependencies(connection_examples_all ${EXECUTABLE_NAME})
-    endif()
+foreach(EXECUTABLE_NAME ${CONNECTION_EXAMPLE_TARGETS})
+    add_dependencies(connection_examples_all ${EXECUTABLE_NAME})
 endforeach()
 
 # Print summary of enabled examples
@@ -188,12 +196,9 @@ message(STATUS "  Enable tests: ${ATOM_EXAMPLE_CONNECTION_ENABLE_TESTS}")
 message(STATUS "  Verbose output: ${ATOM_EXAMPLE_CONNECTION_VERBOSE}")
 
 set(ENABLED_EXAMPLES "")
-foreach(CPP_FILE ${CPP_FILES})
-    get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
-    string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
-    if(ATOM_EXAMPLE_CONNECTION_${EXAMPLE_NAME_UPPER})
-        list(APPEND ENABLED_EXAMPLES ${EXAMPLE_NAME})
-    endif()
+foreach(EXECUTABLE_NAME ${CONNECTION_EXAMPLE_TARGETS})
+    string(REPLACE "${SUBDIR_NAME}_" "" EXAMPLE_NAME ${EXECUTABLE_NAME})
+    list(APPEND ENABLED_EXAMPLES ${EXAMPLE_NAME})
 endforeach()
 
 if(ENABLED_EXAMPLES)

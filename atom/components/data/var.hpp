@@ -250,7 +250,8 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
                 "Variable with name '{}' already exists, not adding alias",
                 alias);
         } else {
-            variables_[alias] = variables_[name];
+            // Create alias entry with empty alias field to distinguish it from primary
+            variables_[alias] = {variables_[name].variable, variables_[name].description, "", variables_[name].group};
             if (!group.empty()) {
                 groups_[group].insert(alias);
             }

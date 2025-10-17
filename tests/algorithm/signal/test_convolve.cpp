@@ -72,7 +72,8 @@ TEST_F(ConvolveTest, IdentityKernelPreservesImage) {
 
 TEST_F(ConvolveTest, EdgeDetectionKernel) {
     auto result = convolve2D(simple_image, edge_detection_kernel);
-    EXPECT_GT(std::abs(result[1][1]), 0.0);
+    // Note: For a linear gradient image, edge detection produces 0 at center
+    // The original assertion EXPECT_GT(std::abs(result[1][1]), 0.0) was incorrect
     double expected_center =
         8 * simple_image[1][1] -
         (simple_image[0][0] + simple_image[0][1] + simple_image[0][2] +
@@ -124,7 +125,9 @@ TEST_F(ConvolveTest, GaussianFilterBlursImage) {
     mean /= (simple_image.size() * simple_image[0].size());
     double dist_orig_to_mean = std::abs(original_center - mean);
     double dist_blur_to_mean = std::abs(blurred_center - mean);
-    EXPECT_LE(dist_blur_to_mean, dist_orig_to_mean);
+    // For a linear gradient, the center equals the mean, so both distances should be ~0
+    // Use tolerance to account for floating point precision
+    EXPECT_NEAR(dist_blur_to_mean, dist_orig_to_mean, 1e-10);
 }
 
 TEST_F(ConvolveTest, EmptyInputThrowsException) {
@@ -132,17 +135,17 @@ TEST_F(ConvolveTest, EmptyInputThrowsException) {
     std::vector<std::vector<double>> empty_rows_matrix(3,
                                                        std::vector<double>());
     EXPECT_THROW(convolve2D(empty_matrix, identity_kernel),
-                 std::invalid_argument);
-    EXPECT_THROW(convolve2D(simple_image, empty_matrix), std::invalid_argument);
+                 ConvolveError);
+    EXPECT_THROW(convolve2D(simple_image, empty_matrix), ConvolveError);
     EXPECT_THROW(convolve2D(empty_rows_matrix, identity_kernel),
-                 std::invalid_argument);
+                 ConvolveError);
 }
 
 TEST_F(ConvolveTest, NonUniformInputThrowsException) {
     std::vector<std::vector<double>> non_uniform{{1, 2, 3}, {4, 5}, {6, 7, 8}};
     EXPECT_THROW(convolve2D(non_uniform, identity_kernel),
-                 std::invalid_argument);
-    EXPECT_THROW(convolve2D(simple_image, non_uniform), std::invalid_argument);
+                 ConvolveError);
+    EXPECT_THROW(convolve2D(simple_image, non_uniform), ConvolveError);
 }
 
 TEST_F(ConvolveTest, MultiThreadingProducesSameResults) {
@@ -176,12 +179,12 @@ TEST_F(ConvolveTest, BasicDeconvolution) {
 TEST_F(ConvolveTest, DeconvolutionExceptions) {
     std::vector<std::vector<double>> empty_matrix;
     EXPECT_THROW(deconvolve2D(empty_matrix, identity_kernel),
-                 std::invalid_argument);
+                 ConvolveError);
     EXPECT_THROW(deconvolve2D(simple_image, empty_matrix),
-                 std::invalid_argument);
+                 ConvolveError);
     std::vector<std::vector<double>> non_uniform{{1, 2, 3}, {4, 5}, {6, 7, 8}};
     EXPECT_THROW(deconvolve2D(non_uniform, identity_kernel),
-                 std::invalid_argument);
+                 ConvolveError);
 }
 
 TEST_F(ConvolveTest, ConvolutionPerformance) {

@@ -675,3 +675,680 @@ TEST_F(IoTest, SearchExecutableFiles) {
     found_files = atom::io::searchExecutableFiles(non_existent_path, "test");
     EXPECT_EQ(found_files.size(), 0);
 }
+
+// Test classifyFiles function
+TEST_F(IoTest, ClassifyFiles) {
+    // Create files with different extensions
+    createTestFile(test_dir / "doc1.txt", "Text file 1");
+    createTestFile(test_dir / "doc2.txt", "Text file 2");
+    createTestFile(test_dir / "image1.jpg", "JPEG data");
+    createTestFile(test_dir / "image2.png", "PNG data");
+    createTestFile(test_dir / "data.json", "JSON data");
+
+    auto classified = atom::io::classifyFiles(test_dir);
+
+    // Check that files are classified by extension
+    EXPECT_TRUE(classified.contains(".txt"));
+    EXPECT_TRUE(classified.contains(".jpg"));
+    EXPECT_TRUE(classified.contains(".png"));
+    EXPECT_TRUE(classified.contains(".json"));
+
+    // Check counts
+    EXPECT_EQ(classified[".txt"].size(), 2);
+    EXPECT_EQ(classified[".jpg"].size(), 1);
+    EXPECT_EQ(classified[".png"].size(), 1);
+    EXPECT_EQ(classified[".json"].size(), 1);
+
+    // Test with non-existent directory
+    auto empty_classified = atom::io::classifyFiles(non_existent_path);
+    EXPECT_TRUE(empty_classified.empty());
+}
+
+// Test createDateDirectory function
+TEST_F(IoTest, CreateDateDirectory) {
+    std::string date = "2024-01-15";
+    fs::path root_dir = test_dir / "date_root";
+    fs::create_directories(root_dir);
+
+    EXPECT_NO_THROW(atom::io::createDateDirectory(date, root_dir));
+
+    fs::path expected_dir = root_dir / date;
+    EXPECT_TRUE(fs::exists(expected_dir));
+    EXPECT_TRUE(fs::is_directory(expected_dir));
+
+    // Test creating the same directory again (should not throw)
+    EXPECT_NO_THROW(atom::io::createDateDirectory(date, root_dir));
+}
+
+// Test createDirectoriesRecursive with dry run option
+TEST_F(IoTest, CreateDirectoriesRecursiveDryRun) {
+    fs::path base_dir = test_dir / "dry_run_base";
+    std::vector<std::string> subdirs = {"dir1", "dir2", "dir3"};
+
+    atom::io::CreateDirectoriesOptions options;
+    options.dryRun = true;
+    options.verbose = false;
+
+    EXPECT_TRUE(atom::io::createDirectoriesRecursive(base_dir, subdirs, options));
+
+    // Directories should NOT be created in dry run mode
+    EXPECT_FALSE(fs::exists(base_dir / "dir1"));
+    EXPECT_FALSE(fs::exists(base_dir / "dir2"));
+    EXPECT_FALSE(fs::exists(base_dir / "dir3"));
+}
+
+// Test removeDirectoriesRecursive with dry run option
+TEST_F(IoTest, RemoveDirectoriesRecursiveDryRun) {
+    fs::path base_dir = test_dir / "dry_run_remove";
+    fs::create_directories(base_dir);
+
+    std::vector<std::string> subdirs = {"dir1", "dir2"};
+    for (const auto& subdir : subdirs) {
+        fs::create_directories(base_dir / subdir);
+    }
+
+    atom::io::CreateDirectoriesOptions options;
+    options.dryRun = true;
+    options.verbose = false;
+
+    EXPECT_TRUE(atom::io::removeDirectoriesRecursive(base_dir, subdirs, options));
+
+    // Directories should still exist in dry run mode
+    EXPECT_TRUE(fs::exists(base_dir / "dir1"));
+    EXPECT_TRUE(fs::exists(base_dir / "dir2"));
+}
+
+// Test directory operations with delay option
+TEST_F(IoTest, DirectoryOperationsWithDelay) {
+    fs::path base_dir = test_dir / "delay_test";
+    std::vector<std::string> subdirs = {"dir1", "dir2"};
+
+    atom::io::CreateDirectoriesOptions options;
+    options.delay = 50;  // 50ms delay between operations
+    options.verbose = false;
+
+    auto start = std::chrono::high_resolution_clock::now();
+    EXPECT_TRUE(atom::io::createDirectoriesRecursive(base_dir, subdirs, options));
+    auto end = std::chrono::high_resolution_clock::now();
+
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+
+    // Should take at least delay * number of directories
+    EXPECT_GE(duration, 50);  // At least one delay occurred
+
+    EXPECT_TRUE(fs::exists(base_dir / "dir1"));
+    EXPECT_TRUE(fs::exists(base_dir / "dir2"));
+}
+
+// Test truncateFile with various sizes
+TEST_F(IoTest, TruncateFileVariousSizes) {
+    fs::path truncate_file = test_dir / "truncate_test.txt";
+    createTestFile(truncate_file, std::string(1000, 'A'));
+
+    // Truncate to smaller size
+    EXPECT_TRUE(atom::io::truncateFile(truncate_file, 100));
+    EXPECT_EQ(fs::file_size(truncate_file), 100);
+
+    // Truncate to larger size (should extend file)
+    EXPECT_TRUE(atom::io::truncateFile(truncate_file, 500));
+    EXPECT_EQ(fs::file_size(truncate_file), 500);
+
+    // Truncate to zero
+    EXPECT_TRUE(atom::io::truncateFile(truncate_file, 0));
+    EXPECT_EQ(fs::file_size(truncate_file), 0);
+
+    // Test with empty path
+    EXPECT_FALSE(atom::io::truncateFile("", 10));
+}
+
+// Test getExecutableNameFromPath function
+TEST_F(IoTest, GetExecutableNameFromPath) {
+    std::string path1 = "/usr/bin/python3";
+    EXPECT_EQ(atom::io::getExecutableNameFromPath(path1), "python3");
+
+    std::string path2 = "C:\\Program Files\\app.exe";
+    EXPECT_EQ(atom::io::getExecutableNameFromPath(path2), "app.exe");
+
+    std::string path3 = "relative/path/to/executable";
+    EXPECT_EQ(atom::io::getExecutableNameFromPath(path3), "executable");
+
+    std::string path4 = "simple_name";
+    EXPECT_EQ(atom::io::getExecutableNameFromPath(path4), "simple_name");
+
+    // Test with empty path
+    EXPECT_TRUE(atom::io::getExecutableNameFromPath("").empty());
+}
+
+// Test moveDirectory and renameDirectory
+TEST_F(IoTest, MoveAndRenameDirectory) {
+    fs::path source_dir = test_dir / "source_dir";
+    fs::path dest_dir = test_dir / "dest_dir";
+
+    fs::create_directories(source_dir);
+    createTestFile(source_dir / "file.txt", "Test content");
+
+    // Test moveDirectory
+    EXPECT_TRUE(atom::io::moveDirectory(source_dir, dest_dir));
+    EXPECT_FALSE(fs::exists(source_dir));
+    EXPECT_TRUE(fs::exists(dest_dir));
+    EXPECT_TRUE(fs::exists(dest_dir / "file.txt"));
+
+    // Test renameDirectory (which calls moveDirectory)
+    fs::path renamed_dir = test_dir / "renamed_dir";
+    EXPECT_TRUE(atom::io::renameDirectory(dest_dir, renamed_dir));
+    EXPECT_FALSE(fs::exists(dest_dir));
+    EXPECT_TRUE(fs::exists(renamed_dir));
+
+    // Test with empty paths
+    EXPECT_FALSE(atom::io::moveDirectory("", renamed_dir));
+    EXPECT_FALSE(atom::io::moveDirectory(renamed_dir, ""));
+
+    // Test with non-existent source
+    EXPECT_FALSE(atom::io::moveDirectory(non_existent_path, test_dir / "new_dir"));
+}
+
+// Test edge cases for file operations
+TEST_F(IoTest, FileOperationsEdgeCases) {
+    // Test copyFile with overwrite
+    fs::path source = test_dir / "source.txt";
+    fs::path dest = test_dir / "dest.txt";
+
+    createTestFile(source, "Original content");
+    createTestFile(dest, "Existing content");
+
+    EXPECT_TRUE(atom::io::copyFile(source, dest));
+
+    // Verify content was overwritten
+    EXPECT_EQ(readTestFile(dest), "Original content");
+
+    // Test renameFile with destination in non-existent directory
+    fs::path new_dest = test_dir / "new_subdir" / "renamed.txt";
+    EXPECT_TRUE(atom::io::renameFile(source, new_dest));
+    EXPECT_TRUE(fs::exists(new_dest));
+    EXPECT_FALSE(fs::exists(source));
+}
+
+// Test symlink operations edge cases
+TEST_F(IoTest, SymlinkEdgeCases) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping symlink edge case tests on Windows";
+#endif
+
+    fs::path target = test_file;
+    fs::path link = test_dir / "test_symlink";
+
+    // Create symlink
+    EXPECT_TRUE(atom::io::createSymlink(target, link));
+
+    // Test creating symlink with non-existent parent directory
+    fs::path link_in_new_dir = test_dir / "new_link_dir" / "link";
+    EXPECT_TRUE(atom::io::createSymlink(target, link_in_new_dir));
+    EXPECT_TRUE(fs::exists(link_in_new_dir));
+
+    // Test with empty paths
+    EXPECT_FALSE(atom::io::createSymlink("", link));
+    EXPECT_FALSE(atom::io::createSymlink(target, ""));
+}
+
+// Test concurrent file operations
+TEST_F(IoTest, ConcurrentFileOperations) {
+    const int num_threads = 10;
+    std::vector<std::thread> threads;
+    std::atomic<int> success_count{0};
+
+    // Test concurrent file creation
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([this, i, &success_count]() {
+            fs::path file = test_dir / ("concurrent_file_" + std::to_string(i) + ".txt");
+            std::ofstream ofs(file);
+            ofs << "Thread " << i << " content";
+            ofs.close();
+            if (fs::exists(file)) {
+                success_count++;
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(success_count, num_threads);
+
+    // Test concurrent file reading
+    threads.clear();
+    success_count = 0;
+
+    for (int i = 0; i < num_threads; ++i) {
+        threads.emplace_back([this, i, &success_count]() {
+            fs::path file = test_dir / ("concurrent_file_" + std::to_string(i) + ".txt");
+            std::ifstream ifs(file);
+            std::string content;
+            std::getline(ifs, content);
+            if (!content.empty()) {
+                success_count++;
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(success_count, num_threads);
+}
+
+// Test very long path handling
+TEST_F(IoTest, VeryLongPathHandling) {
+    // Create a deeply nested directory structure
+    fs::path long_path = test_dir;
+    std::string dir_name = "a";
+
+    // Create path up to reasonable limit (not OS max to avoid issues)
+    for (int i = 0; i < 50; ++i) {
+        long_path /= dir_name;
+    }
+
+    // Test directory creation with long path
+    EXPECT_TRUE(atom::io::createDirectory(long_path));
+    EXPECT_TRUE(fs::exists(long_path));
+
+    // Test file creation in long path
+    fs::path long_file = long_path / "test.txt";
+    createTestFile(long_file, "Long path test");
+    EXPECT_TRUE(atom::io::isFileExists(long_file));
+
+    // Test file operations on long path
+    EXPECT_GT(atom::io::fileSize(long_file), 0);
+    EXPECT_TRUE(atom::io::removeFile(long_file));
+}
+
+// Test special characters in filenames
+TEST_F(IoTest, SpecialCharactersInFilenames) {
+    // Test various special characters that should be valid
+    std::vector<std::string> valid_names = {
+        "file_with_underscore.txt",
+        "file-with-dash.txt",
+        "file.multiple.dots.txt",
+        "file with spaces.txt",
+        "file(with)parens.txt",
+        "file[with]brackets.txt"
+    };
+
+    for (const auto& name : valid_names) {
+        fs::path file = test_dir / name;
+        createTestFile(file, "Test content");
+        EXPECT_TRUE(fs::exists(file)) << "Failed for: " << name;
+        EXPECT_TRUE(atom::io::isFileExists(file)) << "Failed for: " << name;
+        EXPECT_TRUE(atom::io::removeFile(file)) << "Failed for: " << name;
+    }
+
+    // Test invalid characters (platform-specific)
+#ifdef _WIN32
+    std::vector<std::string> invalid_names = {
+        "file<with>angles.txt",
+        "file:with:colons.txt",
+        "file|with|pipes.txt",
+        "file?with?questions.txt",
+        "file*with*asterisks.txt"
+    };
+#else
+    std::vector<std::string> invalid_names = {
+        "file/with/slashes.txt"  // Forward slash is path separator
+    };
+#endif
+
+    for (const auto& name : invalid_names) {
+        EXPECT_FALSE(atom::io::isFileNameValid(name)) << "Should be invalid: " << name;
+    }
+}
+
+// Test error handling for read-only files
+TEST_F(IoTest, ReadOnlyFileHandling) {
+    fs::path readonly_file = test_dir / "readonly.txt";
+    createTestFile(readonly_file, "Read-only content");
+
+    // Make file read-only
+    fs::permissions(readonly_file,
+                   fs::perms::owner_read | fs::perms::group_read | fs::perms::others_read,
+                   fs::perm_options::replace);
+
+    // Test that we can read the file
+    EXPECT_TRUE(atom::io::isFileExists(readonly_file));
+    EXPECT_GT(atom::io::fileSize(readonly_file), 0);
+
+    // Test that writing fails (or succeeds depending on permissions)
+    std::ofstream ofs(readonly_file, std::ios::app);
+    bool can_write = ofs.is_open() && ofs.good();
+    ofs.close();
+
+    // Restore write permissions for cleanup
+    fs::permissions(readonly_file,
+                   fs::perms::owner_all,
+                   fs::perm_options::replace);
+
+    // File should still exist
+    EXPECT_TRUE(fs::exists(readonly_file));
+}
+
+// Test disk space handling
+TEST_F(IoTest, DiskSpaceOperations) {
+    // Get space info for test directory
+    std::error_code ec;
+    auto space_info = fs::space(test_dir, ec);
+
+    EXPECT_FALSE(ec);
+    EXPECT_GT(space_info.capacity, 0);
+    EXPECT_GT(space_info.free, 0);
+    EXPECT_LE(space_info.available, space_info.free);
+}
+
+// Test atomic file operations
+TEST_F(IoTest, AtomicFileOperations) {
+    fs::path source = test_dir / "atomic_source.txt";
+    fs::path dest = test_dir / "atomic_dest.txt";
+
+    createTestFile(source, "Atomic test content");
+
+    // Test atomic rename (move)
+    EXPECT_TRUE(atom::io::renameFile(source, dest));
+    EXPECT_FALSE(fs::exists(source));
+    EXPECT_TRUE(fs::exists(dest));
+
+    // Verify content is intact
+    EXPECT_EQ(readTestFile(dest), "Atomic test content");
+}
+
+// Test file locking scenarios
+TEST_F(IoTest, FileLockingScenarios) {
+    fs::path locked_file = test_dir / "locked.txt";
+    createTestFile(locked_file, "Locked content");
+
+    // Open file for reading
+    std::ifstream reader(locked_file);
+    EXPECT_TRUE(reader.is_open());
+
+    // Try to read while file is open (should succeed)
+    EXPECT_TRUE(atom::io::isFileExists(locked_file));
+    EXPECT_GT(atom::io::fileSize(locked_file), 0);
+
+    reader.close();
+
+    // File should still be accessible
+    EXPECT_TRUE(atom::io::isFileExists(locked_file));
+}
+
+// Test empty file operations
+TEST_F(IoTest, EmptyFileOperations) {
+    fs::path empty_file = test_dir / "empty.txt";
+    createTestFile(empty_file, "");
+
+    EXPECT_TRUE(atom::io::isFileExists(empty_file));
+    EXPECT_EQ(atom::io::fileSize(empty_file), 0);
+
+    // Test copying empty file
+    fs::path empty_copy = test_dir / "empty_copy.txt";
+    EXPECT_TRUE(atom::io::copyFile(empty_file, empty_copy));
+    EXPECT_TRUE(fs::exists(empty_copy));
+    EXPECT_EQ(atom::io::fileSize(empty_copy), 0);
+
+    // Test line counting on empty file
+    auto lines = atom::io::countLinesInFile(empty_file);
+    EXPECT_TRUE(lines.has_value());
+    EXPECT_EQ(lines.value(), 0);
+}
+
+// Test binary file operations
+TEST_F(IoTest, BinaryFileOperations) {
+    fs::path binary_file = test_dir / "binary.dat";
+
+    // Create binary file with null bytes
+    std::vector<char> binary_data = {static_cast<char>(0x00),
+                                     static_cast<char>(0x01),
+                                     static_cast<char>(0x02),
+                                     static_cast<char>(0xFF),
+                                     static_cast<char>(0xFE),
+                                     static_cast<char>(0x00),
+                                     static_cast<char>(0x7F)};
+    std::ofstream ofs(binary_file, std::ios::binary);
+    ofs.write(binary_data.data(), binary_data.size());
+    ofs.close();
+
+    EXPECT_TRUE(atom::io::isFileExists(binary_file));
+    EXPECT_EQ(atom::io::fileSize(binary_file), binary_data.size());
+
+    // Test copying binary file
+    fs::path binary_copy = test_dir / "binary_copy.dat";
+    EXPECT_TRUE(atom::io::copyFile(binary_file, binary_copy));
+
+    // Verify binary content
+    std::ifstream ifs(binary_copy, std::ios::binary);
+    std::vector<char> read_data(binary_data.size());
+    ifs.read(read_data.data(), read_data.size());
+    ifs.close();
+
+    EXPECT_EQ(std::memcmp(binary_data.data(), read_data.data(), binary_data.size()), 0);
+}
+
+// Test error handling for non-existent paths
+TEST_F(IoTest, ErrorHandlingNonExistentPaths) {
+    fs::path non_existent = test_dir / "does_not_exist.txt";
+
+    // Test file operations on non-existent file
+    EXPECT_FALSE(atom::io::isFileExists(non_existent));
+    EXPECT_EQ(atom::io::fileSize(non_existent), 0);
+    EXPECT_FALSE(atom::io::removeFile(non_existent));
+
+    // Test copy from non-existent source
+    fs::path dest = test_dir / "dest.txt";
+    EXPECT_FALSE(atom::io::copyFile(non_existent, dest));
+
+    // Test move from non-existent source
+    EXPECT_FALSE(atom::io::moveFile(non_existent, dest));
+
+    // Test rename from non-existent source
+    EXPECT_FALSE(atom::io::renameFile(non_existent, dest));
+}
+
+// Test error handling for invalid operations
+TEST_F(IoTest, ErrorHandlingInvalidOperations) {
+    // Test copying file to itself
+    EXPECT_FALSE(atom::io::copyFile(test_file, test_file));
+
+    // Test moving file to itself
+    EXPECT_FALSE(atom::io::moveFile(test_file, test_file));
+
+    // Test creating directory with file path
+    EXPECT_FALSE(atom::io::createDirectory(test_file));
+
+    // Test removing non-empty directory without recursive flag
+    fs::path non_empty_dir = test_dir / "non_empty";
+    fs::create_directories(non_empty_dir);
+    createTestFile(non_empty_dir / "file.txt", "content");
+
+    // Non-recursive remove should fail on non-empty directory
+    std::error_code ec;
+    fs::remove(non_empty_dir, ec);
+    EXPECT_TRUE(ec);  // Should have error
+}
+
+// Test error handling for permission issues
+TEST_F(IoTest, ErrorHandlingPermissionIssues) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping permission tests on Windows";
+#endif
+
+    fs::path protected_dir = test_dir / "protected";
+    fs::create_directories(protected_dir);
+
+    // Remove all permissions
+    fs::permissions(protected_dir, fs::perms::none, fs::perm_options::replace);
+
+    // Try to create file in protected directory (should fail)
+    fs::path protected_file = protected_dir / "file.txt";
+    std::ofstream ofs(protected_file);
+    EXPECT_FALSE(ofs.is_open());
+
+    // Restore permissions for cleanup
+    fs::permissions(protected_dir, fs::perms::owner_all, fs::perm_options::replace);
+}
+
+// Test path traversal prevention
+TEST_F(IoTest, PathTraversalPrevention) {
+    // Test that path traversal attempts are handled safely
+    std::vector<std::string> traversal_attempts = {
+        "../../../etc/passwd",
+        "..\\..\\..\\windows\\system32",
+        "subdir/../../outside.txt"
+    };
+
+    for (const auto& attempt : traversal_attempts) {
+        fs::path attempted_path = test_dir / attempt;
+
+        // Verify the canonical path is still within test_dir or handle appropriately
+        // This test ensures we're aware of path traversal
+        EXPECT_NO_THROW({
+            [[maybe_unused]] auto canonical = fs::weakly_canonical(attempted_path);
+        });
+    }
+}
+
+// Test large file handling
+TEST_F(IoTest, LargeFileHandling) {
+    fs::path large_file = test_dir / "large.txt";
+
+    // Create a moderately large file (10 MB)
+    const size_t file_size = 10 * 1024 * 1024;
+    createLargeTestFile(large_file, file_size);
+
+    EXPECT_TRUE(atom::io::isFileExists(large_file));
+    EXPECT_GE(atom::io::fileSize(large_file), file_size);
+
+    // Test copying large file
+    fs::path large_copy = test_dir / "large_copy.txt";
+    EXPECT_TRUE(atom::io::copyFile(large_file, large_copy));
+    EXPECT_EQ(atom::io::fileSize(large_file), atom::io::fileSize(large_copy));
+
+    // Test moving large file
+    fs::path large_moved = test_dir / "large_moved.txt";
+    EXPECT_TRUE(atom::io::moveFile(large_copy, large_moved));
+    EXPECT_FALSE(fs::exists(large_copy));
+    EXPECT_TRUE(fs::exists(large_moved));
+}
+
+// Test file truncation edge cases
+TEST_F(IoTest, FileTruncationEdgeCases) {
+    fs::path trunc_file = test_dir / "truncate.txt";
+    createTestFile(trunc_file, "This is a test file with some content");
+
+    size_t original_size = atom::io::fileSize(trunc_file);
+    EXPECT_GT(original_size, 0);
+
+    // Truncate to smaller size
+    EXPECT_TRUE(atom::io::truncateFile(trunc_file, 10));
+    EXPECT_EQ(atom::io::fileSize(trunc_file), 10);
+
+    // Truncate to zero
+    EXPECT_TRUE(atom::io::truncateFile(trunc_file, 0));
+    EXPECT_EQ(atom::io::fileSize(trunc_file), 0);
+
+    // Truncate to larger size (should extend with null bytes)
+    EXPECT_TRUE(atom::io::truncateFile(trunc_file, 100));
+    EXPECT_EQ(atom::io::fileSize(trunc_file), 100);
+}
+
+// Test directory walking with errors
+TEST_F(IoTest, DirectoryWalkingWithErrors) {
+    // Create a complex directory structure
+    fs::path complex_dir = test_dir / "complex";
+    fs::create_directories(complex_dir / "dir1" / "subdir1");
+    fs::create_directories(complex_dir / "dir2" / "subdir2");
+    createTestFile(complex_dir / "file1.txt", "content1");
+    createTestFile(complex_dir / "dir1" / "file2.txt", "content2");
+    createTestFile(complex_dir / "dir1" / "subdir1" / "file3.txt", "content3");
+
+    // Test jwalk (returns JSON string)
+    std::string json_result = atom::io::jwalk(complex_dir);
+    EXPECT_FALSE(json_result.empty());
+    EXPECT_NE(json_result.find("file1.txt"), std::string::npos);
+
+    // Test fwalk (callback-based)
+    std::vector<fs::path> all_paths;
+    atom::io::fwalk(complex_dir, [&all_paths](const fs::path& p) {
+        all_paths.push_back(p);
+    });
+
+    EXPECT_GE(all_paths.size(), 3);  // Should include files and directories
+}
+
+// Test file type classification edge cases
+TEST_F(IoTest, FileTypeClassificationEdgeCases) {
+    // Create various file types
+    fs::path text_file = test_dir / "test.txt";
+    fs::path cpp_file = test_dir / "test.cpp";
+    fs::path header_file = test_dir / "test.hpp";
+    fs::path no_ext_file = test_dir / "no_extension";
+    fs::path hidden_file = test_dir / ".hidden";
+
+    createTestFile(text_file, "text content");
+    createTestFile(cpp_file, "// C++ code");
+    createTestFile(header_file, "// Header");
+    createTestFile(no_ext_file, "no extension");
+    createTestFile(hidden_file, "hidden content");
+
+    // Test file type checking
+    EXPECT_TRUE(atom::io::isFileExists(text_file));
+    EXPECT_TRUE(atom::io::isFileExists(cpp_file));
+    EXPECT_TRUE(atom::io::isFileExists(header_file));
+    EXPECT_TRUE(atom::io::isFileExists(no_ext_file));
+    EXPECT_TRUE(atom::io::isFileExists(hidden_file));
+
+    // Test classification
+    auto classified = atom::io::classifyFiles(test_dir);
+    EXPECT_FALSE(classified.empty());
+}
+
+// Test symlink chain handling
+TEST_F(IoTest, SymlinkChainHandling) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping symlink chain tests on Windows";
+#endif
+
+    fs::path target = test_file;
+    fs::path link1 = test_dir / "link1";
+    fs::path link2 = test_dir / "link2";
+    fs::path link3 = test_dir / "link3";
+
+    // Create chain of symlinks
+    EXPECT_TRUE(atom::io::createSymlink(target, link1));
+    EXPECT_TRUE(atom::io::createSymlink(link1, link2));
+    EXPECT_TRUE(atom::io::createSymlink(link2, link3));
+
+    // All links should exist
+    EXPECT_TRUE(fs::exists(link1));
+    EXPECT_TRUE(fs::exists(link2));
+    EXPECT_TRUE(fs::exists(link3));
+
+    // Reading through the chain should work
+    EXPECT_TRUE(atom::io::isFileExists(link3));
+}
+
+// Test circular symlink detection
+TEST_F(IoTest, CircularSymlinkDetection) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping circular symlink tests on Windows";
+#endif
+
+    fs::path link_a = test_dir / "link_a";
+    fs::path link_b = test_dir / "link_b";
+
+    // Create circular symlinks
+    std::error_code ec;
+    fs::create_symlink(link_b, link_a, ec);
+    fs::create_symlink(link_a, link_b, ec);
+
+    // Operations on circular symlinks should handle gracefully
+    EXPECT_NO_THROW({
+        [[maybe_unused]] bool exists = atom::io::isFileExists(link_a);
+    });
+}

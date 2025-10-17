@@ -307,6 +307,20 @@ public:
     // callbacks_ (the vector itself) would need a mutex for add and iteration.
 #endif
 
+    EnhancedFuture() noexcept
+        : future_(),
+          cancelled_(std::make_shared<std::atomic<bool>>(false))
+#ifdef ATOM_USE_BOOST_LOCKFREE
+          ,
+          callbacks_(std::make_shared<LockfreeCallbackContainer>())
+#else
+          ,
+          callbacks_(std::make_shared<
+                        std::vector<std::function<void(T)>>>())
+#endif
+    {
+    }
+
     /**
      * @brief Constructs an EnhancedFuture from a shared future.
      * @param fut The shared future to wrap.

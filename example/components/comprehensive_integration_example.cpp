@@ -25,7 +25,7 @@ serialization, and optional scripting support.
 #include "atom/components/component.hpp"
 #include "atom/components/core/registry.hpp"
 #include "atom/components/lifecycle/lifecycle.hpp"
-#include "atom/components/serialization.hpp"
+#include "atom/components/data/serialization.hpp"
 
 // Conditional scripting support
 #if ATOM_ENABLE_LUA
@@ -114,19 +114,19 @@ public:
         auto& lifecycle = LifecycleManager::instance();
 
         lifecycle.registerHook(name, LifecyclePhase::PostInitialization,
-            [this](Component& comp, LifecyclePhase phase) {
+            [this]([[maybe_unused]] Component& comp, [[maybe_unused]] LifecyclePhase phase) {
                 std::cout << "  Service initializing..." << std::endl;
                 setValue("running", false);
             });
 
         lifecycle.registerHook(name, LifecyclePhase::PostActivation,
-            [this](Component& comp, LifecyclePhase phase) {
+            [this]([[maybe_unused]] Component& comp, [[maybe_unused]] LifecyclePhase phase) {
                 std::cout << "  Service starting..." << std::endl;
                 setValue("running", true);
             });
 
         lifecycle.registerHook(name, LifecyclePhase::PreDeactivation,
-            [this](Component& comp, LifecyclePhase phase) {
+            [this]([[maybe_unused]] Component& comp, [[maybe_unused]] LifecyclePhase phase) {
                 std::cout << "  Service stopping..." << std::endl;
                 setValue("running", false);
             });
@@ -252,15 +252,41 @@ public:
 
     void demonstrateSerialization() {
         try {
-            // Note: ComponentSerializer is not available in current API
-            // This is a placeholder for serialization functionality
-            std::cout << "  Serialization functionality not available in current API" << std::endl;
-            std::cout << "  Component state can be accessed via variables instead" << std::endl;
-            // Placeholder for actual serialization
-            std::cout << "  Component state would be serialized here" << std::endl;
+            std::cout << "  Demonstrating component serialization..." << std::endl;
 
-            // Demonstrate deserialization (would create new component)
-            std::cout << "  Deserialization would restore component state" << std::endl;
+            // Get the serialization manager
+            auto& serializationMgr = atom::components::SerializationManager::instance();
+
+            // Configure serialization options
+            atom::components::SerializationOptions options;
+            options.format = atom::components::SerializationFormat::JSON;
+            options.includeMetadata = true;
+            options.includeTimestamp = true;
+            options.includeVersion = true;
+
+            // Serialize the service component
+            auto result = serializationMgr.serialize(*service_, options);
+
+            if (result.success) {
+                std::cout << "  Component serialized successfully" << std::endl;
+                std::cout << "  Original size: " << result.originalSize << " bytes" << std::endl;
+                std::cout << "  Serialization time: " << result.serializationTime.count() << " μs" << std::endl;
+
+                // Convert data to string for display (JSON format)
+                std::string jsonStr(result.data.begin(), result.data.end());
+                std::cout << "  Serialized data preview: " << jsonStr.substr(0, std::min(size_t(100), jsonStr.size())) << "..." << std::endl;
+
+                // Demonstrate deserialization
+                auto deserResult = serializationMgr.deserialize(result.data, options);
+                if (deserResult.success) {
+                    std::cout << "  Component deserialized successfully" << std::endl;
+                    std::cout << "  Deserialization time: " << deserResult.deserializationTime.count() << " μs" << std::endl;
+                } else {
+                    std::cout << "  Deserialization failed: " << deserResult.errorMessage << std::endl;
+                }
+            } else {
+                std::cout << "  Serialization failed: " << result.errorMessage << std::endl;
+            }
 
         } catch (const std::exception& e) {
             std::cout << "  Serialization error: " << e.what() << std::endl;

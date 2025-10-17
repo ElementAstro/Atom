@@ -53,6 +53,9 @@ struct SaveOptions {
     bool overwriteExisting = true;                     // Overwrite existing files
     bool createDirectories = true;                     // Create directories if needed
     std::string backupSuffix = ".bak";                // Backup suffix for existing files
+
+    // Default constructor
+    SaveOptions() = default;
 };
 
 /**

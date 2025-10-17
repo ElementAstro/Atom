@@ -1,4 +1,4 @@
-# CMakeLists.txt for Atom SysInfo Tests (Custom Configuration)
+# CMakeLists.txt for Atom SysInfo Tests
 # This project is licensed under the terms of the GPL3 license.
 #
 # Project Name: Atom-SysInfo-Tests
@@ -16,9 +16,9 @@ find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
 # =============================================================================
-# Include Test Infrastructure (Optional for Custom Modules)
+# Include Test Infrastructure
 # =============================================================================
-# Include the standardized test infrastructure if available
+# Include the standardized test infrastructure
 if(EXISTS "${CMAKE_SOURCE_DIR}/tests/tests/CMakeLists.txt")
     add_subdirectory("${CMAKE_SOURCE_DIR}/tests/tests" "${CMAKE_CURRENT_BINARY_DIR}/test_infrastructure")
 endif()
@@ -109,10 +109,21 @@ enable_testing()
 
 # Include GoogleTest for standardized test discovery
 include(GoogleTest)
-gtest_discover_tests(atom_sysinfo_tests
+# Temporarily disabled due to timeout issues during test discovery
+# gtest_discover_tests(atom_sysinfo_tests
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#     PROPERTIES
+#     LABELS "sysinfo;unit"
+#     TIMEOUT 300
+# )
+
+# Manual test registration as workaround
+add_test(NAME atom_sysinfo_tests
+    COMMAND atom_sysinfo_tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
-    LABELS "sysinfo"
+)
+set_tests_properties(atom_sysinfo_tests PROPERTIES
+    LABELS "sysinfo;unit"
     TIMEOUT 300
 )
 
@@ -206,69 +217,71 @@ set_tests_properties(IntegrationTests PROPERTIES
     TIMEOUT 120
 )
 
-# Custom test targets
+# Custom test targets for better organization
 add_custom_target(run_sysinfo_tests
-    COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "sysinfo"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running all system information tests"
 )
 
 add_custom_target(run_hardware_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="CPUInfoTest.*:CpuTest.*:MemoryInfoTest.*:MemoryTest.*:DiskInfoTest.*:DiskTest.*:GPUInfoTest.*:GpuTest.*:BatteryInfoTest.*:BatteryTest.*:BiosTest.*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "hardware"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running hardware information tests"
 )
 
 add_custom_target(run_system_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="OSInfoTest.*:OsTest.*:LocaleTest.*:SnTest.*:VirtualTest.*:WmTest.*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "system"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running system information tests"
 )
 
 add_custom_target(run_network_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="NetworkInfoTest.*:WifiTest.*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "network"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running network information tests"
 )
 
 add_custom_target(run_utility_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="SysInfoPrinterTest.*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "utility"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running utility tests"
 )
 
 # Test category targets for better organization
 add_custom_target(run_unit_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="*Test.*:-*IntegrationTest.*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "unit"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running unit tests only"
 )
 
 add_custom_target(run_integration_tests_only
-    COMMAND ${PROJECT_NAME} --gtest_filter="*IntegrationTest.*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "integration"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running integration tests only"
 )
 
 add_custom_target(run_sysinfo_performance_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="*Performance*:*Monitoring*:*Load*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "performance"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running sysinfo performance-related tests"
 )
 
 add_custom_target(run_sysinfo_security_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="*Security*:*Secure*:BiosTest.*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "security"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running sysinfo security-related tests"
 )
 
 add_custom_target(run_quick_tests
-    COMMAND ${PROJECT_NAME} --gtest_filter="*Basic*:*Info*:-*Performance*:-*Monitoring*"
-    DEPENDS ${PROJECT_NAME}
+    COMMAND ${CMAKE_CTEST_COMMAND} --verbose -L "unit" -E "performance|load|stress"
+    DEPENDS atom_sysinfo_tests
     COMMENT "Running quick tests (excluding performance tests)"
 )
 
-# Code coverage (if available)
+# =============================================================================
+# Code Coverage Support
+# =============================================================================
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
     target_compile_options(atom_sysinfo_tests PRIVATE --coverage)
     target_link_options(atom_sysinfo_tests PRIVATE --coverage)
@@ -282,3 +295,11 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
         COMMENT "Generating code coverage report for system information"
     )
 endif()
+
+# Set IDE folder organization
+set_property(TARGET atom_sysinfo_tests PROPERTY FOLDER "Tests/SysInfo")
+set_property(TARGET run_sysinfo_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_hardware_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_system_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_network_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+set_property(TARGET run_utility_tests PROPERTY FOLDER "Tests/SysInfo/Custom")

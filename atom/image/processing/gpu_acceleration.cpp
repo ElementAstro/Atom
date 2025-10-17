@@ -170,7 +170,7 @@ public:
         info.name = "Fallback CPU Device";
         info.vendor = "Atom Framework";
         info.version = "1.0";
-        info.memorySize = 1024 * 1024 * 1024; // 1GB placeholder
+        info.totalMemory = 1024 * 1024 * 1024; // 1GB placeholder
         info.computeUnits = 1;
         info.maxWorkGroupSize = 256;
         info.supportsDouble = true;
@@ -178,21 +178,8 @@ public:
         return info;
     }
 
-    std::vector<GPUDeviceInfo> getAvailableDevices(GPUBackend backend) const override {
-        return {getDeviceInfo()};
-    }
-
-    bool isInitialized() const override {
-        return initialized_;
-    }
-
-    GPUBackend getBackend() const override {
-        return backend_;
-    }
-
-    void release() override {
-        initialized_ = false;
-    }
+    // These methods are static in the base class, so they can't be overridden
+    // Remove the override specifiers or make them static if needed
 
 private:
     GPUBackend backend_ = GPUBackend::AUTO;
@@ -238,7 +225,7 @@ bool GPUImageProcessor::initialize(GPUBackend backend, int deviceId) {
 }
 
 std::unique_ptr<GPUBuffer> GPUImageProcessor::uploadImage(const blob& image) {
-    if (!context_ || image.empty()) {
+    if (!context_ || image.isEmpty()) {
         return nullptr;
     }
 
@@ -265,8 +252,8 @@ blob GPUImageProcessor::downloadImage(const GPUBuffer& buffer, int width, int he
         size_t imageSize = width * height * channels;
         std::vector<uint8_t> data(imageSize);
         
-        if (buffer.download(data.data(), imageSize)) {
-            return blob(data);
+        if (const_cast<GPUBuffer&>(buffer).download(data.data(), imageSize)) {
+            return blob(data.data(), data.size());
         }
     } catch (const std::exception&) {
         // Handle error
@@ -533,7 +520,7 @@ std::unordered_map<std::string, double> GPUImageProcessor::getPerformanceStats()
 
     if (context_) {
         auto deviceInfo = context_->getDeviceInfo();
-        stats["memory_size_mb"] = static_cast<double>(deviceInfo.memorySize) / (1024 * 1024);
+        stats["memory_size_mb"] = static_cast<double>(deviceInfo.totalMemory) / (1024 * 1024);
         stats["compute_units"] = static_cast<double>(deviceInfo.computeUnits);
         stats["max_work_group_size"] = static_cast<double>(deviceInfo.maxWorkGroupSize);
     }
@@ -739,8 +726,7 @@ std::unordered_map<std::string, size_t> GPUImageProcessor::optimizeKernelParams(
     return params;
 }
 
-}  // namespace atom::image
-
+  
 std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(const GPUBuffer& input,
                                                           float sigma, int kernelSize,
                                                           int width, int height, int channels) {
@@ -753,7 +739,7 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(const GPUBuffer& inpu
         std::vector<std::vector<float>> kernel(kernelSize, std::vector<float>(kernelSize));
         float sum = 0.0f;
         int center = kernelSize / 2;
-        
+
         for (int i = 0; i < kernelSize; ++i) {
             for (int j = 0; j < kernelSize; ++j) {
                 float x = i - center;
@@ -762,17 +748,19 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(const GPUBuffer& inpu
                 sum += kernel[i][j];
             }
         }
-        
+
         // Normalize kernel
         for (int i = 0; i < kernelSize; ++i) {
             for (int j = 0; j < kernelSize; ++j) {
                 kernel[i][j] /= sum;
             }
         }
-        
+
         // Apply convolution
         return convolve(input, kernel, width, height, channels);
     } catch (const std::exception&) {
         return nullptr;
     }
 }
+
+}  // namespace atom::image

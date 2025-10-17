@@ -29,6 +29,36 @@ using namespace atom::async;
 
 namespace atom::async::sync::test {
 
+namespace {
+struct ThrowingType {
+    int value;
+    static inline std::atomic<bool> shouldThrow{false};
+
+    explicit ThrowingType(int v) : value(v) {
+        if (shouldThrow.load(std::memory_order_relaxed) && v == 999) {
+            throw std::runtime_error("Constructor exception");
+        }
+    }
+
+    ThrowingType(const ThrowingType& other) : value(other.value) {
+        if (shouldThrow.load(std::memory_order_relaxed) && value == 888) {
+            throw std::runtime_error("Copy constructor exception");
+        }
+    }
+
+    ThrowingType& operator=(const ThrowingType& other) {
+        if (this != &other) {
+            if (shouldThrow.load(std::memory_order_relaxed) &&
+                other.value == 777) {
+                throw std::runtime_error("Assignment exception");
+            }
+            value = other.value;
+        }
+        return *this;
+    }
+};
+}  // namespace
+
 // ============================================================================
 // Slot Tests
 // ============================================================================
@@ -308,24 +338,7 @@ TEST_F(SlotTest, SlotWaitForSpace) {
 }
 
 TEST_F(SlotTest, SlotExceptionSafety) {
-    struct ThrowingType {
-        int value;
-        static bool shouldThrow;
-
-        ThrowingType(int v) : value(v) {
-            if (shouldThrow && v == 999) {
-                throw std::runtime_error("Constructor exception");
-            }
-        }
-
-        ThrowingType(const ThrowingType& other) : value(other.value) {
-            if (shouldThrow && value == 888) {
-                throw std::runtime_error("Copy constructor exception");
-            }
-        }
-    };
-
-    ThrowingType::shouldThrow = true;
+    ThrowingType::shouldThrow.store(true, std::memory_order_relaxed);
 
     Slot<ThrowingType> slot;
 
@@ -339,7 +352,7 @@ TEST_F(SlotTest, SlotExceptionSafety) {
     EXPECT_FALSE(slot.hasValue());
 
     // Normal operation should still work
-    ThrowingType::shouldThrow = false;
+    ThrowingType::shouldThrow.store(false, std::memory_order_relaxed);
     slot.put(ThrowingType(42));
     EXPECT_TRUE(slot.hasValue());
 

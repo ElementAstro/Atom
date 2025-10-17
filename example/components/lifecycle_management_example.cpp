@@ -32,11 +32,12 @@ and advanced lifecycle management features.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/lifecycle.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
 #include "atom/components/core/registry.hpp"
 
 // Note: Registry and Component are in the global namespace, not atom::components
 // LifecycleManager and LifecyclePhase are in atom::components namespace
+namespace ac = atom::components;
 
 /**
  * @brief Service component demonstrating lifecycle hooks
@@ -260,20 +261,20 @@ void setupLifecycleHooks() {
 void setupDependencies() {
     std::cout << "\n=== Setting up Dependencies ===" << std::endl;
 
-    auto& lifecycle = LifecycleManager::instance();
+    auto& lifecycle = ac::LifecycleManager::instance();
 
     // WebService depends on Database (required)
     lifecycle.addDependency(
         "WebService",
-        DependencyConstraint("Database", DependencyType::Required));
+        ac::DependencyConstraint("Database", ac::DependencyType::Required));
 
     // Application depends on both Database and WebService (required)
     lifecycle.addDependency(
         "Application",
-        DependencyConstraint("Database", DependencyType::Required));
+        ac::DependencyConstraint("Database", ac::DependencyType::Required));
     lifecycle.addDependency(
         "Application",
-        DependencyConstraint("WebService", DependencyType::Required));
+        ac::DependencyConstraint("WebService", ac::DependencyType::Required));
 
     std::cout << "Dependencies configured:" << std::endl;
     std::cout << "  WebService -> Database (Required)" << std::endl;
@@ -285,7 +286,7 @@ void demonstrateLifecycleExecution() {
     std::cout << "\n=== Lifecycle Execution Demo ===" << std::endl;
 
     auto& registry = Registry::instance();
-    auto& lifecycle = LifecycleManager::instance();
+    auto& lifecycle = ac::LifecycleManager::instance();
 
     std::cout << "\n1. Creating components..." << std::endl;
 
@@ -314,13 +315,13 @@ void demonstrateLifecycleExecution() {
 
             // Execute pre-initialization hooks
             lifecycle.executePhase(*component,
-                                   LifecyclePhase::PreInitialization);
+                                   ac::LifecyclePhase::PreInitialization);
 
             // Initialize component
             if (component->initialize()) {
                 // Execute post-initialization hooks
                 lifecycle.executePhase(*component,
-                                       LifecyclePhase::PostInitialization);
+                                       ac::LifecyclePhase::PostInitialization);
                 std::cout << "  " << componentName
                           << " initialized successfully" << std::endl;
             } else {
@@ -333,9 +334,9 @@ void demonstrateLifecycleExecution() {
 
     // Initialize the main component
     std::cout << "\nInitializing: Application" << std::endl;
-    lifecycle.executePhase(*app, LifecyclePhase::PreInitialization);
+    lifecycle.executePhase(*app, ac::LifecyclePhase::PreInitialization);
     if (app->initialize()) {
-        lifecycle.executePhase(*app, LifecyclePhase::PostInitialization);
+        lifecycle.executePhase(*app, ac::LifecyclePhase::PostInitialization);
         std::cout << "  Application initialized successfully" << std::endl;
     } else {
         std::cout << "  Application initialization failed" << std::endl;
@@ -350,9 +351,9 @@ void demonstrateLifecycleExecution() {
         if (component) {
             std::cout << "\nActivating: " << componentName << std::endl;
 
-            lifecycle.executePhase(*component, LifecyclePhase::PreActivation);
+            lifecycle.executePhase(*component, ac::LifecyclePhase::PreActivation);
             // Note: Component doesn't have activate() method, using lifecycle phases instead
-            lifecycle.executePhase(*component, LifecyclePhase::PostActivation);
+            lifecycle.executePhase(*component, ac::LifecyclePhase::PostActivation);
             std::cout << "  " << componentName << " activated successfully"
                       << std::endl;
         }
@@ -360,9 +361,9 @@ void demonstrateLifecycleExecution() {
 
     // Activate the main component
     std::cout << "\nActivating: Application" << std::endl;
-    lifecycle.executePhase(*app, LifecyclePhase::PreActivation);
+    lifecycle.executePhase(*app, ac::LifecyclePhase::PreActivation);
     // Note: Component doesn't have activate() method, using lifecycle phases instead
-    lifecycle.executePhase(*app, LifecyclePhase::PostActivation);
+    lifecycle.executePhase(*app, ac::LifecyclePhase::PostActivation);
     std::cout << "  Application activated successfully" << std::endl;
 }
 
@@ -370,7 +371,7 @@ void demonstrateLifecycleShutdown() {
     std::cout << "\n=== Lifecycle Shutdown Demo ===" << std::endl;
 
     auto& registry = Registry::instance();
-    auto& lifecycle = LifecycleManager::instance();
+    auto& lifecycle = ac::LifecycleManager::instance();
 
     std::cout << "\n5. Shutting down components..." << std::endl;
 
@@ -384,14 +385,14 @@ void demonstrateLifecycleShutdown() {
             std::cout << "\nShutting down: " << componentName << std::endl;
 
             // Deactivate
-            lifecycle.executePhase(*component, LifecyclePhase::PreDeactivation);
+            lifecycle.executePhase(*component, ac::LifecyclePhase::PreDeactivation);
             // Note: Component doesn't have deactivate() method, using lifecycle phases instead
-            lifecycle.executePhase(*component, LifecyclePhase::PostDeactivation);
+            lifecycle.executePhase(*component, ac::LifecyclePhase::PostDeactivation);
 
             // Cleanup
-            lifecycle.executePhase(*component, LifecyclePhase::PreDestruction);
+            lifecycle.executePhase(*component, ac::LifecyclePhase::PreDestruction);
             // Note: Component doesn't have cleanup() method, using lifecycle phases instead
-            lifecycle.executePhase(*component, LifecyclePhase::PostDestruction);
+            lifecycle.executePhase(*component, ac::LifecyclePhase::PostDestruction);
 
             std::cout << "  " << componentName << " shut down successfully"
                       << std::endl;
@@ -402,7 +403,7 @@ void demonstrateLifecycleShutdown() {
 void demonstrateLifecycleHistory() {
     std::cout << "\n=== Lifecycle History Demo ===" << std::endl;
 
-    auto& lifecycle = LifecycleManager::instance();
+    [[maybe_unused]] auto& lifecycle = ac::LifecycleManager::instance();
 
     std::cout << "\n6. Lifecycle event history:" << std::endl;
 

@@ -8,6 +8,7 @@
 #define ATOM_IO_IO_HPP
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <concepts>
 #include <cstdint>
@@ -24,6 +25,12 @@
 #include <thread>
 #include <unordered_map>
 #include <vector>
+
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <sys/stat.h>
+#endif
 
 #include <spdlog/spdlog.h>
 #include "atom/macro.hpp"
@@ -1308,20 +1315,71 @@ template <PathLike P>
             return fileTimes;
         }
 
-        // Get file creation time - C++20 still doesn't have a standard way to
-        // get creation time This implementation may need platform-specific code
-        // for complete accuracy
-
+        // Get file creation time using platform-specific APIs
 #if defined(_WIN32)
-        // Windows implementation
-        // This is platform-specific and would need to use Windows API
-        // Placeholder for now
-        fileTimes.first = "Creation time not available in portable C++";
+        // Windows implementation using GetFileAttributesExW
+        try {
+            WIN32_FILE_ATTRIBUTE_DATA fileInfo;
+            if (GetFileAttributesExW(path.wstring().c_str(),
+                                     GetFileExInfoStandard, &fileInfo)) {
+                SYSTEMTIME sysTime;
+                FILETIME creationTime = fileInfo.ftCreationTime;
+
+                if (FileTimeToSystemTime(&creationTime, &sysTime)) {
+                    std::array<char, 100> buffer{};
+                    int written = snprintf(
+                        buffer.data(), buffer.size(),
+                        "%04d-%02d-%02d %02d:%02d:%02d", sysTime.wYear,
+                        sysTime.wMonth, sysTime.wDay, sysTime.wHour,
+                        sysTime.wMinute, sysTime.wSecond);
+                    if (written > 0 &&
+                        static_cast<size_t>(written) < buffer.size()) {
+                        fileTimes.first = std::string(buffer.data());
+                    } else {
+                        fileTimes.first = "Unavailable";
+                    }
+                } else {
+                    fileTimes.first = "Unavailable";
+                }
+            } else {
+                spdlog::warn("Failed to get Windows file attributes for: {}",
+                             path.string());
+                fileTimes.first = "Unavailable";
+            }
+        } catch (const std::exception& e) {
+            spdlog::error("Exception while getting Windows creation time: {}",
+                          e.what());
+            fileTimes.first = "Unavailable";
+        }
 #else
-        // Unix/Linux implementation
-        // This is platform-specific and would need to use stat
-        // Placeholder for now
-        fileTimes.first = "Creation time not available in portable C++";
+        // Unix/Linux implementation using stat
+        try {
+            struct stat fileStat;
+            if (stat(path.string().c_str(), &fileStat) == 0) {
+#ifdef __APPLE__
+                // macOS has birth time
+                auto time_val = fileStat.st_birthtimespec.tv_sec;
+#elif defined(__linux__)
+                // Linux uses ctime (change time, closest to creation)
+                auto time_val = fileStat.st_ctim.tv_sec;
+#else
+                // Fallback for other Unix systems
+                auto time_val = fileStat.st_ctime;
+#endif
+                std::string timeStr = std::ctime(&time_val);
+                if (!timeStr.empty() && timeStr.back() == '\n') {
+                    timeStr.pop_back();
+                }
+                fileTimes.first = timeStr;
+            } else {
+                spdlog::warn("Failed to get file stat for: {}", path.string());
+                fileTimes.first = "Unavailable";
+            }
+        } catch (const std::exception& e) {
+            spdlog::error("Exception while getting Unix creation time: {}",
+                          e.what());
+            fileTimes.first = "Unavailable";
+        }
 #endif
 
         // Convert last_write_time to string

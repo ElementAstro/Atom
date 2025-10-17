@@ -269,18 +269,9 @@ private:
         if (status == 0 && demangledName) {
             demangled = String(demangledName.get());
         } else {
-            switch (status) {
-                case -1:
-                    throw AbiException(
-                        "Memory allocation failure during demangling");
-                case -2:
-                    demangled = String(mangled_name);
-                    break;
-                case -3:
-                    throw AbiException("Invalid mangled name");
-                default:
-                    demangled = String(mangled_name);
-            }
+            // On Windows or when demangling fails, return the original mangled name
+            // instead of throwing an exception
+            demangled = String(mangled_name);
         }
 #endif
 

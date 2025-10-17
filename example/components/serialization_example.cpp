@@ -22,8 +22,9 @@ and comprehensive serialization features with the component system.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
-#include "atom/components/serialization.hpp"
+#include "atom/components/core/registry.hpp"
+#include "atom/components/data/serialization.hpp"
+#include <chrono>
 
 using namespace atom::components;
 
@@ -124,7 +125,7 @@ public:
 void demonstrateBasicSerialization() {
     std::cout << "\n=== Basic Serialization Demo ===" << std::endl;
 
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
     auto& serializer = SerializationManager::instance();
 
     std::cout << "\n1. Creating component with data..." << std::endl;
@@ -201,7 +202,7 @@ void demonstrateBasicSerialization() {
 void demonstrateFileSerialization() {
     std::cout << "\n=== File Serialization Demo ===" << std::endl;
 
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
     auto& serializer = SerializationManager::instance();
 
     auto component = registry.getComponent("PlayerData");
@@ -272,7 +273,7 @@ void demonstrateFileSerialization() {
 void demonstrateDeserialization() {
     std::cout << "\n=== Deserialization Demo ===" << std::endl;
 
-    auto& registry = Registry::instance();
+    [[maybe_unused]] auto& registry = ::Registry::instance();
     auto& serializer = SerializationManager::instance();
 
     std::cout << "\n5. Deserializing from files..." << std::endl;
@@ -324,7 +325,7 @@ void demonstrateDeserialization() {
 void demonstrateVersioning() {
     std::cout << "\n=== Versioning Demo ===" << std::endl;
 
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
     auto& serializer = SerializationManager::instance();
 
     std::cout << "\n6. Testing version compatibility..." << std::endl;
@@ -389,7 +390,7 @@ void demonstrateCustomSerialization() {
     // The SerializationManager uses the registered serializers for both serialization and deserialization
 
     // Test custom serialization
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
     auto component = registry.getComponent("PlayerData");
     if (component) {
         SerializationOptions customOptions;
@@ -430,7 +431,7 @@ void demonstrateCustomSerialization() {
 void demonstratePerformanceAnalysis() {
     std::cout << "\n=== Performance Analysis Demo ===" << std::endl;
 
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
     auto& serializer = SerializationManager::instance();
 
     std::cout << "\n8. Analyzing serialization performance..." << std::endl;

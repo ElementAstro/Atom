@@ -114,31 +114,135 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
 }
 
 auto getCurrentCpuTemperature() -> float {
-    spdlog::info( "Starting getCurrentCpuTemperature function on Windows");
-
-    // Windows doesn't provide a direct API for CPU temperature
-    // This would require WMI or third-party libraries like OpenHardwareMonitor
-    // A simplified placeholder implementation is provided
+    spdlog::info("Starting getCurrentCpuTemperature function on Windows");
 
     float temperature = 0.0F;
+    HRESULT hres;
 
-    spdlog::info( "Windows CPU Temperature: {}°C (placeholder value)",
-          temperature);
+    // Initialize COM
+    hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres) && hres != RPC_E_CHANGED_MODE) {
+        spdlog::error("Failed to initialize COM library. Error code: {}", hres);
+        return temperature;
+    }
+
+    // Initialize COM security
+    hres = CoInitializeSecurity(
+        nullptr, -1, nullptr, nullptr, RPC_C_AUTHN_LEVEL_DEFAULT,
+        RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE, nullptr);
+
+    if (FAILED(hres) && hres != RPC_E_TOO_LATE) {
+        spdlog::debug("COM security already initialized or failed: {}", hres);
+    }
+
+    // Obtain the initial locator to WMI
+    IWbemLocator *pLoc = nullptr;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+                            IID_IWbemLocator, (LPVOID *)&pLoc);
+
+    if (FAILED(hres)) {
+        spdlog::error("Failed to create IWbemLocator object. Error code: {}", hres);
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Connect to WMI through the IWbemLocator::ConnectServer method
+    IWbemServices *pSvc = nullptr;
+    hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\WMI"), nullptr, nullptr, 0,
+                               0, 0, 0, &pSvc);
+
+    if (FAILED(hres)) {
+        spdlog::warn("Could not connect to WMI namespace ROOT\\WMI. Error code: {}", hres);
+        pLoc->Release();
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Set security levels on the proxy
+    hres = CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE,
+                             nullptr, RPC_C_AUTHN_LEVEL_CALL,
+                             RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+
+    if (FAILED(hres)) {
+        spdlog::error("Could not set proxy blanket. Error code: {}", hres);
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Query for thermal zone temperature
+    IEnumWbemClassObject *pEnumerator = nullptr;
+    hres = pSvc->ExecQuery(
+        bstr_t("WQL"),
+        bstr_t("SELECT * FROM MSAcpi_ThermalZoneTemperature"),
+        WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
+        &pEnumerator);
+
+    if (FAILED(hres)) {
+        spdlog::warn("WMI query for thermal zone failed. Error code: {}", hres);
+        pSvc->Release();
+        pLoc->Release();
+        CoUninitialize();
+        return temperature;
+    }
+
+    // Get the data from the query
+    IWbemClassObject *pclsObj = nullptr;
+    ULONG uReturn = 0;
+
+    if (pEnumerator) {
+        HRESULT hr = pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn);
+
+        if (uReturn != 0) {
+            VARIANT vtProp;
+            VariantInit(&vtProp);
+
+            // Get the value of the CurrentTemperature property
+            hr = pclsObj->Get(L"CurrentTemperature", 0, &vtProp, 0, 0);
+            if (SUCCEEDED(hr) && vtProp.vt == VT_I4) {
+                // Temperature is in tenths of Kelvin, convert to Celsius
+                temperature = (vtProp.lVal / 10.0f) - 273.15f;
+                spdlog::info("Windows CPU Temperature: {}°C (from thermal zone)", temperature);
+            } else {
+                spdlog::warn("Failed to retrieve CurrentTemperature property");
+            }
+
+            VariantClear(&vtProp);
+            pclsObj->Release();
+        } else {
+            spdlog::warn("No thermal zone temperature data available");
+        }
+
+        pEnumerator->Release();
+    }
+
+    // Cleanup
+    pSvc->Release();
+    pLoc->Release();
+    CoUninitialize();
+
     return temperature;
 }
 
 auto getPerCoreCpuTemperature() -> std::vector<float> {
-    spdlog::info( "Starting getPerCoreCpuTemperature function on Windows");
+    spdlog::info("Starting getPerCoreCpuTemperature function on Windows");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<float> temperatures(numCores, 0.0F);
 
-    // As with getCurrentCpuTemperature, this is a placeholder
+    // Windows WMI doesn't provide per-core temperature data directly
+    // MSAcpi_ThermalZoneTemperature provides overall thermal zone temperatures
+    // For per-core data, we would need hardware-specific drivers or libraries
 
-    spdlog::info(
-          "Windows Per-Core CPU Temperature collected for {} cores "
-          "(placeholder values)",
-          numCores);
+    // As a fallback, use the overall CPU temperature for all cores
+    float overallTemp = getCurrentCpuTemperature();
+    std::fill(temperatures.begin(), temperatures.end(), overallTemp);
+
+    spdlog::info("Windows Per-Core CPU Temperature: Using overall temperature ({} °C) for {} cores",
+                 overallTemp, numCores);
+    spdlog::debug("Note: Windows does not provide native per-core temperature APIs. Consider using hardware monitoring libraries for detailed per-core data.");
+
     return temperatures;
 }
 
@@ -737,7 +841,7 @@ auto getCpuVendor() -> CpuVendor {
 }
 
 auto getCpuSocketType() -> std::string {
-    spdlog::info( "Starting getCpuSocketType function on Windows");
+    spdlog::info("Starting getCpuSocketType function on Windows");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.socketType.empty()) {
         return g_cpuInfoCache.socketType;
@@ -745,11 +849,106 @@ auto getCpuSocketType() -> std::string {
 
     std::string socketType = "Unknown";
 
-    // Windows doesn't provide a direct API for socket type
-    // This would require WMI or similar advanced techniques
-    // This is a placeholder implementation
+    // Try to get socket designation from WMI Win32_Processor
+    HRESULT hres;
+    hres = CoInitializeEx(0, COINIT_MULTITHREADED);
+    if (FAILED(hres) && hres != RPC_E_CHANGED_MODE) {
+        spdlog::debug("COM already initialized or failed: {}", hres);
+    }
 
-    spdlog::info( "Windows CPU Socket Type: {} (placeholder)", socketType);
+    IWbemLocator *pLoc = nullptr;
+    hres = CoCreateInstance(CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER,
+                            IID_IWbemLocator, (LPVOID *)&pLoc);
+
+    if (SUCCEEDED(hres)) {
+        IWbemServices *pSvc = nullptr;
+        hres = pLoc->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), nullptr, nullptr, 0,
+                                   0, 0, 0, &pSvc);
+
+        if (SUCCEEDED(hres)) {
+            CoSetProxyBlanket(pSvc, RPC_C_AUTHN_WINNT, RPC_C_AUTHZ_NONE,
+                             nullptr, RPC_C_AUTHN_LEVEL_CALL,
+                             RPC_C_IMP_LEVEL_IMPERSONATE, nullptr, EOAC_NONE);
+
+            IEnumWbemClassObject *pEnumerator = nullptr;
+            hres = pSvc->ExecQuery(
+                bstr_t("WQL"),
+                bstr_t("SELECT SocketDesignation FROM Win32_Processor"),
+                WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
+                &pEnumerator);
+
+            if (SUCCEEDED(hres)) {
+                IWbemClassObject *pclsObj = nullptr;
+                ULONG uReturn = 0;
+
+                if (pEnumerator->Next(WBEM_INFINITE, 1, &pclsObj, &uReturn) == S_OK && uReturn != 0) {
+                    VARIANT vtProp;
+                    VariantInit(&vtProp);
+
+                    if (pclsObj->Get(L"SocketDesignation", 0, &vtProp, 0, 0) == S_OK) {
+                        if (vtProp.vt == VT_BSTR && vtProp.bstrVal != nullptr) {
+                            int size = WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, -1, nullptr, 0, nullptr, nullptr);
+                            if (size > 0) {
+                                std::vector<char> buffer(size);
+                                WideCharToMultiByte(CP_UTF8, 0, vtProp.bstrVal, -1, buffer.data(), size, nullptr, nullptr);
+                                socketType = buffer.data();
+                            }
+                        }
+                    }
+
+                    VariantClear(&vtProp);
+                    pclsObj->Release();
+                }
+
+                pEnumerator->Release();
+            }
+
+            pSvc->Release();
+        }
+
+        pLoc->Release();
+    }
+
+    CoUninitialize();
+
+    // If WMI didn't provide useful info, try to infer from CPU model
+    if (socketType == "Unknown" || socketType.empty()) {
+        std::string model = getCPUModel();
+
+        if (model.find("Intel") != std::string::npos) {
+            if (model.find("Core i9") != std::string::npos || model.find("Core i7") != std::string::npos ||
+                model.find("Core i5") != std::string::npos || model.find("Core i3") != std::string::npos) {
+                if (model.find("12th Gen") != std::string::npos || model.find("13th Gen") != std::string::npos ||
+                    model.find("14th Gen") != std::string::npos) {
+                    socketType = "LGA1700";
+                } else if (model.find("10th Gen") != std::string::npos || model.find("11th Gen") != std::string::npos) {
+                    socketType = "LGA1200";
+                } else if (model.find("8th Gen") != std::string::npos || model.find("9th Gen") != std::string::npos) {
+                    socketType = "LGA1151";
+                }
+            } else if (model.find("Xeon") != std::string::npos) {
+                socketType = "Intel Xeon Socket";
+            }
+        } else if (model.find("AMD") != std::string::npos) {
+            if (model.find("Ryzen") != std::string::npos) {
+                if (model.find("7000") != std::string::npos) {
+                    socketType = "AM5";
+                } else if (model.find("5000") != std::string::npos || model.find("3000") != std::string::npos) {
+                    socketType = "AM4";
+                }
+            } else if (model.find("EPYC") != std::string::npos) {
+                socketType = "AMD EPYC Socket";
+            } else if (model.find("Threadripper") != std::string::npos) {
+                socketType = "sTRX4/TRX40";
+            }
+        }
+    }
+
+    spdlog::info("Windows CPU Socket Type: {}", socketType);
+
+    std::lock_guard<std::mutex> lock(g_cacheMutex);
+    g_cpuInfoCache.socketType = socketType;
+
     return socketType;
 }
 

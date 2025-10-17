@@ -125,7 +125,7 @@ void testZeroSizeConditions() {
     // Test 1: Empty blob creation
     tester.runTest("Empty blob creation", []() {
         blob emptyBlob;
-        if (!emptyBlob.empty()) {
+        if (!emptyBlob.isEmpty()) {
             throw std::runtime_error("Empty blob should report as empty");
         }
         if (emptyBlob.size() != 0) {
@@ -139,7 +139,7 @@ void testZeroSizeConditions() {
     // Test 2: Zero-size blob creation
     tester.runTest("Zero-size blob with null data", []() {
         blob zeroBlob(nullptr, 0);
-        if (!zeroBlob.empty()) {
+        if (!zeroBlob.isEmpty()) {
             throw std::runtime_error("Zero-size blob should be empty");
         }
     });
@@ -152,7 +152,7 @@ void testZeroSizeConditions() {
         // These operations should handle empty input gracefully
         try {
             auto result = processor.applyFilter(emptyBlob, FilterType::GAUSSIAN_BLUR, {});
-            if (!result.empty()) {
+            if (!result.isEmpty()) {
                 throw std::runtime_error("Processing empty blob should return empty result");
             }
         } catch (const std::exception& e) {
@@ -169,10 +169,10 @@ void testZeroSizeConditions() {
         std::vector<uint8_t> data(100, 128); // Some data
         
         // Try to create image with zero width
-        ImageMetadata metadata;
-        metadata.width = 0;
-        metadata.height = 100;
-        metadata.channels = 1;
+        core::ImageMetadata metadata;
+        metadata.set(core::MetadataKeys::WIDTH, 0);
+        metadata.set(core::MetadataKeys::HEIGHT, 100);
+        metadata.set(core::MetadataKeys::CHANNELS, 1);
         
         // This should either work (creating empty result) or fail gracefully
         blob image(data.data(), data.size());
@@ -407,7 +407,7 @@ void testExtremeParameters() {
     tester.runTest("Extreme brightness/contrast", [&]() {
         // Maximum brightness
         try {
-            auto result = processor.adjustBrightness(testImage, 255.0);
+            auto result = processor.adjustBrightnessContrast(testImage, 255.0, 0.0);
             // Should clamp to valid range
         } catch (const std::exception& e) {
             // May reject extreme values
@@ -415,14 +415,14 @@ void testExtremeParameters() {
         
         // Minimum brightness
         try {
-            auto result = processor.adjustBrightness(testImage, -255.0);
+            auto result = processor.adjustBrightnessContrast(testImage, -255.0, 0.0);
         } catch (const std::exception& e) {
             // May reject extreme values
         }
         
         // Extreme contrast
         try {
-            auto result = processor.adjustContrast(testImage, 100.0);
+            auto result = processor.adjustBrightnessContrast(testImage, 0.0, 100.0);
         } catch (const std::exception& e) {
             // May reject extreme values
         }

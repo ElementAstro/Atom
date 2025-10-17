@@ -1,4 +1,5 @@
 #include "pushd.hpp"
+#include "../core/path_utils.hpp"
 
 #include <algorithm>
 #include <filesystem>
@@ -30,16 +31,7 @@ namespace atom::io {
 
 namespace {
 [[nodiscard]] bool isValidPath(const fs::path& path) noexcept {
-    try {
-        if (path.empty())
-            return false;
-
-        std::error_code ec;
-        [[maybe_unused]] auto canonical_path = fs::weakly_canonical(path, ec);
-        return !ec;
-    } catch (const std::exception&) {
-        return false;
-    }
+    return path_utils::isValidPath(path);
 }
 }  // namespace
 

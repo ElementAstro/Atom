@@ -741,6 +741,91 @@ void AsyncFile::asyncListDirectory(T&& path,
     });
 }
 
+template <PathString T, PathString U>
+void AsyncFile::asyncCopy(T&& src, U&& dest,
+                         std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([src = toString(std::forward<T>(src)),
+                  dest = toString(std::forward<U>(dest)),
+                  callback = std::move(callback)]() {
+        try {
+            std::error_code ec;
+            std::filesystem::copy_file(src, dest,
+                std::filesystem::copy_options::overwrite_existing, ec);
+
+            if (ec) {
+                callback(AsyncResult<void>::error_result(
+                    "Failed to copy file from " + src + " to " + dest + ": " + ec.message()));
+                return;
+            }
+
+            callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T, PathString U>
+void AsyncFile::asyncMove(T&& src, U&& dest,
+                         std::function<void(AsyncResult<void>)> callback) {
+    executeAsync([src = toString(std::forward<T>(src)),
+                  dest = toString(std::forward<U>(dest)),
+                  callback = std::move(callback)]() {
+        try {
+            std::error_code ec;
+            std::filesystem::rename(src, dest, ec);
+
+            if (ec) {
+                callback(AsyncResult<void>::error_result(
+                    "Failed to move file from " + src + " to " + dest + ": " + ec.message()));
+                return;
+            }
+
+            callback(AsyncResult<void>::success_result());
+        } catch (const std::exception& e) {
+            callback(AsyncResult<void>::error_result(e.what()));
+        }
+    });
+}
+
+template <PathString T>
+void AsyncFile::asyncReadWithTimeout(T&& filename, std::chrono::milliseconds timeout,
+                                    std::function<void(AsyncResult<std::string>)> callback) {
+    auto filename_str = toString(std::forward<T>(filename));
+
+    // Launch the read operation asynchronously
+    auto read_future = std::async(std::launch::async, [filename_str]() -> AsyncResult<std::string> {
+        try {
+            std::ifstream file(filename_str, std::ios::binary);
+            if (!file) {
+                return AsyncResult<std::string>::error_result("Failed to open file: " + filename_str);
+            }
+
+            file.seekg(0, std::ios::end);
+            auto size = file.tellg();
+            file.seekg(0, std::ios::beg);
+
+            std::string content(size, '\0');
+            if (!file.read(content.data(), size)) {
+                return AsyncResult<std::string>::error_result("Failed to read file: " + filename_str);
+            }
+
+            return AsyncResult<std::string>::success_result(std::move(content));
+        } catch (const std::exception& e) {
+            return AsyncResult<std::string>::error_result(e.what());
+        }
+    });
+
+    // Wait for completion with timeout
+    executeAsync([read_future = std::move(read_future), timeout, callback = std::move(callback)]() mutable {
+        if (read_future.wait_for(timeout) == std::future_status::timeout) {
+            callback(AsyncResult<std::string>::error_result("Read operation timed out"));
+        } else {
+            callback(read_future.get());
+        }
+    });
+}
+
 template <PathString T>
 [[nodiscard]] atom::async::Task<AsyncResult<std::string>> AsyncFile::readFile(T&& filename) {
     std::promise<AsyncResult<std::string>> promise;

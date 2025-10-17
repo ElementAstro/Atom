@@ -89,9 +89,36 @@ public:
           channels_(that.channels_),
           depth_(that.depth_) {}
 
-    Blob(void* ptr, size_t n) noexcept
-        requires(Mode == BlobMode::FAST)
-        : storage_(reinterpret_cast<T*>(ptr), n) {}
+    Blob(std::nullptr_t, size_t n) {
+        if (n != 0) {
+            THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+        }
+        if constexpr (Mode == BlobMode::FAST) {
+            storage_ = std::span<T>();
+        } else {
+            storage_.clear();
+        }
+        rows_ = 0;
+        cols_ = 0;
+        channels_ = 1;
+#if __has_include(<opencv2/core.hpp>)
+        depth_ = CV_8U;
+#else
+        depth_ = DEFAULT_DEPTH;
+#endif
+    }
+
+    Blob(void* ptr, size_t n)
+        requires(Mode == BlobMode::FAST) {
+        if (ptr == nullptr) {
+            if (n != 0) {
+                THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+            }
+            storage_ = std::span<T>();
+            return;
+        }
+        storage_ = std::span<T>(reinterpret_cast<T*>(ptr), n);
+    }
 
     template <BlobValueType U>
     explicit Blob(U& var) noexcept
@@ -100,13 +127,29 @@ public:
 
     template <BlobValueType U>
     Blob(U* ptr, size_t n) {
+        if (ptr == nullptr) {
+            if (n != 0) {
+                THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+            }
+            if constexpr (Mode == BlobMode::FAST) {
+                storage_ = std::span<T>();
+            } else {
+                storage_.clear();
+            }
+            return;
+        }
+
+        const auto byte_count = n * sizeof(U);
+
         if constexpr (Mode == BlobMode::FAST) {
-            storage_ = std::span<T>(reinterpret_cast<T*>(ptr), n * sizeof(U));
-            // Heuristic: leave dimensions as-is in fast mode
+            if constexpr (std::is_const_v<U>) {
+                THROW_RUNTIME_ERROR("Cannot create fast blob from const data source");
+            }
+            auto* byte_ptr = reinterpret_cast<T*>(ptr);
+            storage_ = std::span<T>(byte_ptr, byte_count);
         } else {
-            storage_ = std::vector<T>(
-                reinterpret_cast<T*>(ptr),
-                reinterpret_cast<T*>(ptr) + n * sizeof(U));
+            auto* byte_ptr = reinterpret_cast<const T*>(ptr);
+            storage_ = std::vector<T>(byte_ptr, byte_ptr + byte_count);
         }
     }
 
@@ -122,7 +165,16 @@ public:
 
     // Constructor from raw data with dimensions
     Blob(void* ptr, size_t size, int rows, int cols, int channels = 1, int depth = DEFAULT_DEPTH) {
-        if constexpr (Mode == BlobMode::FAST) {
+        if (ptr == nullptr) {
+            if (size != 0) {
+                THROW_RUNTIME_ERROR("Cannot create Blob from null pointer with non-zero size");
+            }
+            if constexpr (Mode == BlobMode::FAST) {
+                storage_ = std::span<T>();
+            } else {
+                storage_.clear();
+            }
+        } else if constexpr (Mode == BlobMode::FAST) {
             storage_ = std::span<T>(reinterpret_cast<T*>(ptr), size);
         } else {
             storage_.resize(size);
@@ -262,6 +314,9 @@ public:
     auto end() const { return storage_.end(); }
 
     [[nodiscard]] auto size() const -> size_t { return storage_.size(); }
+
+    [[nodiscard]] auto data() -> T* { return storage_.data(); }
+    [[nodiscard]] auto data() const -> const T* { return storage_.data(); }
 
     auto slice(size_t offset, size_t length) const -> Blob {
         if (offset + length > size()) {
@@ -417,16 +472,9 @@ public:
         }
         // Create a copy to avoid const issues
         Blob result;
-        if constexpr (Mode == BlobMode::FAST) {
-            // Fast mode can't work with const data, so we need to copy
-            result.storage_ = std::vector<T>(
-                reinterpret_cast<const T*>(data.data() + sizeof(size_t)),
-                reinterpret_cast<const T*>(data.data() + sizeof(size_t)) + size);
-        } else {
-            result.storage_ = std::vector<T>(
-                reinterpret_cast<const T*>(data.data() + sizeof(size_t)),
-                reinterpret_cast<const T*>(data.data() + sizeof(size_t)) + size);
-        }
+        // Use memcpy to copy the data instead of reinterpret_cast
+        result.storage_.resize(size);
+        std::memcpy(result.storage_.data(), data.data() + sizeof(size_t), size);
         return result;
     }
 

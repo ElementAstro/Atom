@@ -859,6 +859,8 @@ public:
         return handle_.promise().result();
     }
 
+    T get() { return await_result(); }
+
     void resume() {
         if (handle_ && !handle_.done()) {
             handle_.resume();

@@ -42,49 +42,83 @@ function(atom_configure_module module_name)
     set(multiValueArgs DEPENDENCIES OPTIONAL_DEPENDENCIES)
     cmake_parse_arguments(ACM "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
 
-    # Set standard include directories
-    if(NOT ACM_HEADER_ONLY)
-        target_include_directories(${module_name} PUBLIC
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-            $<INSTALL_INTERFACE:include/atom/${module_name}>
-        )
+    set(is_header_only ${ACM_HEADER_ONLY})
+
+    if(is_header_only)
+        if(NOT TARGET ${module_name})
+            add_library(${module_name} INTERFACE)
+        endif()
+        set(include_scope INTERFACE)
+        set(link_scope INTERFACE)
+        set(feature_scope INTERFACE)
+        set(option_scope INTERFACE)
     else()
-        target_include_directories(${module_name} INTERFACE
-            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-            $<INSTALL_INTERFACE:include/atom/${module_name}>
-        )
+        if(NOT TARGET ${module_name})
+            message(FATAL_ERROR "atom_configure_module called for target ${module_name} before it was created")
+        endif()
+        set(include_scope PUBLIC)
+        set(link_scope PUBLIC)
+        set(feature_scope PUBLIC)
+        set(option_scope PRIVATE)
     endif()
 
-    # All modules depend on error handling
-    if(TARGET atom-error)
-        if(ACM_HEADER_ONLY)
-            target_link_libraries(${module_name} INTERFACE atom-error)
+    # Set standard include directories
+    target_include_directories(${module_name} ${include_scope}
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include/atom/${module_name}>
+    )
+
+    # Link required dependencies
+    foreach(dep ${ACM_DEPENDENCIES})
+        if(TARGET ${dep})
+            target_link_libraries(${module_name} ${link_scope} ${dep})
         else()
-            target_link_libraries(${module_name} PUBLIC atom-error)
+            message(WARNING "Required dependency ${dep} not found for module ${module_name}")
         endif()
+    endforeach()
+
+    # Link optional dependencies
+    foreach(dep ${ACM_OPTIONAL_DEPENDENCIES})
+        if(TARGET ${dep})
+            target_link_libraries(${module_name} ${link_scope} ${dep})
+            message(STATUS "Optional dependency ${dep} linked to ${module_name}")
+        else()
+            message(STATUS "Optional dependency ${dep} not available for ${module_name}")
+        endif()
+    endforeach()
+
+    # All modules depend on error handling
+    if(TARGET atom-error AND NOT ${module_name} STREQUAL "atom-error")
+        target_link_libraries(${module_name} ${link_scope} atom-error)
     endif()
 
     # Most modules need threading
     find_package(Threads REQUIRED)
-    if(ACM_HEADER_ONLY)
-        target_link_libraries(${module_name} INTERFACE Threads::Threads)
-    else()
-        target_link_libraries(${module_name} PUBLIC Threads::Threads)
-    endif()
+    target_link_libraries(${module_name} ${link_scope} Threads::Threads)
 
     # Platform-specific libraries
     if(WIN32)
-        # Windows-specific libraries that many modules need
-        if(ACM_HEADER_ONLY)
-            target_link_libraries(${module_name} INTERFACE ws2_32 wsock32)
-        else()
-            target_link_libraries(${module_name} PUBLIC ws2_32 wsock32)
-        endif()
+        target_link_libraries(${module_name} ${link_scope} ws2_32 wsock32)
     endif()
 
-    # Add to global module registry
+    # Apply common compile features/options
+    target_compile_features(${module_name} ${feature_scope} cxx_std_20)
+
+    if(MSVC)
+        target_compile_options(${module_name} ${option_scope} /W4)
+    else()
+        target_compile_options(${module_name} ${option_scope} -Wall -Wextra -Wpedantic)
+    endif()
+
+    # Set common include directories for installation for non-header-only targets are already handled above
+
+    # Add to global module registry (ensure uniqueness)
     get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
+    if(NOT ATOM_MODULE_TARGETS)
+        set(ATOM_MODULE_TARGETS)
+    endif()
     list(APPEND ATOM_MODULE_TARGETS ${module_name})
+    list(REMOVE_DUPLICATES ATOM_MODULE_TARGETS)
     set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
 endfunction()
 
@@ -288,98 +322,4 @@ function(atom_setup_test_deps test_name)
     endif()
 endfunction()
 
-# Macro to simplify common module setup
-macro(atom_configure_module module_name)
-    # Parse arguments
-    set(options HEADER_ONLY)
-    set(oneValueArgs "")
-    set(multiValueArgs "")
-    cmake_parse_arguments(ATOM_MODULE "${options}" "${oneValueArgs}" "${multiValueArgs}" ${ARGN})
-
-    # Determine if this is a header-only library
-    if(ATOM_MODULE_HEADER_ONLY)
-        # Create interface library for header-only modules
-        if(NOT TARGET ${module_name})
-            add_library(${module_name} INTERFACE)
-        endif()
-        set(target_type "INTERFACE_LIBRARY")
-    else()
-        # Check if target exists and get its type
-        if(TARGET ${module_name})
-            get_target_property(target_type ${module_name} TYPE)
-        else()
-            # If target doesn't exist yet, assume it will be a static library
-            set(target_type "STATIC_LIBRARY")
-        endif()
-    endif()
-
-    # Apply standard dependencies directly to avoid circular calls
-    # All modules depend on error handling
-    if(TARGET atom-error AND NOT ${module_name} STREQUAL "atom-error")
-        if(target_type STREQUAL "INTERFACE_LIBRARY")
-            target_link_libraries(${module_name} INTERFACE atom-error)
-        else()
-            target_link_libraries(${module_name} PUBLIC atom-error)
-        endif()
-    endif()
-
-    # Most modules need threading
-    find_package(Threads REQUIRED)
-    if(target_type STREQUAL "INTERFACE_LIBRARY")
-        target_link_libraries(${module_name} INTERFACE Threads::Threads)
-    else()
-        target_link_libraries(${module_name} PUBLIC Threads::Threads)
-    endif()
-
-    # Platform-specific libraries
-    if(WIN32)
-        # Windows-specific libraries that many modules need
-        if(target_type STREQUAL "INTERFACE_LIBRARY")
-            target_link_libraries(${module_name} INTERFACE ws2_32 wsock32)
-        else()
-            target_link_libraries(${module_name} PUBLIC ws2_32 wsock32)
-        endif()
-    endif()
-
-    # Add to global module registry
-    get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-    list(APPEND ATOM_MODULE_TARGETS ${module_name})
-    set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
-
-    # Set common compile features
-    if(target_type STREQUAL "INTERFACE_LIBRARY")
-        target_compile_features(${module_name} INTERFACE cxx_std_20)
-    else()
-        target_compile_features(${module_name} PUBLIC cxx_std_20)
-    endif()
-
-    # Set common compile options
-    if(target_type STREQUAL "INTERFACE_LIBRARY")
-        if(MSVC)
-            target_compile_options(${module_name} INTERFACE /W4)
-        else()
-            target_compile_options(${module_name} INTERFACE -Wall -Wextra -Wpedantic)
-        endif()
-    else()
-        if(MSVC)
-            target_compile_options(${module_name} PRIVATE /W4)
-        else()
-            target_compile_options(${module_name} PRIVATE -Wall -Wextra -Wpedantic)
-        endif()
-    endif()
-
-    # Set common include directories
-    if(target_type STREQUAL "INTERFACE_LIBRARY")
-        target_include_directories(${module_name}
-            INTERFACE
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                $<INSTALL_INTERFACE:include>
-        )
-    else()
-        target_include_directories(${module_name}
-            PUBLIC
-                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-                $<INSTALL_INTERFACE:include>
-        )
-    endif()
-endmacro()
+# Macro removed; function implementation above handles module configuration

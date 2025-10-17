@@ -45,7 +45,34 @@ void MessageBus::shutdown() {
 }
 
 void MessageBus::process_messages() {
-    // For synchronous processing in examples
+    std::unique_lock<std::mutex> queue_lock(pimpl_->message_queue_mutex);
+    auto start_time = std::chrono::steady_clock::now();
+
+    while (!pimpl_->message_queue.empty()) {
+        auto message_func = std::move(pimpl_->message_queue.front());
+        pimpl_->message_queue.pop();
+
+        // Release lock while processing to allow other threads to publish
+        queue_lock.unlock();
+
+        try {
+            message_func();
+        } catch (const std::exception& e) {
+            spdlog::error("Error processing message: {}", e.what());
+        }
+
+        queue_lock.lock();
+    }
+
+    auto end_time = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+
+    // Update average delivery time (simple exponential moving average)
+    auto current_avg = pimpl_->avg_delivery_time.load();
+    auto new_avg = std::chrono::milliseconds(
+        (current_avg.count() * 9 + duration.count()) / 10  // 0.9 weight on old average
+    );
+    pimpl_->avg_delivery_time.store(new_avg);
 }
 
 MessageBus* MessageBus::get_instance() {
@@ -69,5 +96,6 @@ MessageBus::QueueStats MessageBus::get_stats() const {
                       .total_handlers = total_handlers,
                       .avg_delivery_time = pimpl_->avg_delivery_time.load()};
 }
+
 
 }  // namespace msgbus

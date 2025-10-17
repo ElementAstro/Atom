@@ -160,6 +160,7 @@ make test_unified
 
 1. Create test files in `tests/<module>/` following naming convention `test_<feature>.cpp`
 2. Use GoogleTest framework for assertions:
+
    ```cpp
    #include <gtest/gtest.h>
    #include "atom/yourmodule/header.hpp"
@@ -171,6 +172,7 @@ make test_unified
    ```
 
 3. Update the module's `CMakeLists.txt` using the standardized template:
+
    ```cmake
    # =============================================================================
    # Standardized Test Configuration for Atom <Module> Module
@@ -193,6 +195,7 @@ make test_unified
 
 1. Create test headers in `tests/<module>/` following naming convention `test_<feature>.hpp`
 2. Use the header-only template configuration:
+
    ```cmake
    set(MODULE_NAME "<module>")
    set(HEADER_ONLY ON)

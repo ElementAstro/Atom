@@ -83,9 +83,20 @@ endif()
 enable_testing()
 
 include(GoogleTest)
-gtest_discover_tests(atom_search_tests
+# Temporarily disabled due to DLL dependency issues during test discovery
+# gtest_discover_tests(atom_search_tests
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#     PROPERTIES
+#     LABELS "search"
+#     TIMEOUT 300
+# )
+
+# Manual test registration as workaround
+add_test(NAME atom_search_tests
+    COMMAND atom_search_tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
+)
+set_tests_properties(atom_search_tests PROPERTIES
     LABELS "search"
     TIMEOUT 300
 )

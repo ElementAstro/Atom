@@ -2,8 +2,11 @@
 #define ATOM_ASYNC_SIGNAL_HPP
 
 #include <algorithm>
+#include <chrono>
 #include <concepts>
+#include <condition_variable>
 #include <coroutine>
+#include <deque>
 #include <exception>
 #include <execution>
 #include <functional>
@@ -11,10 +14,131 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <shared_mutex>
+#include <utility>
 #include <vector>
 
 namespace atom::async {
+
+template <typename T>
+class Slot {
+public:
+    explicit Slot(size_t capacity = 1)
+        : capacity_(capacity == 0 ? 1 : capacity) {}
+
+    bool hasValue() const {
+        std::scoped_lock lock(mutex_);
+        return !queue_.empty();
+    }
+
+    bool empty() const {
+        std::scoped_lock lock(mutex_);
+        return queue_.empty();
+    }
+
+    size_t size() const {
+        std::scoped_lock lock(mutex_);
+        return queue_.size();
+    }
+
+    void clear() {
+        std::scoped_lock lock(mutex_);
+        queue_.clear();
+        not_full_.notify_all();
+    }
+
+    void waitForEmpty() {
+        std::unique_lock lock(mutex_);
+        not_full_.wait(lock, [&] { return queue_.empty(); });
+    }
+
+    void waitForSpace() {
+        std::unique_lock lock(mutex_);
+        not_full_.wait(lock, [&] { return queue_.size() < capacity_; });
+    }
+
+    void put(const T& value) {
+        std::unique_lock lock(mutex_);
+        not_full_.wait(lock, [&] { return queue_.size() < capacity_; });
+        queue_.push_back(value);
+        lock.unlock();
+        not_empty_.notify_one();
+    }
+
+    void put(T&& value) {
+        std::unique_lock lock(mutex_);
+        not_full_.wait(lock, [&] { return queue_.size() < capacity_; });
+        queue_.push_back(std::move(value));
+        lock.unlock();
+        not_empty_.notify_one();
+    }
+
+    bool tryPut(const T& value) {
+        std::unique_lock lock(mutex_);
+        if (queue_.size() >= capacity_) {
+            return false;
+        }
+        queue_.push_back(value);
+        lock.unlock();
+        not_empty_.notify_one();
+        return true;
+    }
+
+    bool tryPut(T&& value) {
+        std::unique_lock lock(mutex_);
+        if (queue_.size() >= capacity_) {
+            return false;
+        }
+        queue_.push_back(std::move(value));
+        lock.unlock();
+        not_empty_.notify_one();
+        return true;
+    }
+
+    T get() {
+        std::unique_lock lock(mutex_);
+        not_empty_.wait(lock, [&] { return !queue_.empty(); });
+        T value = std::move(queue_.front());
+        queue_.pop_front();
+        lock.unlock();
+        not_full_.notify_one();
+        return value;
+    }
+
+    template <typename Rep, typename Period>
+    std::optional<T> getWithTimeout(
+        const std::chrono::duration<Rep, Period>& timeout) {
+        std::unique_lock lock(mutex_);
+        if (!not_empty_.wait_for(lock, timeout, [&] { return !queue_.empty(); })) {
+            return std::nullopt;
+        }
+        T value = std::move(queue_.front());
+        queue_.pop_front();
+        lock.unlock();
+        not_full_.notify_one();
+        return value;
+    }
+
+    std::optional<T> tryGet() {
+        std::unique_lock lock(mutex_);
+        if (queue_.empty()) {
+            return std::nullopt;
+        }
+        T value = std::move(queue_.front());
+        queue_.pop_front();
+        lock.unlock();
+        not_full_.notify_one();
+        return value;
+    }
+
+private:
+    mutable std::mutex mutex_;
+    std::condition_variable not_empty_;
+    std::condition_variable not_full_;
+    std::deque<T> queue_;
+    size_t capacity_;
+};
 
 class SlotConnectionError : public std::runtime_error {
 public:

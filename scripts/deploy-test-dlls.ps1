@@ -12,17 +12,48 @@ Write-Host "Deploying DLLs to test directories..." -ForegroundColor Green
 $DllSources = @(
     "$BuildDir\atom\error\libatom-error.dll",
     "$BuildDir\atom\log\libloguru.dll",
-    "$BuildDir\atom\log\liblogurud.dll"
+    "$BuildDir\atom\log\liblogurud.dll",
+    "$BuildDir\atom\log\libatom-log.dll",
+    "$BuildDir\atom\components\libatom-component.dll",
+    "$BuildDir\atom\system\shortcut\libshortcut_detector.dll"
 )
 
-# Define test directories that need DLLs
+# Define MinGW/MSYS2 DLL locations (for GTest and runtime libraries)
+# These are typically in D:\msys64\mingw64\bin but can be customized
+$MinGWBinDir = "D:\msys64\mingw64\bin"
+if ($env:MINGW_PREFIX) {
+    $MinGWBinDir = "$env:MINGW_PREFIX\bin"
+}
+
+$MinGWDlls = @(
+    "libgtest.dll",
+    "libgtest_main.dll",
+    "libgcc_s_seh-1.dll",
+    "libwinpthread-1.dll",
+    "libstdc++-6.dll"
+)
+
+# Define test directories that need DLLs (all test modules)
 $TestDirectories = @(
+    "$BuildDir\bin",  # Main test executable directory
+    "$BuildDir\tests\algorithm",
+    "$BuildDir\tests\async",
+    "$BuildDir\tests\components",
+    "$BuildDir\tests\connection",
+    "$BuildDir\tests\error",
+    "$BuildDir\tests\extra",
+    "$BuildDir\tests\image",
+    "$BuildDir\tests\io",
     "$BuildDir\tests\memory",
+    "$BuildDir\tests\meta",
     "$BuildDir\tests\search",
     "$BuildDir\tests\secret",
+    "$BuildDir\tests\serial",
+    "$BuildDir\tests\sysinfo",
+    "$BuildDir\tests\system",
     "$BuildDir\tests\type",
-    "$BuildDir\tests\extra",
-    "$BuildDir\tests\meta"
+    "$BuildDir\tests\utils",
+    "$BuildDir\tests\web"
 )
 
 # Function to copy DLL if it exists
@@ -62,8 +93,17 @@ foreach ($TestDir in $TestDirectories) {
     if (Test-Path $TestDir) {
         Write-Host "Deploying to: $TestDir" -ForegroundColor Yellow
 
+        # Copy project DLLs
         foreach ($DllSource in $DllSources) {
             if (Copy-DllIfExists $DllSource $TestDir) {
+                $TotalCopied++
+            }
+        }
+
+        # Copy MinGW/GTest DLLs
+        foreach ($DllName in $MinGWDlls) {
+            $DllPath = Join-Path $MinGWBinDir $DllName
+            if (Copy-DllIfExists $DllPath $TestDir) {
                 $TotalCopied++
             }
         }

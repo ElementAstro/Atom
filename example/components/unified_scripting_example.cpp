@@ -21,19 +21,20 @@ and unified scripting features that work across multiple scripting engines.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
-#include "atom/components/scripting_api.hpp"
+#include "atom/components/core/registry.hpp"
+#include "atom/components/scripting/scripting_api.hpp"
+#include <any>
 
 // Conditional includes for scripting engines
 #if ATOM_ENABLE_LUA
-#include "atom/components/lua_engine.hpp"
+#include "atom/components/scripting/lua_engine.hpp"
 #endif
 
 #if ATOM_ENABLE_PYTHON
-#include "atom/components/python_engine.hpp"
+#include "atom/components/scripting/python_engine.hpp"
 #endif
 
-using namespace atom::components;
+// Note: Component and Registry are in global namespace, not atom::components
 using namespace atom::components::scripting;
 
 /**
@@ -520,7 +521,7 @@ int main() {
 
     try {
         // Create component and scripting manager
-        auto& registry = Registry::instance();
+        auto& registry = ::Registry::instance();
         auto component = registry.createComponent<UniversalScriptableComponent>(
             "UniversalHero");
 

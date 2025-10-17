@@ -40,6 +40,9 @@ struct LoadOptions {
     bool enableCaching = true;                          // Enable result caching
     std::string cacheKey;                              // Custom cache key
     std::unordered_map<std::string, std::string> customOptions;  // Format-specific options
+
+    // Default constructor
+    LoadOptions() = default;
 };
 
 /**

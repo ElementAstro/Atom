@@ -22,20 +22,20 @@ and safe script execution with the component system.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/registry.hpp"
-#include "atom/components/script_sandbox.hpp"
-#include "atom/components/scripting_api.hpp"
+#include "atom/components/core/registry.hpp"
+#include "atom/components/scripting/script_sandbox.hpp"
+#include "atom/components/scripting/scripting_api.hpp"
 
 // Conditional includes for scripting engines
 #if ATOM_ENABLE_LUA
-#include "atom/components/lua_engine.hpp"
+#include "atom/components/scripting/lua_engine.hpp"
 #endif
 
 #if ATOM_ENABLE_PYTHON
-#include "atom/components/python_engine.hpp"
+#include "atom/components/scripting/python_engine.hpp"
 #endif
 
-using namespace atom::components;
+// Note: Component and Registry are in global namespace, not atom::components
 using namespace atom::components::scripting;
 
 /**
@@ -168,7 +168,7 @@ void demonstrateBasicSandbox() {
 void demonstratePermissionSystem() {
     std::cout << "\n=== Permission System Demo ===" << std::endl;
 
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
     auto component = registry.createComponent<SecureComponent>("SecureComp");
 
     std::cout << "\n2. Testing permission-based access control..." << std::endl;
@@ -229,7 +229,7 @@ void demonstratePermissionSystem() {
 void demonstrateResourceLimits() {
     std::cout << "\n=== Resource Limits Demo ===" << std::endl;
 
-    auto& registry = Registry::instance();
+    auto& registry = ::Registry::instance();
     auto component = registry.getComponent("SecureComp");
 
     if (!component) {

@@ -39,11 +39,11 @@ Demonstrates advanced TCP socket server functionality including:
 #include "atom/connection/sockethub.hpp"
 
 // Enhanced utility class for formatted logging with thread safety
-class Logger {
+class ExampleLogger {
 public:
     enum Level { LOG_INFO, LOG_SUCCESS, LOG_WARNING, LOG_ERROR, LOG_DEBUG };
 
-    static void log(Level level, const std::string& component,
+    static void write(Level level, const std::string& component,
                     const std::string& message) {
         static std::mutex log_mutex;
         std::lock_guard<std::mutex> lock(log_mutex);
@@ -125,39 +125,39 @@ public:
         auto seconds =
             std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 
-        Logger::log(Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                     "=== Socket Hub Statistics ===");
-        Logger::log(Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                     "Runtime: " + std::to_string(seconds) + " seconds");
-        Logger::log(
-            Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "SocketStats",
             "Total connections: " + std::to_string(total_connections.load()));
-        Logger::log(
-            Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "SocketStats",
             "Active connections: " + std::to_string(active_connections.load()));
-        Logger::log(
-            Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "SocketStats",
             "Messages received: " + std::to_string(messages_received.load()));
-        Logger::log(Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                     "Messages sent: " + std::to_string(messages_sent.load()));
-        Logger::log(Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                     "Bytes received: " + std::to_string(bytes_received.load()));
-        Logger::log(Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                     "Bytes sent: " + std::to_string(bytes_sent.load()));
-        Logger::log(
-            Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "SocketStats",
             "Connection errors: " + std::to_string(connection_errors.load()));
-        Logger::log(Logger::LOG_INFO, "SocketStats",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                     "Message errors: " + std::to_string(message_errors.load()));
 
         if (seconds > 0) {
-            Logger::log(Logger::LOG_INFO, "SocketStats",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                         "Connections/sec: " +
                             std::to_string(total_connections.load() / seconds));
-            Logger::log(Logger::LOG_INFO, "SocketStats",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                         "Messages/sec received: " +
                             std::to_string(messages_received.load() / seconds));
-            Logger::log(Logger::LOG_INFO, "SocketStats",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "SocketStats",
                         "Bytes/sec received: " +
                             std::to_string(bytes_received.load() / seconds));
         }
@@ -187,7 +187,7 @@ public:
     void add_client(int client_id, const std::string& ip_address) {
         std::lock_guard<std::mutex> lock(clients_mutex_);
         clients_.emplace(client_id, ClientInfo(client_id, ip_address));
-        Logger::log(Logger::LOG_INFO, "ClientMgr",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "ClientMgr",
                     "Client " + std::to_string(client_id) + " connected from " +
                         ip_address);
     }
@@ -202,7 +202,7 @@ public:
                 std::chrono::duration_cast<std::chrono::seconds>(duration)
                     .count();
 
-            Logger::log(Logger::LOG_INFO, "ClientMgr",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "ClientMgr",
                         "Client " + std::to_string(client_id) +
                             " disconnected after " + std::to_string(seconds) +
                             " seconds" +
@@ -239,8 +239,8 @@ public:
     void print_clients() const {
         std::lock_guard<std::mutex> lock(
             const_cast<std::mutex&>(clients_mutex_));
-        Logger::log(
-            Logger::LOG_INFO, "ClientMgr",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "ClientMgr",
             "Active clients (" + std::to_string(clients_.size()) + "):");
 
         for (const auto& [id, info] : clients_) {
@@ -250,8 +250,8 @@ public:
                 std::chrono::duration_cast<std::chrono::seconds>(duration)
                     .count();
 
-            Logger::log(
-                Logger::LOG_INFO, "ClientMgr",
+            ExampleLogger::write(
+                ExampleLogger::LOG_INFO, "ClientMgr",
                 "  Client " + std::to_string(id) + " (" + info.ip_address +
                     ") - " + "Connected: " + std::to_string(seconds) + "s, " +
                     "Messages: " + std::to_string(info.messages_received) +
@@ -266,7 +266,7 @@ ClientConnectionManager globalClientManager;
 
 // Example 1: Enhanced basic socket hub server
 void basicSocketHubExample(int port) {
-    Logger::log(Logger::LOG_INFO, "Example1",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                 "Starting enhanced basic socket hub example on port " +
                     std::to_string(port));
 
@@ -276,7 +276,7 @@ void basicSocketHubExample(int port) {
         // Enhanced message handler with comprehensive processing
         socketHub.addHandler([](std::string_view message) {
             std::string msg(message);
-            Logger::log(Logger::LOG_INFO, "Example1",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                         "Received message: " + msg + " (" +
                             std::to_string(message.length()) + " bytes)");
 
@@ -284,12 +284,12 @@ void basicSocketHubExample(int port) {
 
             // Process different message types
             if (msg.find("ECHO:") == 0) {
-                Logger::log(Logger::LOG_INFO, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                             "Echo request: " + msg.substr(5));
                 globalSocketStats.record_message_sent(msg.length());
 
             } else if (msg.find("BROADCAST:") == 0) {
-                Logger::log(Logger::LOG_INFO, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                             "Broadcast request: " + msg.substr(10));
                 globalSocketStats.record_message_sent(msg.length());
 
@@ -297,12 +297,12 @@ void basicSocketHubExample(int port) {
                 std::string statusResponse =
                     "SERVER_STATUS:ACTIVE_CLIENTS=" +
                     std::to_string(globalClientManager.get_client_count());
-                Logger::log(Logger::LOG_INFO, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                             "Status response: " + statusResponse);
                 globalSocketStats.record_message_sent(statusResponse.length());
 
             } else {
-                Logger::log(Logger::LOG_DEBUG, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_DEBUG, "Example1",
                             "Processing regular message");
             }
         });
@@ -311,8 +311,8 @@ void basicSocketHubExample(int port) {
         socketHub.addConnectHandler([](int clientId,
                                        std::string_view ipAddress) {
             std::string ip(ipAddress);
-            Logger::log(
-                Logger::LOG_SUCCESS, "Example1",
+            ExampleLogger::write(
+                ExampleLogger::LOG_SUCCESS, "Example1",
                 "Client " + std::to_string(clientId) + " connected from " + ip);
             globalSocketStats.record_connection();
             globalClientManager.add_client(clientId, ip);
@@ -322,7 +322,7 @@ void basicSocketHubExample(int port) {
         socketHub.addDisconnectHandler(
             [](int clientId, std::string_view reason) {
                 std::string disconnectReason(reason);
-                Logger::log(Logger::LOG_WARNING, "Example1",
+                ExampleLogger::write(ExampleLogger::LOG_WARNING, "Example1",
                             "Client " + std::to_string(clientId) +
                                 " disconnected: " + disconnectReason);
                 globalSocketStats.record_disconnection();
@@ -331,11 +331,11 @@ void basicSocketHubExample(int port) {
 
         // Start the socket server
         socketHub.start(port);
-        Logger::log(Logger::LOG_SUCCESS, "Example1",
+        ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example1",
                     "Socket server started on port " + std::to_string(port));
 
         // Run server for demonstration period
-        Logger::log(Logger::LOG_INFO, "Example1",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                     "Server running for 10 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(10));
 
@@ -344,21 +344,21 @@ void basicSocketHubExample(int port) {
 
         // Stop the server
         socketHub.stop();
-        Logger::log(Logger::LOG_INFO, "Example1", "Socket server stopped");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1", "Socket server stopped");
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Example1",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
                     "Exception: " + std::string(e.what()));
         globalSocketStats.record_connection_error();
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
                 "Enhanced basic socket hub example completed");
 }
 
 // Example 2: Multi-threaded client simulation
 void clientSimulationExample(int port) {
-    Logger::log(Logger::LOG_INFO, "Example2",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                 "Starting client simulation example");
 
     try {
@@ -367,7 +367,7 @@ void clientSimulationExample(int port) {
         // Set up handlers for client simulation
         socketHub.addHandler([](std::string_view message) {
             globalSocketStats.record_message_received(message.length());
-            Logger::log(Logger::LOG_DEBUG, "Example2",
+            ExampleLogger::write(ExampleLogger::LOG_DEBUG, "Example2",
                         "Received: " + std::string(message));
         });
 
@@ -375,8 +375,8 @@ void clientSimulationExample(int port) {
                                        std::string_view ipAddress) {
             globalSocketStats.record_connection();
             globalClientManager.add_client(clientId, std::string(ipAddress));
-            Logger::log(
-                Logger::LOG_INFO, "Example2",
+            ExampleLogger::write(
+                ExampleLogger::LOG_INFO, "Example2",
                 "Simulated client " + std::to_string(clientId) + " connected");
         });
 
@@ -384,15 +384,15 @@ void clientSimulationExample(int port) {
                                           std::string_view reason) {
             globalSocketStats.record_disconnection();
             globalClientManager.remove_client(clientId, std::string(reason));
-            Logger::log(Logger::LOG_INFO, "Example2",
+            ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                         "Simulated client " + std::to_string(clientId) +
                             " disconnected");
         });
 
         // Start server
         socketHub.start(port);
-        Logger::log(
-            Logger::LOG_SUCCESS, "Example2",
+        ExampleLogger::write(
+            ExampleLogger::LOG_SUCCESS, "Example2",
             "Client simulation server started on port " + std::to_string(port));
 
         // Simulate multiple client connections and message exchanges
@@ -412,7 +412,7 @@ void clientSimulationExample(int port) {
                                               std::to_string(j);
                         globalSocketStats.record_message_sent(message.length());
 
-                        Logger::log(Logger::LOG_DEBUG, "ClientSim",
+                        ExampleLogger::write(ExampleLogger::LOG_DEBUG, "ClientSim",
                                     "Client " + std::to_string(i) +
                                         " would send: " + message);
 
@@ -421,7 +421,7 @@ void clientSimulationExample(int port) {
                     }
 
                 } catch (const std::exception& e) {
-                    Logger::log(Logger::LOG_ERROR, "ClientSim",
+                    ExampleLogger::write(ExampleLogger::LOG_ERROR, "ClientSim",
                                 "Client simulator " + std::to_string(i) +
                                     " error: " + std::string(e.what()));
                 }
@@ -429,7 +429,7 @@ void clientSimulationExample(int port) {
         }
 
         // Monitor simulation
-        Logger::log(Logger::LOG_INFO, "Example2",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                     "Running client simulation for 8 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(8));
 
@@ -439,21 +439,21 @@ void clientSimulationExample(int port) {
         }
 
         socketHub.stop();
-        Logger::log(Logger::LOG_INFO, "Example2",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                     "Client simulation server stopped");
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Example2",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example2",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
                 "Client simulation example completed");
 }
 
 // Example 3: Performance and load testing
 void performanceTestingExample(int port) {
-    Logger::log(Logger::LOG_INFO, "Example3",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
                 "Starting performance testing example");
 
     try {
@@ -483,7 +483,7 @@ void performanceTestingExample(int port) {
 
         // Start server
         socketHub.start(port);
-        Logger::log(Logger::LOG_SUCCESS, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example3",
                     "Performance testing server started on port " +
                         std::to_string(port));
 
@@ -507,7 +507,7 @@ void performanceTestingExample(int port) {
                             std::chrono::microseconds(100));
                     }
                 } catch (const std::exception& e) {
-                    Logger::log(Logger::LOG_ERROR, "LoadGen",
+                    ExampleLogger::write(ExampleLogger::LOG_ERROR, "LoadGen",
                                 "Load generator " + std::to_string(i) +
                                     " error: " + std::string(e.what()));
                 }
@@ -521,7 +521,7 @@ void performanceTestingExample(int port) {
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
             endTime - startTime);
 
-        Logger::log(Logger::LOG_SUCCESS, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example3",
                     "Performance test completed in " +
                         std::to_string(duration.count()) + " ms");
 
@@ -531,41 +531,41 @@ void performanceTestingExample(int port) {
         }
 
         socketHub.stop();
-        Logger::log(Logger::LOG_INFO, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
                     "Performance testing server stopped");
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Example3",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example3",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3",
+    ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
                 "Performance testing example completed");
 }
 
 int main() {
     try {
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "Starting Enhanced Socket Hub Examples");
-        Logger::log(Logger::LOG_INFO, "Main", "");
-        Logger::log(Logger::LOG_INFO, "Main", "Features demonstrated:");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "Features demonstrated:");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Enhanced basic socket hub server operations");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Advanced client connection management and tracking");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Multi-threaded client simulation and testing");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Performance testing and load analysis");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Connection lifecycle management (connect/disconnect)");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Real-time statistics monitoring and reporting");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Advanced message routing and processing");
-        Logger::log(Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
                     "- Comprehensive error handling and recovery");
-        Logger::log(Logger::LOG_INFO, "Main", "");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
 
         const int basePort = 8080;
 
@@ -579,24 +579,24 @@ int main() {
         performanceTestingExample(basePort + 2);
 
         // Print comprehensive statistics
-        Logger::log(Logger::LOG_INFO, "Main", "");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
         globalSocketStats.print_summary();
         globalClientManager.print_clients();
 
-        Logger::log(Logger::LOG_SUCCESS, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Main",
                     "All enhanced socket hub examples completed successfully");
-        Logger::log(Logger::LOG_INFO, "Main", "");
-        Logger::log(
-            Logger::LOG_INFO, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "Main",
             "Example completed. Check the output above for detailed results.");
-        Logger::log(
-            Logger::LOG_INFO, "Main",
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "Main",
             "You can test the server with telnet: telnet localhost 8080");
 
         return 0;
 
     } catch (const std::exception& e) {
-        Logger::log(Logger::LOG_ERROR, "Main",
+        ExampleLogger::write(ExampleLogger::LOG_ERROR, "Main",
                     "Fatal error: " + std::string(e.what()));
         globalSocketStats.print_summary();
         return 1;

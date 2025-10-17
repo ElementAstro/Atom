@@ -28,8 +28,6 @@
 #include <shared_mutex>
 #endif
 
-#include "atom/macro.hpp"
-
 // 确定是否启用内存追踪
 #if !defined(ATOM_MEMORY_STATS_ENABLED)
 #if defined(ATOM_DEBUG) || defined(_DEBUG) || defined(DEBUG)

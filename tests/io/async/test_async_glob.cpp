@@ -264,7 +264,10 @@ TEST_F(AsyncGlobTest, TildeExpansion) {
     AsyncGlob glob(*io_context);
 
     // Just verify it doesn't throw - actual expansion is platform-dependent
-    EXPECT_NO_THROW(glob.glob_sync("~/test_pattern"));
+    EXPECT_NO_THROW(([&]() {
+        auto result = glob.glob_sync("~/test_pattern");
+        (void)result;
+    })());
 }
 
 // Test with multiple patterns in parallel
@@ -467,4 +470,135 @@ TEST_F(AsyncGlobTest, SpecialCharacters) {
     EXPECT_THAT(mixedResult, Contains(testDir / "file-with-dashes.txt"));
     EXPECT_THAT(mixedResult, Contains(testDir / "file+with+plus.txt"));
     EXPECT_THAT(mixedResult, Contains(testDir / "file.with.dots.txt"));
+}
+
+// Test async glob with timeout
+TEST_F(AsyncGlobTest, AsyncGlobWithTimeout) {
+    AsyncGlob glob(*io_context);
+
+    // Create many files to potentially slow down glob
+    for (int i = 0; i < 100; ++i) {
+        createFile(testDir / ("file" + std::to_string(i) + ".txt"), "content");
+    }
+
+    auto task = glob.glob_async((testDir / "*.txt").string());
+    auto result = task.get_result();
+
+    runContext();
+
+    EXPECT_GE(result.size(), 100);
+}
+
+// Test concurrent async glob operations
+TEST_F(AsyncGlobTest, ConcurrentAsyncGlob) {
+    AsyncGlob glob(*io_context);
+
+    std::vector<std::future<std::vector<fs::path>>> futures;
+
+    // Launch multiple async glob operations
+    for (int i = 0; i < 5; ++i) {
+        futures.push_back(std::async(std::launch::async, [&glob, this]() {
+            return glob.glob_sync((testDir / "*.txt").string());
+        }));
+    }
+
+    // Wait for all to complete
+    for (auto& future : futures) {
+        auto result = future.get();
+        EXPECT_GE(result.size(), 2);
+    }
+}
+
+// Test error handling for invalid patterns
+TEST_F(AsyncGlobTest, InvalidPatternHandling) {
+    AsyncGlob glob(*io_context);
+
+    // Test with empty pattern
+    auto result = glob.glob_sync("");
+    EXPECT_TRUE(result.empty());
+
+    // Test with non-existent directory
+    result = glob.glob_sync((testDir / "nonexistent" / "*.txt").string());
+    EXPECT_TRUE(result.empty());
+}
+
+// Test glob with very deep nesting
+TEST_F(AsyncGlobTest, VeryDeepNesting) {
+    AsyncGlob glob(*io_context);
+
+    // Create deeply nested structure
+    fs::path deep_path = testDir;
+    for (int i = 0; i < 10; ++i) {
+        deep_path /= ("level" + std::to_string(i));
+        fs::create_directories(deep_path);
+    }
+    createFile(deep_path / "deep.txt", "Deep file");
+
+    // Test recursive glob
+    auto task = glob.glob_async((testDir / "**" / "deep.txt").string());
+    auto result = task.get_result();
+
+    runContext();
+
+    EXPECT_EQ(result.size(), 1);
+    EXPECT_THAT(result, Contains(deep_path / "deep.txt"));
+}
+
+// Test pattern caching
+TEST_F(AsyncGlobTest, PatternCaching) {
+    AsyncGlob glob(*io_context);
+
+    std::string pattern = (testDir / "*.txt").string();
+
+    // First call - should compile and cache pattern
+    auto result1 = glob.glob_sync(pattern);
+
+    // Second call - should use cached pattern
+    auto result2 = glob.glob_sync(pattern);
+
+    EXPECT_EQ(result1.size(), result2.size());
+    EXPECT_EQ(result1, result2);
+}
+
+// Test expandTilde functionality
+TEST_F(AsyncGlobTest, ExpandTilde) {
+    AsyncGlob glob(*io_context);
+
+    // Test tilde expansion
+    auto expanded = glob.expandTilde(std::string_view{"~/test"});
+    auto expandedStr = expanded.string();
+    EXPECT_EQ(expandedStr.find('~'), std::string::npos);
+}
+
+// Test filter functionality
+TEST_F(AsyncGlobTest, FilterFunctionality) {
+    AsyncGlob glob(*io_context);
+
+    std::vector<std::string> paths = {
+        (testDir / "file1.txt").string(),
+        (testDir / "file2.txt").string(),
+        (testDir / "file3.dat").string()
+    };
+
+    auto filtered = glob.filter(paths, "*.txt");
+    EXPECT_EQ(filtered.size(), 2);
+}
+
+// Test glob with symbolic links
+TEST_F(AsyncGlobTest, SymbolicLinks) {
+#ifdef _WIN32
+    GTEST_SKIP() << "Skipping symlink tests on Windows";
+#endif
+
+    AsyncGlob glob(*io_context);
+
+    fs::path link = testDir / "link_to_file1.txt";
+    std::error_code ec;
+    fs::create_symlink(testDir / "file1.txt", link, ec);
+
+    if (!ec) {
+        auto result = glob.glob_sync((testDir / "link_*.txt").string());
+        EXPECT_EQ(result.size(), 1);
+        EXPECT_THAT(result, Contains(link));
+    }
 }

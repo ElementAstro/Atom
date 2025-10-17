@@ -428,7 +428,7 @@ Examples:
         .def(
             "submit_with_promise",
             [](atom::async::ThreadPool& pool, py::function func) {
-                auto promise = pool.submitWithPromise([func]() -> py::object {
+                auto future = pool.submitWithPromise([func]() -> py::object {
                     py::gil_scoped_acquire acquire;
                     return func();
                 });
@@ -436,11 +436,13 @@ Examples:
                 // Convert Promise to Python future-like object
                 auto py_future = py::module::import("concurrent.futures").attr("Future")();
 
-                std::thread([promise = std::move(promise), py_future]() mutable {
+                std::thread([future = std::move(future), py_future]() mutable {
                     try {
-                        py::object result = promise.getValue();
+                        py::gil_scoped_acquire acquire;
+                        py::object result = future.get();
                         py_future.attr("set_result")(result);
                     } catch (const std::exception& e) {
+                        py::gil_scoped_acquire acquire;
                         py_future.attr("set_exception")(py::str(e.what()));
                     }
                 }).detach();

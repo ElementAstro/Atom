@@ -8,9 +8,11 @@
 #include <thread>
 #include <vector>
 
-#include "atom/system/storage.hpp"
+#include "atom/system/storage/storage.hpp"
 
 namespace atom::system::test {
+
+using atom::system::StorageMonitor;
 
 // Mock filesystem operations for testing
 class MockFileSystem {

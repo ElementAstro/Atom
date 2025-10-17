@@ -353,6 +353,8 @@ public:
      */
     template <typename Iterator, typename Function>
         requires std::invocable<
+            Function, typename std::iterator_traits<Iterator>::value_type&> ||
+                 std::invocable<
             Function, typename std::iterator_traits<Iterator>::value_type>
     static void for_each_jthread(Iterator begin, Iterator end, Function func,
                                  size_t numThreads = 0) {
@@ -433,6 +435,8 @@ public:
      */
     template <typename Iterator, typename Function>
         requires std::invocable<
+            Function, typename std::iterator_traits<Iterator>::value_type&> ||
+                 std::invocable<
             Function, typename std::iterator_traits<Iterator>::value_type>
     static void for_each(Iterator begin, Iterator end, Function func,
                          size_t numThreads = 0) {
@@ -634,10 +638,11 @@ public:
 
         // Determine which elements satisfy the predicate in parallel
         std::vector<bool> satisfies(range_size);
+        std::atomic<size_t> counter{0};
         for_each(
             begin, end,
-            [&satisfies, &pred, begin](const auto& item) {
-                auto idx = std::distance(begin, &item);
+            [&satisfies, &pred, &counter](const auto& item) {
+                size_t idx = counter.fetch_add(1);
                 satisfies[idx] = pred(item);
             },
             numThreads);

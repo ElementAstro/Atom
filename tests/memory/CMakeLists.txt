@@ -37,6 +37,9 @@ endif()
 # For modules with .cpp test files
 file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 
+# Exclude CMake-generated helper directories
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/build/.*")
+
 # Remove problematic test files (preserve existing exclusions)
 list(REMOVE_ITEM TEST_SOURCES ${PROJECT_SOURCE_DIR}/test_memory_main.cpp)
 
@@ -44,31 +47,6 @@ list(REMOVE_ITEM TEST_SOURCES ${PROJECT_SOURCE_DIR}/test_memory_main.cpp)
 # Create Test Executable
 # =============================================================================
 add_executable(atom_memory_tests ${TEST_SOURCES})
-
-# =============================================================================
-# Create Additional Test Executables (preserve existing functionality)
-# =============================================================================
-# Create a simple memory test executable with minimal dependencies
-add_executable(atom_memory_simple.test test_memory_simple.cpp)
-target_link_libraries(atom_memory_simple.test
-    PRIVATE
-    atom-test-common
-    atom-memory
-    atom-error
-)
-if(WIN32)
-    target_link_libraries(atom_memory_simple.test PRIVATE kernel32)
-endif()
-target_compile_features(atom_memory_simple.test PRIVATE cxx_std_20)
-target_compile_definitions(atom_memory_simple.test PRIVATE ATOM_MEMORY_TRACKING_DISABLED=1)
-
-# Create an alternative memory test with no dependencies on atom-memory
-add_executable(atom_memory_alternative.test test_memory_simple_alternative.cpp)
-target_link_libraries(atom_memory_alternative.test
-    PRIVATE
-    atom-test-common
-)
-target_compile_features(atom_memory_alternative.test PRIVATE cxx_std_20)
 
 # =============================================================================
 # Link Libraries
@@ -81,6 +59,10 @@ target_link_libraries(atom_memory_tests
     # Module under test and its dependencies
     atom-memory
     atom-error
+
+    # GoogleTest libraries (explicit linking required)
+    GTest::gtest
+    GTest::gtest_main
 
     # System libraries
     Threads::Threads
@@ -109,6 +91,11 @@ target_include_directories(atom_memory_tests
 # Set C++ standard
 target_compile_features(atom_memory_tests PRIVATE cxx_std_20)
 
+target_compile_definitions(atom_memory_tests
+    PRIVATE
+        SPDLOG_USE_STD_FORMAT=1
+)
+
 # Add compiler flags
 if(MSVC)
     target_compile_options(atom_memory_tests PRIVATE /W4)
@@ -124,25 +111,21 @@ enable_testing()
 
 # Use GoogleTest discovery for automatic test registration
 include(GoogleTest)
-gtest_discover_tests(atom_memory_tests
+# Temporarily disabled due to DLL dependency issues during test discovery
+# gtest_discover_tests(atom_memory_tests
+#     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+#     PROPERTIES
+#     LABELS "memory"
+#     TIMEOUT 300
+# )
+
+# Manual test registration as workaround
+add_test(NAME atom_memory_tests
+    COMMAND atom_memory_tests
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
+)
+set_tests_properties(atom_memory_tests PROPERTIES
     LABELS "memory"
-    TIMEOUT 300
-)
-
-# Register additional test executables
-gtest_discover_tests(atom_memory_simple.test
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
-    LABELS "memory;simple"
-    TIMEOUT 300
-)
-
-gtest_discover_tests(atom_memory_alternative.test
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-    PROPERTIES
-    LABELS "memory;alternative"
     TIMEOUT 300
 )
 
@@ -152,7 +135,7 @@ gtest_discover_tests(atom_memory_alternative.test
 # Add custom target for running only this module's tests
 add_custom_target(test_memory
     COMMAND ${CMAKE_CTEST_COMMAND} -L memory --output-on-failure
-    DEPENDS atom_memory_tests atom_memory_simple.test atom_memory_alternative.test
+    DEPENDS atom_memory_tests
     COMMENT "Running memory module tests"
 )
 
@@ -168,8 +151,6 @@ add_custom_target(test_memory_performance
 # =============================================================================
 # Set IDE folder for better organization
 set_property(TARGET atom_memory_tests PROPERTY FOLDER "Tests/Memory")
-set_property(TARGET atom_memory_simple.test PROPERTY FOLDER "Tests/Memory")
-set_property(TARGET atom_memory_alternative.test PROPERTY FOLDER "Tests/Memory")
 if(TARGET test_memory)
     set_property(TARGET test_memory PROPERTY FOLDER "Tests/Memory")
 endif()

@@ -1,5 +1,5 @@
-#ifndef ATOM_ALGORITHM_RING_HPP
-#define ATOM_ALGORITHM_RING_HPP
+#ifndef ATOM_MEMORY_RING_HPP
+#define ATOM_MEMORY_RING_HPP
 
 #include <algorithm>
 #include <concepts>
@@ -496,4 +496,4 @@ private:
 
 }  // namespace atom::memory
 
-#endif  // ATOM_ALGORITHM_RING_HPP
+#endif  // ATOM_MEMORY_RING_HPP

@@ -255,10 +255,7 @@ auto translate(Pattern&& pattern, int flags) noexcept
     }
 
     std::string result;
-    result.reserve(pattern_view.size() * 2 + 2); // +2 for anchors
-
-    // Add start anchor
-    result += '^';
+    result.reserve(pattern_view.size() * 2);
 
     try {
         for (auto it = pattern_view.begin(); it != pattern_view.end(); ++it) {
@@ -286,12 +283,11 @@ auto translate(Pattern&& pattern, int flags) noexcept
                         return atom::type::unexpected(FnmatchError::UnmatchedBracket);
                     }
 
+                    // Handle ] as first character in bracket expression (it's literal)
+                    // In ECMAScript regex, ] must be escaped even as first char
                     if (*it == ']') {
-                        result += *it;
+                        result += "\\]";
                         ++it;
-                        if (it == pattern_view.end()) {
-                            return atom::type::unexpected(FnmatchError::UnmatchedBracket);
-                        }
                     }
 
                     while (it != pattern_view.end() && *it != ']') {
@@ -365,9 +361,6 @@ auto translate(Pattern&& pattern, int flags) noexcept
                     break;
             }
         }
-
-        // Add end anchor
-        result += '$';
 
         return result;
     } catch (const std::exception& e) {

@@ -195,8 +195,49 @@ public:
 
     auto monitorProcesses() -> bool {
 #ifdef _WIN32
-        spdlog::warn("Process monitoring not implemented for Windows platform");
-        return false;
+        std::unique_lock lock(mtx);
+        size_t initialCount = processes.size();
+
+        for (auto processIt = processes.begin(); processIt != processes.end();) {
+            HANDLE hProcess = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_INFORMATION,
+                                         FALSE, processIt->pid);
+
+            if (hProcess == nullptr) {
+                // Process no longer exists or we don't have access
+                spdlog::info("Process no longer accessible: PID={}", processIt->pid);
+                processIt = processes.erase(processIt);
+                cv.notify_all();
+                continue;
+            }
+
+            // Check if process is still running (non-blocking)
+            DWORD exitCode = 0;
+            if (GetExitCodeProcess(hProcess, &exitCode)) {
+                if (exitCode != STILL_ACTIVE) {
+                    spdlog::info("Process terminated naturally: PID={}, exit code={}",
+                               processIt->pid, exitCode);
+                    CloseHandle(hProcess);
+                    processIt = processes.erase(processIt);
+                    cv.notify_all();
+                    continue;
+                }
+            } else {
+                spdlog::error("Error querying process PID {}: {}",
+                            processIt->pid, GetLastError());
+                CloseHandle(hProcess);
+                processIt = processes.erase(processIt);
+                continue;
+            }
+
+            CloseHandle(hProcess);
+            ++processIt;
+        }
+
+        if (processes.size() != initialCount) {
+            spdlog::debug("Process monitoring completed. Active processes: {}",
+                        processes.size());
+        }
+        return true;
 #elif defined(__linux__) || defined(__APPLE__)
         std::unique_lock lock(mtx);
         size_t initialCount = processes.size();

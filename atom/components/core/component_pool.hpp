@@ -330,7 +330,7 @@ private:
     ComponentPool<T>& getPool();
 
     mutable std::shared_mutex poolsMutex_;
-    std::unordered_map<std::type_index, std::unique_ptr<void, void (*)(void*)>>
+    std::unordered_map<std::type_index, std::shared_ptr<void>>
         pools_;
 };
 
@@ -382,13 +382,19 @@ public:
      * @brief Gets component count
      * @return Number of components
      */
-    [[nodiscard]] size_t size() const noexcept { return components_.size(); }
+    [[nodiscard]] size_t size() const noexcept {
+        std::shared_lock lock(mutex_);
+        return components_.size();
+    }
 
     /**
      * @brief Checks if container is empty
      * @return True if empty
      */
-    [[nodiscard]] bool empty() const noexcept { return components_.empty(); }
+    [[nodiscard]] bool empty() const noexcept {
+        std::shared_lock lock(mutex_);
+        return components_.empty();
+    }
 
     /**
      * @brief Optimizes internal layout for better cache performance
@@ -404,6 +410,363 @@ private:
     template <typename Func>
     void processBatch(size_t startIdx, size_t endIdx, Func&& func);
 };
+
+// ============================================================================
+// ComponentPool Template Implementation
+// ============================================================================
+
+template <typename T>
+template <typename... Args>
+std::shared_ptr<T> ComponentPool<T>::allocate(Args&&... args) {
+    const auto startTime = std::chrono::high_resolution_clock::now();
+
+    std::unique_lock lock(mutex_);
+
+    // Find available slot
+    ComponentChunk* targetChunk = nullptr;
+    size_t slotIndex = 0;
+
+    // First, try to find a chunk with available slots
+    for (auto& chunk : chunks_) {
+        if (chunk->allocatedCount.load(std::memory_order_relaxed) <
+            config_.chunkSize) {
+            for (size_t i = 0; i < config_.chunkSize; ++i) {
+                if (!chunk->allocated[i]) {
+                    targetChunk = chunk.get();
+                    slotIndex = i;
+                    break;
+                }
+            }
+            if (targetChunk)
+                break;
+        }
+    }
+
+    // If no available slot, allocate new chunk
+    if (!targetChunk) {
+        if (chunks_.size() >= config_.maxPoolSize / config_.chunkSize) {
+            lock.unlock();
+            const auto endTime = std::chrono::high_resolution_clock::now();
+            updateStatistics(
+                std::chrono::duration_cast<std::chrono::microseconds>(
+                    endTime - startTime));
+            statistics_.poolMisses.fetch_add(1, std::memory_order_relaxed);
+
+            // Fall back to regular allocation
+            return std::make_shared<T>(std::forward<Args>(args)...);
+        }
+
+        targetChunk = allocateChunk();
+        slotIndex = 0;
+    }
+
+    assert(targetChunk != nullptr);
+
+    // Mark slot as allocated
+    targetChunk->allocated[slotIndex] = true;
+    targetChunk->allocatedCount.fetch_add(1, std::memory_order_relaxed);
+    targetChunk->lastAccess = std::chrono::steady_clock::now();
+
+    // Get memory location
+    void* memory = &targetChunk->storage[slotIndex];
+
+    lock.unlock();
+
+    // Construct object in-place
+    T* rawPtr = new (memory) T(std::forward<Args>(args)...);
+
+    // Create shared_ptr with custom deleter
+    std::shared_ptr<T> result(rawPtr, [this, targetChunk, slotIndex](T* ptr) {
+        // Destroy object
+        ptr->~T();
+
+        // Return slot to pool
+        std::unique_lock deallocLock(mutex_);
+        targetChunk->allocated[slotIndex] = false;
+        targetChunk->allocatedCount.fetch_sub(1, std::memory_order_relaxed);
+
+        statistics_.totalDeallocations.fetch_add(1, std::memory_order_relaxed);
+        statistics_.currentAllocations.fetch_sub(1, std::memory_order_relaxed);
+    });
+
+    // Update statistics
+    const auto endTime = std::chrono::high_resolution_clock::now();
+    updateStatistics(std::chrono::duration_cast<std::chrono::microseconds>(
+        endTime - startTime));
+
+    statistics_.totalAllocations.fetch_add(1, std::memory_order_relaxed);
+    const auto current =
+        statistics_.currentAllocations.fetch_add(1, std::memory_order_relaxed) +
+        1;
+
+    // Update peak allocations
+    auto peak = statistics_.peakAllocations.load(std::memory_order_relaxed);
+    while (current > peak && !statistics_.peakAllocations.compare_exchange_weak(
+                                 peak, current, std::memory_order_relaxed)) {
+        // Retry if another thread updated peak
+    }
+
+    statistics_.poolHits.fetch_add(1, std::memory_order_relaxed);
+
+    return result;
+}
+
+// ============================================================================
+// ComponentPool Private Method Implementations
+// ============================================================================
+
+template <typename T>
+typename ComponentPool<T>::ComponentChunk* ComponentPool<T>::allocateChunk() {
+    auto chunk = std::make_unique<ComponentChunk>();
+    ComponentChunk* rawPtr = chunk.get();
+    chunks_.push_back(std::move(chunk));
+    return rawPtr;
+}
+
+template <typename T>
+void ComponentPool<T>::deallocateChunk(ComponentChunk* chunk) {
+    auto it =
+        std::find_if(chunks_.begin(), chunks_.end(),
+                     [chunk](const auto& ptr) { return ptr.get() == chunk; });
+
+    if (it != chunks_.end()) {
+        chunks_.erase(it);
+    }
+}
+
+template <typename T>
+void ComponentPool<T>::performCleanup() {
+    const auto now = std::chrono::steady_clock::now();
+    const auto cleanupThreshold = now - config_.cleanupInterval;
+
+    // Remove empty chunks that haven't been accessed recently
+    chunks_.erase(
+        std::remove_if(chunks_.begin(), chunks_.end(),
+                       [cleanupThreshold](const auto& chunk) {
+                           return chunk->allocatedCount.load(
+                                      std::memory_order_relaxed) == 0 &&
+                                  chunk->lastAccess < cleanupThreshold;
+                       }),
+        chunks_.end());
+
+    lastCleanup_ = now;
+    needsCleanup_.store(false, std::memory_order_relaxed);
+}
+
+template <typename T>
+void ComponentPool<T>::updateStatistics(
+    std::chrono::microseconds allocationTime) {
+    if (!config_.enableStatistics)
+        return;
+
+    statistics_.timing.totalAllocationTime += allocationTime;
+
+    if (allocationTime > statistics_.timing.maxAllocationTime) {
+        statistics_.timing.maxAllocationTime = allocationTime;
+    }
+
+    const auto totalAllocs =
+        statistics_.totalAllocations.load(std::memory_order_relaxed);
+    if (totalAllocs > 0) {
+        statistics_.timing.avgAllocationTime = std::chrono::microseconds{
+            statistics_.timing.totalAllocationTime.count() / totalAllocs};
+    }
+}
+
+// ============================================================================
+// ComponentPool Public Method Implementations
+// ============================================================================
+
+template <typename T>
+ComponentPool<T>::ComponentPool(const PoolConfig& config)
+    : config_(config), lastCleanup_(std::chrono::steady_clock::now()) {
+    // Pre-allocate initial chunks
+    chunks_.reserve(config_.maxPoolSize / config_.chunkSize);
+    freeChunks_.reserve(config_.maxPoolSize / config_.chunkSize);
+
+    // Allocate initial pool
+    const size_t initialChunks =
+        (config_.initialPoolSize + config_.chunkSize - 1) / config_.chunkSize;
+    for (size_t i = 0; i < initialChunks; ++i) {
+        auto chunk = std::make_unique<ComponentChunk>();
+        freeChunks_.push_back(chunks_.size());
+        chunks_.push_back(std::move(chunk));
+    }
+}
+
+template <typename T>
+ComponentPool<T>::~ComponentPool() {
+    cleanup();
+}
+
+template <typename T>
+void ComponentPool<T>::deallocate(std::shared_ptr<T> component) {
+    // The actual deallocation is handled by the custom deleter in allocate()
+    component.reset();
+}
+
+template <typename T>
+void ComponentPool<T>::updateConfig(const PoolConfig& config) {
+    std::unique_lock lock(mutex_);
+    config_ = config;
+}
+
+template <typename T>
+void ComponentPool<T>::cleanup() {
+    std::unique_lock lock(mutex_);
+    performCleanup();
+}
+
+template <typename T>
+size_t ComponentPool<T>::getMemoryUsage() const noexcept {
+    std::shared_lock lock(mutex_);
+    return chunks_.size() * sizeof(ComponentChunk);
+}
+
+template <typename T>
+double ComponentPool<T>::getFragmentationRatio() const noexcept {
+    std::shared_lock lock(mutex_);
+
+    if (chunks_.empty())
+        return 0.0;
+
+    size_t totalSlots = chunks_.size() * config_.chunkSize;
+    size_t allocatedSlots = 0;
+    size_t fragmentedChunks = 0;
+
+    for (const auto& chunk : chunks_) {
+        const auto allocated =
+            chunk->allocatedCount.load(std::memory_order_relaxed);
+        allocatedSlots += allocated;
+
+        // A chunk is fragmented if it has both allocated and free slots
+        if (allocated > 0 && allocated < config_.chunkSize) {
+            fragmentedChunks++;
+        }
+    }
+
+    return totalSlots > 0
+               ? static_cast<double>(fragmentedChunks) / chunks_.size()
+               : 0.0;
+}
+
+// ============================================================================
+// ComponentFactory Template Implementation
+// ============================================================================
+
+template <typename T, typename... Args>
+std::shared_ptr<T> ComponentFactory::create(Args&&... args) {
+    return getPool<T>().allocate(std::forward<Args>(args)...);
+}
+
+template <typename T>
+const PoolStatistics& ComponentFactory::getPoolStatistics() const {
+    return const_cast<ComponentFactory*>(this)->getPool<T>().getStatistics();
+}
+
+template <typename T>
+void ComponentFactory::configurePool(const PoolConfig& config) {
+    getPool<T>().updateConfig(config);
+}
+
+template <typename T>
+ComponentPool<T>& ComponentFactory::getPool() {
+    std::unique_lock lock(poolsMutex_);
+
+    auto typeIndex = std::type_index(typeid(T));
+    auto it = pools_.find(typeIndex);
+
+    if (it == pools_.end()) {
+        auto pool = std::make_shared<ComponentPool<T>>();
+        auto* rawPool = pool.get();
+        pools_[typeIndex] = pool;
+        return *rawPool;
+    }
+
+    return *static_cast<ComponentPool<T>*>(it->second.get());
+}
+
+// ============================================================================
+// SIMDComponentContainer Template Implementation
+// ============================================================================
+
+template <typename T>
+SIMDComponentContainer<T>::SIMDComponentContainer(const SIMDConfig& config)
+    : config_(config) {
+    components_.reserve(config_.batchSize * 4);  // Pre-allocate for efficiency
+}
+
+template <typename T>
+void SIMDComponentContainer<T>::add(std::shared_ptr<T> component) {
+    if (!component) {
+        return;
+    }
+
+    std::unique_lock lock(mutex_);
+    components_.push_back(std::move(component));
+}
+
+template <typename T>
+void SIMDComponentContainer<T>::remove(const std::shared_ptr<T>& component) {
+    if (!component) {
+        return;
+    }
+
+    std::unique_lock lock(mutex_);
+    auto it = std::find(components_.begin(), components_.end(), component);
+    if (it != components_.end()) {
+        components_.erase(it);
+    }
+}
+
+template <typename T>
+template <typename Func>
+void SIMDComponentContainer<T>::forEachBatch(Func&& func) {
+    std::shared_lock lock(mutex_);
+
+    const size_t totalComponents = components_.size();
+    const size_t batchSize = config_.batchSize;
+
+    for (size_t i = 0; i < totalComponents; i += batchSize) {
+        const size_t endIdx = std::min(i + batchSize, totalComponents);
+        processBatch(i, endIdx, std::forward<Func>(func));
+    }
+}
+
+template <typename T>
+void SIMDComponentContainer<T>::optimize() {
+    std::unique_lock lock(mutex_);
+
+    // Remove null components
+    components_.erase(
+        std::remove_if(components_.begin(), components_.end(),
+                      [](const auto& comp) { return !comp; }),
+        components_.end());
+
+    // Shrink to fit to reduce memory overhead
+    components_.shrink_to_fit();
+}
+
+template <typename T>
+template <typename Func>
+void SIMDComponentContainer<T>::processBatch(size_t startIdx, size_t endIdx, Func&& func) {
+    // Prefetch if enabled
+    if (config_.enablePrefetch && config_.prefetchDistance > 0) {
+        const size_t prefetchIdx = std::min(endIdx + config_.prefetchDistance, components_.size());
+        if (prefetchIdx < components_.size()) {
+            __builtin_prefetch(components_[prefetchIdx].get(), 0, 3);
+        }
+    }
+
+    // Process batch
+    for (size_t i = startIdx; i < endIdx; ++i) {
+        if (components_[i]) {
+            if (!func(components_[i])) {
+                break;  // Early termination if func returns false
+            }
+        }
+    }
+}
 
 }  // namespace atom::components
 

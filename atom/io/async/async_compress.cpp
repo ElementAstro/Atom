@@ -16,6 +16,7 @@
 #include <mutex>
 #include <ranges>
 #include <stdexcept>
+#include <system_error>
 
 namespace atom::async::io {
 
@@ -48,6 +49,24 @@ BaseCompressor::BaseCompressor(asio::io_context& io_context,
     }
 
     is_initialized_ = true;
+}
+
+void BaseCompressor::setCompletionHandler(CompletionHandler handler) {
+    completion_handler_ = std::move(handler);
+    completion_notified_.store(false);
+}
+
+void BaseCompressor::notifyCompletion(const std::error_code& ec,
+                                      std::size_t bytes) {
+    bool expected = false;
+    if (completion_handler_ &&
+        completion_notified_.compare_exchange_strong(expected, true)) {
+        auto handler = completion_handler_;
+        asio::post(io_context_,
+                   [handler = std::move(handler), ec, bytes]() mutable {
+                       handler(ec, bytes);
+                   });
+    }
 }
 
 BaseCompressor::~BaseCompressor() noexcept {
@@ -110,6 +129,7 @@ void BaseCompressor::doCompress() {
                     }
                 } else {
                     spdlog::error("Error during file write: {}", ec.message());
+                    notifyCompletion(ec);
                 }
             });
     } else {
@@ -146,8 +166,10 @@ void BaseCompressor::finishCompression() {
                     deflateEnd(&zlib_stream_);
                     is_initialized_ = false;
                     spdlog::info("Compression finished successfully");
+                    notifyCompletion({});
                 } else if (ec) {
                     spdlog::error("Error during file write: {}", ec.message());
+                    notifyCompletion(ec);
                 }
             });
 
@@ -171,7 +193,10 @@ SingleFileCompressor::SingleFileCompressor(asio::io_context& io_context,
     openInputFile(input_file);
 }
 
-void SingleFileCompressor::start() { doRead(); }
+void SingleFileCompressor::start() {
+    completion_notified_.store(false);
+    doRead();
+}
 
 void SingleFileCompressor::openInputFile(const fs::path& input_file) {
 #ifdef _WIN32
@@ -208,6 +233,8 @@ void SingleFileCompressor::doRead() {
             } else {
                 if (ec != asio::error::eof) {
                     spdlog::error("Error during file read: {}", ec.message());
+                    notifyCompletion(ec);
+                    return;
                 }
                 finishCompression();
             }
@@ -233,6 +260,7 @@ DirectoryCompressor::DirectoryCompressor(asio::io_context& io_context,
 }
 
 void DirectoryCompressor::start() {
+    completion_notified_.store(false);
     files_to_compress_.clear();
     files_to_compress_.reserve(1000);
     total_bytes_processed_ = 0;
@@ -275,6 +303,7 @@ void DirectoryCompressor::start() {
     } else {
         spdlog::warn("No files to compress in directory: {}",
                      input_dir_.string());
+        notifyCompletion({});
     }
 }
 
@@ -324,6 +353,24 @@ void DirectoryCompressor::onAfterWrite() { doRead(); }
 BaseDecompressor::BaseDecompressor(asio::io_context& io_context) noexcept
     : io_context_(io_context) {}
 
+void BaseDecompressor::setCompletionHandler(CompletionHandler handler) {
+    completion_handler_ = std::move(handler);
+    completion_notified_.store(false);
+}
+
+void BaseDecompressor::notifyCompletion(const std::error_code& ec,
+                                        std::size_t bytes) {
+    bool expected = false;
+    if (completion_handler_ &&
+        completion_notified_.compare_exchange_strong(expected, true)) {
+        auto handler = completion_handler_;
+        asio::post(io_context_,
+                   [handler = std::move(handler), ec, bytes]() mutable {
+                       handler(ec, bytes);
+                   });
+    }
+}
+
 void BaseDecompressor::decompress(gzFile source, StreamHandle& output_stream) {
     if (!source) {
         spdlog::error("Invalid source gzFile");
@@ -349,12 +396,14 @@ void BaseDecompressor::doRead() {
                     doRead();
                 } else {
                     spdlog::error("Error during file write: {}", ec.message());
+                    notifyCompletion(ec);
                     done();
                 }
             });
     } else {
         if (read_result < 0) {
             spdlog::error("Error during file read");
+            notifyCompletion(std::make_error_code(std::errc::io_error));
         }
         gzclose(in_file_);
         done();
@@ -382,8 +431,10 @@ SingleFileDecompressor::SingleFileDecompressor(asio::io_context& io_context,
 }
 
 void SingleFileDecompressor::start() {
+    completion_notified_.store(false);
     if (!fs::exists(input_file_)) {
         spdlog::error("Input file does not exist: {}", input_file_.string());
+        notifyCompletion(std::make_error_code(std::errc::no_such_file_or_directory));
         return;
     }
 
@@ -399,6 +450,7 @@ void SingleFileDecompressor::start() {
     if (inputHandle == nullptr) {
         spdlog::error("Failed to open compressed file: {}",
                       input_file_.string());
+        notifyCompletion(std::make_error_code(std::errc::io_error));
         return;
     }
 
@@ -410,6 +462,7 @@ void SingleFileDecompressor::start() {
         gzclose(inputHandle);
         spdlog::error("Failed to create decompressed file: {}",
                       outputFilePath.string());
+        notifyCompletion(std::make_error_code(std::errc::io_error));
         return;
     }
     output_stream_.assign(file_handle);
@@ -420,6 +473,7 @@ void SingleFileDecompressor::start() {
         gzclose(inputHandle);
         spdlog::error("Failed to create decompressed file: {}",
                       outputFilePath.string());
+        notifyCompletion(std::make_error_code(std::errc::io_error));
         return;
     }
     output_stream_.assign(file_descriptor);
@@ -432,6 +486,7 @@ void SingleFileDecompressor::done() {
     if (output_stream_.is_open()) {
         output_stream_.close();
     }
+    notifyCompletion({});
 }
 
 DirectoryDecompressor::DirectoryDecompressor(asio::io_context& io_context,
@@ -461,6 +516,7 @@ DirectoryDecompressor::DirectoryDecompressor(asio::io_context& io_context,
 }
 
 void DirectoryDecompressor::start() {
+    completion_notified_.store(false);
     files_to_decompress_.clear();
     files_to_decompress_.reserve(1000);
 
@@ -481,11 +537,13 @@ void DirectoryDecompressor::start() {
     } else {
         spdlog::warn("No files to decompress in directory: {}",
                      input_dir_.string());
+        notifyCompletion({});
     }
 }
 
 void DirectoryDecompressor::decompressNextFile() {
     if (files_to_decompress_.empty()) {
+        notifyCompletion({});
         return;
     }
 

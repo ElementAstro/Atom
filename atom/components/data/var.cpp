@@ -83,6 +83,27 @@ void VariableManager::removeVariable(const std::string& name) {
     if (it != variables_.end()) {
         const auto& info = it->second;
 
+        // Check if this is an alias entry (empty alias field)
+        // If so, find and remove the primary entry instead
+        if (info.alias.empty()) {
+            // This might be an alias entry, find the primary
+            std::string primaryName;
+            for (const auto& [key, value] : variables_) {
+                if (key != name && !value.alias.empty() && value.alias == name) {
+                    primaryName = key;
+                    break;
+                }
+            }
+
+            if (!primaryName.empty()) {
+                // This is an alias, remove the primary instead
+                removeVariable(primaryName);
+                return;
+            }
+            // Otherwise, this is a primary entry without an alias, fall through
+        }
+
+        // This is a primary entry, remove it and its alias
         if (!info.group.empty()) {
             auto groupIt = groups_.find(info.group);
             if (groupIt != groups_.end()) {
@@ -107,19 +128,7 @@ void VariableManager::removeVariable(const std::string& name) {
 
         variables_.erase(it);
     } else {
-        std::string primaryNameToRemove;
-        for (const auto& [primaryName, info] : variables_) {
-            if (info.alias == name) {
-                primaryNameToRemove = primaryName;
-                break;
-            }
-        }
-
-        if (!primaryNameToRemove.empty()) {
-            removeVariable(primaryNameToRemove);
-        } else {
-            spdlog::warn("Variable or alias not found: {}", name);
-        }
+        spdlog::warn("Variable not found: {}", name);
     }
 }
 
