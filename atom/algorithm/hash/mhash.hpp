@@ -37,6 +37,7 @@ Description: Implementation of murmur3 hash and quick hash
 #endif
 
 #include "../rust_numeric.hpp"
+#include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
 #ifdef ATOM_USE_BOOST
@@ -157,8 +158,8 @@ public:
      */
     template <std::ranges::range Range>
         requires Hashable<std::ranges::range_value_t<Range>>
-    [[nodiscard]] auto computeSignature(const Range& set) const noexcept(false)
-        -> HashSignature {
+    [[nodiscard]] auto computeSignature(const Range& set) const
+        noexcept(false) -> HashSignature {
         if (hash_functions_.empty()) {
             return {};
         }
@@ -335,7 +336,7 @@ private:
             cl_int error;
             mem_ = clCreateBuffer(ctx, flags, size, host_ptr, &error);
             if (error != CL_SUCCESS) {
-                throw std::runtime_error("Failed to create OpenCL buffer");
+                THROW_RUNTIME_ERROR("Failed to create OpenCL buffer");
             }
         }
 
@@ -392,7 +393,7 @@ private:
                                 HashSignature& signature) const {
         if (!opencl_available_.load(std::memory_order_acquire) ||
             !opencl_resources_) {
-            throw std::runtime_error("OpenCL not available");
+            THROW_RUNTIME_ERROR("OpenCL not available");
         }
 
         cl_int err;
@@ -459,37 +460,37 @@ private:
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 0,
                                  sizeof(cl_mem), &hashesBuffer.get());
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to set kernel arg 0");
+                THROW_RUNTIME_ERROR("Failed to set kernel arg 0");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 1,
                                  sizeof(cl_mem), &signatureBuffer.get());
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to set kernel arg 1");
+                THROW_RUNTIME_ERROR("Failed to set kernel arg 1");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 2,
                                  sizeof(cl_mem), &aValuesBuffer.get());
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to set kernel arg 2");
+                THROW_RUNTIME_ERROR("Failed to set kernel arg 2");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 3,
                                  sizeof(cl_mem), &bValuesBuffer.get());
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to set kernel arg 3");
+                THROW_RUNTIME_ERROR("Failed to set kernel arg 3");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 4,
                                  sizeof(usize), &p);
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to set kernel arg 4");
+                THROW_RUNTIME_ERROR("Failed to set kernel arg 4");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 5,
                                  sizeof(usize), &numHashes);
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to set kernel arg 5");
+                THROW_RUNTIME_ERROR("Failed to set kernel arg 5");
 
             err = clSetKernelArg(opencl_resources_->minhash_kernel, 6,
                                  sizeof(usize), &numElements);
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to set kernel arg 6");
+                THROW_RUNTIME_ERROR("Failed to set kernel arg 6");
 
             // Optimization: Use multi-dimensional work-group structure for
             // better parallelism
@@ -502,7 +503,7 @@ private:
                                          nullptr, &globalWorkSize,
                                          &WORK_GROUP_SIZE, 0, nullptr, nullptr);
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to enqueue kernel");
+                THROW_RUNTIME_ERROR("Failed to enqueue kernel");
 
             // Read results
             err = clEnqueueReadBuffer(opencl_resources_->queue,
@@ -510,10 +511,10 @@ private:
                                       numHashes * sizeof(usize),
                                       signature.data(), 0, nullptr, nullptr);
             if (err != CL_SUCCESS)
-                throw std::runtime_error("Failed to read results");
+                THROW_RUNTIME_ERROR("Failed to read results");
 
         } catch (const std::exception& e) {
-            throw std::runtime_error(std::string("OpenCL error: ") + e.what());
+            THROW_RUNTIME_ERROR(std::string("OpenCL error: ") + e.what());
         }
     }
 #endif

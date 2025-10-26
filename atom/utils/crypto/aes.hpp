@@ -12,12 +12,9 @@
 #include <string>
 #include <vector>
 
-namespace atom::utils {
+#include "atom/utils/text/string.hpp"
 
-template <typename T>
-concept StringLike = requires(T t) {
-    { std::string_view(t) } -> std::convertible_to<std::string_view>;
-};
+namespace atom::utils {
 
 /**
  * @brief Encrypts the input plaintext using the AES algorithm.
@@ -46,11 +43,10 @@ concept StringLike = requires(T t) {
  * @throws std::invalid_argument If inputs are invalid
  * @throws std::runtime_error If decryption fails
  */
-[[nodiscard]] auto decryptAES(StringLike auto&& ciphertext,
-                              StringLike auto&& key,
-                              std::span<const unsigned char> iv,
-                              std::span<const unsigned char> tag)
-    -> std::string;
+[[nodiscard]] auto decryptAES(
+    StringLike auto&& ciphertext, StringLike auto&& key,
+    std::span<const unsigned char> iv,
+    std::span<const unsigned char> tag) -> std::string;
 
 /**
  * @brief Compresses the input data using the Zlib library.

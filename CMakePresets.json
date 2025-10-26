@@ -49,6 +49,27 @@
             }
         },
         {
+            "name": "base-msvc-vcpkg",
+            "hidden": true,
+            "generator": "Visual Studio 17 2022",
+            "architecture": "x64",
+            "binaryDir": "${sourceDir}/build",
+            "toolchainFile": "C:/vcpkg/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "CMAKE_C_COMPILER": "cl",
+                "CMAKE_CXX_COMPILER": "cl",
+                "USE_VCPKG": "ON",
+                "VCPKG_TARGET_TRIPLET": "x64-windows",
+                "VCPKG_HOST_TRIPLET": "x64-windows"
+            },
+            "environment": {
+                "MSYSTEM": null,
+                "VCPKG_ROOT": "C:/vcpkg",
+                "VCPKG_FORCE_DOWNLOADED_BINARIES": "1"
+            }
+        },
+        {
             "name": "base",
             "hidden": true,
             "inherits": "base-ninja",
@@ -209,6 +230,30 @@
                 "base-vs",
                 "_vs-relwithdebinfo-config"
             ]
+        },
+        {
+            "name": "msvc-vcpkg-debug",
+            "displayName": "Debug (MSVC with vcpkg)",
+            "inherits": [
+                "base-msvc-vcpkg",
+                "_vs-debug-config"
+            ]
+        },
+        {
+            "name": "msvc-vcpkg-release",
+            "displayName": "Release (MSVC with vcpkg)",
+            "inherits": [
+                "base-msvc-vcpkg",
+                "_vs-release-config"
+            ]
+        },
+        {
+            "name": "msvc-vcpkg-relwithdebinfo",
+            "displayName": "RelWithDebInfo (MSVC with vcpkg)",
+            "inherits": [
+                "base-msvc-vcpkg",
+                "_vs-relwithdebinfo-config"
+            ]
         }
     ],
     "buildPresets": [
@@ -270,6 +315,21 @@
         {
             "name": "relwithdebinfo-vs",
             "configurePreset": "relwithdebinfo-vs",
+            "configuration": "RelWithDebInfo"
+        },
+        {
+            "name": "msvc-vcpkg-debug",
+            "configurePreset": "msvc-vcpkg-debug",
+            "configuration": "Debug"
+        },
+        {
+            "name": "msvc-vcpkg-release",
+            "configurePreset": "msvc-vcpkg-release",
+            "configuration": "Release"
+        },
+        {
+            "name": "msvc-vcpkg-relwithdebinfo",
+            "configurePreset": "msvc-vcpkg-relwithdebinfo",
             "configuration": "RelWithDebInfo"
         }
     ],

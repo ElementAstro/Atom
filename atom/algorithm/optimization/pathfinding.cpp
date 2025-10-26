@@ -25,8 +25,8 @@ f32 euclidean(const Point& a, const Point& b) {
 f32 diagonal(const Point& a, const Point& b) {
     i32 dx = std::abs(a.x - b.x);
     i32 dy = std::abs(a.y - b.y);
-    return static_cast<f32>(1.0f * std::max(dx, dy) +
-                            0.414f * std::min(dx, dy));
+    // Diagonal distance is Chebyshev distance: max(|dx|, |dy|)
+    return static_cast<f32>(std::max(dx, dy));
 }
 
 f32 octile(const Point& a, const Point& b) {

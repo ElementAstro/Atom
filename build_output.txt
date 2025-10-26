@@ -1,0 +1,11 @@
+'wmic' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+===============================================
+Atom Project Enhanced Build Script
+===============================================
+Build script started at 2025/10/25 周六 15:50:48.28
+Project root: D:\Project\Atom\scripts\..
+Build log: D:\Project\Atom\scripts\..\logs\build_~0,8scripts/build.batdt:~8,6.log
+  --clean        Clean build directory before building
+  --help         Show this help message
+

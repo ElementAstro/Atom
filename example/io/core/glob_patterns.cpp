@@ -73,28 +73,28 @@ void demonstrateBasicGlob() {
 
     // Find all .txt files
     std::cout << "\n1. Finding all .txt files:" << std::endl;
-    auto txtFiles = atom::io::glob("test_glob/*.txt");
+    auto txtFiles = atom::io::glob("test_glob/*.txt", false, false);
     for (const auto& file : txtFiles) {
         std::cout << "  📄 " << file << std::endl;
     }
 
     // Find all .cpp files
     std::cout << "\n2. Finding all .cpp files:" << std::endl;
-    auto cppFiles = atom::io::glob("test_glob/*.cpp");
+    auto cppFiles = atom::io::glob("test_glob/*.cpp", false, false);
     for (const auto& file : cppFiles) {
         std::cout << "  📄 " << file << std::endl;
     }
 
     // Find files with specific pattern
     std::cout << "\n3. Finding files starting with 'file':" << std::endl;
-    auto filePattern = atom::io::glob("test_glob/file*");
+    auto filePattern = atom::io::glob("test_glob/file*", false, false);
     for (const auto& file : filePattern) {
         std::cout << "  📄 " << file << std::endl;
     }
 
     // Find files with character class
     std::cout << "\n4. Finding files with numbers (file[0-9]*):" << std::endl;
-    auto numberedFiles = atom::io::glob("test_glob/file[0-9]*");
+    auto numberedFiles = atom::io::glob("test_glob/file[0-9]*", false, false);
     for (const auto& file : numberedFiles) {
         std::cout << "  📄 " << file << std::endl;
     }
@@ -108,14 +108,14 @@ void demonstrateRecursiveGlob() {
 
     // Find all .txt files recursively
     std::cout << "\n1. Finding all .txt files recursively:" << std::endl;
-    auto allTxtFiles = atom::io::glob("test_glob/**/*.txt", true);
+    auto allTxtFiles = atom::io::glob("test_glob/**/*.txt", true, false);
     for (const auto& file : allTxtFiles) {
         std::cout << "  📄 " << file << std::endl;
     }
 
     // Find all files recursively
     std::cout << "\n2. Finding all files recursively:" << std::endl;
-    auto allFiles = atom::io::glob("test_glob/**/*", true);
+    auto allFiles = atom::io::glob("test_glob/**/*", true, false);
     for (const auto& file : allFiles) {
         std::cout << "  📄 " << file << std::endl;
     }
@@ -175,14 +175,14 @@ void demonstrateAdvancedFeatures() {
 
     // Negation patterns (if supported)
     std::cout << "\n1. Complex patterns with character classes:" << std::endl;
-    auto complexPattern = atom::io::glob("test_glob/*.[ch]*");
+    auto complexPattern = atom::io::glob("test_glob/*.[ch]*", false, false);
     for (const auto& file : complexPattern) {
         std::cout << "  📄 " << file << std::endl;
     }
 
     // Question mark wildcard
     std::cout << "\n2. Single character wildcard (file?.*):" << std::endl;
-    auto singleChar = atom::io::glob("test_glob/file?.*");
+    auto singleChar = atom::io::glob("test_glob/file?.*", false, false);
     for (const auto& file : singleChar) {
         std::cout << "  📄 " << file << std::endl;
     }

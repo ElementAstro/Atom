@@ -1,0 +1,11 @@
+{
+  "session_id": "7fba7e00-a319-4827-81fe-92edb657d6fa",
+  "transcript_path": "C:\\Users\\Max Qian\\.claude\\projects\\d--Project-Atom\\7fba7e00-a319-4827-81fe-92edb657d6fa.jsonl",
+  "hook_event_name": "PreToolUse",
+  "tool_name": "Edit",
+  "tool_input": {
+    "file_path": "d:\\Project\\Atom\\atom\\components\\data\\var.hpp",
+    "old_string": "            THROW_INVALID_ARGUMENT(\n                \"Value {} out of range [{}, {}] for variable '{}'\", newValue,\n                min, max, name);",
+    "new_string": "            THROW_OUT_OF_RANGE(\n                \"Value {} out of range [{}, {}] for variable '{}'\", newValue,\n                min, max, name);"
+  }
+}

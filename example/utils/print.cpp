@@ -248,7 +248,7 @@ int main() {
 
     // Manual timing
     {
-        atom::utils::Timer timer;
+        atom::utils::PerformanceTimer timer;
         std::cout << "Starting a heavy computation..." << std::endl;
         performHeavyComputation();
         std::cout << "Computation completed in " << timer.elapsed()
@@ -256,15 +256,16 @@ int main() {
     }
 
     // Automatic timing with return value
-    int result = atom::utils::Timer::measure("Vector summation", []() {
-        std::vector<int> data(5000000);
-        std::iota(data.begin(), data.end(), 1);
-        return std::accumulate(data.begin(), data.end(), 0);
-    });
+    int result =
+        atom::utils::PerformanceTimer::measure("Vector summation", []() {
+            std::vector<int> data(5000000);
+            std::iota(data.begin(), data.end(), 1);
+            return std::accumulate(data.begin(), data.end(), 0);
+        });
     std::cout << "Sum result: " << result << std::endl;
 
     // Automatic timing with void function
-    atom::utils::Timer::measureVoid("Vector shuffling", []() {
+    atom::utils::PerformanceTimer::measureVoid("Vector shuffling", []() {
         std::vector<int> data(3000000);
         std::iota(data.begin(), data.end(), 1);
 

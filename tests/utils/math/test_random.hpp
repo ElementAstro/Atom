@@ -583,7 +583,12 @@ TEST_F(RandomTest, GenerateRandomStringPerformance) {
     EXPECT_EQ(large_string.length(), static_cast<size_t>(large_length));
 }
 
+#if 0  // DISABLED: Duplicate main() function - CMake generates test runner with
+       // main()
+// Test files should not define their own main() function when using CMake's test runner.
+// The test runner (test_utils_runner.cpp) already provides a main() function.
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+#endif

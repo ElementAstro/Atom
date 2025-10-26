@@ -1,8 +1,9 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include <vector>
 #include <spdlog/spdlog.h>
+#include <vector>
 #include "atom/algorithm/matrix.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -532,7 +533,7 @@ TEST_F(MatrixTest, SingularInverse) {
     EXPECT_NEAR(singular.determinant(), 0.0, 1e-9);
 
     // Inverse should throw an exception
-    EXPECT_THROW(singular.inverse(), std::runtime_error);
+    EXPECT_THROW(singular.inverse(), atom::error::RuntimeError);
 }
 
 TEST_F(MatrixTest, Rank) {

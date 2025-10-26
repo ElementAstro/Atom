@@ -20,9 +20,10 @@ Description: Tests for container utility functions
 #include <algorithm>
 #include <list>
 #include <map>
+#include <numeric>
 #include <string>
 #include <unordered_map>
-#include "atom/utils/container.hpp"
+#include "atom/utils/container/container.hpp"
 
 namespace atom::utils::test {
 
@@ -71,20 +72,20 @@ TEST_F(ContainerTest, Contains) {
     EXPECT_FALSE(contains(strVec, std::string("grape")));
 }
 
-// Test toUnorderedSet function
-TEST_F(ContainerTest, ToUnorderedSet) {
-    auto set1 = toUnorderedSet(vec1);
+// Test toHashSet function
+TEST_F(ContainerTest, ToHashSet) {
+    auto set1 = toHashSet(vec1);
     EXPECT_EQ(set1.size(), 5);
     EXPECT_TRUE(set1.contains(1));
     EXPECT_TRUE(set1.contains(5));
     EXPECT_FALSE(set1.contains(8));
 
     // Test with duplicates
-    auto setDuplicates = toUnorderedSet(duplicate);
+    auto setDuplicates = toHashSet(duplicate);
     EXPECT_EQ(setDuplicates.size(), 3);  // Should only have 3 unique elements
 
     // Test with empty container
-    auto emptySet = toUnorderedSet(empty);
+    auto emptySet = toHashSet(empty);
     EXPECT_TRUE(emptySet.empty());
 }
 
@@ -417,9 +418,9 @@ TEST_F(ContainerTest, LargeContainerOperations) {
     std::vector<int> largeSubset(100);
 
     // Fill with ascending values
-    std::ranges::iota(large1.begin(), large1.end(), 0);              // 0-999
-    std::ranges::iota(large2.begin(), large2.end(), 500);            // 500-1499
-    std::ranges::iota(largeSubset.begin(), largeSubset.end(), 500);  // 500-599
+    std::iota(large1.begin(), large1.end(), 0);              // 0-999
+    std::iota(large2.begin(), large2.end(), 500);            // 500-1499
+    std::iota(largeSubset.begin(), largeSubset.end(), 500);  // 500-599
 
     // IsSubset operation with large containers
     EXPECT_TRUE(isSubset(largeSubset, large2));  // Should be a subset

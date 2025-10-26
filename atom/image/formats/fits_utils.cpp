@@ -14,7 +14,6 @@
 #define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
 #define THROW_INVALID_ARGUMENT(msg) throw std::invalid_argument(msg)
 
-
 namespace atom {
 namespace image {
 
@@ -192,7 +191,8 @@ void FitsImage::save(const std::string& filename) const {
 void FitsImage::load(const std::string& filename) {
     try {
         // Use the simple readFITS version to avoid ambiguity
-        (fitsFile.get()->*static_cast<void (FITSFile::*)(const std::string&)>(&FITSFile::readFITS))(filename);
+        (fitsFile.get()->*static_cast<void (FITSFile::*)(const std::string&)>(
+                              &FITSFile::readFITS))(filename);
 
         // 从BITPIX确定数据类型
         if (fitsFile->getHDUCount() > 0) {
@@ -300,10 +300,10 @@ void FitsImage::applyFilter(FilterType filterType, int kernelSize,
     std::vector<std::vector<double>> kernel;
 
     switch (filterType) {
-        case FilterType::GAUSSIAN:
+        case FilterType::GAUSSIAN_BLUR:
             kernel = createGaussianKernel(kernelSize);
             break;
-        case FilterType::MEAN:
+        case FilterType::BOX_BLUR:
             kernel = createMeanKernel(kernelSize);
             break;
         case FilterType::SOBEL:
@@ -747,12 +747,12 @@ void FitsImage::removeNoise(FilterType filterType, int strength, int channel) {
             // 中值滤波是去噪的常用方法
             applyFilter(FilterType::MEDIAN, strength, channel);
             break;
-        case FilterType::GAUSSIAN:
+        case FilterType::GAUSSIAN_BLUR:
             // 高斯滤波也可以用于去噪
-            applyFilter(FilterType::GAUSSIAN, strength, channel);
+            applyFilter(FilterType::GAUSSIAN_BLUR, strength, channel);
             break;
-        case FilterType::MEAN:
-            applyFilter(FilterType::MEAN, strength, channel);
+        case FilterType::BOX_BLUR:
+            applyFilter(FilterType::BOX_BLUR, strength, channel);
             break;
         default:
             THROW_INVALID_ARGUMENT("不支持的去噪滤镜类型");

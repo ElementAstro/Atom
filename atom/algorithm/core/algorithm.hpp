@@ -26,6 +26,8 @@ Description: A collection of algorithms for C++
 #include <unordered_map>
 #include <vector>
 
+#include "atom/error/exception.hpp"
+
 namespace atom::algorithm {
 
 // Concepts for string-like types
@@ -247,7 +249,7 @@ template <std::size_t N, typename ElementType, typename HashFunction>
 BloomFilter<N, ElementType, HashFunction>::BloomFilter(
     std::size_t num_hash_functions) {
     if (num_hash_functions == 0) {
-        throw std::invalid_argument(
+        THROW_INVALID_ARGUMENT(
             "Number of hash functions must be greater than zero");
     }
     m_num_hash_functions_ = num_hash_functions;
@@ -295,8 +297,8 @@ template <std::size_t N, typename ElementType, typename HashFunction>
         { h(e) } -> std::convertible_to<std::size_t>;
     }
 auto BloomFilter<N, ElementType, HashFunction>::hash(
-    const ElementType& element, std::size_t seed) const noexcept
-    -> std::size_t {
+    const ElementType& element,
+    std::size_t seed) const noexcept -> std::size_t {
     // Combine the element hash with the seed using FNV-1a variation
     std::size_t hashValue = 0x811C9DC5 + seed;  // FNV offset basis + seed
     std::size_t elementHash = m_hasher_(element);

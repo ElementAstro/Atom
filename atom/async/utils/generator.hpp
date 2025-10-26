@@ -81,6 +81,10 @@ public:
                 return *this;
             }
             handle_.resume();
+            // Check for exceptions after resuming
+            if (handle_.promise().exception_) {
+                std::rethrow_exception(handle_.promise().exception_);
+            }
             if (handle_.done()) {
                 handle_ = nullptr;
             }
@@ -101,9 +105,19 @@ public:
             return !(*this == other);
         }
 
-        const T& operator*() const { return handle_.promise().value(); }
+        const T& operator*() const {
+            if (!handle_ || handle_.done()) {
+                throw std::logic_error("Dereferencing end iterator");
+            }
+            return handle_.promise().value();
+        }
 
-        const T* operator->() const { return &handle_.promise().value(); }
+        const T* operator->() const {
+            if (!handle_ || handle_.done()) {
+                throw std::logic_error("Dereferencing end iterator");
+            }
+            return &handle_.promise().value();
+        }
 
     private:
         std::coroutine_handle<promise_type> handle_;
@@ -113,7 +127,7 @@ public:
      * @brief Promise type for the generator coroutine
      */
     struct promise_type {
-        T value_;
+        std::optional<T> value_;
         std::exception_ptr exception_;
 
         Generator get_return_object() {
@@ -138,7 +152,10 @@ public:
             if (exception_) {
                 std::rethrow_exception(exception_);
             }
-            return value_;
+            if (!value_.has_value()) {
+                throw std::logic_error("Accessing value of empty generator");
+            }
+            return value_.value();
         }
     };
 
@@ -180,13 +197,14 @@ public:
      * @brief Returns an iterator pointing to the beginning of the generator
      */
     iterator begin() {
-        if (handle_) {
+        if (handle_ && !handle_.done()) {
             handle_.resume();
             if (handle_.done()) {
                 return end();
             }
+            return iterator{handle_};
         }
-        return iterator{handle_};
+        return end();
     }
 
     /**
@@ -211,7 +229,7 @@ public:
     using handle_type = std::coroutine_handle<promise_type>;
 
     struct promise_type {
-        Yield value_to_yield_;
+        std::optional<Yield> value_to_yield_;
         std::optional<Receive> value_to_receive_;
         std::exception_ptr exception_;
 
@@ -304,7 +322,10 @@ public:
             throw std::logic_error("Generator is done after resume");
         }
 
-        return std::move(handle_.promise().value_to_yield_);
+        if (!handle_.promise().value_to_yield_.has_value()) {
+            throw std::logic_error("Accessing unset value in TwoWayGenerator");
+        }
+        return std::move(handle_.promise().value_to_yield_.value());
     }
 
     /**
@@ -324,7 +345,7 @@ public:
     using handle_type = std::coroutine_handle<promise_type>;
 
     struct promise_type {
-        Yield value_to_yield_;
+        std::optional<Yield> value_to_yield_;
         std::exception_ptr exception_;
 
         TwoWayGenerator get_return_object() {
@@ -392,7 +413,10 @@ public:
                                // exception)
             throw std::logic_error("Generator is done after resume");
         }
-        return std::move(handle_.promise().value_to_yield_);
+        if (!handle_.promise().value_to_yield_.has_value()) {
+            throw std::logic_error("Accessing unset value in TwoWayGenerator");
+        }
+        return std::move(handle_.promise().value_to_yield_.value());
     }
 
     /**
@@ -629,13 +653,14 @@ public:
 
     iterator begin() {
         boost::lock_guard<boost::mutex> lock(iter_mutex_);
-        if (handle_) {
+        if (handle_ && !handle_.done()) {
             handle_.resume();  // Initial resume
             if (handle_.done()) {
                 return end();
             }
+            return iterator{handle_, this};
         }
-        return iterator{handle_, this};
+        return end();
     }
 
     iterator end() { return iterator{nullptr, nullptr}; }

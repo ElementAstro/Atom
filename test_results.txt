@@ -1,0 +1,422 @@
+Test project D:/Project/Atom/build
+      Start  1: unified_test_runner
+ 1/90 Test  #1: unified_test_runner ..............   Passed    0.62 sec
+      Start  2: InfrastructureValidation
+ 2/90 Test  #2: InfrastructureValidation .........   Passed    0.87 sec
+      Start  3: algorithm_tests
+ 3/90 Test  #3: algorithm_tests ..................Exit code 0xc0000374
+***Exception:   2.62 sec
+Running main() from C:/M/B/src/googletest-1.17.0/googletest/src/gtest_main.cc
+[==========] Running 635 tests from 56 test suites.
+[----------] Global test environment set-up.
+[----------] 19 tests from UUIDTest
+[ RUN      ] UUIDTest.DefaultConstructor
+[       OK ] UUIDTest.DefaultConstructor (0 ms)
+[ RUN      ] UUIDTest.GenerateRandom
+[       OK ] UUIDTest.GenerateRandom (0 ms)
+[ RUN      ] UUIDTest.GenerateNil
+[       OK ] UUIDTest.GenerateNil (0 ms)
+[ RUN      ] UUIDTest.GenerateTimeBased
+[       OK ] UUIDTest.GenerateTimeBased (0 ms)
+[ RUN      ] UUIDTest.GenerateRandomNodeId
+[       OK ] UUIDTest.GenerateRandomNodeId (0 ms)
+[ RUN      ] UUIDTest.ConstructFromData
+[       OK ] UUIDTest.ConstructFromData (0 ms)
+[ RUN      ] UUIDTest.ConstructFromString
+[       OK ] UUIDTest.ConstructFromString (0 ms)
+[ RUN      ] UUIDTest.ConstructFromInvalidString
+[       OK ] UUIDTest.ConstructFromInvalidString (0 ms)
+[ RUN      ] UUIDTest.FromStringMethod
+[       OK ] UUIDTest.FromStringMethod (0 ms)
+[ RUN      ] UUIDTest.ComparisonOperators
+[       OK ] UUIDTest.ComparisonOperators (0 ms)
+[ RUN      ] UUIDTest.StreamOutput
+[       OK ] UUIDTest.StreamOutput (0 ms)
+[ RUN      ] UUIDTest.Uniqueness
+[       OK ] UUIDTest.Uniqueness (8 ms)
+[ RUN      ] UUIDTest.TimeBasedUniqueness
+[       OK ] UUIDTest.TimeBasedUniqueness (0 ms)
+[ RUN      ] UUIDTest.VersionDetection
+[       OK ] UUIDTest.VersionDetection (0 ms)
+[ RUN      ] UUIDTest.HashFunctionality
+[       OK ] UUIDTest.HashFunctionality (0 ms)
+[ RUN      ] UUIDTest.Performance
+[       OK ] UUIDTest.Performance (119 ms)
+[ RUN      ] UUIDTest.EdgeCases
+[       OK ] UUIDTest.EdgeCases (0 ms)
+[ RUN      ] UUIDTest.RoundTripConsistency
+[       OK ] UUIDTest.RoundTripConsistency (0 ms)
+[ RUN      ] UUIDTest.ThreadSafety
+[       OK ] UUIDTest.ThreadSafety (15 ms)
+[----------] 19 tests from UUIDTest (146 ms total)
+
+[----------] 20 tests from SnowflakeTest
+[ RUN      ] SnowflakeTest.GenerateSingleId
+[       OK ] SnowflakeTest.GenerateSingleId (0 ms)
+[ RUN      ] SnowflakeTest.GenerateMultipleIds
+[       OK ] SnowflakeTest.GenerateMultipleIds (0 ms)
+[ RUN      ] SnowflakeTest.IdStructure
+[       OK ] SnowflakeTest.IdStructure (0 ms)
+[ RUN      ] SnowflakeTest.IdIncrementsOverTime
+[       OK ] SnowflakeTest.IdIncrementsOverTime (2 ms)
+[ RUN      ] SnowflakeTest.IdUniqueness
+[       OK ] SnowflakeTest.IdUniqueness (86 ms)
+[ RUN      ] SnowflakeTest.SequenceIncrements
+[       OK ] SnowflakeTest.SequenceIncrements (0 ms)
+[ RUN      ] SnowflakeTest.WorkerAndDatacenterIds
+[       OK ] SnowflakeTest.WorkerAndDatacenterIds (0 ms)
+[ RUN      ] SnowflakeTest.InvalidInitialization
+[       OK ] SnowflakeTest.InvalidInitialization (0 ms)
+[ RUN      ] SnowflakeTest.InitMethod
+[       OK ] SnowflakeTest.InitMethod (1 ms)
+[ RUN      ] SnowflakeTest.IdValidation
+[       OK ] SnowflakeTest.IdValidation (0 ms)
+[ RUN      ] SnowflakeTest.TimestampExtraction
+[       OK ] SnowflakeTest.TimestampExtraction (0 ms)
+[ RUN      ] SnowflakeTest.IdParsing
+[       OK ] SnowflakeTest.IdParsing (0 ms)
+[ RUN      ] SnowflakeTest.Reset
+[       OK ] SnowflakeTest.Reset (0 ms)
+[ RUN      ] SnowflakeTest.Statistics
+[       OK ] SnowflakeTest.Statistics (0 ms)
+[ RUN      ] SnowflakeTest.Serialization
+[       OK ] SnowflakeTest.Serialization (0 ms)
+[ RUN      ] SnowflakeTest.InvalidDeserialization
+[       OK ] SnowflakeTest.InvalidDeserialization (0 ms)
+[ RUN      ] SnowflakeTest.ThreadSafety
+[       OK ] SnowflakeTest.ThreadSafety (15 ms)
+[ RUN      ] SnowflakeTest.BatchEfficiency
+[       OK ] SnowflakeTest.BatchEfficiency (3 ms)
+[ RUN      ] SnowflakeTest.LockTypes
+[       OK ] SnowflakeTest.LockTypes (0 ms)
+[ RUN      ] SnowflakeTest.IdBitStructure
+[       OK ] SnowflakeTest.IdBitStructure (0 ms)
+[----------] 20 tests from SnowflakeTest (110 ms total)
+
+[----------] 22 tests from FnmatchTest
+[ RUN      ] FnmatchTest.BasicMatching
+[       OK ] FnmatchTest.BasicMatching (0 ms)
+[ RUN      ] FnmatchTest.CharacterClasses
+[       OK ] FnmatchTest.CharacterClasses (0 ms)
+[ RUN      ] FnmatchTest.ComplexPatterns
+[       OK ] FnmatchTest.ComplexPatterns (1 ms)
+[ RUN      ] FnmatchTest.Escapes
+[       OK ] FnmatchTest.Escapes (0 ms)
+[ RUN      ] FnmatchTest.CasefoldsFlag
+[       OK ] FnmatchTest.CasefoldsFlag (1 ms)
+[ RUN      ] FnmatchTest.BasicFilter
+[       OK ] FnmatchTest.BasicFilter (0 ms)
+[ RUN      ] FnmatchTest.MultiplePatternFilter
+[       OK ] FnmatchTest.MultiplePatternFilter (6 ms)
+[ RUN      ] FnmatchTest.FilterParallelExecution
+[       OK ] FnmatchTest.FilterParallelExecution (110 ms)
+[ RUN      ] FnmatchTest.TranslateBasicPattern
+[       OK ] FnmatchTest.TranslateBasicPattern (0 ms)
+[ RUN      ] FnmatchTest.TranslateComplexPatterns
+[       OK ] FnmatchTest.TranslateComplexPatterns (0 ms)
+[ RUN      ] FnmatchTest.TranslateInvalidPatterns
+[       OK ] FnmatchTest.TranslateInvalidPatterns (0 ms)
+[ RUN      ] FnmatchTest.ErrorHandlingInFnmatch
+[       OK ] FnmatchTest.ErrorHandlingInFnmatch (0 ms)
+[ RUN      ] FnmatchTest.ErrorHandlingInNothrow
+[       OK ] FnmatchTest.ErrorHandlingInNothrow (0 ms)
+[ RUN      ] FnmatchTest.EdgeCases
+[       OK ] FnmatchTest.EdgeCases (0 ms)
+[ RUN      ] FnmatchTest.SpecialCharacters
+[       OK ] FnmatchTest.SpecialCharacters (10 ms)
+[ RUN      ] FnmatchTest.PerformanceBasicPatterns
+[       OK ] FnmatchTest.PerformanceBasicPatterns (36 ms)
+[ RUN      ] FnmatchTest.PerformanceComplexPatterns
+[       OK ] FnmatchTest.PerformanceComplexPatterns (26 ms)
+[ RUN      ] FnmatchTest.PerformanceMultipleFilters
+[       OK ] FnmatchTest.PerformanceMultipleFilters (349 ms)
+[ RUN      ] FnmatchTest.ThreadSafety
+[       OK ] FnmatchTest.ThreadSafety (1 ms)
+[ RUN      ] FnmatchTest.ThreadSafetyWithPatternCache
+[       OK ] FnmatchTest.ThreadSafetyWithPatternCache (7 ms)
+[ RUN      ] FnmatchTest.FilesystemIntegration
+[       OK ] FnmatchTest.FilesystemIntegration (9 ms)
+[ RUN      ] FnmatchTest.ExplicitTemplateInstantiations
+[       OK ] FnmatchTest.ExplicitTemplateInstantiations (0 ms)
+[----------] 22 tests from FnmatchTest (566 ms total)
+
+[----------] 22 tests from FloodFillTest
+[ RUN      ] FloodFillTest.BFSFillSimple
+[       OK ] FloodFillTest.BFSFillSimple (0 ms)
+[ RUN      ] FloodFillTest.BFSFillIsland
+[       OK ] FloodFillTest.BFSFillIsland (0 ms)
+[ RUN      ] FloodFillTest.BFSFillMaze
+[       OK ] FloodFillTest.BFSFillMaze (0 ms)
+[ RUN      ] FloodFillTest.DFSFillSimple
+[       OK ] FloodFillTest.DFSFillSimple (0 ms)
+[ RUN      ] FloodFillTest.DFSFillIsland
+[       OK ] FloodFillTest.DFSFillIsland (0 ms)
+[ RUN      ] FloodFillTest.DFSFillMaze
+[       OK ] FloodFillTest.DFSFillMaze (0 ms)
+[ RUN      ] FloodFillTest.BFSFillFourConnectivity
+[       OK ] FloodFillTest.BFSFillFourConnectivity (0 ms)
+[ RUN      ] FloodFillTest.BFSFillEightConnectivity
+[       OK ] FloodFillTest.BFSFillEightConnectivity (0 ms)
+[ RUN      ] FloodFillTest.DFSFillFourConnectivity
+[       OK ] FloodFillTest.DFSFillFourConnectivity (0 ms)
+[ RUN      ] FloodFillTest.DFSFillEightConnectivity
+[       OK ] FloodFillTest.DFSFillEightConnectivity (0 ms)
+[ RUN      ] FloodFillTest.EmptyGrid
+[       OK ] FloodFillTest.EmptyGrid (1 ms)
+[ RUN      ] FloodFillTest.OutOfBoundsCoordinates
+[       OK ] FloodFillTest.OutOfBoundsCoordinates (1 ms)
+[ RUN      ] FloodFillTest.SameTargetAndFillColor
+[       OK ] FloodFillTest.SameTargetAndFillColor (0 ms)
+[ RUN      ] FloodFillTest.StartPositionDoesNotMatchTarget
+[       OK ] FloodFillTest.StartPositionDoesNotMatchTarget (0 ms)
+[ RUN      ] FloodFillTest.SingleCellGrid
+[       OK ] FloodFillTest.SingleCellGrid (0 ms)
+[ RUN      ] FloodFillTest.EntireGridSameColor
+[       OK ] FloodFillTest.EntireGridSameColor (0 ms)
+[ RUN      ] FloodFillTest.ParallelFillSimple
+[       OK ] FloodFillTest.ParallelFillSimple (1 ms)
+[ RUN      ] FloodFillTest.ParallelFillLargeGrid
+[       OK ] FloodFillTest.ParallelFillLargeGrid (4 ms)
+[ RUN      ] FloodFillTest.ParallelFillWithDifferentThreadCounts
+[       OK ] FloodFillTest.ParallelFillWithDifferentThreadCounts (5 ms)
+[ RUN      ] FloodFillTest.PerformanceComparisonLargeGrid
+Performance comparison for 500x500 grid:
+BFS: 80ms
+DFS: 96ms
+Parallel: 105ms
+[       OK ] FloodFillTest.PerformanceComparisonLargeGrid (289 ms)
+[ RUN      ] FloodFillTest.CustomGridTypes
+[       OK ] FloodFillTest.CustomGridTypes (0 ms)
+[ RUN      ] FloodFillTest.IntegrationTestComplexGrid
+[       OK ] FloodFillTest.IntegrationTestComplexGrid (11 ms)
+[----------] 22 tests from FloodFillTest (315 ms total)
+
+[----------] 18 tests from PerlinNoiseTest
+[ RUN      ] PerlinNoiseTest.NoiseInRange
+[       OK ] PerlinNoiseTest.NoiseInRange (4 ms)
+[ RUN      ] PerlinNoiseTest.FloatAndDoubleSupport
+[       OK ] PerlinNoiseTest.FloatAndDoubleSupport (0 ms)
+[ RUN      ] PerlinNoiseTest.DeterministicOutput
+[       OK ] PerlinNoiseTest.DeterministicOutput (5 ms)
+[ RUN      ] PerlinNoiseTest.OctaveNoise
+[       OK ] PerlinNoiseTest.OctaveNoise (0 ms)
+[ RUN      ] PerlinNoiseTest.OctaveNoiseConvergence
+[       OK ] PerlinNoiseTest.OctaveNoiseConvergence (0 ms)
+[ RUN      ] PerlinNoiseTest.NoiseMapGeneration
+[       OK ] PerlinNoiseTest.NoiseMapGeneration (4 ms)
+[ RUN      ] PerlinNoiseTest.NoiseMapScaleEffect
+[       OK ] PerlinNoiseTest.NoiseMapScaleEffect (8 ms)
+[ RUN      ] PerlinNoiseTest.NoiseMapOctaveEffect
+[       OK ] PerlinNoiseTest.NoiseMapOctaveEffect (10 ms)
+[ RUN      ] PerlinNoiseTest.NoiseMapSeedEffect
+[       OK ] PerlinNoiseTest.NoiseMapSeedEffect (7 ms)
+[ RUN      ] PerlinNoiseTest.NoiseContinuity
+[       OK ] PerlinNoiseTest.NoiseContinuity (0 ms)
+[ RUN      ] PerlinNoiseTest.IntegerBoundaryConsistency
+[       OK ] PerlinNoiseTest.IntegerBoundaryConsistency (0 ms)
+[ RUN      ] PerlinNoiseTest.PerformanceSinglePoint
+[       OK ] PerlinNoiseTest.PerformanceSinglePoint (21 ms)
+[ RUN      ] PerlinNoiseTest.PerformanceNoiseMap
+[       OK ] PerlinNoiseTest.PerformanceNoiseMap (64 ms)
+[ RUN      ] PerlinNoiseTest.ThreadSafety
+[       OK ] PerlinNoiseTest.ThreadSafety (12 ms)
+[ RUN      ] PerlinNoiseTest.DataTypeConsistency
+[       OK ] PerlinNoiseTest.DataTypeConsistency (0 ms)
+[ RUN      ] PerlinNoiseTest.ExtremeParameters
+[       OK ] PerlinNoiseTest.ExtremeParameters (3 ms)
+[ RUN      ] PerlinNoiseTest.SpatialFrequency
+[       OK ] PerlinNoiseTest.SpatialFrequency (0 ms)
+[ RUN      ] PerlinNoiseTest.Reproducibility
+[       OK ] PerlinNoiseTest.Reproducibility (0 ms)
+[----------] 18 tests from PerlinNoiseTest (143 ms total)
+
+[----------] 16 tests from ConvolveTest
+[ RUN      ] ConvolveTest.IdentityKernelPreservesImage
+[       OK ] ConvolveTest.IdentityKernelPreservesImage (2 ms)
+[ RUN      ] ConvolveTest.EdgeDetectionKernel
+[       OK ] ConvolveTest.EdgeDetectionKernel (2 ms)
+[ RUN      ] ConvolveTest.GaussianKernelGeneration
+[       OK ] ConvolveTest.GaussianKernelGeneration (0 ms)
+[ RUN      ] ConvolveTest.GaussianFilterBlursImage
+[       OK ] ConvolveTest.GaussianFilterBlursImage (0 ms)
+[ RUN      ] ConvolveTest.EmptyInputThrowsException
+[       OK ] ConvolveTest.EmptyInputThrowsException (1 ms)
+[ RUN      ] ConvolveTest.NonUniformInputThrowsException
+[       OK ] ConvolveTest.NonUniformInputThrowsException (0 ms)
+[ RUN      ] ConvolveTest.MultiThreadingProducesSameResults
+[       OK ] ConvolveTest.MultiThreadingProducesSameResults (3 ms)
+[ RUN      ] ConvolveTest.NegativeThreadCountDefaultsToOne
+[       OK ] ConvolveTest.NegativeThreadCountDefaultsToOne (0 ms)
+[ RUN      ] ConvolveTest.BasicDeconvolution
+D:/Project/Atom/tests/algorithm/signal/test_convolve.cpp:176: Failure
+The difference between original_ratio and deconvolved_ratio is 2.5284818121584838, which exceeds 0.5, where
+original_ratio evaluates to 4,
+deconvolved_ratio evaluates to 1.4715181878415162, and
+0.5 evaluates to 0.5.
+
+[  FAILED  ] ConvolveTest.BasicDeconvolution (12 ms)
+[ RUN      ] ConvolveTest.DeconvolutionExceptions
+[       OK ] ConvolveTest.DeconvolutionExceptions (1 ms)
+[ RUN      ] ConvolveTest.ConvolutionPerformance
+[       OK ] ConvolveTest.ConvolutionPerformance (40 ms)
+[ RUN      ] ConvolveTest.DiscreteFourierTransform
+[       OK ] ConvolveTest.DiscreteFourierTransform (5 ms)
+[ RUN      ] ConvolveTest.DFTRoundtrip
+[       OK ] ConvolveTest.DFTRoundtrip (5 ms)
+[ RUN      ] ConvolveTest.EndToEndConvolutionDeconvolution
+D:/Project/Atom/tests/algorithm/signal/test_convolve.cpp:265: Failure
+Expected: (correlation) > (0.5), actual: -0.10315611614940086 vs 0.5
+
+[  FAILED  ] ConvolveTest.EndToEndConvolutionDeconvolution (30 ms)
+[ RUN      ] ConvolveTest.MultithreadedDFT
+[       OK ] ConvolveTest.MultithreadedDFT (16 ms)
+[ RUN      ] ConvolveTest.MultithreadedIDFT
+[       OK ] ConvolveTest.MultithreadedIDFT (29 ms)
+[----------] 16 tests from ConvolveTest (153 ms total)
+
+[----------] 13 tests from WeightSelectorTest
+[ RUN      ] WeightSelectorTest.BasicConstruction
+[       OK ] WeightSelectorTest.BasicConstruction (0 ms)
+[ RUN      ] WeightSelectorTest.SelectionStrategies
+[       OK ] WeightSelectorTest.SelectionStrategies (24 ms)
+[ RUN      ] WeightSelectorTest.ModifyWeights
+[       OK ] WeightSelectorTest.ModifyWeights (0 ms)
+[ RUN      ] WeightSelectorTest.WeightCalculations
+[       OK ] WeightSelectorTest.WeightCalculations (0 ms)
+[ RUN      ] WeightSelectorTest.ApplyFunction
+[       OK ] WeightSelectorTest.ApplyFunction (0 ms)
+[ RUN      ] WeightSelectorTest.BatchUpdate
+[       OK ] WeightSelectorTest.BatchUpdate (0 ms)
+[ RUN      ] WeightSelectorTest.SelectMultiple
+[       OK ] WeightSelectorTest.SelectMultiple (0 ms)
+[ RUN      ] WeightSelectorTest.WeightedRandomSampler
+[       OK ] WeightSelectorTest.WeightedRandomSampler (3 ms)
+[ RUN      ] WeightSelectorTest.ErrorCases
+[       OK ] WeightSelectorTest.ErrorCases (0 ms)
+[ RUN      ] WeightSelectorTest.PrintWeights
+[       OK ] WeightSelectorTest.PrintWeights (0 ms)
+[ RUN      ] WeightSelectorTest.IntegerWeights
+[       OK ] WeightSelectorTest.IntegerWeights (0 ms)
+[ RUN      ] WeightSelectorTest.ChangeStrategy
+D:/Project/Atom/tests/algorithm/optimization/test_weight.cpp:277: Failure
+Value of: diffRatio < 0.5 || diffRatio > 1.5
+  Actual: false
+Expected: true
+
+[  FAILED  ] WeightSelectorTest.ChangeStrategy (1 ms)
+[ RUN      ] WeightSelectorTest.EdgeCaseWeights
+[       OK ] WeightSelectorTest.EdgeCaseWeights (0 ms)
+[----------] 13 tests from WeightSelectorTest (31 ms total)
+
+[----------] 2 tests from PointTest
+[ RUN      ] PointTest.BasicOperations
+[       OK ] PointTest.BasicOperations (0 ms)
+[ RUN      ] PointTest.ComparisonOperations
+[       OK ] PointTest.ComparisonOperations (0 ms)
+[----------] 2 tests from PointTest (0 ms total)
+
+[----------] 5 tests from HeuristicTest
+[ RUN      ] HeuristicTest.ManhattanDistance
+[       OK ] HeuristicTest.ManhattanDistance (0 ms)
+[ RUN      ] HeuristicTest.EuclideanDistance
+[       OK ] HeuristicTest.EuclideanDistance (0 ms)
+[ RUN      ] HeuristicTest.DiagonalDistance
+[       OK ] HeuristicTest.DiagonalDistance (0 ms)
+[ RUN      ] HeuristicTest.OctileDistance
+[       OK ] HeuristicTest.OctileDistance (0 ms)
+[ RUN      ] HeuristicTest.ZeroHeuristic
+[       OK ] HeuristicTest.ZeroHeuristic (0 ms)
+[----------] 5 tests from HeuristicTest (0 ms total)
+
+[----------] 6 tests from GridMapTest
+[ RUN      ] GridMapTest.BasicProperties
+[       OK ] GridMapTest.BasicProperties (0 ms)
+[ RUN      ] GridMapTest.TerrainOperations
+[       OK ] GridMapTest.TerrainOperations (0 ms)
+[ RUN      ] GridMapTest.ValidCoordinates
+[       OK ] GridMapTest.ValidCoordinates (0 ms)
+[ RUN      ] GridMapTest.TraversableTerrain
+[       OK ] GridMapTest.TraversableTerrain (0 ms)
+[ RUN      ] GridMapTest.NeighborGeneration
+[       OK ] GridMapTest.NeighborGeneration (0 ms)
+[ RUN      ] GridMapTest.MovementCost
+[       OK ] GridMapTest.MovementCost (0 ms)
+[----------] 6 tests from GridMapTest (0 ms total)
+
+[----------] 6 tests from AStarTest
+[ RUN      ] AStarTest.SimplePath
+[       OK ] AStarTest.SimplePath (0 ms)
+[ RUN      ] AStarTest.ObstacleAvoidance
+D:/Project/Atom/tests/algorithm/optimization/test_pathfinding.cpp:274: Failure
+Value of: path.has_value()
+  Actual: false
+Expected: true
+
+[  FAILED  ] AStarTest.ObstacleAvoidance (0 ms)
+[ RUN      ] AStarTest.NoPathExists
+[       OK ] AStarTest.NoPathExists (0 ms)
+[ RUN      ] AStarTest.SameStartAndGoal
+[       OK ] AStarTest.SameStartAndGoal (0 ms)
+[ RUN      ] AStarTest.DifferentHeuristics
+[       OK ] AStarTest.DifferentHeuristics (0 ms)
+[ RUN      ] AStarTest.PathOptimality
+[       OK ] AStarTest.PathOptimality (0 ms)
+[----------] 6 tests from AStarTest (0 ms total)
+
+[----------] 2 tests from CustomGraphTest
+[ RUN      ] CustomGraphTest.BasicPathfinding
+[       OK ] CustomGraphTest.BasicPathfinding (0 ms)
+[ RUN      ] CustomGraphTest.UnreachableGoal
+[       OK ] CustomGraphTest.UnreachableGoal (0 ms)
+[----------] 2 tests from CustomGraphTest (0 ms total)
+
+[----------] 3 tests from PerformanceTest
+[ RUN      ] PerformanceTest.Base64EncodePerformance
+[       OK ] PerformanceTest.Base64EncodePerformance (89 ms)
+[ RUN      ] PerformanceTest.LargeGridPathfinding
+C:/M/B/src/googletest-1.17.0/googletest/src/gtest.cc:2588: Failure
+Failed
+All tests in the same test suite must use the same test fixture
+class, so mixing TEST_F and TEST in the same test suite is
+illegal.  In test suite PerformanceTest,
+test LargeGridPathfinding is defined using TEST_F but
+test Base64EncodePerformance is defined using TEST.  You probably
+want to change the TEST to TEST_F or move it to another test
+case.
+
+[  FAILED  ] PerformanceTest.LargeGridPathfinding (0 ms)
+[ RUN      ] PerformanceTest.MultiplePathfindingQueries
+C:/M/B/src/googletest-1.17.0/googletest/src/gtest.cc:2588: Failure
+Failed
+All tests in the same test suite must use the same test fixture
+class, so mixing TEST_F and TEST in the same test suite is
+illegal.  In test suite PerformanceTest,
+test MultiplePathfindingQueries is defined using TEST_F but
+test Base64EncodePerformance is defined using TEST.  You probably
+want to change the TEST to TEST_F or move it to another test
+case.
+
+[  FAILED  ] PerformanceTest.MultiplePathfindingQueries (0 ms)
+[----------] 3 tests from PerformanceTest (89 ms total)
+
+[----------] 1 test from AnnealingConceptTest
+[ RUN      ] AnnealingConceptTest.TestProblemSatisfiesConcept
+[       OK ] AnnealingConceptTest.TestProblemSatisfiesConcept (0 ms)
+[----------] 1 test from AnnealingConceptTest (0 ms total)
+
+[----------] 10 tests from SimulatedAnnealingTest
+[ RUN      ] SimulatedAnnealingTest.BuilderPattern
+[       OK ] SimulatedAnnealingTest.BuilderPattern (1 ms)
+[ RUN      ] SimulatedAnnealingTest.CoolingSchedules
+[       OK ] SimulatedAnnealingTest.CoolingSchedules (4 ms)
+[ RUN      ] SimulatedAnnealingTest.ConvergesToOptimalSolution
+[       OK ] SimulatedAnnealingTest.ConvergesToOptimalSolution (1 ms)
+[ RUN      ] SimulatedAnnealingTest.ProgressCallback
+[       OK ] SimulatedAnnealingTest.ProgressCallback (0 ms)
+[ RUN      ] SimulatedAnnealingTest.StopCondition
+[       OK ] SimulatedAnnealingTest.StopCondition (0 ms)
+[ RUN      ] SimulatedAnnealingTest.ParallelOptimization
+
+      Start  4: InfrastructureValidation
+ 4/90 Test  #4: InfrastructureValidation .........   Passed    0.38 sec
+      Start  5: atom_async_tests

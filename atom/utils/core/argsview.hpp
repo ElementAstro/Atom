@@ -55,10 +55,14 @@ public:
         AUTO
     };
 
-    /**
-     * @enum NargsType
-     * @brief Enumeration of possible nargs types.
-     */
+/**
+ * @enum NargsType
+ * @brief Enumeration of possible nargs types.
+ */
+// Undefine Windows OPTIONAL macro to avoid conflict with enum value
+#ifdef OPTIONAL
+#undef OPTIONAL
+#endif
     enum class NargsType {
         NONE,
         OPTIONAL,
@@ -754,8 +758,8 @@ inline auto ArgumentParser::detectType(const std::any& value) -> ArgType {
     return ArgType::STRING;
 }
 
-inline auto ArgumentParser::parseValue(ArgType type, const String& value)
-    -> std::any {
+inline auto ArgumentParser::parseValue(ArgType type,
+                                       const String& value) -> std::any {
     try {
         const char* str = value.c_str();
         size_t len = value.length();

@@ -7,6 +7,7 @@
 #include <string>
 
 #include "atom/algorithm/bignumber.hpp"
+#include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
 using namespace atom::algorithm;
@@ -68,9 +69,7 @@ protected:
     BigNumber minInt;
 };
 
-BigNumber BigNumberTest::two() {
-    return BigNumber("2");
-}
+BigNumber BigNumberTest::two() { return BigNumber("2"); }
 
 // Constructor tests
 TEST_F(BigNumberTest, DefaultConstructor) {
@@ -112,11 +111,11 @@ TEST_F(BigNumberTest, IntegerConstructor) {
 }
 
 TEST_F(BigNumberTest, ConstructorInvalidInputs) {
-    EXPECT_THROW(BigNumber(""), std::invalid_argument);
-    EXPECT_THROW(BigNumber("-"), std::invalid_argument);
-    EXPECT_THROW(BigNumber("123a456"), std::invalid_argument);
-    EXPECT_THROW(BigNumber("12.34"), std::invalid_argument);
-    EXPECT_THROW(BigNumber("-12a"), std::invalid_argument);
+    EXPECT_THROW(BigNumber(""), atom::error::InvalidArgument);
+    EXPECT_THROW(BigNumber("-"), atom::error::InvalidArgument);
+    EXPECT_THROW(BigNumber("123a456"), atom::error::InvalidArgument);
+    EXPECT_THROW(BigNumber("12.34"), atom::error::InvalidArgument);
+    EXPECT_THROW(BigNumber("-12a"), atom::error::InvalidArgument);
 }
 
 // String trimming tests
@@ -170,8 +169,8 @@ TEST_F(BigNumberTest, SetString) {
     num.setString("0");
     EXPECT_EQ(num.toString(), "0");
 
-    EXPECT_THROW(num.setString(""), std::invalid_argument);
-    EXPECT_THROW(num.setString("abc"), std::invalid_argument);
+    EXPECT_THROW(num.setString(""), atom::error::InvalidArgument);
+    EXPECT_THROW(num.setString("abc"), atom::error::InvalidArgument);
 }
 
 // Equality tests
@@ -500,7 +499,7 @@ TEST_F(BigNumberTest, Divide) {
 
     // Test division by zero
     EXPECT_THROW(ATOM_UNUSED_RESULT(one.divide(zero)),
-                 std::invalid_argument);  // Removed [[maybe_unused]]
+                 atom::error::InvalidArgument);  // Removed [[maybe_unused]]
 }
 
 TEST_F(BigNumberTest, DivisionOperator) {
@@ -521,7 +520,7 @@ TEST_F(BigNumberTest, DivisionOperator) {
     EXPECT_EQ((negative / negative).toString(), "1");
 
     // Test division by zero
-    EXPECT_THROW(one / zero, std::invalid_argument);
+    EXPECT_THROW(one / zero, atom::error::InvalidArgument);
 }
 
 TEST_F(BigNumberTest, DivideAssignmentOperator) {
@@ -543,7 +542,7 @@ TEST_F(BigNumberTest, DivideAssignmentOperator) {
 
     // Test division by zero
     BigNumber num5("100");
-    EXPECT_THROW(num5 /= BigNumber("0"), std::invalid_argument);
+    EXPECT_THROW(num5 /= BigNumber("0"), atom::error::InvalidArgument);
 }
 
 // Power tests
@@ -572,7 +571,7 @@ TEST_F(BigNumberTest, Pow) {
     EXPECT_EQ(minusOne.pow(3).toString(), "-1");
 
     // Test negative exponent (should throw)
-    EXPECT_THROW(ATOM_UNUSED_RESULT(one.pow(-1)), std::invalid_argument);
+    EXPECT_THROW(ATOM_UNUSED_RESULT(one.pow(-1)), atom::error::InvalidArgument);
 }
 
 TEST_F(BigNumberTest, PowerOperator) {

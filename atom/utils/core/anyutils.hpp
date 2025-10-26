@@ -32,6 +32,7 @@ Description: A collection of useful functions with std::any Or Any
 #include <utility>
 #include "atom/containers/high_performance.hpp"
 #include "atom/meta/concept.hpp"
+#include "atom/utils/text/to_string.hpp"
 
 namespace atom::utils {
 using atom::containers::String;
@@ -44,12 +45,12 @@ using Vector = atom::containers::Vector<T>;
 // Use concepts from concept.hpp via using declarations
 namespace atom::utils {
 
-using ::IsBuiltIn;
-using ::StringType;
 using ::AnyChar;
+using ::IsBuiltIn;
 using ::Number;
 using ::Pointer;
 using ::SmartPointer;
+using ::StringType;
 
 }  // namespace atom::utils
 
@@ -78,9 +79,9 @@ concept CanBeStringifiedToToml = requires(T t, atom::utils::String key) {
     { toToml(t, key) } -> std::convertible_to<atom::utils::String>;
 };
 
-template <typename T>
-[[nodiscard]] auto toString(const T &value, bool prettyPrint = false)
-    -> atom::utils::String;
+// Note: Generic toString(T, bool) overload removed to avoid ambiguity
+// with atom/utils/text/to_string.hpp. Container overloads below use
+// toString from to_string.hpp (included above).
 
 namespace {
 std::mutex cacheMutex;
@@ -99,7 +100,8 @@ std::size_t getTypeHash(const T &value, bool prettyPrint = false) {
 }
 
 template <typename T>
-std::optional<atom::utils::String> getCachedString(const T &value, bool prettyPrint = false) {
+std::optional<atom::utils::String> getCachedString(const T &value,
+                                                   bool prettyPrint = false) {
     std::lock_guard<std::mutex> lock(cacheMutex);
     auto hash = getTypeHash(value, prettyPrint);
     auto it = conversionCache.find(hash);
@@ -110,7 +112,8 @@ std::optional<atom::utils::String> getCachedString(const T &value, bool prettyPr
 }
 
 template <typename T>
-void cacheString(const T &value, const atom::utils::String &str, bool prettyPrint = false) {
+void cacheString(const T &value, const atom::utils::String &str,
+                 bool prettyPrint = false) {
     std::lock_guard<std::mutex> lock(cacheMutex);
     auto hash = getTypeHash(value, prettyPrint);
     conversionCache[hash] = str;
@@ -118,9 +121,9 @@ void cacheString(const T &value, const atom::utils::String &str, bool prettyPrin
 }  // namespace
 
 template <std::ranges::input_range Container>
-requires (!StringType<Container>)
+    requires(!StringType<Container>)
 [[nodiscard]] auto toString(const Container &container,
-                            bool prettyPrint = false) -> atom::utils::String {
+                            bool prettyPrint) -> atom::utils::String {
     try {
         if (std::ranges::empty(container)) {
             return "[]";
@@ -139,11 +142,11 @@ requires (!StringType<Container>)
 
         for (const auto &item : container) {
             if constexpr (IsBuiltIn<std::remove_cvref_t<decltype(item)>>) {
-                result += toString(item, prettyPrint) + separator +
-                          (prettyPrint ? indent : "");
+                result +=
+                    toString(item) + separator + (prettyPrint ? indent : "");
             } else {
-                result += "\"" + toString(item, prettyPrint) + "\"" +
-                          separator + (prettyPrint ? indent : "");
+                result += "\"" + toString(item) + "\"" + separator +
+                          (prettyPrint ? indent : "");
             }
         }
 
@@ -172,7 +175,7 @@ requires (!StringType<Container>)
 
 template <typename K, typename V>
 [[nodiscard]] auto toString(const atom::utils::HashMap<K, V> &map,
-                            bool prettyPrint = false) -> atom::utils::String {
+                            bool prettyPrint) -> atom::utils::String {
     try {
         if (map.empty()) {
             return "{}";
@@ -185,8 +188,8 @@ template <typename K, typename V>
             result += "\n  ";
 
         for (const auto &pair : map) {
-            result += toString(pair.first, prettyPrint) + ": " +
-                      toString(pair.second, prettyPrint) + separator;
+            result +=
+                toString(pair.first) + ": " + toString(pair.second) + separator;
         }
 
         if (prettyPrint) {
@@ -207,55 +210,28 @@ template <typename K, typename V>
 
 template <typename T1, typename T2>
 [[nodiscard]] auto toString(const std::pair<T1, T2> &pair,
-                            bool prettyPrint = false) -> atom::utils::String {
+                            bool prettyPrint) -> atom::utils::String {
     try {
-        return "(" + toString(pair.first, prettyPrint) + ", " +
-               toString(pair.second, prettyPrint) + ")";
+        return "(" + toString(pair.first) + ", " + toString(pair.second) + ")";
     } catch (const std::exception &e) {
         return std::format("Error converting pair to string: {}", e.what())
             .c_str();
     }
 }
 
-template <typename T>
-[[nodiscard]] auto toString(const T &value, bool prettyPrint)
-    -> atom::utils::String {
-    try {
-        if constexpr (StringType<T>) {
-            return atom::utils::String(value);
-        } else if constexpr (AnyChar<T>) {
-            return atom::utils::String(1, value);
-        } else if constexpr (std::is_same_v<T, bool>) {
-            return value ? "true" : "false";
-        } else if constexpr (Number<T>) {
-            if constexpr (std::is_floating_point_v<T>) {
-                return atom::utils::String(std::format("{:.6g}", value));
-            } else {
-                return atom::utils::String(std::to_string(value));
-            }
-        } else if constexpr (Pointer<T> || SmartPointer<T>) {
-            if (value == nullptr) {
-                return "nullptr";
-            }
-            return toString(*value, prettyPrint);
-        } else if constexpr (requires { value.toString(); }) {
-            return value.toString();
-        } else {
-            return "unknown type";
-        }
-    } catch (const std::exception &e) {
-        return std::format("Error in toString: {}", e.what()).c_str();
-    }
-}
+// Note: Generic toString(T, bool) overload removed to avoid ambiguity with
+// atom/utils/text/to_string.hpp The prettyPrint parameter is only used by
+// container overloads above. For single-value toString, use the overloads in
+// atom/utils/text/to_string.hpp instead.
 
 template <typename T>
-[[nodiscard]] auto toJson(const T &value, bool prettyPrint = false)
-    -> atom::utils::String;
+[[nodiscard]] auto toJson(const T &value,
+                          bool prettyPrint = false) -> atom::utils::String;
 
 template <std::ranges::input_range Container>
-requires (!StringType<Container>)
-[[nodiscard]] auto toJson(const Container &container, bool prettyPrint = false)
-    -> atom::utils::String {
+    requires(!StringType<Container>)
+[[nodiscard]] auto toJson(const Container &container,
+                          bool prettyPrint = false) -> atom::utils::String {
     try {
         if (std::ranges::empty(container)) {
             return "[]";
@@ -326,7 +302,9 @@ template <typename K, typename V>
                           std::is_convertible_v<K, const char *>) {
                 key = "\"" + atom::utils::String(pair.first) + "\"";
             } else {
-                key = "\"" + toString(pair.first, prettyPrint) + "\"";
+                // Note: Removed prettyPrint parameter from toString call
+                // to avoid ambiguity with to_string.hpp overloads
+                key = "\"" + atom::utils::toString(pair.first) + "\"";
             }
 
             result += (prettyPrint ? indent : "") + key + ":" +
@@ -372,8 +350,8 @@ template <typename T1, typename T2>
 }
 
 template <typename T>
-[[nodiscard]] auto toJson(const T &value, bool prettyPrint)
-    -> atom::utils::String {
+[[nodiscard]] auto toJson(const T &value,
+                          bool prettyPrint) -> atom::utils::String {
     try {
         if constexpr (StringType<T>) {
             atom::utils::String escaped;
@@ -454,7 +432,7 @@ template <typename T>
     -> atom::utils::String;
 
 template <std::ranges::input_range Container>
-requires (!StringType<Container>)
+    requires(!StringType<Container>)
 [[nodiscard]] auto toXml(const Container &container,
                          const atom::utils::String &tagName)
     -> atom::utils::String {
@@ -578,12 +556,10 @@ template <typename T>
     }
     if (tagName.find('<') != atom::utils::String::npos ||
         tagName.find('>') != atom::utils::String::npos) {
-        throw std::invalid_argument(
-            "XML tag name contains invalid characters");
+        throw std::invalid_argument("XML tag name contains invalid characters");
     }
 
     try {
-
         if constexpr (StringType<T>) {
             atom::utils::String content = atom::utils::String(value);
             std::string std_content(content.begin(), content.end());
@@ -642,7 +618,7 @@ template <typename T>
     -> atom::utils::String;
 
 template <std::ranges::input_range Container>
-requires (!StringType<Container>)
+    requires(!StringType<Container>)
 [[nodiscard]] auto toYaml(const Container &container,
                           const atom::utils::String &key)
     -> atom::utils::String {
@@ -864,7 +840,7 @@ template <typename T>
     -> atom::utils::String;
 
 template <std::ranges::input_range Container>
-requires (!StringType<Container>)
+    requires(!StringType<Container>)
 [[nodiscard]] auto toToml(const Container &container,
                           const atom::utils::String &key)
     -> atom::utils::String {

@@ -55,3 +55,14 @@ configure_standard_module_tests(
   "${TEST_TARGET_NAME}"
   EXCLUDE_SOURCES
   "${EXCLUDE_SOURCES}")
+
+# Copy DLLs to test directory
+if(TARGET atom_async_tests)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_async_tests)
+  endif()
+  # Increase timeout for async tests (thread pool tests take time)
+  if(TEST atom_async_tests)
+    set_tests_properties(atom_async_tests PROPERTIES TIMEOUT 600)
+  endif()
+endif()

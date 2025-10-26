@@ -38,9 +38,9 @@ class UdpSocketHub::Impl {
 public:
     Impl(unsigned int numThreads = DEFAULT_THREAD_COUNT)
         : socket_(io_context_),
-          running_(false),
           receiveBufferSize_(DEFAULT_BUFFER_SIZE),
           numThreads_(numThreads),
+          running_(false),
           ipFilterEnabled_(false) {
         resetStatistics();
     }

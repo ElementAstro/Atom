@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 #include "atom/algorithm/blowfish.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
 
@@ -108,12 +109,12 @@ TEST_F(BlowfishTest, KeyValidation) {
     // Test with empty key (should throw)
     std::vector<std::byte> empty_key;
     EXPECT_THROW(Blowfish(std::span<const std::byte>(empty_key)),
-                 std::runtime_error);
+                 atom::error::RuntimeError);
 
     // Test with key that's too long (should throw)
     std::vector<std::byte> long_key = generateRandomBytes(57);
     EXPECT_THROW(Blowfish(std::span<const std::byte>(long_key)),
-                 std::runtime_error);
+                 atom::error::RuntimeError);
 }
 
 // Test block encryption/decryption
@@ -256,7 +257,7 @@ TEST_F(BlowfishTest, BlockSizeValidation) {
     // Test with data that's not a multiple of BLOCK_SIZE
     std::vector<std::byte> invalid_data(7);
     EXPECT_THROW(blowfish->encrypt_data(std::span<std::byte>(invalid_data)),
-                 std::runtime_error);
+                 atom::error::RuntimeError);
 
     // Test with data that is a multiple of BLOCK_SIZE
     std::vector<std::byte> valid_data(16);
@@ -426,7 +427,7 @@ TEST_F(BlowfishTest, InvalidPadding) {
     size_t length = valid_data.size();
     EXPECT_THROW(
         blowfish->decrypt_data(std::span<std::byte>(valid_data), length),
-        std::runtime_error);
+        atom::error::RuntimeError);
 }
 
 // Test cross-platform consistency

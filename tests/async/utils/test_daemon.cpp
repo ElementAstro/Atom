@@ -9,21 +9,22 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Daemon
-Tests process management, daemon lifecycle, platform-specific behavior, and error scenarios.
+Tests process management, daemon lifecycle, platform-specific behavior, and
+error scenarios.
 
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <thread>
+#include <vector>
 
-#include "atom/async/utils/daemon.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/utils/daemon.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -105,9 +106,8 @@ TEST_F(DaemonTest, ProcessIdOperations) {
 // Test DaemonException functionality
 TEST_F(DaemonTest, DaemonExceptionFunctionality) {
     // Test basic exception
-    EXPECT_THROW({
-        throw DaemonException("Test daemon exception");
-    }, DaemonException);
+    EXPECT_THROW(
+        { throw DaemonException("Test daemon exception"); }, DaemonException);
 
     // Test exception with source location
     try {
@@ -139,7 +139,15 @@ TEST_F(DaemonTest, PidFileOperations) {
 
 // Test PID file with invalid path
 TEST_F(DaemonTest, PidFileInvalidPath) {
-    const std::filesystem::path invalidPath = "/invalid/path/that/does/not/exist/test.pid";
+#ifdef _WIN32
+    // On Windows, use an invalid device path that cannot be created
+    const std::filesystem::path invalidPath =
+        "\\\\?\\C:\\invalid:\\path\\test.pid";
+#else
+    // On Unix, use a path with insufficient permissions
+    const std::filesystem::path invalidPath =
+        "/root/invalid/path/that/does/not/exist/test.pid";
+#endif
 
     // Should throw exception for invalid path
     EXPECT_THROW(writePidFile(invalidPath), DaemonException);
@@ -182,13 +190,15 @@ TEST_F(DaemonTest, DaemonGuardRealStart) {
     std::atomic<int> receivedArgc{0};
 
     // Set up callback
-    auto callback = [&callbackExecuted, &receivedArgc](int argc, char** /*argv*/) -> int {
+    auto callback = [&callbackExecuted, &receivedArgc](int argc,
+                                                       char** /*argv*/) -> int {
         callbackExecuted = true;
         receivedArgc = argc;
-        return 42; // Return specific value to test
+        return 42;  // Return specific value to test
     };
 
-    // Test with valid arguments - use const_cast to work around string literal issue
+    // Test with valid arguments - use const_cast to work around string literal
+    // issue
     const char* const_argv[] = {"test_program", "arg1", "arg2"};
     char* argv[3];
     for (int i = 0; i < 3; ++i) {

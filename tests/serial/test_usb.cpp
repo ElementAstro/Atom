@@ -247,7 +247,7 @@ TEST_F(UsbContextTest, GetDevices) {
     libusb_device** device_list = mock_devices;
 
     EXPECT_CALL(LibUsbMock::instance(), get_device_list(_, _))
-        .WillOnce(DoAll(SetArgPointee<1>(&device_list), Return(2)));
+        .WillOnce(DoAll(SetArgPointee<1>(device_list), Return(2)));
     EXPECT_CALL(LibUsbMock::instance(), free_device_list(_, _)).Times(1);
 
     // For each device, we need to mock descriptor retrieval
@@ -264,7 +264,7 @@ TEST_F(UsbContextTest, GetDevices) {
     // Reference counting for devices
     EXPECT_CALL(LibUsbMock::instance(), ref_device(_))
         .Times(2)
-        .WillRepeatedly(Return(1));
+        .WillRepeatedly(::testing::ReturnArg<0>());
 
     auto devices = context.getDevices();
     EXPECT_EQ(2, devices.size());
@@ -371,12 +371,12 @@ TEST_F(UsbDeviceTest, DeviceControlTransfer) {
     EXPECT_CALL(LibUsbMock::instance(), free_transfer(_)).Times(1);
 
     std::array<uint8_t, 8> buffer = {0};
-    auto operation = device.controlTransfer(
+    [[maybe_unused]] auto operation = device.controlTransfer(
         static_cast<uint8_t>(LIBUSB_ENDPOINT_OUT) |
             static_cast<uint8_t>(LIBUSB_REQUEST_TYPE_VENDOR) |
             static_cast<uint8_t>(LIBUSB_RECIPIENT_DEVICE),
         0x01, 0x0002, 0x0003, buffer);
-    [[maybe_unused]] auto awaiter = transfer.submit();
+    // UsbOperation is a coroutine that runs automatically
 }
 
 TEST_F(UsbDeviceTest, BulkReadAndWrite) {

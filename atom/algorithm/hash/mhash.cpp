@@ -23,6 +23,7 @@ Description: Implementation of murmur3 hash and quick hash
 #include <stdexcept>
 #include <system_error>
 
+#include "atom/error/exception.hpp"
 #include "atom/utils/random.hpp"
 
 #include <openssl/evp.h>
@@ -193,7 +194,7 @@ MinHash::MinHash(usize num_hashes) noexcept(false)
 #endif
 {
     if (num_hashes == 0) {
-        throw std::invalid_argument(
+        THROW_INVALID_ARGUMENT(
             "Number of hash functions must be greater than zero");
     }
 
@@ -203,7 +204,7 @@ MinHash::MinHash(usize num_hashes) noexcept(false)
             hash_functions_.emplace_back(generateHashFunction());
         }
     } catch (const std::exception &e) {
-        throw std::runtime_error(
+        THROW_RUNTIME_ERROR(
             std::string("Failed to initialize hash functions: ") + e.what());
     }
 
@@ -295,9 +296,11 @@ void MinHash::initializeOpenCL() noexcept {
 #endif
 
 auto MinHash::generateHashFunction() noexcept -> HashFunction {
-    // Use standard library random instead of atom::utils::Random to avoid include issues
+    // Use standard library random instead of atom::utils::Random to avoid
+    // include issues
     static thread_local std::mt19937_64 gen(std::random_device{}());
-    static thread_local std::uniform_int_distribution<u64> dist(1, std::numeric_limits<u64>::max() - 1);
+    static thread_local std::uniform_int_distribution<u64> dist(
+        1, std::numeric_limits<u64>::max() - 1);
 
     // Use large prime to improve hash quality
     constexpr usize LARGE_PRIME = 0xFFFFFFFFFFFFFFC5ULL;  // 2^64 - 59 (prime)
@@ -316,7 +319,7 @@ auto MinHash::jaccardIndex(std::span<const usize> sig1,
                            std::span<const usize> sig2) noexcept(false) -> f64 {
     // Verify input signatures have the same length
     if (sig1.size() != sig2.size()) {
-        throw std::invalid_argument("Signatures must have the same length");
+        THROW_INVALID_ARGUMENT("Signatures must have the same length");
     }
 
     if (sig1.empty()) {
@@ -368,8 +371,8 @@ auto hexstringFromData(std::string_view data) noexcept(false) -> std::string {
         throw boost::enable_error_info(std::runtime_error(
             std::string("Failed to convert to hex: ") + e.what()));
 #else
-        throw std::runtime_error(std::string("Failed to convert to hex: ") +
-                                 e.what());
+        THROW_RUNTIME_ERROR(std::string("Failed to convert to hex: ") +
+                            e.what());
 #endif
     }
 
@@ -386,7 +389,7 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
         throw boost::enable_error_info(
             std::invalid_argument("Hex string length must be even"));
 #else
-        throw std::invalid_argument("Hex string length must be even");
+        THROW_INVALID_ARGUMENT("Hex string length must be even");
 #endif
     }
 
@@ -424,7 +427,7 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
                         "Invalid hex character at position " +
                         std::to_string(pos)));
 #else
-                    throw std::invalid_argument(
+                    THROW_INVALID_ARGUMENT(
                         "Invalid hex character at position " +
                         std::to_string(pos));
 #endif
@@ -441,8 +444,8 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
         throw boost::enable_error_info(std::runtime_error(
             std::string("Failed to convert from hex: ") + e.what()));
 #else
-        throw std::runtime_error(std::string("Failed to convert from hex: ") +
-                                 e.what());
+        THROW_RUNTIME_ERROR(std::string("Failed to convert from hex: ") +
+                            e.what());
 #endif
     }
 

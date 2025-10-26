@@ -41,25 +41,16 @@ struct alignas(32) Align32 {
 // Test valid size and alignment combinations
 TEST_F(AlignedStorageTest, ValidSizeAndAlignment) {
     // Standard case - storage larger than implementation
-    using Valid1 = ValidateAlignedStorage<1, 1, 2, 2>;
-    static_cast<void>(sizeof(Valid1));
-
-    using Valid2 = ValidateAlignedStorage<2, 2, 4, 4>;
-    static_cast<void>(sizeof(Valid2));
-
-    using Valid4 = ValidateAlignedStorage<4, 4, 8, 8>;
-    static_cast<void>(sizeof(Valid4));
-
-    using Valid8 = ValidateAlignedStorage<8, 8, 16, 16>;
-    static_cast<void>(sizeof(Valid8));
+    EXPECT_TRUE((IsValidAlignedStorage<1, 1, 2, 2>::value));
+    EXPECT_TRUE((IsValidAlignedStorage<2, 2, 4, 4>::value));
+    EXPECT_TRUE((IsValidAlignedStorage<4, 4, 8, 8>::value));
+    EXPECT_TRUE((IsValidAlignedStorage<8, 8, 16, 16>::value));
 
     // Equal size but valid alignment
-    using ValidEqual = ValidateAlignedStorage<8, 4, 8, 8>;
-    static_cast<void>(sizeof(ValidEqual));
+    EXPECT_TRUE((IsValidAlignedStorage<8, 4, 8, 8>::value));
 
     // Larger alignment but same size
-    using ValidAlign = ValidateAlignedStorage<8, 4, 8, 16>;
-    static_cast<void>(sizeof(ValidAlign));
+    EXPECT_TRUE((IsValidAlignedStorage<8, 4, 8, 16>::value));
 }
 
 // Test invalid size combinations
@@ -78,46 +69,36 @@ TEST_F(AlignedStorageTest, InvalidAlignment) {
 
 // Test with different types and their alignments
 TEST_F(AlignedStorageTest, TypeAlignments) {
-    using ValidChar = ValidateAlignedStorage<sizeof(char), alignof(char),
-                                             sizeof(int), alignof(int)>;
-    static_cast<void>(sizeof(ValidChar));
+    EXPECT_TRUE((IsValidAlignedStorage<sizeof(char), alignof(char), sizeof(int),
+                                       alignof(int)>::value));
 
-    using ValidInt = ValidateAlignedStorage<sizeof(int), alignof(int),
-                                            sizeof(double), alignof(double)>;
-    static_cast<void>(sizeof(ValidInt));
+    EXPECT_TRUE(
+        (IsValidAlignedStorage<sizeof(int), alignof(int), sizeof(double),
+                               alignof(double)>::value));
 
-    using ValidDouble =
-        ValidateAlignedStorage<sizeof(double), alignof(double), sizeof(Align16),
-                               alignof(Align16)>;
-    static_cast<void>(sizeof(ValidDouble));
+    EXPECT_TRUE(
+        (IsValidAlignedStorage<sizeof(double), alignof(double), sizeof(Align16),
+                               alignof(Align16)>::value));
 }
 
 // Test power-of-2 alignments
 TEST_F(AlignedStorageTest, PowerOf2Alignments) {
-    using Valid16 = ValidateAlignedStorage<16, 16, 32, 32>;
-    static_cast<void>(sizeof(Valid16));
+    EXPECT_TRUE((IsValidAlignedStorage<16, 16, 32, 32>::value));
+    EXPECT_TRUE((IsValidAlignedStorage<32, 32, 64, 64>::value));
 
-    using Valid32 = ValidateAlignedStorage<32, 32, 64, 64>;
-    static_cast<void>(sizeof(Valid32));
-
-    using ValidCustom16 =
-        ValidateAlignedStorage<sizeof(Align16), alignof(Align16),
-                               sizeof(Align32), alignof(Align32)>;
-    static_cast<void>(sizeof(ValidCustom16));
+    EXPECT_TRUE(
+        (IsValidAlignedStorage<sizeof(Align16), alignof(Align16),
+                               sizeof(Align32), alignof(Align32)>::value));
 }
 
 // Test edge cases
 TEST_F(AlignedStorageTest, EdgeCases) {
-    using ValidSame = ValidateAlignedStorage<8, 8, 8, 8>;
-    static_cast<void>(sizeof(ValidSame));
+    EXPECT_TRUE((IsValidAlignedStorage<8, 8, 8, 8>::value));
+    EXPECT_TRUE((IsValidAlignedStorage<1, 1, 1, 1>::value));
 
-    using ValidMin = ValidateAlignedStorage<1, 1, 1, 1>;
-    static_cast<void>(sizeof(ValidMin));
-
-    using ValidLarge =
-        ValidateAlignedStorage<sizeof(Align32), alignof(Align32),
-                               sizeof(Align32) * 2, alignof(Align32) * 2>;
-    static_cast<void>(sizeof(ValidLarge));
+    EXPECT_TRUE((IsValidAlignedStorage<sizeof(Align32), alignof(Align32),
+                                       sizeof(Align32) * 2,
+                                       alignof(Align32) * 2>::value));
 }
 
 #ifdef ATOM_USE_BOOST
@@ -130,11 +111,11 @@ TEST_F(AlignedStorageTest, BoostSpecificValidations) {
 
 // Test with standard containers
 TEST_F(AlignedStorageTest, ContainerAlignments) {
-    // TODO: Add tests for standard containers
-    using ValidVector = ValidateAlignedStorage<
+    // Test container alignment validations
+    constexpr bool validVector = IsValidAlignedStorage<
         sizeof(std::vector<int>), alignof(std::vector<int>),
-        sizeof(std::array<int, 8>), alignof(std::array<int, 8>)>;
-    // static_cast<void>(sizeof(ValidVector));
+        sizeof(std::array<int, 8>), alignof(std::array<int, 8>)>::value;
+    static_cast<void>(validVector);
 }
 
 // Test compilation failure cases

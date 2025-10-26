@@ -7,6 +7,7 @@
 #include <random>
 #include <vector>
 #include "atom/algorithm/annealing.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace testing;
 using namespace std::chrono_literals;
@@ -146,9 +147,9 @@ TEST_F(SimulatedAnnealingTest, ParallelOptimization) {
 
 TEST_F(SimulatedAnnealingTest, ExceptionHandling) {
     EXPECT_THROW(annealing_->setInitialTemperature(-10.0),
-                 std::invalid_argument);
-    EXPECT_THROW(annealing_->setCoolingRate(1.5), std::invalid_argument);
-    EXPECT_THROW(annealing_->setCoolingRate(0.0), std::invalid_argument);
+                 atom::error::InvalidArgument);
+    EXPECT_THROW(annealing_->setCoolingRate(1.5), atom::error::InvalidArgument);
+    EXPECT_THROW(annealing_->setCoolingRate(0.0), atom::error::InvalidArgument);
 }
 
 TEST_F(TSPTest, EnergyCalculation) {

@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "atom/algorithm/rust_numeric.hpp"
+#include "atom/error/exception.hpp"
 
 #include <cmath>
 #include <limits>
@@ -54,7 +55,7 @@ TEST(RustNumericResultTest, ErrResult) {
     EXPECT_FALSE(err_result.is_ok());
     EXPECT_TRUE(err_result.is_err());
     EXPECT_EQ(err_result.unwrap_or(10), 10);
-    EXPECT_THROW(err_result.unwrap(), std::runtime_error);
+    EXPECT_THROW(err_result.unwrap(), atom::error::RuntimeError);
 
     Error error = err_result.unwrap_err();
     EXPECT_EQ(error.kind(), ErrorKind::ParseIntError);
@@ -102,8 +103,8 @@ TEST(RustNumericOptionTest, NoneOption) {
     EXPECT_FALSE(none.has_value());
     EXPECT_FALSE(none.is_some());
     EXPECT_TRUE(none.is_none());
-    EXPECT_THROW(none.value(), std::runtime_error);
-    EXPECT_THROW(none.unwrap(), std::runtime_error);
+    EXPECT_THROW(none.value(), atom::error::RuntimeError);
+    EXPECT_THROW(none.unwrap(), atom::error::RuntimeError);
     EXPECT_EQ(none.unwrap_or(10), 10);
 }
 
@@ -382,12 +383,12 @@ TEST(RustNumericIntegerTest, WrappingOperations) {
 
     // Wrapping Div
     EXPECT_EQ(I8::wrapping_div(120, 10), 12);
-    EXPECT_THROW(I8::wrapping_div(120, 0), std::runtime_error);
+    EXPECT_THROW(I8::wrapping_div(120, 0), atom::error::RuntimeError);
     EXPECT_EQ(I8::wrapping_div(I8::MIN, -1), I8::MIN);  // Special case
 
     // Wrapping Rem
     EXPECT_EQ(I8::wrapping_rem(125, 10), 5);
-    EXPECT_THROW(I8::wrapping_rem(125, 0), std::runtime_error);
+    EXPECT_THROW(I8::wrapping_rem(125, 0), atom::error::RuntimeError);
 
     // Wrapping Neg
     EXPECT_EQ(I8::wrapping_neg(100), -100);
@@ -527,7 +528,8 @@ TEST(RustNumericIntegerTest, MathOperations) {
     // Abs
     EXPECT_EQ(I32::abs(-42), 42);
     EXPECT_EQ(I32::abs(42), 42);
-    EXPECT_THROW(I32::abs(std::numeric_limits<i32>::min()), std::runtime_error);
+    EXPECT_THROW(I32::abs(std::numeric_limits<i32>::min()),
+                 atom::error::RuntimeError);
 }
 
 // ====================== Float Methods Tests ======================

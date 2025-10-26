@@ -219,9 +219,9 @@ function Run-Tests {
 
     # Test known working examples
     $workingExamples = @(
-        @("containers", "containers_high_performance_containers_example", "High Performance Containers", 30),
-        @("meta", "meta_comprehensive_meta_example", "Comprehensive Meta", 30),
-        @("secret", "secret_basic_test", "Secret Basic Test", 10),
+        @("containers", "containers_containers_usage", "Containers Usage", 30),
+        @("meta", "meta_meta_integration", "Meta Integration", 30),
+        @("secret", "secret_secret_test", "Secret Test", 10),
         @("sysinfo", "sysinfo_header_test", "Sysinfo Header Test", 10)
     )
 

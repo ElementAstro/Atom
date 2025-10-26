@@ -187,13 +187,13 @@ echo === Atom Framework Examples Test Suite ===
 echo.
 
 REM Test known working examples
-call :test_example "containers" "containers_high_performance_containers_example" "High Performance Containers"
+call :test_example "containers" "containers_containers_usage" "Containers Usage"
 call :update_counters %errorlevel%
 
-call :test_example "meta" "meta_comprehensive_meta_example" "Comprehensive Meta"
+call :test_example "meta" "meta_meta_integration" "Meta Integration"
 call :update_counters %errorlevel%
 
-call :test_example "secret" "secret_basic_test" "Secret Basic Test"
+call :test_example "secret" "secret_secret_test" "Secret Test"
 call :update_counters %errorlevel%
 
 call :test_example "sysinfo" "sysinfo_header_test" "Sysinfo Header Test"

@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.21)
-project(atom-search VERSION 1.0.0 LANGUAGES C CXX)
+project(
+  atom-search
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
@@ -8,10 +11,8 @@ include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 set(SOURCES
     # Core search functionality
     core/search.cpp
-
     # Database backends
-    database/sqlite.cpp
-)
+    database/sqlite.cpp)
 
 # Headers
 set(HEADERS
@@ -22,22 +23,33 @@ set(HEADERS
     mysql.hpp
     sqlite.hpp
     search.hpp
-
     # Actual implementation headers (in subdirectories)
     core/search.hpp
-
     database/sqlite.hpp
-
     cache/cache.hpp
     cache/lru.hpp
-    cache/ttl.hpp
-)
+    cache/ttl.hpp)
 
 # Dependencies
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} ${SQLite3_LIBRARIES})
+if(MSVC)
+  find_package(SQLite3 QUIET)
+  if(NOT SQLite3_FOUND)
+    message(
+      WARNING "SQLite3 not found for MSVC - database features will be disabled")
+  endif()
+else()
+  find_package(SQLite3 REQUIRED)
+endif()
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(MARIADB libmariadb)
+set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+if(SQLite3_FOUND)
+  list(APPEND LIBS ${SQLite3_LIBRARIES})
+endif()
+
+find_package(PkgConfig QUIET)
+if(PKG_CONFIG_FOUND)
+  pkg_check_modules(MARIADB libmariadb)
+endif()
 if(MARIADB_FOUND)
   message(STATUS "Found libmariadb: ${MARIADB_VERSION}")
   list(APPEND SOURCES database/mysql.cpp)
@@ -58,6 +70,4 @@ atom_configure_module(atom-search)
 target_link_libraries(atom-search PRIVATE ${LIBS})
 
 # Install headers
-install(FILES ${HEADERS}
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/search
-)
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/search)

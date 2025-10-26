@@ -38,13 +38,14 @@ using String = atom::containers::String;
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
-             std::ranges::input_range<Container2> &&
-             std::equality_comparable_with<typename Container1::value_type,
-                                           typename Container2::value_type> &&
-             std::regular<typename Container2::value_type> &&
-             std::regular<typename Container1::value_type>
-constexpr auto isSubset(const Container1& subset, const Container2& superset)
-    -> bool {
+                 std::ranges::input_range<Container2> &&
+                 std::equality_comparable_with<
+                     typename Container1::value_type,
+                     typename Container2::value_type> &&
+                 std::regular<typename Container2::value_type> &&
+                 std::regular<typename Container1::value_type>
+constexpr auto isSubset(const Container1& subset,
+                        const Container2& superset) -> bool {
     HashSet<typename Container2::value_type> set(superset.begin(),
                                                  superset.end());
     return std::ranges::all_of(
@@ -59,9 +60,61 @@ constexpr auto isSubset(const Container1& subset, const Container2& superset)
  */
 template <typename Container, typename T>
     requires std::ranges::input_range<Container> &&
-             std::equality_comparable_with<typename Container::value_type, T>
+                 std::equality_comparable_with<typename Container::value_type,
+                                               T>
 constexpr auto contains(const Container& container, const T& value) -> bool {
     return std::ranges::find(container, value) != container.end();
+}
+
+/**
+ * @brief Checks if one container is a subset of another using linear search.
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<int> b = {1, 2, 3, 4};
+ *   bool result = isSubsetLinearSearch(a, b); // returns true
+ */
+template <typename Container1, typename Container2>
+    requires std::ranges::input_range<Container1> &&
+                 std::ranges::input_range<Container2> &&
+                 std::equality_comparable_with<typename Container1::value_type,
+                                               typename Container2::value_type>
+constexpr auto isSubsetLinearSearch(const Container1& subset,
+                                    const Container2& superset) -> bool {
+    return std::ranges::all_of(subset, [&superset](const auto& elem) {
+        return std::ranges::find(superset, elem) != superset.end();
+    });
+}
+
+/**
+ * @brief Checks if one container is a subset of another using hash set.
+ * @example
+ *   Vector<int> a = {1, 2, 3};
+ *   Vector<int> b = {1, 2, 3, 4};
+ *   bool result = isSubsetWithHashSet(a, b); // returns true
+ */
+template <typename Container1, typename Container2>
+    requires std::ranges::input_range<Container1> &&
+                 std::ranges::input_range<Container2> &&
+                 std::equality_comparable_with<
+                     typename Container1::value_type,
+                     typename Container2::value_type> &&
+                 std::regular<typename Container2::value_type>
+constexpr auto isSubsetWithHashSet(const Container1& subset,
+                                   const Container2& superset) -> bool {
+    return isSubset(subset, superset);
+}
+
+/**
+ * @brief Alias for toHashSet for compatibility.
+ * @example
+ *   Vector<int> v = {1, 2, 2, 3};
+ *   auto set = toUnorderedSet(v); // returns HashSet with {1, 2, 3}
+ */
+template <typename Container>
+    requires std::ranges::input_range<Container> &&
+             std::regular<typename Container::value_type>
+auto toUnorderedSet(const Container& container) {
+    return toHashSet(container);
 }
 
 /**
@@ -176,9 +229,9 @@ auto symmetricDifference(const Container1& container1,
  */
 template <typename Container1, typename Container2>
     requires std::ranges::input_range<Container1> &&
-             std::ranges::input_range<Container2> &&
-             std::equality_comparable_with<typename Container1::value_type,
-                                           typename Container2::value_type>
+                 std::ranges::input_range<Container2> &&
+                 std::equality_comparable_with<typename Container1::value_type,
+                                               typename Container2::value_type>
 constexpr auto isEqual(const Container1& container1,
                        const Container2& container2) -> bool {
     if (container1.size() != container2.size()) {
@@ -390,7 +443,7 @@ auto partition(const Container& container, Predicate predicate) {
  */
 template <typename Container, typename Predicate>
     requires std::ranges::input_range<Container> &&
-             std::predicate<Predicate, typename Container::value_type>
+                 std::predicate<Predicate, typename Container::value_type>
 constexpr auto findIf(const Container& container, Predicate predicate)
     -> std::optional<typename Container::value_type> {
     for (const auto& elem : container) {

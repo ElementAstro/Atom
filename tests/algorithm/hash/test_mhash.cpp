@@ -8,6 +8,7 @@
 #include <unordered_set>
 #include <vector>
 #include "atom/algorithm/mhash.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -86,7 +87,7 @@ protected:
 
 TEST_F(MHashTest, MinHashConstruction) {
     EXPECT_NO_THROW({ MinHash minhash(10); });
-    EXPECT_THROW({ MinHash minhash(0); }, std::invalid_argument);
+    EXPECT_THROW({ MinHash minhash(0); }, atom::error::InvalidArgument);
 }
 
 TEST_F(MHashTest, MinHashEmptySets) {
@@ -139,7 +140,7 @@ TEST_F(MHashTest, MinHashSimilarityIndexErrorCases) {
             double result = MinHash::jaccardIndex(sig1, sig2);
             (void)result;
         },
-        std::invalid_argument);
+        atom::error::InvalidArgument);
     std::vector<size_t> empty;
     double result = MinHash::jaccardIndex(empty, empty);
     EXPECT_EQ(result, 0.0);
@@ -232,13 +233,13 @@ TEST_F(MHashTest, HexStringConversion) {
             std::string result = dataFromHexstring("123");
             (void)result;
         },
-        std::invalid_argument);
+        atom::error::InvalidArgument);
     ASSERT_THROW(
         {
             std::string result = dataFromHexstring("12ZZ");
             (void)result;
         },
-        std::invalid_argument);
+        atom::error::InvalidArgument);
 }
 
 TEST_F(MHashTest, ThreadSafety) {

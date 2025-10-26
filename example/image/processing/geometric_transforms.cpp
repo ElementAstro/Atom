@@ -17,9 +17,9 @@
 
 #include <chrono>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <vector>
-#include <iomanip>
 
 #include "atom/image/core/image_blob.hpp"
 #include "atom/image/processing/image_processor.hpp"
@@ -93,7 +93,8 @@ blob createGeometricTestImage() {
         }
     }
 
-    return blob(reinterpret_cast<std::byte*>(data.data()), data.size());
+    return blob(reinterpret_cast<std::byte*>(data.data()), data.size(), height,
+                width, 3, DEFAULT_DEPTH);
 }
 
 /**
@@ -104,7 +105,8 @@ void demonstrateResize() {
 
     try {
         auto original = createGeometricTestImage();
-        std::cout << "Original image blob size: " << original.size() << " bytes\n";
+        std::cout << "Original image blob size: " << original.size()
+                  << " bytes\n";
 
         ImageTransform transform;
 
@@ -135,8 +137,8 @@ void demonstrateResize() {
                 auto duration = duration_cast<microseconds>(end - start);
 
                 // Skip scale calculation due to lack of blob dimension methods
-                std::cout << "  Resized to " << width << "x" << height
-                          << " in " << duration.count() << " μs\n";
+                std::cout << "  Resized to " << width << "x" << height << " in "
+                          << duration.count() << " μs\n";
             }
         }
 
@@ -148,8 +150,8 @@ void demonstrateResize() {
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(end - start);
 
-        std::cout << "  Preserve aspect resize completed in " << duration.count()
-                  << " μs\n";
+        std::cout << "  Preserve aspect resize completed in "
+                  << duration.count() << " μs\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in resize operations: " << e.what() << "\n";
@@ -188,9 +190,9 @@ void demonstrateRotation() {
         std::cout << "\nRotation around custom center:\n";
         Point2D custom_center = {150, 100};  // Center point
         auto start = high_resolution_clock::now();
-        auto custom_rotated = transform.rotate(original, 45, custom_center, false,
-                                             InterpolationMethod::LINEAR,
-                                             BorderMode::CONSTANT, 0);
+        auto custom_rotated = transform.rotate(
+            original, 45, custom_center, false, InterpolationMethod::LINEAR,
+            BorderMode::CONSTANT, 0);
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(end - start);
 
@@ -242,15 +244,16 @@ void demonstrateCropping() {
         for (const auto& [x, y, width, height, description] : crop_regions) {
             auto start = high_resolution_clock::now();
 
-            auto cropped = transform.crop(original, x, y, width, height);
+            auto cropped = original.crop(x, y, width, height);
 
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<microseconds>(end - start);
 
             std::cout << "  " << description << ": "
                       << "(" << x << "," << y << "," << width << "," << height
-                      << ") -> " << cropped.getCols() << "x" << cropped.getRows()
-                      << " in " << duration.count() << " μs\n";
+                      << ") -> " << cropped.getCols() << "x"
+                      << cropped.getRows() << " in " << duration.count()
+                      << " μs\n";
         }
 
         // Demonstrate smart cropping (content-aware)
@@ -264,7 +267,7 @@ void demonstrateCropping() {
 
         auto start = high_resolution_clock::now();
         auto smart_crop =
-            transform.crop(original, best_x, best_y, crop_width, crop_height);
+            original.crop(best_x, best_y, crop_width, crop_height);
         auto end = high_resolution_clock::now();
         auto duration = duration_cast<microseconds>(end - start);
 
@@ -287,15 +290,17 @@ void demonstrateFlipping() {
         auto original = createGeometricTestImage();
         ImageTransform transform;
 
-        std::vector<std::pair<FlipMode, std::string>> flip_modes = {
-            {FlipMode::HORIZONTAL, "Horizontal flip"},
-            {FlipMode::VERTICAL, "Vertical flip"},
-            {FlipMode::BOTH, "Both directions"}};
+        std::vector<std::pair<int, std::string>> flip_modes = {
+            {0, "Horizontal flip"},
+            {1, "Vertical flip"},
+            {-1, "Both directions"}};
 
         for (const auto& [mode, description] : flip_modes) {
             auto start = high_resolution_clock::now();
 
-            auto flipped = transform.flip(original, mode);
+            blob flipped = original.clone();
+            // Use Blob's flip via OpenCV wrapper when available
+            flipped.flip(mode);
 
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<microseconds>(end - start);
@@ -305,16 +310,19 @@ void demonstrateFlipping() {
         }
 
         // Demonstrate transpose operations
-        std::cout << "\nTranspose operations:\n";
+        // Note: transpose() method not available in current API
+        // std::cout << "\nTranspose operations:\n";
 
-        auto start = high_resolution_clock::now();
-        auto transposed = transform.transpose(original);
-        auto end = high_resolution_clock::now();
-        auto duration = duration_cast<microseconds>(end - start);
+        // auto start = high_resolution_clock::now();
+        // auto transposed = transform.transpose(original);
+        // auto end = high_resolution_clock::now();
+        // auto duration = duration_cast<microseconds>(end - start);
 
-        std::cout << "  Transpose: " << original.getCols() << "x"
-                  << original.getRows() << " -> " << transposed.getCols() << "x"
-                  << transposed.getRows() << " in " << duration.count() << " μs\n";
+        // std::cout << "  Transpose: " << original.getCols() << "x"
+        //           << original.getRows() << " -> " << transposed.getCols() <<
+        //           "x"
+        //           << transposed.getRows() << " in " << duration.count() << "
+        //           μs\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in flipping operations: " << e.what() << "\n";
@@ -370,8 +378,8 @@ void demonstrateAffineTransforms() {
         auto duration = duration_cast<microseconds>(end - start);
 
         std::cout << "  Scale + Rotate: " << duration.count() << " μs\n";
-        std::cout << "  Final size: " << final.getCols() << "x" << final.getRows()
-                  << "\n";
+        std::cout << "  Final size: " << final.getCols() << "x"
+                  << final.getRows() << "\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in affine transformations: " << e.what() << "\n";

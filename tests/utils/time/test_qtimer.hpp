@@ -4,7 +4,8 @@
 #include <chrono>
 #include <thread>
 
-#include "qtimer.hpp"
+#include "atom/error/exception.hpp"
+#include "atom/utils/time/qtimer.hpp"
 
 using namespace atom::utils;
 using namespace std::chrono_literals;
@@ -122,7 +123,7 @@ TEST_F(ElapsedTimerTest, HasExpiredOnInvalidTimer) {
 // Test hasExpired throws on negative time
 TEST_F(ElapsedTimerTest, HasExpiredThrowsOnNegativeTime) {
     ElapsedTimer timer(true);
-    EXPECT_THROW(timer.hasExpired(-100), std::invalid_argument);
+    EXPECT_THROW(timer.hasExpired(-100), atom::error::InvalidArgument);
 }
 
 // Test remainingTimeMs method
@@ -157,7 +158,7 @@ TEST_F(ElapsedTimerTest, RemainingTimeMsOnInvalidTimer) {
 // Test remainingTimeMs throws on negative time
 TEST_F(ElapsedTimerTest, RemainingTimeMsThrowsOnNegativeTime) {
     ElapsedTimer timer(true);
-    EXPECT_THROW(timer.remainingTimeMs(-100), std::invalid_argument);
+    EXPECT_THROW(timer.remainingTimeMs(-100), atom::error::InvalidArgument);
 }
 
 // Test currentTimeMs static method
@@ -303,7 +304,12 @@ TEST_F(ElapsedTimerTest, StartHandlesExceptions) {
     EXPECT_NO_THROW(timer.start());
 }
 
+#if 0  // DISABLED: Duplicate main() function - CMake generates test runner with
+       // main()
+// Test files should not define their own main() function when using CMake's test runner.
+// The test runner (test_utils_runner.cpp) already provides a main() function.
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }
+#endif

@@ -24,6 +24,8 @@ Description: Some useful string functions
 #include <stdexcept>
 #include <string>
 
+#include "atom/error/exception.hpp"
+
 namespace atom::utils {
 
 auto hasUppercase(std::string_view str) -> bool {
@@ -48,7 +50,8 @@ auto toUnderscore(std::string_view str) -> std::string {
 
         for (char ch : str) {
             if (std::isupper(static_cast<unsigned char>(ch))) {
-                // Only add underscore if not first char AND previous char wasn't underscore
+                // Only add underscore if not first char AND previous char
+                // wasn't underscore
                 if (!firstChar && !result.empty() && result.back() != '_') {
                     result.push_back('_');
                 }
@@ -119,8 +122,7 @@ auto urlEncode(std::string_view str) -> std::string {
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
     } catch (const std::exception& e) {
-        throw std::runtime_error(
-            std::format("URL encoding failed: {}", e.what()));
+        THROW_RUNTIME_ERROR(std::format("URL encoding failed: {}", e.what()));
     }
 }
 
@@ -136,7 +138,7 @@ auto urlDecode(std::string_view str) -> std::string {
         for (size_t i = 0; i < str.size(); ++i) {
             if (str[i] == '%') {
                 if (i + 2 >= str.size()) {
-                    throw std::invalid_argument("Incomplete escape sequence");
+                    THROW_INVALID_ARGUMENT("Incomplete escape sequence");
                 }
 
                 int value = 0;
@@ -144,7 +146,7 @@ auto urlDecode(std::string_view str) -> std::string {
                     str.data() + i + 1, str.data() + i + 3, value, 16);
 
                 if (res.ec != std::errc()) {
-                    throw std::invalid_argument("Invalid escape sequence");
+                    THROW_INVALID_ARGUMENT("Invalid escape sequence");
                 }
 
                 result.push_back(static_cast<char>(value));
@@ -160,7 +162,7 @@ auto urlDecode(std::string_view str) -> std::string {
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
     } catch (const std::invalid_argument& e) {
-        throw std::invalid_argument(
+        THROW_INVALID_ARGUMENT(
             std::format("URL decoding failed: {}", e.what()));
     }
 }
@@ -175,8 +177,8 @@ auto endsWith(std::string_view str, std::string_view suffix) -> bool {
            str.substr(str.size() - suffix.size()) == suffix;
 }
 
-auto splitString(std::string_view str, char delimiter)
-    -> std::vector<std::string> {
+auto splitString(std::string_view str,
+                 char delimiter) -> std::vector<std::string> {
     try {
         if (str.empty()) {
             return {};
@@ -376,7 +378,7 @@ auto stringToWString(std::string_view str) -> std::wstring {
                     result.push_back(static_cast<wchar_t>(codepoint));
                 } else {
                     result.push_back(L'?');  // Invalid sequence
-                    --i;  // Back up to reprocess the byte
+                    --i;                     // Back up to reprocess the byte
                 }
             }
             // 3-byte UTF-8 sequence
@@ -384,12 +386,12 @@ auto stringToWString(std::string_view str) -> std::wstring {
                 const unsigned char c2 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c3 = static_cast<unsigned char>(str[i++]);
                 if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80) {
-                    const uint32_t codepoint = ((c & 0x0F) << 12) |
-                                               ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+                    const uint32_t codepoint =
+                        ((c & 0x0F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
                     result.push_back(static_cast<wchar_t>(codepoint));
                 } else {
                     result.push_back(L'?');  // Invalid sequence
-                    i -= 2;  // Back up to reprocess the bytes
+                    i -= 2;                  // Back up to reprocess the bytes
                 }
             }
             // 4-byte UTF-8 sequence
@@ -397,7 +399,8 @@ auto stringToWString(std::string_view str) -> std::wstring {
                 const unsigned char c2 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c3 = static_cast<unsigned char>(str[i++]);
                 const unsigned char c4 = static_cast<unsigned char>(str[i++]);
-                if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80 && (c4 & 0xC0) == 0x80) {
+                if ((c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80 &&
+                    (c4 & 0xC0) == 0x80) {
                     const uint32_t codepoint = ((c & 0x07) << 18) |
                                                ((c2 & 0x3F) << 12) |
                                                ((c3 & 0x3F) << 6) | (c4 & 0x3F);
@@ -414,7 +417,7 @@ auto stringToWString(std::string_view str) -> std::wstring {
                     }
                 } else {
                     result.push_back(L'?');  // Invalid sequence
-                    i -= 3;  // Back up to reprocess the bytes
+                    i -= 3;                  // Back up to reprocess the bytes
                 }
             } else {
                 // Invalid UTF-8 sequence, skip
@@ -426,7 +429,7 @@ auto stringToWString(std::string_view str) -> std::wstring {
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
     } catch (const std::exception& e) {
-        throw std::runtime_error(
+        THROW_RUNTIME_ERROR(
             std::format("String to WString conversion failed: {}", e.what()));
     }
 }
@@ -461,28 +464,55 @@ auto wstringToString(std::wstring_view wstr) -> std::string {
 
                 if (low >= 0xDC00 && low <= 0xDFFF) {
                     // Valid surrogate pair
-                    const uint32_t codepoint = 0x10000 +
-                        ((high - 0xD800) << 10) + (low - 0xDC00);
+                    const uint32_t codepoint =
+                        0x10000 + ((high - 0xD800) << 10) + (low - 0xDC00);
 
-                    result.push_back(static_cast<char>(0xF0 | (codepoint >> 18)));
-                    result.push_back(static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
-                    result.push_back(static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
-                    result.push_back(static_cast<char>(0x80 | (codepoint & 0x3F)));
+                    result.push_back(
+                        static_cast<char>(0xF0 | (codepoint >> 18)));
+                    result.push_back(
+                        static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F)));
+                    result.push_back(
+                        static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+                    result.push_back(
+                        static_cast<char>(0x80 | (codepoint & 0x3F)));
                 } else {
-                    // Invalid surrogate pair, replace with replacement character
-                    result.append("\xEF\xBF\xBD");  // UTF-8 replacement character
+                    // Invalid surrogate pair, replace with replacement
+                    // character
+                    result.append(
+                        "\xEF\xBF\xBD");  // UTF-8 replacement character
                     --i;  // Back up to process the low surrogate separately
                 }
             }
-            // Handle 3-byte UTF-8 characters (2048-65535)
-            else if (static_cast<uint32_t>(wc) < 0x10000) {
-                result.push_back(static_cast<char>(0xE0 | (wc >> 12)));
-                result.push_back(static_cast<char>(0x80 | ((wc >> 6) & 0x3F)));
-                result.push_back(static_cast<char>(0x80 | (wc & 0x3F)));
-            }
-            // Invalid character, replace with replacement character
+            // Handle the remaining UTF-8 cases
             else {
-                result.append("\xEF\xBF\xBD");  // UTF-8 replacement character
+                if constexpr (sizeof(wchar_t) > 2) {
+                    const uint32_t codepoint = static_cast<uint32_t>(wc);
+                    if (codepoint < 0x10000) {
+                        result.push_back(
+                            static_cast<char>(0xE0 | (codepoint >> 12)));
+                        result.push_back(static_cast<char>(
+                            0x80 | ((codepoint >> 6) & 0x3F)));
+                        result.push_back(
+                            static_cast<char>(0x80 | (codepoint & 0x3F)));
+                    } else {
+                        result.push_back(
+                            static_cast<char>(0xF0 | (codepoint >> 18)));
+                        result.push_back(static_cast<char>(
+                            0x80 | ((codepoint >> 12) & 0x3F)));
+                        result.push_back(static_cast<char>(
+                            0x80 | ((codepoint >> 6) & 0x3F)));
+                        result.push_back(
+                            static_cast<char>(0x80 | (codepoint & 0x3F)));
+                    }
+                } else {
+                    const auto codepoint = static_cast<uint16_t>(wc);
+                    result.push_back(
+                        static_cast<char>(0xE0 | (codepoint >> 12)));
+                    result.push_back(
+                        static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F)));
+                    result.push_back(
+                        static_cast<char>(0x80 | (codepoint & 0x3F)));
+                }
             }
         }
 
@@ -490,14 +520,14 @@ auto wstringToString(std::wstring_view wstr) -> std::string {
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
     } catch (const std::exception& e) {
-        throw std::runtime_error(
+        THROW_RUNTIME_ERROR(
             std::format("WString to String conversion failed: {}", e.what()));
     }
 }
 
 auto stod(std::string_view str, std::size_t* idx) -> double {
     if (str.empty()) {
-        throw std::invalid_argument("Cannot convert empty string to double");
+        THROW_INVALID_ARGUMENT("Cannot convert empty string to double");
     }
 
     try {
@@ -506,7 +536,8 @@ auto stod(std::string_view str, std::size_t* idx) -> double {
 
         // If idx is null, validate that entire string was consumed
         if (idx == nullptr && pos != str.size()) {
-            throw std::invalid_argument("Invalid characters found after valid number");
+            THROW_INVALID_ARGUMENT(
+                "Invalid characters found after valid number");
         }
 
         // Set the position if idx is provided
@@ -516,17 +547,17 @@ auto stod(std::string_view str, std::size_t* idx) -> double {
 
         return result;
     } catch (const std::invalid_argument& e) {
-        throw std::invalid_argument(
+        THROW_INVALID_ARGUMENT(
             std::format("String to double conversion failed: {}", e.what()));
     } catch (const std::out_of_range& e) {
-        throw std::out_of_range(std::format(
+        THROW_OUT_OF_RANGE(std::format(
             "String to double conversion out of range: {}", e.what()));
     }
 }
 
 auto stof(std::string_view str, std::size_t* idx) -> float {
     if (str.empty()) {
-        throw std::invalid_argument("Cannot convert empty string to float");
+        THROW_INVALID_ARGUMENT("Cannot convert empty string to float");
     }
 
     try {
@@ -535,7 +566,8 @@ auto stof(std::string_view str, std::size_t* idx) -> float {
 
         // If idx is null, validate that entire string was consumed
         if (idx == nullptr && pos != str.size()) {
-            throw std::invalid_argument("Invalid characters found after valid number");
+            THROW_INVALID_ARGUMENT(
+                "Invalid characters found after valid number");
         }
 
         // Set the position if idx is provided
@@ -545,42 +577,42 @@ auto stof(std::string_view str, std::size_t* idx) -> float {
 
         return result;
     } catch (const std::invalid_argument& e) {
-        throw std::invalid_argument(
+        THROW_INVALID_ARGUMENT(
             std::format("String to float conversion failed: {}", e.what()));
     } catch (const std::out_of_range& e) {
-        throw std::out_of_range(std::format(
+        THROW_OUT_OF_RANGE(std::format(
             "String to float conversion out of range: {}", e.what()));
     }
 }
 
 auto stoi(std::string_view str, std::size_t* idx, int base) -> int {
     if (str.empty()) {
-        throw std::invalid_argument("Cannot convert empty string to int");
+        THROW_INVALID_ARGUMENT("Cannot convert empty string to int");
     }
 
     try {
         return std::stoi(std::string(str), idx, base);
     } catch (const std::invalid_argument& e) {
-        throw std::invalid_argument(
+        THROW_INVALID_ARGUMENT(
             std::format("String to int conversion failed: {}", e.what()));
     } catch (const std::out_of_range& e) {
-        throw std::out_of_range(
+        THROW_OUT_OF_RANGE(
             std::format("String to int conversion out of range: {}", e.what()));
     }
 }
 
 auto stol(std::string_view str, std::size_t* idx, int base) -> long {
     if (str.empty()) {
-        throw std::invalid_argument("Cannot convert empty string to long");
+        THROW_INVALID_ARGUMENT("Cannot convert empty string to long");
     }
 
     try {
         return std::stol(std::string(str), idx, base);
     } catch (const std::invalid_argument& e) {
-        throw std::invalid_argument(
+        THROW_INVALID_ARGUMENT(
             std::format("String to long conversion failed: {}", e.what()));
     } catch (const std::out_of_range& e) {
-        throw std::out_of_range(std::format(
+        THROW_OUT_OF_RANGE(std::format(
             "String to long conversion out of range: {}", e.what()));
     }
 }
@@ -639,8 +671,8 @@ auto nstrtok(std::string_view& str, const std::string_view& delims)
  * @throws std::bad_alloc if memory allocation fails
  */
 auto parallelReplaceString(std::string_view text, std::string_view oldStr,
-                           std::string_view newStr, size_t threshold)
-    -> std::string {
+                           std::string_view newStr,
+                           size_t threshold) -> std::string {
     try {
         // For small strings or when oldStr is empty, use the regular approach
         if (text.size() < threshold || oldStr.empty()) {
@@ -681,7 +713,7 @@ auto parallelReplaceString(std::string_view text, std::string_view oldStr,
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
     } catch (const std::exception& e) {
-        throw std::runtime_error(
+        THROW_RUNTIME_ERROR(
             std::format("Parallel replace failed: {}", e.what()));
     }
 }
@@ -694,8 +726,8 @@ auto parallelReplaceString(std::string_view text, std::string_view oldStr,
  * @return The converted vector of string
  * @throws std::bad_alloc if memory allocation fails
  */
-auto parallelSVVtoSV(std::span<const std::string_view> svv, size_t threshold)
-    -> std::vector<std::string> {
+auto parallelSVVtoSV(std::span<const std::string_view> svv,
+                     size_t threshold) -> std::vector<std::string> {
     try {
         if (svv.empty()) {
             return {};
@@ -717,7 +749,7 @@ auto parallelSVVtoSV(std::span<const std::string_view> svv, size_t threshold)
     } catch (const std::bad_alloc& e) {
         throw std::bad_alloc();
     } catch (const std::exception& e) {
-        throw std::runtime_error(
+        THROW_RUNTIME_ERROR(
             std::format("Parallel SVVtoSV failed: {}", e.what()));
     }
 }

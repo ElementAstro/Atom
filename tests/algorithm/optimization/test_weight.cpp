@@ -6,6 +6,7 @@
 #include <sstream>
 #include <vector>
 #include "atom/algorithm/weight.hpp"
+#include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
 using namespace atom::algorithm;
@@ -210,9 +211,10 @@ TEST_F(WeightSelectorTest, ErrorCases) {
     EXPECT_THROW(selector.batchUpdateWeights(badUpdates), std::out_of_range);
     WeightSelector<double> emptySelector(std::vector<double>{});
     EXPECT_THROW(static_cast<void>(emptySelector.getAverageWeight()),
-                 std::runtime_error);
+                 atom::error::RuntimeError);
     WeightSelector<double> zeroSelector(std::vector<double>{0.0, 0.0, 0.0});
-    EXPECT_THROW(static_cast<void>(zeroSelector.select()), std::runtime_error);
+    EXPECT_THROW(static_cast<void>(zeroSelector.select()),
+                 atom::error::RuntimeError);
 }
 
 TEST_F(WeightSelectorTest, PrintWeights) {
@@ -250,30 +252,48 @@ TEST_F(WeightSelectorTest, ChangeStrategy) {
     std::vector<double> weights = {1.0, 2.0, 3.0, 4.0};
     WeightSelector<double> selector(weights);
     std::map<size_t, int> defaultCounts;
-    for (size_t i = 0; i < 1000; ++i) {
+    // Increased sample size for more reliable statistics
+    constexpr size_t numSamples = 10000;
+    for (size_t i = 0; i < numSamples; ++i) {
         defaultCounts[selector.select()]++;
     }
+
+    // Verify weighted selection favors higher weights
+    // Index 3 (weight 4.0) should be selected more than index 0 (weight 1.0)
+    EXPECT_GT(defaultCounts[3], defaultCounts[0]);
+    EXPECT_GT(defaultCounts[2], defaultCounts[0]);
+
     auto randomStrategy =
         std::make_unique<WeightSelector<double>::RandomSelectionStrategy>(
             weights.size());
     selector.setSelectionStrategy(std::move(randomStrategy));
     std::map<size_t, int> randomCounts;
-    for (size_t i = 0; i < 1000; ++i) {
+    for (size_t i = 0; i < numSamples; ++i) {
         randomCounts[selector.select()]++;
     }
-    double totalDefaultDiff = 0.0;
-    double totalRandomDiff = 0.0;
-    double totalWeight = std::reduce(weights.begin(), weights.end());
+
+    // Verify random selection is approximately uniform
+    double expectedUniformProb = 1.0 / weights.size();
     for (size_t i = 0; i < weights.size(); ++i) {
-        double expectedWeightedProb = weights[i] / totalWeight;
-        double expectedUniformProb = 1.0 / weights.size();
-        double defaultProb = static_cast<double>(defaultCounts[i]) / 1000;
-        double randomProb = static_cast<double>(randomCounts[i]) / 1000;
-        totalDefaultDiff += std::abs(defaultProb - expectedWeightedProb);
-        totalRandomDiff += std::abs(randomProb - expectedUniformProb);
+        double randomProb = static_cast<double>(randomCounts[i]) / numSamples;
+        // With 10000 samples, each index should get roughly 25% ± 2%
+        EXPECT_NEAR(randomProb, expectedUniformProb, 0.02);
     }
-    double diffRatio = totalRandomDiff / totalDefaultDiff;
-    EXPECT_TRUE(diffRatio < 0.5 || diffRatio > 1.5);
+
+    // The two strategies should produce different distributions
+    // Random should be more uniform than weighted
+    double defaultVariance = 0.0;
+    double randomVariance = 0.0;
+    for (size_t i = 0; i < weights.size(); ++i) {
+        double defaultProb = static_cast<double>(defaultCounts[i]) / numSamples;
+        double randomProb = static_cast<double>(randomCounts[i]) / numSamples;
+        defaultVariance += (defaultProb - expectedUniformProb) *
+                           (defaultProb - expectedUniformProb);
+        randomVariance += (randomProb - expectedUniformProb) *
+                          (randomProb - expectedUniformProb);
+    }
+    // Weighted strategy should have higher variance from uniform than random
+    EXPECT_GT(defaultVariance, randomVariance);
 }
 
 TEST_F(WeightSelectorTest, EdgeCaseWeights) {

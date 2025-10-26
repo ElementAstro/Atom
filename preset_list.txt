@@ -1,0 +1,17 @@
+Available configure presets:
+
+  "debug"                     - Debug
+  "release"                   - Release
+  "relwithdebinfo"            - RelWithDebInfo
+  "debug-msys2"               - Debug (MSYS2)
+  "release-msys2"             - Release (MSYS2)
+  "relwithdebinfo-msys2"      - RelWithDebInfo (MSYS2)
+  "debug-make"                - Debug (Makefile)
+  "release-make"              - Release (Makefile)
+  "relwithdebinfo-make"       - RelWithDebInfo (Makefile)
+  "debug-vs"                  - Debug (Visual Studio)
+  "release-vs"                - Release (Visual Studio)
+  "relwithdebinfo-vs"         - RelWithDebInfo (Visual Studio)
+  "msvc-vcpkg-debug"          - Debug (MSVC with vcpkg)
+  "msvc-vcpkg-release"        - Release (MSVC with vcpkg)
+  "msvc-vcpkg-relwithdebinfo" - RelWithDebInfo (MSVC with vcpkg)

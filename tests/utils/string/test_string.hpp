@@ -1,13 +1,13 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <chrono>
+#include <future>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <vector>
-#include <future>
-#include <chrono>
-#include <algorithm>
 
 #include "atom/utils/string.hpp"
 
@@ -60,7 +60,8 @@ TEST_F(StringUtilsTest, ToUnderscore) {
         long_input += (i % 2 == 0) ? "Aa" : "bb";
     }
     EXPECT_EQ(toUnderscore(long_input).size(),
-              long_input.size() + 499);  // One underscore per uppercase (except first)
+              long_input.size() +
+                  499);  // One underscore per uppercase (except first)
 }
 
 // Test toCamelCase function
@@ -706,14 +707,19 @@ TEST_F(StringUtilsTest, PerformanceTest) {
     auto replaced = replaceString(largeData, "A", "B");
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time
-    EXPECT_LT(duration.count(), 1000); // 1 second max
+    EXPECT_LT(duration.count(), 1000);  // 1 second max
 
     // Verify correctness
-    EXPECT_TRUE(std::all_of(lower.begin(), lower.end(), [](char c) { return std::islower(c) || !std::isalpha(c); }));
-    EXPECT_TRUE(std::all_of(upper.begin(), upper.end(), [](char c) { return std::isupper(c) || !std::isalpha(c); }));
+    EXPECT_TRUE(std::all_of(lower.begin(), lower.end(), [](char c) {
+        return std::islower(c) || !std::isalpha(c);
+    }));
+    EXPECT_TRUE(std::all_of(upper.begin(), upper.end(), [](char c) {
+        return std::isupper(c) || !std::isalpha(c);
+    }));
 }
 
 // Test thread safety
@@ -723,15 +729,18 @@ TEST_F(StringUtilsTest, ThreadSafety) {
     std::vector<std::future<bool>> futures;
 
     for (int t = 0; t < numThreads; ++t) {
-        futures.push_back(std::async(std::launch::async, [operationsPerThread, t]() {
+        futures.push_back(std::async(std::launch::async, [operationsPerThread,
+                                                          t]() {
             for (int i = 0; i < operationsPerThread; ++i) {
-                std::string testStr = "Thread" + std::to_string(t) + "Operation" + std::to_string(i);
+                std::string testStr = "Thread" + std::to_string(t) +
+                                      "Operation" + std::to_string(i);
 
                 try {
                     // Test various string operations
                     auto lower = toLower(testStr);
                     auto upper = toUpper(testStr);
-                    auto camel = toCamelCase("test_string_" + std::to_string(i));
+                    auto camel =
+                        toCamelCase("test_string_" + std::to_string(i));
                     auto snake = toUnderscore("TestString" + std::to_string(i));
                     auto encoded = urlEncode(testStr);
                     auto decoded = urlDecode(encoded);
@@ -756,12 +765,15 @@ TEST_F(StringUtilsTest, ThreadSafety) {
 // Test boundary conditions
 TEST_F(StringUtilsTest, BoundaryConditions) {
     // Test with maximum string sizes (within reason)
-    std::string maxString(std::string::max_size() > 1000000 ? 1000000 : std::string::max_size() / 2, 'A');
+    // Fixed: max_size() is a member function, need an instance to call it
+    std::string tempStr;
+    std::string maxString(
+        tempStr.max_size() > 1000000 ? 1000000 : tempStr.max_size() / 2, 'A');
     EXPECT_NO_THROW(hasUppercase(maxString));
 
     // Test with null characters
     std::string nullString = "Hello\0World";
-    nullString.resize(11); // Ensure null character is included
+    nullString.resize(11);  // Ensure null character is included
     EXPECT_NO_THROW(toLower(nullString));
     EXPECT_NO_THROW(toUpper(nullString));
 

@@ -11,7 +11,7 @@
 namespace atom::utils {
 // UTF-16 to UTF-8 using Windows API or manual conversion for non-Windows
 // platforms
-auto utF16toUtF8(std::u16string_view str) -> std::string {
+auto utf16toUtF8(std::u16string_view str) -> std::string {
 #if defined(_WIN32) || defined(_WIN64)
     if (str.empty()) {
         return {};
@@ -45,7 +45,7 @@ auto utF16toUtF8(std::u16string_view str) -> std::string {
 
 // UTF-8 to UTF-16 using Windows API or manual conversion for non-Windows
 // platforms
-auto utF8toUtF16(std::string_view str) -> std::u16string {
+auto utf8toUtF16(std::string_view str) -> std::u16string {
 #if defined(_WIN32) || defined(_WIN64)
     if (str.empty()) {
         return {};
@@ -93,7 +93,7 @@ auto utF8toUtF16(std::string_view str) -> std::u16string {
 }
 
 // UTF-32 to UTF-8 conversion
-auto utF32toUtF8(std::u32string_view str) -> std::string {
+auto utf32toUtF8(std::u32string_view str) -> std::string {
     std::string result;
     result.reserve(str.size() *
                    4);  // UTF-8 could be up to 4 bytes per UTF-32 code point
@@ -118,7 +118,7 @@ auto utF32toUtF8(std::u32string_view str) -> std::string {
 }
 
 // UTF-8 to UTF-32 conversion
-auto utF8toUtF32(std::string_view str) -> std::u32string {
+auto utf8toUtF32(std::string_view str) -> std::u32string {
     std::u32string result;
     size_t i = 0;
     while (i < str.size()) {
@@ -181,7 +181,7 @@ auto surrogateToCodepoint(char16_t high, char16_t low) -> char32_t {
 }
 
 // UTF-16 to UTF-32 conversion
-auto utF16toUtF32(std::u16string_view str) -> std::u32string {
+auto utf16toUtF32(std::u16string_view str) -> std::u32string {
     std::u32string result;
     auto iterator = str.begin();  // Renamed 'it' to 'iterator' and fixed type
     while (iterator != str.end()) {
@@ -204,7 +204,7 @@ auto utF16toUtF32(std::u16string_view str) -> std::u32string {
 }
 
 // UTF-32 to UTF-16 conversion
-auto utF32toUtF16(std::u32string_view str) -> std::u16string {
+auto utf32toUtF16(std::u32string_view str) -> std::u16string {
     std::u16string result;
     for (char32_t codePoint : str) {
         if (codePoint <= 0xFFFF) {

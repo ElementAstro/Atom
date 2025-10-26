@@ -158,7 +158,7 @@ ATOM_INLINE auto translate(const String &pattern) -> String {
             }
         }
     }
-    return String{"(("} + resultString + String{R"()|[\r\n])$)"};
+    return String{"(("} + resultString + String{")|[\\r\\n])$"};
 }
 
 /**
@@ -167,7 +167,7 @@ ATOM_INLINE auto translate(const String &pattern) -> String {
  * @return A compiled std::regex object
  */
 ATOM_INLINE auto compilePattern(const String &pattern) -> std::regex {
-    return std::regex(pattern.c_str(), std::regex::ECMAScript);
+    return std::regex(translate(pattern).c_str(), std::regex::ECMAScript);
 }
 
 /**
@@ -186,8 +186,8 @@ ATOM_INLINE auto fnmatch(const fs::path &name, const String &pattern) -> bool {
  * @param pattern The shell pattern to match against
  * @return Vector of paths that match the pattern
  */
-ATOM_INLINE auto filter(const Vector<fs::path> &names, const String &pattern)
-    -> Vector<fs::path> {
+ATOM_INLINE auto filter(const Vector<fs::path> &names,
+                        const String &pattern) -> Vector<fs::path> {
     Vector<fs::path> result;
     for (const auto &name : names) {
         if (fnmatch(name, pattern)) {
@@ -275,8 +275,8 @@ ATOM_INLINE auto isRecursive(const String &pattern) -> bool {
  * @param dironly If true, only return directories
  * @return Vector of filesystem paths found in the directory
  */
-ATOM_INLINE auto iterDirectory(const fs::path &dirname, bool dironly)
-    -> Vector<fs::path> {
+ATOM_INLINE auto iterDirectory(const fs::path &dirname,
+                               bool dironly) -> Vector<fs::path> {
     Vector<fs::path> result;
     auto currentDirectory = dirname;
 
@@ -311,8 +311,8 @@ ATOM_INLINE auto iterDirectory(const fs::path &dirname, bool dironly)
  * @param dironly If true, only return directories
  * @return Vector of all filesystem paths found recursively
  */
-ATOM_INLINE auto rlistdir(const fs::path &dirname, bool dironly)
-    -> Vector<fs::path> {
+ATOM_INLINE auto rlistdir(const fs::path &dirname,
+                          bool dironly) -> Vector<fs::path> {
     Vector<fs::path> result;
     auto names = iterDirectory(dirname, dironly);
 
@@ -334,8 +334,8 @@ ATOM_INLINE auto rlistdir(const fs::path &dirname, bool dironly)
  * @return Vector of all matching paths found recursively
  */
 ATOM_INLINE auto glob2(const fs::path &dirname,
-                       [[maybe_unused]] const String &pattern, bool dironly)
-    -> Vector<fs::path> {
+                       [[maybe_unused]] const String &pattern,
+                       bool dironly) -> Vector<fs::path> {
     Vector<fs::path> result;
     assert(isRecursive(pattern));
 

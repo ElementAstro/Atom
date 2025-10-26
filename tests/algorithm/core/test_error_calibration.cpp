@@ -6,6 +6,7 @@
 #include <random>
 #include <thread>
 #include "atom/algorithm/error_calibration.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -227,8 +228,10 @@ TEST_F(ErrorCalibrationTest, CrossValidation) {
         generateLinearData<double>(50, test_slope, test_intercept, 0.1);
     ErrorCalibration<double> calibrator;
     EXPECT_NO_THROW(calibrator.crossValidation(x, y, 5));
-    EXPECT_THROW(calibrator.crossValidation(x, y, 51), std::invalid_argument);
-    EXPECT_THROW(calibrator.crossValidation(x, y, 0), std::invalid_argument);
+    EXPECT_THROW(calibrator.crossValidation(x, y, 51),
+                 atom::error::InvalidArgument);
+    EXPECT_THROW(calibrator.crossValidation(x, y, 0),
+                 atom::error::InvalidArgument);
 }
 
 TEST_F(ErrorCalibrationTest, ExceptionHandling) {
@@ -242,10 +245,12 @@ TEST_F(ErrorCalibrationTest, ExceptionHandling) {
         1.0, std::numeric_limits<double>::infinity(), 3.0};
     std::vector<double> negative = {-1.0, -2.0, -3.0};
     ErrorCalibration<double> calibrator;
-    EXPECT_THROW(calibrator.linearCalibrate(empty, y), std::invalid_argument);
-    EXPECT_THROW(calibrator.linearCalibrate(x, empty), std::invalid_argument);
+    EXPECT_THROW(calibrator.linearCalibrate(empty, y),
+                 atom::error::InvalidArgument);
+    EXPECT_THROW(calibrator.linearCalibrate(x, empty),
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.linearCalibrate(x, mismatched),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.polynomialCalibrate(with_nan, y, 1),
                  std::invalid_argument);
     EXPECT_THROW(calibrator.polynomialCalibrate(x, with_inf, 1),
@@ -365,7 +370,8 @@ TEST_F(ErrorCalibrationTest, EdgeCases) {
     std::vector<double> y = {10.0, 10.1, 9.9,  10.2, 9.8,
                              10.3, 9.7,  10.4, 9.6,  10.5};
     ErrorCalibration<double> calibrator;
-    EXPECT_THROW(calibrator.linearCalibrate(constant_x, y), std::runtime_error);
+    EXPECT_THROW(calibrator.linearCalibrate(constant_x, y),
+                 atom::error::RuntimeError);
     std::vector<double> x = {1.0, 2.0, 3.0, 4.0, 5.0};
     std::vector<double> perfect_y = {3.0, 5.0, 7.0, 9.0, 11.0};
     EXPECT_NO_THROW(calibrator.linearCalibrate(x, perfect_y));

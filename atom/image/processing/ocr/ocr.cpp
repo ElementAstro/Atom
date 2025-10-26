@@ -76,38 +76,38 @@ void ProgressReporter::reportProgress() const {
             .count();
 
     if (m_total > 0) {
-        float percentage = static_cast<float>(m_current) * 100.0f / m_total;
+        size_t current = m_current.load();  // Load atomic value
+        float percentage = static_cast<float>(current) * 100.0f / m_total;
 
         // Calculate ETA
         std::string eta = "N/A";
-        if (m_current > 0 && elapsed > 0) {
-            float itemsPerSecond = static_cast<float>(m_current) / elapsed;
+        if (current > 0 && elapsed > 0) {
+            float itemsPerSecond = static_cast<float>(current) / elapsed;
             if (itemsPerSecond > 0) {
-                int etaSeconds = static_cast<int>((m_total - m_current) /
-                                                  itemsPerSecond);
-                eta = std::format("{}m {}s", etaSeconds / 60,
-                                  etaSeconds % 60);
+                int etaSeconds =
+                    static_cast<int>((m_total - current) / itemsPerSecond);
+                eta = std::format("{}m {}s", etaSeconds / 60, etaSeconds % 60);
             }
         }
 
         std::cout << std::format(
             "\r{}: {:.1f}% ({}/{}) - Elapsed: {}s - ETA: {}", m_taskName,
-            percentage, m_current, m_total, elapsed, eta);
+            percentage, current, m_total, elapsed, eta);
         std::cout.flush();
 
-        if (m_current >= m_total) {
+        if (current >= m_total) {
             std::cout << std::endl;
         }
     }
 }
 
-#ifdef ATOM_IMAGE_HAS_OCR
 // OCRCache implementation
 std::string OCRCache::calculateHash(const cv::Mat& img) const {
     std::vector<uint8_t> buffer;
     cv::imencode(".jpg", img, buffer);
 
-    // Using a simple hash function, in production use a stronger hash like SHA-256
+    // Using a simple hash function, in production use a stronger hash like
+    // SHA-256
     size_t hash = 0;
     for (const auto& byte : buffer) {
         hash = (hash * 31) + byte;
@@ -148,7 +148,8 @@ std::optional<std::string> OCRCache::get(const cv::Mat& img) {
                                 std::istreambuf_iterator<char>());
 
             // Update memory cache
-            if (content.size() < 1024 * 10) {  // Only cache small results in memory
+            if (content.size() <
+                1024 * 10) {  // Only cache small results in memory
                 m_memoryCache[key] = content;
             }
 
@@ -195,10 +196,9 @@ void OCRCache::cleanCacheIfNeeded() {
     // If cache is too large, remove oldest files
     if (totalSize > m_maxCacheSize) {
         // Sort by last write time (oldest first)
-        std::sort(files.begin(), files.end(),
-                  [](const auto& a, const auto& b) {
-                      return a.second < b.second;
-                  });
+        std::sort(files.begin(), files.end(), [](const auto& a, const auto& b) {
+            return a.second < b.second;
+        });
 
         // Remove oldest files until we're under the limit
         for (const auto& [path, time] : files) {
@@ -247,15 +247,14 @@ void SpellChecker::loadDictionary(const std::string& filePath) {
     }
 }
 
-void SpellChecker::addWord(const std::string& word) {
-    m_dictionary[word]++;
-}
+void SpellChecker::addWord(const std::string& word) { m_dictionary[word]++; }
 
 bool SpellChecker::isCorrect(const std::string& word) {
     return m_dictionary.count(word) > 0;
 }
 
-int SpellChecker::levenshteinDistance(const std::string& s1, const std::string& s2) {
+int SpellChecker::levenshteinDistance(const std::string& s1,
+                                      const std::string& s2) {
     const std::size_t len1 = s1.size(), len2 = s2.size();
     std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
 
@@ -266,9 +265,9 @@ int SpellChecker::levenshteinDistance(const std::string& s1, const std::string& 
 
     for (int i = 1; i <= len1; ++i) {
         for (int j = 1; j <= len2; ++j) {
-            d[i][j] = std::min(
-                {d[i - 1][j] + 1, d[i][j - 1] + 1,
-                 d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
+            d[i][j] =
+                std::min({d[i - 1][j] + 1, d[i][j - 1] + 1,
+                          d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
         }
     }
 
@@ -372,11 +371,10 @@ EnhancedOCRProcessor::EnhancedOCRProcessor(const OCRConfig& config)
     m_tessApi.SetPageSegMode(tesseract::PSM_AUTO);
 }
 
-EnhancedOCRProcessor::~EnhancedOCRProcessor() {
-    m_tessApi.End();
-}
+EnhancedOCRProcessor::~EnhancedOCRProcessor() { m_tessApi.End(); }
 
-bool EnhancedOCRProcessor::detectLanguage(const cv::Mat& image, std::string& detectedLanguage) {
+bool EnhancedOCRProcessor::detectLanguage(const cv::Mat& image,
+                                          std::string& detectedLanguage) {
     // In a real implementation, this would use a language detection model
     // For simplicity, we'll assume English
     detectedLanguage = "eng";
@@ -414,7 +412,8 @@ cv::Mat EnhancedOCRProcessor::deskew(const cv::Mat& image) {
 
     // Threshold the image
     cv::Mat binary;
-    cv::threshold(gray, binary, 0, 255, cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
+    cv::threshold(gray, binary, 0, 255,
+                  cv::THRESH_BINARY_INV | cv::THRESH_OTSU);
 
     // Find all contours
     std::vector<std::vector<cv::Point>> contours;
@@ -455,7 +454,8 @@ cv::Mat EnhancedOCRProcessor::deskew(const cv::Mat& image) {
     return rotated;
 }
 
-std::vector<cv::Rect> EnhancedOCRProcessor::detectTextRegions(const cv::Mat& image) {
+std::vector<cv::Rect> EnhancedOCRProcessor::detectTextRegions(
+    const cv::Mat& image) {
     std::vector<cv::Rect> textBoxes;
 
     try {
@@ -479,8 +479,8 @@ std::vector<cv::Rect> EnhancedOCRProcessor::detectTextRegions(const cv::Mat& ima
 
         // Set the blob as input and get output layer names
         m_textDetector.setInput(blob);
-        std::vector<std::string> outNames = {
-            "feature_fusion/Conv_7/Sigmoid", "feature_fusion/concat_3"};
+        std::vector<std::string> outNames = {"feature_fusion/Conv_7/Sigmoid",
+                                             "feature_fusion/concat_3"};
 
         // Forward pass
         std::vector<cv::Mat> outputBlobs;
@@ -525,9 +525,8 @@ std::vector<cv::Rect> EnhancedOCRProcessor::detectTextRegions(const cv::Mat& ima
                     offsetY - (sin * x1Data[x] - cos * x2Data[x]));
                 cv::Point2f p1 = cv::Point2f(-sin * h, -cos * h) + offset;
                 cv::Point2f p3 = cv::Point2f(-cos * w, sin * w) + offset;
-                cv::RotatedRect r(
-                    0.5f * (p1 + p3), cv::Size2f(w, h),
-                    -angle * 180.0f / static_cast<float>(CV_PI));
+                cv::RotatedRect r(0.5f * (p1 + p3), cv::Size2f(w, h),
+                                  -angle * 180.0f / static_cast<float>(CV_PI));
 
                 detections.push_back(r);
                 confidences.push_back(score);
@@ -567,13 +566,12 @@ std::vector<cv::Rect> EnhancedOCRProcessor::detectTextRegions(const cv::Mat& ima
 
             // Create axis-aligned bounding box with margins
             int margin = 10;
-            cv::Rect rect(
-                std::max(0, static_cast<int>(minX) - margin),
-                std::max(0, static_cast<int>(minY) - margin),
-                std::min(static_cast<int>(width) - 1,
-                         static_cast<int>(maxX - minX) + 2 * margin),
-                std::min(static_cast<int>(height) - 1,
-                         static_cast<int>(maxY - minY) + 2 * margin));
+            cv::Rect rect(std::max(0, static_cast<int>(minX) - margin),
+                          std::max(0, static_cast<int>(minY) - margin),
+                          std::min(static_cast<int>(width) - 1,
+                                   static_cast<int>(maxX - minX) + 2 * margin),
+                          std::min(static_cast<int>(height) - 1,
+                                   static_cast<int>(maxY - minY) + 2 * margin));
 
             textBoxes.push_back(rect);
         }
@@ -585,4 +583,4 @@ std::vector<cv::Rect> EnhancedOCRProcessor::detectTextRegions(const cv::Mat& ima
     return textBoxes;
 }
 
-#endif // ATOM_IMAGE_HAS_OCR
+#endif  // ATOM_IMAGE_HAS_OCR

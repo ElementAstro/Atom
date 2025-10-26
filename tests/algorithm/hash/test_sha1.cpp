@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include "atom/algorithm/sha1.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
 
@@ -341,7 +342,7 @@ TEST_F(SHA1Test, NullPtrHandling) {
     EXPECT_NO_THROW(hasher.update(nullptr, 0));
 
     // Update with nullptr and non-zero length should throw
-    EXPECT_THROW(hasher.update(nullptr, 5), std::invalid_argument);
+    EXPECT_THROW(hasher.update(nullptr, 5), atom::error::InvalidArgument);
 }
 
 TEST_F(SHA1Test, LargeBlockBoundaries) {

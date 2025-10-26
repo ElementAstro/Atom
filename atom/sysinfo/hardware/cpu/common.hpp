@@ -20,6 +20,7 @@ Description: System Information Module - CPU Common Header
 #include <atomic>
 #include <chrono>
 #include <mutex>
+#include <vector>
 
 #ifdef _WIN32
 // clang-format off
@@ -31,13 +32,47 @@ Description: System Information Module - CPU Common Header
 #include <powrprof.h>
 #include <tlhelp32.h>
 #include <wincon.h>
-#include <comutil.h>
 #include <wbemidl.h>
-// clang-format on
 #ifdef _MSC_VER
+#include <comutil.h>
 #pragma comment(lib, "pdh.lib")
 #pragma comment(lib, "PowrProf.lib")
+#pragma comment(lib, "comsuppw.lib")
+#else
+// MinGW-compatible BSTR wrapper (replaces _bstr_t from comutil.h)
+class bstr_t {
+public:
+    bstr_t(const wchar_t* str) : bstr_(SysAllocString(str)) {}
+    bstr_t(const char* str) {
+        if (str) {
+            int size = MultiByteToWideChar(CP_UTF8, 0, str, -1, nullptr, 0);
+            if (size > 0) {
+                std::vector<wchar_t> wstr(size);
+                MultiByteToWideChar(CP_UTF8, 0, str, -1, wstr.data(), size);
+                bstr_ = SysAllocString(wstr.data());
+            } else {
+                bstr_ = nullptr;
+            }
+        } else {
+            bstr_ = nullptr;
+        }
+    }
+    ~bstr_t() { if (bstr_) SysFreeString(bstr_); }
+
+    bstr_t(const bstr_t&) = delete;
+    bstr_t& operator=(const bstr_t&) = delete;
+
+    operator BSTR() const { return bstr_; }
+    BSTR GetBSTR() const { return bstr_; }
+
+private:
+    BSTR bstr_;
+};
+
+// Alias for compatibility
+using _bstr_t = bstr_t;
 #endif
+// clang-format on
 #elif defined(__linux__) || defined(__ANDROID__)
 #include <dirent.h>
 #include <limits.h>

@@ -78,11 +78,13 @@ auto MD5::finalize() -> std::string {
         // Padding
         buffer_.push_back(static_cast<std::byte>(0x80));
 
-        // Adjust buffer to final size
-        const usize padding_needed =
-            (56 <= buffer_.size() && buffer_.size() < 64)
-                ? (64 + 56 - buffer_.size())
-                : (56 - buffer_.size());
+        // Calculate padding needed to reach 56 bytes mod 64
+        usize padding_needed;
+        if (buffer_.size() <= 56) {
+            padding_needed = 56 - buffer_.size();
+        } else {
+            padding_needed = 64 + 56 - buffer_.size();
+        }
 
         buffer_.resize(buffer_.size() + padding_needed,
                        static_cast<std::byte>(0));
@@ -93,12 +95,11 @@ auto MD5::finalize() -> std::string {
                 static_cast<std::byte>((count_ >> (i * 8)) & 0xff));
         }
 
-        // Process final block
-        if (buffer_.size() == 64) {
-            processBlock(std::span<const std::byte, 64>(buffer_.data(), 64));
-        } else {
-            spdlog::error("MD5: Buffer size incorrect during finalization");
-            throw MD5Exception("Buffer size incorrect during finalization");
+        // Process blocks - should be either 1 or 2 blocks
+        usize num_blocks = buffer_.size() / 64;
+        for (usize block_idx = 0; block_idx < num_blocks; ++block_idx) {
+            processBlock(std::span<const std::byte, 64>(
+                buffer_.data() + block_idx * 64, 64));
         }
 
         // Format result

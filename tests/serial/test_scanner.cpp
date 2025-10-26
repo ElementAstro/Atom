@@ -8,6 +8,8 @@
 #include <string>
 #include <vector>
 
+using atom::serial::SerialPortScanner;
+
 // Platform-specific mocking setup
 #ifdef _WIN32
 // Windows mock declarations
@@ -86,6 +88,29 @@ protected:
             });
     }
 
+    // Helper to extract vector from Result variant
+    std::vector<SerialPortScanner::PortInfo> getPortsFromResult(
+        const SerialPortScanner::Result<
+            std::vector<SerialPortScanner::PortInfo>>& result) {
+        if (std::holds_alternative<std::vector<SerialPortScanner::PortInfo>>(
+                result)) {
+            return std::get<std::vector<SerialPortScanner::PortInfo>>(result);
+        }
+        return {};
+    }
+
+    // Helper to extract optional from Result variant
+    std::optional<SerialPortScanner::PortDetails> getDetailsFromResult(
+        const SerialPortScanner::Result<
+            std::optional<SerialPortScanner::PortDetails>>& result) {
+        if (std::holds_alternative<
+                std::optional<SerialPortScanner::PortDetails>>(result)) {
+            return std::get<std::optional<SerialPortScanner::PortDetails>>(
+                result);
+        }
+        return std::nullopt;
+    }
+
     std::unique_ptr<SerialPortScanner> scanner;
 };
 
@@ -145,7 +170,8 @@ TEST_F(SerialPortScannerTest, ListAvailablePortsWindows) {
     // Setup mock expectations for Windows API calls
 
     // Actual test - will use the mocked Windows API functions
-    auto ports = scanner->list_available_ports();
+    auto result = scanner->list_available_ports();
+    auto ports = getPortsFromResult(result);
 
     // Verify results based on mock data
     EXPECT_FALSE(ports.empty());
@@ -166,7 +192,8 @@ TEST_F(SerialPortScannerTest, ListAvailablePortsLinux) {
     // Setup mock expectations for libudev calls
 
     // Actual test - will use the mocked libudev functions
-    auto ports = scanner->list_available_ports();
+    auto result = scanner->list_available_ports();
+    auto ports = getPortsFromResult(result);
 
     // Verify results based on mock data
     EXPECT_FALSE(ports.empty());
@@ -189,10 +216,11 @@ TEST_F(SerialPortScannerTest, GetPortDetailsExistingPort) {
 
     // Test with a port name that should exist in our mock
 #ifdef _WIN32
-    auto details = scanner->get_port_details("COM3");
+    auto result = scanner->get_port_details("COM3");
 #else
-    auto details = scanner->get_port_details("/dev/ttyUSB0");
+    auto result = scanner->get_port_details("/dev/ttyUSB0");
 #endif
+    auto details = getDetailsFromResult(result);
 
     // Verify we got details back
     ASSERT_TRUE(details.has_value());
@@ -207,7 +235,8 @@ TEST_F(SerialPortScannerTest, GetPortDetailsExistingPort) {
 // Test getting port details for a non-existing port
 TEST_F(SerialPortScannerTest, GetPortDetailsNonExistingPort) {
     // Test with a port name that shouldn't exist
-    auto details = scanner->get_port_details("NON_EXISTENT_PORT");
+    auto result = scanner->get_port_details("NON_EXISTENT_PORT");
+    auto details = getDetailsFromResult(result);
 
     // Verify we get an empty optional
     EXPECT_FALSE(details.has_value());
@@ -218,7 +247,8 @@ TEST_F(SerialPortScannerTest, ListPortsWithoutCH340Highlighting) {
     // Mock setup
 
     // Call with highlight_ch340 set to false
-    auto ports = scanner->list_available_ports(false);
+    auto result = scanner->list_available_ports(false);
+    auto ports = getPortsFromResult(result);
 
     // Verify all ports have is_ch340 set to false
     for (const auto& port : ports) {
@@ -232,7 +262,8 @@ TEST_F(SerialPortScannerTest, NoAvailablePorts) {
     // Mock setup to return no ports
 
     // Call list_available_ports
-    auto ports = scanner->list_available_ports();
+    auto result = scanner->list_available_ports();
+    auto ports = getPortsFromResult(result);
 
     // Verify an empty vector is returned
     EXPECT_TRUE(ports.empty());
@@ -255,11 +286,13 @@ TEST_F(SerialPortScannerTest, CH340DetectionWithMalformedInput) {
 // Integration-style test for the full port scanning workflow
 TEST_F(SerialPortScannerTest, FullPortScanningWorkflow) {
     // 1. List available ports
-    auto ports = scanner->list_available_ports();
+    auto result = scanner->list_available_ports();
+    auto ports = getPortsFromResult(result);
 
     // 2. For each port, get detailed information
     for (const auto& port : ports) {
-        auto details = scanner->get_port_details(port.device);
+        auto details_result = scanner->get_port_details(port.device);
+        auto details = getDetailsFromResult(details_result);
 
         // Verify details are available
         ASSERT_TRUE(details.has_value());
@@ -275,9 +308,4 @@ TEST_F(SerialPortScannerTest, FullPortScanningWorkflow) {
             EXPECT_EQ(details->ch340_model, port.ch340_model);
         }
     }
-}
-
-int main(int argc, char** argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
 }

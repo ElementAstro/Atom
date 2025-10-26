@@ -10,11 +10,20 @@
         "zlib",
         "sqlite3",
         "fmt",
+        "spdlog",
         "readline",
         "pybind11",
         "tbb",
         "minizip-ng",
-        "opencv",
+        {
+            "name": "opencv",
+            "default-features": true,
+            "features": ["contrib"]
+        },
+        "curl",
+        "libuv",
+        "pugixml",
+        "tinyxml2",
         {
             "name": "boost",
             "default-features": true

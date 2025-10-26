@@ -72,7 +72,7 @@ repos:
       - id: markdownlint
         args: ['--fix']
         files: \.md$
-        exclude: ^(build/|vcpkg_installed/)
+        exclude: ^(build/|vcpkg_installed/|\.augment/rules/|llmdoc/|\.claude/|example/async/README\.md|README\.md)
 
   # YAML linting
   - repo: https://github.com/adrienverge/yamllint

@@ -2,8 +2,8 @@
 #include <gtest/gtest.h>
 #include <future>
 
-#include "qdatetime.hpp"
-#include "qtimezone.hpp"
+#include "atom/utils/time/qdatetime.hpp"
+#include "atom/utils/time/qtimezone.hpp"
 
 namespace atom::utils::tests {
 

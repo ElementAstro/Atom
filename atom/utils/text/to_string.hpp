@@ -22,26 +22,26 @@
 #include <utility>
 #include <variant>
 
+// Include concept definitions from atom/meta/concept.hpp
+#include "atom/meta/concept.hpp"
+
 namespace atom::utils {
 
-/**
- * @brief Concept for string types.
- * @details This concept checks if a type is a string, const char*, char*, or
- * string_view.
- */
-template <typename T>
-concept StringType = std::is_same_v<std::decay_t<T>, std::string> ||
-                     std::is_same_v<std::decay_t<T>, const char*> ||
-                     std::is_same_v<std::decay_t<T>, char*> ||
-                     std::is_same_v<std::decay_t<T>, std::string_view>;
+// Import concepts from global namespace to avoid redefinition conflicts
+// These concepts are defined in atom/meta/concept.hpp
+using ::SmartPointer;
+using ::StringType;
 
+// Note: RangeContainer concept is renamed from Container to avoid conflict with
+// atom/utils/debug/print.hpp. This version uses std::ranges::range while
+// print.hpp uses iterator-based definition.
 /**
- * @brief Concept for container types with C++20 syntax.
+ * @brief Concept for range-based container types with C++20 syntax.
  * @details This concept checks if a type has begin and end functions compatible
  * with std::ranges.
  */
 template <typename T>
-concept Container = std::ranges::range<T> && !StringType<T>;
+concept RangeContainer = std::ranges::range<T> && !StringType<T>;
 
 /**
  * @brief Concept for map types with C++20 syntax.
@@ -49,7 +49,7 @@ concept Container = std::ranges::range<T> && !StringType<T>;
  * range.
  */
 template <typename T>
-concept MapType = Container<T> && requires {
+concept MapType = RangeContainer<T> && requires {
     typename T::key_type;
     typename T::mapped_type;
 };
@@ -67,16 +67,6 @@ concept PointerType = std::is_pointer_v<T> && !StringType<T>;
  */
 template <typename T>
 concept EnumType = std::is_enum_v<T>;
-
-/**
- * @brief Concept for smart pointer types.
- * @details This concept checks if a type has dereference and get methods.
- */
-template <typename T>
-concept SmartPointer = requires(T smartPtr) {
-    *smartPtr;
-    { smartPtr.get() } -> std::convertible_to<void*>;
-};
 
 /**
  * @brief Concept for types that can be converted to a string using
@@ -114,9 +104,24 @@ public:
 
 /**
  * @brief Forward declaration for general toString to handle recursive cases
+ * @note Constraints match the actual implementation to avoid ambiguity
  */
 template <typename T>
+    requires(!StringType<T> && !RangeContainer<T> && !PointerType<T> &&
+             !EnumType<T> && !SmartPointer<T>)
 auto toString(const T& value) -> std::string;
+
+/**
+ * @brief Forward declaration for container toString (1-parameter version)
+ */
+template <RangeContainer T>
+auto toString(const T& container) -> std::string;
+
+/**
+ * @brief Forward declaration for std::pair toString
+ */
+template <typename T1, typename T2>
+auto toString(const std::pair<T1, T2>& pair) -> std::string;
 
 /**
  * @brief Converts a string type to std::string.
@@ -179,49 +184,6 @@ constexpr auto toString(T value) -> std::string {
 }
 
 /**
- * @brief Converts a pointer type to std::string.
- * @tparam T The type of the input pointer.
- * @param ptr The input pointer to be converted.
- * @return The converted std::string.
- * @throws ToStringException if conversion fails
- */
-template <PointerType T>
-auto toString(T ptr) -> std::string {
-    try {
-        if (ptr) {
-            return std::format("Pointer({}, {})", static_cast<const void*>(ptr),
-                               toString(*ptr));
-        }
-        return "nullptr";
-    } catch (const std::exception& e) {
-        return std::format("Pointer({}) [Error: {}]",
-                           static_cast<const void*>(ptr), e.what());
-    }
-}
-
-/**
- * @brief Converts a smart pointer type to std::string.
- * @tparam T The type of the input smart pointer.
- * @param ptr The input smart pointer to be converted.
- * @return The converted std::string.
- */
-template <SmartPointer T>
-auto toString(const T& ptr) -> std::string {
-    try {
-        if (ptr) {
-            return std::format("SmartPointer({}, {})",
-                               static_cast<const void*>(ptr.get()),
-                               toString(*ptr));
-        }
-        return "nullptr";
-    } catch (const std::exception& e) {
-        return std::format("SmartPointer({}) [Error: {}]",
-                           ptr ? static_cast<const void*>(ptr.get()) : nullptr,
-                           e.what());
-    }
-}
-
-/**
  * @brief Converts a container type to std::string with specified separator.
  * @tparam T The type of the input container.
  * @param container The input container to be converted.
@@ -229,7 +191,7 @@ auto toString(const T& ptr) -> std::string {
  * @return The converted std::string.
  * @throws ToStringException if conversion fails
  */
-template <Container T>
+template <RangeContainer T>
 auto toString(const T& container, std::string_view separator) -> std::string {
     try {
         std::string result;
@@ -286,9 +248,52 @@ auto toString(const T& container, std::string_view separator) -> std::string {
  * @return The converted std::string.
  * @throws ToStringException if conversion fails
  */
-template <Container T>
+template <RangeContainer T>
 auto toString(const T& container) -> std::string {
     return toString(container, ", ");
+}
+
+/**
+ * @brief Converts a pointer type to std::string.
+ * @tparam T The type of the input pointer.
+ * @param ptr The input pointer to be converted.
+ * @return The converted std::string.
+ * @throws ToStringException if conversion fails
+ */
+template <PointerType T>
+auto toString(T ptr) -> std::string {
+    try {
+        if (ptr) {
+            return std::format("Pointer({}, {})", static_cast<const void*>(ptr),
+                               toString(*ptr));
+        }
+        return "nullptr";
+    } catch (const std::exception& e) {
+        return std::format("Pointer({}) [Error: {}]",
+                           static_cast<const void*>(ptr), e.what());
+    }
+}
+
+/**
+ * @brief Converts a smart pointer type to std::string.
+ * @tparam T The type of the input smart pointer.
+ * @param ptr The input smart pointer to be converted.
+ * @return The converted std::string.
+ */
+template <SmartPointer T>
+auto toString(const T& ptr) -> std::string {
+    try {
+        if (ptr) {
+            return std::format("SmartPointer({}, {})",
+                               static_cast<const void*>(ptr.get()),
+                               toString(*ptr));
+        }
+        return "nullptr";
+    } catch (const std::exception& e) {
+        return std::format("SmartPointer({}) [Error: {}]",
+                           ptr ? static_cast<const void*>(ptr.get()) : nullptr,
+                           e.what());
+    }
 }
 
 /**
@@ -299,7 +304,7 @@ auto toString(const T& container) -> std::string {
  * @throws ToStringException if conversion fails
  */
 template <typename T>
-    requires(!StringType<T> && !Container<T> && !PointerType<T> &&
+    requires(!StringType<T> && !RangeContainer<T> && !PointerType<T> &&
              !EnumType<T> && !SmartPointer<T>)
 auto toString(const T& value) -> std::string {
     try {
@@ -357,9 +362,9 @@ auto joinCommandLine(const Args&... args) -> std::string {
  * @return The converted std::string.
  * @throws ToStringException if conversion fails
  */
-template <Container T>
-auto toStringArray(const T& array, std::string_view separator = " ")
-    -> std::string {
+template <RangeContainer T>
+auto toStringArray(const T& array,
+                   std::string_view separator = " ") -> std::string {
     try {
         std::string result;
         result.reserve(std::ranges::size(array) * 8);
@@ -486,8 +491,8 @@ auto tupleToStringImpl(const Tuple& tpl, std::index_sequence<I...>,
  * @throws ToStringException if conversion fails
  */
 template <typename... Args>
-auto toString(const std::tuple<Args...>& tpl, std::string_view separator = ", ")
-    -> std::string {
+auto toString(const std::tuple<Args...>& tpl,
+              std::string_view separator = ", ") -> std::string {
     return tupleToStringImpl(tpl, std::index_sequence_for<Args...>(),
                              separator);
 }
@@ -540,6 +545,24 @@ auto toString(const std::variant<Ts...>& var) -> std::string {
     } catch (const std::exception& e) {
         throw ToStringException(
             std::format("Variant conversion failed: {}", e.what()));
+    }
+}
+
+/**
+ * @brief Converts a std::pair to std::string.
+ * @tparam T1 The type of the first element.
+ * @tparam T2 The type of the second element.
+ * @param pair The input pair to be converted.
+ * @return The converted std::string in format "(first, second)".
+ * @throws ToStringException if conversion fails
+ */
+template <typename T1, typename T2>
+auto toString(const std::pair<T1, T2>& pair) -> std::string {
+    try {
+        return "(" + toString(pair.first) + ", " + toString(pair.second) + ")";
+    } catch (const std::exception& e) {
+        throw ToStringException(
+            std::format("Pair conversion failed: {}", e.what()));
     }
 }
 

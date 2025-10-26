@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "atom/algorithm/rust_numeric.hpp"
+#include "atom/error/exception.hpp"
 #include "atom/utils/random/random.hpp"
 
 #ifdef ATOM_USE_BOOST
@@ -37,13 +38,13 @@ concept WeightType = std::floating_point<T> || std::integral<T>;
 /**
  * @brief Exception class for weight-related errors
  */
-class WeightError : public std::runtime_error {
+class WeightError : public error::RuntimeError {
 public:
     explicit WeightError(
         const std::string& message,
         const std::source_location& loc = std::source_location::current())
-        : std::runtime_error(
-              std::format("{}:{}: {}", loc.file_name(), loc.line(), message)) {}
+        : error::RuntimeError(loc.file_name(), loc.line(), loc.function_name(),
+                              message) {}
 };
 
 /**
@@ -321,8 +322,8 @@ public:
          * @param n Number of samples to draw
          * @return Vector of sampled indices
          */
-        [[nodiscard]] auto sample(std::span<const T> weights, usize n) const
-            -> std::vector<usize> {
+        [[nodiscard]] auto sample(std::span<const T> weights,
+                                  usize n) const -> std::vector<usize> {
             if (weights.empty()) {
                 throw WeightError("Cannot sample from empty weights");
             }
@@ -393,9 +394,8 @@ public:
         }
 
     private:
-        [[nodiscard]] auto sampleUniqueRejection(std::span<const T> weights,
-                                                 usize n) const
-            -> std::vector<usize> {
+        [[nodiscard]] auto sampleUniqueRejection(
+            std::span<const T> weights, usize n) const -> std::vector<usize> {
             std::vector<usize> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 
@@ -440,9 +440,8 @@ public:
             return results;
         }
 
-        [[nodiscard]] auto sampleUniqueShuffle(std::span<const T> weights,
-                                               usize n) const
-            -> std::vector<usize> {
+        [[nodiscard]] auto sampleUniqueShuffle(
+            std::span<const T> weights, usize n) const -> std::vector<usize> {
             std::vector<usize> indices(weights.size());
             std::iota(indices.begin(), indices.end(), 0);
 

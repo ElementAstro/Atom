@@ -7,7 +7,18 @@
 #include <string>
 #include <vector>
 #include "atom/io/core/io.hpp"
+
+// nlohmann/json is optional - only include if available
+#ifdef __has_include
+#if __has_include(<nlohmann/json.hpp>)
 #include <nlohmann/json.hpp>
+#define HAS_NLOHMANN_JSON 1
+#else
+#define HAS_NLOHMANN_JSON 0
+#endif
+#else
+#define HAS_NLOHMANN_JSON 0
+#endif
 
 namespace fs = std::filesystem;
 
@@ -346,11 +357,18 @@ TEST_F(IoTest, JsonWalk) {
     std::string json_str = atom::io::jwalk(walk_dir);
     EXPECT_FALSE(json_str.empty());
 
-    // Parse JSON and verify structure
+#if HAS_NLOHMANN_JSON
+    // Parse JSON and verify structure (only if nlohmann/json is available)
     auto json = nlohmann::json::parse(json_str);
     EXPECT_EQ(json["path"], walk_dir.generic_string());
     EXPECT_TRUE(json.contains("directories"));
     EXPECT_TRUE(json.contains("files"));
+#else
+    // Without nlohmann/json, just verify the string is not empty and contains
+    // expected paths
+    EXPECT_NE(json_str.find(walk_dir.generic_string()), std::string::npos);
+    EXPECT_NE(json_str.find("file1.txt"), std::string::npos);
+#endif
 
     // Test with non-existent directory
     EXPECT_TRUE(atom::io::jwalk(non_existent_path).empty());
@@ -729,7 +747,8 @@ TEST_F(IoTest, CreateDirectoriesRecursiveDryRun) {
     options.dryRun = true;
     options.verbose = false;
 
-    EXPECT_TRUE(atom::io::createDirectoriesRecursive(base_dir, subdirs, options));
+    EXPECT_TRUE(
+        atom::io::createDirectoriesRecursive(base_dir, subdirs, options));
 
     // Directories should NOT be created in dry run mode
     EXPECT_FALSE(fs::exists(base_dir / "dir1"));
@@ -751,7 +770,8 @@ TEST_F(IoTest, RemoveDirectoriesRecursiveDryRun) {
     options.dryRun = true;
     options.verbose = false;
 
-    EXPECT_TRUE(atom::io::removeDirectoriesRecursive(base_dir, subdirs, options));
+    EXPECT_TRUE(
+        atom::io::removeDirectoriesRecursive(base_dir, subdirs, options));
 
     // Directories should still exist in dry run mode
     EXPECT_TRUE(fs::exists(base_dir / "dir1"));
@@ -768,10 +788,13 @@ TEST_F(IoTest, DirectoryOperationsWithDelay) {
     options.verbose = false;
 
     auto start = std::chrono::high_resolution_clock::now();
-    EXPECT_TRUE(atom::io::createDirectoriesRecursive(base_dir, subdirs, options));
+    EXPECT_TRUE(
+        atom::io::createDirectoriesRecursive(base_dir, subdirs, options));
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
 
     // Should take at least delay * number of directories
     EXPECT_GE(duration, 50);  // At least one delay occurred
@@ -844,7 +867,8 @@ TEST_F(IoTest, MoveAndRenameDirectory) {
     EXPECT_FALSE(atom::io::moveDirectory(renamed_dir, ""));
 
     // Test with non-existent source
-    EXPECT_FALSE(atom::io::moveDirectory(non_existent_path, test_dir / "new_dir"));
+    EXPECT_FALSE(
+        atom::io::moveDirectory(non_existent_path, test_dir / "new_dir"));
 }
 
 // Test edge cases for file operations
@@ -899,7 +923,8 @@ TEST_F(IoTest, ConcurrentFileOperations) {
     // Test concurrent file creation
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([this, i, &success_count]() {
-            fs::path file = test_dir / ("concurrent_file_" + std::to_string(i) + ".txt");
+            fs::path file =
+                test_dir / ("concurrent_file_" + std::to_string(i) + ".txt");
             std::ofstream ofs(file);
             ofs << "Thread " << i << " content";
             ofs.close();
@@ -921,7 +946,8 @@ TEST_F(IoTest, ConcurrentFileOperations) {
 
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([this, i, &success_count]() {
-            fs::path file = test_dir / ("concurrent_file_" + std::to_string(i) + ".txt");
+            fs::path file =
+                test_dir / ("concurrent_file_" + std::to_string(i) + ".txt");
             std::ifstream ifs(file);
             std::string content;
             std::getline(ifs, content);
@@ -967,13 +993,9 @@ TEST_F(IoTest, VeryLongPathHandling) {
 TEST_F(IoTest, SpecialCharactersInFilenames) {
     // Test various special characters that should be valid
     std::vector<std::string> valid_names = {
-        "file_with_underscore.txt",
-        "file-with-dash.txt",
-        "file.multiple.dots.txt",
-        "file with spaces.txt",
-        "file(with)parens.txt",
-        "file[with]brackets.txt"
-    };
+        "file_with_underscore.txt", "file-with-dash.txt",
+        "file.multiple.dots.txt",   "file with spaces.txt",
+        "file(with)parens.txt",     "file[with]brackets.txt"};
 
     for (const auto& name : valid_names) {
         fs::path file = test_dir / name;
@@ -986,12 +1008,8 @@ TEST_F(IoTest, SpecialCharactersInFilenames) {
     // Test invalid characters (platform-specific)
 #ifdef _WIN32
     std::vector<std::string> invalid_names = {
-        "file<with>angles.txt",
-        "file:with:colons.txt",
-        "file|with|pipes.txt",
-        "file?with?questions.txt",
-        "file*with*asterisks.txt"
-    };
+        "file<with>angles.txt", "file:with:colons.txt", "file|with|pipes.txt",
+        "file?with?questions.txt", "file*with*asterisks.txt"};
 #else
     std::vector<std::string> invalid_names = {
         "file/with/slashes.txt"  // Forward slash is path separator
@@ -999,7 +1017,8 @@ TEST_F(IoTest, SpecialCharactersInFilenames) {
 #endif
 
     for (const auto& name : invalid_names) {
-        EXPECT_FALSE(atom::io::isFileNameValid(name)) << "Should be invalid: " << name;
+        EXPECT_FALSE(atom::io::isFileNameValid(name))
+            << "Should be invalid: " << name;
     }
 }
 
@@ -1009,9 +1028,10 @@ TEST_F(IoTest, ReadOnlyFileHandling) {
     createTestFile(readonly_file, "Read-only content");
 
     // Make file read-only
-    fs::permissions(readonly_file,
-                   fs::perms::owner_read | fs::perms::group_read | fs::perms::others_read,
-                   fs::perm_options::replace);
+    fs::permissions(
+        readonly_file,
+        fs::perms::owner_read | fs::perms::group_read | fs::perms::others_read,
+        fs::perm_options::replace);
 
     // Test that we can read the file
     EXPECT_TRUE(atom::io::isFileExists(readonly_file));
@@ -1023,9 +1043,8 @@ TEST_F(IoTest, ReadOnlyFileHandling) {
     ofs.close();
 
     // Restore write permissions for cleanup
-    fs::permissions(readonly_file,
-                   fs::perms::owner_all,
-                   fs::perm_options::replace);
+    fs::permissions(readonly_file, fs::perms::owner_all,
+                    fs::perm_options::replace);
 
     // File should still exist
     EXPECT_TRUE(fs::exists(readonly_file));
@@ -1103,13 +1122,11 @@ TEST_F(IoTest, BinaryFileOperations) {
     fs::path binary_file = test_dir / "binary.dat";
 
     // Create binary file with null bytes
-    std::vector<char> binary_data = {static_cast<char>(0x00),
-                                     static_cast<char>(0x01),
-                                     static_cast<char>(0x02),
-                                     static_cast<char>(0xFF),
-                                     static_cast<char>(0xFE),
-                                     static_cast<char>(0x00),
-                                     static_cast<char>(0x7F)};
+    std::vector<char> binary_data = {
+        static_cast<char>(0x00), static_cast<char>(0x01),
+        static_cast<char>(0x02), static_cast<char>(0xFF),
+        static_cast<char>(0xFE), static_cast<char>(0x00),
+        static_cast<char>(0x7F)};
     std::ofstream ofs(binary_file, std::ios::binary);
     ofs.write(binary_data.data(), binary_data.size());
     ofs.close();
@@ -1127,7 +1144,9 @@ TEST_F(IoTest, BinaryFileOperations) {
     ifs.read(read_data.data(), read_data.size());
     ifs.close();
 
-    EXPECT_EQ(std::memcmp(binary_data.data(), read_data.data(), binary_data.size()), 0);
+    EXPECT_EQ(
+        std::memcmp(binary_data.data(), read_data.data(), binary_data.size()),
+        0);
 }
 
 // Test error handling for non-existent paths
@@ -1190,25 +1209,25 @@ TEST_F(IoTest, ErrorHandlingPermissionIssues) {
     EXPECT_FALSE(ofs.is_open());
 
     // Restore permissions for cleanup
-    fs::permissions(protected_dir, fs::perms::owner_all, fs::perm_options::replace);
+    fs::permissions(protected_dir, fs::perms::owner_all,
+                    fs::perm_options::replace);
 }
 
 // Test path traversal prevention
 TEST_F(IoTest, PathTraversalPrevention) {
     // Test that path traversal attempts are handled safely
     std::vector<std::string> traversal_attempts = {
-        "../../../etc/passwd",
-        "..\\..\\..\\windows\\system32",
-        "subdir/../../outside.txt"
-    };
+        "../../../etc/passwd", "..\\..\\..\\windows\\system32",
+        "subdir/../../outside.txt"};
 
     for (const auto& attempt : traversal_attempts) {
         fs::path attempted_path = test_dir / attempt;
 
-        // Verify the canonical path is still within test_dir or handle appropriately
-        // This test ensures we're aware of path traversal
+        // Verify the canonical path is still within test_dir or handle
+        // appropriately This test ensures we're aware of path traversal
         EXPECT_NO_THROW({
-            [[maybe_unused]] auto canonical = fs::weakly_canonical(attempted_path);
+            [[maybe_unused]] auto canonical =
+                fs::weakly_canonical(attempted_path);
         });
     }
 }
@@ -1348,7 +1367,6 @@ TEST_F(IoTest, CircularSymlinkDetection) {
     fs::create_symlink(link_a, link_b, ec);
 
     // Operations on circular symlinks should handle gracefully
-    EXPECT_NO_THROW({
-        [[maybe_unused]] bool exists = atom::io::isFileExists(link_a);
-    });
+    EXPECT_NO_THROW(
+        { [[maybe_unused]] bool exists = atom::io::isFileExists(link_a); });
 }

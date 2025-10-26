@@ -2,25 +2,30 @@
 type: "manual"
 ---
 
-Build the complete project from scratch and systematically fix all encountered issues. This should include:
+# Complete Atom Project Build
 
-1. **Initial Assessment**: First analyze the current project structure and identify the build system being used (e.g.,  CMake, XMake etc.)
+Build the entire Atom project from scratch using the CMake build system.
+During the build process:
 
-2. **Dependency Resolution**: Install all required dependencies and resolve any version conflicts or missing packages
+1. Execute a complete build of all project components
+2. Identify and document every error, warning, or build failure
+3. For each issue encountered:
+   - Investigate the root cause thoroughly using available tools
+   - Implement a proper, complete fix (no placeholders, no TODOs)
+   - Verify the fix resolves the issue
+4. Continue iterating through the build-fix cycle until the entire project
+   builds successfully with zero errors
+5. Do not skip any errors or leave any issues unresolved
+6. Provide a summary of all issues found and how each was resolved
 
-3. **Build Process**: Execute the full build process using the appropriate build commands for the project type
+## Requirements
 
-4. **Error Identification**: Capture and categorize all build errors, warnings, and failures that occur during the build process
+- Use the existing CMake configuration in the project
+- Apply real, working solutions only - no temporary workarounds
+- Ensure all downstream changes are made (update all callers, tests)
+- Verify the final build completes successfully before concluding
 
-5. **Systematic Fixes**: For each identified issue:
-   - Analyze the root cause of the problem
-   - Implement the appropriate fix (code changes, configuration updates, dependency adjustments)
-   - Verify the fix resolves the specific issue without introducing new problems
+## Goal
 
-6. **Iterative Building**: Re-run the build process after each fix to ensure progress and identify any remaining issues
-
-7. **Final Verification**: Ensure the complete project builds successfully without errors or critical warnings
-
-8. **Testing**: If applicable, run any existing tests to verify the build produces a functional application
-
-Please provide detailed feedback on each issue encountered and the steps taken to resolve it, so I can track progress and understand the solutions implemented.
+A fully functional, clean build of the entire Atom project with all
+compilation issues genuinely resolved.

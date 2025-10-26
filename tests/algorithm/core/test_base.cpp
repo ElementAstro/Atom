@@ -304,7 +304,7 @@ TEST(StaticBase64Test, CompileTimeDecode) {
 }
 */
 
-TEST(PerformanceTest, Base64EncodePerformance) {
+TEST(Base64PerformanceTest, Base64EncodePerformance) {
     auto largeData = generateRandomBytes(1000000);
     std::string_view dataView(reinterpret_cast<const char*>(largeData.data()),
                               largeData.size());

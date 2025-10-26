@@ -190,13 +190,13 @@ auto KMP::search(std::string_view text) const -> std::vector<int> {
                      occurrences.size());
     } catch (const std::exception& e) {
         spdlog::error("Exception in KMP::search: {}", e.what());
-        throw std::runtime_error(std::string("KMP search failed: ") + e.what());
+        THROW_RUNTIME_ERROR(std::string("KMP search failed: ") + e.what());
     }
     return occurrences;
 }
 
-auto KMP::searchParallel(std::string_view text, size_t chunk_size) const
-    -> std::vector<int> {
+auto KMP::searchParallel(std::string_view text,
+                         size_t chunk_size) const -> std::vector<int> {
     if (text.empty() || pattern_.empty() || text.length() < pattern_.length()) {
         return {};
     }
@@ -285,8 +285,8 @@ auto KMP::searchParallel(std::string_view text, size_t chunk_size) const
         return occurrences;
     } catch (const std::exception& e) {
         spdlog::error("Exception in KMP::searchParallel: {}", e.what());
-        throw std::runtime_error(std::string("KMP parallel search failed: ") +
-                                 e.what());
+        THROW_RUNTIME_ERROR(std::string("KMP parallel search failed: ") +
+                            e.what());
     }
 }
 
@@ -633,7 +633,7 @@ auto BoyerMoore::searchOptimized(std::string_view text) const
             occurrences.size());
     } catch (const std::exception& e) {
         spdlog::error("Exception in BoyerMoore::searchOptimized: {}", e.what());
-        throw std::runtime_error(
+        THROW_RUNTIME_ERROR(
             std::string("BoyerMoore optimized search failed: ") + e.what());
     }
 

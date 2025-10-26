@@ -14,37 +14,34 @@ Description: Implementation of thread-safe error handling system
 
 #include "error_handler.hpp"
 #include <algorithm>
+#include <exception>
 #include <iostream>
 #include <sstream>
-#include <exception>
 
 namespace atom::error {
 
 // ErrorReporter implementation
 ErrorReporter::ErrorReporter()
-    : running_(false)
-    , maxQueueSize_(10000)
-    , aggregationStrategy_(AggregationStrategy::None)
-    , aggregationWindow_(std::chrono::milliseconds(1000))
-    , totalErrors_(0)
-    , processedErrors_(0)
-    , filteredErrors_(0)
-    , droppedErrors_(0) {
-    
+    : running_(false),
+      maxQueueSize_(10000),
+      aggregationStrategy_(AggregationStrategy::None),
+      aggregationWindow_(std::chrono::milliseconds(1000)),
+      totalErrors_(0),
+      processedErrors_(0),
+      filteredErrors_(0),
+      droppedErrors_(0) {
     // Initialize severity stats
     for (int i = 0; i <= static_cast<int>(ErrorSeverity::Fatal); ++i) {
         severityStats_[static_cast<ErrorSeverity>(i)] = 0;
     }
-    
+
     // Initialize category stats
     for (int i = 0; i <= static_cast<int>(ErrorCategory::External); ++i) {
         categoryStats_[static_cast<ErrorCategory>(i)] = 0;
     }
 }
 
-ErrorReporter::~ErrorReporter() {
-    stop();
-}
+ErrorReporter::~ErrorReporter() { stop(); }
 
 void ErrorReporter::start() {
     std::lock_guard<std::mutex> lock(queueMutex_);
@@ -57,36 +54,36 @@ void ErrorReporter::start() {
 void ErrorReporter::stop() {
     running_ = false;
     queueCondition_.notify_all();
-    
+
     if (processingThread_.joinable()) {
         processingThread_.join();
     }
 }
 
-auto ErrorReporter::isRunning() const -> bool {
-    return running_.load();
-}
+auto ErrorReporter::isRunning() const -> bool { return running_.load(); }
 
 void ErrorReporter::reportError(std::shared_ptr<ErrorContext> context) {
-    if (!context) return;
-    
+    if (!context)
+        return;
+
     totalErrors_++;
-    
+
     std::unique_lock<std::mutex> lock(queueMutex_);
-    
+
     // Check queue size limit
     if (errorQueue_.size() >= maxQueueSize_) {
         droppedErrors_++;
         return;
     }
-    
+
     errorQueue_.push(context);
     lock.unlock();
-    
+
     queueCondition_.notify_one();
 }
 
-void ErrorReporter::addHandler(const std::string& name, ErrorHandlerCallback handler) {
+void ErrorReporter::addHandler(const std::string& name,
+                               ErrorHandlerCallback handler) {
     std::unique_lock<std::shared_mutex> lock(handlersMutex_);
     handlers_[name] = std::move(handler);
 }
@@ -116,25 +113,26 @@ void ErrorReporter::setAggregationWindow(std::chrono::milliseconds window) {
     aggregationWindow_ = window;
 }
 
-auto ErrorReporter::getStatistics() const -> std::unordered_map<std::string, int> {
+auto ErrorReporter::getStatistics() const
+    -> std::unordered_map<std::string, int> {
     std::unordered_map<std::string, int> stats;
-    
+
     stats["total_errors"] = totalErrors_.load();
     stats["processed_errors"] = processedErrors_.load();
     stats["filtered_errors"] = filteredErrors_.load();
     stats["dropped_errors"] = droppedErrors_.load();
     stats["queue_size"] = static_cast<int>(getQueueSize());
-    
+
     // Severity statistics
     for (const auto& [severity, count] : severityStats_) {
         stats[std::string(severityToString(severity))] = count.load();
     }
-    
+
     // Category statistics
     for (const auto& [category, count] : categoryStats_) {
         stats[std::string(categoryToString(category))] = count.load();
     }
-    
+
     return stats;
 }
 
@@ -143,11 +141,11 @@ void ErrorReporter::clearStatistics() {
     processedErrors_ = 0;
     filteredErrors_ = 0;
     droppedErrors_ = 0;
-    
+
     for (auto& [severity, count] : severityStats_) {
         count = 0;
     }
-    
+
     for (auto& [category, count] : categoryStats_) {
         count = 0;
     }
@@ -166,40 +164,40 @@ auto ErrorReporter::getQueueSize() const -> size_t {
 void ErrorReporter::processingLoop() {
     while (running_.load()) {
         std::unique_lock<std::mutex> lock(queueMutex_);
-        
-        queueCondition_.wait(lock, [this] {
-            return !errorQueue_.empty() || !running_.load();
-        });
-        
+
+        queueCondition_.wait(
+            lock, [this] { return !errorQueue_.empty() || !running_.load(); });
+
         while (!errorQueue_.empty()) {
             auto context = errorQueue_.front();
             errorQueue_.pop();
             lock.unlock();
-            
+
             processError(context);
-            
+
             lock.lock();
         }
     }
 }
 
 void ErrorReporter::processError(std::shared_ptr<ErrorContext> context) {
-    if (!context) return;
-    
+    if (!context)
+        return;
+
     // Apply filters
     if (!shouldProcess(context)) {
         filteredErrors_++;
         return;
     }
-    
+
     // Update statistics
     updateStatistics(context);
-    
+
     // Handle aggregation
     if (aggregationStrategy_ != AggregationStrategy::None) {
         aggregateError(context);
     }
-    
+
     // Call handlers
     std::shared_lock<std::shared_mutex> lock(handlersMutex_);
     for (const auto& [name, handler] : handlers_) {
@@ -207,16 +205,17 @@ void ErrorReporter::processError(std::shared_ptr<ErrorContext> context) {
             handler(context);
         } catch (const std::exception& e) {
             // Log handler error but continue processing
-            std::cerr << "Error in handler '" << name << "': " << e.what() << std::endl;
+            std::cerr << "Error in handler '" << name << "': " << e.what()
+                      << std::endl;
         }
     }
-    
+
     processedErrors_++;
 }
 
 bool ErrorReporter::shouldProcess(std::shared_ptr<ErrorContext> context) {
     std::shared_lock<std::shared_mutex> lock(handlersMutex_);
-    
+
     for (const auto& [name, filter] : filters_) {
         try {
             if (!filter(context)) {
@@ -224,10 +223,11 @@ bool ErrorReporter::shouldProcess(std::shared_ptr<ErrorContext> context) {
             }
         } catch (const std::exception& e) {
             // Log filter error but continue processing
-            std::cerr << "Error in filter '" << name << "': " << e.what() << std::endl;
+            std::cerr << "Error in filter '" << name << "': " << e.what()
+                      << std::endl;
         }
     }
-    
+
     return true;
 }
 
@@ -238,10 +238,10 @@ void ErrorReporter::updateStatistics(std::shared_ptr<ErrorContext> context) {
 
 void ErrorReporter::aggregateError(std::shared_ptr<ErrorContext> context) {
     std::lock_guard<std::mutex> lock(aggregationMutex_);
-    
+
     std::string key = getAggregationKey(context);
     auto now = std::chrono::steady_clock::now();
-    
+
     // Check if we need to flush old aggregated errors
     auto it = aggregationTimestamps_.find(key);
     if (it != aggregationTimestamps_.end()) {
@@ -260,11 +260,12 @@ void ErrorReporter::aggregateError(std::shared_ptr<ErrorContext> context) {
     } else {
         aggregationTimestamps_[key] = now;
     }
-    
+
     aggregatedErrors_[key].push_back(context);
 }
 
-std::string ErrorReporter::getAggregationKey(std::shared_ptr<ErrorContext> context) {
+std::string ErrorReporter::getAggregationKey(
+    std::shared_ptr<ErrorContext> context) {
     switch (aggregationStrategy_) {
         case AggregationStrategy::BySeverity:
             return std::string(severityToString(context->getSeverity()));
@@ -274,14 +275,16 @@ std::string ErrorReporter::getAggregationKey(std::shared_ptr<ErrorContext> conte
             return std::to_string(context->getErrorCode());
         case AggregationStrategy::ByCorrelation:
             return context->getCorrelationId();
-        case AggregationStrategy::ByTimeWindow:
-            {
-                auto timestamp = context->getTimestamp();
-                auto time_t = std::chrono::system_clock::to_time_t(timestamp);
-                auto window_seconds = std::chrono::duration_cast<std::chrono::seconds>(aggregationWindow_).count();
-                auto window_start = (time_t / window_seconds) * window_seconds;
-                return std::to_string(window_start);
-            }
+        case AggregationStrategy::ByTimeWindow: {
+            auto timestamp = context->getTimestamp();
+            auto time_t = std::chrono::system_clock::to_time_t(timestamp);
+            auto window_seconds =
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    aggregationWindow_)
+                    .count();
+            auto window_start = (time_t / window_seconds) * window_seconds;
+            return std::to_string(window_start);
+        }
         default:
             return context->getErrorId();
     }
@@ -291,7 +294,8 @@ std::string ErrorReporter::getAggregationKey(std::shared_ptr<ErrorContext> conte
 ErrorAggregator::ErrorAggregator() = default;
 
 void ErrorAggregator::addError(std::shared_ptr<ErrorContext> context) {
-    if (!context) return;
+    if (!context)
+        return;
 
     std::unique_lock<std::shared_mutex> lock(aggregationMutex_);
     std::string key = context->getCorrelationId();
@@ -306,7 +310,9 @@ auto ErrorAggregator::getAggregatedErrors(const std::string& key) const
     -> std::vector<std::shared_ptr<ErrorContext>> {
     std::shared_lock<std::shared_mutex> lock(aggregationMutex_);
     auto it = aggregatedErrors_.find(key);
-    return it != aggregatedErrors_.end() ? it->second : std::vector<std::shared_ptr<ErrorContext>>{};
+    return it != aggregatedErrors_.end()
+               ? it->second
+               : std::vector<std::shared_ptr<ErrorContext>>{};
 }
 
 auto ErrorAggregator::getAggregationKeys() const -> std::vector<std::string> {
@@ -333,12 +339,12 @@ void ErrorAggregator::clearOlderThan(std::chrono::minutes maxAge) {
     for (auto it = aggregatedErrors_.begin(); it != aggregatedErrors_.end();) {
         auto& errors = it->second;
         errors.erase(
-            std::remove_if(errors.begin(), errors.end(),
+            std::remove_if(
+                errors.begin(), errors.end(),
                 [cutoff](const std::shared_ptr<ErrorContext>& context) {
                     return context && context->getTimestamp() < cutoff;
                 }),
-            errors.end()
-        );
+            errors.end());
 
         if (errors.empty()) {
             it = aggregatedErrors_.erase(it);
@@ -348,7 +354,8 @@ void ErrorAggregator::clearOlderThan(std::chrono::minutes maxAge) {
     }
 }
 
-auto ErrorAggregator::getStatistics() const -> std::unordered_map<std::string, int> {
+auto ErrorAggregator::getStatistics() const
+    -> std::unordered_map<std::string, int> {
     std::shared_lock<std::shared_mutex> lock(aggregationMutex_);
     std::unordered_map<std::string, int> stats;
 
@@ -376,9 +383,10 @@ void GlobalErrorHandler::initialize() {
         aggregator_ = std::make_unique<ErrorAggregator>();
 
         // Add default handler that forwards to aggregator
-        reporter_->addHandler("aggregator", [this](std::shared_ptr<ErrorContext> context) {
-            aggregator_->addError(context);
-        });
+        reporter_->addHandler("aggregator",
+                              [this](std::shared_ptr<ErrorContext> context) {
+                                  aggregator_->addError(context);
+                              });
 
         reporter_->start();
         initialized_ = true;
@@ -388,6 +396,10 @@ void GlobalErrorHandler::initialize() {
 void GlobalErrorHandler::shutdown() {
     std::lock_guard<std::mutex> lock(initMutex_);
     if (initialized_.load()) {
+        // Clear any previously set global handler BEFORE stopping the reporter
+        // to avoid callbacks into dangling lambdas captured by previous
+        // tests/contexts.
+        globalHandler_ = nullptr;
         if (reporter_) {
             reporter_->stop();
             reporter_.reset();
@@ -442,10 +454,9 @@ void GlobalErrorHandler::setUnhandledExceptionHandler() {
 
 void GlobalErrorHandler::handleUnhandledException() {
     try {
-        auto context = ErrorContext::create(
-            static_cast<int>(ErrorCodeBase::Failed),
-            "Unhandled exception occurred"
-        );
+        auto context =
+            ErrorContext::create(static_cast<int>(ErrorCodeBase::Failed),
+                                 "Unhandled exception occurred");
         context->addTag("unhandled_exception");
         context->setSystemInfo("severity", "fatal");
 
@@ -460,9 +471,7 @@ void GlobalErrorHandler::handleUnhandledException() {
 thread_local std::unique_ptr<ThreadLocalErrorHandler> tlsErrorHandler;
 
 ThreadLocalErrorHandler::ThreadLocalErrorHandler()
-    : errorCount_(0)
-    , startTime_(std::chrono::steady_clock::now()) {
-}
+    : errorCount_(0), startTime_(std::chrono::steady_clock::now()) {}
 
 ThreadLocalErrorHandler::~ThreadLocalErrorHandler() = default;
 
@@ -470,14 +479,16 @@ void ThreadLocalErrorHandler::setHandler(ErrorHandlerCallback handler) {
     handler_ = std::move(handler);
 }
 
-void ThreadLocalErrorHandler::reportError(std::shared_ptr<ErrorContext> context) {
+void ThreadLocalErrorHandler::reportError(
+    std::shared_ptr<ErrorContext> context) {
     errorCount_++;
 
     if (handler_) {
         try {
             handler_(context);
         } catch (const std::exception& e) {
-            std::cerr << "Error in thread-local handler: " << e.what() << std::endl;
+            std::cerr << "Error in thread-local handler: " << e.what()
+                      << std::endl;
         }
     }
 
@@ -485,15 +496,17 @@ void ThreadLocalErrorHandler::reportError(std::shared_ptr<ErrorContext> context)
     GlobalErrorHandler::getInstance().reportError(context);
 }
 
-auto ThreadLocalErrorHandler::getStatistics() const -> std::unordered_map<std::string, int> {
+auto ThreadLocalErrorHandler::getStatistics() const
+    -> std::unordered_map<std::string, int> {
     std::unordered_map<std::string, int> stats;
     stats["thread_error_count"] = errorCount_.load();
 
     auto duration = std::chrono::steady_clock::now() - startTime_;
-    auto seconds = std::chrono::duration_cast<std::chrono::seconds>(duration).count();
+    auto seconds =
+        std::chrono::duration_cast<std::chrono::seconds>(duration).count();
     stats["thread_uptime_seconds"] = static_cast<int>(seconds);
 
     return stats;
 }
 
-} // namespace atom::error
+}  // namespace atom::error

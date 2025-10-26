@@ -1,0 +1,4 @@
+# Testing framework
+if(ATOM_BUILD_TESTS)
+    include(cmake/FindGTestFixed.cmake)
+endif()

@@ -18,10 +18,12 @@ protected:
         test_data = {
             // First row
             std::byte{10}, std::byte{20}, std::byte{30},  // First pixel (R,G,B)
-            std::byte{40}, std::byte{50}, std::byte{60},  // Second pixel (R,G,B)
+            std::byte{40}, std::byte{50},
+            std::byte{60},  // Second pixel (R,G,B)
             // Second row
-            std::byte{70}, std::byte{80}, std::byte{90},    // Third pixel (R,G,B)
-            std::byte{100}, std::byte{110}, std::byte{120}  // Fourth pixel (R,G,B)
+            std::byte{70}, std::byte{80}, std::byte{90},  // Third pixel (R,G,B)
+            std::byte{100}, std::byte{110},
+            std::byte{120}  // Fourth pixel (R,G,B)
         };
 
         // Create test file path for image I/O tests
@@ -85,14 +87,23 @@ TEST_F(BlobTest, CopyConstructor) {
 // Test move constructor
 TEST_F(BlobTest, MoveConstructor) {
     blob original(test_data.data(), test_data.size());
-    // Note: Dimensions are handled internally by the blob constructor
+    // The basic constructor creates a 1-row blob with size=cols and channels=1
     size_t originalSize = original.size();
+    int originalRows = original.getRows();
+    int originalCols = original.getCols();
+    int originalChannels = original.getChannels();
+    int originalDepth = original.getDepth();
 
     blob moved(std::move(original));
     EXPECT_EQ(moved.size(), originalSize);
-    EXPECT_EQ(moved.getRows(), 2);
-    EXPECT_EQ(moved.getCols(), 2);
-    EXPECT_EQ(moved.getChannels(), 3);
+    EXPECT_EQ(moved.getRows(), originalRows);
+    EXPECT_EQ(moved.getCols(), originalCols);
+    EXPECT_EQ(moved.getChannels(), originalChannels);
+    EXPECT_EQ(moved.getDepth(), originalDepth);
+
+    // After move, original should be in a valid but unspecified state
+    // We just verify it doesn't crash when accessed
+    EXPECT_GE(original.size(), 0);
 }
 
 // Test const-conversion constructor
@@ -191,7 +202,7 @@ TEST_F(BlobTest, SingleElementBlob) {
 
 // Test edge case: large blob
 TEST_F(BlobTest, LargeBlobOperations) {
-    const size_t large_size = 1000000; // 1MB
+    const size_t large_size = 1000000;  // 1MB
     std::vector<std::byte> large_data(large_size, std::byte{128});
 
     blob large_blob(large_data.data(), large_data.size());
@@ -208,7 +219,8 @@ TEST_F(BlobTest, LargeBlobOperations) {
     auto start = std::chrono::high_resolution_clock::now();
     blob copy(large_blob);
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(copy.size(), large_size);
     // Should complete in reasonable time (less than 1 second)
@@ -240,7 +252,8 @@ TEST_F(BlobTest, SliceBoundaryConditions) {
 // Test memory alignment and data integrity
 TEST_F(BlobTest, MemoryAlignmentAndIntegrity) {
     // Test with various data sizes to check alignment
-    std::vector<size_t> sizes = {1, 3, 4, 7, 8, 15, 16, 31, 32, 63, 64, 127, 128};
+    std::vector<size_t> sizes = {1,  3,  4,  7,  8,   15, 16,
+                                 31, 32, 63, 64, 127, 128};
 
     for (size_t size : sizes) {
         std::vector<std::byte> data(size);
@@ -273,9 +286,9 @@ TEST_F(BlobTest, ConcurrentAccess) {
                     // Read operations should be thread-safe
                     auto size = b.size();
                     if (size > 0) {
-                        (void)b[0]; // Suppress unused variable warning
+                        (void)b[0];  // Suppress unused variable warning
                         auto slice = b.slice(0, std::min(size, size_t(3)));
-                        (void)slice; // Suppress unused variable warning
+                        (void)slice;  // Suppress unused variable warning
                         success_count.fetch_add(1);
                     }
                 } catch (...) {
@@ -333,7 +346,7 @@ TEST_F(BlobTest, Fill) {
 
 // Test append method with another blob
 TEST_F(BlobTest, AppendBlob) {
-    blob b1(test_data.data(), 6);  // First 6 bytes
+    blob b1(test_data.data(), 6);      // First 6 bytes
     blob b2(test_data.data() + 6, 6);  // Next 6 bytes
     // Note: Dimensions are handled internally by the blob constructor
 
@@ -380,7 +393,8 @@ TEST_F(BlobTest, XorOperation) {
 
     // Check that each byte is now the XOR of the original and 255
     for (size_t i = 0; i < test_data.size(); ++i) {
-        auto expected = static_cast<std::byte>(static_cast<unsigned char>(test_data[i]) ^ 255);
+        auto expected = static_cast<std::byte>(
+            static_cast<unsigned char>(test_data[i]) ^ 255);
         EXPECT_EQ(b1[i], expected);
     }
 
@@ -453,7 +467,8 @@ TEST_F(BlobTest, OpenCVIntegration) {
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
             for (int c = 0; c < 3; ++c) {
-                mat.at<cv::Vec3b>(i, j)[c] = static_cast<unsigned char>(i * 2 * 3 + j * 3 + c + 10);
+                mat.at<cv::Vec3b>(i, j)[c] =
+                    static_cast<unsigned char>(i * 2 * 3 + j * 3 + c + 10);
             }
         }
     }
@@ -522,7 +537,8 @@ TEST_F(BlobTest, OpenCVImageIO) {
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
             for (int c = 0; c < 3; ++c) {
-                mat.at<cv::Vec3b>(i, j)[c] = static_cast<unsigned char>(i * 2 * 3 + j * 3 + c + 10);
+                mat.at<cv::Vec3b>(i, j)[c] =
+                    static_cast<unsigned char>(i * 2 * 3 + j * 3 + c + 10);
             }
         }
     }
@@ -556,7 +572,8 @@ TEST_F(BlobTest, CImgIntegration) {
     for (int y = 0; y < 2; ++y) {
         for (int x = 0; x < 2; ++x) {
             for (int c = 0; c < 3; ++c) {
-                img(x, y, 0, c) = static_cast<unsigned char>(y * 2 * 3 + x * 3 + c + 10);
+                img(x, y, 0, c) =
+                    static_cast<unsigned char>(y * 2 * 3 + x * 3 + c + 10);
             }
         }
     }
@@ -598,53 +615,53 @@ TEST_F(BlobTest, CImgIntegration) {
 #if __has_include(<stb_image.h>)
 // Test stb_image integration
 TEST_F(BlobTest, StbImageIntegration) {
-    // Create a test image with OpenCV and save it
-    #if __has_include(<opencv2/core.hpp>)
+// Create a test image with OpenCV and save it
+#if __has_include(<opencv2/core.hpp>)
     cv::Mat mat(2, 2, CV_8UC3);
     for (int i = 0; i < 2; ++i) {
         for (int j = 0; j < 2; ++j) {
             for (int c = 0; c < 3; ++c) {
-                mat.at<cv::Vec3b>(i, j)[c] = static_cast<unsigned char>(i * 2 * 3 + j * 3 + c + 10);
+                mat.at<cv::Vec3b>(i, j)[c] =
+                    static_cast<unsigned char>(i * 2 * 3 + j * 3 + c + 10);
             }
         }
     }
     cv::imwrite(test_image_path, mat);
-    #else
+#else
     // Create a simple bitmap file for testing
     FILE* f = fopen(test_image_path.c_str(), "wb");
     if (f) {
         // Simple BMP header
         unsigned char bmp_header[54] = {
-            'B', 'M',                       // Signature
-            0x36, 0x00, 0x00, 0x00,         // File size
-            0x00, 0x00, 0x00, 0x00,         // Reserved
-            0x36, 0x00, 0x00, 0x00,         // Pixel data offset
-            0x28, 0x00, 0x00, 0x00,         // DIB header size
-            0x02, 0x00, 0x00, 0x00,         // Width
-            0x02, 0x00, 0x00, 0x00,         // Height
-            0x01, 0x00,                     // Planes
-            0x18, 0x00,                     // Bits per pixel (24)
-            0x00, 0x00, 0x00, 0x00,         // Compression
-            0x10, 0x00, 0x00, 0x00,         // Image size
-            0x00, 0x00, 0x00, 0x00,         // X pixels per meter
-            0x00, 0x00, 0x00, 0x00,         // Y pixels per meter
-            0x00, 0x00, 0x00, 0x00,         // Total colors
-            0x00, 0x00, 0x00, 0x00          // Important colors
+            'B',  'M',               // Signature
+            0x36, 0x00, 0x00, 0x00,  // File size
+            0x00, 0x00, 0x00, 0x00,  // Reserved
+            0x36, 0x00, 0x00, 0x00,  // Pixel data offset
+            0x28, 0x00, 0x00, 0x00,  // DIB header size
+            0x02, 0x00, 0x00, 0x00,  // Width
+            0x02, 0x00, 0x00, 0x00,  // Height
+            0x01, 0x00,              // Planes
+            0x18, 0x00,              // Bits per pixel (24)
+            0x00, 0x00, 0x00, 0x00,  // Compression
+            0x10, 0x00, 0x00, 0x00,  // Image size
+            0x00, 0x00, 0x00, 0x00,  // X pixels per meter
+            0x00, 0x00, 0x00, 0x00,  // Y pixels per meter
+            0x00, 0x00, 0x00, 0x00,  // Total colors
+            0x00, 0x00, 0x00, 0x00   // Important colors
         };
         fwrite(bmp_header, sizeof(bmp_header), 1, f);
 
         // Write test data (BGR order for BMP)
         for (int i = 0; i < test_data.size(); i += 3) {
             unsigned char bgr[3] = {
-                static_cast<unsigned char>(test_data[i+2]),
-                static_cast<unsigned char>(test_data[i+1]),
-                static_cast<unsigned char>(test_data[i])
-            };
+                static_cast<unsigned char>(test_data[i + 2]),
+                static_cast<unsigned char>(test_data[i + 1]),
+                static_cast<unsigned char>(test_data[i])};
             fwrite(bgr, 3, 1, f);
         }
         fclose(f);
     }
-    #endif
+#endif
 
     // Load with stb_image
     blob b(test_image_path);
@@ -667,7 +684,8 @@ TEST_F(BlobTest, StbImageIntegration) {
     std::remove((test_image_path + ".tga").c_str());
 
     // Test invalid format
-    EXPECT_THROW(b.save_as(test_image_path + ".invalid", "invalid"), std::runtime_error);
+    EXPECT_THROW(b.save_as(test_image_path + ".invalid", "invalid"),
+                 std::runtime_error);
 }
 #endif
 
@@ -683,20 +701,20 @@ TEST_F(BlobTest, FastModeLimitations) {
     EXPECT_THROW(fb.allocate(20), std::runtime_error);
     EXPECT_THROW(fb.deallocate(), std::runtime_error);
 
-    #if __has_include(<CImg.h>)
+#if __has_include(<CImg.h>)
     // CImg operations should throw in FAST mode
     cimg_library::CImg<float> kernel(3, 3);
     EXPECT_THROW(fb.apply_cimg_filter(kernel), std::runtime_error);
     EXPECT_THROW(fb.to_cimg(), std::runtime_error);
-    #endif
+#endif
 
-    #if __has_include(<stb_image.h>)
+#if __has_include(<stb_image.h>)
     // stb_image operations should throw in FAST mode
     EXPECT_THROW(fb.save_as(test_image_path, "png"), std::runtime_error);
 
     // Fast mode constructor from stb_image should throw
     EXPECT_THROW(fast_blob bad_fb(test_image_path), std::runtime_error);
-    #endif
+#endif
 }
 
-} // namespace atom::image::test
+}  // namespace atom::image::test

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "atom/error/exception.hpp"
+#include "atom/utils/text/string.hpp"  // For StringLike concept
 
 namespace atom::utils {
 class GetTimeException : public error::Exception {
@@ -24,9 +25,6 @@ class GetTimeException : public error::Exception {
 #define THROW_NESTED_GET_TIME_ERROR(...)          \
     atom::utils::GetTimeException::rethrowNested( \
         ATOM_FILE_NAME, ATOM_FILE_LINE, ATOM_FUNC_NAME, __VA_ARGS__)
-
-template <typename T>
-concept StringLike = std::convertible_to<T, std::string_view>;
 
 class QDateTime;
 

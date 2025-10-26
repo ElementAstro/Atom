@@ -8,6 +8,7 @@
 #include <thread>
 #include <vector>
 
+#include "atom/error/exception.hpp"
 #include "atom/utils/random/lcg.hpp"
 
 namespace atom::utils::tests {
@@ -110,7 +111,7 @@ TEST_F(LCGTest, NextIntRangeEnforced) {
     }
 
     // Test error case
-    EXPECT_THROW(lcg->nextInt(10, 5), std::invalid_argument)
+    EXPECT_THROW(lcg->nextInt(10, 5), atom::error::InvalidArgument)
         << "nextInt() should throw when min > max";
 }
 
@@ -135,7 +136,7 @@ TEST_F(LCGTest, NextDoubleRangeEnforced) {
     }
 
     // Test error case
-    EXPECT_THROW(lcg->nextDouble(10.0, 5.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextDouble(10.0, 5.0), atom::error::InvalidArgument)
         << "nextDouble() should throw when min >= max";
 }
 
@@ -149,15 +150,17 @@ TEST_F(LCGTest, ValidateProbabilityChecksRange) {
         << "1.0 should be a valid probability";
 
     // Invalid probabilities
-    EXPECT_THROW(lcg->validateProbability(-0.1), std::invalid_argument)
+    EXPECT_THROW(lcg->validateProbability(-0.1), atom::error::InvalidArgument)
         << "Negative probabilities should throw";
-    EXPECT_THROW(lcg->validateProbability(1.1), std::invalid_argument)
+    EXPECT_THROW(lcg->validateProbability(1.1), atom::error::InvalidArgument)
         << "Probabilities > 1.0 should throw";
 
     // Test with allowZeroOne = false
-    EXPECT_THROW(lcg->validateProbability(0.0, false), std::invalid_argument)
+    EXPECT_THROW(lcg->validateProbability(0.0, false),
+                 atom::error::InvalidArgument)
         << "0.0 should not be valid when allowZeroOne is false";
-    EXPECT_THROW(lcg->validateProbability(1.0, false), std::invalid_argument)
+    EXPECT_THROW(lcg->validateProbability(1.0, false),
+                 atom::error::InvalidArgument)
         << "1.0 should not be valid when allowZeroOne is false";
     EXPECT_NO_THROW(lcg->validateProbability(0.5, false))
         << "0.5 should be valid regardless of allowZeroOne";
@@ -181,9 +184,9 @@ TEST_F(LCGTest, NextBernoulliDistribution) {
                          0.5, 0.05);
 
     // Test invalid probability
-    EXPECT_THROW(lcg->nextBernoulli(-0.1), std::invalid_argument)
+    EXPECT_THROW(lcg->nextBernoulli(-0.1), atom::error::InvalidArgument)
         << "Negative probability should throw";
-    EXPECT_THROW(lcg->nextBernoulli(1.1), std::invalid_argument)
+    EXPECT_THROW(lcg->nextBernoulli(1.1), atom::error::InvalidArgument)
         << "Probability > 1.0 should throw";
 }
 
@@ -219,9 +222,9 @@ TEST_F(LCGTest, NextGaussianDistribution) {
         << "Standard deviation should be approximately as specified";
 
     // Test invalid stddev
-    EXPECT_THROW(lcg->nextGaussian(0.0, -1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGaussian(0.0, -1.0), atom::error::InvalidArgument)
         << "Negative stddev should throw";
-    EXPECT_THROW(lcg->nextGaussian(0.0, 0.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGaussian(0.0, 0.0), atom::error::InvalidArgument)
         << "Zero stddev should throw";
 }
 
@@ -236,9 +239,9 @@ TEST_F(LCGTest, NextPoissonDistribution) {
         lambda, lambda * 0.1);
 
     // Test invalid lambda
-    EXPECT_THROW(lcg->nextPoisson(-1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextPoisson(-1.0), atom::error::InvalidArgument)
         << "Negative lambda should throw";
-    EXPECT_THROW(lcg->nextPoisson(0.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextPoisson(0.0), atom::error::InvalidArgument)
         << "Zero lambda should throw";
 }
 
@@ -258,9 +261,9 @@ TEST_F(LCGTest, NextExponentialDistribution) {
     }
 
     // Test invalid lambda
-    EXPECT_THROW(lcg->nextExponential(-1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextExponential(-1.0), atom::error::InvalidArgument)
         << "Negative lambda should throw";
-    EXPECT_THROW(lcg->nextExponential(0.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextExponential(0.0), atom::error::InvalidArgument)
         << "Zero lambda should throw";
 }
 
@@ -282,13 +285,13 @@ TEST_F(LCGTest, NextGeometricDistribution) {
     }
 
     // Test invalid probability
-    EXPECT_THROW(lcg->nextGeometric(0.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGeometric(0.0), atom::error::InvalidArgument)
         << "Zero probability should throw";
-    EXPECT_THROW(lcg->nextGeometric(1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGeometric(1.0), atom::error::InvalidArgument)
         << "Probability 1.0 should throw";
-    EXPECT_THROW(lcg->nextGeometric(-0.1), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGeometric(-0.1), atom::error::InvalidArgument)
         << "Negative probability should throw";
-    EXPECT_THROW(lcg->nextGeometric(1.1), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGeometric(1.1), atom::error::InvalidArgument)
         << "Probability > 1.0 should throw";
 }
 
@@ -309,13 +312,13 @@ TEST_F(LCGTest, NextGammaDistribution) {
     }
 
     // Test invalid parameters
-    EXPECT_THROW(lcg->nextGamma(-1.0, 1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGamma(-1.0, 1.0), atom::error::InvalidArgument)
         << "Negative shape should throw";
-    EXPECT_THROW(lcg->nextGamma(0.0, 1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGamma(0.0, 1.0), atom::error::InvalidArgument)
         << "Zero shape should throw";
-    EXPECT_THROW(lcg->nextGamma(1.0, -1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGamma(1.0, -1.0), atom::error::InvalidArgument)
         << "Negative scale should throw";
-    EXPECT_THROW(lcg->nextGamma(1.0, 0.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextGamma(1.0, 0.0), atom::error::InvalidArgument)
         << "Zero scale should throw";
 }
 
@@ -341,13 +344,13 @@ TEST_F(LCGTest, NextBetaDistribution) {
                          0.1);
 
     // Test invalid parameters
-    EXPECT_THROW(lcg->nextBeta(-1.0, 1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextBeta(-1.0, 1.0), atom::error::InvalidArgument)
         << "Negative alpha should throw";
-    EXPECT_THROW(lcg->nextBeta(0.0, 1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextBeta(0.0, 1.0), atom::error::InvalidArgument)
         << "Zero alpha should throw";
-    EXPECT_THROW(lcg->nextBeta(1.0, -1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextBeta(1.0, -1.0), atom::error::InvalidArgument)
         << "Negative beta should throw";
-    EXPECT_THROW(lcg->nextBeta(1.0, 0.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextBeta(1.0, 0.0), atom::error::InvalidArgument)
         << "Zero beta should throw";
 }
 
@@ -366,9 +369,9 @@ TEST_F(LCGTest, NextChiSquaredDistribution) {
     }
 
     // Test invalid degrees of freedom
-    EXPECT_THROW(lcg->nextChiSquared(-1.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextChiSquared(-1.0), atom::error::InvalidArgument)
         << "Negative degrees of freedom should throw";
-    EXPECT_THROW(lcg->nextChiSquared(0.0), std::invalid_argument)
+    EXPECT_THROW(lcg->nextChiSquared(0.0), atom::error::InvalidArgument)
         << "Zero degrees of freedom should throw";
 }
 
@@ -394,15 +397,20 @@ TEST_F(LCGTest, NextHypergeometricDistribution) {
     }
 
     // Test invalid parameters
-    EXPECT_THROW(lcg->nextHypergeometric(-1, 10, 5), std::invalid_argument)
+    EXPECT_THROW(lcg->nextHypergeometric(-1, 10, 5),
+                 atom::error::InvalidArgument)
         << "Negative total should throw";
-    EXPECT_THROW(lcg->nextHypergeometric(10, -1, 5), std::invalid_argument)
+    EXPECT_THROW(lcg->nextHypergeometric(10, -1, 5),
+                 atom::error::InvalidArgument)
         << "Negative success should throw";
-    EXPECT_THROW(lcg->nextHypergeometric(10, 5, -1), std::invalid_argument)
+    EXPECT_THROW(lcg->nextHypergeometric(10, 5, -1),
+                 atom::error::InvalidArgument)
         << "Negative draws should throw";
-    EXPECT_THROW(lcg->nextHypergeometric(10, 15, 5), std::invalid_argument)
+    EXPECT_THROW(lcg->nextHypergeometric(10, 15, 5),
+                 atom::error::InvalidArgument)
         << "success > total should throw";
-    EXPECT_THROW(lcg->nextHypergeometric(10, 5, 15), std::invalid_argument)
+    EXPECT_THROW(lcg->nextHypergeometric(10, 5, 15),
+                 atom::error::InvalidArgument)
         << "draws > total should throw";
 }
 
@@ -438,17 +446,18 @@ TEST_F(LCGTest, NextDiscreteDistribution) {
 
     // Test empty weights
     std::vector<double> emptyWeights;
-    EXPECT_THROW(lcg->nextDiscrete(emptyWeights), std::invalid_argument)
+    EXPECT_THROW(lcg->nextDiscrete(emptyWeights), atom::error::InvalidArgument)
         << "Empty weights should throw";
 
     // Test negative weights
     std::vector<double> negativeWeights = {1.0, -1.0, 2.0};
-    EXPECT_THROW(lcg->nextDiscrete(negativeWeights), std::invalid_argument)
+    EXPECT_THROW(lcg->nextDiscrete(negativeWeights),
+                 atom::error::InvalidArgument)
         << "Negative weights should throw";
 
     // Test all zero weights
     std::vector<double> zeroWeights = {0.0, 0.0, 0.0};
-    EXPECT_THROW(lcg->nextDiscrete(zeroWeights), std::invalid_argument)
+    EXPECT_THROW(lcg->nextDiscrete(zeroWeights), atom::error::InvalidArgument)
         << "All-zero weights should throw";
 }
 
@@ -481,15 +490,17 @@ TEST_F(LCGTest, NextMultinomialDistribution) {
         << "nextMultinomial() should accept std::span";
 
     // Test invalid parameters
-    EXPECT_THROW(lcg->nextMultinomial(-1, probs), std::invalid_argument)
+    EXPECT_THROW(lcg->nextMultinomial(-1, probs), atom::error::InvalidArgument)
         << "Negative trials should throw";
 
     std::vector<double> invalidProbs = {0.3, 0.9};  // Sum > 1
-    EXPECT_THROW(lcg->nextMultinomial(10, invalidProbs), std::invalid_argument)
+    EXPECT_THROW(lcg->nextMultinomial(10, invalidProbs),
+                 atom::error::InvalidArgument)
         << "Invalid probabilities should throw";
 
     std::vector<double> emptyProbs;
-    EXPECT_THROW(lcg->nextMultinomial(10, emptyProbs), std::invalid_argument)
+    EXPECT_THROW(lcg->nextMultinomial(10, emptyProbs),
+                 atom::error::InvalidArgument)
         << "Empty probabilities should throw";
 }
 
@@ -547,7 +558,8 @@ TEST_F(LCGTest, SampleFunction) {
         << "Full sample should contain all original elements";
 
     // Test with too large sample size
-    EXPECT_THROW(lcg->sample(data, data.size() + 1), std::invalid_argument)
+    EXPECT_THROW(lcg->sample(data, data.size() + 1),
+                 atom::error::InvalidArgument)
         << "Sample size larger than data size should throw";
 }
 
@@ -584,7 +596,8 @@ TEST_F(LCGTest, SaveAndLoadState) {
     cleanupTempFile(filename);
 
     // Test error cases
-    EXPECT_THROW(lcg->loadState("nonexistent_file.dat"), std::runtime_error)
+    EXPECT_THROW(lcg->loadState("nonexistent_file.dat"),
+                 atom::error::RuntimeError)
         << "Loading non-existent file should throw";
 }
 

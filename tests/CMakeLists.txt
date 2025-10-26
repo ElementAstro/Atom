@@ -12,16 +12,72 @@ project(
 
 # Include test build options if not already included
 if(NOT DEFINED ATOM_TEST_BUILD_ALL)
-    include(${CMAKE_SOURCE_DIR}/cmake/TestsBuildOptions.cmake)
+  include(${CMAKE_SOURCE_DIR}/cmake/TestsBuildOptions.cmake)
 endif()
 
 # Find required packages
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
+# Function to copy required DLLs to test executable directory
+function(copy_test_dlls TARGET_NAME)
+  if(WIN32)
+    # List of all DLL targets that might be needed by tests
+    set(DLL_TARGETS atom-error atom-log loguru atom-component)
+
+    # Copy each DLL if it exists as a target
+    foreach(DLL_TARGET ${DLL_TARGETS})
+      if(TARGET ${DLL_TARGET})
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:${DLL_TARGET}>"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying ${DLL_TARGET} DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endforeach()
+  endif()
+endfunction()
+
+# Make the function available globally
+macro(copy_test_dlls_macro TARGET_NAME)
+  copy_test_dlls(${TARGET_NAME})
+endmacro()
+
+# Add a global post-build step to copy DLLs to all test directories
+if(WIN32)
+  # Determine the correct loguru DLL name based on build type
+  if(CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(LOGURU_DLL_NAME "liblogurud.dll")
+  else()
+    set(LOGURU_DLL_NAME "libloguru.dll")
+  endif()
+
+  # This custom target will copy DLLs after all tests are built
+  add_custom_target(
+    copy_all_test_dlls ALL
+    COMMAND ${CMAKE_COMMAND} -E echo "Copying DLLs to all test directories..."
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/atom/error/libatom-error.dll"
+      "${CMAKE_CURRENT_BINARY_DIR}/"
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/atom/log/libatom-log.dll"
+      "${CMAKE_CURRENT_BINARY_DIR}/"
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      "${CMAKE_BINARY_DIR}/atom/log/${LOGURU_DLL_NAME}"
+      "${CMAKE_CURRENT_BINARY_DIR}/"
+    DEPENDS atom-error atom-log loguru
+    COMMENT "Copying DLLs to test root directory")
+endif()
+
 # Include test infrastructure first
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
-    add_subdirectory(tests)
+  add_subdirectory(tests)
 endif()
 
 # Conditionally add test subdirectories based on build options
@@ -250,4 +306,56 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/run_all_tests.cpp")
   set_property(TARGET test_unified PROPERTY FOLDER "Tests/Infrastructure")
 
   message(STATUS "Unified test runner configured")
+endif()
+
+# =============================================================================
+# Copy DLLs to All Test Directories (Windows)
+# =============================================================================
+if(WIN32)
+  # Get all test executables
+  set(TEST_SUBDIRS
+      algorithm
+      async
+      components
+      connection
+      containers
+      error
+      extra
+      image
+      io
+      log
+      memory
+      meta
+      search
+      secret
+      serial
+      sysinfo
+      type
+      utils
+      web)
+
+  # Copy DLLs to each test subdirectory
+  foreach(SUBDIR ${TEST_SUBDIRS})
+    if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}")
+      add_custom_command(
+        TARGET copy_all_test_dlls
+        POST_BUILD
+        COMMAND
+          ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_BINARY_DIR}/atom/error/libatom-error.dll"
+          "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
+        COMMAND
+          ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_BINARY_DIR}/atom/log/libatom-log.dll"
+          "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
+        COMMAND
+          ${CMAKE_COMMAND} -E copy_if_different
+          "${CMAKE_BINARY_DIR}/atom/log/${LOGURU_DLL_NAME}"
+          "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
+        COMMENT "Copying DLLs to ${SUBDIR} test directory"
+        VERBATIM)
+    endif()
+  endforeach()
+
+  message(STATUS "Configured DLL copying for all test directories")
 endif()

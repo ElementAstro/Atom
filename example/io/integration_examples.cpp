@@ -439,7 +439,7 @@ void demonstratePerformanceOptimization() {
     std::cout << "\n1. Batch vs Individual Operations:" << std::endl;
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto allFiles = atom::io::glob(testDir + "/*.txt");
+    auto allFiles = atom::io::glob(testDir + "/*.txt", false, false);
     auto end = std::chrono::high_resolution_clock::now();
     auto batchTime =
         std::chrono::duration_cast<std::chrono::microseconds>(end - start);

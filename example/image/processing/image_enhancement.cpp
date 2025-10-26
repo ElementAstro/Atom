@@ -37,7 +37,7 @@ blob createEnhancementTestImage() {
     const int height = 300;
     // Create raw data buffer
     std::vector<uint8_t> data(height * width * 3);
-    
+
     blob img(reinterpret_cast<std::byte*>(data.data()), data.size());
 
     // Create regions with different brightness levels
@@ -92,20 +92,20 @@ blob createEnhancementTestImage() {
         }
     }
 
-    return blob(reinterpret_cast<std::byte*>(data.data()), data.size());
+    return blob(reinterpret_cast<std::byte*>(data.data()), data.size(), height,
+                width, 3, DEFAULT_DEPTH);
 }
 
 /**
  * @brief Calculate and display histogram statistics
  */
-void displayHistogramStats(const blob& img,
-                           const std::string& description) {
+void displayHistogramStats(const blob& img, const std::string& description) {
     std::vector<int> histogram(256, 0);
-    
+
     // Simplified histogram calculation
     const uint8_t* data = reinterpret_cast<const uint8_t*>(img.data());
     size_t pixel_count = img.size() / 3;  // Assume 3-channel image
-    
+
     for (size_t i = 0; i < pixel_count; ++i) {
         histogram[data[i * 3]]++;  // Only use first channel
     }
@@ -146,7 +146,8 @@ void demonstrateHistogramEqualization() {
 
     try {
         auto original = createEnhancementTestImage();
-        std::cout << "Original image blob size: " << original.size() << " bytes\n";
+        std::cout << "Original image blob size: " << original.size()
+                  << " bytes\n";
 
         displayHistogramStats(original, "Original");
 
@@ -164,9 +165,7 @@ void demonstrateHistogramEqualization() {
             EnhancementParams params;
             if (method == HistogramMethod::CLAHE) {
                 params.clipLimit = 2.0;
-                params.tileSize = 8;
-            } else if (method == HistogramMethod::ADAPTIVE) {
-                params.windowSize = 64;
+                params.tileGridSize = 8;
             }
 
             auto enhanced =
@@ -180,7 +179,8 @@ void demonstrateHistogramEqualization() {
 
             if (method == HistogramMethod::CLAHE) {
                 std::cout << "  Clip limit: " << params.clipLimit
-                          << ", Tile size: " << params.tileSize << "\n";
+                          << ", Tile grid size: " << params.tileGridSize
+                          << "\n";
             }
         }
 
@@ -191,7 +191,7 @@ void demonstrateHistogramEqualization() {
         for (double clip_limit : clip_limits) {
             EnhancementParams params;
             params.clipLimit = clip_limit;
-            params.tileSize = 8;
+            params.tileGridSize = 8;
 
             auto start = high_resolution_clock::now();
             auto enhanced = enhancer.equalizeHistogram(
@@ -216,7 +216,8 @@ void demonstrateToneMapping() {
 
     try {
         // Create HDR-like test image with high dynamic range
-        blob<uint8_t> hdr_image(200, 300, 3);
+        blob hdr_image(nullptr, static_cast<size_t>(200 * 300 * 3), 300, 200, 3,
+                       DEFAULT_DEPTH);
 
         for (int y = 0; y < hdr_image.rows(); ++y) {
             for (int x = 0; x < hdr_image.cols(); ++x) {
@@ -251,8 +252,8 @@ void demonstrateToneMapping() {
             }
         }
 
-        std::cout << "Created HDR test image: " << hdr_image.cols() << "x"
-                  << hdr_image.rows() << "\n";
+        std::cout << "Created HDR test image: " << hdr_image.getCols() << "x"
+                  << hdr_image.getRows() << "\n";
         displayHistogramStats(hdr_image, "HDR Original");
 
         ImageEnhancement enhancer;
@@ -269,16 +270,15 @@ void demonstrateToneMapping() {
 
             EnhancementParams params;
             if (op == ToneMappingOperator::REINHARD) {
-                params.key = 0.18;
-                params.white = 1.0;
+                // Using available parameters; key/white not present in API
+                params.exposure = 0.0;
             } else if (op == ToneMappingOperator::DRAGO) {
-                params.bias = 0.85;
+                params.exposure = 0.0;
             } else if (op == ToneMappingOperator::MANTIUK) {
-                params.colorSaturation = 1.0;
-                params.contrastEnhancement = 1.0;
+                params.saturation = 1.0;
+                params.clarity = 0.5;
             } else if (op == ToneMappingOperator::FATTAL) {
-                params.alpha = 0.1;
-                params.beta = 0.8;
+                params.gamma = 1.2;
             }
 
             auto tone_mapped = enhancer.toneMapping(hdr_image, op, params);
@@ -296,8 +296,7 @@ void demonstrateToneMapping() {
 
         for (double key : key_values) {
             EnhancementParams params;
-            params.key = key;
-            params.white = 1.0;
+            params.gamma = 1.0;
 
             auto start = high_resolution_clock::now();
             auto tone_mapped = enhancer.toneMapping(
@@ -322,7 +321,8 @@ void demonstrateColorCorrection() {
 
     try {
         // Create image with color cast
-        blob<uint8_t> color_cast_image(200, 300, 3);
+        blob color_cast_image(nullptr, static_cast<size_t>(200 * 300 * 3), 300,
+                              200, 3, DEFAULT_DEPTH);
 
         for (int y = 0; y < color_cast_image.rows(); ++y) {
             for (int x = 0; x < color_cast_image.cols(); ++x) {
@@ -345,18 +345,15 @@ void demonstrateColorCorrection() {
         }
 
         std::cout << "Created color cast test image: "
-                  << color_cast_image.cols() << "x" << color_cast_image.rows()
-                  << "\n";
+                  << color_cast_image.getCols() << "x"
+                  << color_cast_image.getRows() << "\n";
 
         ImageEnhancement enhancer;
 
         // Test different color correction methods
         std::vector<std::pair<ColorCorrectionMethod, std::string>> methods = {
             {ColorCorrectionMethod::AUTO_COLOR, "Auto Color Correction"},
-            {ColorCorrectionMethod::WHITE_BALANCE, "White Balance"},
-            {ColorCorrectionMethod::GRAY_WORLD, "Gray World Assumption"},
-            {ColorCorrectionMethod::PERFECT_REFLECTOR, "Perfect Reflector"},
-            {ColorCorrectionMethod::COLOR_CONSTANCY, "Color Constancy"}};
+            {ColorCorrectionMethod::WHITE_BALANCE, "White Balance"}};
 
         for (const auto& [method, name] : methods) {
             auto start = high_resolution_clock::now();
@@ -491,7 +488,7 @@ void demonstrateSaturationVibrance() {
         for (double saturation : saturation_values) {
             auto start = high_resolution_clock::now();
             auto adjusted =
-                enhancer.adjustSaturation(original, saturation, true);
+                enhancer.vibranceSaturation(original, 0.0, saturation);
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<microseconds>(end - start);
 
@@ -514,7 +511,8 @@ void demonstrateSaturationVibrance() {
 
         for (double vibrance : vibrance_values) {
             auto start = high_resolution_clock::now();
-            auto adjusted = enhancer.adjustVibrance(original, vibrance);
+            auto adjusted =
+                enhancer.vibranceSaturation(original, vibrance, 0.0);
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<microseconds>(end - start);
 

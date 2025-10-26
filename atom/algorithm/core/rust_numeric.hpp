@@ -12,6 +12,8 @@
 #include <type_traits>
 #include <variant>
 
+#include "atom/error/exception.hpp"
+
 #undef NAN
 
 namespace atom::algorithm {
@@ -93,8 +95,8 @@ public:
         if (is_ok()) {
             return std::get<0>(m_value);
         }
-        throw std::runtime_error("Called unwrap() on an Err value: " +
-                                 std::get<1>(m_value).to_string());
+        THROW_RUNTIME_ERROR("Called unwrap() on an Err value: " +
+                            std::get<1>(m_value).to_string());
     }
 
     T unwrap_or(const T& default_value) const {
@@ -108,7 +110,7 @@ public:
         if (is_err()) {
             return std::get<1>(m_value);
         }
-        throw std::runtime_error("Called unwrap_err() on an Ok value");
+        THROW_RUNTIME_ERROR("Called unwrap_err() on an Ok value");
     }
 
     template <typename F>
@@ -152,14 +154,14 @@ public:
 
     T value() const {
         if (!m_has_value) {
-            throw std::runtime_error("Called value() on a None option");
+            THROW_RUNTIME_ERROR("Called value() on a None option");
         }
         return m_value;
     }
 
     T unwrap() const {
         if (!m_has_value) {
-            throw std::runtime_error("Called unwrap() on a None option");
+            THROW_RUNTIME_ERROR("Called unwrap() on a None option");
         }
         return m_value;
     }
@@ -489,7 +491,7 @@ public:
 
     static Int wrapping_div(Int a, Int b) {
         if (b == 0) {
-            throw std::runtime_error("Division by zero");
+            THROW_RUNTIME_ERROR("Division by zero");
         }
         if (a == MIN && b == -1) {
             return MIN;
@@ -499,7 +501,7 @@ public:
 
     static Int wrapping_rem(Int a, Int b) {
         if (b == 0) {
-            throw std::runtime_error("Division by zero");
+            THROW_RUNTIME_ERROR("Division by zero");
         }
         if (a == MIN && b == -1) {
             return 0;
@@ -698,7 +700,7 @@ public:
 
     static std::string to_string(Int value, int base = 10) {
         if (base < 2 || base > 36) {
-            throw std::invalid_argument("Base must be between 2 and 36");
+            THROW_INVALID_ARGUMENT("Base must be between 2 and 36");
         }
 
         if (value == 0)
@@ -888,7 +890,7 @@ public:
 
     static std::tuple<Int, Int> div_rem(Int a, Int b) {
         if (b == 0) {
-            throw std::runtime_error("Division by zero");
+            THROW_RUNTIME_ERROR("Division by zero");
         }
 
         Int q = a / b;
@@ -923,7 +925,7 @@ public:
     static Int abs(Int a) {
         if (a < 0) {
             if (a == MIN) {
-                throw std::runtime_error("Absolute value of MIN overflows");
+                THROW_RUNTIME_ERROR("Absolute value of MIN overflows");
             }
             return -a;
         }

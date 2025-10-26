@@ -306,10 +306,10 @@ public:
  */
 class EnhancedOCRProcessor {
 private:
-    tesseract::TessBaseAPI m_tessApi;              ///< Tesseract OCR engine
-    OCRConfig m_config;                            ///< Configuration parameters
-    std::unique_ptr<OCRCache> m_cache;             ///< Result cache
-    std::unique_ptr<Logger> m_logger;              ///< Logging system
+    tesseract::TessBaseAPI m_tessApi;   ///< Tesseract OCR engine
+    OCRConfig m_config;                 ///< Configuration parameters
+    std::unique_ptr<OCRCache> m_cache;  ///< Result cache
+    // std::unique_ptr<Logger> m_logger;           ///< Logging system (unused)
     std::unique_ptr<SpellChecker> m_spellChecker;  ///< Spell checker
     std::unique_ptr<cv::dnn_superres::DnnSuperResImpl>
         m_superRes;  ///< Super resolution

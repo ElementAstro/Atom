@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include "atom/algorithm/algorithm.hpp"
+#include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -83,8 +84,6 @@ TEST_F(KMPTest, BasicPatternMatching) {
     EXPECT_EQ(result[0], 0);
     EXPECT_EQ(result[1], 7);
 }
-
-
 
 TEST_F(KMPTest, EmptyText) {
     KMP kmp("pattern");
@@ -174,8 +173,6 @@ TEST_F(KMPTest, CornerCases) {
     ASSERT_EQ(result3.size(), 1);
     EXPECT_EQ(result3[0], 0);
 }
-
-
 
 TEST_F(KMPTest, Performance) {
     // Create a large text and pattern
@@ -318,7 +315,8 @@ TEST_F(BloomFilterTest, DifferentTypes) {
 
 TEST_F(BloomFilterTest, ExceptionHandling) {
     // Test constructor with zero hash functions (should throw)
-    EXPECT_THROW({ BloomFilter<1024> filter(0); }, std::invalid_argument);
+    EXPECT_THROW(
+        { BloomFilter<1024> filter(0); }, atom::error::InvalidArgument);
 }
 
 TEST_F(BloomFilterTest, LargeNumberOfElements) {
@@ -462,8 +460,6 @@ TEST_F(BoyerMooreTest, CompareWithRegularSearch) {
         EXPECT_EQ(regular_result[i], optimized_result[i]);
     }
 }
-
-
 
 TEST_F(BoyerMooreTest, Performance) {
     // Create a large text and pattern

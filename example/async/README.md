@@ -10,7 +10,7 @@ Start here if you're new to async programming or the atom::async library.
 
 | Example | Description | Key Concepts |
 |---------|-------------|--------------|
-| [`async_worker_basic.cpp`](async_worker_basic.cpp) | Basic AsyncWorker usage patterns | Task creation, state management, result retrieval |
+| [`async_worker_usage.cpp`](async_worker_usage.cpp) | Basic AsyncWorker usage patterns | Task creation, state management, result retrieval |
 | [`promise.cpp`](promise.cpp) | Promise creation and value setting | Promise/Future pattern, callbacks, cancellation |
 | [`future.cpp`](future.cpp) | EnhancedFuture operations | Future chaining, timeouts, error handling |
 
@@ -20,7 +20,7 @@ Build upon fundamental concepts with more advanced usage patterns.
 
 | Example | Description | Key Concepts |
 |---------|-------------|--------------|
-| [`async_worker_advanced.cpp`](async_worker_advanced.cpp) | Advanced AsyncWorker patterns | WorkerContainer, error recovery, performance optimization |
+| [`async_worker_features.cpp`](async_worker_features.cpp) | Advanced AsyncWorker patterns | WorkerContainer, error recovery, performance optimization |
 | [`async_executor.cpp`](async_executor.cpp) | AsyncExecutor configuration and usage | Thread management, priority execution, resource optimization |
 | [`pool.cpp`](pool.cpp) | Thread pool implementations | Pool configurations, load balancing, performance tuning |
 | [`parallel.cpp`](parallel.cpp) | Parallel execution patterns | Parallel algorithms, execution policies, performance optimization |
@@ -251,7 +251,7 @@ When adding new examples:
 1. **Start with basic concepts:**
 
    ```bash
-   ./async_worker_basic_example
+   ./async_worker_usage_example
    ./async_promise_example
    ./async_future_example
    ```
@@ -283,7 +283,7 @@ Jump directly to advanced examples:
 
 Many examples include performance measurements. Look for output like:
 
-```
+```text
 ⏱️  Starting: Basic AsyncWorker
 ⏱️  Completed: Basic AsyncWorker in 1250 μs
 ```
@@ -328,7 +328,7 @@ Many examples include performance measurements. Look for output like:
 
 ### Example Output Analysis
 
-```
+```text
 📊 Total scheduled notifications: 4
 📊 Processed requests: 4
 📊 Collected results: 4

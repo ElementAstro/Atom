@@ -18,6 +18,7 @@
 #include <string>
 #include <vector>
 
+#include "../processing/filters.hpp"
 #include "fits_file.hpp"
 #include "hdu.hpp"
 

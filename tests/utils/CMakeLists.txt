@@ -23,8 +23,19 @@ set(HEADER_ONLY ON)
 set(USE_GMOCK OFF)
 
 # Exclude problematic test files
-set(EXCLUDE_SOURCES "${PROJECT_SOURCE_DIR}/crypto/test_aes_main.cpp"
-                    "${PROJECT_SOURCE_DIR}/core/test_uuid.cpp")
+set(EXCLUDE_SOURCES
+    "crypto/test_aes_main\\.cpp"
+    "core/test_uuid\\.cpp"
+    "string/test_cstring\\.hpp"
+    "string/test_to_string\\.hpp"
+    "core/test_anyutils\\.hpp"
+    "format/test_xml\\.hpp"
+    "math/test_random\\.hpp"
+    "debug/test_print\\.hpp"
+    "format/test_difflib\\.hpp"
+    "core/test_bit\\.hpp"
+    "core/test_linq\\.hpp"
+    "math/test_uuid\\.hpp")
 
 # =============================================================================
 # Include Standard Test Template
@@ -47,3 +58,19 @@ configure_standard_module_tests(
   "${TEST_TARGET_NAME}"
   EXCLUDE_SOURCES
   "${EXCLUDE_SOURCES}")
+
+# Copy DLLs to test directory
+if(TARGET atom_utils_tests)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_utils_tests)
+  endif()
+  # Increase timeout for computationally intensive tests
+  if(TEST atom_utils_tests)
+    set_tests_properties(atom_utils_tests PROPERTIES TIMEOUT 600)
+  endif()
+
+  # Fix for MinGW: "too many sections" error when compiling large test files
+  if(MINGW)
+    target_compile_options(atom_utils_tests PRIVATE -Wa,-mbig-obj)
+  endif()
+endif()

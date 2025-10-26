@@ -5,12 +5,12 @@
 #define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
 #define THROW_INVALID_ARGUMENT(msg) throw std::invalid_argument(msg)
 #include <algorithm>
-#include <cmath>
 #include <chrono>
+#include <cmath>
 
 #ifdef ATOM_IMAGE_HAS_CUDA
-#include <cuda_runtime.h>
 #include <cublas_v2.h>
+#include <cuda_runtime.h>
 #include <cufft.h>
 #endif
 
@@ -19,8 +19,8 @@
 #endif
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
-#include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
+#include <opencv2/opencv.hpp>
 #endif
 
 namespace atom::image {
@@ -54,26 +54,23 @@ public:
         return true;
     }
 
-    bool copyFrom(const GPUBuffer& src, size_t srcOffset, size_t dstOffset, size_t size) override {
+    bool copyFrom(const GPUBuffer& src, size_t srcOffset, size_t dstOffset,
+                  size_t size) override {
         const auto& srcBuffer = static_cast<const FallbackGPUBuffer&>(src);
-        if (srcOffset + size > srcBuffer.data_.size() || dstOffset + size > data_.size()) {
+        if (srcOffset + size > srcBuffer.data_.size() ||
+            dstOffset + size > data_.size()) {
             return false;
         }
-        std::memcpy(data_.data() + dstOffset, srcBuffer.data_.data() + srcOffset, size);
+        std::memcpy(data_.data() + dstOffset,
+                    srcBuffer.data_.data() + srcOffset, size);
         return true;
     }
 
-    size_t getSize() const override {
-        return size_;
-    }
+    size_t getSize() const override { return size_; }
 
-    GPUMemoryType getMemoryType() const override {
-        return memoryType_;
-    }
+    GPUMemoryType getMemoryType() const override { return memoryType_; }
 
-    bool isValid() const override {
-        return !data_.empty();
-    }
+    bool isValid() const override { return !data_.empty(); }
 
     void release() override {
         data_.clear();
@@ -92,14 +89,17 @@ public:
     FallbackGPUKernel() = default;
     ~FallbackGPUKernel() override = default;
 
-    bool loadFromSource(const std::string& source, const std::string& entryPoint, const std::string& buildOptions) override {
+    bool loadFromSource(const std::string& source,
+                        const std::string& entryPoint,
+                        const std::string& buildOptions) override {
         source_ = source;
         entryPoint_ = entryPoint;
         buildOptions_ = buildOptions;
         return true;
     }
 
-    bool loadFromBinary(const std::vector<uint8_t>& binary, const std::string& entryPoint) override {
+    bool loadFromBinary(const std::vector<uint8_t>& binary,
+                        const std::string& entryPoint) override {
         binary_ = binary;
         entryPoint_ = entryPoint;
         return true;
@@ -115,17 +115,16 @@ public:
         return true;
     }
 
-    bool execute(const std::vector<size_t>& globalWorkSize, const std::vector<size_t>& localWorkSize) override {
+    bool execute(const std::vector<size_t>& globalWorkSize,
+                 const std::vector<size_t>& localWorkSize) override {
         // Fallback CPU execution would go here
         return true;
     }
 
     std::unordered_map<std::string, std::string> getInfo() const override {
-        return {
-            {"type", "fallback"},
-            {"entry_point", entryPoint_},
-            {"status", "loaded"}
-        };
+        return {{"type", "fallback"},
+                {"entry_point", entryPoint_},
+                {"status", "loaded"}};
     }
 
 private:
@@ -148,7 +147,8 @@ public:
         return true;
     }
 
-    std::unique_ptr<GPUBuffer> createBuffer(size_t size, GPUMemoryType memoryType) override {
+    std::unique_ptr<GPUBuffer> createBuffer(size_t size,
+                                            GPUMemoryType memoryType) override {
         auto buffer = std::make_unique<FallbackGPUBuffer>();
         if (buffer->allocate(size, memoryType)) {
             return std::move(buffer);
@@ -170,7 +170,7 @@ public:
         info.name = "Fallback CPU Device";
         info.vendor = "Atom Framework";
         info.version = "1.0";
-        info.totalMemory = 1024 * 1024 * 1024; // 1GB placeholder
+        info.totalMemory = 1024 * 1024 * 1024;  // 1GB placeholder
         info.computeUnits = 1;
         info.maxWorkGroupSize = 256;
         info.supportsDouble = true;
@@ -232,7 +232,7 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::uploadImage(const blob& image) {
     try {
         size_t imageSize = image.size();
         auto buffer = context_->createBuffer(imageSize, GPUMemoryType::DEVICE);
-        
+
         if (buffer && buffer->upload(image.data(), imageSize)) {
             return buffer;
         }
@@ -243,7 +243,8 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::uploadImage(const blob& image) {
     return nullptr;
 }
 
-blob GPUImageProcessor::downloadImage(const GPUBuffer& buffer, int width, int height, int channels) {
+blob GPUImageProcessor::downloadImage(const GPUBuffer& buffer, int width,
+                                      int height, int channels) {
     if (!context_ || !buffer.isValid()) {
         return blob{};
     }
@@ -251,7 +252,7 @@ blob GPUImageProcessor::downloadImage(const GPUBuffer& buffer, int width, int he
     try {
         size_t imageSize = width * height * channels;
         std::vector<uint8_t> data(imageSize);
-        
+
         if (const_cast<GPUBuffer&>(buffer).download(data.data(), imageSize)) {
             return blob(data.data(), data.size());
         }
@@ -262,9 +263,9 @@ blob GPUImageProcessor::downloadImage(const GPUBuffer& buffer, int width, int he
     return blob{};
 }
 
-std::unique_ptr<GPUBuffer> GPUImageProcessor::convolve(const GPUBuffer& input,
-                                                      const std::vector<std::vector<float>>& kernel,
-                                                      int width, int height, int channels) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::convolve(
+    const GPUBuffer& input, const std::vector<std::vector<float>>& kernel,
+    int width, int height, int channels) {
     if (!context_ || !input.isValid()) {
         return nullptr;
     }
@@ -273,7 +274,7 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::convolve(const GPUBuffer& input,
         // Create output buffer
         size_t outputSize = width * height * channels;
         auto output = context_->createBuffer(outputSize, GPUMemoryType::DEVICE);
-        
+
         if (!output) {
             return nullptr;
         }
@@ -283,21 +284,19 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::convolve(const GPUBuffer& input,
         // 2. Set kernel arguments (input, output, kernel weights, dimensions)
         // 3. Execute kernel with appropriate work group sizes
         // 4. Return output buffer
-        
+
         // For fallback, just copy input to output
         output->copyFrom(input, 0, 0, outputSize);
-        
+
         return output;
     } catch (const std::exception&) {
         return nullptr;
     }
 }
 
-std::unique_ptr<GPUBuffer> GPUImageProcessor::resize(const GPUBuffer& input,
-                                                    int srcWidth, int srcHeight,
-                                                    int dstWidth, int dstHeight,
-                                                    int channels,
-                                                    const std::string& interpolation) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::resize(
+    const GPUBuffer& input, int srcWidth, int srcHeight, int dstWidth,
+    int dstHeight, int channels, const std::string& interpolation) {
     if (!context_ || !input.isValid()) {
         return nullptr;
     }
@@ -310,8 +309,9 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::resize(const GPUBuffer& input,
             return nullptr;
         }
 
-        // In a real implementation, this would use GPU kernels for bilinear/bicubic interpolation
-        // For fallback, just copy input (no actual resizing)
+        // In a real implementation, this would use GPU kernels for
+        // bilinear/bicubic interpolation For fallback, just copy input (no
+        // actual resizing)
         size_t copySize = std::min(input.getSize(), outputSize);
         output->copyFrom(input, 0, 0, copySize);
 
@@ -321,24 +321,24 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::resize(const GPUBuffer& input,
     }
 }
 
-std::unique_ptr<GPUBuffer> GPUImageProcessor::convertColorSpace(const GPUBuffer& input,
-                                                               const std::string& fromSpace,
-                                                               const std::string& toSpace,
-                                                               int width, int height) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::convertColorSpace(
+    const GPUBuffer& input, const std::string& fromSpace,
+    const std::string& toSpace, int width, int height) {
     if (!context_ || !input.isValid() || fromSpace == toSpace) {
         return nullptr;
     }
 
     try {
-        size_t outputSize = width * height * 3; // Assume 3 channels for most color spaces
+        size_t outputSize =
+            width * height * 3;  // Assume 3 channels for most color spaces
         auto output = context_->createBuffer(outputSize, GPUMemoryType::DEVICE);
 
         if (!output) {
             return nullptr;
         }
 
-        // In a real implementation, this would use GPU kernels for color space conversion
-        // For fallback, just copy input
+        // In a real implementation, this would use GPU kernels for color space
+        // conversion For fallback, just copy input
         size_t copySize = std::min(input.getSize(), outputSize);
         output->copyFrom(input, 0, 0, copySize);
 
@@ -348,8 +348,8 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::convertColorSpace(const GPUBuffer&
     }
 }
 
-std::unique_ptr<GPUBuffer> GPUImageProcessor::equalizeHistogram(const GPUBuffer& input,
-                                                               int width, int height, int channels) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::equalizeHistogram(
+    const GPUBuffer& input, int width, int height, int channels) {
     if (!context_ || !input.isValid()) {
         return nullptr;
     }
@@ -376,10 +376,10 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::equalizeHistogram(const GPUBuffer&
     }
 }
 
-std::unique_ptr<GPUBuffer> GPUImageProcessor::morphological(const GPUBuffer& input,
-                                                           const std::string& operation,
-                                                           const std::vector<std::vector<int>>& structElement,
-                                                           int width, int height, int channels) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::morphological(
+    const GPUBuffer& input, const std::string& operation,
+    const std::vector<std::vector<int>>& structElement, int width, int height,
+    int channels) {
     if (!context_ || !input.isValid()) {
         return nullptr;
     }
@@ -392,8 +392,8 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::morphological(const GPUBuffer& inp
             return nullptr;
         }
 
-        // In a real implementation, this would apply morphological operations (erosion, dilation, etc.)
-        // For fallback, just copy input
+        // In a real implementation, this would apply morphological operations
+        // (erosion, dilation, etc.) For fallback, just copy input
         output->copyFrom(input, 0, 0, outputSize);
 
         return output;
@@ -402,24 +402,26 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::morphological(const GPUBuffer& inp
     }
 }
 
-std::unique_ptr<GPUBuffer> GPUImageProcessor::detectEdges(const GPUBuffer& input,
-                                                         const std::string& method,
-                                                         float threshold1, float threshold2,
-                                                         int width, int height) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::detectEdges(
+    const GPUBuffer& input, const std::string& method, float threshold1,
+    float threshold2, int width, int height) {
     if (!context_ || !input.isValid()) {
         return nullptr;
     }
 
     try {
-        size_t outputSize = width * height; // Edge detection typically produces grayscale output
+        size_t outputSize =
+            width *
+            height;  // Edge detection typically produces grayscale output
         auto output = context_->createBuffer(outputSize, GPUMemoryType::DEVICE);
 
         if (!output) {
             return nullptr;
         }
 
-        // In a real implementation, this would apply edge detection algorithms (Sobel, Canny, etc.)
-        // For fallback, just copy input (truncated to single channel)
+        // In a real implementation, this would apply edge detection algorithms
+        // (Sobel, Canny, etc.) For fallback, just copy input (truncated to
+        // single channel)
         size_t copySize = std::min(input.getSize(), outputSize);
         output->copyFrom(input, 0, 0, copySize);
 
@@ -429,12 +431,10 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::detectEdges(const GPUBuffer& input
     }
 }
 
-std::unique_ptr<GPUBuffer> GPUImageProcessor::applyCustomKernel(const GPUBuffer& input,
-                                                               const std::string& kernelSource,
-                                                               const std::string& entryPoint,
-                                                               const std::vector<size_t>& globalWorkSize,
-                                                               const std::vector<size_t>& localWorkSize,
-                                                               const std::vector<float>& args) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::applyCustomKernel(
+    const GPUBuffer& input, const std::string& kernelSource,
+    const std::string& entryPoint, const std::vector<size_t>& globalWorkSize,
+    const std::vector<size_t>& localWorkSize, const std::vector<float>& args) {
     if (!context_ || !input.isValid()) {
         return nullptr;
     }
@@ -447,7 +447,8 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::applyCustomKernel(const GPUBuffer&
         }
 
         // Create output buffer (assume same size as input)
-        auto output = context_->createBuffer(input.getSize(), GPUMemoryType::DEVICE);
+        auto output =
+            context_->createBuffer(input.getSize(), GPUMemoryType::DEVICE);
         if (!output) {
             return nullptr;
         }
@@ -458,7 +459,8 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::applyCustomKernel(const GPUBuffer&
 
         // Set additional arguments
         for (size_t i = 0; i < args.size(); ++i) {
-            kernel->setArgument(static_cast<int>(i + 2), &args[i], sizeof(float));
+            kernel->setArgument(static_cast<int>(i + 2), &args[i],
+                                sizeof(float));
         }
 
         // Execute kernel
@@ -476,7 +478,6 @@ std::vector<std::unique_ptr<GPUBuffer>> GPUImageProcessor::batchProcess(
     const std::vector<std::unique_ptr<GPUBuffer>>& inputs,
     const std::string& operation,
     const std::unordered_map<std::string, float>& params) {
-
     std::vector<std::unique_ptr<GPUBuffer>> outputs;
     outputs.reserve(inputs.size());
 
@@ -491,15 +492,25 @@ std::vector<std::unique_ptr<GPUBuffer>> GPUImageProcessor::batchProcess(
 
         if (operation == "gaussian_blur") {
             float sigma = params.count("sigma") ? params.at("sigma") : 1.0f;
-            int kernelSize = params.count("kernel_size") ? static_cast<int>(params.at("kernel_size")) : 5;
-            int width = params.count("width") ? static_cast<int>(params.at("width")) : 512;
-            int height = params.count("height") ? static_cast<int>(params.at("height")) : 512;
-            int channels = params.count("channels") ? static_cast<int>(params.at("channels")) : 3;
+            int kernelSize = params.count("kernel_size")
+                                 ? static_cast<int>(params.at("kernel_size"))
+                                 : 5;
+            int width = params.count("width")
+                            ? static_cast<int>(params.at("width"))
+                            : 512;
+            int height = params.count("height")
+                             ? static_cast<int>(params.at("height"))
+                             : 512;
+            int channels = params.count("channels")
+                               ? static_cast<int>(params.at("channels"))
+                               : 3;
 
-            result = gaussianBlur(*input, sigma, kernelSize, width, height, channels);
+            result = gaussianBlur(*input, sigma, kernelSize, width, height,
+                                  channels);
         } else {
             // For unknown operations, just copy input
-            result = context_->createBuffer(input->getSize(), GPUMemoryType::DEVICE);
+            result =
+                context_->createBuffer(input->getSize(), GPUMemoryType::DEVICE);
             if (result) {
                 result->copyFrom(*input, 0, 0, input->getSize());
             }
@@ -511,18 +522,19 @@ std::vector<std::unique_ptr<GPUBuffer>> GPUImageProcessor::batchProcess(
     return outputs;
 }
 
-GPUContext* GPUImageProcessor::getContext() const {
-    return context_.get();
-}
+GPUContext* GPUImageProcessor::getContext() const { return context_.get(); }
 
-std::unordered_map<std::string, double> GPUImageProcessor::getPerformanceStats() const {
+std::unordered_map<std::string, double> GPUImageProcessor::getPerformanceStats()
+    const {
     std::unordered_map<std::string, double> stats;
 
     if (context_) {
         auto deviceInfo = context_->getDeviceInfo();
-        stats["memory_size_mb"] = static_cast<double>(deviceInfo.totalMemory) / (1024 * 1024);
+        stats["memory_size_mb"] =
+            static_cast<double>(deviceInfo.totalMemory) / (1024 * 1024);
         stats["compute_units"] = static_cast<double>(deviceInfo.computeUnits);
-        stats["max_work_group_size"] = static_cast<double>(deviceInfo.maxWorkGroupSize);
+        stats["max_work_group_size"] =
+            static_cast<double>(deviceInfo.maxWorkGroupSize);
     }
 
     // Placeholder performance metrics
@@ -533,9 +545,9 @@ std::unordered_map<std::string, double> GPUImageProcessor::getPerformanceStats()
     return stats;
 }
 
-std::unordered_map<std::string, double> GPUImageProcessor::benchmark(const std::string& operation,
-                                                                    const std::pair<int, int>& imageSize,
-                                                                    int iterations) {
+std::unordered_map<std::string, double> GPUImageProcessor::benchmark(
+    const std::string& operation, const std::pair<int, int>& imageSize,
+    int iterations) {
     std::unordered_map<std::string, double> results;
 
     if (!context_ || iterations <= 0) {
@@ -550,7 +562,8 @@ std::unordered_map<std::string, double> GPUImageProcessor::benchmark(const std::
         size_t imageDataSize = width * height * channels;
 
         // Create test input buffer
-        auto inputBuffer = context_->createBuffer(imageDataSize, GPUMemoryType::DEVICE);
+        auto inputBuffer =
+            context_->createBuffer(imageDataSize, GPUMemoryType::DEVICE);
         if (!inputBuffer) {
             results["error"] = 1.0;
             return results;
@@ -567,15 +580,20 @@ std::unordered_map<std::string, double> GPUImageProcessor::benchmark(const std::
             std::unique_ptr<GPUBuffer> output;
 
             if (operation == "gaussian_blur") {
-                output = gaussianBlur(*inputBuffer, 1.0f, 5, width, height, channels);
+                output = gaussianBlur(*inputBuffer, 1.0f, 5, width, height,
+                                      channels);
             } else if (operation == "resize") {
-                output = resize(*inputBuffer, width, height, width/2, height/2, channels);
+                output = resize(*inputBuffer, width, height, width / 2,
+                                height / 2, channels);
             } else if (operation == "histogram_equalization") {
-                output = equalizeHistogram(*inputBuffer, width, height, channels);
+                output =
+                    equalizeHistogram(*inputBuffer, width, height, channels);
             } else {
                 // Default to convolution
-                std::vector<std::vector<float>> kernel = {{0, -1, 0}, {-1, 5, -1}, {0, -1, 0}};
-                output = convolve(*inputBuffer, kernel, width, height, channels);
+                std::vector<std::vector<float>> kernel = {
+                    {0, -1, 0}, {-1, 5, -1}, {0, -1, 0}};
+                output =
+                    convolve(*inputBuffer, kernel, width, height, channels);
             }
 
             // Synchronize to ensure operation completes
@@ -583,15 +601,19 @@ std::unordered_map<std::string, double> GPUImageProcessor::benchmark(const std::
         }
 
         auto endTime = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            endTime - startTime);
 
-        double avgTimeMs = static_cast<double>(duration.count()) / (iterations * 1000.0);
-        double throughputMpixels = (width * height * iterations) / (duration.count() / 1000000.0) / 1000000.0;
+        double avgTimeMs =
+            static_cast<double>(duration.count()) / (iterations * 1000.0);
+        double throughputMpixels = (width * height * iterations) /
+                                   (duration.count() / 1000000.0) / 1000000.0;
 
         results["avg_time_ms"] = avgTimeMs;
         results["throughput_mpixels_per_sec"] = throughputMpixels;
         results["iterations"] = static_cast<double>(iterations);
-        results["image_size_mpixels"] = static_cast<double>(width * height) / 1000000.0;
+        results["image_size_mpixels"] =
+            static_cast<double>(width * height) / 1000000.0;
 
     } catch (const std::exception&) {
         results["error"] = 1.0;
@@ -606,15 +628,16 @@ bool GPUImageProcessor::loadBuiltinKernels() {
     }
 
     try {
-        // In a real implementation, this would load optimized GPU kernels for common operations
-        // For now, just return success
+        // In a real implementation, this would load optimized GPU kernels for
+        // common operations For now, just return success
         return true;
     } catch (const std::exception&) {
         return false;
     }
 }
 
-std::string GPUImageProcessor::getKernelSource(const std::string& operation) const {
+std::string GPUImageProcessor::getKernelSource(
+    const std::string& operation) const {
     // Return placeholder kernel sources
     // In a real implementation, these would be optimized GPU kernels
 
@@ -689,13 +712,11 @@ std::string GPUImageProcessor::getKernelSource(const std::string& operation) con
         )";
     }
 
-    return ""; // Unknown operation
+    return "";  // Unknown operation
 }
 
 std::unordered_map<std::string, size_t> GPUImageProcessor::optimizeKernelParams(
-    const std::string& operation,
-    const std::pair<int, int>& imageSize) const {
-
+    const std::string& operation, const std::pair<int, int>& imageSize) const {
     std::unordered_map<std::string, size_t> params;
 
     if (!context_) {
@@ -708,8 +729,9 @@ std::unordered_map<std::string, size_t> GPUImageProcessor::optimizeKernelParams(
     size_t maxWorkGroupSize = deviceInfo.maxWorkGroupSize;
 
     // For 2D image processing, use square work groups when possible
-    size_t workGroupSize = 16; // Common choice for image processing
-    while (workGroupSize * workGroupSize > maxWorkGroupSize && workGroupSize > 1) {
+    size_t workGroupSize = 16;  // Common choice for image processing
+    while (workGroupSize * workGroupSize > maxWorkGroupSize &&
+           workGroupSize > 1) {
         workGroupSize /= 2;
     }
 
@@ -717,8 +739,10 @@ std::unordered_map<std::string, size_t> GPUImageProcessor::optimizeKernelParams(
     params["local_work_size_y"] = workGroupSize;
 
     // Calculate global work sizes (must be multiples of local work sizes)
-    size_t globalX = ((imageSize.first + workGroupSize - 1) / workGroupSize) * workGroupSize;
-    size_t globalY = ((imageSize.second + workGroupSize - 1) / workGroupSize) * workGroupSize;
+    size_t globalX =
+        ((imageSize.first + workGroupSize - 1) / workGroupSize) * workGroupSize;
+    size_t globalY = ((imageSize.second + workGroupSize - 1) / workGroupSize) *
+                     workGroupSize;
 
     params["global_work_size_x"] = globalX;
     params["global_work_size_y"] = globalY;
@@ -726,17 +750,17 @@ std::unordered_map<std::string, size_t> GPUImageProcessor::optimizeKernelParams(
     return params;
 }
 
-  
-std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(const GPUBuffer& input,
-                                                          float sigma, int kernelSize,
-                                                          int width, int height, int channels) {
+std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(
+    const GPUBuffer& input, float sigma, int kernelSize, int width, int height,
+    int channels) {
     if (!context_ || !input.isValid()) {
         return nullptr;
     }
 
     try {
         // Generate Gaussian kernel
-        std::vector<std::vector<float>> kernel(kernelSize, std::vector<float>(kernelSize));
+        std::vector<std::vector<float>> kernel(kernelSize,
+                                               std::vector<float>(kernelSize));
         float sum = 0.0f;
         int center = kernelSize / 2;
 
@@ -744,7 +768,7 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(const GPUBuffer& inpu
             for (int j = 0; j < kernelSize; ++j) {
                 float x = i - center;
                 float y = j - center;
-                kernel[i][j] = std::exp(-(x*x + y*y) / (2 * sigma * sigma));
+                kernel[i][j] = std::exp(-(x * x + y * y) / (2 * sigma * sigma));
                 sum += kernel[i][j];
             }
         }
@@ -761,6 +785,95 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(const GPUBuffer& inpu
     } catch (const std::exception&) {
         return nullptr;
     }
+}
+
+// GPUContext static method implementations
+std::vector<GPUDeviceInfo> GPUContext::getAvailableDevices(GPUBackend backend) {
+    std::vector<GPUDeviceInfo> devices;
+
+    // For fallback implementation, return a single CPU device
+    GPUDeviceInfo cpuDevice;
+    cpuDevice.name = "CPU Fallback Device";
+    cpuDevice.vendor = "Generic";
+    cpuDevice.totalMemory = 1024 * 1024 * 1024;  // 1GB
+    cpuDevice.computeUnits = 1;
+    cpuDevice.maxWorkGroupSize = 256;
+    cpuDevice.supportsDouble = true;
+    cpuDevice.supportsHalf = false;
+
+    devices.push_back(cpuDevice);
+    return devices;
+}
+
+bool GPUContext::isBackendAvailable(GPUBackend backend) {
+    // Check for specific backend availability
+    switch (backend) {
+#ifdef ATOM_IMAGE_HAS_CUDA
+        case GPUBackend::CUDA:
+            return true;
+#endif
+#ifdef ATOM_IMAGE_HAS_OPENCL
+        case GPUBackend::OPENCL:
+            return true;
+#endif
+#ifdef ATOM_IMAGE_HAS_VULKAN
+        case GPUBackend::VULKAN:
+            return true;
+#endif
+#ifdef ATOM_IMAGE_HAS_METAL
+        case GPUBackend::METAL:
+            return true;
+#endif
+        case GPUBackend::AUTO:
+            return true;  // AUTO always available (falls back to CPU)
+        default:
+            return false;
+    }
+}
+
+GPUBackend GPUContext::getOptimalBackend() {
+    // Return the best available backend in priority order
+#ifdef ATOM_IMAGE_HAS_CUDA
+    if (isBackendAvailable(GPUBackend::CUDA)) {
+        return GPUBackend::CUDA;
+    }
+#endif
+#ifdef ATOM_IMAGE_HAS_OPENCL
+    if (isBackendAvailable(GPUBackend::OPENCL)) {
+        return GPUBackend::OPENCL;
+    }
+#endif
+#ifdef ATOM_IMAGE_HAS_VULKAN
+    if (isBackendAvailable(GPUBackend::VULKAN)) {
+        return GPUBackend::VULKAN;
+    }
+#endif
+#ifdef ATOM_IMAGE_HAS_METAL
+    if (isBackendAvailable(GPUBackend::METAL)) {
+        return GPUBackend::METAL;
+    }
+#endif
+    // Fallback to AUTO (CPU)
+    return GPUBackend::AUTO;
+}
+
+// Factory function implementation
+std::unique_ptr<GPUImageProcessor> createOptimalGPUProcessor(GPUBackend backend,
+                                                             int deviceId) {
+    auto processor = std::make_unique<GPUImageProcessor>();
+
+    // If AUTO backend, select the optimal one
+    if (backend == GPUBackend::AUTO) {
+        backend = GPUContext::getOptimalBackend();
+    }
+
+    // Try to initialize with the specified backend
+    if (processor->initialize(backend, deviceId)) {
+        return processor;
+    }
+
+    // If initialization failed, return nullptr
+    return nullptr;
 }
 
 }  // namespace atom::image
