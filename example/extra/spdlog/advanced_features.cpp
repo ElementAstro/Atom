@@ -28,41 +28,40 @@ int main() {
                 .name = "file_logger",
                 .level = Level::info,
                 .file_config = LogConfig::FileConfig{.filename = "test.log"},
-                .console_output = false
-            };
+                .console_output = false};
             auto file_logger_result = manager.create_logger(file_config);
             if (file_logger_result) {
-                file_logger_result.value()->info("This message goes to file logger");
+                file_logger_result.value()->info(
+                    "This message goes to file logger");
             }
 
             // Create a console logger
-            LogConfig console_config{
-                .name = "console_logger",
-                .level = Level::info,
-                .file_config = {},
-                .console_output = true
-            };
+            LogConfig console_config{.name = "console_logger",
+                                     .level = Level::info,
+                                     .file_config = {},
+                                     .console_output = true};
             auto console_logger_result = manager.create_logger(console_config);
             if (console_logger_result) {
-                console_logger_result.value()->info("This message goes to console logger");
+                console_logger_result.value()->info(
+                    "This message goes to console logger");
             }
 
             // Create a network logger (using general type)
-            LogConfig network_config{
-                .name = "network_logger",
-                .level = Level::info,
-                .file_config = {},
-                .console_output = true
-            };
+            LogConfig network_config{.name = "network_logger",
+                                     .level = Level::info,
+                                     .file_config = {},
+                                     .console_output = true};
             auto network_logger_result = manager.create_logger(network_config);
             if (network_logger_result) {
-                network_logger_result.value()->info("This message goes to network logger");
+                network_logger_result.value()->info(
+                    "This message goes to network logger");
             }
 
             // Get logger by name
             auto retrieved_logger_result = manager.get_logger("file_logger");
             if (retrieved_logger_result) {
-                retrieved_logger_result.value()->info("Retrieved logger by name");
+                retrieved_logger_result.value()->info(
+                    "Retrieved logger by name");
             }
 
             std::cout << "Custom logger management completed" << std::endl;
@@ -107,7 +106,8 @@ int main() {
             }
 
             // Manual time-based sampling demonstration
-            std::cout << "Manual time-based sampling demonstration:" << std::endl;
+            std::cout << "Manual time-based sampling demonstration:"
+                      << std::endl;
             auto last_log_time = std::chrono::steady_clock::now();
             for (int i = 0; i < 10; ++i) {
                 auto now = std::chrono::steady_clock::now();
@@ -142,12 +142,15 @@ int main() {
             // Get logger statistics
             try {
                 const auto& stats = logger.get_stats();
-                std::cout << "Logger statistics retrieved successfully" << std::endl;
+                std::cout << "Logger statistics retrieved successfully"
+                          << std::endl;
             } catch (const std::exception& e) {
-                std::cout << "Statistics not available: " << e.what() << std::endl;
+                std::cout << "Statistics not available: " << e.what()
+                          << std::endl;
             }
 
-            std::cout << "Performance timing and statistics completed" << std::endl;
+            std::cout << "Performance timing and statistics completed"
+                      << std::endl;
         }
 
         // 5. Structured data logging
@@ -184,7 +187,8 @@ int main() {
             std::cout << "Structured data as JSON: " << user_data.to_json()
                       << std::endl;
             // Skip XML conversion as to_xml method doesn't exist
-            std::cout << "XML conversion would be shown here if implemented" << std::endl;
+            std::cout << "XML conversion would be shown here if implemented"
+                      << std::endl;
 
             std::cout << "Structured data logging completed" << std::endl;
         }
@@ -227,9 +231,12 @@ int main() {
         // 7. Log archiving and rotation (skipped - LogArchiver not implemented)
         std::cout << "\n7. Log Archiving and Rotation:" << std::endl;
         {
-            std::cout << "LogArchiver functionality would be demonstrated here if implemented" << std::endl;
+            std::cout << "LogArchiver functionality would be demonstrated here "
+                         "if implemented"
+                      << std::endl;
             std::cout << "This would include:" << std::endl;
-            std::cout << "  - Automatic log rotation based on size" << std::endl;
+            std::cout << "  - Automatic log rotation based on size"
+                      << std::endl;
             std::cout << "  - Compression of archived logs" << std::endl;
             std::cout << "  - Retention policies" << std::endl;
             std::cout << "Log archiving and rotation skipped" << std::endl;
@@ -314,20 +321,21 @@ int main() {
             // Simulate network logger failure and fallback
             try {
                 auto& manager = LogManager::instance();
-                LogConfig network_config{
-                    .name = "failing_network",
-                    .level = Level::info,
-                    .file_config = {},
-                    .console_output = true
-                };
-                auto network_logger_result = manager.create_logger(network_config);
+                LogConfig network_config{.name = "failing_network",
+                                         .level = Level::info,
+                                         .file_config = {},
+                                         .console_output = true};
+                auto network_logger_result =
+                    manager.create_logger(network_config);
                 auto network_logger = network_logger_result.value();
 
                 // This might fail in a real scenario
                 network_logger->info("This might fail if network is down");
 
             } catch (const std::exception& e) {
-                logger.warn("Network logger failed, falling back to local logging: {}", e.what());
+                logger.warn(
+                    "Network logger failed, falling back to local logging: {}",
+                    e.what());
             }
 
             std::cout << "Error handling and recovery completed" << std::endl;

@@ -46,7 +46,7 @@ public:
     enum Level { LOG_INFO, LOG_SUCCESS, LOG_WARNING, LOG_ERROR, LOG_DEBUG };
 
     static void write(Level level, const std::string& component,
-                    const std::string& message) {
+                      const std::string& message) {
         static std::mutex log_mutex;
         std::lock_guard<std::mutex> lock(log_mutex);
 
@@ -120,38 +120,44 @@ public:
             std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 
         ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "=== Async UDP Statistics ===");
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "Runtime: " + std::to_string(seconds) + " seconds");
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "Messages sent: " + std::to_string(messages_sent.load()));
+                             "=== Async UDP Statistics ===");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncStats",
+            "Runtime: " + std::to_string(seconds) + " seconds");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncStats",
+            "Messages sent: " + std::to_string(messages_sent.load()));
         ExampleLogger::write(
             ExampleLogger::LOG_INFO, "AsyncStats",
             "Messages received: " + std::to_string(messages_received.load()));
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "Bytes sent: " + std::to_string(bytes_sent.load()));
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "Bytes received: " + std::to_string(bytes_received.load()));
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncStats",
+            "Bytes sent: " + std::to_string(bytes_sent.load()));
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncStats",
+            "Bytes received: " + std::to_string(bytes_received.load()));
         ExampleLogger::write(
             ExampleLogger::LOG_INFO, "AsyncStats",
             "Async operations: " + std::to_string(async_operations.load()));
         ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "Successful operations: " +
-                        std::to_string(successful_operations.load()));
+                             "Successful operations: " +
+                                 std::to_string(successful_operations.load()));
         ExampleLogger::write(
             ExampleLogger::LOG_INFO, "AsyncStats",
             "Failed operations: " + std::to_string(failed_operations.load()));
         ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "Callback invocations: " +
-                        std::to_string(callback_invocations.load()));
+                             "Callback invocations: " +
+                                 std::to_string(callback_invocations.load()));
 
         if (seconds > 0) {
-            ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                        "Messages/sec sent: " +
-                            std::to_string(messages_sent.load() / seconds));
-            ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                        "Bytes/sec sent: " +
-                            std::to_string(bytes_sent.load() / seconds));
+            ExampleLogger::write(
+                ExampleLogger::LOG_INFO, "AsyncStats",
+                "Messages/sec sent: " +
+                    std::to_string(messages_sent.load() / seconds));
+            ExampleLogger::write(
+                ExampleLogger::LOG_INFO, "AsyncStats",
+                "Bytes/sec sent: " +
+                    std::to_string(bytes_sent.load() / seconds));
         }
 
         double success_rate = async_operations.load() > 0
@@ -159,8 +165,9 @@ public:
                                      async_operations.load()) *
                                         100.0
                                   : 0.0;
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "AsyncStats",
-                    "Success rate: " + std::to_string(success_rate) + "%");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "AsyncStats",
+            "Success rate: " + std::to_string(success_rate) + "%");
     }
 };
 
@@ -226,7 +233,7 @@ std::string vectorToString(const std::vector<char>& vec) {
 // Example 1: Enhanced basic async UDP operations
 void basicAsyncUdpExample() {
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
-                "Starting enhanced basic async UDP example");
+                         "Starting enhanced basic async UDP example");
 
     try {
         UdpClient client;
@@ -234,12 +241,14 @@ void basicAsyncUdpExample() {
         // Bind to a specific port
         int port = 12345;
         if (!client.bind(port)) {
-            ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
-                        "Failed to bind to port " + std::to_string(port));
+            ExampleLogger::write(
+                ExampleLogger::LOG_ERROR, "Example1",
+                "Failed to bind to port " + std::to_string(port));
             return;
         }
-        ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example1",
-                    "Successfully bound to port " + std::to_string(port));
+        ExampleLogger::write(
+            ExampleLogger::LOG_SUCCESS, "Example1",
+            "Successfully bound to port " + std::to_string(port));
 
         // Set enhanced callback for data received
         client.setOnDataReceivedCallback([](const std::vector<char>& data,
@@ -250,8 +259,9 @@ void basicAsyncUdpExample() {
                 remoteHost + ":" + std::to_string(remotePort);
 
             ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
-                        "Received from " + endpoint + ": " + message + " (" +
-                            std::to_string(data.size()) + " bytes)");
+                                 "Received from " + endpoint + ": " + message +
+                                     " (" + std::to_string(data.size()) +
+                                     " bytes)");
 
             globalAsyncUdpStats.record_receive(data.size());
             globalMessageQueue.push(data, endpoint);
@@ -260,15 +270,15 @@ void basicAsyncUdpExample() {
         // Set enhanced error callback
         client.setOnErrorCallback([](const std::string& error, int errorCode) {
             ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
-                        "Error: " + error +
-                            " (Code: " + std::to_string(errorCode) + ")");
+                                 "Error: " + error + " (Code: " +
+                                     std::to_string(errorCode) + ")");
             globalAsyncUdpStats.failed_operations++;
         });
 
         // Start receiving with enhanced buffer
         client.startReceiving(2048);
         ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example1",
-                    "Started receiving with 2KB buffer");
+                             "Started receiving with 2KB buffer");
 
         // Send multiple test messages
         std::vector<std::pair<std::string, std::string>> testMessages = {
@@ -288,14 +298,14 @@ void basicAsyncUdpExample() {
             globalAsyncUdpStats.record_send(data.size(), success);
 
             if (success) {
-                ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example1",
-                            "Sent to " + endpoint + ": " +
-                                message.substr(0, 50) +
-                                (message.length() > 50 ? "..." : "") + " (" +
-                                std::to_string(data.size()) + " bytes)");
+                ExampleLogger::write(
+                    ExampleLogger::LOG_SUCCESS, "Example1",
+                    "Sent to " + endpoint + ": " + message.substr(0, 50) +
+                        (message.length() > 50 ? "..." : "") + " (" +
+                        std::to_string(data.size()) + " bytes)");
             } else {
                 ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
-                            "Failed to send to " + endpoint);
+                                     "Failed to send to " + endpoint);
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -303,7 +313,7 @@ void basicAsyncUdpExample() {
 
         // Test synchronous receive with timeout
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
-                    "Testing synchronous receive with timeout...");
+                             "Testing synchronous receive with timeout...");
         std::string receivedHost;
         int receivedPort;
         auto receivedData = client.receive(1024, receivedHost, receivedPort,
@@ -312,17 +322,18 @@ void basicAsyncUdpExample() {
         if (!receivedData.empty()) {
             std::string message = vectorToString(receivedData);
             ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example1",
-                        "Synchronously received from " + receivedHost + ":" +
-                            std::to_string(receivedPort) + ": " + message);
+                                 "Synchronously received from " + receivedHost +
+                                     ":" + std::to_string(receivedPort) + ": " +
+                                     message);
             globalAsyncUdpStats.record_receive(receivedData.size());
         } else {
             ExampleLogger::write(ExampleLogger::LOG_WARNING, "Example1",
-                        "No data received within timeout period");
+                                 "No data received within timeout period");
         }
 
         // Process queued messages
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
-                    "Processing queued messages...");
+                             "Processing queued messages...");
         std::vector<char> queuedData;
         std::string queuedEndpoint;
         int processedCount = 0;
@@ -332,35 +343,36 @@ void basicAsyncUdpExample() {
                processedCount < 5) {
             std::string message = vectorToString(queuedData);
             ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
-                        "Processed queued message from " + queuedEndpoint +
-                            ": " + message);
+                                 "Processed queued message from " +
+                                     queuedEndpoint + ": " + message);
             processedCount++;
         }
 
         // Stop receiving
         client.stopReceiving();
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1", "Stopped receiving data");
+        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
+                             "Stopped receiving data");
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example1",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example1",
-                "Enhanced basic async UDP example completed");
+                         "Enhanced basic async UDP example completed");
 }
 
 // Example 2: Future-based async operations
 void futureBasedAsyncExample() {
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
-                "Starting future-based async operations example");
+                         "Starting future-based async operations example");
 
     try {
         UdpClient client;
 
         if (!client.bind(12346)) {
             ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example2",
-                        "Failed to bind to port 12346");
+                                 "Failed to bind to port 12346");
             return;
         }
 
@@ -389,19 +401,23 @@ void futureBasedAsyncExample() {
         }
 
         // Wait for all futures and collect results
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
-                    "Waiting for future-based operations to complete...");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "Example2",
+            "Waiting for future-based operations to complete...");
         for (size_t i = 0; i < sendFutures.size(); ++i) {
             try {
                 bool result = sendFutures[i].get();
-                ExampleLogger::write(result ? ExampleLogger::LOG_SUCCESS : ExampleLogger::LOG_ERROR,
-                            "Example2",
-                            "Future operation " + std::to_string(i + 1) +
-                                (result ? " succeeded" : " failed"));
+                ExampleLogger::write(result ? ExampleLogger::LOG_SUCCESS
+                                            : ExampleLogger::LOG_ERROR,
+                                     "Example2",
+                                     "Future operation " +
+                                         std::to_string(i + 1) +
+                                         (result ? " succeeded" : " failed"));
             } catch (const std::exception& e) {
-                ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example2",
-                            "Future " + std::to_string(i + 1) +
-                                " exception: " + std::string(e.what()));
+                ExampleLogger::write(
+                    ExampleLogger::LOG_ERROR, "Example2",
+                    "Future " + std::to_string(i + 1) +
+                        " exception: " + std::string(e.what()));
             }
         }
 
@@ -409,17 +425,17 @@ void futureBasedAsyncExample() {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example2",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example2",
-                "Future-based async operations example completed");
+                         "Future-based async operations example completed");
 }
 
 // Example 3: Concurrent message processing
 void concurrentProcessingExample() {
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
-                "Starting concurrent message processing example");
+                         "Starting concurrent message processing example");
 
     try {
         std::vector<std::unique_ptr<UdpClient>> clients;
@@ -432,8 +448,9 @@ void concurrentProcessingExample() {
 
             if (!client->bind(port)) {
                 ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example3",
-                            "Failed to bind client " + std::to_string(i) +
-                                " to port " + std::to_string(port));
+                                     "Failed to bind client " +
+                                         std::to_string(i) + " to port " +
+                                         std::to_string(port));
                 continue;
             }
 
@@ -443,9 +460,10 @@ void concurrentProcessingExample() {
                                                   int remotePort) {
                 std::string message = vectorToString(data);
                 ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
-                            "Client " + std::to_string(i) +
-                                " received: " + message + " from " +
-                                remoteHost + ":" + std::to_string(remotePort));
+                                     "Client " + std::to_string(i) +
+                                         " received: " + message + " from " +
+                                         remoteHost + ":" +
+                                         std::to_string(remotePort));
                 globalAsyncUdpStats.record_receive(data.size());
             });
 
@@ -454,8 +472,8 @@ void concurrentProcessingExample() {
         }
 
         ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example3",
-                    "Created " + std::to_string(clients.size()) +
-                        " concurrent clients");
+                             "Created " + std::to_string(clients.size()) +
+                                 " concurrent clients");
 
         // Launch concurrent message sending threads
         std::vector<std::thread> senderThreads;
@@ -475,18 +493,20 @@ void concurrentProcessingExample() {
                         globalAsyncUdpStats.record_send(data.size(), success);
 
                         if (success) {
-                            ExampleLogger::write(ExampleLogger::LOG_DEBUG, "Example3",
-                                        "Thread " + std::to_string(i) +
-                                            " sent: " + message);
+                            ExampleLogger::write(ExampleLogger::LOG_DEBUG,
+                                                 "Example3",
+                                                 "Thread " + std::to_string(i) +
+                                                     " sent: " + message);
                         }
 
                         std::this_thread::sleep_for(
                             std::chrono::milliseconds(200));
                     }
                 } catch (const std::exception& e) {
-                    ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example3",
-                                "Sender thread " + std::to_string(i) +
-                                    " error: " + std::string(e.what()));
+                    ExampleLogger::write(
+                        ExampleLogger::LOG_ERROR, "Example3",
+                        "Sender thread " + std::to_string(i) +
+                            " error: " + std::string(e.what()));
                 }
             });
         }
@@ -506,24 +526,24 @@ void concurrentProcessingExample() {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example3",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example3",
-                "Concurrent message processing example completed");
+                         "Concurrent message processing example completed");
 }
 
 // Example 4: Performance and load testing
 void performanceTestingExample() {
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example4",
-                "Starting performance testing example");
+                         "Starting performance testing example");
 
     try {
         UdpClient client;
 
         if (!client.bind(12360)) {
             ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example4",
-                        "Failed to bind to port 12360");
+                                 "Failed to bind to port 12360");
             return;
         }
 
@@ -537,7 +557,7 @@ void performanceTestingExample() {
 
         // Performance test: rapid message sending
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Example4",
-                    "Starting rapid message sending test...");
+                             "Starting rapid message sending test...");
         auto startTime = std::chrono::high_resolution_clock::now();
 
         const int numMessages = 100;
@@ -553,8 +573,9 @@ void performanceTestingExample() {
             endTime - startTime);
 
         ExampleLogger::write(ExampleLogger::LOG_SUCCESS, "Example4",
-                    "Sent " + std::to_string(numMessages) + " messages in " +
-                        std::to_string(duration.count()) + " μs");
+                             "Sent " + std::to_string(numMessages) +
+                                 " messages in " +
+                                 std::to_string(duration.count()) + " μs");
         ExampleLogger::write(
             ExampleLogger::LOG_INFO, "Example4",
             "Average: " + std::to_string(duration.count() / numMessages) +
@@ -578,41 +599,46 @@ void performanceTestingExample() {
             globalAsyncUdpStats.record_send(data.size(), success);
 
             ExampleLogger::write(ExampleLogger::LOG_INFO, "Example4",
-                        "Size " + std::to_string(size) + " bytes: " +
-                            std::to_string(latency.count()) + " μs latency");
+                                 "Size " + std::to_string(size) + " bytes: " +
+                                     std::to_string(latency.count()) +
+                                     " μs latency");
         }
 
         client.stopReceiving();
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Example4",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::LOG_INFO, "Example4",
-                "Performance testing example completed");
+                         "Performance testing example completed");
 }
 
 int main() {
     try {
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "Starting Enhanced Async UDP Client Examples");
+                             "Starting Enhanced Async UDP Client Examples");
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "Features demonstrated:");
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "- Enhanced basic async UDP operations with callbacks");
+                             "Features demonstrated:");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "Main",
+            "- Enhanced basic async UDP operations with callbacks");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "Main",
+            "- Future-based async operations and promise patterns");
+        ExampleLogger::write(
+            ExampleLogger::LOG_INFO, "Main",
+            "- Concurrent message processing with multiple clients");
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "- Future-based async operations and promise patterns");
+                             "- Performance testing and load analysis");
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "- Concurrent message processing with multiple clients");
+                             "- Advanced error handling and recovery");
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "- Performance testing and load analysis");
+                             "- Message queuing and buffering strategies");
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "- Advanced error handling and recovery");
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "- Message queuing and buffering strategies");
-        ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "- Comprehensive statistics tracking");
+                             "- Comprehensive statistics tracking");
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main", "");
 
         // Run all examples with proper spacing
@@ -633,7 +659,7 @@ int main() {
 
         // Process any remaining queued messages
         ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                    "Processing remaining queued messages...");
+                             "Processing remaining queued messages...");
         std::vector<char> data;
         std::string endpoint;
         int remainingCount = 0;
@@ -642,15 +668,16 @@ int main() {
                                       std::chrono::milliseconds(100)) &&
                remainingCount < 10) {
             std::string message = vectorToString(data);
-            ExampleLogger::write(ExampleLogger::LOG_DEBUG, "Main",
-                        "Remaining message from " + endpoint + ": " + message);
+            ExampleLogger::write(
+                ExampleLogger::LOG_DEBUG, "Main",
+                "Remaining message from " + endpoint + ": " + message);
             remainingCount++;
         }
 
         if (remainingCount > 0) {
             ExampleLogger::write(ExampleLogger::LOG_INFO, "Main",
-                        "Processed " + std::to_string(remainingCount) +
-                            " remaining messages");
+                                 "Processed " + std::to_string(remainingCount) +
+                                     " remaining messages");
         }
 
         ExampleLogger::write(
@@ -665,7 +692,7 @@ int main() {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::LOG_ERROR, "Main",
-                    "Fatal error: " + std::string(e.what()));
+                             "Fatal error: " + std::string(e.what()));
         globalAsyncUdpStats.print_summary();
         return 1;
     }

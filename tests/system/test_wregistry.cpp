@@ -382,7 +382,8 @@ TEST_F(WRegistryTest, RecursivelyEnumerateRegistrySubKeys) {
 TEST_F(WRegistryTest, FindRegistryKey) {
     // This should not throw or crash
     std::vector<std::string> foundKeys;
-    EXPECT_NO_THROW(findRegistryKey(HKEY_CURRENT_USER, test_key, "SubKey1", foundKeys));
+    EXPECT_NO_THROW(
+        findRegistryKey(HKEY_CURRENT_USER, test_key, "SubKey1", foundKeys));
 }
 
 // Test findRegistryValue function
@@ -391,8 +392,8 @@ TEST_F(WRegistryTest, FindRegistryKey) {
 TEST_F(WRegistryTest, FindRegistryValue) {
     // This should not throw or crash
     std::vector<std::pair<std::string, std::string>> foundValues;
-    EXPECT_NO_THROW(
-        findRegistryValue(HKEY_CURRENT_USER, test_key, "TestString", foundValues));
+    EXPECT_NO_THROW(findRegistryValue(HKEY_CURRENT_USER, test_key, "TestString",
+                                      foundValues));
 }
 
 // Edge case: test with empty subkey

@@ -52,9 +52,10 @@ PYBIND11_MODULE(core_io, m) {
     });
 
     // PathType enum
-    py::enum_<atom::io::PathType>(m, "PathType", 
+    py::enum_<atom::io::PathType>(
+        m, "PathType",
         R"(Enumeration representing different types of filesystem paths.
-        
+
         Values:
             NOT_EXISTS: Path does not exist
             REGULAR_FILE: Regular file
@@ -62,16 +63,19 @@ PYBIND11_MODULE(core_io, m) {
             SYMLINK: Symbolic link
             OTHER: Other type (device, pipe, etc.)
         )")
-        .value("NOT_EXISTS", atom::io::PathType::NOT_EXISTS, "Path does not exist")
+        .value("NOT_EXISTS", atom::io::PathType::NOT_EXISTS,
+               "Path does not exist")
         .value("REGULAR_FILE", atom::io::PathType::REGULAR_FILE, "Regular file")
         .value("DIRECTORY", atom::io::PathType::DIRECTORY, "Directory")
         .value("SYMLINK", atom::io::PathType::SYMLINK, "Symbolic link")
-        .value("OTHER", atom::io::PathType::OTHER, "Other type (device, pipe, etc.)");
+        .value("OTHER", atom::io::PathType::OTHER,
+               "Other type (device, pipe, etc.)");
 
     // CreateDirectoriesOptions struct
-    py::class_<atom::io::CreateDirectoriesOptions>(m, "CreateDirectoriesOptions",
+    py::class_<atom::io::CreateDirectoriesOptions>(
+        m, "CreateDirectoriesOptions",
         R"(Options for directory creation operations.
-        
+
         Attributes:
             verbose: Enable verbose output
             dry_run: Perform dry run without actual operations
@@ -79,11 +83,11 @@ PYBIND11_MODULE(core_io, m) {
         )")
         .def(py::init<>(), "Default constructor")
         .def_readwrite("verbose", &atom::io::CreateDirectoriesOptions::verbose,
-                      "Enable verbose output during operations")
+                       "Enable verbose output during operations")
         .def_readwrite("dry_run", &atom::io::CreateDirectoriesOptions::dryRun,
-                      "Perform dry run without actual filesystem operations")
+                       "Perform dry run without actual filesystem operations")
         .def_readwrite("delay", &atom::io::CreateDirectoriesOptions::delay,
-                      "Delay between operations in milliseconds");
+                       "Delay between operations in milliseconds");
 
     // Directory operations
     m.def("create_directory", &atom::io::createDirectory<std::string>,
@@ -121,7 +125,8 @@ Examples:
     True
 )");
 
-    m.def("rename_directory", &atom::io::renameDirectory<std::string, std::string>,
+    m.def("rename_directory",
+          &atom::io::renameDirectory<std::string, std::string>,
           py::arg("old_path"), py::arg("new_path"),
           R"(Renames a directory from old_path to new_path.
 
@@ -202,8 +207,7 @@ Examples:
     True
 )");
 
-    m.def("remove_file", &atom::io::removeFile<std::string>,
-          py::arg("path"),
+    m.def("remove_file", &atom::io::removeFile<std::string>, py::arg("path"),
           R"(Removes a file at the specified path.
 
 Args:
@@ -250,8 +254,7 @@ Examples:
 )");
 
     // File information and utilities
-    m.def("file_size", &atom::io::fileSize<std::string>,
-          py::arg("path"),
+    m.def("file_size", &atom::io::fileSize<std::string>, py::arg("path"),
           R"(Returns the size of a file in bytes.
 
 Args:
@@ -375,7 +378,8 @@ Examples:
     ...     print("It's a regular file")
 )");
 
-    m.def("is_executable_file", &atom::io::isExecutableFile<std::string, std::string>,
+    m.def("is_executable_file",
+          &atom::io::isExecutableFile<std::string, std::string>,
           py::arg("file_name"), py::arg("file_ext") = "",
           R"(Checks if a file is executable.
 
@@ -394,8 +398,7 @@ Examples:
 )");
 
     // Directory and file walking
-    m.def("jwalk", &atom::io::jwalk<std::string>,
-          py::arg("root"),
+    m.def("jwalk", &atom::io::jwalk<std::string>, py::arg("root"),
           R"(Recursively walks through a directory and returns JSON information.
 
 Args:
@@ -409,9 +412,10 @@ Examples:
     >>> print(json_info)
 )");
 
-    m.def("fwalk", &atom::io::fwalk<std::string>,
-          py::arg("root"), py::arg("callback"),
-          R"(Recursively walks through a directory, calling callback for each file.
+    m.def(
+        "fwalk", &atom::io::fwalk<std::string>, py::arg("root"),
+        py::arg("callback"),
+        R"(Recursively walks through a directory, calling callback for each file.
 
 Args:
     root: The root directory to walk
@@ -424,7 +428,8 @@ Examples:
 )");
 
     // Working directory operations
-    m.def("change_working_directory", &atom::io::changeWorkingDirectory<std::string>,
+    m.def("change_working_directory",
+          &atom::io::changeWorkingDirectory<std::string>,
           py::arg("directory_path"),
           R"(Changes the current working directory.
 
@@ -474,7 +479,8 @@ Examples:
 
     // File splitting and merging
     m.def("split_file", &atom::io::splitFile<std::string, std::string>,
-          py::arg("file_path"), py::arg("chunk_size"), py::arg("output_pattern") = "",
+          py::arg("file_path"), py::arg("chunk_size"),
+          py::arg("output_pattern") = "",
           R"(Splits a file into multiple chunks.
 
 Args:
@@ -486,12 +492,16 @@ Examples:
     >>> split_file("largefile.txt", 1024*1024)  # Split into 1MB chunks
 )");
 
-    m.def("merge_files",
-          [](const std::string& output_file_path, const std::vector<std::string>& part_files) {
-              atom::io::mergeFiles(output_file_path, std::span<const std::string>(part_files.data(), part_files.size()));
-          },
-          py::arg("output_file_path"), py::arg("part_files"),
-          R"(Merges multiple file parts into a single file.
+    m.def(
+        "merge_files",
+        [](const std::string& output_file_path,
+           const std::vector<std::string>& part_files) {
+            atom::io::mergeFiles(output_file_path,
+                                 std::span<const std::string>(
+                                     part_files.data(), part_files.size()));
+        },
+        py::arg("output_file_path"), py::arg("part_files"),
+        R"(Merges multiple file parts into a single file.
 
 Args:
     output_file_path: The path for the merged output file
@@ -503,7 +513,8 @@ Examples:
 )");
 
     m.def("quick_split", &atom::io::quickSplit<std::string, std::string>,
-          py::arg("file_path"), py::arg("num_chunks"), py::arg("output_pattern") = "",
+          py::arg("file_path"), py::arg("num_chunks"),
+          py::arg("output_pattern") = "",
           R"(Quickly splits a file into a specified number of chunks.
 
 Args:
@@ -533,9 +544,11 @@ Examples:
 )");
 
     // Search functions
-    m.def("search_executable_files", &atom::io::searchExecutableFiles<std::string>,
-          py::arg("dir"), py::arg("search_str"),
-          R"(Searches for executable files in a directory containing a search string.
+    m.def(
+        "search_executable_files",
+        &atom::io::searchExecutableFiles<std::string>, py::arg("dir"),
+        py::arg("search_str"),
+        R"(Searches for executable files in a directory containing a search string.
 
 Args:
     dir: Directory to search in
@@ -551,12 +564,13 @@ Examples:
 )");
 
     // Additional utility functions
-    m.def("get_executable_name",
-          [](const std::string& path) -> std::string {
-              return std::filesystem::path(path).filename().string();
-          },
-          py::arg("path"),
-          R"(Gets the executable name from a path.
+    m.def(
+        "get_executable_name",
+        [](const std::string& path) -> std::string {
+            return std::filesystem::path(path).filename().string();
+        },
+        py::arg("path"),
+        R"(Gets the executable name from a path.
 
 Args:
     path: The path to extract the executable name from

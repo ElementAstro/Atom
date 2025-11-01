@@ -1,11 +1,11 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include "atom/extra/injection/all.hpp"
-#include "atom/extra/injection/container.hpp"
 #include "atom/extra/injection/binding.hpp"
-#include "atom/extra/injection/resolver.hpp"
+#include "atom/extra/injection/container.hpp"
 #include "atom/extra/injection/inject.hpp"
+#include "atom/extra/injection/resolver.hpp"
 
 #include <memory>
 #include <string>
@@ -71,62 +71,62 @@ protected:
 // Placeholder tests for dependency injection
 TEST_F(InjectionTest, ContainerCreation) {
     // Test DI container creation
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, SingletonBinding) {
     // Test singleton binding
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, TransientBinding) {
     // Test transient binding
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, InterfaceBinding) {
     // Test interface to implementation binding
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, FactoryBinding) {
     // Test factory binding
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, DependencyResolution) {
     // Test dependency resolution
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, CircularDependencyDetection) {
     // Test circular dependency detection
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, ScopeManagement) {
     // Test scope management
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, ConditionalBinding) {
     // Test conditional binding
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, NamedBinding) {
     // Test named binding
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, AutoWiring) {
     // Test auto-wiring functionality
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(InjectionTest, LifecycleManagement) {
     // Test lifecycle management
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
-} // namespace atom::extra::injection::test
+}  // namespace atom::extra::injection::test

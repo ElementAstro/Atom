@@ -219,42 +219,6 @@ exclude_lines = [
 source-dir = "docs"
 build-dir = "docs/_build"
 
-# Pre-commit configuration
-[tool.pre-commit]
-repos = [
-    {
-        repo = "https://github.com/pre-commit/pre-commit-hooks",
-        rev = "v4.4.0",
-        hooks = [
-            {id = "trailing-whitespace"},
-            {id = "end-of-file-fixer"},
-            {id = "check-yaml"},
-            {id = "check-added-large-files"},
-            {id = "check-merge-conflict"},
-        ]
-    },
-    {
-        repo = "https://github.com/psf/black",
-        rev = "23.1.0",
-        hooks = [{id = "black"}]
-    },
-    {
-        repo = "https://github.com/pycqa/isort",
-        rev = "5.12.0",
-        hooks = [{id = "isort"}]
-    },
-    {
-        repo = "https://github.com/charliermarsh/ruff-pre-commit",
-        rev = "v0.1.0",
-        hooks = [{id = "ruff", args = ["--fix"]}]
-    },
-    {
-        repo = "https://github.com/pre-commit/mirrors-mypy",
-        rev = "v1.0.0",
-        hooks = [{id = "mypy", additional_dependencies = ["types-all"]}]
-    },
-]
-
 # Bandit security linter configuration
 [tool.bandit]
 exclude_dirs = ["tests", "build", "dist"]

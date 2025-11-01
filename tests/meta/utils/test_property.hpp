@@ -467,8 +467,7 @@ TEST_F(PropertyTest, ThreadSafety) {
 TEST_F(PropertyTest, EdgeCases) {
     // Test with empty getter/setter functions
     Property<int> emptyProp;
-    EXPECT_THROW(static_cast<int>(emptyProp),
-                 atom::error::InvalidArgument);
+    EXPECT_THROW(static_cast<int>(emptyProp), atom::error::InvalidArgument);
 
     // Test with nullptr callbacks
     emptyProp.setOnChange(nullptr);

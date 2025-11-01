@@ -242,8 +242,34 @@ struct FifoClient::Impl {
         spdlog::info("Attempting to reconnect (attempt {}/{})", attempts + 1,
                      config.max_reconnect_attempts);
 
+        // Track start time for timeout enforcement
+        auto startTime = std::chrono::steady_clock::now();
+        auto effectiveTimeout = timeout.value_or(
+            config.default_timeout.value_or(std::chrono::milliseconds(5000)));
+
         reconnectAttempts++;
-        std::this_thread::sleep_for(config.reconnect_delay);
+
+        // Check if we have time remaining before waiting
+        auto elapsed = std::chrono::steady_clock::now() - startTime;
+        if (elapsed >= effectiveTimeout) {
+            spdlog::error("Reconnection timeout before attempt");
+            return type::unexpected(make_error_code(FifoError::Timeout));
+        }
+
+        // Wait for reconnect delay, but respect the timeout
+        auto remainingTime = effectiveTimeout - elapsed;
+        auto delayTime =
+            std::min(config.reconnect_delay,
+                     std::chrono::duration_cast<std::chrono::milliseconds>(
+                         remainingTime));
+        std::this_thread::sleep_for(delayTime);
+
+        // Check timeout again after delay
+        elapsed = std::chrono::steady_clock::now() - startTime;
+        if (elapsed >= effectiveTimeout) {
+            spdlog::error("Reconnection timeout after delay");
+            return type::unexpected(make_error_code(FifoError::Timeout));
+        }
 
         try {
             close();
@@ -268,6 +294,24 @@ struct FifoClient::Impl {
             return type::unexpected(
                 make_error_code(FifoError::MessageTooLarge));
         }
+
+        // Log message priority for monitoring and debugging
+        const char* priorityStr = "Normal";
+        switch (priority) {
+            case MessagePriority::Low:
+                priorityStr = "Low";
+                break;
+            case MessagePriority::Normal:
+                priorityStr = "Normal";
+                break;
+            case MessagePriority::High:
+                priorityStr = "High";
+                break;
+            case MessagePriority::Critical:
+                priorityStr = "Critical";
+                break;
+        }
+        spdlog::debug("Writing message with priority: {}", priorityStr);
 
         std::lock_guard<std::mutex> lock(operationMutex);
         auto startTime = std::chrono::steady_clock::now();
@@ -306,9 +350,38 @@ struct FifoClient::Impl {
             }
         }
 
-        size_t bytesWritten = 0;
-        auto effectiveTimeout = timeout.value_or(
+        // Adjust timeout based on priority - higher priority gets more time
+        auto baseTimeout = timeout.value_or(
             config.default_timeout.value_or(std::chrono::milliseconds(5000)));
+        auto effectiveTimeout = baseTimeout;
+
+        // Apply priority multiplier to timeout
+        switch (priority) {
+            case MessagePriority::Low:
+                // Low priority gets 75% of base timeout
+                effectiveTimeout =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        baseTimeout * 0.75);
+                break;
+            case MessagePriority::Normal:
+                // Normal priority uses base timeout
+                effectiveTimeout = baseTimeout;
+                break;
+            case MessagePriority::High:
+                // High priority gets 150% of base timeout
+                effectiveTimeout =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        baseTimeout * 1.5);
+                break;
+            case MessagePriority::Critical:
+                // Critical priority gets 200% of base timeout
+                effectiveTimeout =
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        baseTimeout * 2.0);
+                break;
+        }
+
+        size_t bytesWritten = 0;
 
 #ifdef _WIN32
         DWORD written;
@@ -875,8 +948,9 @@ FifoClient::readAsyncWithFuture(
     return m_impl->readAsyncWithFuture(maxSize, timeout);
 }
 
-auto FifoClient::open(std::optional<std::chrono::milliseconds> timeout [[maybe_unused]])
-    -> type::expected<void, std::error_code> {
+auto FifoClient::open(
+    std::optional<std::chrono::milliseconds> timeout
+    [[maybe_unused]]) -> type::expected<void, std::error_code> {
     if (!m_impl) {
         return type::unexpected(make_error_code(FifoError::NotOpen));
     }

@@ -155,9 +155,7 @@ TEST_F(SocketHubTest, ClientTimeout) {
     ::close(clientSocket);
 }
 
-TEST_F(SocketHubTest, GetPort) {
-    EXPECT_EQ(socketHub_->getPort(), port_);
-}
+TEST_F(SocketHubTest, GetPort) { EXPECT_EQ(socketHub_->getPort(), port_); }
 
 TEST_F(SocketHubTest, SendLargeMessage) {
     int clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);

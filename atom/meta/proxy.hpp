@@ -425,8 +425,8 @@ protected:
     }
 
     template <std::size_t... Is>
-    auto callFunction(std::vector<std::any>& args, std::index_sequence<Is...>)
-        -> std::any {
+    auto callFunction(std::vector<std::any>& args,
+                      std::index_sequence<Is...>) -> std::any {
         try {
             if constexpr (std::is_void_v<typename Traits::return_type>) {
                 std::invoke(
@@ -853,8 +853,8 @@ template <typename Func>
 AsyncProxyFunction(Func) -> AsyncProxyFunction<Func>;
 
 template <typename Func>
-AsyncProxyFunction(Func&&, FunctionInfo&)
-    -> AsyncProxyFunction<std::decay_t<Func>>;
+AsyncProxyFunction(Func&&,
+                   FunctionInfo&) -> AsyncProxyFunction<std::decay_t<Func>>;
 
 /**
  * @brief Factory function to create a proxy

@@ -5,22 +5,21 @@ Automates building, testing, and packaging for multiple platforms and distributi
 """
 
 import argparse
-import os
-import sys
-import subprocess
-import platform
-import shutil
 import json
-import tempfile
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
 import logging
-import concurrent.futures
+import platform
+import subprocess
+import sys
 from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class AtomBuildSystem:
     """Comprehensive build and packaging system for Atom library."""
@@ -35,64 +34,64 @@ class AtomBuildSystem:
 
         # Build configurations
         self.build_configs = {
-            'debug': {
-                'cmake_build_type': 'Debug',
-                'optimization': False,
-                'debug_symbols': True
+            "debug": {
+                "cmake_build_type": "Debug",
+                "optimization": False,
+                "debug_symbols": True,
             },
-            'release': {
-                'cmake_build_type': 'Release',
-                'optimization': True,
-                'debug_symbols': False
+            "release": {
+                "cmake_build_type": "Release",
+                "optimization": True,
+                "debug_symbols": False,
             },
-            'relwithdebinfo': {
-                'cmake_build_type': 'RelWithDebInfo',
-                'optimization': True,
-                'debug_symbols': True
-            }
+            "relwithdebinfo": {
+                "cmake_build_type": "RelWithDebInfo",
+                "optimization": True,
+                "debug_symbols": True,
+            },
         }
 
         # Package formats by platform
         self.package_formats = {
-            'linux': ['tar.gz', 'deb', 'rpm', 'appimage'],
-            'windows': ['zip', 'msi', 'nsis'],
-            'macos': ['tar.gz', 'dmg', 'pkg']
+            "linux": ["tar.gz", "deb", "rpm", "appimage"],
+            "windows": ["zip", "msi", "nsis"],
+            "macos": ["tar.gz", "dmg", "pkg"],
         }
 
         # Distribution channels
         self.distribution_channels = [
-            'github-releases',
-            'pypi',
-            'vcpkg',
-            'conan',
-            'homebrew',
-            'apt',
-            'docker'
+            "github-releases",
+            "pypi",
+            "vcpkg",
+            "conan",
+            "homebrew",
+            "apt",
+            "docker",
         ]
 
     def _detect_platform(self) -> str:
         """Detect the current platform."""
         system = platform.system().lower()
-        if system == 'windows':
-            return 'windows'
-        elif system == 'darwin':
-            return 'macos'
-        elif system == 'linux':
-            return 'linux'
+        if system == "windows":
+            return "windows"
+        elif system == "darwin":
+            return "macos"
+        elif system == "linux":
+            return "linux"
         else:
-            return 'unknown'
+            return "unknown"
 
     def _detect_architecture(self) -> str:
         """Detect the current architecture."""
         machine = platform.machine().lower()
-        if machine in ['x86_64', 'amd64']:
-            return 'x64'
-        elif machine in ['i386', 'i686']:
-            return 'x86'
-        elif machine in ['aarch64', 'arm64']:
-            return 'arm64'
+        if machine in ["x86_64", "amd64"]:
+            return "x64"
+        elif machine in ["i386", "i686"]:
+            return "x86"
+        elif machine in ["aarch64", "arm64"]:
+            return "arm64"
         else:
-            return 'x64'
+            return "x64"
 
     def setup_build_environment(self):
         """Setup the build environment."""
@@ -130,8 +129,12 @@ class AtomBuildSystem:
             except subprocess.CalledProcessError as e:
                 logger.warning(f"Failed to setup vcpkg: {e}")
 
-    def configure_build(self, build_type: str = "release", components: Optional[List[str]] = None,
-                       features: Optional[Dict[str, bool]] = None):
+    def configure_build(
+        self,
+        build_type: str = "release",
+        components: Optional[List[str]] = None,
+        features: Optional[Dict[str, bool]] = None,
+    ):
         """Configure the build system."""
         logger.info(f"Configuring build (type: {build_type})")
 
@@ -142,49 +145,71 @@ class AtomBuildSystem:
 
         # Base CMake arguments
         cmake_args = [
-            'cmake', '-B', str(self.build_dir), '-S', str(self.source_dir),
+            "cmake",
+            "-B",
+            str(self.build_dir),
+            "-S",
+            str(self.source_dir),
             f'-DCMAKE_BUILD_TYPE={str(config["cmake_build_type"])}',
-            '-DATOM_BUILD_EXAMPLES=ON',
-            '-DATOM_BUILD_TESTS=ON',
-            '-DATOM_BUILD_PYTHON_BINDINGS=ON',
-            '-DATOM_BUILD_DOCS=ON',
-            '-DATOM_INSTALL_MODULAR=ON',
-            '-DATOM_INSTALL_COMPONENT_PACKAGES=ON',
+            "-DATOM_BUILD_EXAMPLES=ON",
+            "-DATOM_BUILD_TESTS=ON",
+            "-DATOM_BUILD_PYTHON_BINDINGS=ON",
+            "-DATOM_BUILD_DOCS=ON",
+            "-DATOM_INSTALL_MODULAR=ON",
+            "-DATOM_INSTALL_COMPONENT_PACKAGES=ON",
         ]
 
         # Component-specific options
         if components:
             all_components = [
-                'algorithm', 'async', 'components', 'connection', 'containers',
-                'error', 'image', 'io', 'log', 'memory', 'meta', 'search',
-                'secret', 'serial', 'sysinfo', 'system', 'type', 'utils', 'web'
+                "algorithm",
+                "async",
+                "components",
+                "connection",
+                "containers",
+                "error",
+                "image",
+                "io",
+                "log",
+                "memory",
+                "meta",
+                "search",
+                "secret",
+                "serial",
+                "sysinfo",
+                "system",
+                "type",
+                "utils",
+                "web",
             ]
 
             for component in all_components:
-                enabled = 'ON' if component in components else 'OFF'
-                cmake_args.append(f'-DATOM_BUILD_{component.upper()}={enabled}')
+                enabled = "ON" if component in components else "OFF"
+                cmake_args.append(f"-DATOM_BUILD_{component.upper()}={enabled}")
 
         # Feature options
         if features:
             for feature, feature_enabled in features.items():
-                cmake_value: str = 'ON' if feature_enabled else 'OFF'
-                cmake_args.append(f'-DATOM_USE_{feature.upper()}={cmake_value}')
+                cmake_value: str = "ON" if feature_enabled else "OFF"
+                cmake_args.append(f"-DATOM_USE_{feature.upper()}={cmake_value}")
 
         # Platform-specific configuration
-        if self.platform == 'windows':
-            cmake_args.extend(['-G', 'Visual Studio 17 2022', '-A', 'x64'])
+        if self.platform == "windows":
+            cmake_args.extend(["-G", "Visual Studio 17 2022", "-A", "x64"])
         else:
-            cmake_args.extend(['-G', 'Ninja'])
+            cmake_args.extend(["-G", "Ninja"])
 
         # vcpkg integration
         vcpkg_dir = self.source_dir / "vcpkg"
         if vcpkg_dir.exists():
             toolchain_file = vcpkg_dir / "scripts" / "buildsystems" / "vcpkg.cmake"
             if toolchain_file.exists():
-                cmake_args.append(f'-DCMAKE_TOOLCHAIN_FILE={toolchain_file}')
+                cmake_args.append(f"-DCMAKE_TOOLCHAIN_FILE={toolchain_file}")
 
         # Run CMake configuration
-        result = subprocess.run(cmake_args, cwd=self.source_dir, capture_output=True, text=True)
+        result = subprocess.run(
+            cmake_args, cwd=self.source_dir, capture_output=True, text=True
+        )
         if result.returncode != 0:
             logger.error(f"CMake configuration failed: {result.stderr}")
             raise RuntimeError("Build configuration failed")
@@ -199,15 +224,20 @@ class AtomBuildSystem:
 
         # Build arguments
         build_args: list[str] = [
-            'cmake', '--build', str(self.build_dir),
-            '--config', str(config['cmake_build_type'])
+            "cmake",
+            "--build",
+            str(self.build_dir),
+            "--config",
+            str(config["cmake_build_type"]),
         ]
 
         if parallel:
-            build_args.append('--parallel')
+            build_args.append("--parallel")
 
         # Run build
-        result = subprocess.run(build_args, cwd=self.source_dir, capture_output=True, text=True)
+        result = subprocess.run(
+            build_args, cwd=self.source_dir, capture_output=True, text=True
+        )
         if result.returncode != 0:
             logger.error(f"Build failed: {result.stderr}")
             raise RuntimeError("Build failed")
@@ -219,8 +249,10 @@ class AtomBuildSystem:
         logger.info("Running tests")
 
         # Run CTest
-        test_args = ['ctest', '--output-on-failure', '--parallel']
-        result = subprocess.run(test_args, cwd=self.build_dir, capture_output=True, text=True)
+        test_args = ["ctest", "--output-on-failure", "--parallel"]
+        result = subprocess.run(
+            test_args, cwd=self.build_dir, capture_output=True, text=True
+        )
 
         if result.returncode != 0:
             logger.error(f"Tests failed: {result.stderr}")
@@ -233,7 +265,7 @@ class AtomBuildSystem:
         logger.info("Creating distribution packages")
 
         if not formats:
-            formats = self.package_formats.get(self.platform, ['tar.gz'])
+            formats = self.package_formats.get(self.platform, ["tar.gz"])
 
         # Create source distribution
         self._create_source_package()
@@ -260,18 +292,20 @@ class AtomBuildSystem:
         """Create a specific package format."""
         logger.info(f"Creating {package_format} package")
 
-        if package_format in ['deb', 'rpm']:
+        if package_format in ["deb", "rpm"]:
             # Use package manager script
             script_path = self.source_dir / "scripts" / "package-manager.sh"
             if script_path.exists():
-                subprocess.run([str(script_path), f"create-{package_format}"], check=True)
+                subprocess.run(
+                    [str(script_path), f"create-{package_format}"], check=True
+                )
 
-        elif package_format in ['tar.gz', 'zip']:
+        elif package_format in ["tar.gz", "zip"]:
             # Use CPack
-            cpack_args = ['cpack', '-G', 'TGZ' if package_format == 'tar.gz' else 'ZIP']
+            cpack_args = ["cpack", "-G", "TGZ" if package_format == "tar.gz" else "ZIP"]
             subprocess.run(cpack_args, cwd=self.build_dir, check=True)
 
-        elif package_format == 'docker':
+        elif package_format == "docker":
             # Create Docker images
             script_path = self.source_dir / "scripts" / "package-manager.sh"
             if script_path.exists():
@@ -283,18 +317,26 @@ class AtomBuildSystem:
 
         script_path = self.source_dir / "scripts" / "create-portable.py"
         if script_path.exists():
-            cmd = [sys.executable, str(script_path), '--source', str(self.source_dir),
-                   '--output', str(self.dist_dir)]
+            cmd = [
+                sys.executable,
+                str(script_path),
+                "--source",
+                str(self.source_dir),
+                "--output",
+                str(self.dist_dir),
+            ]
 
             if components:
-                cmd.extend(['--components'] + components)
+                cmd.extend(["--components"] + components)
 
             try:
                 subprocess.run(cmd, check=True)
             except subprocess.CalledProcessError as e:
                 logger.error(f"Failed to create portable distribution: {e}")
 
-    def publish_packages(self, channels: Optional[List[str]] = None, dry_run: bool = True):
+    def publish_packages(
+        self, channels: Optional[List[str]] = None, dry_run: bool = True
+    ):
         """Publish packages to distribution channels."""
         if dry_run:
             logger.info("Publishing packages (dry run)")
@@ -302,7 +344,7 @@ class AtomBuildSystem:
             logger.info("Publishing packages")
 
         if not channels:
-            channels = ['github-releases']
+            channels = ["github-releases"]
 
         for channel in channels:
             try:
@@ -314,11 +356,11 @@ class AtomBuildSystem:
         """Publish to a specific distribution channel."""
         logger.info(f"Publishing to {channel}")
 
-        if channel == 'github-releases':
+        if channel == "github-releases":
             self._publish_github_release(dry_run)
-        elif channel == 'pypi':
+        elif channel == "pypi":
             self._publish_pypi(dry_run)
-        elif channel == 'docker':
+        elif channel == "docker":
             self._publish_docker(dry_run)
         else:
             logger.warning(f"Publishing to {channel} not implemented")
@@ -339,12 +381,14 @@ class AtomBuildSystem:
             return
 
         # Build Python wheel first
-        subprocess.run([sys.executable, 'setup.py', 'bdist_wheel'],
-                      cwd=self.source_dir, check=True)
+        subprocess.run(
+            [sys.executable, "setup.py", "bdist_wheel"], cwd=self.source_dir, check=True
+        )
 
         # Upload with twine
-        subprocess.run(['twine', 'upload', 'dist/*.whl'],
-                      cwd=self.source_dir, check=True)
+        subprocess.run(
+            ["twine", "upload", "dist/*.whl"], cwd=self.source_dir, check=True
+        )
 
     def _publish_docker(self, dry_run: bool):
         """Publish Docker images."""
@@ -357,37 +401,42 @@ class AtomBuildSystem:
     def generate_build_report(self) -> Dict:
         """Generate a comprehensive build report."""
         report: Dict[str, Any] = {
-            'build_info': {
-                'timestamp': datetime.now().isoformat(),
-                'platform': self.platform,
-                'architecture': self.arch,
-                'source_dir': str(self.source_dir),
-                'build_dir': str(self.build_dir),
-                'output_dir': str(self.output_dir)
+            "build_info": {
+                "timestamp": datetime.now().isoformat(),
+                "platform": self.platform,
+                "architecture": self.arch,
+                "source_dir": str(self.source_dir),
+                "build_dir": str(self.build_dir),
+                "output_dir": str(self.output_dir),
             },
-            'packages': [],
-            'artifacts': []
+            "packages": [],
+            "artifacts": [],
         }
 
         # Find created packages
         if self.dist_dir.exists():
-            for package_file in self.dist_dir.rglob('*'):
+            for package_file in self.dist_dir.rglob("*"):
                 if package_file.is_file():
-                    report['packages'].append({
-                        'name': package_file.name,
-                        'path': str(package_file),
-                        'size': package_file.stat().st_size,
-                        'type': package_file.suffix
-                    })
+                    report["packages"].append(
+                        {
+                            "name": package_file.name,
+                            "path": str(package_file),
+                            "size": package_file.stat().st_size,
+                            "type": package_file.suffix,
+                        }
+                    )
 
         return report
 
-    def full_build_and_package(self, build_type: str = "release",
-                              components: Optional[List[str]] = None,
-                              features: Optional[Dict[str, bool]] = None,
-                              package_formats: Optional[List[str]] = None,
-                              create_portable: bool = True,
-                              run_tests: bool = True) -> Dict:
+    def full_build_and_package(
+        self,
+        build_type: str = "release",
+        components: Optional[List[str]] = None,
+        features: Optional[Dict[str, bool]] = None,
+        package_formats: Optional[List[str]] = None,
+        create_portable: bool = True,
+        run_tests: bool = True,
+    ) -> Dict:
         """Perform a complete build and packaging workflow."""
         logger.info("Starting full build and package workflow")
 
@@ -424,27 +473,42 @@ class AtomBuildSystem:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Atom Library Build and Package System')
-    parser.add_argument('--source', type=Path, default=Path.cwd(),
-                       help='Source directory (default: current directory)')
-    parser.add_argument('--output', type=Path, default=Path.cwd() / 'dist',
-                       help='Output directory (default: ./dist)')
-    parser.add_argument('--build-type', choices=['debug', 'release', 'relwithdebinfo'],
-                       default='release', help='Build type (default: release)')
-    parser.add_argument('--components', nargs='*',
-                       help='Specific components to build (default: all)')
-    parser.add_argument('--package-formats', nargs='*',
-                       help='Package formats to create')
-    parser.add_argument('--no-tests', action='store_true',
-                       help='Skip running tests')
-    parser.add_argument('--no-portable', action='store_true',
-                       help='Skip creating portable distribution')
-    parser.add_argument('--publish', nargs='*',
-                       help='Publish to distribution channels')
-    parser.add_argument('--dry-run', action='store_true',
-                       help='Dry run for publishing')
-    parser.add_argument('--verbose', '-v', action='store_true',
-                       help='Enable verbose logging')
+    parser = argparse.ArgumentParser(
+        description="Atom Library Build and Package System"
+    )
+    parser.add_argument(
+        "--source",
+        type=Path,
+        default=Path.cwd(),
+        help="Source directory (default: current directory)",
+    )
+    parser.add_argument(
+        "--output",
+        type=Path,
+        default=Path.cwd() / "dist",
+        help="Output directory (default: ./dist)",
+    )
+    parser.add_argument(
+        "--build-type",
+        choices=["debug", "release", "relwithdebinfo"],
+        default="release",
+        help="Build type (default: release)",
+    )
+    parser.add_argument(
+        "--components", nargs="*", help="Specific components to build (default: all)"
+    )
+    parser.add_argument(
+        "--package-formats", nargs="*", help="Package formats to create"
+    )
+    parser.add_argument("--no-tests", action="store_true", help="Skip running tests")
+    parser.add_argument(
+        "--no-portable", action="store_true", help="Skip creating portable distribution"
+    )
+    parser.add_argument("--publish", nargs="*", help="Publish to distribution channels")
+    parser.add_argument("--dry-run", action="store_true", help="Dry run for publishing")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose logging"
+    )
 
     args = parser.parse_args()
 
@@ -460,7 +524,7 @@ def main():
             components=args.components,
             package_formats=args.package_formats,
             create_portable=not args.no_portable,
-            run_tests=not args.no_tests
+            run_tests=not args.no_tests,
         )
 
         # Publish if requested
@@ -476,5 +540,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

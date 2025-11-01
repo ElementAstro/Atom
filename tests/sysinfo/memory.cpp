@@ -1,10 +1,10 @@
 #include "atom/sysinfo/memory.hpp"
 #include <gtest/gtest.h>
-#include <string>
-#include <vector>
 #include <algorithm>
 #include <chrono>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace atom::system;
 
@@ -137,7 +137,7 @@ TEST_F(MemoryTest, GetCommittedMemory) {
 
     // Committed memory should be reasonable
     unsigned long long totalMemory = getTotalMemorySize();
-    EXPECT_LT(committed, totalMemory * 10); // Allow for overcommit
+    EXPECT_LT(committed, totalMemory * 10);  // Allow for overcommit
 }
 
 // ============================================================================
@@ -167,9 +167,11 @@ TEST_F(RealMemoryTest, MemoryConsistency) {
     EXPECT_EQ(info1.swapMemoryTotal, info2.swapMemoryTotal);
 
     // Dynamic values should be close
-    float availableDiff = std::abs(static_cast<float>(info1.availablePhysicalMemory) -
-                                 static_cast<float>(info2.availablePhysicalMemory));
-    float tolerance = static_cast<float>(info1.totalPhysicalMemory) * 0.1f; // 10% tolerance
+    float availableDiff =
+        std::abs(static_cast<float>(info1.availablePhysicalMemory) -
+                 static_cast<float>(info2.availablePhysicalMemory));
+    float tolerance =
+        static_cast<float>(info1.totalPhysicalMemory) * 0.1f;  // 10% tolerance
     EXPECT_LT(availableDiff, tolerance);
 }
 
@@ -193,8 +195,8 @@ TEST_F(RealMemoryTest, MemoryUsageMonitoring) {
 
     // Memory usage should be relatively stable over short periods
     for (size_t i = 1; i < usageHistory.size(); ++i) {
-        float diff = std::abs(usageHistory[i] - usageHistory[i-1]);
-        EXPECT_LT(diff, 50.0f); // Should not change by more than 50% quickly
+        float diff = std::abs(usageHistory[i] - usageHistory[i - 1]);
+        EXPECT_LT(diff, 50.0f);  // Should not change by more than 50% quickly
     }
 }
 
@@ -203,12 +205,15 @@ TEST_F(RealMemoryTest, MemoryCalculations) {
     MemoryInfo memInfo = getDetailedMemoryStats();
 
     // Used memory calculation
-    unsigned long long usedMemory = memInfo.totalPhysicalMemory - memInfo.availablePhysicalMemory;
+    unsigned long long usedMemory =
+        memInfo.totalPhysicalMemory - memInfo.availablePhysicalMemory;
     EXPECT_LE(usedMemory, memInfo.totalPhysicalMemory);
 
     // Memory load percentage should match calculation
-    float calculatedLoad = (static_cast<float>(usedMemory) / memInfo.totalPhysicalMemory) * 100.0f;
-    EXPECT_NEAR(memInfo.memoryLoadPercentage, calculatedLoad, 5.0f); // 5% tolerance
+    float calculatedLoad =
+        (static_cast<float>(usedMemory) / memInfo.totalPhysicalMemory) * 100.0f;
+    EXPECT_NEAR(memInfo.memoryLoadPercentage, calculatedLoad,
+                5.0f);  // 5% tolerance
 
     // Virtual memory relationships
     EXPECT_GE(memInfo.virtualMemoryMax, memInfo.totalPhysicalMemory);
@@ -245,9 +250,9 @@ TEST_F(RealMemoryTest, BoundaryConditions) {
     unsigned long long committed = getCommittedMemory();
 
     // Test upper bounds (reasonable maximums)
-    EXPECT_LT(totalMemory, 10000ULL * 1024 * 1024 * 1024); // Less than 10TB
-    EXPECT_LT(virtualMax, 100000ULL * 1024 * 1024 * 1024); // Less than 100TB
-    EXPECT_LT(committed, 10000ULL * 1024 * 1024 * 1024); // Less than 10TB
+    EXPECT_LT(totalMemory, 10000ULL * 1024 * 1024 * 1024);  // Less than 10TB
+    EXPECT_LT(virtualMax, 100000ULL * 1024 * 1024 * 1024);  // Less than 100TB
+    EXPECT_LT(committed, 10000ULL * 1024 * 1024 * 1024);    // Less than 10TB
 
     // Test relationships
     EXPECT_LE(availableMemory, totalMemory);
@@ -260,4 +265,4 @@ TEST_F(RealMemoryTest, BoundaryConditions) {
     EXPECT_LE(memoryUsage, 100.0f);
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

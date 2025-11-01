@@ -285,7 +285,11 @@ void executeAntiDebugAction(AntiDebugAction action,
 
         case AntiDebugAction::CRASH:
             *reinterpret_cast<volatile int*>(0) = 0;
+#ifdef _MSC_VER
+            __debugbreak();
+#else
             __builtin_trap();
+#endif
             break;
 
         case AntiDebugAction::MISLEAD:

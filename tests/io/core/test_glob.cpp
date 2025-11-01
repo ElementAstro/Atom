@@ -21,8 +21,7 @@ auto globHelper(const String& pattern, bool recursive = false,
 
 auto globHelper(const fs::path& pattern, bool recursive = false,
                 bool dironly = false) {
-    return atom::io::glob(
-        String{pattern.string().c_str()}, recursive, dironly);
+    return atom::io::glob(String{pattern.string().c_str()}, recursive, dironly);
 }
 
 inline auto glob_helper(const char* pattern, bool recursive = false,
@@ -374,12 +373,9 @@ TEST_F(GlobTest, TranslateComplexPatterns) {
 
 // Test filter function
 TEST_F(GlobTest, FilterFunction) {
-    std::vector<fs::path> paths = {
-        fs::path("file1.txt"),
-        fs::path("file2.txt"),
-        fs::path("file.cpp"),
-        fs::path("document.md")
-    };
+    std::vector<fs::path> paths = {fs::path("file1.txt"), fs::path("file2.txt"),
+                                   fs::path("file.cpp"),
+                                   fs::path("document.md")};
 
     // Filter for .txt files
     auto filtered = atom::io::filter(paths, "*.txt");
@@ -552,7 +548,8 @@ TEST_F(GlobTest, Glob0Function) {
     EXPECT_EQ(results[0], fs::path("file1.txt"));
 
     // Test with non-existent file
-    results = atom::io::glob0(fs::path("."), fs::path("nonexistent.txt"), false);
+    results =
+        atom::io::glob0(fs::path("."), fs::path("nonexistent.txt"), false);
     EXPECT_THAT(results, IsEmpty());
 
     // Test with empty basename
@@ -636,19 +633,18 @@ TEST_F(GlobTest, StringReplaceFunction) {
 // Test complex bracket expressions
 TEST_F(GlobTest, ComplexBracketExpressions) {
     // Test range with negation
-    auto result = globHelper(
-        String{(testDir / "[!a-m]*.txt").string().c_str()});
+    auto result =
+        globHelper(String{(testDir / "[!a-m]*.txt").string().c_str()});
     EXPECT_THAT(result, Contains(testDir / "nested.txt"));
     EXPECT_THAT(result, Not(Contains(testDir / "file1.txt")));
 
     // Test multiple ranges
-    result = globHelper(
-        String{(testDir / "[a-zA-Z0-9]*.txt").string().c_str()});
+    result =
+        globHelper(String{(testDir / "[a-zA-Z0-9]*.txt").string().c_str()});
     EXPECT_GE(result.size(), 2);
 
     // Test character class with special characters
-    result = globHelper(
-        String{(testDir / "[._-]*.txt").string().c_str()});
+    result = globHelper(String{(testDir / "[._-]*.txt").string().c_str()});
     // Should match files starting with ., _, or -
 }
 
@@ -661,8 +657,8 @@ TEST_F(GlobTest, VeryLongPatterns) {
     std::ofstream(long_file).close();
 
     // Test glob with long pattern
-    auto result = globHelper(String{
-        (testDir / (std::string(200, 'a') + ".txt")).string().c_str()});
+    auto result = globHelper(
+        String{(testDir / (std::string(200, 'a') + ".txt")).string().c_str()});
     EXPECT_EQ(result.size(), 1);
     EXPECT_THAT(result, Contains(long_file));
 }
@@ -675,8 +671,8 @@ TEST_F(GlobTest, SpecialCharactersInDirectoryNames) {
     std::ofstream(special_dir / "file.txt").close();
 
     // Test glob with spaces
-    auto result = globHelper(String{
-        (testDir / "dir with spaces" / "*.txt").string().c_str()});
+    auto result = globHelper(
+        String{(testDir / "dir with spaces" / "*.txt").string().c_str()});
     EXPECT_EQ(result.size(), 1);
 
     // Create directory with parentheses
@@ -684,8 +680,8 @@ TEST_F(GlobTest, SpecialCharactersInDirectoryNames) {
     fs::create_directories(paren_dir);
     std::ofstream(paren_dir / "file.txt").close();
 
-    result = globHelper(String{
-        (testDir / "dir(with)parens" / "*.txt").string().c_str()});
+    result = globHelper(
+        String{(testDir / "dir(with)parens" / "*.txt").string().c_str()});
     EXPECT_EQ(result.size(), 1);
 }
 
@@ -744,26 +740,25 @@ TEST_F(GlobTest, MultipleWildcards) {
     std::ofstream(testDir / "abc_def_xyz.txt").close();
 
     // Test pattern with multiple wildcards
-    auto result = globHelper(
-        String{(testDir / "abc_*_ghi.txt").string().c_str()});
+    auto result =
+        globHelper(String{(testDir / "abc_*_ghi.txt").string().c_str()});
     EXPECT_EQ(result.size(), 2);
 
-    result = globHelper(
-        String{(testDir / "*_*_*.txt").string().c_str()});
+    result = globHelper(String{(testDir / "*_*_*.txt").string().c_str()});
     EXPECT_GE(result.size(), 3);
 }
 
 // Test glob error handling
 TEST_F(GlobTest, ErrorHandling) {
     // Test with non-existent directory
-    auto result = globHelper(String{
-        (testDir / "nonexistent" / "*.txt").string().c_str()});
+    auto result = globHelper(
+        String{(testDir / "nonexistent" / "*.txt").string().c_str()});
     EXPECT_TRUE(result.empty());
 
     // Test with invalid pattern characters (platform-specific)
     EXPECT_NO_THROW({
-        result = globHelper(String{
-            (testDir / "**" / "*.txt").string().c_str()});
+        result =
+            globHelper(String{(testDir / "**" / "*.txt").string().c_str()});
     });
 }
 
@@ -793,8 +788,8 @@ TEST_F(GlobTest, ConcurrentGlobOperations) {
 
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([this, &success_count]() {
-            auto result = globHelper(
-                String{(testDir / "*.txt").string().c_str()});
+            auto result =
+                globHelper(String{(testDir / "*.txt").string().c_str()});
             if (!result.empty()) {
                 success_count++;
             }
@@ -820,8 +815,7 @@ TEST_F(GlobTest, HiddenFilesHandling) {
         atom::io::isHidden(String((testDir / "file1.txt").string().c_str())));
 
     // Glob should find hidden files when explicitly requested
-    auto result = globHelper(
-        String{(testDir / ".*").string().c_str()});
+    auto result = globHelper(String{(testDir / ".*").string().c_str()});
     EXPECT_GE(result.size(), 1);
 }
 
@@ -832,7 +826,8 @@ TEST_F(GlobTest, LargeDirectoryPerformance) {
     fs::create_directories(large_dir);
 
     for (int i = 0; i < 100; ++i) {
-        std::ofstream(large_dir / ("file" + std::to_string(i) + ".txt")).close();
+        std::ofstream(large_dir / ("file" + std::to_string(i) + ".txt"))
+            .close();
     }
 
     // Time the glob operation
@@ -842,7 +837,8 @@ TEST_F(GlobTest, LargeDirectoryPerformance) {
 
     EXPECT_EQ(result.size(), 100);
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     // Should complete in reasonable time (< 1 second for 100 files)
     EXPECT_LT(duration.count(), 1000);
 }
@@ -869,7 +865,8 @@ TEST_F(GlobTest, FnmatchEdgeCases) {
     EXPECT_FALSE(atom::io::fnmatch("*", ""));
 
     // Test case sensitivity
-    EXPECT_TRUE(atom::io::fnmatch("*.txt", "FILE.TXT"));  // Case insensitive by default
+    EXPECT_TRUE(
+        atom::io::fnmatch("*.txt", "FILE.TXT"));  // Case insensitive by default
 
     // Test with path separators
     EXPECT_TRUE(atom::io::fnmatch("dir/*.txt", "dir/file.txt"));

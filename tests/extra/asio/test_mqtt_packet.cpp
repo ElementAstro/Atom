@@ -1,5 +1,5 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 // Temporarily disable MQTT packet tests due to API mismatch
 #if 0
@@ -7,10 +7,10 @@
 #include "atom/extra/asio/mqtt/protocol.hpp"
 #include "atom/extra/asio/mqtt/types.hpp"
 
-#include <vector>
-#include <string>
-#include <cstdint>
 #include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
 
 using namespace testing;
 using namespace mqtt;
@@ -401,4 +401,4 @@ TEST_F(MqttPacketTest, LargePacketHandling) {
 
 } // namespace atom::extra::asio::test
 
-#endif // Temporarily disabled MQTT packet tests
+#endif  // Temporarily disabled MQTT packet tests

@@ -1,9 +1,9 @@
-#include "atom/components/types.hpp"
 #include "atom/components/module_macro.hpp"
+#include "atom/components/types.hpp"
 
 #include <gtest/gtest.h>
-#include <string>
 #include <array>
+#include <string>
 
 // ============================================================================
 // ComponentType Tests
@@ -112,15 +112,15 @@ private:
 
 // Apply module macros to the test component
 ATOM_COMPONENT_MODULE_BEGIN(TestModuleComponent)
-    ATOM_COMPONENT_PROPERTY(name, getName, setName)
-    ATOM_COMPONENT_PROPERTY(value, getValue, setValue)
-    ATOM_COMPONENT_PROPERTY(active, isActive, setActive)
-    ATOM_COMPONENT_METHOD(getName)
-    ATOM_COMPONENT_METHOD(setName)
-    ATOM_COMPONENT_METHOD(getValue)
-    ATOM_COMPONENT_METHOD(setValue)
-    ATOM_COMPONENT_METHOD(isActive)
-    ATOM_COMPONENT_METHOD(setActive)
+ATOM_COMPONENT_PROPERTY(name, getName, setName)
+ATOM_COMPONENT_PROPERTY(value, getValue, setValue)
+ATOM_COMPONENT_PROPERTY(active, isActive, setActive)
+ATOM_COMPONENT_METHOD(getName)
+ATOM_COMPONENT_METHOD(setName)
+ATOM_COMPONENT_METHOD(getValue)
+ATOM_COMPONENT_METHOD(setValue)
+ATOM_COMPONENT_METHOD(isActive)
+ATOM_COMPONENT_METHOD(setActive)
 ATOM_COMPONENT_MODULE_END()
 
 TEST(ModuleMacroTest, ComponentModuleDefinition) {
@@ -143,7 +143,8 @@ TEST(ModuleMacroTest, ComponentModuleDefinition) {
 
 TEST(ModuleMacroTest, PropertyMacroExpansion) {
     // Test that property macros expand correctly
-    // This is mainly a compilation test to ensure macros are syntactically correct
+    // This is mainly a compilation test to ensure macros are syntactically
+    // correct
     TestModuleComponent component("PropertyTest");
 
     // Test all properties
@@ -177,7 +178,8 @@ TEST(ModuleMacroTest, MethodMacroExpansion) {
 
 TEST(ModuleMacroTest, ModuleRegistration) {
     // Test module registration functionality
-    // This tests that the ATOM_COMPONENT_MODULE_* macros create proper registration
+    // This tests that the ATOM_COMPONENT_MODULE_* macros create proper
+    // registration
 
     // Create component instance
     TestModuleComponent component("RegistrationTest");
@@ -241,9 +243,9 @@ TEST(ModuleMacroTest, MultipleComponents) {
 
     // Apply macros to another component
     ATOM_COMPONENT_MODULE_BEGIN(AnotherTestComponent)
-        ATOM_COMPONENT_PROPERTY(value, getValue, setValue)
-        ATOM_COMPONENT_METHOD(getValue)
-        ATOM_COMPONENT_METHOD(setValue)
+    ATOM_COMPONENT_PROPERTY(value, getValue, setValue)
+    ATOM_COMPONENT_METHOD(getValue)
+    ATOM_COMPONENT_METHOD(setValue)
     ATOM_COMPONENT_MODULE_END()
 
     // Test both components work independently
@@ -267,10 +269,8 @@ TEST(ModuleMacroTest, MacroCompilation) {
 
     // Test that we can create multiple instances
     std::array<TestModuleComponent, 3> components = {
-        TestModuleComponent("Comp1"),
-        TestModuleComponent("Comp2"),
-        TestModuleComponent("Comp3")
-    };
+        TestModuleComponent("Comp1"), TestModuleComponent("Comp2"),
+        TestModuleComponent("Comp3")};
 
     // Test that all instances work correctly
     for (size_t i = 0; i < components.size(); ++i) {
@@ -310,7 +310,7 @@ TEST(ModuleMacroTest, EdgeCases) {
     };
 
     ATOM_COMPONENT_MODULE_BEGIN(EmptyComponent)
-        // No properties or methods
+    // No properties or methods
     ATOM_COMPONENT_MODULE_END()
 
     EmptyComponent empty;
@@ -337,9 +337,9 @@ TEST(TypesAndMacrosIntegrationTest, ComponentTypeWithMacros) {
     };
 
     ATOM_COMPONENT_MODULE_BEGIN(TypedComponent)
-        ATOM_COMPONENT_PROPERTY(type, getType, setType)
-        ATOM_COMPONENT_METHOD(getType)
-        ATOM_COMPONENT_METHOD(setType)
+    ATOM_COMPONENT_PROPERTY(type, getType, setType)
+    ATOM_COMPONENT_METHOD(getType)
+    ATOM_COMPONENT_METHOD(setType)
     ATOM_COMPONENT_MODULE_END()
 
     TypedComponent component(ComponentType::SHARED);
@@ -379,8 +379,8 @@ TEST(TypesAndMacrosIntegrationTest, EnumTraitsWithMacros) {
     };
 
     ATOM_COMPONENT_MODULE_BEGIN(EnumTraitsComponent)
-        ATOM_COMPONENT_METHOD(getTypeName)
-        ATOM_COMPONENT_METHOD(getTypeByName)
+    ATOM_COMPONENT_METHOD(getTypeName)
+    ATOM_COMPONENT_METHOD(getTypeByName)
     ATOM_COMPONENT_MODULE_END()
 
     EnumTraitsComponent component;

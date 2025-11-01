@@ -14,17 +14,17 @@ Tests initialization, cleanup, thread safety, and edge cases.
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <memory>
 #include <set>
 #include <sstream>
+#include <thread>
+#include <vector>
 
-#include "atom/async/threading/threadlocal.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/threading/threadlocal.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -94,17 +94,13 @@ TEST_F(ThreadLocalTest, DifferentValuesInDifferentThreads) {
 TEST_F(ThreadLocalTest, InitializerFunction) {
     std::atomic<int> initCount{0};
 
-    ThreadLocal<int> tl([&initCount]() {
-        return initCount.fetch_add(1) + 1;
-    });
+    ThreadLocal<int> tl([&initCount]() { return initCount.fetch_add(1) + 1; });
 
     std::vector<std::thread> threads;
     std::vector<std::atomic<int>> values(5);
 
     for (int i = 0; i < 5; ++i) {
-        threads.emplace_back([&tl, &values, i]() {
-            values[i] = tl.get();
-        });
+        threads.emplace_back([&tl, &values, i]() { values[i] = tl.get(); });
     }
 
     for (auto& thread : threads) {
@@ -131,8 +127,7 @@ TEST_F(ThreadLocalTest, CleanupFunction) {
                 if (ptr) {
                     cleanupCount.fetch_add(1);
                 }
-            }
-        );
+            });
 
         std::vector<std::thread> threads;
 
@@ -147,7 +142,7 @@ TEST_F(ThreadLocalTest, CleanupFunction) {
         for (auto& thread : threads) {
             thread.join();
         }
-    } // ThreadLocal destructor should trigger cleanup
+    }  // ThreadLocal destructor should trigger cleanup
 
     // Give some time for cleanup to complete
     std::this_thread::sleep_for(10ms);
@@ -162,8 +157,8 @@ TEST_F(ThreadLocalTest, Reset) {
     tl.reset(20);
     EXPECT_EQ(tl.get(), 20);
 
-    tl.reset(); // Reset to default
-    EXPECT_EQ(tl.get(), 0); // Default constructed int
+    tl.reset();              // Reset to default
+    EXPECT_EQ(tl.get(), 0);  // Default constructed int
 }
 
 TEST_F(ThreadLocalTest, Clear) {
@@ -201,7 +196,7 @@ TEST_F(ThreadLocalTest, GetActiveThreadCount) {
         std::this_thread::sleep_for(1ms);
     }
 
-    EXPECT_EQ(tl.getActiveThreadCount(), 6); // 5 threads + main thread
+    EXPECT_EQ(tl.getActiveThreadCount(), 6);  // 5 threads + main thread
 
     for (auto& thread : threads) {
         thread.join();
@@ -285,9 +280,8 @@ TEST_F(ThreadLocalTest, ThreadIdBasedInitializer) {
 }
 
 TEST_F(ThreadLocalTest, ExceptionInInitializer) {
-    ThreadLocal<int> tl([]() -> int {
-        throw std::runtime_error("Initialization failed");
-    });
+    ThreadLocal<int> tl(
+        []() -> int { throw std::runtime_error("Initialization failed"); });
 
     EXPECT_THROW(tl.get(), std::runtime_error);
     EXPECT_FALSE(tl.hasValue());
@@ -328,11 +322,11 @@ TEST_F(ThreadLocalTest, RAIITypes) {
     auto& tracker = getResourceTracker();
 
     {
-        ThreadLocal<std::unique_ptr<atom::async::test::ScopedResourceTracker>> tl(
-            [&tracker]() {
-                return std::make_unique<atom::async::test::ScopedResourceTracker>(tracker);
-            }
-        );
+        ThreadLocal<std::unique_ptr<atom::async::test::ScopedResourceTracker>>
+            tl([&tracker]() {
+                return std::make_unique<
+                    atom::async::test::ScopedResourceTracker>(tracker);
+            });
 
         std::vector<std::thread> threads;
         const int numThreads = 5;
@@ -348,7 +342,7 @@ TEST_F(ThreadLocalTest, RAIITypes) {
         for (auto& thread : threads) {
             thread.join();
         }
-    } // ThreadLocal destructor should trigger cleanup
+    }  // ThreadLocal destructor should trigger cleanup
 
     // Give some time for cleanup
     std::this_thread::sleep_for(50ms);
@@ -371,10 +365,11 @@ TEST_F(ThreadLocalTest, Performance) {
     auto elapsed = timer.elapsed();
 
     // Performance should be reasonable
-    EXPECT_LT(elapsed.count(), 1000000); // Less than 1 second for 10k operations
+    EXPECT_LT(elapsed.count(),
+              1000000);  // Less than 1 second for 10k operations
 
-    std::cout << "ThreadLocal performance: "
-              << elapsed.count() / numOperations << " microseconds per operation" << std::endl;
+    std::cout << "ThreadLocal performance: " << elapsed.count() / numOperations
+              << " microseconds per operation" << std::endl;
 }
 
 // Test thread local with complex initialization
@@ -385,7 +380,10 @@ TEST_F(ThreadLocalTest, ComplexInitialization) {
         std::vector<int> data;
         std::thread::id threadId;
 
-        ComplexType(int i) : id(i), name("thread_" + std::to_string(i)), threadId(std::this_thread::get_id()) {
+        ComplexType(int i)
+            : id(i),
+              name("thread_" + std::to_string(i)),
+              threadId(std::this_thread::get_id()) {
             for (int j = 0; j < 10; ++j) {
                 data.push_back(i * 10 + j);
             }
@@ -393,9 +391,8 @@ TEST_F(ThreadLocalTest, ComplexInitialization) {
     };
 
     std::atomic<int> nextId{0};
-    ThreadLocal<ComplexType> tl([&nextId]() {
-        return ComplexType(nextId.fetch_add(1));
-    });
+    ThreadLocal<ComplexType> tl(
+        [&nextId]() { return ComplexType(nextId.fetch_add(1)); });
 
     std::vector<std::thread> threads;
     std::vector<std::atomic<bool>> initialized(5);
@@ -424,14 +421,13 @@ TEST_F(ThreadLocalTest, ComplexInitialization) {
         EXPECT_EQ(results[i].data[9], results[i].id * 10 + 9);
     }
 
-    EXPECT_EQ(uniqueIds.size(), 5); // All IDs should be unique
+    EXPECT_EQ(uniqueIds.size(), 5);  // All IDs should be unique
 }
 
 // Test thread local with move-only types
 TEST_F(ThreadLocalTest, MoveOnlyTypes) {
-    ThreadLocal<std::unique_ptr<int>> tl([]() {
-        return std::make_unique<int>(42);
-    });
+    ThreadLocal<std::unique_ptr<int>> tl(
+        []() { return std::make_unique<int>(42); });
 
     std::vector<std::thread> threads;
     std::vector<std::atomic<bool>> success(3);
@@ -467,12 +463,13 @@ TEST_F(ThreadLocalTest, StressTest) {
     const size_t numThreads = getMaxThreads();
     const size_t operationsPerThread = 100;
 
-    runStressTest(numThreads, operationsPerThread,
-                  [&tl, &totalOperations](size_t threadId, size_t operationId) {
-        auto& vec = tl.get();
-        vec.push_back(static_cast<int>(threadId * 1000 + operationId));
-        totalOperations.fetch_add(1);
-    });
+    runStressTest(
+        numThreads, operationsPerThread,
+        [&tl, &totalOperations](size_t threadId, size_t operationId) {
+            auto& vec = tl.get();
+            vec.push_back(static_cast<int>(threadId * 1000 + operationId));
+            totalOperations.fetch_add(1);
+        });
 
     EXPECT_EQ(totalOperations.load(), numThreads * operationsPerThread);
 }
@@ -486,8 +483,8 @@ TEST_F(ThreadLocalTest, ExceptionInCleanup) {
 
         ~ThrowingCleanup() {
             if (shouldThrow && *shouldThrow) {
-                // Note: destructors shouldn't throw, but we're testing robustness
-                // In real code, this would be a bug
+                // Note: destructors shouldn't throw, but we're testing
+                // robustness In real code, this would be a bug
             }
         }
     };
@@ -495,20 +492,19 @@ TEST_F(ThreadLocalTest, ExceptionInCleanup) {
     bool shouldThrow = false;
 
     {
-        ThreadLocal<ThrowingCleanup> tl([&shouldThrow]() {
-            return ThrowingCleanup(&shouldThrow);
-        });
+        ThreadLocal<ThrowingCleanup> tl(
+            [&shouldThrow]() { return ThrowingCleanup(&shouldThrow); });
 
         std::thread t([&tl]() {
             auto& obj = tl.get();
-            (void)obj; // Use the object
+            (void)obj;  // Use the object
         });
 
         t.join();
 
         // Enable throwing in destructor (bad practice, but testing robustness)
         shouldThrow = true;
-    } // ThreadLocal destructor should handle exceptions gracefully
+    }  // ThreadLocal destructor should handle exceptions gracefully
 
     // Test should complete without crashing
 }

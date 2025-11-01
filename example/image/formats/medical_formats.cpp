@@ -17,7 +17,7 @@
 
 /**
  * @brief Demonstrates medical image format processing
- * 
+ *
  * This example shows how to handle medical image formats like DICOM
  * and perform basic medical image processing operations.
  */
@@ -38,17 +38,21 @@ int main() {
 
         // Create a simulated medical image (16-bit grayscale)
         cv::Mat medical_image = cv::Mat::zeros(256, 256, CV_16UC1);
-        
+
         // Simulate medical image data with typical intensity ranges
         cv::randu(medical_image, cv::Scalar(0), cv::Scalar(4095));
-        
+
         // Add some anatomical-like structures
-        cv::circle(medical_image, cv::Point(128, 128), 80, cv::Scalar(3000), -1);
-        cv::circle(medical_image, cv::Point(128, 128), 60, cv::Scalar(2000), -1);
-        cv::circle(medical_image, cv::Point(128, 128), 40, cv::Scalar(1000), -1);
+        cv::circle(medical_image, cv::Point(128, 128), 80, cv::Scalar(3000),
+                   -1);
+        cv::circle(medical_image, cv::Point(128, 128), 60, cv::Scalar(2000),
+                   -1);
+        cv::circle(medical_image, cv::Point(128, 128), 40, cv::Scalar(1000),
+                   -1);
 
         std::cout << "1. Loading medical image (simulated)\n";
-        std::cout << "   Image size: " << medical_image.cols << "x" << medical_image.rows << std::endl;
+        std::cout << "   Image size: " << medical_image.cols << "x"
+                  << medical_image.rows << std::endl;
         std::cout << "   Bit depth: 16-bit grayscale\n";
         std::cout << "   Intensity range: 0-4095\n";
 
@@ -58,8 +62,9 @@ int main() {
         double window_width = 1000;
         double min_val = window_center - window_width / 2;
         double max_val = window_center + window_width / 2;
-        
-        medical_image.convertTo(windowed, CV_8UC1, 255.0 / window_width, -min_val * 255.0 / window_width);
+
+        medical_image.convertTo(windowed, CV_8UC1, 255.0 / window_width,
+                                -min_val * 255.0 / window_width);
         std::cout << "2. Window/Level adjustment applied\n";
         std::cout << "   Window center: " << window_center << std::endl;
         std::cout << "   Window width: " << window_width << std::endl;
@@ -76,23 +81,21 @@ int main() {
 
         // Edge enhancement
         cv::Mat enhanced;
-        cv::Mat kernel = (cv::Mat_<float>(3,3) << 
-                         0, -1, 0,
-                         -1, 5, -1,
-                         0, -1, 0);
+        cv::Mat kernel =
+            (cv::Mat_<float>(3, 3) << 0, -1, 0, -1, 5, -1, 0, -1, 0);
         cv::filter2D(denoised, enhanced, -1, kernel);
         std::cout << "5. Edge enhancement applied\n";
 
         // Region of Interest (ROI) analysis
         cv::Rect roi(64, 64, 128, 128);
         cv::Mat roi_image = enhanced(roi);
-        
+
         cv::Scalar mean_intensity = cv::mean(roi_image);
         cv::Scalar std_intensity;
         cv::meanStdDev(roi_image, mean_intensity, std_intensity);
-        
+
         std::cout << "6. ROI analysis completed\n";
-        std::cout << "   ROI location: (" << roi.x << ", " << roi.y << ") " 
+        std::cout << "   ROI location: (" << roi.x << ", " << roi.y << ") "
                   << roi.width << "x" << roi.height << std::endl;
         std::cout << "   Mean intensity: " << mean_intensity[0] << std::endl;
         std::cout << "   Std deviation: " << std_intensity[0] << std::endl;
@@ -104,7 +107,8 @@ int main() {
 
         // Morphological operations
         cv::Mat morphed;
-        cv::Mat element = cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
+        cv::Mat element =
+            cv::getStructuringElement(cv::MORPH_ELLIPSE, cv::Size(5, 5));
         cv::morphologyEx(segmented, morphed, cv::MORPH_CLOSE, element);
         std::cout << "8. Morphological closing applied\n";
 
@@ -121,9 +125,11 @@ int main() {
         return 1;
     }
 #else
-    std::cout << "OpenCV not available. Medical image processing example cannot run." << std::endl;
+    std::cout
+        << "OpenCV not available. Medical image processing example cannot run."
+        << std::endl;
     std::cout << "This is a placeholder implementation." << std::endl;
-    
+
     std::cout << "\nMedical image processing would typically include:\n";
     std::cout << "- DICOM file reading/writing\n";
     std::cout << "- Window/Level adjustments\n";
@@ -132,6 +138,7 @@ int main() {
     std::cout << "- Measurement tools\n";
 #endif
 
-    std::cout << "\nMedical image format processing example completed." << std::endl;
+    std::cout << "\nMedical image format processing example completed."
+              << std::endl;
     return 0;
 }

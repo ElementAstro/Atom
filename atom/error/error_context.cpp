@@ -13,18 +13,25 @@ Description: Implementation of error context system
 **************************************************/
 
 #include "error_context.hpp"
-#include <random>
-#include <sstream>
-#include <iomanip>
 #include <algorithm>
+#include <iomanip>
+#include <random>
 #include <shared_mutex>
+#include <sstream>
 
 #ifdef _WIN32
-#include <windows.h>
+// Include windows.h first to ensure all Windows types are defined
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <psapi.h>
+#include <windows.h>
 #else
-#include <unistd.h>
 #include <sys/utsname.h>
+#include <unistd.h>
 #endif
 
 namespace atom::error {
@@ -33,7 +40,7 @@ ErrorId generateErrorId() {
     static std::random_device rd;
     static std::mt19937 gen(rd());
     static std::uniform_int_distribution<> dis(0, 15);
-    
+
     std::stringstream ss;
     ss << std::hex;
     for (int i = 0; i < 32; ++i) {
@@ -46,52 +53,50 @@ ErrorId generateErrorId() {
 }
 
 ErrorContext::ErrorContext(int errorCode, std::string message)
-    : errorId_(generateErrorId())
-    , errorCode_(errorCode)
-    , message_(std::move(message))
-    , timestamp_(std::chrono::system_clock::now())
-    , threadId_(std::this_thread::get_id())
-    , metadata_(ErrorCodeMapper::getMetadata(errorCode))
-    , retryCount_(0)
-    , maxRetries_(metadata_.maxRetries) {
+    : errorId_(generateErrorId()),
+      errorCode_(errorCode),
+      message_(std::move(message)),
+      timestamp_(std::chrono::system_clock::now()),
+      threadId_(std::this_thread::get_id()),
+      metadata_(ErrorCodeMapper::getMetadata(errorCode)),
+      retryCount_(0),
+      maxRetries_(metadata_.maxRetries) {
     initializeSystemInfo();
 }
 
 ErrorContext::ErrorContext(const ErrorContext& other)
-    : errorId_(other.errorId_)
-    , errorCode_(other.errorCode_)
-    , message_(other.message_)
-    , timestamp_(other.timestamp_)
-    , threadId_(other.threadId_)
-    , metadata_(other.metadata_)
-    , userData_(other.userData_)
-    , systemInfo_(other.systemInfo_)
-    , tags_(other.tags_)
-    , correlationId_(other.correlationId_)
-    , parentErrorId_(other.parentErrorId_)
-    , childErrorIds_(other.childErrorIds_)
-    , retryCount_(other.retryCount_)
-    , maxRetries_(other.maxRetries_)
-    , stackTrace_(other.stackTrace_) {
-}
+    : errorId_(other.errorId_),
+      errorCode_(other.errorCode_),
+      message_(other.message_),
+      timestamp_(other.timestamp_),
+      threadId_(other.threadId_),
+      metadata_(other.metadata_),
+      userData_(other.userData_),
+      systemInfo_(other.systemInfo_),
+      tags_(other.tags_),
+      correlationId_(other.correlationId_),
+      parentErrorId_(other.parentErrorId_),
+      childErrorIds_(other.childErrorIds_),
+      retryCount_(other.retryCount_),
+      maxRetries_(other.maxRetries_),
+      stackTrace_(other.stackTrace_) {}
 
 ErrorContext::ErrorContext(ErrorContext&& other) noexcept
-    : errorId_(std::move(other.errorId_))
-    , errorCode_(other.errorCode_)
-    , message_(std::move(other.message_))
-    , timestamp_(other.timestamp_)
-    , threadId_(other.threadId_)
-    , metadata_(std::move(other.metadata_))
-    , userData_(std::move(other.userData_))
-    , systemInfo_(std::move(other.systemInfo_))
-    , tags_(std::move(other.tags_))
-    , correlationId_(std::move(other.correlationId_))
-    , parentErrorId_(std::move(other.parentErrorId_))
-    , childErrorIds_(std::move(other.childErrorIds_))
-    , retryCount_(other.retryCount_)
-    , maxRetries_(other.maxRetries_)
-    , stackTrace_(std::move(other.stackTrace_)) {
-}
+    : errorId_(std::move(other.errorId_)),
+      errorCode_(other.errorCode_),
+      message_(std::move(other.message_)),
+      timestamp_(other.timestamp_),
+      threadId_(other.threadId_),
+      metadata_(std::move(other.metadata_)),
+      userData_(std::move(other.userData_)),
+      systemInfo_(std::move(other.systemInfo_)),
+      tags_(std::move(other.tags_)),
+      correlationId_(std::move(other.correlationId_)),
+      parentErrorId_(std::move(other.parentErrorId_)),
+      childErrorIds_(std::move(other.childErrorIds_)),
+      retryCount_(other.retryCount_),
+      maxRetries_(other.maxRetries_),
+      stackTrace_(std::move(other.stackTrace_)) {}
 
 ErrorContext& ErrorContext::operator=(const ErrorContext& other) {
     if (this != &other) {
@@ -137,7 +142,8 @@ ErrorContext& ErrorContext::operator=(ErrorContext&& other) noexcept {
     return *this;
 }
 
-auto ErrorContext::setUserData(const std::string& key, std::any value) -> ErrorContext& {
+auto ErrorContext::setUserData(const std::string& key,
+                               std::any value) -> ErrorContext& {
     std::lock_guard<std::mutex> lock(mutex_);
     userData_[key] = std::move(value);
     return *this;
@@ -154,7 +160,8 @@ auto ErrorContext::hasUserData(const std::string& key) const -> bool {
     return userData_.find(key) != userData_.end();
 }
 
-auto ErrorContext::setSystemInfo(const std::string& key, std::string value) -> ErrorContext& {
+auto ErrorContext::setSystemInfo(const std::string& key,
+                                 std::string value) -> ErrorContext& {
     std::lock_guard<std::mutex> lock(mutex_);
     systemInfo_[key] = std::move(value);
     return *this;
@@ -183,7 +190,8 @@ auto ErrorContext::hasTag(const std::string& tag) const -> bool {
     return std::find(tags_.begin(), tags_.end(), tag) != tags_.end();
 }
 
-auto ErrorContext::setCorrelationId(const std::string& correlationId) -> ErrorContext& {
+auto ErrorContext::setCorrelationId(const std::string& correlationId)
+    -> ErrorContext& {
     std::lock_guard<std::mutex> lock(mutex_);
     correlationId_ = correlationId;
     return *this;
@@ -219,9 +227,7 @@ auto ErrorContext::incrementRetryCount() -> ErrorContext& {
     return *this;
 }
 
-auto ErrorContext::getRetryCount() const -> int {
-    return retryCount_;
-}
+auto ErrorContext::getRetryCount() const -> int { return retryCount_; }
 
 auto ErrorContext::setMaxRetries(int maxRetries) -> ErrorContext& {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -229,16 +235,15 @@ auto ErrorContext::setMaxRetries(int maxRetries) -> ErrorContext& {
     return *this;
 }
 
-auto ErrorContext::getMaxRetries() const -> int {
-    return maxRetries_;
-}
+auto ErrorContext::getMaxRetries() const -> int { return maxRetries_; }
 
 auto ErrorContext::canRetry() const -> bool {
-    return retryCount_ < maxRetries_ && 
+    return retryCount_ < maxRetries_ &&
            (metadata_.recovery == ErrorRecoveryStrategy::Retry);
 }
 
-auto ErrorContext::setStackTrace(const std::string& stackTrace) -> ErrorContext& {
+auto ErrorContext::setStackTrace(const std::string& stackTrace)
+    -> ErrorContext& {
     std::lock_guard<std::mutex> lock(mutex_);
     stackTrace_ = stackTrace;
     return *this;
@@ -249,43 +254,45 @@ auto ErrorContext::getStackTrace() const -> const std::string& {
 }
 
 void ErrorContext::initializeSystemInfo() {
-    // Get process ID
-    #ifdef _WIN32
+// Get process ID
+#ifdef _WIN32
     systemInfo_["pid"] = std::to_string(GetCurrentProcessId());
-    #else
+#else
     systemInfo_["pid"] = std::to_string(getpid());
-    #endif
-    
-    // Get system information
-    #ifdef _WIN32
+#endif
+
+// Get system information
+#ifdef _WIN32
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
     systemInfo_["cpu_count"] = std::to_string(sysInfo.dwNumberOfProcessors);
-    #else
+#else
     systemInfo_["cpu_count"] = std::to_string(sysconf(_SC_NPROCESSORS_ONLN));
-    
+
     struct utsname unameData;
     if (uname(&unameData) == 0) {
         systemInfo_["os_name"] = unameData.sysname;
         systemInfo_["os_version"] = unameData.release;
         systemInfo_["hostname"] = unameData.nodename;
     }
-    #endif
-    
+#endif
+
     // Thread ID as string
     std::stringstream ss;
     ss << threadId_;
     systemInfo_["thread_id"] = ss.str();
 }
 
-auto ErrorContext::create(int errorCode, const std::string& message) -> std::shared_ptr<ErrorContext> {
+auto ErrorContext::create(int errorCode, const std::string& message)
+    -> std::shared_ptr<ErrorContext> {
     auto context = std::make_shared<ErrorContext>(errorCode, message);
     ErrorContextManager::getInstance().registerContext(context);
     return context;
 }
 
-auto ErrorContext::createWithCorrelation(int errorCode, const std::string& correlationId,
-                                        const std::string& message) -> std::shared_ptr<ErrorContext> {
+auto ErrorContext::createWithCorrelation(
+    int errorCode, const std::string& correlationId,
+    const std::string& message) -> std::shared_ptr<ErrorContext> {
     auto context = create(errorCode, message);
     context->setCorrelationId(correlationId);
     return context;
@@ -298,19 +305,24 @@ auto ErrorContext::toJson() const -> std::string {
     ss << "  \"errorId\": \"" << errorId_ << "\",\n";
     ss << "  \"errorCode\": " << errorCode_ << ",\n";
     ss << "  \"message\": \"" << message_ << "\",\n";
-    ss << "  \"severity\": \"" << severityToString(metadata_.severity) << "\",\n";
-    ss << "  \"category\": \"" << categoryToString(metadata_.category) << "\",\n";
-    ss << "  \"recovery\": \"" << recoveryStrategyToString(metadata_.recovery) << "\",\n";
+    ss << "  \"severity\": \"" << severityToString(metadata_.severity)
+       << "\",\n";
+    ss << "  \"category\": \"" << categoryToString(metadata_.category)
+       << "\",\n";
+    ss << "  \"recovery\": \"" << recoveryStrategyToString(metadata_.recovery)
+       << "\",\n";
 
     // Timestamp
     auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
-    ss << "  \"timestamp\": \"" << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%SZ") << "\",\n";
+    ss << "  \"timestamp\": \""
+       << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%SZ") << "\",\n";
 
     // System info
     ss << "  \"systemInfo\": {\n";
     bool first = true;
     for (const auto& [key, value] : systemInfo_) {
-        if (!first) ss << ",\n";
+        if (!first)
+            ss << ",\n";
         ss << "    \"" << key << "\": \"" << value << "\"";
         first = false;
     }
@@ -320,7 +332,8 @@ auto ErrorContext::toJson() const -> std::string {
     ss << "  \"tags\": [";
     first = true;
     for (const auto& tag : tags_) {
-        if (!first) ss << ", ";
+        if (!first)
+            ss << ", ";
         ss << "\"" << tag << "\"";
         first = false;
     }
@@ -344,10 +357,12 @@ auto ErrorContext::toString() const -> std::string {
     ss << "  Message: " << message_ << "\n";
     ss << "  Severity: " << severityToString(metadata_.severity) << "\n";
     ss << "  Category: " << categoryToString(metadata_.category) << "\n";
-    ss << "  Recovery: " << recoveryStrategyToString(metadata_.recovery) << "\n";
+    ss << "  Recovery: " << recoveryStrategyToString(metadata_.recovery)
+       << "\n";
 
     auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
-    ss << "  Timestamp: " << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << "\n";
+    ss << "  Timestamp: "
+       << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << "\n";
 
     if (!correlationId_.empty()) {
         ss << "  Correlation ID: " << correlationId_ << "\n";
@@ -360,7 +375,8 @@ auto ErrorContext::toString() const -> std::string {
     if (!tags_.empty()) {
         ss << "  Tags: ";
         for (size_t i = 0; i < tags_.size(); ++i) {
-            if (i > 0) ss << ", ";
+            if (i > 0)
+                ss << ", ";
             ss << tags_[i];
         }
         ss << "\n";
@@ -381,20 +397,24 @@ auto ErrorContextManager::getInstance() -> ErrorContextManager& {
     return instance;
 }
 
-void ErrorContextManager::registerContext(std::shared_ptr<ErrorContext> context) {
-    if (!context) return;
+void ErrorContextManager::registerContext(
+    std::shared_ptr<ErrorContext> context) {
+    if (!context)
+        return;
 
     std::unique_lock<std::shared_mutex> lock(contextsMutex_);
     contexts_[context->getErrorId()] = context;
 }
 
-auto ErrorContextManager::getContext(const ErrorId& errorId) const -> std::shared_ptr<ErrorContext> {
+auto ErrorContextManager::getContext(const ErrorId& errorId) const
+    -> std::shared_ptr<ErrorContext> {
     std::shared_lock<std::shared_mutex> lock(contextsMutex_);
     auto it = contexts_.find(errorId);
     return it != contexts_.end() ? it->second : nullptr;
 }
 
-auto ErrorContextManager::getContextsByCorrelation(const std::string& correlationId) const
+auto ErrorContextManager::getContextsByCorrelation(
+    const std::string& correlationId) const
     -> std::vector<std::shared_ptr<ErrorContext>> {
     std::shared_lock<std::shared_mutex> lock(contextsMutex_);
     std::vector<std::shared_ptr<ErrorContext>> result;
@@ -408,7 +428,8 @@ auto ErrorContextManager::getContextsByCorrelation(const std::string& correlatio
     return result;
 }
 
-auto ErrorContextManager::getStatistics() const -> std::unordered_map<std::string, int> {
+auto ErrorContextManager::getStatistics() const
+    -> std::unordered_map<std::string, int> {
     std::shared_lock<std::shared_mutex> lock(contextsMutex_);
     std::unordered_map<std::string, int> stats;
 
@@ -456,8 +477,7 @@ void ErrorContextManager::clear() {
 
 // ScopedErrorContext implementation
 ScopedErrorContext::ScopedErrorContext(std::shared_ptr<ErrorContext> context)
-    : context_(std::move(context)) {
-}
+    : context_(std::move(context)) {}
 
 ScopedErrorContext::~ScopedErrorContext() {
     // Context is automatically managed by shared_ptr
@@ -467,4 +487,4 @@ auto ScopedErrorContext::getContext() const -> std::shared_ptr<ErrorContext> {
     return context_;
 }
 
-} // namespace atom::error
+}  // namespace atom::error

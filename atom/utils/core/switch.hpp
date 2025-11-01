@@ -290,8 +290,8 @@ public:
     template <std::ranges::range KeyRange>
         requires std::convertible_to<std::ranges::range_value_t<KeyRange>,
                                      std::string_view>
-    auto matchParallel(const KeyRange& keys, Args... args)
-        -> Vector<std::optional<ReturnType>> {
+    auto matchParallel(const KeyRange& keys,
+                       Args... args) -> Vector<std::optional<ReturnType>> {
         auto keyCount = std::ranges::distance(keys);
         Vector<std::optional<ReturnType>> results;
         results.reserve(keyCount);
@@ -497,8 +497,8 @@ private:
 
     bool unregisterCaseImpl(const String& key) { return cases_.erase(key) > 0; }
 
-    auto matchImpl(std::string_view keyView, Args... args)
-        -> std::optional<ReturnType> {
+    auto matchImpl(std::string_view keyView,
+                   Args... args) -> std::optional<ReturnType> {
         const auto startTime = std::chrono::steady_clock::now();
         metrics_.totalCalls.fetch_add(1, std::memory_order_relaxed);
 

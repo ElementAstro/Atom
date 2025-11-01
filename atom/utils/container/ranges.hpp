@@ -512,8 +512,9 @@ template <std::ranges::input_range R,
  * @return Generator yielding pairs of adjacent elements
  */
 template <std::ranges::forward_range R>
-[[nodiscard]] auto adjacent(R&& range) -> Generator<
-    std::pair<std::ranges::range_value_t<R>, std::ranges::range_value_t<R>>> {
+[[nodiscard]] auto adjacent(R&& range)
+    -> Generator<std::pair<std::ranges::range_value_t<R>,
+                           std::ranges::range_value_t<R>>> {
     auto it = std::ranges::begin(range);
     auto end = std::ranges::end(range);
     if (it == end) {

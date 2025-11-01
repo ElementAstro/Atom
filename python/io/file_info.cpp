@@ -46,12 +46,13 @@ PYBIND11_MODULE(file_info, m) {
     });
 
     // FileInfo structure binding
-    py::class_<atom::io::FileInfo>(m, "FileInfo",
+    py::class_<atom::io::FileInfo>(
+        m, "FileInfo",
         R"(Structure containing detailed file information.
-        
+
         This class provides comprehensive metadata about a file including
         timestamps, permissions, ownership, and type information.
-        
+
         Attributes:
             file_path: Absolute path of the file
             file_name: Name of the file
@@ -69,66 +70,75 @@ PYBIND11_MODULE(file_info, m) {
         )")
         .def(py::init<>(), "Default constructor")
         .def_readwrite("file_path", &atom::io::FileInfo::filePath,
-                      "Absolute path of the file")
+                       "Absolute path of the file")
         .def_readwrite("file_name", &atom::io::FileInfo::fileName,
-                      "Name of the file")
+                       "Name of the file")
         .def_readwrite("extension", &atom::io::FileInfo::extension,
-                      "File extension")
+                       "File extension")
         .def_readwrite("file_size", &atom::io::FileInfo::fileSize,
-                      "Size of the file in bytes")
+                       "Size of the file in bytes")
         .def_readwrite("file_type", &atom::io::FileInfo::fileType,
-                      "Type of the file (e.g., Regular file, Directory)")
+                       "Type of the file (e.g., Regular file, Directory)")
         .def_readwrite("creation_time", &atom::io::FileInfo::creationTime,
-                      "Creation timestamp")
-        .def_readwrite("last_modified_time", &atom::io::FileInfo::lastModifiedTime,
-                      "Last modification timestamp")
+                       "Creation timestamp")
+        .def_readwrite("last_modified_time",
+                       &atom::io::FileInfo::lastModifiedTime,
+                       "Last modification timestamp")
         .def_readwrite("last_access_time", &atom::io::FileInfo::lastAccessTime,
-                      "Last access timestamp")
+                       "Last access timestamp")
         .def_readwrite("permissions", &atom::io::FileInfo::permissions,
-                      "File permissions (e.g., rwxr-xr-x)")
+                       "File permissions (e.g., rwxr-xr-x)")
         .def_readwrite("is_hidden", &atom::io::FileInfo::isHidden,
-                      "Whether the file is hidden")
-        .def_readwrite("owner", &atom::io::FileInfo::owner,
-                      "Owner of the file")
+                       "Whether the file is hidden")
+        .def_readwrite("owner", &atom::io::FileInfo::owner, "Owner of the file")
 #ifndef _WIN32
         .def_readwrite("group", &atom::io::FileInfo::group,
-                      "Group of the file (Unix/Linux only)")
+                       "Group of the file (Unix/Linux only)")
         .def_readwrite("symlink_target", &atom::io::FileInfo::symlinkTarget,
-                      "Target of symbolic link (Unix/Linux only)")
+                       "Target of symbolic link (Unix/Linux only)")
 #endif
-        .def("__repr__", [](const atom::io::FileInfo& info) {
-            return "<FileInfo(path='" + std::string(info.filePath.c_str()) + 
-                   "', size=" + std::to_string(info.fileSize) + 
-                   ", type='" + std::string(info.fileType.c_str()) + "')>";
-        })
+        .def("__repr__",
+             [](const atom::io::FileInfo& info) {
+                 return "<FileInfo(path='" +
+                        std::string(info.filePath.c_str()) +
+                        "', size=" + std::to_string(info.fileSize) +
+                        ", type='" + std::string(info.fileType.c_str()) + "')>";
+             })
         .def("__str__", [](const atom::io::FileInfo& info) {
             std::string result = "File Information:\n";
             result += "  Path: " + std::string(info.filePath.c_str()) + "\n";
             result += "  Name: " + std::string(info.fileName.c_str()) + "\n";
-            result += "  Extension: " + std::string(info.extension.c_str()) + "\n";
+            result +=
+                "  Extension: " + std::string(info.extension.c_str()) + "\n";
             result += "  Size: " + std::to_string(info.fileSize) + " bytes\n";
             result += "  Type: " + std::string(info.fileType.c_str()) + "\n";
-            result += "  Modified: " + std::string(info.lastModifiedTime.c_str()) + "\n";
-            result += "  Permissions: " + std::string(info.permissions.c_str()) + "\n";
+            result +=
+                "  Modified: " + std::string(info.lastModifiedTime.c_str()) +
+                "\n";
+            result +=
+                "  Permissions: " + std::string(info.permissions.c_str()) +
+                "\n";
             result += "  Hidden: " + (info.isHidden ? "Yes" : "No") + "\n";
             result += "  Owner: " + std::string(info.owner.c_str());
 #ifndef _WIN32
             result += "\n  Group: " + std::string(info.group.c_str());
             if (!info.symlinkTarget.empty()) {
-                result += "\n  Symlink Target: " + std::string(info.symlinkTarget.c_str());
+                result += "\n  Symlink Target: " +
+                          std::string(info.symlinkTarget.c_str());
             }
 #endif
             return result;
         });
 
     // Main functions
-    m.def("get_file_info", 
-          [](const std::string& file_path) {
-              fs::path path(file_path);
-              return atom::io::getFileInfo(path);
-          },
-          py::arg("file_path"),
-          R"(Retrieves detailed information about a file.
+    m.def(
+        "get_file_info",
+        [](const std::string& file_path) {
+            fs::path path(file_path);
+            return atom::io::getFileInfo(path);
+        },
+        py::arg("file_path"),
+        R"(Retrieves detailed information about a file.
 
 Args:
     file_path: The path to the file
@@ -148,8 +158,7 @@ Examples:
     >>> print(f"Is hidden: {info.is_hidden}")
 )");
 
-    m.def("print_file_info", &atom::io::printFileInfo,
-          py::arg("info"),
+    m.def("print_file_info", &atom::io::printFileInfo, py::arg("info"),
           R"(Prints file information to the console.
 
 Args:
@@ -161,13 +170,14 @@ Examples:
 )");
 
     // Convenience functions
-    m.def("get_file_size", 
-          [](const std::string& file_path) {
-              auto info = atom::io::getFileInfo(fs::path(file_path));
-              return info.fileSize;
-          },
-          py::arg("file_path"),
-          R"(Gets the size of a file in bytes.
+    m.def(
+        "get_file_size",
+        [](const std::string& file_path) {
+            auto info = atom::io::getFileInfo(fs::path(file_path));
+            return info.fileSize;
+        },
+        py::arg("file_path"),
+        R"(Gets the size of a file in bytes.
 
 Args:
     file_path: The path to the file
@@ -180,13 +190,14 @@ Examples:
     >>> print(f"File is {size} bytes")
 )");
 
-    m.def("get_file_type", 
-          [](const std::string& file_path) {
-              auto info = atom::io::getFileInfo(fs::path(file_path));
-              return std::string(info.fileType.c_str());
-          },
-          py::arg("file_path"),
-          R"(Gets the type of a file.
+    m.def(
+        "get_file_type",
+        [](const std::string& file_path) {
+            auto info = atom::io::getFileInfo(fs::path(file_path));
+            return std::string(info.fileType.c_str());
+        },
+        py::arg("file_path"),
+        R"(Gets the type of a file.
 
 Args:
     file_path: The path to the file
@@ -199,13 +210,14 @@ Examples:
     >>> print(f"File type: {file_type}")
 )");
 
-    m.def("get_file_permissions", 
-          [](const std::string& file_path) {
-              auto info = atom::io::getFileInfo(fs::path(file_path));
-              return std::string(info.permissions.c_str());
-          },
-          py::arg("file_path"),
-          R"(Gets the permissions of a file.
+    m.def(
+        "get_file_permissions",
+        [](const std::string& file_path) {
+            auto info = atom::io::getFileInfo(fs::path(file_path));
+            return std::string(info.permissions.c_str());
+        },
+        py::arg("file_path"),
+        R"(Gets the permissions of a file.
 
 Args:
     file_path: The path to the file
@@ -218,13 +230,14 @@ Examples:
     >>> print(f"Permissions: {perms}")
 )");
 
-    m.def("is_hidden_file", 
-          [](const std::string& file_path) {
-              auto info = atom::io::getFileInfo(fs::path(file_path));
-              return info.isHidden;
-          },
-          py::arg("file_path"),
-          R"(Checks if a file is hidden.
+    m.def(
+        "is_hidden_file",
+        [](const std::string& file_path) {
+            auto info = atom::io::getFileInfo(fs::path(file_path));
+            return info.isHidden;
+        },
+        py::arg("file_path"),
+        R"(Checks if a file is hidden.
 
 Args:
     file_path: The path to the file
@@ -237,13 +250,14 @@ Examples:
     >>> print(f"Is hidden: {hidden}")
 )");
 
-    m.def("get_file_owner", 
-          [](const std::string& file_path) {
-              auto info = atom::io::getFileInfo(fs::path(file_path));
-              return std::string(info.owner.c_str());
-          },
-          py::arg("file_path"),
-          R"(Gets the owner of a file.
+    m.def(
+        "get_file_owner",
+        [](const std::string& file_path) {
+            auto info = atom::io::getFileInfo(fs::path(file_path));
+            return std::string(info.owner.c_str());
+        },
+        py::arg("file_path"),
+        R"(Gets the owner of a file.
 
 Args:
     file_path: The path to the file
@@ -257,13 +271,14 @@ Examples:
 )");
 
 #ifndef _WIN32
-    m.def("get_file_group", 
-          [](const std::string& file_path) {
-              auto info = atom::io::getFileInfo(fs::path(file_path));
-              return std::string(info.group.c_str());
-          },
-          py::arg("file_path"),
-          R"(Gets the group of a file (Unix/Linux only).
+    m.def(
+        "get_file_group",
+        [](const std::string& file_path) {
+            auto info = atom::io::getFileInfo(fs::path(file_path));
+            return std::string(info.group.c_str());
+        },
+        py::arg("file_path"),
+        R"(Gets the group of a file (Unix/Linux only).
 
 Args:
     file_path: The path to the file
@@ -276,13 +291,14 @@ Examples:
     >>> print(f"Group: {group}")
 )");
 
-    m.def("get_symlink_target", 
-          [](const std::string& file_path) {
-              auto info = atom::io::getFileInfo(fs::path(file_path));
-              return std::string(info.symlinkTarget.c_str());
-          },
-          py::arg("file_path"),
-          R"(Gets the target of a symbolic link (Unix/Linux only).
+    m.def(
+        "get_symlink_target",
+        [](const std::string& file_path) {
+            auto info = atom::io::getFileInfo(fs::path(file_path));
+            return std::string(info.symlinkTarget.c_str());
+        },
+        py::arg("file_path"),
+        R"(Gets the target of a symbolic link (Unix/Linux only).
 
 Args:
     file_path: The path to the symbolic link
@@ -298,22 +314,26 @@ Examples:
 #endif
 
     // Utility functions for file information analysis
-    m.def("compare_file_times", 
-          [](const std::string& file1, const std::string& file2) {
-              auto info1 = atom::io::getFileInfo(fs::path(file1));
-              auto info2 = atom::io::getFileInfo(fs::path(file2));
-              
-              py::dict result;
-              result["file1_newer"] = info1.lastModifiedTime > info2.lastModifiedTime;
-              result["file2_newer"] = info2.lastModifiedTime > info1.lastModifiedTime;
-              result["same_time"] = info1.lastModifiedTime == info2.lastModifiedTime;
-              result["file1_time"] = std::string(info1.lastModifiedTime.c_str());
-              result["file2_time"] = std::string(info2.lastModifiedTime.c_str());
-              
-              return result;
-          },
-          py::arg("file1"), py::arg("file2"),
-          R"(Compares the modification times of two files.
+    m.def(
+        "compare_file_times",
+        [](const std::string& file1, const std::string& file2) {
+            auto info1 = atom::io::getFileInfo(fs::path(file1));
+            auto info2 = atom::io::getFileInfo(fs::path(file2));
+
+            py::dict result;
+            result["file1_newer"] =
+                info1.lastModifiedTime > info2.lastModifiedTime;
+            result["file2_newer"] =
+                info2.lastModifiedTime > info1.lastModifiedTime;
+            result["same_time"] =
+                info1.lastModifiedTime == info2.lastModifiedTime;
+            result["file1_time"] = std::string(info1.lastModifiedTime.c_str());
+            result["file2_time"] = std::string(info2.lastModifiedTime.c_str());
+
+            return result;
+        },
+        py::arg("file1"), py::arg("file2"),
+        R"(Compares the modification times of two files.
 
 Args:
     file1: Path to the first file

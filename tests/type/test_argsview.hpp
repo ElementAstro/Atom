@@ -1,10 +1,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <optional>
 #include <string>
 #include <tuple>
 #include <vector>
-#include <optional>
 
 #include "atom/type/argsview.hpp"
 
@@ -62,11 +62,12 @@ TEST_F(ArgsViewTest, OptionalConstruction) {
     std::optional<std::string> opt2 = "hello";
     std::optional<double> opt3 = std::nullopt;
 
-    ArgsView<int, std::string, double> view(std::move(opt1), std::move(opt2), std::move(opt3));
+    ArgsView<int, std::string, double> view(std::move(opt1), std::move(opt2),
+                                            std::move(opt3));
 
     EXPECT_EQ(view.get<0>(), 42);
     EXPECT_EQ(view.get<1>(), "hello");
-    EXPECT_EQ(view.get<2>(), 0.0); // Default value for double
+    EXPECT_EQ(view.get<2>(), 0.0);  // Default value for double
 }
 
 // Access Methods Tests
@@ -107,9 +108,7 @@ TEST_F(ArgsViewTest, ForEachOperation) {
     ArgsView<int, int, int> view(1, 2, 3);
 
     int sum = 0;
-    view.forEach([&sum](const auto& value) {
-        sum += value;
-    });
+    view.forEach([&sum](const auto& value) { sum += value; });
 
     EXPECT_EQ(sum, 6);
 }
@@ -117,9 +116,7 @@ TEST_F(ArgsViewTest, ForEachOperation) {
 TEST_F(ArgsViewTest, TransformOperation) {
     ArgsView<int, int, int> view(1, 2, 3);
 
-    auto doubled = view.transform([](const auto& value) {
-        return value * 2;
-    });
+    auto doubled = view.transform([](const auto& value) { return value * 2; });
 
     EXPECT_EQ(doubled.get<0>(), 2);
     EXPECT_EQ(doubled.get<1>(), 4);
@@ -176,8 +173,8 @@ TEST_F(ArgsViewTest, LargeNumberOfArguments) {
 }
 
 TEST_F(ArgsViewTest, MixedTypes) {
-    ArgsView<int, double, std::string, bool, char> view(
-        42, 3.14, "test", true, 'A');
+    ArgsView<int, double, std::string, bool, char> view(42, 3.14, "test", true,
+                                                        'A');
 
     EXPECT_EQ(view.get<0>(), 42);
     EXPECT_EQ(view.get<1>(), 3.14);

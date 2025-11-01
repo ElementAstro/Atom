@@ -61,9 +61,12 @@ constexpr std::string_view logLevelToString(LogLevel level) noexcept {
 
 LogLevel stringToLogLevel(std::string_view str) {
     static const std::unordered_map<std::string_view, LogLevel> level_map = {
-        {"TRACE", LogLevel::TRACE}, {"DEBUG", LogLevel::DEBUG_LEVEL},
-        {"INFO", LogLevel::INFO_LEVEL},   {"WARN", LogLevel::WARN_LEVEL},
-        {"ERROR", LogLevel::ERROR_LEVEL}, {"CRITICAL", LogLevel::CRITICAL_LEVEL},
+        {"TRACE", LogLevel::TRACE},
+        {"DEBUG", LogLevel::DEBUG_LEVEL},
+        {"INFO", LogLevel::INFO_LEVEL},
+        {"WARN", LogLevel::WARN_LEVEL},
+        {"ERROR", LogLevel::ERROR_LEVEL},
+        {"CRITICAL", LogLevel::CRITICAL_LEVEL},
         {"OFF", LogLevel::OFF_LEVEL}};
 
     auto it = level_map.find(str);

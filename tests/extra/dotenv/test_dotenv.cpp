@@ -1,11 +1,11 @@
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include "atom/extra/dotenv/dotenv.hpp"
-#include "atom/extra/dotenv/parser.hpp"
-#include "atom/extra/dotenv/loader.hpp"
-#include "atom/extra/dotenv/validator.hpp"
 #include "atom/extra/dotenv/exceptions.hpp"
+#include "atom/extra/dotenv/loader.hpp"
+#include "atom/extra/dotenv/parser.hpp"
+#include "atom/extra/dotenv/validator.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -51,62 +51,62 @@ TEST_F(DotenvTest, BasicLoading) {
     // Test basic .env file loading
     writeFile(".env", "KEY1=value1\nKEY2=value2\n");
 
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, ParsingVariousFormats) {
     // Test parsing various .env formats
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, QuotedValues) {
     // Test quoted value parsing
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, CommentHandling) {
     // Test comment handling
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, VariableExpansion) {
     // Test variable expansion
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, MultilineValues) {
     // Test multiline value parsing
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, FileNotFound) {
     // Test file not found handling
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, InvalidSyntax) {
     // Test invalid syntax handling
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, OverrideExisting) {
     // Test overriding existing environment variables
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, ValidationRules) {
     // Test validation rules
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, FileWatching) {
     // Test file watching functionality
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
 TEST_F(DotenvTest, MultipleFiles) {
     // Test loading multiple .env files
-    EXPECT_TRUE(true); // Placeholder
+    EXPECT_TRUE(true);  // Placeholder
 }
 
-} // namespace atom::extra::dotenv::test
+}  // namespace atom::extra::dotenv::test

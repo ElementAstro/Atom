@@ -16,10 +16,10 @@ Description: Better Exception Library
 #define ATOM_ERROR_EXCEPTION_HPP
 
 #include <exception>
+#include <ostream>
 #include <sstream>
 #include <string>
 #include <thread>
-#include <ostream>
 
 #include "../macro.hpp"
 #include "stacktrace.hpp"
@@ -57,7 +57,6 @@ private:
     }
 
 public:
-
     template <typename... Args>
     static void rethrowNested(Args &&...args) {
         try {

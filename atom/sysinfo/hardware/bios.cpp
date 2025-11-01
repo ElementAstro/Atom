@@ -1,6 +1,12 @@
 #include "bios.hpp"
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <sysinfoapi.h>
 #include <wbemidl.h>
 #include <winbase.h>
@@ -11,13 +17,17 @@
 
 // Helper function to convert BSTR to std::string (MinGW compatible)
 static std::string BSTRToString(BSTR bstr) {
-    if (!bstr) return "";
+    if (!bstr)
+        return "";
 
-    int len = WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 0) return "";
+    int len =
+        WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0)
+        return "";
 
     std::string result(len - 1, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr,
+                        nullptr);
     return result;
 }
 
@@ -25,7 +35,10 @@ static std::string BSTRToString(BSTR bstr) {
 class BSTRWrapper {
 public:
     explicit BSTRWrapper(const wchar_t* str) : bstr_(SysAllocString(str)) {}
-    ~BSTRWrapper() { if (bstr_) SysFreeString(bstr_); }
+    ~BSTRWrapper() {
+        if (bstr_)
+            SysFreeString(bstr_);
+    }
 
     BSTRWrapper(const BSTRWrapper&) = delete;
     BSTRWrapper& operator=(const BSTRWrapper&) = delete;
@@ -191,8 +204,8 @@ BiosHealthStatus BiosInfo::checkHealth() const {
         }
 
         BSTRWrapper rootCimv2(L"ROOT\\CIMV2");
-        hres = pLoc->ConnectServer(rootCimv2, nullptr, nullptr, 0,
-                                   0, 0, 0, pSvc.getAddressOf());
+        hres = pLoc->ConnectServer(rootCimv2, nullptr, nullptr, 0, 0, 0, 0,
+                                   pSvc.getAddressOf());
         if (FAILED(hres)) {
             throw std::runtime_error("Could not connect to WMI namespace");
         }
@@ -208,19 +221,20 @@ BiosHealthStatus BiosInfo::checkHealth() const {
 
         ComPtr<IEnumWbemClassObject> pEnumerator;
         BSTRWrapper wql2(L"WQL");
-        BSTRWrapper query2(L"SELECT * FROM Win32_NTLogEvent WHERE LogFile='System' AND "
-                          L"EventCode='7' AND SourceName='Microsoft-Windows-BIOS' AND "
-                          L"TimeWritten > '20230101000000.000000-000'");
+        BSTRWrapper query2(
+            L"SELECT * FROM Win32_NTLogEvent WHERE LogFile='System' AND "
+            L"EventCode='7' AND SourceName='Microsoft-Windows-BIOS' AND "
+            L"TimeWritten > '20230101000000.000000-000'");
         hres = pSvc->ExecQuery(
-            wql2, query2,
-            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
-            pEnumerator.getAddressOf());
+            wql2, query2, WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+            nullptr, pEnumerator.getAddressOf());
 
         if (SUCCEEDED(hres)) {
             ComPtr<IWbemClassObject> pclsObj;
             ULONG uReturn = 0;
 
-            while (pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, pclsObj.getAddressOf(),
+            while (pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                     pclsObj.getAddressOf(),
                                      &uReturn) == S_OK) {
                 if (uReturn == 0)
                     break;
@@ -230,8 +244,7 @@ BiosHealthStatus BiosInfo::checkHealth() const {
 
                 if (SUCCEEDED(pclsObj->Get(L"Message", 0, &vtProp, 0, 0))) {
                     status.isHealthy = false;
-                    status.errors.push_back(
-                        BSTRToString(vtProp.bstrVal));
+                    status.errors.push_back(BSTRToString(vtProp.bstrVal));
                 }
 
                 VariantClear(&vtProp);
@@ -249,7 +262,8 @@ BiosHealthStatus BiosInfo::checkHealth() const {
                            currentTime - biosTime)
                            .count();
         // Clamp to reasonable range to avoid overflow
-        status.biosAgeInDays = static_cast<int>(std::min(biosAge, static_cast<decltype(biosAge)>(INT_MAX)));
+        status.biosAgeInDays = static_cast<int>(
+            std::min(biosAge, static_cast<decltype(biosAge)>(INT_MAX)));
 
         if (biosAge > 730) {
             status.warnings.push_back(
@@ -322,7 +336,8 @@ BiosHealthStatus BiosInfo::checkHealth() const {
                                .count() /
                            24;
             // Clamp to reasonable range to avoid overflow
-            status.biosAgeInDays = static_cast<int>(std::min(biosAge, static_cast<decltype(biosAge)>(INT_MAX)));
+            status.biosAgeInDays = static_cast<int>(
+                std::min(biosAge, static_cast<decltype(biosAge)>(INT_MAX)));
 
             if (biosAge > 730) {
                 status.warnings.push_back(
@@ -551,8 +566,8 @@ BiosInfoData BiosInfo::fetchBiosInfo() {
         }
 
         BSTRWrapper rootCimv2_2(L"ROOT\\CIMV2");
-        hres = pLoc->ConnectServer(rootCimv2_2, nullptr, nullptr, 0,
-                                   0, 0, 0, pSvc.getAddressOf());
+        hres = pLoc->ConnectServer(rootCimv2_2, nullptr, nullptr, 0, 0, 0, 0,
+                                   pSvc.getAddressOf());
         if (FAILED(hres)) {
             throw std::runtime_error("Could not connect to WMI namespace");
         }
@@ -593,10 +608,9 @@ BiosInfoData BiosInfo::fetchBiosInfo() {
                 VariantInit(&vtProp);
                 if (SUCCEEDED(
                         pclsObj->Get(prop, 0, &vtProp, nullptr, nullptr))) {
-                    std::string result =
-                        (vtProp.vt == VT_BSTR)
-                            ? BSTRToString(vtProp.bstrVal)
-                            : "";
+                    std::string result = (vtProp.vt == VT_BSTR)
+                                             ? BSTRToString(vtProp.bstrVal)
+                                             : "";
                     VariantClear(&vtProp);
                     return result;
                 }
@@ -686,8 +700,8 @@ bool BiosInfo::isUEFIBootSupported() {
             return false;
 
         BSTRWrapper rootWmi(L"ROOT\\WMI");
-        hres = pLoc->ConnectServer(rootWmi, nullptr, nullptr, 0,
-                                   0, 0, 0, pSvc.getAddressOf());
+        hres = pLoc->ConnectServer(rootWmi, nullptr, nullptr, 0, 0, 0, 0,
+                                   pSvc.getAddressOf());
         if (FAILED(hres) || !pSvc.get())
             return false;
 
@@ -695,9 +709,8 @@ bool BiosInfo::isUEFIBootSupported() {
         BSTRWrapper wql3(L"WQL");
         BSTRWrapper query3(L"SELECT * FROM MSFirmwareUefiInfo");
         hres = pSvc->ExecQuery(
-            wql3, query3,
-            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
-            pEnumerator.getAddressOf());
+            wql3, query3, WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+            nullptr, pEnumerator.getAddressOf());
 
         return SUCCEEDED(hres) && pEnumerator.get();
     } catch (...) {

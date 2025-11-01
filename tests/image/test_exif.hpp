@@ -1,12 +1,12 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <fstream>
 #include <string>
-#include <vector>
 #include <unordered_map>
+#include <vector>
 
 #include "atom/image/metadata/exif.hpp"
 #include "test_utils.hpp"
@@ -25,62 +25,53 @@ protected:
         createTestImageFiles();
     }
 
-    void TearDown() override {
-        fileManager->cleanup();
-    }
+    void TearDown() override { fileManager->cleanup(); }
 
     void createTestExifData() {
         // Basic camera information
-        testExifData = {
-            {"Make", "Canon"},
-            {"Model", "EOS R5"},
-            {"Software", "Canon Digital Photo Professional"},
-            {"DateTime", "2023:10:15 14:30:25"},
-            {"DateTimeOriginal", "2023:10:15 14:30:25"},
-            {"DateTimeDigitized", "2023:10:15 14:30:25"},
-            
-            // Camera settings
-            {"ExposureTime", "1/125"},
-            {"FNumber", "f/5.6"},
-            {"ISO", "400"},
-            {"FocalLength", "85.0 mm"},
-            {"Flash", "Flash did not fire"},
-            {"WhiteBalance", "Auto"},
-            {"ExposureMode", "Manual"},
-            {"MeteringMode", "Pattern"},
-            
-            // Image properties
-            {"ImageWidth", "6000"},
-            {"ImageHeight", "4000"},
-            {"BitsPerSample", "8"},
-            {"ColorSpace", "sRGB"},
-            {"Orientation", "1"},
-            
-            // GPS data
-            {"GPSLatitude", "37.7749"},
-            {"GPSLongitude", "-122.4194"},
-            {"GPSAltitude", "16.0"},
-            {"GPSLatitudeRef", "N"},
-            {"GPSLongitudeRef", "W"},
-            {"GPSAltitudeRef", "0"},
-            {"GPSTimeStamp", "22:30:25"},
-            {"GPSDateStamp", "2023:10:15"},
-            
-            // Lens information
-            {"LensModel", "RF85mm F1.2 L USM"},
-            {"LensSerialNumber", "1234567890"},
-            {"LensMake", "Canon"}
-        };
+        testExifData = {{"Make", "Canon"},
+                        {"Model", "EOS R5"},
+                        {"Software", "Canon Digital Photo Professional"},
+                        {"DateTime", "2023:10:15 14:30:25"},
+                        {"DateTimeOriginal", "2023:10:15 14:30:25"},
+                        {"DateTimeDigitized", "2023:10:15 14:30:25"},
+
+                        // Camera settings
+                        {"ExposureTime", "1/125"},
+                        {"FNumber", "f/5.6"},
+                        {"ISO", "400"},
+                        {"FocalLength", "85.0 mm"},
+                        {"Flash", "Flash did not fire"},
+                        {"WhiteBalance", "Auto"},
+                        {"ExposureMode", "Manual"},
+                        {"MeteringMode", "Pattern"},
+
+                        // Image properties
+                        {"ImageWidth", "6000"},
+                        {"ImageHeight", "4000"},
+                        {"BitsPerSample", "8"},
+                        {"ColorSpace", "sRGB"},
+                        {"Orientation", "1"},
+
+                        // GPS data
+                        {"GPSLatitude", "37.7749"},
+                        {"GPSLongitude", "-122.4194"},
+                        {"GPSAltitude", "16.0"},
+                        {"GPSLatitudeRef", "N"},
+                        {"GPSLongitudeRef", "W"},
+                        {"GPSAltitudeRef", "0"},
+                        {"GPSTimeStamp", "22:30:25"},
+                        {"GPSDateStamp", "2023:10:15"},
+
+                        // Lens information
+                        {"LensModel", "RF85mm F1.2 L USM"},
+                        {"LensSerialNumber", "1234567890"},
+                        {"LensMake", "Canon"}};
 
         // Create GPS coordinate test data
-        gpsTestData = {
-            {"GPSLatitude", "40.7128"},
-            {"GPSLongitude", "-74.0060"},
-            {"GPSLatitudeRef", "N"},
-            {"GPSLongitudeRef", "W"},
-            {"GPSAltitude", "10.0"},
-            {"GPSAltitudeRef", "0"}
-        };
+        gpsTestData = {{"GPSLatitude", "40.7128"}, {"GPSLongitude", "-74.0060"},
+                       {"GPSLatitudeRef", "N"},    {"GPSLongitudeRef", "W"},
+                       {"GPSAltitude", "10.0"},    {"GPSAltitudeRef", "0"}};
     }
 
     void createTestImageFiles() {
@@ -100,22 +91,25 @@ protected:
         fileManager->registerTempFile(corrupted_exif_file);
     }
 
-    void createMockJpegWithExif(const std::string& filename, const std::unordered_map<std::string, std::string>& exifData) {
+    void createMockJpegWithExif(
+        const std::string& filename,
+        const std::unordered_map<std::string, std::string>& exifData) {
         std::ofstream file(filename, std::ios::binary);
-        
+
         // Write JPEG header
         file.write("\xFF\xD8\xFF\xE1", 4);
-        
+
         // Write mock EXIF segment
         std::string exifSegment = createMockExifSegment(exifData);
         uint16_t segmentSize = static_cast<uint16_t>(exifSegment.size() + 2);
         file.write(reinterpret_cast<const char*>(&segmentSize), 2);
         file.write(exifSegment.c_str(), exifSegment.size());
-        
+
         // Write some image data
         std::vector<uint8_t> imageData(1000, 0x42);
-        file.write(reinterpret_cast<const char*>(imageData.data()), imageData.size());
-        
+        file.write(reinterpret_cast<const char*>(imageData.data()),
+                   imageData.size());
+
         // Write JPEG end marker
         file.write("\xFF\xD9", 2);
         file.close();
@@ -123,17 +117,18 @@ protected:
 
     void createMockJpegWithoutExif(const std::string& filename) {
         std::ofstream file(filename, std::ios::binary);
-        
+
         // Write JPEG header without EXIF
         file.write("\xFF\xD8\xFF\xE0", 4);
-        
+
         // Write JFIF segment
         file.write("\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00", 16);
-        
+
         // Write some image data
         std::vector<uint8_t> imageData(1000, 0x42);
-        file.write(reinterpret_cast<const char*>(imageData.data()), imageData.size());
-        
+        file.write(reinterpret_cast<const char*>(imageData.data()),
+                   imageData.size());
+
         // Write JPEG end marker
         file.write("\xFF\xD9", 2);
         file.close();
@@ -141,30 +136,31 @@ protected:
 
     void createCorruptedExifFile(const std::string& filename) {
         std::ofstream file(filename, std::ios::binary);
-        
+
         // Write JPEG header
         file.write("\xFF\xD8\xFF\xE1", 4);
-        
+
         // Write corrupted EXIF segment
         file.write("\x00\x08Exif\x00\x00", 8);
         file.write("CORRUPTED_DATA", 14);
-        
+
         // Write JPEG end marker
         file.write("\xFF\xD9", 2);
         file.close();
     }
 
-    std::string createMockExifSegment(const std::unordered_map<std::string, std::string>& exifData) {
+    std::string createMockExifSegment(
+        const std::unordered_map<std::string, std::string>& exifData) {
         std::string segment = "Exif\x00\x00";
-        
+
         // Add mock TIFF header
-        segment += "II*\x00"; // Little endian TIFF header
-        
+        segment += "II*\x00";  // Little endian TIFF header
+
         // Add mock IFD data (simplified)
         for (const auto& [key, value] : exifData) {
             segment += key + "=" + value + ";";
         }
-        
+
         return segment;
     }
 
@@ -202,7 +198,8 @@ TEST_F(ExifTest, ExtractGPSCoordinates) {
         double lat = exifData.gpsLatitude->toDecimalDegrees();
         double lon = exifData.gpsLongitude->toDecimalDegrees();
 
-        EXPECT_NEAR(std::abs(lat), 37.7749, 1.0); // Allow some tolerance for test data
+        EXPECT_NEAR(std::abs(lat), 37.7749,
+                    1.0);  // Allow some tolerance for test data
         EXPECT_NEAR(std::abs(lon), 122.4194, 1.0);
     }
 }
@@ -243,7 +240,8 @@ TEST_F(ExifTest, ReadFromFileWithoutExif) {
     if (success) {
         const auto& exifData = parser.getExifData();
         // Most fields should be empty for file without EXIF
-        EXPECT_TRUE(exifData.cameraMake.empty() || exifData.cameraMake == "Unknown");
+        EXPECT_TRUE(exifData.cameraMake.empty() ||
+                    exifData.cameraMake == "Unknown");
     }
 }
 
@@ -349,7 +347,8 @@ TEST_F(ExifTest, ExifDataStructureCompleteness) {
     EXPECT_TRUE(exifData.cameraMake.empty() || !exifData.cameraMake.empty());
     EXPECT_TRUE(exifData.cameraModel.empty() || !exifData.cameraModel.empty());
     EXPECT_TRUE(exifData.dateTime.empty() || !exifData.dateTime.empty());
-    EXPECT_TRUE(exifData.exposureTime.empty() || !exifData.exposureTime.empty());
+    EXPECT_TRUE(exifData.exposureTime.empty() ||
+                !exifData.exposureTime.empty());
     EXPECT_TRUE(exifData.fNumber.empty() || !exifData.fNumber.empty());
     EXPECT_TRUE(exifData.isoSpeed.empty() || !exifData.isoSpeed.empty());
     EXPECT_TRUE(exifData.focalLength.empty() || !exifData.focalLength.empty());
@@ -361,4 +360,4 @@ TEST_F(ExifTest, ExifDataStructureCompleteness) {
     EXPECT_TRUE(exifData.software.empty() || !exifData.software.empty());
 }
 
-} // namespace atom::image::test
+}  // namespace atom::image::test

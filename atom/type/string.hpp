@@ -222,9 +222,8 @@ public:
      * @return Substring
      * @throws StringException if pos is out of range
      */
-    [[nodiscard]] auto substr(size_t pos,
-                              size_t count = std::string::npos) const
-        -> String {
+    [[nodiscard]] auto substr(
+        size_t pos, size_t count = std::string::npos) const -> String {
         try {
             if (pos > m_data_.length()) {
                 throw StringException("Substring position out of range");
@@ -244,8 +243,8 @@ public:
      * @param pos Position to start searching from
      * @return Position of the found substring or NPOS if not found
      */
-    [[nodiscard]] auto find(const String& str, size_t pos = 0) const noexcept
-        -> size_t {
+    [[nodiscard]] auto find(const String& str,
+                            size_t pos = 0) const noexcept -> size_t {
         if (pos > m_data_.length()) {
             return NPOS;
         }
@@ -394,7 +393,8 @@ public:
 #else
             result.m_data_.resize(m_data_.size());
             // Use sequential execution to avoid TBB dependency issues
-            std::transform(m_data_.begin(), m_data_.end(), result.m_data_.begin(),
+            std::transform(m_data_.begin(), m_data_.end(),
+                           result.m_data_.begin(),
                            [](unsigned char c) { return std::toupper(c); });
 #endif
             return result;
@@ -418,7 +418,8 @@ public:
 #else
             result.m_data_.resize(m_data_.size());
             // Use sequential execution to avoid TBB dependency issues
-            std::transform(m_data_.begin(), m_data_.end(), result.m_data_.begin(),
+            std::transform(m_data_.begin(), m_data_.end(),
+                           result.m_data_.begin(),
                            [](unsigned char c) { return std::tolower(c); });
 #endif
             return result;
@@ -985,8 +986,8 @@ public:
      * failed
      */
     template <typename... Args>
-    static auto formatSafe(std::string_view format_str, Args&&... args) noexcept
-        -> std::optional<String> {
+    static auto formatSafe(std::string_view format_str,
+                           Args&&... args) noexcept -> std::optional<String> {
         try {
             return String(
                 std::vformat(format_str, std::make_format_args(args...)));
@@ -1074,8 +1075,8 @@ private:
  * @return Concatenated string
  * @throws StringException if memory allocation fails
  */
-[[nodiscard]] inline auto operator+(const String& lhs, const String& rhs)
-    -> String {
+[[nodiscard]] inline auto operator+(const String& lhs,
+                                    const String& rhs) -> String {
     try {
         String result(lhs);
         result += rhs;

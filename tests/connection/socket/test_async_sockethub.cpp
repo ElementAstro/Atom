@@ -1,6 +1,6 @@
-#include "atom/connection/async_sockethub.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include "atom/connection/async_sockethub.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -33,14 +33,16 @@ public:
 #endif
 
         socket_ = socket(AF_INET, SOCK_STREAM, 0);
-        if (socket_ == -1) return false;
+        if (socket_ == -1)
+            return false;
 
         sockaddr_in serverAddr{};
         serverAddr.sin_family = AF_INET;
         serverAddr.sin_port = htons(port);
         inet_pton(AF_INET, host.c_str(), &serverAddr.sin_addr);
 
-        if (::connect(socket_, (sockaddr*)&serverAddr, sizeof(serverAddr)) == 0) {
+        if (::connect(socket_, (sockaddr*)&serverAddr, sizeof(serverAddr)) ==
+            0) {
             connected_ = true;
             return true;
         }
@@ -63,15 +65,18 @@ public:
     }
 
     bool send(const std::string& message) {
-        if (!connected_ || socket_ == -1) return false;
+        if (!connected_ || socket_ == -1)
+            return false;
         return ::send(socket_, message.c_str(), message.length(), 0) > 0;
     }
 
     std::string receive(size_t maxSize = 1024) {
-        if (!connected_ || socket_ == -1) return "";
+        if (!connected_ || socket_ == -1)
+            return "";
 
         char buffer[1024];
-        int received = recv(socket_, buffer, std::min(maxSize, sizeof(buffer)), 0);
+        int received =
+            recv(socket_, buffer, std::min(maxSize, sizeof(buffer)), 0);
         if (received > 0) {
             return std::string(buffer, received);
         }
@@ -136,13 +141,14 @@ TEST_F(AsyncSocketHubTest, ClientConnection) {
 
     bool connectHandlerCalled = false;
 
-    hub_->addConnectHandler([&](size_t clientId, const std::string& clientAddr) {
-        if (!connectHandlerCalled) {
-            connectHandlerCalled = true;
-            clientIdPromise.set_value(clientId);
-            clientAddrPromise.set_value(clientAddr);
-        }
-    });
+    hub_->addConnectHandler(
+        [&](size_t clientId, const std::string& clientAddr) {
+            if (!connectHandlerCalled) {
+                connectHandlerCalled = true;
+                clientIdPromise.set_value(clientId);
+                clientAddrPromise.set_value(clientAddr);
+            }
+        });
 
     hub_->start(8092);
     std::this_thread::sleep_for(100ms);
@@ -376,9 +382,8 @@ TEST_F(AsyncSocketHubTest, GroupManagement) {
 TEST_F(AsyncSocketHubTest, ClientMetadata) {
     size_t clientId = 0;
 
-    hub_->addConnectHandler([&](size_t id, const std::string&) {
-        clientId = id;
-    });
+    hub_->addConnectHandler(
+        [&](size_t id, const std::string&) { clientId = id; });
 
     hub_->start(8098);
     std::this_thread::sleep_for(100ms);
@@ -458,9 +463,8 @@ TEST_F(AsyncSocketHubTest, DisconnectClient) {
 
     bool disconnectHandlerCalled = false;
 
-    hub_->addConnectHandler([&](size_t id, const std::string&) {
-        clientId = id;
-    });
+    hub_->addConnectHandler(
+        [&](size_t id, const std::string&) { clientId = id; });
 
     hub_->addDisconnectHandler([&](size_t id, const std::string&) {
         if (!disconnectHandlerCalled) {

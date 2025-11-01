@@ -41,7 +41,7 @@ TEST_F(TestDataGeneratorValidation, RandomStringGeneration) {
 
     EXPECT_EQ(str1.length(), 10);
     EXPECT_EQ(str2.length(), 10);
-    EXPECT_NE(str1, str2); // Should be different (very high probability)
+    EXPECT_NE(str1, str2);  // Should be different (very high probability)
 }
 
 TEST_F(TestDataGeneratorValidation, RandomBytesGeneration) {
@@ -51,7 +51,7 @@ TEST_F(TestDataGeneratorValidation, RandomBytesGeneration) {
 
     EXPECT_EQ(bytes1.size(), 100);
     EXPECT_EQ(bytes2.size(), 100);
-    EXPECT_NE(bytes1, bytes2); // Should be different (very high probability)
+    EXPECT_NE(bytes1, bytes2);  // Should be different (very high probability)
 }
 
 TEST_F(TestDataGeneratorValidation, RandomIntegersGeneration) {
@@ -73,13 +73,9 @@ TEST_F(TestDataGeneratorValidation, RandomIntegersGeneration) {
 
 class PerformanceTimerValidation : public ::testing::Test {
 protected:
-    void SetUp() override {
-        timer_ = std::make_unique<PerformanceTimer>();
-    }
+    void SetUp() override { timer_ = std::make_unique<PerformanceTimer>(); }
 
-    void TearDown() override {
-        timer_.reset();
-    }
+    void TearDown() override { timer_.reset(); }
 
     std::unique_ptr<PerformanceTimer> timer_;
 };
@@ -91,8 +87,8 @@ TEST_F(PerformanceTimerValidation, BasicTiming) {
     timer_->stop();
 
     double elapsed = timer_->getElapsedMilliseconds();
-    EXPECT_GE(elapsed, 90.0);  // Allow some tolerance
-    EXPECT_LE(elapsed, 150.0); // Allow some tolerance
+    EXPECT_GE(elapsed, 90.0);   // Allow some tolerance
+    EXPECT_LE(elapsed, 150.0);  // Allow some tolerance
 }
 
 TEST_F(PerformanceTimerValidation, MultipleMeasurements) {
@@ -117,12 +113,11 @@ TEST_F(PerformanceTimerValidation, MultipleMeasurements) {
 class TestFileManagerValidation : public ::testing::Test {
 protected:
     void SetUp() override {
-        file_manager_ = std::make_unique<TestFileManager>("validation_test_dir");
+        file_manager_ =
+            std::make_unique<TestFileManager>("validation_test_dir");
     }
 
-    void TearDown() override {
-        file_manager_.reset();
-    }
+    void TearDown() override { file_manager_.reset(); }
 
     std::unique_ptr<TestFileManager> file_manager_;
 };
@@ -144,7 +139,7 @@ TEST_F(TestFileManagerValidation, FileCreation) {
     // Read back content
     std::ifstream file(filepath);
     std::string read_content((std::istreambuf_iterator<char>(file)),
-                            std::istreambuf_iterator<char>());
+                             std::istreambuf_iterator<char>());
     EXPECT_EQ(read_content, content);
 }
 
@@ -167,22 +162,25 @@ TEST_F(ThreadTestHelperValidation, ConcurrentExecution) {
     // Test concurrent execution
     std::atomic<int> counter{0};
 
-    ThreadTestHelper::runConcurrentTest([&counter]() {
-        for (int i = 0; i < 100; ++i) {
-            counter.fetch_add(1);
-        }
-    }, 4);
+    ThreadTestHelper::runConcurrentTest(
+        [&counter]() {
+            for (int i = 0; i < 100; ++i) {
+                counter.fetch_add(1);
+            }
+        },
+        4);
 
-    EXPECT_EQ(counter.load(), 400); // 4 threads * 100 increments
+    EXPECT_EQ(counter.load(), 400);  // 4 threads * 100 increments
 }
 
 TEST_F(ThreadTestHelperValidation, ExceptionHandling) {
     // Test exception handling in concurrent tests
-    EXPECT_THROW({
-        ThreadTestHelper::runConcurrentTest([]() {
-            throw std::runtime_error("Test exception");
-        }, 2);
-    }, std::runtime_error);
+    EXPECT_THROW(
+        {
+            ThreadTestHelper::runConcurrentTest(
+                []() { throw std::runtime_error("Test exception"); }, 2);
+        },
+        std::runtime_error);
 }
 
 // ============================================================================
@@ -202,18 +200,16 @@ protected:
 
 TEST_F(TestMacrosValidation, PerformanceMacro) {
     // Test performance macro
-    EXPECT_PERFORMANCE_BETTER_THAN({
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
-    }, 50); // Should complete in less than 50ms
+    EXPECT_PERFORMANCE_BETTER_THAN(
+        { std::this_thread::sleep_for(std::chrono::milliseconds(10)); },
+        50);  // Should complete in less than 50ms
 }
 
 TEST_F(TestMacrosValidation, ThreadSafetyMacro) {
     // Test thread safety macro
     std::atomic<int> safe_counter{0};
 
-    EXPECT_THREAD_SAFE({
-        safe_counter.fetch_add(1);
-    }, 4);
+    EXPECT_THREAD_SAFE({ safe_counter.fetch_add(1); }, 4);
 
     EXPECT_EQ(safe_counter.load(), 4);
 }
@@ -243,7 +239,8 @@ TEST_F(AtomTestBaseValidation, BaseFixtureSetup) {
 
 TEST_F(AtomTestBaseValidation, FileManagerIntegration) {
     // Test file manager integration in base fixture
-    std::string filepath = file_manager_->createTestFile("base_test.txt", "content");
+    std::string filepath =
+        file_manager_->createTestFile("base_test.txt", "content");
     EXPECT_TRUE(std::filesystem::exists(filepath));
 }
 
@@ -256,7 +253,7 @@ TEST_F(AtomTestBaseValidation, TimerIntegration) {
     EXPECT_GT(timer_->getElapsedMilliseconds(), 0.0);
 }
 
-} // namespace atom::test::validation
+}  // namespace atom::test::validation
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

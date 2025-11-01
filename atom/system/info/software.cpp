@@ -15,7 +15,8 @@
 
 // Helper function to convert string to wide string
 inline std::wstring stringToWString(const std::string& str) {
-    if (str.empty()) return std::wstring();
+    if (str.empty())
+        return std::wstring();
     int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
     std::wstring wstr(size, 0);
     MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &wstr[0], size);
@@ -171,10 +172,10 @@ auto getAppPermissions(const fs::path& app_path) -> std::vector<std::string> {
     PSECURITY_DESCRIPTOR securityDescriptor;
     PACL dacl = nullptr;
 
-    if (GetNamedSecurityInfoW(
-            stringToWString(app_path.string()).c_str(),
-            SE_FILE_OBJECT, DACL_SECURITY_INFORMATION, nullptr, nullptr, &dacl,
-            nullptr, &securityDescriptor) == ERROR_SUCCESS) {
+    if (GetNamedSecurityInfoW(stringToWString(app_path.string()).c_str(),
+                              SE_FILE_OBJECT, DACL_SECURITY_INFORMATION,
+                              nullptr, nullptr, &dacl, nullptr,
+                              &securityDescriptor) == ERROR_SUCCESS) {
         if (dacl != nullptr) {
             LPVOID ace;
             for (DWORD i = 0; i < dacl->AceCount; ++i) {
@@ -332,8 +333,7 @@ auto checkSoftwareInstalled(const std::string& software_name) -> bool {
     HKEY hKey;
     std::string regPath =
         R"(SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall)";
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE,
-                      stringToWString(regPath).c_str(), 0,
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, stringToWString(regPath).c_str(), 0,
                       KEY_READ, &hKey) == ERROR_SUCCESS) {
         DWORD index = 0;
         wchar_t subKeyName[256];

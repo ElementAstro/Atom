@@ -451,8 +451,8 @@ public:
      * @return Iterator to the first inserted element
      * @throws std::overflow_error if capacity would be exceeded
      */
-    constexpr auto insert(const_iterator pos, size_type n, const T& value)
-        -> iterator {
+    constexpr auto insert(const_iterator pos, size_type n,
+                          const T& value) -> iterator {
         if (n == 0) {
             return const_cast<iterator>(pos);
         }
@@ -495,8 +495,8 @@ public:
      * @throws std::overflow_error if capacity would be exceeded
      */
     template <std::input_iterator InputIt>
-    constexpr auto insert(const_iterator pos, InputIt first, InputIt last)
-        -> iterator {
+    constexpr auto insert(const_iterator pos, InputIt first,
+                          InputIt last) -> iterator {
         const auto index = std::distance(cbegin(), pos);
         assert(index >= 0 && static_cast<size_type>(index) <= m_size_);
 
@@ -557,8 +557,8 @@ public:
      * @return Iterator to the first inserted element
      * @throws std::overflow_error if capacity would be exceeded
      */
-    constexpr auto insert(const_iterator pos, std::initializer_list<T> ilist)
-        -> iterator {
+    constexpr auto insert(const_iterator pos,
+                          std::initializer_list<T> ilist) -> iterator {
         return insert(pos, ilist.begin(), ilist.end());
     }
 
@@ -630,8 +630,8 @@ public:
      * @return Iterator following the last erased element
      * @throws std::out_of_range if range is invalid
      */
-    constexpr auto erase(const_iterator first, const_iterator last)
-        -> iterator {
+    constexpr auto erase(const_iterator first,
+                         const_iterator last) -> iterator {
         if (first < begin() || last > end() || first > last) {
             THROW_OUT_OF_RANGE("Invalid range in erase");
         }

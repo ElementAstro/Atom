@@ -1,5 +1,5 @@
-#include "atom/async/eventstack.hpp"
 #include <gtest/gtest.h>
+#include "atom/async/eventstack.hpp"
 
 TEST(EventStackTest, PushEvent) {
     atom::async::EventStack<int> stack;

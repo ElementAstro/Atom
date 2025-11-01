@@ -27,7 +27,7 @@ PYBIND11_MODULE(curl, m) {
 
         Examples:
             >>> from atom.web.curl import CurlWrapper
-            >>> 
+            >>>
             >>> # Simple GET request
             >>> curl = CurlWrapper()
             >>> curl.set_url("https://httpbin.org/get")
@@ -88,7 +88,7 @@ Examples:
     >>> response = curl.perform()
 )")
         .def(py::init<>(), "Constructs a new CurlWrapper object.")
-        
+
         .def("set_url", &atom::web::CurlWrapper::setUrl, py::arg("url"),
              R"(Sets the URL for the HTTP request.
 
@@ -103,7 +103,8 @@ Examples:
     >>> curl.set_url("https://api.example.com/data")
 )")
 
-        .def("set_request_method", &atom::web::CurlWrapper::setRequestMethod, py::arg("method"),
+        .def("set_request_method", &atom::web::CurlWrapper::setRequestMethod,
+             py::arg("method"),
              R"(Sets the HTTP request method.
 
 Args:
@@ -117,7 +118,8 @@ Examples:
     >>> curl.set_request_method("POST")
 )")
 
-        .def("add_header", &atom::web::CurlWrapper::addHeader, py::arg("key"), py::arg("value"),
+        .def("add_header", &atom::web::CurlWrapper::addHeader, py::arg("key"),
+             py::arg("value"),
              R"(Adds a header to the HTTP request.
 
 Args:
@@ -133,7 +135,8 @@ Examples:
     >>> curl.add_header("Authorization", "Bearer token123")
 )")
 
-        .def("set_on_error_callback", &atom::web::CurlWrapper::setOnErrorCallback, py::arg("callback"),
+        .def("set_on_error_callback",
+             &atom::web::CurlWrapper::setOnErrorCallback, py::arg("callback"),
              R"(Sets a callback function to handle errors.
 
 Args:
@@ -149,7 +152,9 @@ Examples:
     >>> curl.set_on_error_callback(error_handler)
 )")
 
-        .def("set_on_response_callback", &atom::web::CurlWrapper::setOnResponseCallback, py::arg("callback"),
+        .def("set_on_response_callback",
+             &atom::web::CurlWrapper::setOnResponseCallback,
+             py::arg("callback"),
              R"(Sets a callback function to handle the response.
 
 Args:
@@ -165,7 +170,8 @@ Examples:
     >>> curl.set_on_response_callback(response_handler)
 )")
 
-        .def("set_timeout", &atom::web::CurlWrapper::setTimeout, py::arg("timeout"),
+        .def("set_timeout", &atom::web::CurlWrapper::setTimeout,
+             py::arg("timeout"),
              R"(Sets the timeout for the HTTP request.
 
 Args:
@@ -179,7 +185,8 @@ Examples:
     >>> curl.set_timeout(30)  # 30 second timeout
 )")
 
-        .def("set_follow_location", &atom::web::CurlWrapper::setFollowLocation, py::arg("follow"),
+        .def("set_follow_location", &atom::web::CurlWrapper::setFollowLocation,
+             py::arg("follow"),
              R"(Sets whether to follow HTTP redirects.
 
 Args:
@@ -193,7 +200,8 @@ Examples:
     >>> curl.set_follow_location(True)  # Follow redirects
 )")
 
-        .def("set_request_body", &atom::web::CurlWrapper::setRequestBody, py::arg("data"),
+        .def("set_request_body", &atom::web::CurlWrapper::setRequestBody,
+             py::arg("data"),
              R"(Sets the request body data for POST/PUT requests.
 
 Args:
@@ -207,7 +215,8 @@ Examples:
     >>> curl.set_request_body('{"name": "John", "age": 30}')
 )")
 
-        .def("set_upload_file", &atom::web::CurlWrapper::setUploadFile, py::arg("file_path"),
+        .def("set_upload_file", &atom::web::CurlWrapper::setUploadFile,
+             py::arg("file_path"),
              R"(Sets a file to upload with the request.
 
 Args:
@@ -235,7 +244,7 @@ Examples:
     >>> curl.set_proxy("http://proxy.company.com:3128")
 )")
 
-        .def("set_ssl_options", &atom::web::CurlWrapper::setSSLOptions, 
+        .def("set_ssl_options", &atom::web::CurlWrapper::setSSLOptions,
              py::arg("verify_peer"), py::arg("verify_host"),
              R"(Sets SSL/TLS verification options.
 
@@ -297,7 +306,8 @@ Examples:
     >>> curl.wait_all()  # Wait for completion
 )")
 
-        .def("set_max_download_speed", &atom::web::CurlWrapper::setMaxDownloadSpeed, py::arg("speed"),
+        .def("set_max_download_speed",
+             &atom::web::CurlWrapper::setMaxDownloadSpeed, py::arg("speed"),
              R"(Sets the maximum download speed limit.
 
 Args:
@@ -312,14 +322,15 @@ Examples:
 )");
 
     // Convenience functions
-    m.def("simple_get", [](const std::string& url, long timeout = 30) {
-        atom::web::CurlWrapper curl;
-        curl.setUrl(url)
-            .setRequestMethod("GET")
-            .setTimeout(timeout);
-        return curl.perform();
-    }, py::arg("url"), py::arg("timeout") = 30,
-    R"(Convenience function for simple GET requests.
+    m.def(
+        "simple_get",
+        [](const std::string& url, long timeout = 30) {
+            atom::web::CurlWrapper curl;
+            curl.setUrl(url).setRequestMethod("GET").setTimeout(timeout);
+            return curl.perform();
+        },
+        py::arg("url"), py::arg("timeout") = 30,
+        R"(Convenience function for simple GET requests.
 
 Args:
     url: The URL to fetch.
@@ -333,18 +344,22 @@ Examples:
     >>> response = simple_get("https://httpbin.org/get")
 )");
 
-    m.def("simple_post", [](const std::string& url, const std::string& data, 
-                           const std::string& content_type = "application/json", 
-                           long timeout = 30) {
-        atom::web::CurlWrapper curl;
-        curl.setUrl(url)
-            .setRequestMethod("POST")
-            .addHeader("Content-Type", content_type)
-            .setRequestBody(data)
-            .setTimeout(timeout);
-        return curl.perform();
-    }, py::arg("url"), py::arg("data"), py::arg("content_type") = "application/json", py::arg("timeout") = 30,
-    R"(Convenience function for simple POST requests.
+    m.def(
+        "simple_post",
+        [](const std::string& url, const std::string& data,
+           const std::string& content_type = "application/json",
+           long timeout = 30) {
+            atom::web::CurlWrapper curl;
+            curl.setUrl(url)
+                .setRequestMethod("POST")
+                .addHeader("Content-Type", content_type)
+                .setRequestBody(data)
+                .setTimeout(timeout);
+            return curl.perform();
+        },
+        py::arg("url"), py::arg("data"),
+        py::arg("content_type") = "application/json", py::arg("timeout") = 30,
+        R"(Convenience function for simple POST requests.
 
 Args:
     url: The URL to post to.

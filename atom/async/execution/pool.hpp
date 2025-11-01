@@ -945,8 +945,7 @@ public:
                                        std::forward<Args>(largs)...));
                                }
                            } catch (...) {
-                               promise->setException(
-                                   std::current_exception());
+                               promise->setException(std::current_exception());
                            }
                        });
 
@@ -964,8 +963,7 @@ public:
                     promise->setValue();
                 } else {
                     promise->setValue(std::invoke(
-                        std::forward<F>(func),
-                        std::forward<Args>(largs)...));
+                        std::forward<F>(func), std::forward<Args>(largs)...));
                 }
             } catch (...) {
                 promise->setException(std::current_exception());
@@ -1280,7 +1278,8 @@ private:
         AsioContextWrapper() : context_(std::make_unique<asio::io_context>()) {
             // Start the work guard to prevent io_context from running out of
             // work
-            workGuard_ = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
+            workGuard_ = std::make_unique<
+                asio::executor_work_guard<asio::io_context::executor_type>>(
                 context_->get_executor());
         }
 
@@ -1300,7 +1299,9 @@ private:
 
     private:
         std::unique_ptr<asio::io_context> context_;
-        std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> workGuard_;
+        std::unique_ptr<
+            asio::executor_work_guard<asio::io_context::executor_type>>
+            workGuard_;
     };
 
     /**

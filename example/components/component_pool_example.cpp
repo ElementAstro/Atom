@@ -25,7 +25,8 @@ and efficient component allocation/deallocation patterns.
 #include "atom/components/core/component_pool.hpp"
 #include "atom/components/core/registry.hpp"
 
-// Note: Registry and Component are in the global namespace, not atom::components
+// Note: Registry and Component are in the global namespace, not
+// atom::components
 using atom::components::ComponentPool;
 
 /**
@@ -132,8 +133,8 @@ void demonstrateBasicPoolOperations() {
         auto component = pool.allocate("PoolComponent_" + std::to_string(i));
         if (component) {
             components.push_back(component);
-            std::cout << "   Allocated component " << i
-                      << " with ID: " << std::any_cast<int>(component->runCommand("getId", {}))
+            std::cout << "   Allocated component " << i << " with ID: "
+                      << std::any_cast<int>(component->runCommand("getId", {}))
                       << std::endl;
         }
     }
@@ -151,9 +152,12 @@ void demonstrateBasicPoolOperations() {
     std::cout << "\n4. Using allocated components..." << std::endl;
     for (auto& component : components) {
         [[maybe_unused]] auto result = component->runCommand("process", {});
-        std::cout << "   Component " << std::any_cast<int>(component->runCommand("getId", {}))
+        std::cout << "   Component "
+                  << std::any_cast<int>(component->runCommand("getId", {}))
                   << " processed, new value: "
-                  << std::any_cast<double>(component->runCommand("getValue", {})) << std::endl;
+                  << std::any_cast<double>(
+                         component->runCommand("getValue", {}))
+                  << std::endl;
     }
 
     std::cout << "\n5. Deallocating components..." << std::endl;
@@ -309,8 +313,8 @@ void demonstrateMemoryUsage() {
     std::cout << "   Computation counts:" << std::endl;
     for (size_t i = 0; i < std::min(size_t(5), heavyComponents.size()); ++i) {
         auto count = heavyComponents[i]->runCommand("getComputationCount", {});
-        std::cout << "     Component " << i << ": " << std::any_cast<int>(count) << " computations"
-                  << std::endl;
+        std::cout << "     Component " << i << ": " << std::any_cast<int>(count)
+                  << " computations" << std::endl;
     }
 
     // Deallocate heavy components
@@ -350,8 +354,8 @@ void demonstrateConcurrentAccess() {
 
         // Allocate components
         for (int i = 0; i < COMPONENTS_PER_THREAD; ++i) {
-            auto component = pool.allocate(
-                "Thread" + std::to_string(threadId) + "_" + std::to_string(i));
+            auto component = pool.allocate("Thread" + std::to_string(threadId) +
+                                           "_" + std::to_string(i));
             if (component) {
                 localComponents.push_back(component);
                 totalAllocated.fetch_add(1);

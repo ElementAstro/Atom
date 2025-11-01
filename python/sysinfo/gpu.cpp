@@ -25,7 +25,7 @@ PYBIND11_MODULE(gpu, m) {
 
     // MonitorInfo structure binding
     py::class_<MonitorInfo>(m, "MonitorInfo",
-                           R"(Information about a connected monitor/display.
+                            R"(Information about a connected monitor/display.
 
 This class provides detailed information about a connected monitor including
 model name, identifier, resolution, and refresh rate.
@@ -41,19 +41,17 @@ Examples:
     ...     print(f"Identifier: {monitor.identifier}")
 )")
         .def(py::init<>(), "Constructs a new MonitorInfo object.")
-        .def_readwrite("model", &MonitorInfo::model, 
-                       "Monitor model name")
+        .def_readwrite("model", &MonitorInfo::model, "Monitor model name")
         .def_readwrite("identifier", &MonitorInfo::identifier,
                        "Monitor identifier string")
-        .def_readwrite("width", &MonitorInfo::width,
-                       "Screen width in pixels")
+        .def_readwrite("width", &MonitorInfo::width, "Screen width in pixels")
         .def_readwrite("height", &MonitorInfo::height,
                        "Screen height in pixels")
         .def_readwrite("refresh_rate", &MonitorInfo::refreshRate,
                        "Refresh rate in Hz")
         .def("__repr__", [](const MonitorInfo& info) {
             return "<MonitorInfo model='" + info.model + "'" +
-                   " resolution=" + std::to_string(info.width) + "x" + 
+                   " resolution=" + std::to_string(info.width) + "x" +
                    std::to_string(info.height) +
                    " refresh_rate=" + std::to_string(info.refreshRate) + "Hz>";
         });
@@ -86,7 +84,7 @@ Examples:
     >>> # Get information about all monitors
     >>> monitors = gpu.get_all_monitors_info()
     >>> print(f"Found {len(monitors)} monitor(s):")
-    >>> 
+    >>>
     >>> for i, monitor in enumerate(monitors):
     ...     print(f"Monitor {i+1}:")
     ...     print(f"  Model: {monitor.model}")
@@ -94,6 +92,4 @@ Examples:
     ...     print(f"  Refresh Rate: {monitor.refresh_rate}Hz")
     ...     print(f"  Identifier: {monitor.identifier}")
 )");
-
-
 }

@@ -83,6 +83,28 @@
             "name": "base-msys2",
             "hidden": true,
             "inherits": "base-mingw",
+            "cacheVariables": {
+                "USE_VCPKG": "OFF"
+            },
+            "condition": {
+                "type": "matches",
+                "string": "$env{PATH}",
+                "regex": ".*msys64.*|.*msys2.*"
+            }
+        },
+        {
+            "name": "base-msys2-vcpkg",
+            "hidden": true,
+            "inherits": "base-mingw",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "USE_VCPKG": "ON",
+                "VCPKG_TARGET_TRIPLET": "x64-mingw-dynamic",
+                "VCPKG_HOST_TRIPLET": "x64-mingw-dynamic"
+            },
+            "environment": {
+                "VCPKG_ROOT": "$penv{VCPKG_ROOT}"
+            },
             "condition": {
                 "type": "matches",
                 "string": "$env{PATH}",
@@ -180,6 +202,30 @@
             "displayName": "RelWithDebInfo (MSYS2)",
             "inherits": [
                 "base-msys2",
+                "_common-relwithdebinfo-config"
+            ]
+        },
+        {
+            "name": "debug-msys2-vcpkg",
+            "displayName": "Debug (MSYS2 with vcpkg)",
+            "inherits": [
+                "base-msys2-vcpkg",
+                "_common-debug-config"
+            ]
+        },
+        {
+            "name": "release-msys2-vcpkg",
+            "displayName": "Release (MSYS2 with vcpkg)",
+            "inherits": [
+                "base-msys2-vcpkg",
+                "_common-release-config"
+            ]
+        },
+        {
+            "name": "relwithdebinfo-msys2-vcpkg",
+            "displayName": "RelWithDebInfo (MSYS2 with vcpkg)",
+            "inherits": [
+                "base-msys2-vcpkg",
                 "_common-relwithdebinfo-config"
             ]
         },
@@ -285,6 +331,21 @@
         {
             "name": "relwithdebinfo-msys2",
             "configurePreset": "relwithdebinfo-msys2",
+            "jobs": 8
+        },
+        {
+            "name": "debug-msys2-vcpkg",
+            "configurePreset": "debug-msys2-vcpkg",
+            "jobs": 8
+        },
+        {
+            "name": "release-msys2-vcpkg",
+            "configurePreset": "release-msys2-vcpkg",
+            "jobs": 8
+        },
+        {
+            "name": "relwithdebinfo-msys2-vcpkg",
+            "configurePreset": "relwithdebinfo-msys2-vcpkg",
             "jobs": 8
         },
         {

@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
+#include <stdexcept>
 #include <thread>
 #include <vector>
-#include <stdexcept>
 #include "atom/memory/memory_pool.hpp"
 
 using namespace atom::memory;
@@ -11,7 +11,8 @@ class TestObject {
 public:
     TestObject() : value_(0), constructed_(true) {}
     explicit TestObject(int value) : value_(value), constructed_(true) {}
-    TestObject(int value, const std::string& name) : value_(value), name_(name), constructed_(true) {}
+    TestObject(int value, const std::string& name)
+        : value_(value), name_(name), constructed_(true) {}
 
     ~TestObject() { constructed_ = false; }
 
@@ -43,8 +44,8 @@ protected:
 TEST_F(MemoryPoolTest, DefaultConstructor) {
     FixedBlockPool<64, 1024> pool;
     auto stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 0);  // allocated_blocks
-    EXPECT_EQ(stats.second, 0); // total_blocks (no chunks allocated yet)
+    EXPECT_EQ(stats.first, 0);   // allocated_blocks
+    EXPECT_EQ(stats.second, 0);  // total_blocks (no chunks allocated yet)
     EXPECT_TRUE(pool.is_empty());
 }
 
@@ -55,14 +56,14 @@ TEST_F(MemoryPoolTest, BasicAllocation) {
     EXPECT_NE(ptr, nullptr);
 
     auto stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 1);    // allocated_blocks
-    EXPECT_EQ(stats.second, 1024); // total_blocks (one chunk allocated)
+    EXPECT_EQ(stats.first, 1);      // allocated_blocks
+    EXPECT_EQ(stats.second, 1024);  // total_blocks (one chunk allocated)
     EXPECT_FALSE(pool.is_empty());
 
     pool.deallocate(ptr);
     stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 0);    // allocated_blocks
-    EXPECT_EQ(stats.second, 1024); // total_blocks (chunk still exists)
+    EXPECT_EQ(stats.first, 0);      // allocated_blocks
+    EXPECT_EQ(stats.second, 1024);  // total_blocks (chunk still exists)
     EXPECT_TRUE(pool.is_empty());
 }
 
@@ -78,8 +79,8 @@ TEST_F(MemoryPoolTest, MultipleAllocations) {
     }
 
     auto stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 10);   // allocated_blocks
-    EXPECT_EQ(stats.second, 1024); // total_blocks
+    EXPECT_EQ(stats.first, 10);     // allocated_blocks
+    EXPECT_EQ(stats.second, 1024);  // total_blocks
     EXPECT_FALSE(pool.is_empty());
 
     // Deallocate all blocks
@@ -88,12 +89,12 @@ TEST_F(MemoryPoolTest, MultipleAllocations) {
     }
 
     stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 0);    // allocated_blocks
+    EXPECT_EQ(stats.first, 0);  // allocated_blocks
     EXPECT_TRUE(pool.is_empty());
 }
 
 TEST_F(MemoryPoolTest, AllocationExceedsChunk) {
-    FixedBlockPool<64, 10> pool; // Small chunk size
+    FixedBlockPool<64, 10> pool;  // Small chunk size
     std::vector<void*> ptrs;
 
     // Allocate more than one chunk
@@ -104,8 +105,8 @@ TEST_F(MemoryPoolTest, AllocationExceedsChunk) {
     }
 
     auto stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 15);  // allocated_blocks
-    EXPECT_EQ(stats.second, 20); // total_blocks (2 chunks)
+    EXPECT_EQ(stats.first, 15);   // allocated_blocks
+    EXPECT_EQ(stats.second, 20);  // total_blocks (2 chunks)
 
     // Cleanup
     for (void* ptr : ptrs) {
@@ -142,8 +143,8 @@ TEST_F(MemoryPoolTest, MemoryPoolReset) {
     pool.reset();
 
     stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 0);    // allocated_blocks reset
-    EXPECT_EQ(stats.second, 1024); // total_blocks unchanged
+    EXPECT_EQ(stats.first, 0);      // allocated_blocks reset
+    EXPECT_EQ(stats.second, 1024);  // total_blocks unchanged
     EXPECT_TRUE(pool.is_empty());
 
     // Should be able to allocate again
@@ -173,7 +174,7 @@ TEST_F(MemoryPoolTest, MemoryPoolThreadSafety) {
     }
 
     auto stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 400); // 4 threads * 100 allocations
+    EXPECT_EQ(stats.first, 400);  // 4 threads * 100 allocations
 
     // Deallocate all pointers
     for (auto& ptrs : thread_ptrs) {
@@ -268,7 +269,8 @@ TEST_F(MemoryPoolTest, SimpleObjectPoolExceptionSafety) {
     EXPECT_NE(obj1, nullptr);
 
     // This should throw and not leak memory
-    EXPECT_THROW([[maybe_unused]] auto* temp = pool.allocate(true), std::runtime_error);
+    EXPECT_THROW([[maybe_unused]] auto* temp = pool.allocate(true),
+                 std::runtime_error);
 
     // Pool should still be functional
     ThrowingObject* obj2 = pool.allocate(false);
@@ -299,7 +301,7 @@ TEST_F(MemoryPoolTest, SimpleObjectPoolThreadSafety) {
     }
 
     auto stats = pool.get_stats();
-    EXPECT_EQ(stats.first, 200); // 4 threads * 50 allocations
+    EXPECT_EQ(stats.first, 200);  // 4 threads * 50 allocations
 
     // Verify objects were constructed correctly
     for (int i = 0; i < 4; ++i) {
@@ -417,7 +419,8 @@ TEST_F(MemoryPoolTest, MakePoolPtr) {
 // Edge case and boundary tests
 TEST_F(MemoryPoolTest, MemoryPoolDifferentBlockSizes) {
     // Test with minimum aligned block size
-    constexpr size_t min_size = std::max(sizeof(void*), alignof(std::max_align_t));
+    constexpr size_t min_size =
+        std::max(sizeof(void*), alignof(std::max_align_t));
     FixedBlockPool<min_size, 10> small_pool;
     void* ptr1 = small_pool.allocate();
     EXPECT_NE(ptr1, nullptr);
@@ -451,7 +454,8 @@ TEST_F(MemoryPoolTest, SimpleObjectPoolWithComplexTypes) {
     class ComplexObject {
     public:
         ComplexObject() : data_(std::make_unique<int>(42)) {}
-        explicit ComplexObject(int value) : data_(std::make_unique<int>(value)) {}
+        explicit ComplexObject(int value)
+            : data_(std::make_unique<int>(value)) {}
 
         int getValue() const { return *data_; }
 
@@ -517,7 +521,7 @@ TEST_F(MemoryPoolTest, MemoryPoolStressTest) {
 
     auto stats = pool.get_stats();
     EXPECT_EQ(stats.first, 500);
-    EXPECT_GE(stats.second, 500); // Should have multiple chunks
+    EXPECT_GE(stats.second, 500);  // Should have multiple chunks
 
     // Deallocate in reverse order
     for (auto it = ptrs.rbegin(); it != ptrs.rend(); ++it) {
@@ -606,7 +610,8 @@ TEST_F(MemoryPoolTest, PoolPtrExceptionSafety) {
     EXPECT_EQ(ptr1->getValue(), 42);
 
     // This should throw and not leak memory
-    EXPECT_THROW([[maybe_unused]] auto temp = make_pool_ptr(pool, true), std::runtime_error);
+    EXPECT_THROW([[maybe_unused]] auto temp = make_pool_ptr(pool, true),
+                 std::runtime_error);
 
     // Pool should still be functional
     auto ptr2 = make_pool_ptr(pool, false);

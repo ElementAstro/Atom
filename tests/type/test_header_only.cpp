@@ -1,5 +1,6 @@
 // Test runner for header-only test files
-// This file includes all header-only test files to ensure they are compiled and run
+// This file includes all header-only test files to ensure they are compiled and
+// run
 
 #include <gtest/gtest.h>
 

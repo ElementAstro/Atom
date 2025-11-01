@@ -1,6 +1,7 @@
 /**
  * @file tracker.cpp
- * @brief Implementation of global operator new/delete overloads for memory tracking
+ * @brief Implementation of global operator new/delete overloads for memory
+ * tracking
  *
  * This file contains the definitions of global operator new/delete overloads
  * that are used when ATOM_MEMORY_TRACKING_ENABLED is defined. These must be
@@ -112,4 +113,3 @@ void operator delete[](void* ptr, const std::nothrow_t&) noexcept {
 }
 
 #endif  // ATOM_MEMORY_TRACKING_ENABLED
-

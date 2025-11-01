@@ -77,7 +77,8 @@ TEST_F(FnmatchTest, CharacterClasses) {
     EXPECT_FALSE(fnmatch("file.[.]*", "file.txt"));
     // [^.] matches any character except '.', so should match 't' in "file.txt"
     EXPECT_TRUE(fnmatch("file.[^.]*", "file.txt"));
-    // [*?] matches only literal '*' or '?', so should not match 't' in "file?txt"
+    // [*?] matches only literal '*' or '?', so should not match 't' in
+    // "file?txt"
     EXPECT_FALSE(fnmatch("file.[*?]*", "file?txt"));
 }
 
@@ -146,8 +147,8 @@ TEST_F(FnmatchTest, MultiplePatternFilter) {
                 matched.end());
     EXPECT_TRUE(std::find(matched.begin(), matched.end(), "CMakeLists.txt") !=
                 matched.end());
-    EXPECT_TRUE(std::find(matched.begin(), matched.end(), "file with spaces.txt") !=
-                matched.end());
+    EXPECT_TRUE(std::find(matched.begin(), matched.end(),
+                          "file with spaces.txt") != matched.end());
     std::vector<std::string> empty_patterns;
     auto empty_matched = filter(filenames, empty_patterns);
     EXPECT_TRUE(empty_matched.empty());

@@ -1,13 +1,13 @@
 // filepath: atom/type/test_robin_hood.cpp
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
+#include <algorithm>
+#include <future>
+#include <random>
+#include <string>
 #include <thread>
 #include <vector>
-#include <string>
-#include <random>
-#include <future>
-#include <algorithm>
 
 #include "robin_hood.hpp"
 
@@ -114,7 +114,8 @@ TEST_F(RobinHoodMapTest, Iterators) {
     for (auto it = map.begin(); it != map.end(); ++it) {
         ++count;
         // Check that keys are in our test set
-        EXPECT_TRUE(std::find(test_keys.begin(), test_keys.end(), it->first) != test_keys.end());
+        EXPECT_TRUE(std::find(test_keys.begin(), test_keys.end(), it->first) !=
+                    test_keys.end());
     }
     EXPECT_EQ(count, 10);
 
@@ -148,7 +149,9 @@ TEST_F(RobinHoodMapTest, RehashingAndLoadFactor) {
     // Insert elements until rehashing occurs
     size_t initial_bucket_count = map.bucket_count();
     if (initial_bucket_count > 0) {
-        size_t elements_to_add = static_cast<size_t>(initial_bucket_count * map.max_load_factor()) + 1;
+        size_t elements_to_add =
+            static_cast<size_t>(initial_bucket_count * map.max_load_factor()) +
+            1;
 
         for (size_t i = 0; i < elements_to_add; ++i) {
             map.insert(static_cast<int>(i), "value-" + std::to_string(i));
@@ -193,7 +196,8 @@ TEST_F(RobinHoodMapTest, ThreadSafetyWithReaderLocks) {
         threads.emplace_back([&map, i, &results]() {
             try {
                 // Each thread tries to access some keys
-                for (int j = static_cast<int>(i * 10); j < static_cast<int>((i + 1) * 10); ++j) {
+                for (int j = static_cast<int>(i * 10);
+                     j < static_cast<int>((i + 1) * 10); ++j) {
                     std::string expected = "value-" + std::to_string(j);
                     std::string actual = map.at(j);
                     if (actual == expected) {
@@ -234,7 +238,8 @@ TEST_F(RobinHoodMapTest, ThreadSafetyWithMutex) {
         threads.emplace_back([&map, i, elements_per_thread]() {
             for (int j = 0; j < elements_per_thread; ++j) {
                 int key = i * elements_per_thread + j;
-                map.insert(key, "thread-" + std::to_string(i) + "-value-" + std::to_string(j));
+                map.insert(key, "thread-" + std::to_string(i) + "-value-" +
+                                    std::to_string(j));
             }
         });
     }
@@ -245,12 +250,14 @@ TEST_F(RobinHoodMapTest, ThreadSafetyWithMutex) {
     }
 
     // Verify size and all elements
-    EXPECT_EQ(map.size(), static_cast<size_t>(num_threads * elements_per_thread));
+    EXPECT_EQ(map.size(),
+              static_cast<size_t>(num_threads * elements_per_thread));
 
     for (int i = 0; i < num_threads; ++i) {
         for (int j = 0; j < elements_per_thread; ++j) {
             int key = i * elements_per_thread + j;
-            EXPECT_EQ(map.at(key), "thread-" + std::to_string(i) + "-value-" + std::to_string(j));
+            EXPECT_EQ(map.at(key), "thread-" + std::to_string(i) + "-value-" +
+                                       std::to_string(j));
         }
     }
 }
@@ -282,7 +289,7 @@ TEST_F(RobinHoodMapTest, ConcurrentReadsAndWrites) {
                         // Keys might be in transition, that's okay
                     }
                 }
-                std::this_thread::yield(); // Give other threads a chance
+                std::this_thread::yield();  // Give other threads a chance
             }
             return true;
         }));
@@ -295,11 +302,12 @@ TEST_F(RobinHoodMapTest, ConcurrentReadsAndWrites) {
             // Each writer thread updates a subset of elements
             for (int j = i * 30; j < (i + 1) * 30 && j < 100; ++j) {
                 try {
-                    map.insert(j, "updated-" + std::to_string(i) + "-" + std::to_string(j));
+                    map.insert(j, "updated-" + std::to_string(i) + "-" +
+                                      std::to_string(j));
                 } catch (const std::exception&) {
                     return false;
                 }
-                std::this_thread::yield(); // Give other threads a chance
+                std::this_thread::yield();  // Give other threads a chance
             }
             return true;
         }));
@@ -332,8 +340,9 @@ class CustomKeyEqual {
 public:
     bool operator()(const std::string& lhs, const std::string& rhs) const {
         // Case-insensitive comparison
-        return std::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
-                          [](char a, char b) { return std::tolower(a) == std::tolower(b); });
+        return std::equal(
+            lhs.begin(), lhs.end(), rhs.begin(), rhs.end(),
+            [](char a, char b) { return std::tolower(a) == std::tolower(b); });
     }
 };
 
@@ -401,7 +410,7 @@ TEST_F(RobinHoodMapTest, ExceptionSafety) {
 
     // Test exceptions from at() method
     EXPECT_THROW(map.at(999), std::out_of_range);
-    EXPECT_EQ(map.size(), 10); // Size should be unchanged after exception
+    EXPECT_EQ(map.size(), 10);  // Size should be unchanged after exception
 
     // The const version
     const auto& const_map = map;
@@ -409,7 +418,7 @@ TEST_F(RobinHoodMapTest, ExceptionSafety) {
     EXPECT_EQ(map.size(), 10);
 }
 
-int main(int argc, char **argv) {
+int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
 }

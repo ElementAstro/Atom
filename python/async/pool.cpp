@@ -115,17 +115,23 @@ PYBIND11_MODULE(pool, m) {
         Different priority levels affect how the operating system schedules
         the threads in the pool.
         )pbdoc")
-        .value("LOWEST", atom::async::ThreadPool::Options::ThreadPriority::Lowest,
+        .value("LOWEST",
+               atom::async::ThreadPool::Options::ThreadPriority::Lowest,
                "Lowest thread priority")
-        .value("BELOW_NORMAL", atom::async::ThreadPool::Options::ThreadPriority::BelowNormal,
+        .value("BELOW_NORMAL",
+               atom::async::ThreadPool::Options::ThreadPriority::BelowNormal,
                "Below normal thread priority")
-        .value("NORMAL", atom::async::ThreadPool::Options::ThreadPriority::Normal,
+        .value("NORMAL",
+               atom::async::ThreadPool::Options::ThreadPriority::Normal,
                "Normal thread priority (default)")
-        .value("ABOVE_NORMAL", atom::async::ThreadPool::Options::ThreadPriority::AboveNormal,
+        .value("ABOVE_NORMAL",
+               atom::async::ThreadPool::Options::ThreadPriority::AboveNormal,
                "Above normal thread priority")
-        .value("HIGHEST", atom::async::ThreadPool::Options::ThreadPriority::Highest,
+        .value("HIGHEST",
+               atom::async::ThreadPool::Options::ThreadPriority::Highest,
                "Highest thread priority")
-        .value("TIME_CRITICAL", atom::async::ThreadPool::Options::ThreadPriority::TimeCritical,
+        .value("TIME_CRITICAL",
+               atom::async::ThreadPool::Options::ThreadPriority::TimeCritical,
                "Time critical thread priority")
         .export_values();
 
@@ -139,66 +145,87 @@ PYBIND11_MODULE(pool, m) {
         )pbdoc")
         .value("NONE", atom::async::ThreadPool::Options::CpuAffinityMode::None,
                "No CPU affinity settings")
-        .value("SEQUENTIAL", atom::async::ThreadPool::Options::CpuAffinityMode::Sequential,
+        .value("SEQUENTIAL",
+               atom::async::ThreadPool::Options::CpuAffinityMode::Sequential,
                "Threads assigned to cores sequentially")
-        .value("SPREAD", atom::async::ThreadPool::Options::CpuAffinityMode::Spread,
+        .value("SPREAD",
+               atom::async::ThreadPool::Options::CpuAffinityMode::Spread,
                "Threads spread across different cores")
-        .value("CORE_PINNED", atom::async::ThreadPool::Options::CpuAffinityMode::CorePinned,
+        .value("CORE_PINNED",
+               atom::async::ThreadPool::Options::CpuAffinityMode::CorePinned,
                "Threads pinned to specified cores")
-        .value("AUTOMATIC", atom::async::ThreadPool::Options::CpuAffinityMode::Automatic,
+        .value("AUTOMATIC",
+               atom::async::ThreadPool::Options::CpuAffinityMode::Automatic,
                "Automatically adjust (requires hardware support)")
         .export_values();
 
     // Define ThreadPool Options
-    py::class_<atom::async::ThreadPool::Options>(
-        m, "ThreadPoolOptions",
-        R"pbdoc(
+    py::class_<atom::async::ThreadPool::Options>(m, "ThreadPoolOptions",
+                                                 R"pbdoc(
         Configuration options for the ThreadPool.
 
         This class contains all the configurable parameters for thread pool
         behavior, performance tuning, and platform-specific optimizations.
         )pbdoc")
         .def(py::init<>(), "Create default options")
-        .def_readwrite("initial_thread_count", &atom::async::ThreadPool::Options::initialThreadCount,
-                      "Initial number of threads (0 = hardware concurrency)")
-        .def_readwrite("max_thread_count", &atom::async::ThreadPool::Options::maxThreadCount,
-                      "Maximum number of threads (0 = unlimited)")
-        .def_readwrite("max_queue_size", &atom::async::ThreadPool::Options::maxQueueSize,
-                      "Maximum queue size (0 = unlimited)")
-        .def_readwrite("thread_idle_timeout", &atom::async::ThreadPool::Options::threadIdleTimeout,
-                      "Idle thread timeout")
-        .def_readwrite("allow_thread_growth", &atom::async::ThreadPool::Options::allowThreadGrowth,
-                      "Allow dynamic thread creation")
-        .def_readwrite("allow_thread_shrink", &atom::async::ThreadPool::Options::allowThreadShrink,
-                      "Allow dynamic thread reduction")
-        .def_readwrite("thread_priority", &atom::async::ThreadPool::Options::threadPriority,
-                      "Thread priority level")
-        .def_readwrite("cpu_affinity_mode", &atom::async::ThreadPool::Options::cpuAffinityMode,
-                      "CPU affinity mode")
-        .def_readwrite("pinned_cores", &atom::async::ThreadPool::Options::pinnedCores,
-                      "List of CPU cores for pinning (used with CORE_PINNED mode)")
-        .def_readwrite("use_work_stealing", &atom::async::ThreadPool::Options::useWorkStealing,
-                      "Enable work stealing optimization")
-        .def_readwrite("set_stack_size", &atom::async::ThreadPool::Options::setStackSize,
-                      "Whether to set custom stack size")
-        .def_readwrite("stack_size", &atom::async::ThreadPool::Options::stackSize,
-                      "Custom thread stack size (0 = default)")
+        .def_readwrite("initial_thread_count",
+                       &atom::async::ThreadPool::Options::initialThreadCount,
+                       "Initial number of threads (0 = hardware concurrency)")
+        .def_readwrite("max_thread_count",
+                       &atom::async::ThreadPool::Options::maxThreadCount,
+                       "Maximum number of threads (0 = unlimited)")
+        .def_readwrite("max_queue_size",
+                       &atom::async::ThreadPool::Options::maxQueueSize,
+                       "Maximum queue size (0 = unlimited)")
+        .def_readwrite("thread_idle_timeout",
+                       &atom::async::ThreadPool::Options::threadIdleTimeout,
+                       "Idle thread timeout")
+        .def_readwrite("allow_thread_growth",
+                       &atom::async::ThreadPool::Options::allowThreadGrowth,
+                       "Allow dynamic thread creation")
+        .def_readwrite("allow_thread_shrink",
+                       &atom::async::ThreadPool::Options::allowThreadShrink,
+                       "Allow dynamic thread reduction")
+        .def_readwrite("thread_priority",
+                       &atom::async::ThreadPool::Options::threadPriority,
+                       "Thread priority level")
+        .def_readwrite("cpu_affinity_mode",
+                       &atom::async::ThreadPool::Options::cpuAffinityMode,
+                       "CPU affinity mode")
+        .def_readwrite(
+            "pinned_cores", &atom::async::ThreadPool::Options::pinnedCores,
+            "List of CPU cores for pinning (used with CORE_PINNED mode)")
+        .def_readwrite("use_work_stealing",
+                       &atom::async::ThreadPool::Options::useWorkStealing,
+                       "Enable work stealing optimization")
+        .def_readwrite("set_stack_size",
+                       &atom::async::ThreadPool::Options::setStackSize,
+                       "Whether to set custom stack size")
+        .def_readwrite("stack_size",
+                       &atom::async::ThreadPool::Options::stackSize,
+                       "Custom thread stack size (0 = default)")
 
         // Static factory methods
-        .def_static("create_default", &atom::async::ThreadPool::Options::createDefault,
-                   "Create default configuration")
-        .def_static("create_high_performance", &atom::async::ThreadPool::Options::createHighPerformance,
-                   "Create high-performance configuration")
-        .def_static("create_low_latency", &atom::async::ThreadPool::Options::createLowLatency,
-                   "Create low-latency configuration")
-        .def_static("create_energy_efficient", &atom::async::ThreadPool::Options::createEnergyEfficient,
-                   "Create energy-efficient configuration")
+        .def_static("create_default",
+                    &atom::async::ThreadPool::Options::createDefault,
+                    "Create default configuration")
+        .def_static("create_high_performance",
+                    &atom::async::ThreadPool::Options::createHighPerformance,
+                    "Create high-performance configuration")
+        .def_static("create_low_latency",
+                    &atom::async::ThreadPool::Options::createLowLatency,
+                    "Create low-latency configuration")
+        .def_static("create_energy_efficient",
+                    &atom::async::ThreadPool::Options::createEnergyEfficient,
+                    "Create energy-efficient configuration")
 
 #ifdef ATOM_USE_ASIO
-        .def_readwrite("use_asio_context", &atom::async::ThreadPool::Options::useAsioContext,
-                      "Whether to use ASIO context")
-        .def_static("create_asio_enabled", &atom::async::ThreadPool::Options::createAsioEnabled,
-                   "Create ASIO-enabled configuration")
+        .def_readwrite("use_asio_context",
+                       &atom::async::ThreadPool::Options::useAsioContext,
+                       "Whether to use ASIO context")
+        .def_static("create_asio_enabled",
+                    &atom::async::ThreadPool::Options::createAsioEnabled,
+                    "Create ASIO-enabled configuration")
 #endif
         ;
 
@@ -434,7 +461,8 @@ Examples:
                 });
 
                 // Convert Promise to Python future-like object
-                auto py_future = py::module::import("concurrent.futures").attr("Future")();
+                auto py_future =
+                    py::module::import("concurrent.futures").attr("Future")();
 
                 std::thread([future = std::move(future), py_future]() mutable {
                     try {
@@ -478,7 +506,8 @@ Examples:
             [](atom::async::ThreadPool& pool) -> py::object {
                 auto* context = pool.getAsioContext();
                 if (context) {
-                    return py::cast(context, py::return_value_policy::reference);
+                    return py::cast(context,
+                                    py::return_value_policy::reference);
                 }
                 return py::none();
             },
@@ -542,33 +571,38 @@ Examples:
 
     // Utility functions
     m.def(
-        "hardware_concurrency",
-        []() { return std::thread::hardware_concurrency(); },
-        "Returns the number of concurrent threads supported by the hardware.")
+         "hardware_concurrency",
+         []() { return std::thread::hardware_concurrency(); },
+         "Returns the number of concurrent threads supported by the hardware.")
 
-    .def(
-        "create_optimized_pool",
-        [](const std::string& profile) -> std::unique_ptr<atom::async::ThreadPool> {
-            atom::async::ThreadPool::Options options;
+        .def(
+            "create_optimized_pool",
+            [](const std::string& profile)
+                -> std::unique_ptr<atom::async::ThreadPool> {
+                atom::async::ThreadPool::Options options;
 
-            if (profile == "high_performance") {
-                options = atom::async::ThreadPool::Options::createHighPerformance();
-            } else if (profile == "low_latency") {
-                options = atom::async::ThreadPool::Options::createLowLatency();
-            } else if (profile == "energy_efficient") {
-                options = atom::async::ThreadPool::Options::createEnergyEfficient();
+                if (profile == "high_performance") {
+                    options = atom::async::ThreadPool::Options::
+                        createHighPerformance();
+                } else if (profile == "low_latency") {
+                    options =
+                        atom::async::ThreadPool::Options::createLowLatency();
+                } else if (profile == "energy_efficient") {
+                    options = atom::async::ThreadPool::Options::
+                        createEnergyEfficient();
 #ifdef ATOM_USE_ASIO
-            } else if (profile == "asio_enabled") {
-                options = atom::async::ThreadPool::Options::createAsioEnabled();
+                } else if (profile == "asio_enabled") {
+                    options =
+                        atom::async::ThreadPool::Options::createAsioEnabled();
 #endif
-            } else {
-                options = atom::async::ThreadPool::Options::createDefault();
-            }
+                } else {
+                    options = atom::async::ThreadPool::Options::createDefault();
+                }
 
-            return std::make_unique<atom::async::ThreadPool>(options);
-        },
-        py::arg("profile") = "default",
-        R"pbdoc(
+                return std::make_unique<atom::async::ThreadPool>(options);
+            },
+            py::arg("profile") = "default",
+            R"pbdoc(
         Create an optimized thread pool with predefined configuration.
 
         Args:
@@ -583,49 +617,54 @@ Examples:
             >>> pool = create_optimized_pool("low_latency")
         )pbdoc")
 
-    .def(
-        "benchmark_thread_pool",
-        [](size_t num_tasks, size_t num_threads) -> py::dict {
-            using namespace std::chrono;
+        .def(
+            "benchmark_thread_pool",
+            [](size_t num_tasks, size_t num_threads) -> py::dict {
+                using namespace std::chrono;
 
-            auto options = atom::async::ThreadPool::Options::createHighPerformance();
-            options.initialThreadCount = num_threads;
-            atom::async::ThreadPool pool(options);
+                auto options =
+                    atom::async::ThreadPool::Options::createHighPerformance();
+                options.initialThreadCount = num_threads;
+                atom::async::ThreadPool pool(options);
 
-            py::dict results;
-            std::vector<atom::async::EnhancedFuture<int>> futures;
+                py::dict results;
+                std::vector<atom::async::EnhancedFuture<int>> futures;
 
-            auto start_time = high_resolution_clock::now();
+                auto start_time = high_resolution_clock::now();
 
-            // Submit tasks
-            for (size_t i = 0; i < num_tasks; ++i) {
-                auto future = pool.submit([i]() -> int {
-                    // Simulate some work
-                    std::this_thread::sleep_for(std::chrono::microseconds(100));
-                    return static_cast<int>(i * i);
-                });
-                futures.push_back(std::move(future));
-            }
+                // Submit tasks
+                for (size_t i = 0; i < num_tasks; ++i) {
+                    auto future = pool.submit([i]() -> int {
+                        // Simulate some work
+                        std::this_thread::sleep_for(
+                            std::chrono::microseconds(100));
+                        return static_cast<int>(i * i);
+                    });
+                    futures.push_back(std::move(future));
+                }
 
-            // Wait for all tasks to complete
-            for (auto& future : futures) {
-                future.get();
-            }
+                // Wait for all tasks to complete
+                for (auto& future : futures) {
+                    future.get();
+                }
 
-            auto end_time = high_resolution_clock::now();
-            auto total_duration = duration_cast<milliseconds>(end_time - start_time);
+                auto end_time = high_resolution_clock::now();
+                auto total_duration =
+                    duration_cast<milliseconds>(end_time - start_time);
 
-            results["num_tasks"] = num_tasks;
-            results["num_threads"] = num_threads;
-            results["total_time_ms"] = total_duration.count();
-            results["tasks_per_second"] = (num_tasks * 1000.0) / total_duration.count();
-            results["active_threads"] = pool.getActiveThreadCount();
-            results["queue_size"] = pool.getQueueSize();
+                results["num_tasks"] = num_tasks;
+                results["num_threads"] = num_threads;
+                results["total_time_ms"] = total_duration.count();
+                results["tasks_per_second"] =
+                    (num_tasks * 1000.0) / total_duration.count();
+                results["active_threads"] = pool.getActiveThreadCount();
+                results["queue_size"] = pool.getQueueSize();
 
-            return results;
-        },
-        py::arg("num_tasks") = 1000, py::arg("num_threads") = std::thread::hardware_concurrency(),
-        R"pbdoc(
+                return results;
+            },
+            py::arg("num_tasks") = 1000,
+            py::arg("num_threads") = std::thread::hardware_concurrency(),
+            R"pbdoc(
         Benchmark thread pool performance.
 
         Args:
@@ -640,38 +679,42 @@ Examples:
             >>> print(f"Tasks per second: {results['tasks_per_second']}")
         )pbdoc")
 
-    .def(
-        "parallel_map",
-        [](py::function func, py::list items, size_t num_threads) -> py::list {
-            auto options = atom::async::ThreadPool::Options::createHighPerformance();
-            options.initialThreadCount = num_threads;
-            atom::async::ThreadPool pool(options);
+        .def(
+            "parallel_map",
+            [](py::function func, py::list items,
+               size_t num_threads) -> py::list {
+                auto options =
+                    atom::async::ThreadPool::Options::createHighPerformance();
+                options.initialThreadCount = num_threads;
+                atom::async::ThreadPool pool(options);
 
-            std::vector<atom::async::EnhancedFuture<py::object>> futures;
+                std::vector<atom::async::EnhancedFuture<py::object>> futures;
 
-            // Submit all tasks
-            for (auto item : items) {
-                auto future = pool.submit([func, item]() -> py::object {
-                    py::gil_scoped_acquire acquire;
-                    return func(item);
-                });
-                futures.push_back(std::move(future));
-            }
-
-            // Collect results
-            py::list results;
-            for (auto& future : futures) {
-                try {
-                    results.append(future.get());
-                } catch (const std::exception& e) {
-                    results.append(py::str("Error: " + std::string(e.what())));
+                // Submit all tasks
+                for (auto item : items) {
+                    auto future = pool.submit([func, item]() -> py::object {
+                        py::gil_scoped_acquire acquire;
+                        return func(item);
+                    });
+                    futures.push_back(std::move(future));
                 }
-            }
 
-            return results;
-        },
-        py::arg("func"), py::arg("items"), py::arg("num_threads") = std::thread::hardware_concurrency(),
-        R"pbdoc(
+                // Collect results
+                py::list results;
+                for (auto& future : futures) {
+                    try {
+                        results.append(future.get());
+                    } catch (const std::exception& e) {
+                        results.append(
+                            py::str("Error: " + std::string(e.what())));
+                    }
+                }
+
+                return results;
+            },
+            py::arg("func"), py::arg("items"),
+            py::arg("num_threads") = std::thread::hardware_concurrency(),
+            R"pbdoc(
         Apply a function to all items in parallel.
 
         Args:

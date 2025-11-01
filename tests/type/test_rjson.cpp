@@ -7,9 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
-
-#include "atom/type/rjson.hpp"
 #include "atom/error/exception.hpp"
+#include "atom/type/rjson.hpp"
 
 using namespace atom::type;
 
@@ -104,9 +103,9 @@ TEST_F(JsonValueTest, AsStringMethod) {
     EXPECT_EQ(value.asString(), "test");
 
     // Should throw when used on wrong type
-    EXPECT_THROW({
-        [[maybe_unused]] auto result = JsonValue(42.0).asString();
-    }, atom::error::InvalidArgument);
+    EXPECT_THROW(
+        { [[maybe_unused]] auto result = JsonValue(42.0).asString(); },
+        atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsNumberMethod) {
@@ -114,9 +113,12 @@ TEST_F(JsonValueTest, AsNumberMethod) {
     EXPECT_DOUBLE_EQ(value.asNumber(), 42.5);
 
     // Should throw when used on wrong type
-    EXPECT_THROW({
-        [[maybe_unused]] auto result = JsonValue(std::string("test")).asNumber();
-    }, atom::error::InvalidArgument);
+    EXPECT_THROW(
+        {
+            [[maybe_unused]] auto result =
+                JsonValue(std::string("test")).asNumber();
+        },
+        atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsBoolMethod) {
@@ -124,9 +126,9 @@ TEST_F(JsonValueTest, AsBoolMethod) {
     EXPECT_TRUE(value.asBool());
 
     // Should throw when used on wrong type
-    EXPECT_THROW({
-        [[maybe_unused]] auto result = JsonValue(42.0).asBool();
-    }, atom::error::InvalidArgument);
+    EXPECT_THROW(
+        { [[maybe_unused]] auto result = JsonValue(42.0).asBool(); },
+        atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsObjectMethod) {
@@ -139,9 +141,9 @@ TEST_F(JsonValueTest, AsObjectMethod) {
     EXPECT_EQ(result.at("key").asString(), "value");
 
     // Should throw when used on wrong type
-    EXPECT_THROW({
-        [[maybe_unused]] auto result = JsonValue(42.0).asObject();
-    }, atom::error::InvalidArgument);
+    EXPECT_THROW(
+        { [[maybe_unused]] auto result = JsonValue(42.0).asObject(); },
+        atom::error::InvalidArgument);
 }
 
 TEST_F(JsonValueTest, AsArrayMethod) {
@@ -156,9 +158,9 @@ TEST_F(JsonValueTest, AsArrayMethod) {
     EXPECT_DOUBLE_EQ(result[1].asNumber(), 2.0);
 
     // Should throw when used on wrong type
-    EXPECT_THROW({
-        [[maybe_unused]] auto result = JsonValue(42.0).asArray();
-    }, atom::error::InvalidArgument);
+    EXPECT_THROW(
+        { [[maybe_unused]] auto result = JsonValue(42.0).asArray(); },
+        atom::error::InvalidArgument);
 }
 
 // Operator[] Tests
@@ -448,7 +450,8 @@ TEST_F(JsonParserTest, ParseInvalidJson) {
     EXPECT_THROW(JsonParser::parse("42."), atom::error::InvalidArgument);
 
     // Invalid object format (missing value)
-    EXPECT_THROW(JsonParser::parse("{\"key\": }"), atom::error::InvalidArgument);
+    EXPECT_THROW(JsonParser::parse("{\"key\": }"),
+                 atom::error::InvalidArgument);
 
     // Invalid object format (missing comma)
     EXPECT_THROW(JsonParser::parse("{\"key1\": 42 \"key2\": 43}"),

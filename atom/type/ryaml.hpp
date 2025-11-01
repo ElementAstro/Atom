@@ -408,8 +408,8 @@ public:
      * @return The value associated with the key, or the default value.
      * @throws YamlException if the value is not an object.
      */
-    auto get(const std::string& key, const YamlValue& default_value) const
-        -> const YamlValue&;
+    auto get(const std::string& key,
+             const YamlValue& default_value) const -> const YamlValue&;
 
     /**
      * @brief Attempts to get a value from an object by key.
@@ -674,8 +674,8 @@ private:
      * @return The parsed string.
      * @throws YamlException on parsing errors.
      */
-    static auto parse_block_scalar(ParseContext& ctx, char style)
-        -> std::string;
+    static auto parse_block_scalar(ParseContext& ctx,
+                                   char style) -> std::string;
 
     /**
      * @brief Parses a YAML tag from a string.

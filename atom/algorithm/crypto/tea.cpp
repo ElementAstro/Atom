@@ -248,8 +248,8 @@ auto xxteaDecryptImpl(std::span<const u32> inputData,
 }
 
 // XTEA encryption function with enhanced security and validation
-auto xteaEncrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false)
-    -> void {
+auto xteaEncrypt(u32& value0, u32& value1,
+                 const XTEAKey& key) noexcept(false) -> void {
     try {
         if (!isValidKey(key)) {
             spdlog::error("Invalid key provided for XTEA encryption");
@@ -273,8 +273,8 @@ auto xteaEncrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false)
 }
 
 // XTEA decryption function with enhanced security and validation
-auto xteaDecrypt(u32& value0, u32& value1, const XTEAKey& key) noexcept(false)
-    -> void {
+auto xteaDecrypt(u32& value0, u32& value1,
+                 const XTEAKey& key) noexcept(false) -> void {
     try {
         if (!isValidKey(key)) {
             spdlog::error("Invalid key provided for XTEA decryption");

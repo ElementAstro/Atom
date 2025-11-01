@@ -287,8 +287,8 @@ SimulatedAnnealing<ProblemType, SolutionType>::SimulatedAnnealing(
       accepted_steps_(other.accepted_steps_.load()),
       rejected_steps_(other.rejected_steps_.load()),
       start_time_(other.start_time_),
-      energy_history_(std::make_unique<std::vector<std::pair<int, double>>>(*other.energy_history_)) {
-}
+      energy_history_(std::make_unique<std::vector<std::pair<int, double>>>(
+          *other.energy_history_)) {}
 
 // Move constructor implementation
 template <typename ProblemType, typename SolutionType>
@@ -313,14 +313,14 @@ SimulatedAnnealing<ProblemType, SolutionType>::SimulatedAnnealing(
       accepted_steps_(other.accepted_steps_.load()),
       rejected_steps_(other.rejected_steps_.load()),
       start_time_(other.start_time_),
-      energy_history_(std::move(other.energy_history_)) {
-}
+      energy_history_(std::move(other.energy_history_)) {}
 
 // Copy assignment operator implementation
 template <typename ProblemType, typename SolutionType>
     requires AnnealingProblem<ProblemType, SolutionType>
 SimulatedAnnealing<ProblemType, SolutionType>&
-SimulatedAnnealing<ProblemType, SolutionType>::operator=(const SimulatedAnnealing& other) {
+SimulatedAnnealing<ProblemType, SolutionType>::operator=(
+    const SimulatedAnnealing& other) {
     if (this != &other) {
         problem_instance_ = other.problem_instance_;
         cooling_schedule_ = other.cooling_schedule_;
@@ -340,7 +340,8 @@ SimulatedAnnealing<ProblemType, SolutionType>::operator=(const SimulatedAnnealin
         accepted_steps_ = other.accepted_steps_.load();
         rejected_steps_ = other.rejected_steps_.load();
         start_time_ = other.start_time_;
-        energy_history_ = std::make_unique<std::vector<std::pair<int, double>>>(*other.energy_history_);
+        energy_history_ = std::make_unique<std::vector<std::pair<int, double>>>(
+            *other.energy_history_);
     }
     return *this;
 }
@@ -349,7 +350,8 @@ SimulatedAnnealing<ProblemType, SolutionType>::operator=(const SimulatedAnnealin
 template <typename ProblemType, typename SolutionType>
     requires AnnealingProblem<ProblemType, SolutionType>
 SimulatedAnnealing<ProblemType, SolutionType>&
-SimulatedAnnealing<ProblemType, SolutionType>::operator=(SimulatedAnnealing&& other) noexcept {
+SimulatedAnnealing<ProblemType, SolutionType>::operator=(
+    SimulatedAnnealing&& other) noexcept {
     if (this != &other) {
         problem_instance_ = other.problem_instance_;
         cooling_schedule_ = std::move(other.cooling_schedule_);

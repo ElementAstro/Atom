@@ -11,7 +11,6 @@
 #include <thread>
 #include <vector>
 
-
 #include "atom/type/auto_table.hpp"
 
 using namespace atom::type;

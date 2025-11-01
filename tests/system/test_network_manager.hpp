@@ -48,7 +48,7 @@ protected:
     // Helper method: wait for a condition to be true
     template <typename Func>
     bool wait_for_condition(Func condition,
-                         std::chrono::milliseconds timeout = 5s) {
+                            std::chrono::milliseconds timeout = 5s) {
         auto start = std::chrono::steady_clock::now();
         while (!condition()) {
             if (std::chrono::steady_clock::now() - start > timeout) {
@@ -109,7 +109,8 @@ TEST_F(NetworkManagerTest, GetNetworkInterfaces) {
         EXPECT_FALSE(interface.getName().empty());
         EXPECT_FALSE(interface.getMac().empty());
 
-        // An interface may not have addresses, but if it does they should be valid
+        // An interface may not have addresses, but if it does they should be
+        // valid
         for (const auto& address : interface.getAddresses()) {
             EXPECT_FALSE(address.empty());
         }
@@ -145,7 +146,8 @@ TEST_F(NetworkManagerTest, ResolveDNS) {
     EXPECT_FALSE(ip.empty());
 
     // Check that it looks like an IPv4 or IPv6 address
-    bool valid_format = ip.find('.') != std::string::npos || ip.find(':') != std::string::npos;
+    bool valid_format =
+        ip.find('.') != std::string::npos || ip.find(':') != std::string::npos;
     EXPECT_TRUE(valid_format);
 }
 
@@ -215,11 +217,12 @@ TEST_F(NetworkManagerTest, GetMacAddress) {
 
         // Verify MAC address format (XX:XX:XX:XX:XX:XX)
         std::string mac = interface.getMac();
-        EXPECT_EQ(17, mac.length()); // 6 pairs of 2 hex digits + 5 colons
+        EXPECT_EQ(17, mac.length());  // 6 pairs of 2 hex digits + 5 colons
 
         int colon_count = 0;
         for (char c : mac) {
-            if (c == ':') colon_count++;
+            if (c == ':')
+                colon_count++;
         }
         EXPECT_EQ(5, colon_count);
     }
@@ -234,7 +237,8 @@ TEST_F(NetworkManagerTest, IsInterfaceUp) {
 
     // We know each interface has an isUp method, so we can test it
     for (const auto& interface : interfaces) {
-        // Just verify that we can get a status - can't predict what it should be
+        // Just verify that we can get a status - can't predict what it should
+        // be
         bool is_up = interface.isUp();
         SUCCEED();
     }
@@ -245,15 +249,16 @@ TEST_F(NetworkManagerTest, GetNetworkConnections) {
     // Use the current process ID or a known process
     int pid =
 #ifdef _WIN32
-        4; // System process on Windows often has network connections
+        4;  // System process on Windows often has network connections
 #else
-        1; // Init process on Unix-like systems
+        1;  // Init process on Unix-like systems
 #endif
 
     // Get connections for the process
     auto connections = getNetworkConnections(pid);
 
-    // We can't predict if there will be connections, but we can verify the method runs
+    // We can't predict if there will be connections, but we can verify the
+    // method runs
     SUCCEED();
 
     // If there are connections, check they have valid data
@@ -272,7 +277,7 @@ TEST_F(NetworkManagerTest, InvalidInterfaceName) {
 
     // Test interface status for non-existent interface
     std::string status = manager->getInterfaceStatus(invalid_name);
-    EXPECT_FALSE(status.empty()); // Should return some kind of error status
+    EXPECT_FALSE(status.empty());  // Should return some kind of error status
 
     // Test enable/disable with invalid interface
     // Should not throw, but probably won't succeed
@@ -318,7 +323,7 @@ TEST_F(NetworkManagerTest, ConcurrentAccess) {
                 } else if (i % 5 == 3) {
                     NetworkManager::resolveDNS(test_hostname);
                 } else {
-                    getNetworkConnections(0); // Current process
+                    getNetworkConnections(0);  // Current process
                 }
                 std::this_thread::sleep_for(5ms);
             }
@@ -352,7 +357,8 @@ TEST_F(NetworkManagerTest, DISABLED_NetworkStress) {
 
         if (i % 10 == 0) {
             // Every 10 iterations, output progress
-            std::cout << "Network stress test progress: " << i << "/" << iterations << std::endl;
+            std::cout << "Network stress test progress: " << i << "/"
+                      << iterations << std::endl;
         }
     }
 
@@ -365,10 +371,13 @@ TEST_F(NetworkManagerTest, DISABLED_NetworkStress) {
 TEST_F(NetworkManagerTest, DISABLED_NetworkStateChanges) {
     // This test is disabled as it would require manual intervention
 
-    std::cout << "This test requires manually changing network state:" << std::endl;
+    std::cout << "This test requires manually changing network state:"
+              << std::endl;
     std::cout << "1. Run the test" << std::endl;
-    std::cout << "2. Manually disable/enable network interfaces or connections" << std::endl;
-    std::cout << "3. The test will check for appropriate state changes" << std::endl;
+    std::cout << "2. Manually disable/enable network interfaces or connections"
+              << std::endl;
+    std::cout << "3. The test will check for appropriate state changes"
+              << std::endl;
 
     // Start monitoring connection status
     manager->monitorConnectionStatus();
@@ -378,8 +387,10 @@ TEST_F(NetworkManagerTest, DISABLED_NetworkStateChanges) {
     for (int i = 0; i < check_intervals; ++i) {
         auto interfaces = manager->getNetworkInterfaces();
         for (const auto& interface : interfaces) {
-            std::string status = manager->getInterfaceStatus(interface.getName());
-            std::cout << "Interface " << interface.getName() << " status: " << status << std::endl;
+            std::string status =
+                manager->getInterfaceStatus(interface.getName());
+            std::cout << "Interface " << interface.getName()
+                      << " status: " << status << std::endl;
         }
 
         std::this_thread::sleep_for(1s);

@@ -29,8 +29,8 @@ and schema validation.
 #include <unordered_map>
 #include <vector>
 
-#include "atom/type/json.hpp"
 #include "../core/component.hpp"
+#include "atom/type/json.hpp"
 
 namespace atom::components {
 

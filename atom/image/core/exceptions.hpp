@@ -15,7 +15,8 @@ public:
         : std::runtime_error("Image Error: " + message) {}
 
     explicit ImageException(const std::string& message, std::error_code ec)
-        : std::runtime_error("Image Error: " + message + " (" + ec.message() + ")"),
+        : std::runtime_error("Image Error: " + message + " (" + ec.message() +
+                             ")"),
           errorCode_(ec) {}
 
     std::error_code errorCode() const { return errorCode_; }
@@ -132,4 +133,4 @@ public:
         : ImageException("Configuration error: " + message) {}
 };
 
-} // namespace atom::image::core
+}  // namespace atom::image::core

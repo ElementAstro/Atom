@@ -1,6 +1,7 @@
 /**
  * @file lcg.hpp
- * @brief Backwards compatibility header for Linear Congruential Generator utilities.
+ * @brief Backwards compatibility header for Linear Congruential Generator
+ * utilities.
  *
  * @deprecated This header location is deprecated. Please use
  * "atom/utils/random/lcg.hpp" instead.

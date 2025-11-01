@@ -18,8 +18,13 @@
 #include <spdlog/spdlog.h>
 #include "memory.hpp"
 
-
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <processthreadsapi.h>
 #include <windows.h>
 #endif
@@ -179,7 +184,8 @@ auto getMemoryFragmentation() -> double {
     size_t allocatableSize = 0;
     try {
         constexpr size_t MAX_ALLOC_SIZE = 100 * 1024 * 1024;  // 100 MB
-        const size_t testSize = std::min(MAX_ALLOC_SIZE, static_cast<size_t>(available));
+        const size_t testSize =
+            std::min(MAX_ALLOC_SIZE, static_cast<size_t>(available));
         std::vector<char> testAlloc;
         testAlloc.reserve(testSize);
         allocatableSize = testAlloc.capacity();

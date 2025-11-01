@@ -385,20 +385,22 @@ Returns:
 This is particularly useful when using lock-free queues to check
 if the background processing is running.
 )")
-        .def("get_statistics",
-             [](const atom::async::MessageBus& self) -> py::dict {
-                 auto stats = self.getStatistics();
-                 py::dict result;
-                 result["subscriber_count"] = stats.subscriberCount;
-                 result["type_count"] = stats.typeCount;
-                 result["namespace_count"] = stats.namespaceCount;
-                 result["history_total_messages"] = stats.historyTotalMessages;
+        .def(
+            "get_statistics",
+            [](const atom::async::MessageBus& self) -> py::dict {
+                auto stats = self.getStatistics();
+                py::dict result;
+                result["subscriber_count"] = stats.subscriberCount;
+                result["type_count"] = stats.typeCount;
+                result["namespace_count"] = stats.namespaceCount;
+                result["history_total_messages"] = stats.historyTotalMessages;
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-                 result["pending_queue_size_approx"] = stats.pendingQueueSizeApprox;
+                result["pending_queue_size_approx"] =
+                    stats.pendingQueueSizeApprox;
 #endif
-                 return result;
-             },
-             R"(Gets comprehensive statistics about the message bus.
+                return result;
+            },
+            R"(Gets comprehensive statistics about the message bus.
 
 Returns:
     dict: Dictionary containing:
@@ -414,7 +416,8 @@ Examples:
     >>> print(f"Message types: {stats['type_count']}")
 )")
 #ifdef ATOM_USE_LOCKFREE_QUEUE
-        .def("start_message_processing", &atom::async::MessageBus::startMessageProcessing,
+        .def("start_message_processing",
+             &atom::async::MessageBus::startMessageProcessing,
              R"(Starts the background message processing for lock-free queues.
 
 This method is only available when ATOM_USE_LOCKFREE_QUEUE is enabled.
@@ -423,7 +426,8 @@ It starts a background thread or async task to process queued messages.
 Note: This is automatically called when the message bus is created,
 but can be used to restart processing if it was stopped.
 )")
-        .def("stop_message_processing", &atom::async::MessageBus::stopMessageProcessing,
+        .def("stop_message_processing",
+             &atom::async::MessageBus::stopMessageProcessing,
              R"(Stops the background message processing for lock-free queues.
 
 This method is only available when ATOM_USE_LOCKFREE_QUEUE is enabled.
@@ -433,13 +437,14 @@ Warning: After calling this, messages will queue up but not be delivered
 until processing is restarted.
 )")
 #endif
-        .def_static("create_shared",
-             [](PyIOContext& py_io_context) {
-                 return std::make_shared<atom::async::MessageBus>(
-                     py_io_context.get_io_context());
-             },
-             py::arg("io_context"),
-             R"(Creates a shared instance of MessageBus.
+        .def_static(
+            "create_shared",
+            [](PyIOContext& py_io_context) {
+                return std::make_shared<atom::async::MessageBus>(
+                    py_io_context.get_io_context());
+            },
+            py::arg("io_context"),
+            R"(Creates a shared instance of MessageBus.
 
 Args:
     io_context: PyIOContext instance for async operations.
@@ -464,13 +469,14 @@ Examples:
         m, "string_dict");
 
     // Utility functions for message bus management
-    m.def("create_message_bus",
-          [](PyIOContext& py_io_context) {
-              return std::make_shared<atom::async::MessageBus>(
-                  py_io_context.get_io_context());
-          },
-          py::arg("io_context"),
-          R"(Creates a new MessageBus instance.
+    m.def(
+        "create_message_bus",
+        [](PyIOContext& py_io_context) {
+            return std::make_shared<atom::async::MessageBus>(
+                py_io_context.get_io_context());
+        },
+        py::arg("io_context"),
+        R"(Creates a new MessageBus instance.
 
 Args:
     io_context: PyIOContext instance for async operations.
@@ -481,11 +487,9 @@ Returns:
 This is a convenience function equivalent to MessageBus.create_shared().
 )");
 
-    m.def("create_io_context",
-          []() {
-              return std::make_unique<PyIOContext>();
-          },
-          R"(Creates a new PyIOContext instance.
+    m.def(
+        "create_io_context", []() { return std::make_unique<PyIOContext>(); },
+        R"(Creates a new PyIOContext instance.
 
 Returns:
     A new PyIOContext for use with MessageBus.
@@ -500,13 +504,16 @@ This is a convenience function for creating IO contexts.
     declare_message_type<py::tuple>(m, "tuple");
 
     // Utility functions for working with message patterns
-    m.def("is_namespace_match",
-          [](const std::string& message_name, const std::string& namespace_pattern) -> bool {
-              // Simple namespace matching: "system.notifications" matches "system"
-              return message_name.rfind(namespace_pattern + ".", 0) == 0;
-          },
-          py::arg("message_name"), py::arg("namespace_pattern"),
-          R"(Checks if a message name matches a namespace pattern.
+    m.def(
+        "is_namespace_match",
+        [](const std::string& message_name,
+           const std::string& namespace_pattern) -> bool {
+            // Simple namespace matching: "system.notifications" matches
+            // "system"
+            return message_name.rfind(namespace_pattern + ".", 0) == 0;
+        },
+        py::arg("message_name"), py::arg("namespace_pattern"),
+        R"(Checks if a message name matches a namespace pattern.
 
 Args:
     message_name: The full message name (e.g., "system.notifications.error")
@@ -522,16 +529,17 @@ Examples:
     False
 )");
 
-    m.def("extract_namespace",
-          [](const std::string& message_name) -> std::string {
-              auto pos = message_name.find('.');
-              if (pos != std::string::npos) {
-                  return message_name.substr(0, pos);
-              }
-              return message_name;
-          },
-          py::arg("message_name"),
-          R"(Extracts the namespace from a message name.
+    m.def(
+        "extract_namespace",
+        [](const std::string& message_name) -> std::string {
+            auto pos = message_name.find('.');
+            if (pos != std::string::npos) {
+                return message_name.substr(0, pos);
+            }
+            return message_name;
+        },
+        py::arg("message_name"),
+        R"(Extracts the namespace from a message name.
 
 Args:
     message_name: The full message name (e.g., "system.notifications.error")
@@ -546,15 +554,19 @@ Examples:
     "simple_message"
 )");
 
-    m.def("validate_message_name",
-          [](const std::string& message_name) -> bool {
-              if (message_name.empty()) return false;
-              if (message_name.front() == '.' || message_name.back() == '.') return false;
-              if (message_name.find("..") != std::string::npos) return false;
-              return true;
-          },
-          py::arg("message_name"),
-          R"(Validates a message name according to naming conventions.
+    m.def(
+        "validate_message_name",
+        [](const std::string& message_name) -> bool {
+            if (message_name.empty())
+                return false;
+            if (message_name.front() == '.' || message_name.back() == '.')
+                return false;
+            if (message_name.find("..") != std::string::npos)
+                return false;
+            return true;
+        },
+        py::arg("message_name"),
+        R"(Validates a message name according to naming conventions.
 
 Args:
     message_name: The message name to validate
@@ -577,90 +589,102 @@ Examples:
 )");
 
     // Advanced utility functions for message bus management
-    m.def("benchmark_message_bus_performance",
-          [](std::shared_ptr<atom::async::MessageBus> bus, int num_publishers,
-             int num_subscribers, int messages_per_publisher) -> py::dict {
-              using namespace std::chrono;
+    m.def(
+         "benchmark_message_bus_performance",
+         [](std::shared_ptr<atom::async::MessageBus> bus, int num_publishers,
+            int num_subscribers, int messages_per_publisher) -> py::dict {
+             using namespace std::chrono;
 
-              py::dict results;
-              std::vector<std::thread> publisher_threads;
-              std::vector<std::thread> subscriber_threads;
-              std::atomic<int> messages_received{0};
-              std::vector<double> publisher_times(num_publishers);
+             py::dict results;
+             std::vector<std::thread> publisher_threads;
+             std::vector<std::thread> subscriber_threads;
+             std::atomic<int> messages_received{0};
+             std::vector<double> publisher_times(num_publishers);
 
-              // Create subscribers
-              std::vector<atom::async::MessageBus::Token> tokens;
-              for (int i = 0; i < num_subscribers; ++i) {
-                  auto token = bus->subscribe<std::string>(
-                      "benchmark.test",
-                      [&messages_received](const std::string& msg) {
-                          messages_received.fetch_add(1, std::memory_order_relaxed);
-                      });
-                  tokens.push_back(token);
-              }
+             // Create subscribers
+             std::vector<atom::async::MessageBus::Token> tokens;
+             for (int i = 0; i < num_subscribers; ++i) {
+                 auto token = bus->subscribe<std::string>(
+                     "benchmark.test",
+                     [&messages_received](const std::string& msg) {
+                         messages_received.fetch_add(1,
+                                                     std::memory_order_relaxed);
+                     });
+                 tokens.push_back(token);
+             }
 
-              auto start_time = high_resolution_clock::now();
+             auto start_time = high_resolution_clock::now();
 
-              // Create publishers
-              for (int i = 0; i < num_publishers; ++i) {
-                  publisher_threads.emplace_back([bus, &publisher_times, i, messages_per_publisher]() {
-                      auto thread_start = high_resolution_clock::now();
+             // Create publishers
+             for (int i = 0; i < num_publishers; ++i) {
+                 publisher_threads.emplace_back([bus, &publisher_times, i,
+                                                 messages_per_publisher]() {
+                     auto thread_start = high_resolution_clock::now();
 
-                      for (int j = 0; j < messages_per_publisher; ++j) {
-                          bus->publish<std::string>("benchmark.test",
-                                                   "Message " + std::to_string(j));
-                      }
+                     for (int j = 0; j < messages_per_publisher; ++j) {
+                         bus->publish<std::string>(
+                             "benchmark.test", "Message " + std::to_string(j));
+                     }
 
-                      auto thread_end = high_resolution_clock::now();
-                      auto duration = duration_cast<microseconds>(thread_end - thread_start);
-                      publisher_times[i] = duration.count();
-                  });
-              }
+                     auto thread_end = high_resolution_clock::now();
+                     auto duration =
+                         duration_cast<microseconds>(thread_end - thread_start);
+                     publisher_times[i] = duration.count();
+                 });
+             }
 
-              // Wait for all publishers to complete
-              for (auto& thread : publisher_threads) {
-                  thread.join();
-              }
+             // Wait for all publishers to complete
+             for (auto& thread : publisher_threads) {
+                 thread.join();
+             }
 
-              // Wait a bit for message processing
-              std::this_thread::sleep_for(std::chrono::milliseconds(100));
+             // Wait a bit for message processing
+             std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
-              auto end_time = high_resolution_clock::now();
-              auto total_duration = duration_cast<microseconds>(end_time - start_time);
+             auto end_time = high_resolution_clock::now();
+             auto total_duration =
+                 duration_cast<microseconds>(end_time - start_time);
 
-              // Cleanup subscribers
-              for (auto token : tokens) {
-                  bus->unsubscribe<std::string>(token);
-              }
+             // Cleanup subscribers
+             for (auto token : tokens) {
+                 bus->unsubscribe<std::string>(token);
+             }
 
-              // Calculate statistics
-              double total_messages = num_publishers * messages_per_publisher;
-              double avg_publisher_time = 0;
-              for (double time : publisher_times) {
-                  avg_publisher_time += time;
-              }
-              avg_publisher_time /= num_publishers;
+             // Calculate statistics
+             double total_messages = num_publishers * messages_per_publisher;
+             double avg_publisher_time = 0;
+             for (double time : publisher_times) {
+                 avg_publisher_time += time;
+             }
+             avg_publisher_time /= num_publishers;
 
-              double min_time = *std::min_element(publisher_times.begin(), publisher_times.end());
-              double max_time = *std::max_element(publisher_times.begin(), publisher_times.end());
+             double min_time = *std::min_element(publisher_times.begin(),
+                                                 publisher_times.end());
+             double max_time = *std::max_element(publisher_times.begin(),
+                                                 publisher_times.end());
 
-              results[py::str("num_publishers")] = num_publishers;
-              results[py::str("num_subscribers")] = num_subscribers;
-              results[py::str("messages_per_publisher")] = messages_per_publisher;
-              results[py::str("total_messages_sent")] = total_messages;
-              results[py::str("total_messages_received")] = messages_received.load();
-              results[py::str("total_time_us")] = total_duration.count();
-              results[py::str("avg_publisher_time_us")] = avg_publisher_time;
-              results[py::str("min_publisher_time_us")] = min_time;
-              results[py::str("max_publisher_time_us")] = max_time;
-              results[py::str("messages_per_second")] = (total_messages * 1000000.0) / total_duration.count();
-              results[py::str("delivery_rate")] = (double)messages_received.load() / total_messages;
+             results[py::str("num_publishers")] = num_publishers;
+             results[py::str("num_subscribers")] = num_subscribers;
+             results[py::str("messages_per_publisher")] =
+                 messages_per_publisher;
+             results[py::str("total_messages_sent")] = total_messages;
+             results[py::str("total_messages_received")] =
+                 messages_received.load();
+             results[py::str("total_time_us")] = total_duration.count();
+             results[py::str("avg_publisher_time_us")] = avg_publisher_time;
+             results[py::str("min_publisher_time_us")] = min_time;
+             results[py::str("max_publisher_time_us")] = max_time;
+             results[py::str("messages_per_second")] =
+                 (total_messages * 1000000.0) / total_duration.count();
+             results[py::str("delivery_rate")] =
+                 (double)messages_received.load() / total_messages;
 
-              return results;
-          },
-          py::arg("bus"), py::arg("num_publishers") = 4, py::arg("num_subscribers") = 4,
-          py::arg("messages_per_publisher") = 1000,
-          R"pbdoc(
+             return results;
+         },
+         py::arg("bus"), py::arg("num_publishers") = 4,
+         py::arg("num_subscribers") = 4,
+         py::arg("messages_per_publisher") = 1000,
+         R"pbdoc(
           Benchmark message bus performance with multiple publishers and subscribers.
 
           Args:
@@ -678,17 +702,18 @@ Examples:
               >>> print(f"Delivery rate: {results['delivery_rate']:.2%}")
           )pbdoc")
 
-    .def("create_message_bus_pool",
-         [](PyIOContext& io_context, size_t pool_size) -> py::list {
-             py::list pool;
-             for (size_t i = 0; i < pool_size; ++i) {
-                 pool.append(std::make_shared<atom::async::MessageBus>(
-                     io_context.get_io_context()));
-             }
-             return pool;
-         },
-         py::arg("io_context"), py::arg("pool_size"),
-         R"pbdoc(
+        .def(
+            "create_message_bus_pool",
+            [](PyIOContext& io_context, size_t pool_size) -> py::list {
+                py::list pool;
+                for (size_t i = 0; i < pool_size; ++i) {
+                    pool.append(std::make_shared<atom::async::MessageBus>(
+                        io_context.get_io_context()));
+                }
+                return pool;
+            },
+            py::arg("io_context"), py::arg("pool_size"),
+            R"pbdoc(
          Create a pool of MessageBus instances for load distribution.
 
          Args:
@@ -706,22 +731,27 @@ Examples:
              >>> service2_bus = bus_pool[1]
          )pbdoc")
 
-    .def("create_message_router",
-         [](const std::vector<std::shared_ptr<atom::async::MessageBus>>& buses) -> py::dict {
-             py::dict router;
-             router[py::str("buses")] = py::cast(buses);
-             router[py::str("current_index")] = 0;
-             router[py::str("round_robin")] = py::cpp_function(
-                 [buses](py::dict& router_dict) -> std::shared_ptr<atom::async::MessageBus> {
-                     int current = router_dict[py::str("current_index")].cast<int>();
-                     router_dict[py::str("current_index")] = (current + 1) % buses.size();
-                     return buses[current];
-                 });
+        .def(
+            "create_message_router",
+            [](const std::vector<std::shared_ptr<atom::async::MessageBus>>&
+                   buses) -> py::dict {
+                py::dict router;
+                router[py::str("buses")] = py::cast(buses);
+                router[py::str("current_index")] = 0;
+                router[py::str("round_robin")] = py::cpp_function(
+                    [buses](py::dict& router_dict)
+                        -> std::shared_ptr<atom::async::MessageBus> {
+                        int current =
+                            router_dict[py::str("current_index")].cast<int>();
+                        router_dict[py::str("current_index")] =
+                            (current + 1) % buses.size();
+                        return buses[current];
+                    });
 
-             return router;
-         },
-         py::arg("buses"),
-         R"pbdoc(
+                return router;
+            },
+            py::arg("buses"),
+            R"pbdoc(
          Create a message router for load balancing across multiple buses.
 
          Args:

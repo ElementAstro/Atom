@@ -31,7 +31,7 @@ PYBIND11_MODULE(file_permission, m) {
             >>> can_access = perm.compare_file_and_self_permissions("sensitive.txt")
             >>> if can_access:
             ...     print("Process has sufficient permissions")
-            >>> 
+            >>>
             >>> # Get file permissions
             >>> perms = perm.get_file_permissions("example.txt")
             >>> print(f"File permissions: {perms}")
@@ -54,25 +54,26 @@ PYBIND11_MODULE(file_permission, m) {
     });
 
     // Core permission functions
-    m.def("compare_file_and_self_permissions", 
-          [](const std::string& file_path) -> py::object {
-              auto result = atom::io::compareFileAndSelfPermissions(file_path);
-              if (result.has_value()) {
-                  return py::cast(result.value());
-              } else {
-                  return py::none();
-              }
-          },
-          py::arg("file_path"),
-          R"(Compare file permissions with current process permissions.
+    m.def(
+        "compare_file_and_self_permissions",
+        [](const std::string& file_path) -> py::object {
+            auto result = atom::io::compareFileAndSelfPermissions(file_path);
+            if (result.has_value()) {
+                return py::cast(result.value());
+            } else {
+                return py::none();
+            }
+        },
+        py::arg("file_path"),
+        R"(Compare file permissions with current process permissions.
 
 Args:
     file_path: Path to the file for permission comparison
 
 Returns:
-    bool or None: 
+    bool or None:
         - True: process has equal or greater permissions than file
-        - False: process has lesser permissions than file  
+        - False: process has lesser permissions than file
         - None: error occurred during comparison
 
 Examples:
@@ -85,17 +86,18 @@ Examples:
     ...     print("Error comparing permissions")
 )");
 
-    m.def("get_file_permissions", 
-          [](const std::string& file_path) -> py::object {
-              auto result = atom::io::getFilePermissions(file_path);
-              if (!result.empty()) {
-                  return py::cast(result);
-              } else {
-                  return py::none();
-              }
-          },
-          py::arg("file_path"),
-          R"(Retrieve file permissions as a readable string.
+    m.def(
+        "get_file_permissions",
+        [](const std::string& file_path) -> py::object {
+            auto result = atom::io::getFilePermissions(file_path);
+            if (!result.empty()) {
+                return py::cast(result);
+            } else {
+                return py::none();
+            }
+        },
+        py::arg("file_path"),
+        R"(Retrieve file permissions as a readable string.
 
 Args:
     file_path: Path to the file
@@ -111,16 +113,17 @@ Examples:
     ...     print("Could not read file permissions")
 )");
 
-    m.def("get_self_permissions", 
-          []() -> py::object {
-              auto result = atom::io::getSelfPermissions();
-              if (!result.empty()) {
-                  return py::cast(result);
-              } else {
-                  return py::none();
-              }
-          },
-          R"(Retrieve current process permissions as a readable string.
+    m.def(
+        "get_self_permissions",
+        []() -> py::object {
+            auto result = atom::io::getSelfPermissions();
+            if (!result.empty()) {
+                return py::cast(result);
+            } else {
+                return py::none();
+            }
+        },
+        R"(Retrieve current process permissions as a readable string.
 
 Returns:
     str or None: Permission string in format "rwxrwxrwx" or None on error
@@ -133,14 +136,15 @@ Examples:
     ...     print("Could not read process permissions")
 )");
 
-    m.def("change_file_permissions", 
-          [](const std::string& file_path, const std::string& permissions) {
-              fs::path path(file_path);
-              atom::containers::String perms(permissions.c_str());
-              atom::io::changeFilePermissions(path, perms);
-          },
-          py::arg("file_path"), py::arg("permissions"),
-          R"(Modify file permissions using permission string.
+    m.def(
+        "change_file_permissions",
+        [](const std::string& file_path, const std::string& permissions) {
+            fs::path path(file_path);
+            atom::containers::String perms(permissions.c_str());
+            atom::io::changeFilePermissions(path, perms);
+        },
+        py::arg("file_path"), py::arg("permissions"),
+        R"(Modify file permissions using permission string.
 
 Args:
     file_path: Filesystem path to the target file
@@ -158,46 +162,48 @@ Security Warning:
 Examples:
     >>> # Make file readable and writable by owner only
     >>> change_file_permissions("example.txt", "rw-------")
-    >>> 
+    >>>
     >>> # Make file executable by owner, readable by group and others
     >>> change_file_permissions("script.sh", "rwxr--r--")
 )");
 
     // Utility functions for permission analysis
-    m.def("parse_permission_string", 
-          [](const std::string& permissions) {
-              if (permissions.length() != 9) {
-                  throw std::invalid_argument("Permission string must be exactly 9 characters");
-              }
-              
-              py::dict result;
-              
-              // Owner permissions
-              result["owner_read"] = permissions[0] == 'r';
-              result["owner_write"] = permissions[1] == 'w';
-              result["owner_execute"] = permissions[2] == 'x';
-              
-              // Group permissions
-              result["group_read"] = permissions[3] == 'r';
-              result["group_write"] = permissions[4] == 'w';
-              result["group_execute"] = permissions[5] == 'x';
-              
-              // Other permissions
-              result["other_read"] = permissions[6] == 'r';
-              result["other_write"] = permissions[7] == 'w';
-              result["other_execute"] = permissions[8] == 'x';
-              
-              // Convenience flags
-              result["is_readable"] = permissions[0] == 'r';
-              result["is_writable"] = permissions[1] == 'w';
-              result["is_executable"] = permissions[2] == 'x';
-              result["is_public_readable"] = permissions[6] == 'r';
-              result["is_public_writable"] = permissions[7] == 'w';
-              
-              return result;
-          },
-          py::arg("permissions"),
-          R"(Parse a permission string into individual permission flags.
+    m.def(
+        "parse_permission_string",
+        [](const std::string& permissions) {
+            if (permissions.length() != 9) {
+                throw std::invalid_argument(
+                    "Permission string must be exactly 9 characters");
+            }
+
+            py::dict result;
+
+            // Owner permissions
+            result["owner_read"] = permissions[0] == 'r';
+            result["owner_write"] = permissions[1] == 'w';
+            result["owner_execute"] = permissions[2] == 'x';
+
+            // Group permissions
+            result["group_read"] = permissions[3] == 'r';
+            result["group_write"] = permissions[4] == 'w';
+            result["group_execute"] = permissions[5] == 'x';
+
+            // Other permissions
+            result["other_read"] = permissions[6] == 'r';
+            result["other_write"] = permissions[7] == 'w';
+            result["other_execute"] = permissions[8] == 'x';
+
+            // Convenience flags
+            result["is_readable"] = permissions[0] == 'r';
+            result["is_writable"] = permissions[1] == 'w';
+            result["is_executable"] = permissions[2] == 'x';
+            result["is_public_readable"] = permissions[6] == 'r';
+            result["is_public_writable"] = permissions[7] == 'w';
+
+            return result;
+        },
+        py::arg("permissions"),
+        R"(Parse a permission string into individual permission flags.
 
 Args:
     permissions: Permission string in format "rwxrwxrwx"
@@ -215,26 +221,27 @@ Examples:
     >>> print(f"Public can write: {perms['is_public_writable']}")
 )");
 
-    m.def("create_permission_string", 
-          [](bool owner_read, bool owner_write, bool owner_execute,
-             bool group_read, bool group_write, bool group_execute,
-             bool other_read, bool other_write, bool other_execute) {
-              std::string result;
-              result += owner_read ? 'r' : '-';
-              result += owner_write ? 'w' : '-';
-              result += owner_execute ? 'x' : '-';
-              result += group_read ? 'r' : '-';
-              result += group_write ? 'w' : '-';
-              result += group_execute ? 'x' : '-';
-              result += other_read ? 'r' : '-';
-              result += other_write ? 'w' : '-';
-              result += other_execute ? 'x' : '-';
-              return result;
-          },
-          py::arg("owner_read"), py::arg("owner_write"), py::arg("owner_execute"),
-          py::arg("group_read"), py::arg("group_write"), py::arg("group_execute"),
-          py::arg("other_read"), py::arg("other_write"), py::arg("other_execute"),
-          R"(Create a permission string from individual permission flags.
+    m.def(
+        "create_permission_string",
+        [](bool owner_read, bool owner_write, bool owner_execute,
+           bool group_read, bool group_write, bool group_execute,
+           bool other_read, bool other_write, bool other_execute) {
+            std::string result;
+            result += owner_read ? 'r' : '-';
+            result += owner_write ? 'w' : '-';
+            result += owner_execute ? 'x' : '-';
+            result += group_read ? 'r' : '-';
+            result += group_write ? 'w' : '-';
+            result += group_execute ? 'x' : '-';
+            result += other_read ? 'r' : '-';
+            result += other_write ? 'w' : '-';
+            result += other_execute ? 'x' : '-';
+            return result;
+        },
+        py::arg("owner_read"), py::arg("owner_write"), py::arg("owner_execute"),
+        py::arg("group_read"), py::arg("group_write"), py::arg("group_execute"),
+        py::arg("other_read"), py::arg("other_write"), py::arg("other_execute"),
+        R"(Create a permission string from individual permission flags.
 
 Args:
     owner_read: Owner read permission
@@ -259,26 +266,30 @@ Examples:
     >>> print(perms)  # "rwxr-xr--"
 )");
 
-    m.def("is_permission_valid", 
-          [](const std::string& permissions) {
-              if (permissions.length() != 9) {
-                  return false;
-              }
-              
-              for (size_t i = 0; i < 9; ++i) {
-                  char c = permissions[i];
-                  if (i % 3 == 0) {  // Read position
-                      if (c != 'r' && c != '-') return false;
-                  } else if (i % 3 == 1) {  // Write position
-                      if (c != 'w' && c != '-') return false;
-                  } else {  // Execute position
-                      if (c != 'x' && c != '-') return false;
-                  }
-              }
-              return true;
-          },
-          py::arg("permissions"),
-          R"(Validate a permission string format.
+    m.def(
+        "is_permission_valid",
+        [](const std::string& permissions) {
+            if (permissions.length() != 9) {
+                return false;
+            }
+
+            for (size_t i = 0; i < 9; ++i) {
+                char c = permissions[i];
+                if (i % 3 == 0) {  // Read position
+                    if (c != 'r' && c != '-')
+                        return false;
+                } else if (i % 3 == 1) {  // Write position
+                    if (c != 'w' && c != '-')
+                        return false;
+                } else {  // Execute position
+                    if (c != 'x' && c != '-')
+                        return false;
+                }
+            }
+            return true;
+        },
+        py::arg("permissions"),
+        R"(Validate a permission string format.
 
 Args:
     permissions: Permission string to validate
@@ -296,18 +307,19 @@ Examples:
 )");
 
     // Security-focused utility functions
-    m.def("is_secure_permissions", 
-          [](const std::string& permissions) {
-              if (!atom::io::getFilePermissions(permissions).empty()) {
-                  // Check if file is not world-writable and not group-writable
-                  return permissions.length() >= 9 && 
-                         permissions[4] != 'w' &&  // Group write
-                         permissions[7] != 'w';    // Other write
-              }
-              return false;
-          },
-          py::arg("permissions"),
-          R"(Check if permissions are considered secure (not world/group writable).
+    m.def(
+        "is_secure_permissions",
+        [](const std::string& permissions) {
+            if (!atom::io::getFilePermissions(permissions).empty()) {
+                // Check if file is not world-writable and not group-writable
+                return permissions.length() >= 9 &&
+                       permissions[4] != 'w' &&  // Group write
+                       permissions[7] != 'w';    // Other write
+            }
+            return false;
+        },
+        py::arg("permissions"),
+        R"(Check if permissions are considered secure (not world/group writable).
 
 Args:
     permissions: Permission string to check
@@ -322,33 +334,44 @@ Examples:
     False
 )");
 
-    m.def("get_permission_octal", 
-          [](const std::string& permissions) {
-              if (permissions.length() != 9) {
-                  throw std::invalid_argument("Permission string must be exactly 9 characters");
-              }
-              
-              int octal = 0;
-              
-              // Owner permissions
-              if (permissions[0] == 'r') octal += 400;
-              if (permissions[1] == 'w') octal += 200;
-              if (permissions[2] == 'x') octal += 100;
-              
-              // Group permissions
-              if (permissions[3] == 'r') octal += 40;
-              if (permissions[4] == 'w') octal += 20;
-              if (permissions[5] == 'x') octal += 10;
-              
-              // Other permissions
-              if (permissions[6] == 'r') octal += 4;
-              if (permissions[7] == 'w') octal += 2;
-              if (permissions[8] == 'x') octal += 1;
-              
-              return octal;
-          },
-          py::arg("permissions"),
-          R"(Convert permission string to octal representation.
+    m.def(
+        "get_permission_octal",
+        [](const std::string& permissions) {
+            if (permissions.length() != 9) {
+                throw std::invalid_argument(
+                    "Permission string must be exactly 9 characters");
+            }
+
+            int octal = 0;
+
+            // Owner permissions
+            if (permissions[0] == 'r')
+                octal += 400;
+            if (permissions[1] == 'w')
+                octal += 200;
+            if (permissions[2] == 'x')
+                octal += 100;
+
+            // Group permissions
+            if (permissions[3] == 'r')
+                octal += 40;
+            if (permissions[4] == 'w')
+                octal += 20;
+            if (permissions[5] == 'x')
+                octal += 10;
+
+            // Other permissions
+            if (permissions[6] == 'r')
+                octal += 4;
+            if (permissions[7] == 'w')
+                octal += 2;
+            if (permissions[8] == 'x')
+                octal += 1;
+
+            return octal;
+        },
+        py::arg("permissions"),
+        R"(Convert permission string to octal representation.
 
 Args:
     permissions: Permission string in format "rwxrwxrwx"

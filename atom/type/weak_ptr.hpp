@@ -461,9 +461,8 @@ public:
      * reached.
      */
     template <typename Clock, typename Duration>
-    [[nodiscard]] auto waitUntil(
-        const std::chrono::time_point<Clock, Duration>& timePoint) const
-        -> bool {
+    [[nodiscard]] auto waitUntil(const std::chrono::time_point<Clock, Duration>&
+                                     timePoint) const -> bool {
         std::unique_lock lock(mutex_);
         return cv_.wait_until(lock, timePoint,
                               [this] { return !this->ptr_.expired(); });
@@ -748,8 +747,8 @@ template <typename T>
  */
 template <typename T, typename Func>
 [[nodiscard]] auto batchOperation(std::span<const EnhancedWeakPtr<T>> weakPtrs,
-                                  Func&& func, size_t parallelThreshold = 100)
-    -> size_t {
+                                  Func&& func,
+                                  size_t parallelThreshold = 100) -> size_t {
     size_t successCount = 0;
 
 #ifdef __cpp_lib_parallel_algorithm

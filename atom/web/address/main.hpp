@@ -34,6 +34,6 @@ inline auto createAddress(std::string_view addressString) {
     return Address::createFromString(addressString);
 }
 
-} // namespace atom::web
+}  // namespace atom::web
 
-#endif // ATOM_WEB_ADDRESS_MAIN_HPP
+#endif  // ATOM_WEB_ADDRESS_MAIN_HPP

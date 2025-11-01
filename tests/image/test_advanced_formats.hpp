@@ -1,15 +1,15 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include <vector>
-#include <string>
-#include <memory>
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include "atom/image/formats/advanced_formats.hpp"
 #include "atom/image/core/image_blob.hpp"
+#include "atom/image/formats/advanced_formats.hpp"
 #include "test_utils.hpp"
 
 namespace atom::image::test {
@@ -22,12 +22,11 @@ protected:
         createTestImages();
     }
 
-    void TearDown() override {
-        fileManager->cleanup();
-    }
+    void TearDown() override { fileManager->cleanup(); }
 
     void createTestImages() {
-        auto gradientData = TestDataGenerator::generateGradientImage(256, 256, 3);
+        auto gradientData =
+            TestDataGenerator::generateGradientImage(256, 256, 3);
         test_image = blob(gradientData.data(), gradientData.size());
 
         auto grayData = TestDataGenerator::generateGradientImage(256, 256, 1);
@@ -54,8 +53,7 @@ TEST_F(AdvancedFormatsTest, FormatDetectionByExtension) {
         {"test.heif", AdvancedFormat::HEIF},
         {"test.svg", AdvancedFormat::SVG},
         {"test.webp", AdvancedFormat::WEBP},
-        {"test.unknown", AdvancedFormat::UNKNOWN}
-    };
+        {"test.unknown", AdvancedFormat::UNKNOWN}};
 
     for (const auto& [filename, expectedFormat] : testCases) {
         EXPECT_NO_THROW({
@@ -76,13 +74,8 @@ TEST_F(AdvancedFormatsTest, GetSupportedFormats) {
 
 TEST_F(AdvancedFormatsTest, IsFormatSupported) {
     std::vector<AdvancedFormat> formatsToTest = {
-        AdvancedFormat::WEBP,
-        AdvancedFormat::AVIF,
-        AdvancedFormat::HEIF,
-        AdvancedFormat::OPENEXR,
-        AdvancedFormat::DNG,
-        AdvancedFormat::DICOM
-    };
+        AdvancedFormat::WEBP,    AdvancedFormat::AVIF, AdvancedFormat::HEIF,
+        AdvancedFormat::OPENEXR, AdvancedFormat::DNG,  AdvancedFormat::DICOM};
 
     for (const auto& format : formatsToTest) {
         bool supported = processor->isFormatSupported(format);
@@ -129,7 +122,8 @@ TEST_F(AdvancedFormatsTest, SaveDICOM) {
     metadata.samplesPerPixel = 1;
 
     try {
-        bool saved = processor->saveDICOM(gray_image, "test_output.dcm", metadata);
+        bool saved =
+            processor->saveDICOM(gray_image, "test_output.dcm", metadata);
         EXPECT_TRUE(saved || !saved);
     } catch (const std::exception& e) {
         GTEST_SKIP() << "DICOM saving not available: " << e.what();
@@ -140,7 +134,7 @@ TEST_F(AdvancedFormatsTest, SaveDICOM) {
 TEST_F(AdvancedFormatsTest, LoadAnimation) {
     try {
         auto frames = processor->loadAnimation("test.gif");
-        
+
         // Verify frame structure
         for (const auto& frame : frames) {
             EXPECT_FALSE(frame.imageData.isEmpty());
@@ -154,19 +148,20 @@ TEST_F(AdvancedFormatsTest, LoadAnimation) {
 // Test animation saving
 TEST_F(AdvancedFormatsTest, SaveAnimation) {
     std::vector<AnimationFrame> frames;
-    
+
     AnimationFrame frame1;
     frame1.imageData = test_image;
     frame1.duration = 100;
     frames.push_back(frame1);
-    
+
     AnimationFrame frame2;
     frame2.imageData = gray_image;
     frame2.duration = 100;
     frames.push_back(frame2);
-    
+
     try {
-        bool saved = processor->saveAnimation(frames, "test_output.gif", AdvancedFormat::GIF, 0);
+        bool saved = processor->saveAnimation(frames, "test_output.gif",
+                                              AdvancedFormat::GIF, 0);
         EXPECT_TRUE(saved || !saved);
     } catch (const std::exception& e) {
         GTEST_SKIP() << "Animation saving not available: " << e.what();
@@ -186,7 +181,8 @@ TEST_F(AdvancedFormatsTest, LoadHDR) {
 // Test HDR saving
 TEST_F(AdvancedFormatsTest, SaveHDR) {
     try {
-        bool saved = processor->saveHDR(hdr_image, "test_output.exr", AdvancedFormat::OPENEXR, "zip");
+        bool saved = processor->saveHDR(hdr_image, "test_output.exr",
+                                        AdvancedFormat::OPENEXR, "zip");
         EXPECT_TRUE(saved || !saved);
     } catch (const std::exception& e) {
         GTEST_SKIP() << "HDR saving not available: " << e.what();
@@ -206,8 +202,9 @@ TEST_F(AdvancedFormatsTest, LoadVector) {
 // Test microscopy image loading
 TEST_F(AdvancedFormatsTest, LoadMicroscopy) {
     try {
-        auto [image, metadata] = processor->loadMicroscopy("test.lsm", 0, 0, 0, 0);
-        
+        auto [image, metadata] =
+            processor->loadMicroscopy("test.lsm", 0, 0, 0, 0);
+
         EXPECT_GE(metadata.size(), 0);
     } catch (const std::exception& e) {
         GTEST_SKIP() << "Microscopy loading not available: " << e.what();
@@ -219,7 +216,7 @@ TEST_F(AdvancedFormatsTest, LoadSatellite) {
     try {
         std::vector<int> bands = {1, 2, 3};
         auto [image, metadata] = processor->loadSatellite("test.tif", bands);
-        
+
         EXPECT_GE(metadata.size(), 0);
     } catch (const std::exception& e) {
         GTEST_SKIP() << "Satellite loading not available: " << e.what();
@@ -229,7 +226,7 @@ TEST_F(AdvancedFormatsTest, LoadSatellite) {
 // Test format conversion
 TEST_F(AdvancedFormatsTest, FormatConversion) {
     try {
-        bool converted = processor->convertFormat("input.png", "output.webp", 
+        bool converted = processor->convertFormat("input.png", "output.webp",
                                                   AdvancedFormat::WEBP);
         EXPECT_TRUE(converted || !converted);
     } catch (const std::exception& e) {
@@ -242,14 +239,14 @@ TEST_F(AdvancedFormatsTest, GetFormatInfo) {
         auto info = processor->getFormatInfo("test.png");
         EXPECT_GE(info.size(), 0);
     } catch (const std::exception& e) {
-        EXPECT_NO_THROW({
-            auto info = processor->getFormatInfo("nonexistent.png");
-        });
+        EXPECT_NO_THROW(
+            { auto info = processor->getFormatInfo("nonexistent.png"); });
     }
 }
 
 TEST_F(AdvancedFormatsTest, BatchConvert) {
-    std::vector<std::string> inputFiles = {"test1.png", "test2.png", "test3.png"};
+    std::vector<std::string> inputFiles = {"test1.png", "test2.png",
+                                           "test3.png"};
 
     int progressCallCount = 0;
     auto progressCallback = [&progressCallCount](int current, int total) {
@@ -258,8 +255,9 @@ TEST_F(AdvancedFormatsTest, BatchConvert) {
     };
 
     try {
-        int converted = processor->batchConvert(inputFiles, "output_dir",
-                                               AdvancedFormat::WEBP, {}, progressCallback);
+        int converted =
+            processor->batchConvert(inputFiles, "output_dir",
+                                    AdvancedFormat::WEBP, {}, progressCallback);
         EXPECT_GE(converted, 0);
         EXPECT_LE(converted, static_cast<int>(inputFiles.size()));
     } catch (const std::exception& e) {
@@ -337,13 +335,16 @@ TEST_F(AdvancedFormatsTest, AnimationFrameStructure) {
 // Test format detection from data
 TEST_F(AdvancedFormatsTest, FormatDetectionFromData) {
     // Create some test data with magic numbers
-    std::vector<uint8_t> pngData = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A};
+    std::vector<uint8_t> pngData = {0x89, 0x50, 0x4E, 0x47,
+                                    0x0D, 0x0A, 0x1A, 0x0A};
     std::vector<uint8_t> jpegData = {0xFF, 0xD8, 0xFF, 0xE0};
 
     // Test detection (may not work without full file structure)
     EXPECT_NO_THROW({
-        [[maybe_unused]] auto format1 = processor->detectFormat(pngData.data(), pngData.size());
-        [[maybe_unused]] auto format2 = processor->detectFormat(jpegData.data(), jpegData.size());
+        [[maybe_unused]] auto format1 =
+            processor->detectFormat(pngData.data(), pngData.size());
+        [[maybe_unused]] auto format2 =
+            processor->detectFormat(jpegData.data(), jpegData.size());
     });
 }
 
@@ -393,15 +394,12 @@ TEST_F(AdvancedFormatsTest, HDRExposureValues) {
 // Test vector rasterization at different resolutions
 TEST_F(AdvancedFormatsTest, VectorRasterizationResolutions) {
     std::vector<std::pair<int, int>> resolutions = {
-        {256, 256},
-        {512, 512},
-        {1024, 1024},
-        {1920, 1080}
-    };
+        {256, 256}, {512, 512}, {1024, 1024}, {1920, 1080}};
 
     for (const auto& [width, height] : resolutions) {
         try {
-            auto result = processor->loadVector("test.svg", width, height, 96.0);
+            auto result =
+                processor->loadVector("test.svg", width, height, 96.0);
             // Verify dimensions if successful
         } catch (const std::exception&) {
             // Expected if file doesn't exist
@@ -413,10 +411,14 @@ TEST_F(AdvancedFormatsTest, VectorRasterizationResolutions) {
 TEST_F(AdvancedFormatsTest, MicroscopyMultiDimensional) {
     // Test different series, channels, time points, and z-stacks
     try {
-        auto [image1, meta1] = processor->loadMicroscopy("test.lsm", 0, 0, 0, 0);
-        auto [image2, meta2] = processor->loadMicroscopy("test.lsm", 0, 1, 0, 0);
-        auto [image3, meta3] = processor->loadMicroscopy("test.lsm", 0, 0, 1, 0);
-        auto [image4, meta4] = processor->loadMicroscopy("test.lsm", 0, 0, 0, 1);
+        auto [image1, meta1] =
+            processor->loadMicroscopy("test.lsm", 0, 0, 0, 0);
+        auto [image2, meta2] =
+            processor->loadMicroscopy("test.lsm", 0, 1, 0, 0);
+        auto [image3, meta3] =
+            processor->loadMicroscopy("test.lsm", 0, 0, 1, 0);
+        auto [image4, meta4] =
+            processor->loadMicroscopy("test.lsm", 0, 0, 0, 1);
     } catch (const std::exception& e) {
         GTEST_SKIP() << "Microscopy loading not available: " << e.what();
     }
@@ -425,15 +427,16 @@ TEST_F(AdvancedFormatsTest, MicroscopyMultiDimensional) {
 // Test satellite band selection
 TEST_F(AdvancedFormatsTest, SatelliteBandSelection) {
     std::vector<std::vector<int>> bandCombinations = {
-        {1, 2, 3},      // RGB
-        {4, 3, 2},      // False color
-        {1},            // Single band
-        {}              // All bands
+        {1, 2, 3},  // RGB
+        {4, 3, 2},  // False color
+        {1},        // Single band
+        {}          // All bands
     };
 
     for (const auto& bands : bandCombinations) {
         try {
-            auto [image, metadata] = processor->loadSatellite("test.tif", bands);
+            auto [image, metadata] =
+                processor->loadSatellite("test.tif", bands);
         } catch (const std::exception&) {
             // Expected if file doesn't exist
         }
@@ -447,8 +450,8 @@ TEST_F(AdvancedFormatsTest, FormatConversionWithParameters) {
     params["compression"] = "lossless";
 
     try {
-        [[maybe_unused]] bool converted = processor->convertFormat("input.png", "output.webp",
-                                                  AdvancedFormat::WEBP, params);
+        [[maybe_unused]] bool converted = processor->convertFormat(
+            "input.png", "output.webp", AdvancedFormat::WEBP, params);
     } catch (const std::exception&) {
         // Expected if files don't exist
     }
@@ -456,7 +459,8 @@ TEST_F(AdvancedFormatsTest, FormatConversionWithParameters) {
 
 // Test batch conversion with progress tracking
 TEST_F(AdvancedFormatsTest, BatchConversionProgress) {
-    std::vector<std::string> files = {"f1.png", "f2.png", "f3.png", "f4.png", "f5.png"};
+    std::vector<std::string> files = {"f1.png", "f2.png", "f3.png", "f4.png",
+                                      "f5.png"};
 
     int lastProgress = -1;
     auto callback = [&lastProgress](int current, int total) {
@@ -466,7 +470,8 @@ TEST_F(AdvancedFormatsTest, BatchConversionProgress) {
     };
 
     try {
-        processor->batchConvert(files, "output", AdvancedFormat::WEBP, {}, callback);
+        processor->batchConvert(files, "output", AdvancedFormat::WEBP, {},
+                                callback);
     } catch (const std::exception&) {
         // Expected if files don't exist
     }
@@ -476,7 +481,8 @@ TEST_F(AdvancedFormatsTest, EmptyAnimationFrames) {
     std::vector<AnimationFrame> emptyFrames;
 
     try {
-        [[maybe_unused]] bool saved = processor->saveAnimation(emptyFrames, "empty.gif", AdvancedFormat::GIF, 0);
+        [[maybe_unused]] bool saved = processor->saveAnimation(
+            emptyFrames, "empty.gif", AdvancedFormat::GIF, 0);
     } catch (const std::exception&) {
         SUCCEED();
     }
@@ -484,14 +490,9 @@ TEST_F(AdvancedFormatsTest, EmptyAnimationFrames) {
 
 TEST_F(AdvancedFormatsTest, FormatExtensionMapping) {
     std::vector<AdvancedFormat> formats = {
-        AdvancedFormat::WEBP,
-        AdvancedFormat::AVIF,
-        AdvancedFormat::HEIF,
-        AdvancedFormat::JPEG_XL,
-        AdvancedFormat::OPENEXR,
-        AdvancedFormat::SVG,
-        AdvancedFormat::PDF
-    };
+        AdvancedFormat::WEBP,    AdvancedFormat::AVIF,    AdvancedFormat::HEIF,
+        AdvancedFormat::JPEG_XL, AdvancedFormat::OPENEXR, AdvancedFormat::SVG,
+        AdvancedFormat::PDF};
 
     for (const auto& format : formats) {
         auto extensions = processor->getFormatExtensions(format);
@@ -514,11 +515,11 @@ TEST_F(AdvancedFormatsTest, LargeAnimation) {
     }
 
     try {
-        [[maybe_unused]] bool saved = processor->saveAnimation(frames, "large.gif", AdvancedFormat::GIF, 0);
+        [[maybe_unused]] bool saved = processor->saveAnimation(
+            frames, "large.gif", AdvancedFormat::GIF, 0);
     } catch (const std::exception&) {
         SUCCEED();
     }
 }
 
-} // namespace atom::image::test
-
+}  // namespace atom::image::test

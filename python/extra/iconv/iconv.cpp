@@ -1,8 +1,8 @@
 #include "atom/extra/iconv/iconv_cpp.hpp"
 
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/functional.h>
 
 namespace py = pybind11;
 
@@ -60,17 +60,22 @@ Examples:
     });
 
     // Exception classes
-    py::register_exception<iconv_cpp::IconvError>(m, "IconvError", PyExc_RuntimeError);
-    py::register_exception<iconv_cpp::IconvInitError>(m, "IconvInitError", PyExc_RuntimeError);
+    py::register_exception<iconv_cpp::IconvError>(m, "IconvError",
+                                                  PyExc_RuntimeError);
+    py::register_exception<iconv_cpp::IconvInitError>(m, "IconvInitError",
+                                                      PyExc_RuntimeError);
 
-    auto iconvConversionError = py::register_exception<iconv_cpp::IconvConversionError>(
-        m, "IconvConversionError", PyExc_RuntimeError);
-    iconvConversionError.def("processed_bytes", &iconv_cpp::IconvConversionError::processed_bytes,
-                             "Get the number of bytes processed before the error occurred");
+    auto iconvConversionError =
+        py::register_exception<iconv_cpp::IconvConversionError>(
+            m, "IconvConversionError", PyExc_RuntimeError);
+    iconvConversionError.def(
+        "processed_bytes", &iconv_cpp::IconvConversionError::processed_bytes,
+        "Get the number of bytes processed before the error occurred");
 
     // ErrorHandlingPolicy enum
-    py::enum_<iconv_cpp::ErrorHandlingPolicy>(m, "ErrorHandlingPolicy",
-                                               R"(Error handling policy for character conversion.
+    py::enum_<iconv_cpp::ErrorHandlingPolicy>(
+        m, "ErrorHandlingPolicy",
+        R"(Error handling policy for character conversion.
 
 Defines how to handle characters that cannot be converted to the target encoding.)")
         .value("Strict", iconv_cpp::ErrorHandlingPolicy::Strict,
@@ -84,8 +89,9 @@ Defines how to handle characters that cannot be converted to the target encoding
         .export_values();
 
     // ConversionOptions struct
-    py::class_<iconv_cpp::ConversionOptions>(m, "ConversionOptions",
-                                             R"(Configuration options for character encoding conversion.
+    py::class_<iconv_cpp::ConversionOptions>(
+        m, "ConversionOptions",
+        R"(Configuration options for character encoding conversion.
 
 This struct defines various options that control how character conversion is performed,
 including error handling policy, replacement characters, and special features.
@@ -98,17 +104,21 @@ Examples:
     >>> options.ignore_bom = False
 )")
         .def(py::init<>(), "Create default conversion options")
-        .def_readwrite("error_policy", &iconv_cpp::ConversionOptions::error_policy,
+        .def_readwrite("error_policy",
+                       &iconv_cpp::ConversionOptions::error_policy,
                        "Error handling policy for conversion failures")
-        .def_readwrite("replacement_char", &iconv_cpp::ConversionOptions::replacement_char,
-                       "Character to use as replacement for unconvertible characters")
-        .def_readwrite("enable_fallback", &iconv_cpp::ConversionOptions::enable_fallback,
+        .def_readwrite(
+            "replacement_char", &iconv_cpp::ConversionOptions::replacement_char,
+            "Character to use as replacement for unconvertible characters")
+        .def_readwrite("enable_fallback",
+                       &iconv_cpp::ConversionOptions::enable_fallback,
                        "Enable fallback conversion methods")
         .def_readwrite("translit", &iconv_cpp::ConversionOptions::translit,
                        "Enable transliteration (convert similar characters)")
         .def_readwrite("ignore_bom", &iconv_cpp::ConversionOptions::ignore_bom,
                        "Ignore Byte Order Mark (BOM) in input")
-        .def("create_encoding_string", &iconv_cpp::ConversionOptions::create_encoding_string,
+        .def("create_encoding_string",
+             &iconv_cpp::ConversionOptions::create_encoding_string,
              py::arg("base_encoding"),
              R"(Create an encoding string with options applied.
 
@@ -120,15 +130,18 @@ Returns:
 )");
 
     // ConversionState struct
-    py::class_<iconv_cpp::ConversionState>(m, "ConversionState",
-                                           R"(State information for incremental character conversion.
+    py::class_<iconv_cpp::ConversionState>(
+        m, "ConversionState",
+        R"(State information for incremental character conversion.
 
 This struct tracks the progress of character conversion operations,
 including processed bytes and completion status.)")
         .def(py::init<>(), "Create a new conversion state")
-        .def_readwrite("processed_input_bytes", &iconv_cpp::ConversionState::processed_input_bytes,
+        .def_readwrite("processed_input_bytes",
+                       &iconv_cpp::ConversionState::processed_input_bytes,
                        "Number of input bytes processed")
-        .def_readwrite("processed_output_bytes", &iconv_cpp::ConversionState::processed_output_bytes,
+        .def_readwrite("processed_output_bytes",
+                       &iconv_cpp::ConversionState::processed_output_bytes,
                        "Number of output bytes produced")
         .def_readwrite("is_complete", &iconv_cpp::ConversionState::is_complete,
                        "Whether the conversion is complete")
@@ -138,8 +151,9 @@ including processed bytes and completion status.)")
              R"(Reset the conversion state to initial values.)");
 
     // EncodingInfo struct
-    py::class_<iconv_cpp::EncodingInfo>(m, "EncodingInfo",
-                                        R"(Information about a character encoding.
+    py::class_<iconv_cpp::EncodingInfo>(
+        m, "EncodingInfo",
+        R"(Information about a character encoding.
 
 This struct contains metadata about a character encoding,
 including its properties and characteristics.)")
@@ -148,7 +162,8 @@ including its properties and characteristics.)")
                        "Canonical name of the encoding")
         .def_readwrite("description", &iconv_cpp::EncodingInfo::description,
                        "Human-readable description of the encoding")
-        .def_readwrite("is_ascii_compatible", &iconv_cpp::EncodingInfo::is_ascii_compatible,
+        .def_readwrite("is_ascii_compatible",
+                       &iconv_cpp::EncodingInfo::is_ascii_compatible,
                        "Whether the encoding is ASCII-compatible")
         .def_readwrite("min_char_size", &iconv_cpp::EncodingInfo::min_char_size,
                        "Minimum character size in bytes")
@@ -169,22 +184,26 @@ Returns:
 )");
 
     // EncodingDetectionResult struct
-    py::class_<iconv_cpp::EncodingDetectionResult>(m, "EncodingDetectionResult",
-                                                   R"(Result of encoding detection.
+    py::class_<iconv_cpp::EncodingDetectionResult>(
+        m, "EncodingDetectionResult",
+        R"(Result of encoding detection.
 
 This struct contains the detected encoding and confidence level.)")
         .def(py::init<>(), "Create empty detection result")
-        .def_readwrite("encoding", &iconv_cpp::EncodingDetectionResult::encoding,
+        .def_readwrite("encoding",
+                       &iconv_cpp::EncodingDetectionResult::encoding,
                        "Detected encoding name")
-        .def_readwrite("confidence", &iconv_cpp::EncodingDetectionResult::confidence,
+        .def_readwrite("confidence",
+                       &iconv_cpp::EncodingDetectionResult::confidence,
                        "Confidence level (0.0 to 1.0)")
         .def("__gt__", &iconv_cpp::EncodingDetectionResult::operator>,
              py::arg("other"),
              R"(Compare detection results by confidence level.)");
 
     // BomHandler class
-    py::class_<iconv_cpp::BomHandler>(m, "BomHandler",
-                                      R"(Utility class for handling Byte Order Marks (BOM).
+    py::class_<iconv_cpp::BomHandler>(
+        m, "BomHandler",
+        R"(Utility class for handling Byte Order Marks (BOM).
 
 This class provides static methods for detecting, adding, and removing BOMs
 to character data for various Unicode encodings.
@@ -235,8 +254,9 @@ Returns:
 )");
 
     // EncodingDetector class
-    py::class_<iconv_cpp::EncodingDetector>(m, "EncodingDetector",
-                                            R"(Utility class for detecting character encodings.
+    py::class_<iconv_cpp::EncodingDetector>(
+        m, "EncodingDetector",
+        R"(Utility class for detecting character encodings.
 
 This class provides static methods for detecting the encoding of character data
 by analyzing byte patterns and BOM markers.
@@ -252,7 +272,8 @@ Examples:
     >>> encoding = iconv.EncodingDetector.detect_most_likely_encoding(data)
     >>> print(f"Detected: {encoding}")
 )")
-        .def_static("detect_encoding", &iconv_cpp::EncodingDetector::detect_encoding,
+        .def_static("detect_encoding",
+                    &iconv_cpp::EncodingDetector::detect_encoding,
                     py::arg("data"), py::arg("max_results") = 3,
                     R"(Detect possible encodings for the given data.
 
@@ -276,8 +297,9 @@ Returns:
 )");
 
     // EncodingRegistry class
-    py::class_<iconv_cpp::EncodingRegistry>(m, "EncodingRegistry",
-                                            R"(Registry of supported character encodings.
+    py::class_<iconv_cpp::EncodingRegistry>(
+        m, "EncodingRegistry",
+        R"(Registry of supported character encodings.
 
 This singleton class maintains information about available character encodings
 and provides methods to query encoding support and properties.
@@ -307,13 +329,15 @@ Examples:
 Returns:
     Reference to the global EncodingRegistry instance.
 )")
-        .def("list_all_encodings", &iconv_cpp::EncodingRegistry::list_all_encodings,
+        .def("list_all_encodings",
+             &iconv_cpp::EncodingRegistry::list_all_encodings,
              R"(List all known character encodings.
 
 Returns:
     List of EncodingInfo objects for all registered encodings.
 )")
-        .def("is_encoding_supported", &iconv_cpp::EncodingRegistry::is_encoding_supported,
+        .def("is_encoding_supported",
+             &iconv_cpp::EncodingRegistry::is_encoding_supported,
              py::arg("encoding"),
              R"(Check if a specific encoding is supported.
 
@@ -323,7 +347,8 @@ Args:
 Returns:
     True if the encoding is supported by the system.
 )")
-        .def("get_encoding_info", &iconv_cpp::EncodingRegistry::get_encoding_info,
+        .def("get_encoding_info",
+             &iconv_cpp::EncodingRegistry::get_encoding_info,
              py::arg("encoding"),
              R"(Get detailed information about a specific encoding.
 
@@ -335,8 +360,9 @@ Returns:
 )");
 
     // BufferManager class
-    py::class_<iconv_cpp::BufferManager>(m, "BufferManager",
-                                         R"(Utility class for managing conversion buffers.
+    py::class_<iconv_cpp::BufferManager>(
+        m, "BufferManager",
+        R"(Utility class for managing conversion buffers.
 
 This class provides static methods for creating and managing buffers
 used in character encoding conversion operations.
@@ -349,7 +375,8 @@ Examples:
     >>> size = iconv.BufferManager.estimate_output_size(1000, "UTF-8", "UTF-16")
     >>> print(f"Estimated output size: {size} bytes")
 )")
-        .def_static("create_resizable_buffer", &iconv_cpp::BufferManager::create_resizable_buffer,
+        .def_static("create_resizable_buffer",
+                    &iconv_cpp::BufferManager::create_resizable_buffer,
                     py::arg("initial_size") = 4096,
                     R"(Create a resizable buffer for conversion operations.
 
@@ -359,7 +386,8 @@ Args:
 Returns:
     A vector of characters with the specified initial size.
 )")
-        .def_static("ensure_buffer_capacity", &iconv_cpp::BufferManager::ensure_buffer_capacity,
+        .def_static("ensure_buffer_capacity",
+                    &iconv_cpp::BufferManager::ensure_buffer_capacity,
                     py::arg("buffer"), py::arg("required_size"),
                     R"(Ensure a buffer has at least the required capacity.
 
@@ -367,8 +395,10 @@ Args:
     buffer: Buffer to resize if needed.
     required_size: Minimum required size in bytes.
 )")
-        .def_static("estimate_output_size", &iconv_cpp::BufferManager::estimate_output_size,
-                    py::arg("input_size"), py::arg("from_encoding"), py::arg("to_encoding"),
+        .def_static("estimate_output_size",
+                    &iconv_cpp::BufferManager::estimate_output_size,
+                    py::arg("input_size"), py::arg("from_encoding"),
+                    py::arg("to_encoding"),
                     R"(Estimate the output buffer size needed for conversion.
 
 Args:
@@ -381,8 +411,9 @@ Returns:
 )");
 
     // Converter class (main conversion class)
-    py::class_<iconv_cpp::Converter>(m, "Converter",
-                                     R"(Character encoding converter using iconv.
+    py::class_<iconv_cpp::Converter>(
+        m, "Converter",
+        R"(Character encoding converter using iconv.
 
 This is the main class for converting text between different character encodings.
 It provides comprehensive conversion capabilities including progress tracking,
@@ -416,8 +447,10 @@ Args:
 Raises:
     IconvInitError: If the conversion is not supported.
 )")
-        .def(py::init<std::string_view, std::string_view, const iconv_cpp::ConversionOptions&>(),
-             py::arg("from_encoding"), py::arg("to_encoding"), py::arg("options"),
+        .def(py::init<std::string_view, std::string_view,
+                      const iconv_cpp::ConversionOptions&>(),
+             py::arg("from_encoding"), py::arg("to_encoding"),
+             py::arg("options"),
              R"(Create a converter with custom options.
 
 Args:
@@ -445,8 +478,7 @@ Returns:
 Returns:
     Target encoding name as a string view.
 )")
-        .def("convert", &iconv_cpp::Converter::convert,
-             py::arg("input"),
+        .def("convert", &iconv_cpp::Converter::convert, py::arg("input"),
              R"(Convert character data from source to target encoding.
 
 Args:
@@ -471,8 +503,9 @@ Returns:
 Raises:
     IconvConversionError: If conversion fails.
 )")
-        .def("convert_with_progress", &iconv_cpp::Converter::convert_with_progress,
-             py::arg("input"), py::arg("progress_callback"),
+        .def("convert_with_progress",
+             &iconv_cpp::Converter::convert_with_progress, py::arg("input"),
+             py::arg("progress_callback"),
              R"(Convert data with progress reporting.
 
 Args:
@@ -532,10 +565,10 @@ Returns:
     Future object that will contain True if conversion succeeded.
 )");
 
-
     // StreamConverter class
-    py::class_<iconv_cpp::StreamConverter>(m, "StreamConverter",
-                                           R"(Stream-based character encoding converter.
+    py::class_<iconv_cpp::StreamConverter>(
+        m, "StreamConverter",
+        R"(Stream-based character encoding converter.
 
 This class provides conversion capabilities for input/output streams,
 useful for processing large files or streaming data.
@@ -554,8 +587,10 @@ Args:
     from_encoding: Source encoding name.
     to_encoding: Target encoding name.
 )")
-        .def(py::init<std::string_view, std::string_view, const iconv_cpp::ConversionOptions&>(),
-             py::arg("from_encoding"), py::arg("to_encoding"), py::arg("options"),
+        .def(py::init<std::string_view, std::string_view,
+                      const iconv_cpp::ConversionOptions&>(),
+             py::arg("from_encoding"), py::arg("to_encoding"),
+             py::arg("options"),
              R"(Create a stream converter with custom options.
 
 Args:
@@ -563,8 +598,8 @@ Args:
     to_encoding: Target encoding name.
     options: Conversion options.
 )")
-        .def("convert", &iconv_cpp::StreamConverter::convert,
-             py::arg("input"), py::arg("output"), py::arg("progress_callback") = nullptr,
+        .def("convert", &iconv_cpp::StreamConverter::convert, py::arg("input"),
+             py::arg("output"), py::arg("progress_callback") = nullptr,
              R"(Convert from input stream to output stream.
 
 Args:
@@ -572,8 +607,9 @@ Args:
     output: Output stream to write to.
     progress_callback: Optional callback function(processed_bytes, total_bytes).
 )")
-        .def("convert_to_string", &iconv_cpp::StreamConverter::convert_to_string,
-             py::arg("input"), py::arg("progress_callback") = nullptr,
+        .def("convert_to_string",
+             &iconv_cpp::StreamConverter::convert_to_string, py::arg("input"),
+             py::arg("progress_callback") = nullptr,
              R"(Convert input stream to a string.
 
 Args:
@@ -583,8 +619,9 @@ Args:
 Returns:
     Converted string.
 )")
-        .def("convert_from_string", &iconv_cpp::StreamConverter::convert_from_string,
-             py::arg("input"), py::arg("output"), py::arg("progress_callback") = nullptr,
+        .def("convert_from_string",
+             &iconv_cpp::StreamConverter::convert_from_string, py::arg("input"),
+             py::arg("output"), py::arg("progress_callback") = nullptr,
              R"(Convert a string to output stream.
 
 Args:
@@ -613,7 +650,8 @@ Examples:
 Args:
     options: Conversion options.
 )")
-        .def("convert_u16string", &iconv_cpp::UTF8ToUTF16Converter::convert_u16string,
+        .def("convert_u16string",
+             &iconv_cpp::UTF8ToUTF16Converter::convert_u16string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to UTF-16 string.
 
@@ -644,7 +682,8 @@ Examples:
 Args:
     options: Conversion options.
 )")
-        .def("convert_u16string", &iconv_cpp::UTF16ToUTF8Converter::convert_u16string,
+        .def("convert_u16string",
+             &iconv_cpp::UTF16ToUTF8Converter::convert_u16string,
              py::arg("utf16_str"),
              R"(Convert UTF-16 string to UTF-8 string.
 
@@ -675,7 +714,8 @@ Examples:
 Args:
     options: Conversion options.
 )")
-        .def("convert_u32string", &iconv_cpp::UTF8ToUTF32Converter::convert_u32string,
+        .def("convert_u32string",
+             &iconv_cpp::UTF8ToUTF32Converter::convert_u32string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to UTF-32 string.
 
@@ -706,7 +746,8 @@ Examples:
 Args:
     options: Conversion options.
 )")
-        .def("convert_u32string", &iconv_cpp::UTF32ToUTF8Converter::convert_u32string,
+        .def("convert_u32string",
+             &iconv_cpp::UTF32ToUTF8Converter::convert_u32string,
              py::arg("utf32_str"),
              R"(Convert UTF-32 string to UTF-8 string.
 
@@ -717,10 +758,10 @@ Returns:
     UTF-8 encoded string.
 )");
 
-
     // ChineseEncodingConverter class
-    py::class_<iconv_cpp::ChineseEncodingConverter>(m, "ChineseEncodingConverter",
-                                                    R"(Specialized converter for Chinese encodings.
+    py::class_<iconv_cpp::ChineseEncodingConverter>(
+        m, "ChineseEncodingConverter",
+        R"(Specialized converter for Chinese encodings.
 
 This class provides convenient methods for converting between UTF-8 and
 various Chinese character encodings (GB18030, GBK, BIG5).
@@ -730,9 +771,9 @@ Examples:
     >>> gb18030_str = converter.utf8_to_gb18030_string("你好世界")
     >>> utf8_str = converter.gb18030_to_utf8_string(gb18030_str)
 )")
-        .def(py::init<>(),
-             R"(Create a Chinese encoding converter.)")
-        .def("utf8_to_gb18030_string", &iconv_cpp::ChineseEncodingConverter::utf8_to_gb18030_string,
+        .def(py::init<>(), R"(Create a Chinese encoding converter.)")
+        .def("utf8_to_gb18030_string",
+             &iconv_cpp::ChineseEncodingConverter::utf8_to_gb18030_string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to GB18030 encoding.
 
@@ -742,7 +783,8 @@ Args:
 Returns:
     GB18030 encoded string.
 )")
-        .def("gb18030_to_utf8_string", &iconv_cpp::ChineseEncodingConverter::gb18030_to_utf8_string,
+        .def("gb18030_to_utf8_string",
+             &iconv_cpp::ChineseEncodingConverter::gb18030_to_utf8_string,
              py::arg("gb18030_str"),
              R"(Convert GB18030 string to UTF-8 encoding.
 
@@ -752,7 +794,8 @@ Args:
 Returns:
     UTF-8 encoded string.
 )")
-        .def("utf8_to_gbk_string", &iconv_cpp::ChineseEncodingConverter::utf8_to_gbk_string,
+        .def("utf8_to_gbk_string",
+             &iconv_cpp::ChineseEncodingConverter::utf8_to_gbk_string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to GBK encoding.
 
@@ -762,7 +805,8 @@ Args:
 Returns:
     GBK encoded string.
 )")
-        .def("gbk_to_utf8_string", &iconv_cpp::ChineseEncodingConverter::gbk_to_utf8_string,
+        .def("gbk_to_utf8_string",
+             &iconv_cpp::ChineseEncodingConverter::gbk_to_utf8_string,
              py::arg("gbk_str"),
              R"(Convert GBK string to UTF-8 encoding.
 
@@ -772,7 +816,8 @@ Args:
 Returns:
     UTF-8 encoded string.
 )")
-        .def("utf8_to_big5_string", &iconv_cpp::ChineseEncodingConverter::utf8_to_big5_string,
+        .def("utf8_to_big5_string",
+             &iconv_cpp::ChineseEncodingConverter::utf8_to_big5_string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to BIG5 encoding.
 
@@ -782,7 +827,8 @@ Args:
 Returns:
     BIG5 encoded string.
 )")
-        .def("big5_to_utf8_string", &iconv_cpp::ChineseEncodingConverter::big5_to_utf8_string,
+        .def("big5_to_utf8_string",
+             &iconv_cpp::ChineseEncodingConverter::big5_to_utf8_string,
              py::arg("big5_str"),
              R"(Convert BIG5 string to UTF-8 encoding.
 
@@ -794,8 +840,9 @@ Returns:
 )");
 
     // JapaneseEncodingConverter class
-    py::class_<iconv_cpp::JapaneseEncodingConverter>(m, "JapaneseEncodingConverter",
-                                                     R"(Specialized converter for Japanese encodings.
+    py::class_<iconv_cpp::JapaneseEncodingConverter>(
+        m, "JapaneseEncodingConverter",
+        R"(Specialized converter for Japanese encodings.
 
 This class provides convenient methods for converting between UTF-8 and
 various Japanese character encodings (Shift-JIS, EUC-JP).
@@ -805,9 +852,9 @@ Examples:
     >>> sjis_str = converter.utf8_to_shift_jis_string("こんにちは")
     >>> utf8_str = converter.shift_jis_to_utf8_string(sjis_str)
 )")
-        .def(py::init<>(),
-             R"(Create a Japanese encoding converter.)")
-        .def("utf8_to_shift_jis_string", &iconv_cpp::JapaneseEncodingConverter::utf8_to_shift_jis_string,
+        .def(py::init<>(), R"(Create a Japanese encoding converter.)")
+        .def("utf8_to_shift_jis_string",
+             &iconv_cpp::JapaneseEncodingConverter::utf8_to_shift_jis_string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to Shift-JIS encoding.
 
@@ -817,7 +864,8 @@ Args:
 Returns:
     Shift-JIS encoded string.
 )")
-        .def("shift_jis_to_utf8_string", &iconv_cpp::JapaneseEncodingConverter::shift_jis_to_utf8_string,
+        .def("shift_jis_to_utf8_string",
+             &iconv_cpp::JapaneseEncodingConverter::shift_jis_to_utf8_string,
              py::arg("sjis_str"),
              R"(Convert Shift-JIS string to UTF-8 encoding.
 
@@ -827,7 +875,8 @@ Args:
 Returns:
     UTF-8 encoded string.
 )")
-        .def("utf8_to_euc_jp_string", &iconv_cpp::JapaneseEncodingConverter::utf8_to_euc_jp_string,
+        .def("utf8_to_euc_jp_string",
+             &iconv_cpp::JapaneseEncodingConverter::utf8_to_euc_jp_string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to EUC-JP encoding.
 
@@ -837,7 +886,8 @@ Args:
 Returns:
     EUC-JP encoded string.
 )")
-        .def("euc_jp_to_utf8_string", &iconv_cpp::JapaneseEncodingConverter::euc_jp_to_utf8_string,
+        .def("euc_jp_to_utf8_string",
+             &iconv_cpp::JapaneseEncodingConverter::euc_jp_to_utf8_string,
              py::arg("euc_jp_str"),
              R"(Convert EUC-JP string to UTF-8 encoding.
 
@@ -849,8 +899,9 @@ Returns:
 )");
 
     // KoreanEncodingConverter class
-    py::class_<iconv_cpp::KoreanEncodingConverter>(m, "KoreanEncodingConverter",
-                                                   R"(Specialized converter for Korean encodings.
+    py::class_<iconv_cpp::KoreanEncodingConverter>(
+        m, "KoreanEncodingConverter",
+        R"(Specialized converter for Korean encodings.
 
 This class provides convenient methods for converting between UTF-8 and
 Korean character encoding (EUC-KR).
@@ -860,9 +911,9 @@ Examples:
     >>> euc_kr_str = converter.utf8_to_euc_kr_string("안녕하세요")
     >>> utf8_str = converter.euc_kr_to_utf8_string(euc_kr_str)
 )")
-        .def(py::init<>(),
-             R"(Create a Korean encoding converter.)")
-        .def("utf8_to_euc_kr_string", &iconv_cpp::KoreanEncodingConverter::utf8_to_euc_kr_string,
+        .def(py::init<>(), R"(Create a Korean encoding converter.)")
+        .def("utf8_to_euc_kr_string",
+             &iconv_cpp::KoreanEncodingConverter::utf8_to_euc_kr_string,
              py::arg("utf8_str"),
              R"(Convert UTF-8 string to EUC-KR encoding.
 
@@ -872,7 +923,8 @@ Args:
 Returns:
     EUC-KR encoded string.
 )")
-        .def("euc_kr_to_utf8_string", &iconv_cpp::KoreanEncodingConverter::euc_kr_to_utf8_string,
+        .def("euc_kr_to_utf8_string",
+             &iconv_cpp::KoreanEncodingConverter::euc_kr_to_utf8_string,
              py::arg("euc_kr_str"),
              R"(Convert EUC-KR string to UTF-8 encoding.
 
@@ -883,10 +935,10 @@ Returns:
     UTF-8 encoded string.
 )");
 
-
     // BatchConverter class
-    py::class_<iconv_cpp::BatchConverter>(m, "BatchConverter",
-                                          R"(Batch converter for processing multiple strings or files.
+    py::class_<iconv_cpp::BatchConverter>(
+        m, "BatchConverter",
+        R"(Batch converter for processing multiple strings or files.
 
 This class provides efficient batch conversion of multiple strings or files,
 with support for parallel processing.
@@ -910,8 +962,10 @@ Args:
     from_encoding: Source encoding name.
     to_encoding: Target encoding name.
 )")
-        .def(py::init<std::string_view, std::string_view, const iconv_cpp::ConversionOptions&>(),
-             py::arg("from_encoding"), py::arg("to_encoding"), py::arg("options"),
+        .def(py::init<std::string_view, std::string_view,
+                      const iconv_cpp::ConversionOptions&>(),
+             py::arg("from_encoding"), py::arg("to_encoding"),
+             py::arg("options"),
              R"(Create a batch converter with custom options.
 
 Args:
@@ -943,8 +997,10 @@ Returns:
 Raises:
     IconvError: If input and output path counts don't match.
 )")
-        .def("convert_files_parallel", &iconv_cpp::BatchConverter::convert_files_parallel,
-             py::arg("input_paths"), py::arg("output_paths"), py::arg("num_threads") = 0,
+        .def("convert_files_parallel",
+             &iconv_cpp::BatchConverter::convert_files_parallel,
+             py::arg("input_paths"), py::arg("output_paths"),
+             py::arg("num_threads") = 0,
              R"(Convert multiple files in parallel.
 
 Args:
@@ -960,8 +1016,8 @@ Raises:
 )");
 
     // Free functions
-    m.def("convert", &iconv_cpp::convert,
-          py::arg("from_encoding"), py::arg("to_encoding"), py::arg("input"),
+    m.def("convert", &iconv_cpp::convert, py::arg("from_encoding"),
+          py::arg("to_encoding"), py::arg("input"),
           py::arg("options") = iconv_cpp::ConversionOptions(),
           R"(Convert character data between encodings (free function).
 
@@ -1009,9 +1065,8 @@ Examples:
     >>> result = iconv.convert_string("UTF-8", "ISO-8859-1", "Hello, world!")
 )");
 
-    m.def("convert_file", &iconv_cpp::convert_file,
-          py::arg("from_encoding"), py::arg("to_encoding"),
-          py::arg("input_path"), py::arg("output_path"),
+    m.def("convert_file", &iconv_cpp::convert_file, py::arg("from_encoding"),
+          py::arg("to_encoding"), py::arg("input_path"), py::arg("output_path"),
           py::arg("options") = iconv_cpp::ConversionOptions(),
           py::arg("progress_callback") = nullptr,
           R"(Convert a file between encodings (free function).
@@ -1085,7 +1140,8 @@ Examples:
 )");
 
     // Encoding constants namespace
-    auto encodings = m.def_submodule("encodings", "Common encoding name constants");
+    auto encodings =
+        m.def_submodule("encodings", "Common encoding name constants");
     encodings.attr("UTF8") = iconv_cpp::encodings::UTF8;
     encodings.attr("UTF16") = iconv_cpp::encodings::UTF16;
     encodings.attr("UTF16LE") = iconv_cpp::encodings::UTF16LE;
@@ -1102,4 +1158,3 @@ Examples:
     encodings.attr("EUC_JP") = iconv_cpp::encodings::EUC_JP;
     encodings.attr("EUC_KR") = iconv_cpp::encodings::EUC_KR;
 }
-

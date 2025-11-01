@@ -18,9 +18,9 @@ Tests error handling, stack traces, and exception management.
 #include <string>
 #include <vector>
 
+#include "atom/error/error_code.hpp"
 #include "atom/error/exception.hpp"
 #include "atom/error/stacktrace.hpp"
-#include "atom/error/error_code.hpp"
 
 namespace atom::error::test {
 
@@ -63,7 +63,8 @@ TEST_F(ExceptionTest, AtomExceptionHandling) {
         THROW_EXCEPTION("Test atom exception with value: ", 42);
     } catch (const atom::error::Exception& e) {
         std::string what_str = e.what();
-        EXPECT_TRUE(what_str.find("Test atom exception with value: 42") != std::string::npos);
+        EXPECT_TRUE(what_str.find("Test atom exception with value: 42") !=
+                    std::string::npos);
         EXPECT_TRUE(what_str.find("File:") != std::string::npos);
         EXPECT_TRUE(what_str.find("Line:") != std::string::npos);
         EXPECT_TRUE(what_str.find("Function:") != std::string::npos);
@@ -141,17 +142,11 @@ protected:
     }
 
     // Helper function to create a call stack
-    void level3Function() {
-        throw std::runtime_error("Exception at level 3");
-    }
+    void level3Function() { throw std::runtime_error("Exception at level 3"); }
 
-    void level2Function() {
-        level3Function();
-    }
+    void level2Function() { level3Function(); }
 
-    void level1Function() {
-        level2Function();
-    }
+    void level1Function() { level2Function(); }
 };
 
 TEST_F(StackTraceTest, BasicStackTrace) {
@@ -162,7 +157,8 @@ TEST_F(StackTraceTest, BasicStackTrace) {
         EXPECT_STREQ(e.what(), "Exception at level 3");
 
         // Note: Actual stack trace testing depends on the implementation
-        // This test verifies the exception propagates correctly through the call stack
+        // This test verifies the exception propagates correctly through the
+        // call stack
         SUCCEED();
     }
 }
@@ -196,17 +192,12 @@ TEST_F(StackTraceTest, StackTraceDepth) {
     std::vector<std::function<void()>> call_stack;
 
     // Create a deep call stack
-    call_stack.push_back([&]() {
-        call_stack[1]();
-    });
+    call_stack.push_back([&]() { call_stack[1](); });
 
-    call_stack.push_back([&]() {
-        call_stack[2]();
-    });
+    call_stack.push_back([&]() { call_stack[2](); });
 
-    call_stack.push_back([&]() {
-        throw std::runtime_error("Deep stack exception");
-    });
+    call_stack.push_back(
+        [&]() { throw std::runtime_error("Deep stack exception"); });
 
     try {
         call_stack[0]();
@@ -244,10 +235,14 @@ TEST_F(ErrorCodeTest, BasicErrorCodes) {
     };
 
     auto testFunction = [](int input) -> TestErrorCode {
-        if (input < 0) return TestErrorCode::InvalidInput;
-        if (input == 404) return TestErrorCode::FileNotFound;
-        if (input == 500) return TestErrorCode::NetworkError;
-        if (input > 1000000) return TestErrorCode::OutOfMemory;
+        if (input < 0)
+            return TestErrorCode::InvalidInput;
+        if (input == 404)
+            return TestErrorCode::FileNotFound;
+        if (input == 500)
+            return TestErrorCode::NetworkError;
+        if (input > 1000000)
+            return TestErrorCode::OutOfMemory;
         return TestErrorCode::Success;
     };
 
@@ -285,12 +280,18 @@ TEST_F(ErrorCodeTest, ErrorCodeMapping) {
 
     auto errorCodeToString = [](int code) -> std::string {
         switch (code) {
-            case 0: return "Success";
-            case 1: return "Invalid Input";
-            case 2: return "File Not Found";
-            case 3: return "Network Error";
-            case 4: return "Out of Memory";
-            default: return "Unknown Error";
+            case 0:
+                return "Success";
+            case 1:
+                return "Invalid Input";
+            case 2:
+                return "File Not Found";
+            case 3:
+                return "Network Error";
+            case 4:
+                return "Out of Memory";
+            default:
+                return "Unknown Error";
         }
     };
 
@@ -356,27 +357,44 @@ TEST_F(ErrorIntegrationTest, CompleteErrorHandling) {
 TEST_F(ErrorIntegrationTest, AtomFileExceptions) {
     // Test file-related exceptions
     EXPECT_THROW(THROW_FILE_NOT_FOUND("test.txt"), atom::error::FileNotFound);
-    EXPECT_THROW(THROW_FILE_NOT_READABLE("test.txt"), atom::error::FileNotReadable);
-    EXPECT_THROW(THROW_FILE_NOT_WRITABLE("test.txt"), atom::error::FileNotWritable);
-    EXPECT_THROW(THROW_FAIL_TO_OPEN_FILE("test.txt"), atom::error::FailToOpenFile);
-    EXPECT_THROW(THROW_FAIL_TO_CLOSE_FILE("test.txt"), atom::error::FailToCloseFile);
-    EXPECT_THROW(THROW_FAIL_TO_CREATE_FILE("test.txt"), atom::error::FailToCreateFile);
-    EXPECT_THROW(THROW_FAIL_TO_DELETE_FILE("test.txt"), atom::error::FailToDeleteFile);
-    EXPECT_THROW(THROW_FAIL_TO_COPY_FILE("test.txt"), atom::error::FailToCopyFile);
-    EXPECT_THROW(THROW_FAIL_TO_MOVE_FILE("test.txt"), atom::error::FailToMoveFile);
-    EXPECT_THROW(THROW_FAIL_TO_READ_FILE("test.txt"), atom::error::FailToReadFile);
-    EXPECT_THROW(THROW_FAIL_TO_WRITE_FILE("test.txt"), atom::error::FailToWriteFile);
+    EXPECT_THROW(THROW_FILE_NOT_READABLE("test.txt"),
+                 atom::error::FileNotReadable);
+    EXPECT_THROW(THROW_FILE_NOT_WRITABLE("test.txt"),
+                 atom::error::FileNotWritable);
+    EXPECT_THROW(THROW_FAIL_TO_OPEN_FILE("test.txt"),
+                 atom::error::FailToOpenFile);
+    EXPECT_THROW(THROW_FAIL_TO_CLOSE_FILE("test.txt"),
+                 atom::error::FailToCloseFile);
+    EXPECT_THROW(THROW_FAIL_TO_CREATE_FILE("test.txt"),
+                 atom::error::FailToCreateFile);
+    EXPECT_THROW(THROW_FAIL_TO_DELETE_FILE("test.txt"),
+                 atom::error::FailToDeleteFile);
+    EXPECT_THROW(THROW_FAIL_TO_COPY_FILE("test.txt"),
+                 atom::error::FailToCopyFile);
+    EXPECT_THROW(THROW_FAIL_TO_MOVE_FILE("test.txt"),
+                 atom::error::FailToMoveFile);
+    EXPECT_THROW(THROW_FAIL_TO_READ_FILE("test.txt"),
+                 atom::error::FailToReadFile);
+    EXPECT_THROW(THROW_FAIL_TO_WRITE_FILE("test.txt"),
+                 atom::error::FailToWriteFile);
 }
 
 TEST_F(ErrorIntegrationTest, AtomSystemExceptions) {
     // Test system-related exceptions
-    EXPECT_THROW(THROW_SYSTEM_ERROR(1, "System error"), atom::error::SystemErrorException);
-    EXPECT_THROW(THROW_SYSTEM_COLLAPSE("System collapse"), atom::error::SystemCollapse);
-    EXPECT_THROW(THROW_FAIL_TO_LOAD_DLL("test.dll"), atom::error::FailToLoadDll);
-    EXPECT_THROW(THROW_FAIL_TO_UNLOAD_DLL("test.dll"), atom::error::FailToUnloadDll);
-    EXPECT_THROW(THROW_FAIL_TO_LOAD_SYMBOL("symbol"), atom::error::FailToLoadSymbol);
-    EXPECT_THROW(THROW_FAIL_TO_CREATE_PROCESS("process"), atom::error::FailToCreateProcess);
-    EXPECT_THROW(THROW_FAIL_TO_TERMINATE_PROCESS("process"), atom::error::FailToTerminateProcess);
+    EXPECT_THROW(THROW_SYSTEM_ERROR(1, "System error"),
+                 atom::error::SystemErrorException);
+    EXPECT_THROW(THROW_SYSTEM_COLLAPSE("System collapse"),
+                 atom::error::SystemCollapse);
+    EXPECT_THROW(THROW_FAIL_TO_LOAD_DLL("test.dll"),
+                 atom::error::FailToLoadDll);
+    EXPECT_THROW(THROW_FAIL_TO_UNLOAD_DLL("test.dll"),
+                 atom::error::FailToUnloadDll);
+    EXPECT_THROW(THROW_FAIL_TO_LOAD_SYMBOL("symbol"),
+                 atom::error::FailToLoadSymbol);
+    EXPECT_THROW(THROW_FAIL_TO_CREATE_PROCESS("process"),
+                 atom::error::FailToCreateProcess);
+    EXPECT_THROW(THROW_FAIL_TO_TERMINATE_PROCESS("process"),
+                 atom::error::FailToTerminateProcess);
 }
 
 TEST_F(ErrorIntegrationTest, ErrorRecovery) {
@@ -389,7 +407,8 @@ TEST_F(ErrorIntegrationTest, ErrorRecovery) {
     auto unreliableOperation = [&]() -> bool {
         attempt_count++;
         if (attempt_count < max_attempts) {
-            throw std::runtime_error("Operation failed, attempt " + std::to_string(attempt_count));
+            throw std::runtime_error("Operation failed, attempt " +
+                                     std::to_string(attempt_count));
         }
         return true;
     };
@@ -401,7 +420,8 @@ TEST_F(ErrorIntegrationTest, ErrorRecovery) {
             break;
         } catch (const std::exception& e) {
             // Log error and continue (in real code, you might add delays)
-            EXPECT_TRUE(std::string(e.what()).find("Operation failed") != std::string::npos);
+            EXPECT_TRUE(std::string(e.what()).find("Operation failed") !=
+                        std::string::npos);
         }
     }
 
@@ -411,10 +431,14 @@ TEST_F(ErrorIntegrationTest, ErrorRecovery) {
 
 TEST_F(ErrorIntegrationTest, AtomNetworkExceptions) {
     // Test network-related exceptions
-    EXPECT_THROW(THROW_JSON_PARSE_ERROR("JSON parse error"), atom::error::JsonParseError);
-    EXPECT_THROW(THROW_JSON_VALUE_ERROR("JSON value error"), atom::error::JsonValueError);
-    EXPECT_THROW(THROW_CURL_INITIALIZATION_ERROR("CURL init error"), atom::error::CurlInitializationError);
-    EXPECT_THROW(THROW_CURL_RUNTIME_ERROR("CURL runtime error"), atom::error::CurlRuntimeError);
+    EXPECT_THROW(THROW_JSON_PARSE_ERROR("JSON parse error"),
+                 atom::error::JsonParseError);
+    EXPECT_THROW(THROW_JSON_VALUE_ERROR("JSON value error"),
+                 atom::error::JsonValueError);
+    EXPECT_THROW(THROW_CURL_INITIALIZATION_ERROR("CURL init error"),
+                 atom::error::CurlInitializationError);
+    EXPECT_THROW(THROW_CURL_RUNTIME_ERROR("CURL runtime error"),
+                 atom::error::CurlRuntimeError);
 }
 
 TEST_F(ErrorIntegrationTest, AllExceptionTypesCoverage) {
@@ -422,9 +446,11 @@ TEST_F(ErrorIntegrationTest, AllExceptionTypesCoverage) {
 
     // Basic exceptions
     EXPECT_THROW(THROW_EXCEPTION("Basic exception"), atom::error::Exception);
-    EXPECT_THROW(THROW_RUNTIME_ERROR("Runtime error"), atom::error::RuntimeError);
+    EXPECT_THROW(THROW_RUNTIME_ERROR("Runtime error"),
+                 atom::error::RuntimeError);
     EXPECT_THROW(THROW_LOGIC_ERROR("Logic error"), atom::error::LogicError);
-    EXPECT_THROW(THROW_UNLAWFUL_OPERATION("Unlawful operation"), atom::error::UnlawfulOperation);
+    EXPECT_THROW(THROW_UNLAWFUL_OPERATION("Unlawful operation"),
+                 atom::error::UnlawfulOperation);
 
     // Range and overflow exceptions
     EXPECT_THROW(THROW_OUT_OF_RANGE("Out of range"), atom::error::OutOfRange);
@@ -433,10 +459,14 @@ TEST_F(ErrorIntegrationTest, AllExceptionTypesCoverage) {
     EXPECT_THROW(THROW_LENGTH("Length error"), atom::error::LengthException);
 
     // Object state exceptions
-    EXPECT_THROW(THROW_OBJ_ALREADY_EXIST("Object exists"), atom::error::ObjectAlreadyExist);
-    EXPECT_THROW(THROW_OBJ_ALREADY_INITIALIZED("Object initialized"), atom::error::ObjectAlreadyInitialized);
-    EXPECT_THROW(THROW_OBJ_NOT_EXIST("Object not exist"), atom::error::ObjectNotExist);
-    EXPECT_THROW(THROW_OBJ_UNINITIALIZED("Object uninitialized"), atom::error::ObjectUninitialized);
+    EXPECT_THROW(THROW_OBJ_ALREADY_EXIST("Object exists"),
+                 atom::error::ObjectAlreadyExist);
+    EXPECT_THROW(THROW_OBJ_ALREADY_INITIALIZED("Object initialized"),
+                 atom::error::ObjectAlreadyInitialized);
+    EXPECT_THROW(THROW_OBJ_NOT_EXIST("Object not exist"),
+                 atom::error::ObjectNotExist);
+    EXPECT_THROW(THROW_OBJ_UNINITIALIZED("Object uninitialized"),
+                 atom::error::ObjectUninitialized);
 
     // Pointer and search exceptions
     EXPECT_THROW(THROW_NULL_POINTER("Null pointer"), atom::error::NullPointer);
@@ -444,12 +474,15 @@ TEST_F(ErrorIntegrationTest, AllExceptionTypesCoverage) {
     EXPECT_THROW(THROW_UNKOWN("Unknown error"), atom::error::Unkown);
 
     // Argument exceptions
-    EXPECT_THROW(THROW_WRONG_ARGUMENT("Wrong argument"), atom::error::WrongArgument);
-    EXPECT_THROW(THROW_INVALID_ARGUMENT("Invalid argument"), atom::error::InvalidArgument);
-    EXPECT_THROW(THROW_MISSING_ARGUMENT("Missing argument"), atom::error::MissingArgument);
+    EXPECT_THROW(THROW_WRONG_ARGUMENT("Wrong argument"),
+                 atom::error::WrongArgument);
+    EXPECT_THROW(THROW_INVALID_ARGUMENT("Invalid argument"),
+                 atom::error::InvalidArgument);
+    EXPECT_THROW(THROW_MISSING_ARGUMENT("Missing argument"),
+                 atom::error::MissingArgument);
 }
 
-} // namespace atom::error::test
+}  // namespace atom::error::test
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

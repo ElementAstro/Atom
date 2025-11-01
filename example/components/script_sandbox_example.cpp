@@ -177,10 +177,12 @@ void demonstratePermissionSystem() {
     std::cout << "\n--- Testing public access ---" << std::endl;
     try {
         auto publicData = component->runCommand("getPublicData", {});
-        std::cout << "Public data: " << std::any_cast<std::string>(publicData) << std::endl;
+        std::cout << "Public data: " << std::any_cast<std::string>(publicData)
+                  << std::endl;
 
         auto securityLevel = component->runCommand("getSecurityLevel", {});
-        std::cout << "Security level: " << std::any_cast<int>(securityLevel) << std::endl;
+        std::cout << "Security level: " << std::any_cast<int>(securityLevel)
+                  << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Error accessing public data: " << e.what() << std::endl;
     }
@@ -190,7 +192,8 @@ void demonstratePermissionSystem() {
               << std::endl;
     try {
         auto privateData = component->runCommand("getPrivateData", {});
-        std::cout << "Unexpected success: " << std::any_cast<std::string>(privateData) << std::endl;
+        std::cout << "Unexpected success: "
+                  << std::any_cast<std::string>(privateData) << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Expected error: " << e.what() << std::endl;
     }
@@ -200,15 +203,19 @@ void demonstratePermissionSystem() {
     try {
         std::vector<std::any> grantArgs = {std::any(std::string("secure123"))};
         auto granted = component->runCommand("grantAccess", grantArgs);
-        std::cout << "Access granted: " << std::any_cast<bool>(granted) << std::endl;
+        std::cout << "Access granted: " << std::any_cast<bool>(granted)
+                  << std::endl;
 
         auto privateData = component->runCommand("getPrivateData", {});
-        std::cout << "Private data: " << std::any_cast<std::string>(privateData) << std::endl;
+        std::cout << "Private data: " << std::any_cast<std::string>(privateData)
+                  << std::endl;
 
         std::vector<std::any> levelArgs = {std::any(std::string("5"))};
-        [[maybe_unused]] auto setResult = component->runCommand("setSecurityLevel", levelArgs);
+        [[maybe_unused]] auto setResult =
+            component->runCommand("setSecurityLevel", levelArgs);
         auto newLevel = component->runCommand("getSecurityLevel", {});
-        std::cout << "New security level: " << std::any_cast<int>(newLevel) << std::endl;
+        std::cout << "New security level: " << std::any_cast<int>(newLevel)
+                  << std::endl;
 
     } catch (const std::exception& e) {
         std::cout << "Error: " << e.what() << std::endl;
@@ -216,11 +223,14 @@ void demonstratePermissionSystem() {
 
     // Test wrong password
     std::cout << "\n--- Testing wrong password ---" << std::endl;
-    [[maybe_unused]] auto revokeResult = component->runCommand("revokeAccess", {});
+    [[maybe_unused]] auto revokeResult =
+        component->runCommand("revokeAccess", {});
     try {
-        std::vector<std::any> wrongArgs = {std::any(std::string("wrongpassword"))};
+        std::vector<std::any> wrongArgs = {
+            std::any(std::string("wrongpassword"))};
         auto granted = component->runCommand("grantAccess", wrongArgs);
-        std::cout << "Access granted: " << std::any_cast<bool>(granted) << std::endl;
+        std::cout << "Access granted: " << std::any_cast<bool>(granted)
+                  << std::endl;
     } catch (const std::exception& e) {
         std::cout << "Error: " << e.what() << std::endl;
     }
@@ -297,13 +307,15 @@ len(big_list)
 
         // This should be interrupted by time limit
         std::vector<std::any> computeArgs = {std::any(std::string("1000000"))};
-        auto result = component->runCommand("intensiveComputation", computeArgs);
+        auto result =
+            component->runCommand("intensiveComputation", computeArgs);
 
         auto end = std::chrono::high_resolution_clock::now();
         auto duration =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-        std::cout << "Computation result: " << std::any_cast<std::string>(result) << std::endl;
+        std::cout << "Computation result: "
+                  << std::any_cast<std::string>(result) << std::endl;
         std::cout << "Execution time: " << duration.count() << " ms"
                   << std::endl;
 
@@ -330,7 +342,8 @@ void demonstrateSandboxViolations() {
     auto sandbox = std::make_unique<ScriptSandbox>(config);
 
     // Note: setViolationHandler is not available in current API
-    // Violations will be tracked automatically and can be retrieved via getRecentViolations
+    // Violations will be tracked automatically and can be retrieved via
+    // getRecentViolations
 
     // Test various violations
     std::vector<std::pair<std::string, std::string>> violationTests = {
@@ -420,7 +433,8 @@ void demonstrateSandboxConfiguration() {
     SandboxConfig restrictiveConfig;
     restrictiveConfig.limits = restrictiveLimits;
     restrictiveConfig.permissions = restrictivePerms;
-    auto restrictiveSandbox = std::make_unique<ScriptSandbox>(restrictiveConfig);
+    auto restrictiveSandbox =
+        std::make_unique<ScriptSandbox>(restrictiveConfig);
 
     std::cout << "Restrictive sandbox allows:" << std::endl;
     std::cout << "  Component access: "
@@ -499,7 +513,8 @@ void demonstrateSandboxStatistics() {
     std::cout << "  Total executions: " << stats.totalExecutions << std::endl;
     std::cout << "  Successful executions: " << stats.successfulExecutions
               << std::endl;
-    std::cout << "  Scripts terminated: " << stats.scriptsTerminated << std::endl;
+    std::cout << "  Scripts terminated: " << stats.scriptsTerminated
+              << std::endl;
     std::cout << "  Violations detected: " << stats.violationsDetected
               << std::endl;
     std::cout << "  Total execution time: " << stats.totalExecutionTime.count()

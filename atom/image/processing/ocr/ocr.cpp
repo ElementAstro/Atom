@@ -258,13 +258,13 @@ int SpellChecker::levenshteinDistance(const std::string& s1,
     const std::size_t len1 = s1.size(), len2 = s2.size();
     std::vector<std::vector<int>> d(len1 + 1, std::vector<int>(len2 + 1));
 
-    for (int i = 0; i <= len1; ++i)
-        d[i][0] = i;
-    for (int j = 0; j <= len2; ++j)
-        d[0][j] = j;
+    for (std::size_t i = 0; i <= len1; ++i)
+        d[i][0] = static_cast<int>(i);
+    for (std::size_t j = 0; j <= len2; ++j)
+        d[0][j] = static_cast<int>(j);
 
-    for (int i = 1; i <= len1; ++i) {
-        for (int j = 1; j <= len2; ++j) {
+    for (std::size_t i = 1; i <= len1; ++i) {
+        for (std::size_t j = 1; j <= len2; ++j) {
             d[i][j] =
                 std::min({d[i - 1][j] + 1, d[i][j - 1] + 1,
                           d[i - 1][j - 1] + (s1[i - 1] == s2[j - 1] ? 0 : 1)});
@@ -373,8 +373,9 @@ EnhancedOCRProcessor::EnhancedOCRProcessor(const OCRConfig& config)
 
 EnhancedOCRProcessor::~EnhancedOCRProcessor() { m_tessApi.End(); }
 
-bool EnhancedOCRProcessor::detectLanguage(const cv::Mat& image,
+bool EnhancedOCRProcessor::detectLanguage([[maybe_unused]] const cv::Mat& image,
                                           std::string& detectedLanguage) {
+    // TODO: Implement language detection using image analysis
     // In a real implementation, this would use a language detection model
     // For simplicity, we'll assume English
     detectedLanguage = "eng";
@@ -581,6 +582,381 @@ std::vector<cv::Rect> EnhancedOCRProcessor::detectTextRegions(
     }
 
     return textBoxes;
+}
+
+cv::Mat EnhancedOCRProcessor::applyPerspectiveCorrection(const cv::Mat& image) {
+    // Simple perspective correction using contour detection
+    cv::Mat gray;
+    if (image.channels() > 1) {
+        cv::cvtColor(image, gray, cv::COLOR_BGR2GRAY);
+    } else {
+        gray = image.clone();
+    }
+
+    // Apply threshold
+    cv::Mat binary;
+    cv::threshold(gray, binary, 0, 255, cv::THRESH_BINARY | cv::THRESH_OTSU);
+
+    // Find contours
+    std::vector<std::vector<cv::Point>> contours;
+    cv::findContours(binary, contours, cv::RETR_EXTERNAL,
+                     cv::CHAIN_APPROX_SIMPLE);
+
+    if (contours.empty()) {
+        return image;
+    }
+
+    // Find the largest contour
+    double maxArea = 0;
+    int maxAreaIdx = -1;
+    for (size_t i = 0; i < contours.size(); i++) {
+        double area = cv::contourArea(contours[i]);
+        if (area > maxArea) {
+            maxArea = area;
+            maxAreaIdx = static_cast<int>(i);
+        }
+    }
+
+    if (maxAreaIdx < 0) {
+        return image;
+    }
+
+    // Approximate the contour to a polygon
+    std::vector<cv::Point> approx;
+    double epsilon = 0.02 * cv::arcLength(contours[maxAreaIdx], true);
+    cv::approxPolyDP(contours[maxAreaIdx], approx, epsilon, true);
+
+    // If we have a quadrilateral, apply perspective transform
+    if (approx.size() == 4) {
+        // Order points: top-left, top-right, bottom-right, bottom-left
+        std::vector<cv::Point2f> srcPoints(4);
+        for (int i = 0; i < 4; i++) {
+            srcPoints[i] = approx[i];
+        }
+
+        // Calculate destination points
+        float width = static_cast<float>(image.cols);
+        float height = static_cast<float>(image.rows);
+        std::vector<cv::Point2f> dstPoints = {
+            cv::Point2f(0, 0), cv::Point2f(width - 1, 0),
+            cv::Point2f(width - 1, height - 1), cv::Point2f(0, height - 1)};
+
+        // Get perspective transform matrix
+        cv::Mat transform = cv::getPerspectiveTransform(srcPoints, dstPoints);
+
+        // Apply transform
+        cv::Mat corrected;
+        cv::warpPerspective(image, corrected, transform, image.size());
+        return corrected;
+    }
+
+    return image;
+}
+
+cv::Mat EnhancedOCRProcessor::removeNoise(const cv::Mat& image) {
+    cv::Mat denoised;
+
+    // Apply bilateral filter to remove noise while preserving edges
+    cv::bilateralFilter(image, denoised, 9, 75, 75);
+
+    return denoised;
+}
+
+cv::Mat EnhancedOCRProcessor::sauvolaBinarization(const cv::Mat& grayImage,
+                                                  int windowSize, double k) {
+    cv::Mat binary;
+
+    // Use adaptive threshold as a fallback for Sauvola
+    // In a full implementation, you would implement the actual Sauvola
+    // algorithm
+    cv::adaptiveThreshold(grayImage, binary, 255,
+                          cv::ADAPTIVE_THRESH_GAUSSIAN_C, cv::THRESH_BINARY,
+                          windowSize, k);
+
+    return binary;
+}
+
+cv::Mat EnhancedOCRProcessor::enhancedPreprocess(const cv::Mat& inputImage) {
+    cv::Mat processed = inputImage.clone();
+
+    // Apply super resolution if enabled
+    if (m_config.enableSuperResolution) {
+        processed = applySuperResolution(processed);
+    }
+
+    // Deskew if enabled
+    if (m_config.enableDeskew) {
+        processed = deskew(processed);
+    }
+
+    // Apply perspective correction if enabled
+    if (m_config.enablePerspectiveCorrection) {
+        processed = applyPerspectiveCorrection(processed);
+    }
+
+    // Remove noise if enabled
+    if (m_config.enableNoiseRemoval) {
+        processed = removeNoise(processed);
+    }
+
+    // Convert to grayscale if needed
+    cv::Mat gray;
+    if (processed.channels() > 1) {
+        cv::cvtColor(processed, gray, cv::COLOR_BGR2GRAY);
+    } else {
+        gray = processed;
+    }
+
+    // Apply binarization
+    cv::Mat binary;
+    if (m_config.preprocessing.binarizationMethod == 2) {
+        // Sauvola binarization
+        binary = sauvolaBinarization(gray);
+    } else if (m_config.preprocessing.binarizationMethod == 1) {
+        // Adaptive thresholding
+        cv::adaptiveThreshold(gray, binary, 255, cv::ADAPTIVE_THRESH_GAUSSIAN_C,
+                              cv::THRESH_BINARY,
+                              m_config.preprocessing.blockSize,
+                              m_config.preprocessing.constantC);
+    } else {
+        // Otsu thresholding
+        cv::threshold(gray, binary, 0, 255,
+                      cv::THRESH_BINARY | cv::THRESH_OTSU);
+    }
+
+    return binary;
+}
+
+float EnhancedOCRProcessor::calculateConfidence(tesseract::TessBaseAPI& api) {
+    // Get word-level confidence scores
+    int* confidences = api.AllWordConfidences();
+    if (!confidences) {
+        return 0.0f;
+    }
+
+    // Calculate average confidence
+    float sum = 0.0f;
+    int count = 0;
+    for (int i = 0; confidences[i] >= 0; i++) {
+        sum += confidences[i];
+        count++;
+    }
+
+    delete[] confidences;
+
+    return count > 0 ? sum / count : 0.0f;
+}
+
+std::unordered_map<std::string, std::string>
+EnhancedOCRProcessor::extractStructuredData(const std::string& text) {
+    std::unordered_map<std::string, std::string> data;
+
+    // Simple pattern matching for common data types
+    // In a real implementation, use regex or NLP for better extraction
+
+    // Email pattern
+    size_t atPos = text.find('@');
+    if (atPos != std::string::npos) {
+        size_t start = text.rfind(' ', atPos);
+        size_t end = text.find(' ', atPos);
+        if (start == std::string::npos)
+            start = 0;
+        if (end == std::string::npos)
+            end = text.length();
+        data["email"] = text.substr(start, end - start);
+    }
+
+    // Phone number pattern (simple)
+    for (size_t i = 0; i < text.length(); i++) {
+        if (std::isdigit(text[i])) {
+            std::string number;
+            while (i < text.length() && (std::isdigit(text[i]) ||
+                                         text[i] == '-' || text[i] == ' ')) {
+                if (std::isdigit(text[i])) {
+                    number += text[i];
+                }
+                i++;
+            }
+            if (number.length() >= 10) {
+                data["phone"] = number;
+                break;
+            }
+        }
+    }
+
+    return data;
+}
+
+std::string EnhancedOCRProcessor::processTextRegions(const cv::Mat& image) {
+    std::vector<cv::Rect> regions = detectTextRegions(image);
+
+    if (regions.empty()) {
+        // Process entire image if no regions detected
+        m_tessApi.SetImage(image.data, image.cols, image.rows, image.channels(),
+                           image.step);
+        char* text = m_tessApi.GetUTF8Text();
+        std::string result(text ? text : "");
+        delete[] text;
+        return result;
+    }
+
+    // Process each region separately
+    std::string combinedText;
+    for (const auto& region : regions) {
+        cv::Mat roi = image(region);
+        m_tessApi.SetImage(roi.data, roi.cols, roi.rows, roi.channels(),
+                           roi.step);
+        char* text = m_tessApi.GetUTF8Text();
+        if (text) {
+            combinedText += text;
+            combinedText += "\n";
+            delete[] text;
+        }
+    }
+
+    return combinedText;
+}
+
+EnhancedOCRProcessor::OCRResult EnhancedOCRProcessor::processImage(
+    const cv::Mat& image) {
+    OCRResult result;
+
+    if (image.empty()) {
+        result.text = "";
+        result.confidence = 0.0f;
+        return result;
+    }
+
+    // Check cache if enabled
+    if (m_cache) {
+        auto cached = m_cache->get(image);
+        if (cached.has_value()) {
+            result.text = cached.value();
+            result.confidence = 100.0f;  // Cached results are assumed correct
+            result.language = m_config.language;
+            return result;
+        }
+    }
+
+    // Set language from config
+    result.language = m_config.language;
+
+    // Preprocess image
+    cv::Mat preprocessed = enhancedPreprocess(image);
+
+    // Perform OCR
+    if (m_config.enableTextDetection) {
+        result.text = processTextRegions(preprocessed);
+    } else {
+        m_tessApi.SetImage(preprocessed.data, preprocessed.cols,
+                           preprocessed.rows, preprocessed.channels(),
+                           preprocessed.step);
+        char* text = m_tessApi.GetUTF8Text();
+        result.text = text ? text : "";
+        delete[] text;
+    }
+
+    // Calculate confidence
+    result.confidence = calculateConfidence(m_tessApi);
+
+    // Apply spell checking if enabled
+    if (m_spellChecker && m_config.enableSpellCheck) {
+        result.text = m_spellChecker->correctText(result.text);
+    }
+
+    // Extract structured data
+    result.structuredData = extractStructuredData(result.text);
+
+    // Cache result if enabled
+    if (m_cache) {
+        m_cache->store(image, result.text);
+    }
+
+    return result;
+}
+
+std::vector<EnhancedOCRProcessor::OCRResult>
+EnhancedOCRProcessor::processBatchParallel(const std::vector<cv::Mat>& images) {
+    std::vector<OCRResult> results(images.size());
+
+    // Process images in parallel
+    std::transform(
+        std::execution::par, images.begin(), images.end(), results.begin(),
+        [this](const cv::Mat& img) { return this->processImage(img); });
+
+    return results;
+}
+
+std::vector<std::pair<int, EnhancedOCRProcessor::OCRResult>>
+EnhancedOCRProcessor::processVideo(const std::string& videoPath,
+                                   int frameInterval) {
+    std::vector<std::pair<int, OCRResult>> results;
+
+    cv::VideoCapture cap(videoPath);
+    if (!cap.isOpened()) {
+        return results;
+    }
+
+    int frameNumber = 0;
+    cv::Mat frame;
+
+    while (cap.read(frame)) {
+        if (frameNumber % frameInterval == 0) {
+            OCRResult result = processImage(frame);
+            results.emplace_back(frameNumber, result);
+        }
+        frameNumber++;
+    }
+
+    return results;
+}
+
+std::vector<EnhancedOCRProcessor::OCRResult> EnhancedOCRProcessor::processPDF(
+    const std::string& pdfPath) {
+    std::vector<OCRResult> results;
+
+    // PDF processing would require a PDF library like Poppler
+    // This is a placeholder implementation
+    (void)pdfPath;  // Suppress unused parameter warning
+
+    return results;
+}
+
+bool EnhancedOCRProcessor::exportResults(const std::vector<OCRResult>& results,
+                                         const std::string& outputPath,
+                                         const std::string& format) {
+    std::ofstream outFile(outputPath);
+    if (!outFile.is_open()) {
+        return false;
+    }
+
+    if (format == "txt") {
+        for (const auto& result : results) {
+            outFile << result.text << "\n\n";
+        }
+    } else if (format == "json") {
+        outFile << "[\n";
+        for (size_t i = 0; i < results.size(); i++) {
+            outFile << "  {\n";
+            outFile << "    \"text\": \"" << results[i].text << "\",\n";
+            outFile << "    \"confidence\": " << results[i].confidence << ",\n";
+            outFile << "    \"language\": \"" << results[i].language << "\"\n";
+            outFile << "  }";
+            if (i < results.size() - 1) {
+                outFile << ",";
+            }
+            outFile << "\n";
+        }
+        outFile << "]\n";
+    } else if (format == "csv") {
+        outFile << "Text,Confidence,Language\n";
+        for (const auto& result : results) {
+            outFile << "\"" << result.text << "\"," << result.confidence << ","
+                    << result.language << "\n";
+        }
+    }
+
+    return true;
 }
 
 #endif  // ATOM_IMAGE_HAS_OCR

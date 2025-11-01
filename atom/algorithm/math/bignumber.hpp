@@ -177,29 +177,29 @@ public:
      */
     [[nodiscard]] auto abs() const -> BigNumber;
 
-    friend auto operator<<(std::ostream& os, const BigNumber& num)
-        -> std::ostream&;
-    friend auto operator+(const BigNumber& b1, const BigNumber& b2)
-        -> BigNumber {
+    friend auto operator<<(std::ostream& os,
+                           const BigNumber& num) -> std::ostream&;
+    friend auto operator+(const BigNumber& b1,
+                          const BigNumber& b2) -> BigNumber {
         return b1.add(b2);
     }
-    friend auto operator-(const BigNumber& b1, const BigNumber& b2)
-        -> BigNumber {
+    friend auto operator-(const BigNumber& b1,
+                          const BigNumber& b2) -> BigNumber {
         return b1.subtract(b2);
     }
-    friend auto operator*(const BigNumber& b1, const BigNumber& b2)
-        -> BigNumber {
+    friend auto operator*(const BigNumber& b1,
+                          const BigNumber& b2) -> BigNumber {
         return b1.multiply(b2);
     }
-    friend auto operator/(const BigNumber& b1, const BigNumber& b2)
-        -> BigNumber {
+    friend auto operator/(const BigNumber& b1,
+                          const BigNumber& b2) -> BigNumber {
         return b1.divide(b2);
     }
     friend auto operator^(const BigNumber& b1, int b2) -> BigNumber {
         return b1.pow(b2);
     }
-    friend auto operator==(const BigNumber& b1, const BigNumber& b2) noexcept
-        -> bool {
+    friend auto operator==(const BigNumber& b1,
+                           const BigNumber& b2) noexcept -> bool {
         return b1.equals(b2);
     }
     friend auto operator>(const BigNumber& b1, const BigNumber& b2) -> bool;

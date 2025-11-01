@@ -14,9 +14,9 @@ Tests hardware serial number retrieval for BIOS, motherboard, CPU, and disks.
 **************************************************/
 
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 #include "atom/sysinfo/sn.hpp"
 
@@ -51,10 +51,11 @@ TEST_F(SnTest, GetBiosSerialNumber) {
     // If we have a BIOS serial, it should be a reasonable length
     if (!biosSerial.empty()) {
         EXPECT_GT(biosSerial.length(), 0);
-        EXPECT_LT(biosSerial.length(), 1000); // Reasonable upper bound
+        EXPECT_LT(biosSerial.length(), 1000);  // Reasonable upper bound
 
         // Should not contain only whitespace
-        EXPECT_FALSE(std::all_of(biosSerial.begin(), biosSerial.end(), ::isspace));
+        EXPECT_FALSE(
+            std::all_of(biosSerial.begin(), biosSerial.end(), ::isspace));
     }
 }
 
@@ -68,10 +69,11 @@ TEST_F(SnTest, GetMotherboardSerialNumber) {
     // If we have a motherboard serial, it should be valid
     if (!motherboardSerial.empty()) {
         EXPECT_GT(motherboardSerial.length(), 0);
-        EXPECT_LT(motherboardSerial.length(), 1000); // Reasonable upper bound
+        EXPECT_LT(motherboardSerial.length(), 1000);  // Reasonable upper bound
 
         // Should not contain only whitespace
-        EXPECT_FALSE(std::all_of(motherboardSerial.begin(), motherboardSerial.end(), ::isspace));
+        EXPECT_FALSE(std::all_of(motherboardSerial.begin(),
+                                 motherboardSerial.end(), ::isspace));
     }
 }
 
@@ -85,10 +87,11 @@ TEST_F(SnTest, GetCpuSerialNumber) {
     // If we have a CPU serial, it should be valid
     if (!cpuSerial.empty()) {
         EXPECT_GT(cpuSerial.length(), 0);
-        EXPECT_LT(cpuSerial.length(), 1000); // Reasonable upper bound
+        EXPECT_LT(cpuSerial.length(), 1000);  // Reasonable upper bound
 
         // Should not contain only whitespace
-        EXPECT_FALSE(std::all_of(cpuSerial.begin(), cpuSerial.end(), ::isspace));
+        EXPECT_FALSE(
+            std::all_of(cpuSerial.begin(), cpuSerial.end(), ::isspace));
     }
 }
 
@@ -103,7 +106,7 @@ TEST_F(SnTest, GetDiskSerialNumbers) {
     for (const auto& serial : diskSerials) {
         EXPECT_FALSE(serial.empty());
         EXPECT_GT(serial.length(), 0);
-        EXPECT_LT(serial.length(), 1000); // Reasonable upper bound
+        EXPECT_LT(serial.length(), 1000);  // Reasonable upper bound
 
         // Should not contain only whitespace
         EXPECT_FALSE(std::all_of(serial.begin(), serial.end(), ::isspace));
@@ -113,7 +116,8 @@ TEST_F(SnTest, GetDiskSerialNumbers) {
     std::vector<std::string> sortedSerials = diskSerials;
     std::sort(sortedSerials.begin(), sortedSerials.end());
     auto uniqueEnd = std::unique(sortedSerials.begin(), sortedSerials.end());
-    EXPECT_EQ(std::distance(sortedSerials.begin(), uniqueEnd), diskSerials.size());
+    EXPECT_EQ(std::distance(sortedSerials.begin(), uniqueEnd),
+              diskSerials.size());
 }
 
 // ============================================================================
@@ -220,21 +224,13 @@ TEST_F(SnTest, ConsistentResults) {
 
 TEST_F(SnTest, NoThrowGuarantee) {
     // Test that all methods provide no-throw guarantee
-    EXPECT_NO_THROW({
-        hardwareInfo->getBiosSerialNumber();
-    });
+    EXPECT_NO_THROW({ hardwareInfo->getBiosSerialNumber(); });
 
-    EXPECT_NO_THROW({
-        hardwareInfo->getMotherboardSerialNumber();
-    });
+    EXPECT_NO_THROW({ hardwareInfo->getMotherboardSerialNumber(); });
 
-    EXPECT_NO_THROW({
-        hardwareInfo->getCpuSerialNumber();
-    });
+    EXPECT_NO_THROW({ hardwareInfo->getCpuSerialNumber(); });
 
-    EXPECT_NO_THROW({
-        hardwareInfo->getDiskSerialNumbers();
-    });
+    EXPECT_NO_THROW({ hardwareInfo->getDiskSerialNumbers(); });
 }
 
 TEST_F(SnTest, DestructorSafety) {
@@ -247,9 +243,7 @@ TEST_F(SnTest, DestructorSafety) {
 
     // Should be able to create new instances after destruction
     HardwareInfo newInfo;
-    EXPECT_NO_THROW({
-        newInfo.getBiosSerialNumber();
-    });
+    EXPECT_NO_THROW({ newInfo.getBiosSerialNumber(); });
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

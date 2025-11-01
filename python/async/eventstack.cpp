@@ -52,12 +52,11 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
         // Copy and move constructors
         .def(py::init<const EventStackType&>(), py::arg("other"),
              "Copy constructor - creates a new stack from an existing one")
-             /*
-            .def(py::init<EventStackType&&>(), py::arg("other"),
-             "Move constructor - creates a new stack by taking ownership of "
-             "another stack")
-             */
-
+        /*
+       .def(py::init<EventStackType&&>(), py::arg("other"),
+        "Move constructor - creates a new stack by taking ownership of "
+        "another stack")
+        */
 
         // Core stack operations
         .def("push_event", &EventStackType::pushEvent, py::arg("event"),
@@ -278,12 +277,13 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             "serialize_stack",
             [](const EventStackType& self) -> py::str {
                 if constexpr (std::is_same_v<T, std::string> ||
-                             std::is_same_v<T, int> ||
-                             std::is_same_v<T, float> ||
-                             std::is_same_v<T, double>) {
+                              std::is_same_v<T, int> ||
+                              std::is_same_v<T, float> ||
+                              std::is_same_v<T, double>) {
                     return self.serializeStack();
                 } else {
-                    throw py::type_error("Serialization not supported for this type");
+                    throw py::type_error(
+                        "Serialization not supported for this type");
                 }
             },
             R"pbdoc(
@@ -304,12 +304,13 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
             "deserialize_stack",
             [](EventStackType& self, const std::string& serialized_data) {
                 if constexpr (std::is_same_v<T, std::string> ||
-                             std::is_same_v<T, int> ||
-                             std::is_same_v<T, float> ||
-                             std::is_same_v<T, double>) {
+                              std::is_same_v<T, int> ||
+                              std::is_same_v<T, float> ||
+                              std::is_same_v<T, double>) {
                     self.deserializeStack(serialized_data);
                 } else {
-                    throw py::type_error("Deserialization not supported for this type");
+                    throw py::type_error(
+                        "Deserialization not supported for this type");
                 }
             },
             py::arg("serialized_data"),
@@ -353,16 +354,18 @@ void declare_event_stack(py::module& m, const std::string& type_name) {
         .def("__len__", &EventStackType::size)
         .def("__bool__",
              [](const EventStackType& self) { return !self.isEmpty(); })
-        .def("__iter__", [](const EventStackType& self) {
-            auto stack_copy = self.copyStack();
-            auto stack_data = stack_copy.getEventsView();
-            return py::make_iterator(
-                stack_data.begin(), stack_data.end(),
-                py::return_value_policy::reference_internal);
-        })
-        .def("__repr__", [](const EventStackType& self) {
-            return "<EventStack size=" + std::to_string(self.size()) + ">";
-        })
+        .def("__iter__",
+             [](const EventStackType& self) {
+                 auto stack_copy = self.copyStack();
+                 auto stack_data = stack_copy.getEventsView();
+                 return py::make_iterator(
+                     stack_data.begin(), stack_data.end(),
+                     py::return_value_policy::reference_internal);
+             })
+        .def("__repr__",
+             [](const EventStackType& self) {
+                 return "<EventStack size=" + std::to_string(self.size()) + ">";
+             })
         .def("__str__", [](const EventStackType& self) {
             return "EventStack(size=" + std::to_string(self.size()) + ")";
         });
@@ -450,23 +453,23 @@ PYBIND11_MODULE(eventstack, m) {
 
     // Add utility functions for stack operations
     m.def(
-        "merge_stacks",
-        [](const atom::async::EventStack<int>& stack1,
-           const atom::async::EventStack<int>& stack2) {
-            auto merged = stack1.copyStack();
-            auto stack2_copy = stack2.copyStack();
+         "merge_stacks",
+         [](const atom::async::EventStack<int>& stack1,
+            const atom::async::EventStack<int>& stack2) {
+             auto merged = stack1.copyStack();
+             auto stack2_copy = stack2.copyStack();
 
-            // Pop all events from stack2_copy and push to merged
-            while (!stack2_copy.isEmpty()) {
-                auto event = stack2_copy.popEvent();
-                if (event) {
-                    merged.pushEvent(*event);
-                }
-            }
-            return merged;
-        },
-        py::arg("stack1"), py::arg("stack2"),
-        R"pbdoc(
+             // Pop all events from stack2_copy and push to merged
+             while (!stack2_copy.isEmpty()) {
+                 auto event = stack2_copy.popEvent();
+                 if (event) {
+                     merged.pushEvent(*event);
+                 }
+             }
+             return merged;
+         },
+         py::arg("stack1"), py::arg("stack2"),
+         R"pbdoc(
          Merge two integer event stacks.
 
          Args:
@@ -480,32 +483,35 @@ PYBIND11_MODULE(eventstack, m) {
              >>> merged = merge_stacks(stack1, stack2)
          )pbdoc")
 
-    .def(
-        "stack_statistics",
-        [](const atom::async::EventStack<int>& stack) -> py::dict {
-            py::dict stats;
-            stats["size"] = stack.size();
-            stats["is_empty"] = stack.isEmpty();
+        .def(
+            "stack_statistics",
+            [](const atom::async::EventStack<int>& stack) -> py::dict {
+                py::dict stats;
+                stats["size"] = stack.size();
+                stats["is_empty"] = stack.isEmpty();
 
-            if (!stack.isEmpty()) {
-                auto view = stack.getEventsView();
-                if (!view.empty()) {
-                    int min_val = *std::min_element(view.begin(), view.end());
-                    int max_val = *std::max_element(view.begin(), view.end());
-                    double sum = std::accumulate(view.begin(), view.end(), 0.0);
-                    double mean = sum / view.size();
+                if (!stack.isEmpty()) {
+                    auto view = stack.getEventsView();
+                    if (!view.empty()) {
+                        int min_val =
+                            *std::min_element(view.begin(), view.end());
+                        int max_val =
+                            *std::max_element(view.begin(), view.end());
+                        double sum =
+                            std::accumulate(view.begin(), view.end(), 0.0);
+                        double mean = sum / view.size();
 
-                    stats["min"] = min_val;
-                    stats["max"] = max_val;
-                    stats["sum"] = sum;
-                    stats["mean"] = mean;
+                        stats["min"] = min_val;
+                        stats["max"] = max_val;
+                        stats["sum"] = sum;
+                        stats["mean"] = mean;
+                    }
                 }
-            }
 
-            return stats;
-        },
-        py::arg("stack"),
-        R"pbdoc(
+                return stats;
+            },
+            py::arg("stack"),
+            R"pbdoc(
          Calculate statistics for an integer event stack.
 
          Args:
@@ -583,38 +589,40 @@ PYBIND11_MODULE(eventstack, m) {
 
     // Add performance benchmarking utilities
     m.def(
-        "benchmark_stack_operations",
-        [](size_t num_operations) -> py::dict {
-            using namespace std::chrono;
-            atom::async::EventStack<int> stack;
+         "benchmark_stack_operations",
+         [](size_t num_operations) -> py::dict {
+             using namespace std::chrono;
+             atom::async::EventStack<int> stack;
 
-            py::dict results;
+             py::dict results;
 
-            // Benchmark push operations
-            auto start = high_resolution_clock::now();
-            for (size_t i = 0; i < num_operations; ++i) {
-                stack.pushEvent(static_cast<int>(i));
-            }
-            auto end = high_resolution_clock::now();
-            auto push_duration = duration_cast<microseconds>(end - start);
-            results["push_time_us"] = push_duration.count();
-            results["push_ops_per_sec"] = (num_operations * 1000000.0) / push_duration.count();
+             // Benchmark push operations
+             auto start = high_resolution_clock::now();
+             for (size_t i = 0; i < num_operations; ++i) {
+                 stack.pushEvent(static_cast<int>(i));
+             }
+             auto end = high_resolution_clock::now();
+             auto push_duration = duration_cast<microseconds>(end - start);
+             results["push_time_us"] = push_duration.count();
+             results["push_ops_per_sec"] =
+                 (num_operations * 1000000.0) / push_duration.count();
 
-            // Benchmark pop operations
-            start = high_resolution_clock::now();
-            for (size_t i = 0; i < num_operations; ++i) {
-                stack.popEvent();
-            }
-            end = high_resolution_clock::now();
-            auto pop_duration = duration_cast<microseconds>(end - start);
-            results["pop_time_us"] = pop_duration.count();
-            results["pop_ops_per_sec"] = (num_operations * 1000000.0) / pop_duration.count();
+             // Benchmark pop operations
+             start = high_resolution_clock::now();
+             for (size_t i = 0; i < num_operations; ++i) {
+                 stack.popEvent();
+             }
+             end = high_resolution_clock::now();
+             auto pop_duration = duration_cast<microseconds>(end - start);
+             results["pop_time_us"] = pop_duration.count();
+             results["pop_ops_per_sec"] =
+                 (num_operations * 1000000.0) / pop_duration.count();
 
-            results["total_operations"] = num_operations;
-            return results;
-        },
-        py::arg("num_operations") = 10000,
-        R"pbdoc(
+             results["total_operations"] = num_operations;
+             return results;
+         },
+         py::arg("num_operations") = 10000,
+         R"pbdoc(
          Benchmark stack operations performance.
 
          Args:
@@ -628,27 +636,28 @@ PYBIND11_MODULE(eventstack, m) {
              >>> print(f"Push ops/sec: {results['push_ops_per_sec']}")
          )pbdoc")
 
-    .def(
-        "create_test_stack",
-        [](const std::string& stack_type, size_t size) -> py::object {
-            if (stack_type == "int") {
-                auto stack = atom::async::EventStack<int>();
-                for (size_t i = 0; i < size; ++i) {
-                    stack.pushEvent(static_cast<int>(i));
+        .def(
+            "create_test_stack",
+            [](const std::string& stack_type, size_t size) -> py::object {
+                if (stack_type == "int") {
+                    auto stack = atom::async::EventStack<int>();
+                    for (size_t i = 0; i < size; ++i) {
+                        stack.pushEvent(static_cast<int>(i));
+                    }
+                    return py::cast(stack);
+                } else if (stack_type == "string") {
+                    auto stack = atom::async::EventStack<std::string>();
+                    for (size_t i = 0; i < size; ++i) {
+                        stack.pushEvent("event_" + std::to_string(i));
+                    }
+                    return py::cast(stack);
+                } else {
+                    throw py::value_error(
+                        "Unsupported stack type. Use 'int' or 'string'.");
                 }
-                return py::cast(stack);
-            } else if (stack_type == "string") {
-                auto stack = atom::async::EventStack<std::string>();
-                for (size_t i = 0; i < size; ++i) {
-                    stack.pushEvent("event_" + std::to_string(i));
-                }
-                return py::cast(stack);
-            } else {
-                throw py::value_error("Unsupported stack type. Use 'int' or 'string'.");
-            }
-        },
-        py::arg("stack_type"), py::arg("size") = 10,
-        R"pbdoc(
+            },
+            py::arg("stack_type"), py::arg("size") = 10,
+            R"pbdoc(
          Create a test stack with predefined data.
 
          Args:

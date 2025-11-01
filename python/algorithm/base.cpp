@@ -4,8 +4,6 @@
 
 #include "atom/algorithm/base.hpp"
 
-
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(base, m) {

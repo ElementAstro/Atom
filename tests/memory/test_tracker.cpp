@@ -549,7 +549,7 @@ TEST_F(MemoryTrackerTest, LargeAllocations) {
 TEST_F(MemoryTrackerTest, InvalidConfigurationHandling) {
     // Test with invalid configuration values
     MemoryTrackerConfig config;
-    config.maxStackFrames = 0;  // Invalid value
+    config.maxStackFrames = 0;            // Invalid value
     config.minAllocationSize = SIZE_MAX;  // Very large value
 
     // Should handle gracefully without crashing
@@ -611,9 +611,7 @@ TEST_F(MemoryTrackerTest, ConcurrentErrorHandling) {
 
     // Configure with error callback
     MemoryTrackerConfig config;
-    config.errorCallback = [&errorCount](const std::string&) {
-        errorCount++;
-    };
+    config.errorCallback = [&errorCount](const std::string&) { errorCount++; };
 
     MemoryTracker::instance().initialize(config);
 
@@ -675,12 +673,8 @@ TEST_F(MemoryTrackerTest, MemoryExhaustionHandling) {
 
 TEST_F(MemoryTrackerTest, InvalidPointerHandling) {
     // Test with various invalid pointers
-    void* invalid_ptrs[] = {
-        nullptr,
-        (void*)0x1,
-        (void*)0xDEADBEEF,
-        (void*)SIZE_MAX
-    };
+    void* invalid_ptrs[] = {nullptr, (void*)0x1, (void*)0xDEADBEEF,
+                            (void*)SIZE_MAX};
 
     for (void* ptr : invalid_ptrs) {
         // Should handle invalid pointers gracefully

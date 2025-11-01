@@ -376,7 +376,8 @@ Result<Message> PacketCodec::parse_publish(const PacketHeader& header,
 Result<std::vector<ErrorCode>> PacketCodec::parse_suback(
     std::span<const uint8_t> data) {
     if (data.size() < 4) {
-        return Result<std::vector<ErrorCode>>::error(ErrorCode::MALFORMED_PACKET);
+        return Result<std::vector<ErrorCode>>::error(
+            ErrorCode::MALFORMED_PACKET);
     }
 
     BinaryBuffer buffer;
@@ -390,7 +391,8 @@ Result<std::vector<ErrorCode>> PacketCodec::parse_suback(
     // Skip properties (MQTT 5.0)
     auto properties_length_result = buffer.read_variable_int();
     if (!properties_length_result)
-        return Result<std::vector<ErrorCode>>::error(properties_length_result.error());
+        return Result<std::vector<ErrorCode>>::error(
+            properties_length_result.error());
 
     uint32_t properties_length = *properties_length_result;
     for (uint32_t i = 0;

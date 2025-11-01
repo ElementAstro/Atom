@@ -1,19 +1,19 @@
 #include "atom/error/error_handler.hpp"
 
+#include <pybind11/chrono.h>
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/functional.h>
-#include <pybind11/chrono.h>
 
 namespace py = pybind11;
 
 PYBIND11_MODULE(error_handler, m) {
-    m.doc() = "Thread-safe error handling system with aggregation and reporting";
+    m.doc() =
+        "Thread-safe error handling system with aggregation and reporting";
 
     // AggregationStrategy enum
-    py::enum_<atom::error::AggregationStrategy>(
-        m, "AggregationStrategy",
-        R"(Error aggregation strategy.
+    py::enum_<atom::error::AggregationStrategy>(m, "AggregationStrategy",
+                                                R"(Error aggregation strategy.
 
 Defines how errors should be aggregated for reporting and analysis.
 
@@ -22,15 +22,21 @@ Examples:
     >>> strategy = AggregationStrategy.BySeverity
 )")
         .value("None", atom::error::AggregationStrategy::None, "No aggregation")
-        .value("BySeverity", atom::error::AggregationStrategy::BySeverity, "Aggregate by severity level")
-        .value("ByCategory", atom::error::AggregationStrategy::ByCategory, "Aggregate by error category")
-        .value("ByCode", atom::error::AggregationStrategy::ByCode, "Aggregate by error code")
-        .value("ByCorrelation", atom::error::AggregationStrategy::ByCorrelation, "Aggregate by correlation ID")
-        .value("ByTimeWindow", atom::error::AggregationStrategy::ByTimeWindow, "Aggregate by time window")
+        .value("BySeverity", atom::error::AggregationStrategy::BySeverity,
+               "Aggregate by severity level")
+        .value("ByCategory", atom::error::AggregationStrategy::ByCategory,
+               "Aggregate by error category")
+        .value("ByCode", atom::error::AggregationStrategy::ByCode,
+               "Aggregate by error code")
+        .value("ByCorrelation", atom::error::AggregationStrategy::ByCorrelation,
+               "Aggregate by correlation ID")
+        .value("ByTimeWindow", atom::error::AggregationStrategy::ByTimeWindow,
+               "Aggregate by time window")
         .export_values();
 
     // ErrorReporter class
-    py::class_<atom::error::ErrorReporter, std::shared_ptr<atom::error::ErrorReporter>>(
+    py::class_<atom::error::ErrorReporter,
+               std::shared_ptr<atom::error::ErrorReporter>>(
         m, "ErrorReporter",
         R"(Thread-safe error reporter for collecting and processing errors.
 
@@ -41,10 +47,10 @@ Examples:
     >>> from atom.error import ErrorReporter, ErrorContext
     >>> reporter = ErrorReporter()
     >>> reporter.start()
-    >>> 
+    >>>
     >>> def my_handler(context):
     ...     print(f"Error: {context.get_message()}")
-    >>> 
+    >>>
     >>> reporter.add_handler("my_handler", my_handler)
     >>> context = ErrorContext.create(100, "Test error")
     >>> reporter.report_error(context)
@@ -118,14 +124,16 @@ Examples:
 Args:
     name (str): Filter name to remove
 )")
-        .def("set_aggregation_strategy", &atom::error::ErrorReporter::setAggregationStrategy,
+        .def("set_aggregation_strategy",
+             &atom::error::ErrorReporter::setAggregationStrategy,
              py::arg("strategy"),
              R"(Set aggregation strategy.
 
 Args:
     strategy (AggregationStrategy): The aggregation strategy to use
 )")
-        .def("set_aggregation_window", &atom::error::ErrorReporter::setAggregationWindow,
+        .def("set_aggregation_window",
+             &atom::error::ErrorReporter::setAggregationWindow,
              py::arg("window"),
              R"(Set aggregation time window.
 
@@ -136,7 +144,7 @@ Args:
              R"(Get error statistics.
 
 Returns:
-    dict[str, int]: Dictionary of statistics including total errors, 
+    dict[str, int]: Dictionary of statistics including total errors,
                     processed errors, filtered errors, and dropped errors
 )")
         .def("clear_statistics", &atom::error::ErrorReporter::clearStatistics,
@@ -159,7 +167,8 @@ Returns:
 )");
 
     // ErrorAggregator class
-    py::class_<atom::error::ErrorAggregator, std::shared_ptr<atom::error::ErrorAggregator>>(
+    py::class_<atom::error::ErrorAggregator,
+               std::shared_ptr<atom::error::ErrorAggregator>>(
         m, "ErrorAggregator",
         R"(Thread-safe error aggregator for collecting related errors.
 
@@ -180,8 +189,8 @@ Examples:
 Args:
     context (ErrorContext): The error context to aggregate
 )")
-        .def("get_aggregated_errors", &atom::error::ErrorAggregator::getAggregatedErrors,
-             py::arg("key"),
+        .def("get_aggregated_errors",
+             &atom::error::ErrorAggregator::getAggregatedErrors, py::arg("key"),
              R"(Get aggregated errors by key.
 
 Args:
@@ -190,7 +199,8 @@ Args:
 Returns:
     list[ErrorContext]: List of aggregated error contexts
 )")
-        .def("get_aggregation_keys", &atom::error::ErrorAggregator::getAggregationKeys,
+        .def("get_aggregation_keys",
+             &atom::error::ErrorAggregator::getAggregationKeys,
              R"(Get all aggregation keys.
 
 Returns:
@@ -230,9 +240,10 @@ Examples:
     >>> handler.report_error(context)
     >>> handler.shutdown()
 )")
-        .def_static("get_instance", &atom::error::GlobalErrorHandler::getInstance,
-                   py::return_value_policy::reference,
-                   R"(Get the singleton instance.
+        .def_static("get_instance",
+                    &atom::error::GlobalErrorHandler::getInstance,
+                    py::return_value_policy::reference,
+                    R"(Get the singleton instance.
 
 Returns:
     GlobalErrorHandler: The singleton instance
@@ -268,21 +279,24 @@ Returns:
 Returns:
     ErrorAggregator: The error aggregator instance
 )")
-        .def("set_global_handler", &atom::error::GlobalErrorHandler::setGlobalHandler,
+        .def("set_global_handler",
+             &atom::error::GlobalErrorHandler::setGlobalHandler,
              py::arg("handler"),
              R"(Set global error handler callback.
 
 Args:
     handler (callable): Global error handler function
 )")
-        .def("set_unhandled_exception_handler", &atom::error::GlobalErrorHandler::setUnhandledExceptionHandler,
+        .def("set_unhandled_exception_handler",
+             &atom::error::GlobalErrorHandler::setUnhandledExceptionHandler,
              R"(Set unhandled exception handler.
 
 Installs a handler for unhandled C++ exceptions.
 )");
 
     // ThreadLocalErrorHandler class
-    py::class_<atom::error::ThreadLocalErrorHandler, std::shared_ptr<atom::error::ThreadLocalErrorHandler>>(
+    py::class_<atom::error::ThreadLocalErrorHandler,
+               std::shared_ptr<atom::error::ThreadLocalErrorHandler>>(
         m, "ThreadLocalErrorHandler",
         R"(RAII helper for thread-local error handling.
 
@@ -291,10 +305,10 @@ Provides thread-local error handling with automatic cleanup.
 Examples:
     >>> from atom.error import ThreadLocalErrorHandler, ErrorContext
     >>> handler = ThreadLocalErrorHandler()
-    >>> 
+    >>>
     >>> def my_handler(context):
     ...     print(f"Thread error: {context.get_message()}")
-    >>> 
+    >>>
     >>> handler.set_handler(my_handler)
     >>> context = ErrorContext.create(100, "Test error")
     >>> handler.report_error(context)
@@ -314,11 +328,11 @@ Args:
 Args:
     context (ErrorContext): The error context to report
 )")
-        .def("get_statistics", &atom::error::ThreadLocalErrorHandler::getStatistics,
+        .def("get_statistics",
+             &atom::error::ThreadLocalErrorHandler::getStatistics,
              R"(Get thread-local error statistics.
 
 Returns:
     dict[str, int]: Dictionary of thread-local statistics
 )");
 }
-

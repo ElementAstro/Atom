@@ -16,9 +16,8 @@ namespace py = pybind11;
  * @param m The pybind11 module to bind to
  */
 void bindUdpError(py::module_& m) {
-    py::enum_<atom::connection::UdpError>(
-        m, "UdpError",
-        R"(Error codes for UDP operations.
+    py::enum_<atom::connection::UdpError>(m, "UdpError",
+                                          R"(Error codes for UDP operations.
 
 This enumeration defines different error conditions that can occur
 during UDP socket operations.
@@ -27,11 +26,13 @@ Examples:
     >>> from atom.connection.udpsockethub import UdpError
     >>> # Error handling in UDP operations
 )")
-        .value("SocketCreationFailed", atom::connection::UdpError::SocketCreationFailed,
+        .value("SocketCreationFailed",
+               atom::connection::UdpError::SocketCreationFailed,
                "Failed to create UDP socket")
         .value("BindFailed", atom::connection::UdpError::BindFailed,
                "Failed to bind socket to port")
-        .value("NetworkInitFailed", atom::connection::UdpError::NetworkInitFailed,
+        .value("NetworkInitFailed",
+               atom::connection::UdpError::NetworkInitFailed,
                "Failed to initialize network")
         .value("SendFailed", atom::connection::UdpError::SendFailed,
                "Failed to send message")
@@ -64,26 +65,26 @@ Classes:
 
 Quick Start Example:
     >>> from atom.connection.udpsockethub import UdpSocketHub, UdpError
-    >>> 
+    >>>
     >>> # Create UDP socket hub
     >>> hub = UdpSocketHub()
-    >>> 
+    >>>
     >>> # Set up message handler
     >>> def on_message(message, ip, port):
     ...     print(f"Received from {ip}:{port}: {message}")
-    >>> 
+    >>>
     >>> hub.add_message_handler(on_message)
-    >>> 
+    >>>
     >>> # Start listening on port
     >>> result = hub.start(8080)
     >>> if result.has_value():
     ...     print("UDP hub started on port 8080")
-    ...     
+    ...
     ...     # Send message to another endpoint
     ...     send_result = hub.send_to("Hello, UDP!", "192.168.1.100", 8081)
     ...     if send_result.has_value():
     ...         print("Message sent successfully")
-    >>> 
+    >>>
     >>> hub.stop()
 
 Advanced Features:
@@ -109,15 +110,15 @@ addresses and ports.
 
 Examples:
     >>> from atom.connection.udpsockethub import UdpSocketHub
-    >>> 
+    >>>
     >>> # Create hub and set up handler
     >>> hub = UdpSocketHub()
-    >>> 
+    >>>
     >>> def message_handler(msg, ip, port):
     ...     print(f"Got message '{msg}' from {ip}:{port}")
-    >>> 
+    >>>
     >>> hub.add_message_handler(message_handler)
-    >>> 
+    >>>
     >>> # Start listening and send messages
     >>> if hub.start(8080).has_value():
     ...     hub.send_to("Hello!", "127.0.0.1", 8081)
@@ -129,15 +130,16 @@ Examples:
 Examples:
     >>> hub = UdpSocketHub()
 )")
-        .def("start", 
-             [](atom::connection::UdpSocketHub& self, std::uint16_t port) {
-                 auto result = self.start(port);
-                 if (!result.has_value()) {
-                     throw std::runtime_error("Failed to start UDP hub");
-                 }
-             },
-             py::arg("port"),
-             R"(Starts the UDP socket hub and binds it to the specified port.
+        .def(
+            "start",
+            [](atom::connection::UdpSocketHub& self, std::uint16_t port) {
+                auto result = self.start(port);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to start UDP hub");
+                }
+            },
+            py::arg("port"),
+            R"(Starts the UDP socket hub and binds it to the specified port.
 
 Args:
     port: The port on which the UDP socket hub will listen
@@ -164,21 +166,22 @@ Examples:
     >>> if hub.is_running():
     ...     print("Hub is active")
 )")
-        .def("add_message_handler",
-             [](atom::connection::UdpSocketHub& self, py::object handler) {
-                 self.addMessageHandler([handler](const std::string& message, 
-                                                  const std::string& ip, 
-                                                  int port) mutable {
-                     try {
-                         py::gil_scoped_acquire acquire;
-                         handler.operator()(message, ip, port);
-                     } catch (const py::error_already_set&) {
-                         // Handle Python exceptions
-                     }
-                 });
-             },
-             py::arg("handler"),
-             R"(Adds a message handler function to the UDP socket hub.
+        .def(
+            "add_message_handler",
+            [](atom::connection::UdpSocketHub& self, py::object handler) {
+                self.addMessageHandler([handler](const std::string& message,
+                                                 const std::string& ip,
+                                                 int port) mutable {
+                    try {
+                        py::gil_scoped_acquire acquire;
+                        handler.operator()(message, ip, port);
+                    } catch (const py::error_already_set&) {
+                        // Handle Python exceptions
+                    }
+                });
+            },
+            py::arg("handler"),
+            R"(Adds a message handler function to the UDP socket hub.
 
 Args:
     handler: Function to call when a message is received
@@ -189,16 +192,17 @@ Examples:
     ...     print(f"Received: {msg} from {ip}:{port}")
     >>> hub.add_message_handler(my_handler)
 )")
-        .def("send_to",
-             [](atom::connection::UdpSocketHub& self, std::string_view message,
-                std::string_view ip, std::uint16_t port) {
-                 auto result = self.sendTo(message, ip, port);
-                 if (!result.has_value()) {
-                     throw std::runtime_error("Failed to send message");
-                 }
-             },
-             py::arg("message"), py::arg("ip"), py::arg("port"),
-             R"(Sends a message to the specified IP address and port.
+        .def(
+            "send_to",
+            [](atom::connection::UdpSocketHub& self, std::string_view message,
+               std::string_view ip, std::uint16_t port) {
+                auto result = self.sendTo(message, ip, port);
+                if (!result.has_value()) {
+                    throw std::runtime_error("Failed to send message");
+                }
+            },
+            py::arg("message"), py::arg("ip"), py::arg("port"),
+            R"(Sends a message to the specified IP address and port.
 
 Args:
     message: The message to send
@@ -223,13 +227,13 @@ Examples:
 )")
         .def(
             "__enter__",
-            [](atom::connection::UdpSocketHub& self) -> atom::connection::UdpSocketHub& {
-                return self;
-            },
+            [](atom::connection::UdpSocketHub& self)
+                -> atom::connection::UdpSocketHub& { return self; },
             "Support for context manager protocol")
         .def(
             "__exit__",
-            [](atom::connection::UdpSocketHub& self, py::object, py::object, py::object) {
+            [](atom::connection::UdpSocketHub& self, py::object, py::object,
+               py::object) {
                 if (self.isRunning()) {
                     self.stop();
                 }

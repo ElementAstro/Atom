@@ -665,7 +665,8 @@ TEST_F(ObjectPoolTest, ResizeEdgeCases) {
     EXPECT_EQ(pool.size(), 0);
 
     // Try to acquire from empty pool
-    EXPECT_THROW([[maybe_unused]] auto temp = pool.acquire(), std::runtime_error);
+    EXPECT_THROW([[maybe_unused]] auto temp = pool.acquire(),
+                 std::runtime_error);
 
     // Resize back to positive size
     pool.resize(5);
@@ -687,8 +688,7 @@ TEST_F(ObjectPoolTest, ApplyToAllEdgeCases) {
     pool.prefill(3);
     EXPECT_THROW(
         pool.applyToAll([](TestObject&) { throw std::runtime_error("test"); }),
-        std::runtime_error
-    );
+        std::runtime_error);
 
     // Pool should still be functional after exception
     auto obj = pool.acquire();
@@ -699,7 +699,8 @@ TEST_F(ObjectPoolTest, AcquireBatchEdgeCases) {
     ObjectPool<TestObject> pool(5);
 
     // Acquire batch larger than pool size
-    EXPECT_THROW([[maybe_unused]] auto temp1 = pool.acquireBatch(10), std::runtime_error);
+    EXPECT_THROW([[maybe_unused]] auto temp1 = pool.acquireBatch(10),
+                 std::runtime_error);
 
     // Acquire maximum batch size
     auto objects = pool.acquireBatch(5);
@@ -707,7 +708,8 @@ TEST_F(ObjectPoolTest, AcquireBatchEdgeCases) {
     EXPECT_EQ(pool.available(), 0);
 
     // Try to acquire more when pool is empty
-    EXPECT_THROW([[maybe_unused]] auto temp2 = pool.acquireBatch(1), std::runtime_error);
+    EXPECT_THROW([[maybe_unused]] auto temp2 = pool.acquireBatch(1),
+                 std::runtime_error);
 
     // Release all and try again
     objects.clear();
@@ -726,7 +728,8 @@ TEST_F(ObjectPoolTest, ConcurrentAcquireRelease) {
     std::atomic<int> totalReleases{0};
 
     for (int i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&pool, &totalAcquisitions, &totalReleases, operationsPerThread, i]() {
+        threads.emplace_back([&pool, &totalAcquisitions, &totalReleases,
+                              operationsPerThread, i]() {
             std::vector<std::shared_ptr<TestObject>> localObjects;
 
             for (int j = 0; j < operationsPerThread; ++j) {
@@ -791,9 +794,11 @@ TEST_F(ObjectPoolTest, ConcurrentBatchOperations) {
                         }
 
                         // Hold objects for a short time
-                        std::this_thread::sleep_for(std::chrono::microseconds(10));
+                        std::this_thread::sleep_for(
+                            std::chrono::microseconds(10));
 
-                        // Objects are automatically released when vector goes out of scope
+                        // Objects are automatically released when vector goes
+                        // out of scope
                     }
                 } catch (const std::runtime_error&) {
                     // Pool might not have enough objects, continue

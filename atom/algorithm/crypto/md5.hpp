@@ -75,8 +75,8 @@ public:
      * @return True if the hash of input matches the expected hash
      */
     template <StringLike StrType>
-    static auto verify(const StrType& input, const std::string& hash) noexcept
-        -> bool;
+    static auto verify(const StrType& input,
+                       const std::string& hash) noexcept -> bool;
 
 private:
     /**
@@ -157,8 +157,8 @@ auto MD5::encrypt(const StrType& input) -> std::string {
 }
 
 template <StringLike StrType>
-auto MD5::verify(const StrType& input, const std::string& hash) noexcept
-    -> bool {
+auto MD5::verify(const StrType& input,
+                 const std::string& hash) noexcept -> bool {
     try {
         spdlog::debug("MD5: Verifying hash match for input");
         return encrypt(input) == hash;

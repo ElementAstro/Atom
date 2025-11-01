@@ -12,6 +12,12 @@
 #include "common.hpp"
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <intrin.h>
 #include <iphlpapi.h>
 #include <pdh.h>
@@ -51,7 +57,7 @@ static PROCESS_MEMORY_COUNTERS getProcessMemoryCounters() {
 
     return pmc;
 }
-}
+}  // namespace
 
 auto getMemoryUsage() -> float {
     spdlog::debug("Getting memory usage percentage");
@@ -61,12 +67,16 @@ auto getMemoryUsage() -> float {
         return 0.0f;
     }
 
-    const auto totalMemoryMB = static_cast<float>(status.ullTotalPhys) / MB_DIVISOR;
-    const auto availableMemoryMB = static_cast<float>(status.ullAvailPhys) / MB_DIVISOR;
-    const auto usagePercent = (totalMemoryMB - availableMemoryMB) / totalMemoryMB * 100.0f;
+    const auto totalMemoryMB =
+        static_cast<float>(status.ullTotalPhys) / MB_DIVISOR;
+    const auto availableMemoryMB =
+        static_cast<float>(status.ullAvailPhys) / MB_DIVISOR;
+    const auto usagePercent =
+        (totalMemoryMB - availableMemoryMB) / totalMemoryMB * 100.0f;
 
-    spdlog::debug("Memory usage: {:.2f}% (Total: {:.2f} MB, Available: {:.2f} MB)",
-                  usagePercent, totalMemoryMB, availableMemoryMB);
+    spdlog::debug(
+        "Memory usage: {:.2f}% (Total: {:.2f} MB, Available: {:.2f} MB)",
+        usagePercent, totalMemoryMB, availableMemoryMB);
 
     return usagePercent;
 }
@@ -114,7 +124,8 @@ auto getVirtualMemoryMax() -> unsigned long long {
 
     const auto status = getMemoryStatus();
     if (status.ullTotalVirtual > 0) {
-        spdlog::debug("Maximum virtual memory: {} bytes", status.ullTotalVirtual);
+        spdlog::debug("Maximum virtual memory: {} bytes",
+                      status.ullTotalVirtual);
     }
 
     return status.ullTotalVirtual;
@@ -124,8 +135,10 @@ auto getVirtualMemoryUsed() -> unsigned long long {
     spdlog::debug("Getting used virtual memory size");
 
     const auto status = getMemoryStatus();
-    if (status.ullTotalVirtual > 0 && status.ullAvailVirtual <= status.ullTotalVirtual) {
-        const auto usedVirtual = status.ullTotalVirtual - status.ullAvailVirtual;
+    if (status.ullTotalVirtual > 0 &&
+        status.ullAvailVirtual <= status.ullTotalVirtual) {
+        const auto usedVirtual =
+            status.ullTotalVirtual - status.ullAvailVirtual;
         spdlog::debug("Used virtual memory: {} bytes", usedVirtual);
         return usedVirtual;
     }
@@ -148,7 +161,8 @@ auto getSwapMemoryUsed() -> unsigned long long {
     spdlog::debug("Getting used swap memory size");
 
     const auto status = getMemoryStatus();
-    if (status.ullTotalPageFile > 0 && status.ullAvailPageFile <= status.ullTotalPageFile) {
+    if (status.ullTotalPageFile > 0 &&
+        status.ullAvailPageFile <= status.ullTotalPageFile) {
         const auto usedSwap = status.ullTotalPageFile - status.ullAvailPageFile;
         spdlog::debug("Used swap memory: {} bytes", usedSwap);
         return usedSwap;
@@ -193,9 +207,11 @@ auto getDetailedMemoryStats() -> MemoryInfo {
         info.totalPhysicalMemory = memStatus.ullTotalPhys;
         info.availablePhysicalMemory = memStatus.ullAvailPhys;
         info.virtualMemoryMax = memStatus.ullTotalVirtual;
-        info.virtualMemoryUsed = memStatus.ullTotalVirtual - memStatus.ullAvailVirtual;
+        info.virtualMemoryUsed =
+            memStatus.ullTotalVirtual - memStatus.ullAvailVirtual;
         info.swapMemoryTotal = memStatus.ullTotalPageFile;
-        info.swapMemoryUsed = memStatus.ullTotalPageFile - memStatus.ullAvailPageFile;
+        info.swapMemoryUsed =
+            memStatus.ullTotalPageFile - memStatus.ullAvailPageFile;
 
         const auto pmc = getProcessMemoryCounters();
         if (pmc.WorkingSetSize > 0) {
@@ -208,7 +224,8 @@ auto getDetailedMemoryStats() -> MemoryInfo {
         }
 
         MemoryInfo::MemorySlot slot;
-        slot.capacity = std::to_string(info.totalPhysicalMemory / (1024 * 1024));
+        slot.capacity =
+            std::to_string(info.totalPhysicalMemory / (1024 * 1024));
         slot.type = "DDR";
         slot.clockSpeed = "Unknown";
         info.slots.push_back(std::move(slot));
@@ -224,7 +241,8 @@ auto getPeakWorkingSetSize() -> size_t {
 
     const auto pmc = getProcessMemoryCounters();
     if (pmc.PeakWorkingSetSize > 0) {
-        spdlog::debug("Peak working set size: {} bytes", pmc.PeakWorkingSetSize);
+        spdlog::debug("Peak working set size: {} bytes",
+                      pmc.PeakWorkingSetSize);
     }
 
     return pmc.PeakWorkingSetSize;
@@ -273,10 +291,13 @@ auto getMemoryPerformance() -> MemoryPerformance {
     PDH_HCOUNTER writeCounter = nullptr;
 
     if (PdhOpenQuery(nullptr, 0, &query) == ERROR_SUCCESS) {
-        const auto addCounterResult1 = PdhAddCounterW(query, L"\\Memory\\Pages/sec", 0, &readCounter);
-        const auto addCounterResult2 = PdhAddCounterW(query, L"\\Memory\\Page Writes/sec", 0, &writeCounter);
+        const auto addCounterResult1 =
+            PdhAddCounterW(query, L"\\Memory\\Pages/sec", 0, &readCounter);
+        const auto addCounterResult2 = PdhAddCounterW(
+            query, L"\\Memory\\Page Writes/sec", 0, &writeCounter);
 
-        if (addCounterResult1 == ERROR_SUCCESS && addCounterResult2 == ERROR_SUCCESS) {
+        if (addCounterResult1 == ERROR_SUCCESS &&
+            addCounterResult2 == ERROR_SUCCESS) {
             PdhCollectQueryData(query);
             std::this_thread::sleep_for(std::chrono::seconds(1));
             PdhCollectQueryData(query);
@@ -284,12 +305,17 @@ auto getMemoryPerformance() -> MemoryPerformance {
             PDH_FMT_COUNTERVALUE readValue{};
             PDH_FMT_COUNTERVALUE writeValue{};
 
-            const auto getValueResult1 = PdhGetFormattedCounterValue(readCounter, PDH_FMT_DOUBLE, nullptr, &readValue);
-            const auto getValueResult2 = PdhGetFormattedCounterValue(writeCounter, PDH_FMT_DOUBLE, nullptr, &writeValue);
+            const auto getValueResult1 = PdhGetFormattedCounterValue(
+                readCounter, PDH_FMT_DOUBLE, nullptr, &readValue);
+            const auto getValueResult2 = PdhGetFormattedCounterValue(
+                writeCounter, PDH_FMT_DOUBLE, nullptr, &writeValue);
 
-            if (getValueResult1 == ERROR_SUCCESS && getValueResult2 == ERROR_SUCCESS) {
-                perf.readSpeed = readValue.doubleValue * PAGE_SIZE_KB * KB_TO_MB;
-                perf.writeSpeed = writeValue.doubleValue * PAGE_SIZE_KB * KB_TO_MB;
+            if (getValueResult1 == ERROR_SUCCESS &&
+                getValueResult2 == ERROR_SUCCESS) {
+                perf.readSpeed =
+                    readValue.doubleValue * PAGE_SIZE_KB * KB_TO_MB;
+                perf.writeSpeed =
+                    writeValue.doubleValue * PAGE_SIZE_KB * KB_TO_MB;
             } else {
                 spdlog::warn("Failed to get formatted counter values");
             }
@@ -301,8 +327,12 @@ auto getMemoryPerformance() -> MemoryPerformance {
         spdlog::warn("Failed to open PDH query for memory performance");
     }
 
-    const auto totalMemoryMB = static_cast<double>(getTotalMemorySize()) / MB_DIVISOR;
-    perf.bandwidthUsage = totalMemoryMB > 0 ? (perf.readSpeed + perf.writeSpeed) / totalMemoryMB * 100.0 : 0.0;
+    const auto totalMemoryMB =
+        static_cast<double>(getTotalMemorySize()) / MB_DIVISOR;
+    perf.bandwidthUsage =
+        totalMemoryMB > 0
+            ? (perf.readSpeed + perf.writeSpeed) / totalMemoryMB * 100.0
+            : 0.0;
 
     std::vector<int> testData;
     testData.reserve(MEMORY_TEST_SIZE);
@@ -313,10 +343,15 @@ auto getMemoryPerformance() -> MemoryPerformance {
     }
     const auto end = std::chrono::high_resolution_clock::now();
 
-    perf.latency = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start).count() / static_cast<double>(MEMORY_TEST_SIZE);
+    perf.latency =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start)
+            .count() /
+        static_cast<double>(MEMORY_TEST_SIZE);
 
-    spdlog::debug("Memory performance - Read: {:.2f} MB/s, Write: {:.2f} MB/s, Bandwidth: {:.1f}%, Latency: {:.2f} ns",
-                  perf.readSpeed, perf.writeSpeed, perf.bandwidthUsage, perf.latency);
+    spdlog::debug(
+        "Memory performance - Read: {:.2f} MB/s, Write: {:.2f} MB/s, "
+        "Bandwidth: {:.1f}%, Latency: {:.2f} ns",
+        perf.readSpeed, perf.writeSpeed, perf.bandwidthUsage, perf.latency);
 
     return perf;
 }

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
-#include "atom/io/filesystem/file_info.hpp"
 #include "atom/io/core/io.hpp"
+#include "atom/io/filesystem/file_info.hpp"
 #include "atom/io/filesystem/file_permission.hpp"
 
 #include <chrono>
@@ -505,7 +505,8 @@ TEST_F(FileInfoTest, DeleteReadOnlyFile) {
     file.close();
 
     // Make file read-only
-    fs::permissions(readonly_file, fs::perms::owner_read, fs::perm_options::replace);
+    fs::permissions(readonly_file, fs::perms::owner_read,
+                    fs::perm_options::replace);
 
     // Deletion should still work (or throw appropriate exception)
     // Behavior may vary by platform
@@ -574,7 +575,8 @@ TEST_F(FileInfoTest, ChangePermissionsVariousStrings) {
     EXPECT_EQ(info.permissions, "rwxr-xr--");
 
     // Restore readable permissions for cleanup
-    fs::permissions(regular_file, fs::perms::owner_read | fs::perms::owner_write,
+    fs::permissions(regular_file,
+                    fs::perms::owner_read | fs::perms::owner_write,
                     fs::perm_options::replace);
 }
 
@@ -597,7 +599,8 @@ TEST_F(FileInfoTest, VeryLongFilename) {
         fs::remove(long_file);
     } catch (const std::exception& e) {
         // Some filesystems may not support such long names
-        GTEST_SKIP() << "Filesystem doesn't support long filenames: " << e.what();
+        GTEST_SKIP() << "Filesystem doesn't support long filenames: "
+                     << e.what();
     }
 }
 
@@ -621,7 +624,8 @@ TEST_F(FileInfoTest, UnicodeFilenames) {
         EXPECT_FALSE(fs::exists(unicode_file));
     } catch (const std::exception& e) {
         // Some filesystems may not support Unicode
-        GTEST_SKIP() << "Filesystem doesn't support Unicode filenames: " << e.what();
+        GTEST_SKIP() << "Filesystem doesn't support Unicode filenames: "
+                     << e.what();
     }
 }
 
@@ -700,11 +704,8 @@ TEST_F(FileInfoTest, ErrorHandlingNonExistent) {
 // Test file info for files with special characters
 TEST_F(FileInfoTest, SpecialCharactersInFilename) {
     std::vector<std::string> special_names = {
-        "file with spaces.txt",
-        "file(with)parens.txt",
-        "file[with]brackets.txt",
-        "file-with-dashes.txt"
-    };
+        "file with spaces.txt", "file(with)parens.txt",
+        "file[with]brackets.txt", "file-with-dashes.txt"};
 
     for (const auto& name : special_names) {
         fs::path special_file = test_dir / name;
@@ -734,7 +735,8 @@ TEST_F(FileInfoTest, BinaryFileInfo) {
     fs::path binary_file = test_dir / "binary.dat";
     std::ofstream ofs(binary_file, std::ios::binary);
     std::vector<unsigned char> binary_data = {0x00, 0xFF, 0x7F, 0x80};
-    ofs.write(reinterpret_cast<const char*>(binary_data.data()), binary_data.size());
+    ofs.write(reinterpret_cast<const char*>(binary_data.data()),
+              binary_data.size());
     ofs.close();
 
     auto fileInfo = atom::io::getFileInfo(binary_file);
@@ -766,7 +768,8 @@ TEST_F(FileInfoTest, ConcurrentFileInfoRetrieval) {
 
 // Test file info with different file extensions
 TEST_F(FileInfoTest, DifferentFileExtensions) {
-    std::vector<std::string> extensions = {".txt", ".cpp", ".hpp", ".dat", ".log", ""};
+    std::vector<std::string> extensions = {".txt", ".cpp", ".hpp",
+                                           ".dat", ".log", ""};
 
     for (const auto& ext : extensions) {
         fs::path file = test_dir / ("testfile" + ext);

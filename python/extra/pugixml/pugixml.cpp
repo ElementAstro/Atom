@@ -1,13 +1,14 @@
 #include "atom/extra/pugixml/modern_xml.hpp"
 
+#include <pybind11/iostream.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/iostream.h>
 
 namespace py = pybind11;
 
 PYBIND11_MODULE(pugixml, m) {
-    m.doc() = R"(Modern XML parsing and manipulation module for the atom package.
+    m.doc() =
+        R"(Modern XML parsing and manipulation module for the atom package.
 
 This module provides a modern C++ interface for XML parsing, manipulation,
 and querying using the pugixml library. It offers type-safe operations,
@@ -23,18 +24,18 @@ Features:
 
 Examples:
     >>> from atom.extra.pugixml import pugixml
-    >>> 
+    >>>
     >>> # Parse XML from string
     >>> doc = pugixml.Document.from_string('<root><item>value</item></root>')
     >>> root = doc.root()
     >>> print(root.name())
-    >>> 
+    >>>
     >>> # Create new document
     >>> doc = pugixml.Document.create_empty()
     >>> root = doc.create_root("config")
     >>> item = root.append_child("setting")
     >>> item.set_text("value")
-    >>> 
+    >>>
     >>> # Save to file
     >>> doc.save_to_file("config.xml")
 )";
@@ -58,12 +59,15 @@ Examples:
     });
 
     // Custom exceptions
-    py::register_exception<atom::extra::pugixml::ParseException>(m, "ParseException", PyExc_ValueError);
-    py::register_exception<atom::extra::pugixml::XmlException>(m, "XmlException", PyExc_RuntimeError);
+    py::register_exception<atom::extra::pugixml::ParseException>(
+        m, "ParseException", PyExc_ValueError);
+    py::register_exception<atom::extra::pugixml::XmlException>(
+        m, "XmlException", PyExc_RuntimeError);
 
     // LoadOptions struct
-    py::class_<atom::extra::pugixml::LoadOptions>(m, "LoadOptions",
-                                                  R"(Options for loading XML documents.
+    py::class_<atom::extra::pugixml::LoadOptions>(
+        m, "LoadOptions",
+        R"(Options for loading XML documents.
 
 This struct contains various options that control how XML documents are loaded,
 including parsing flags, encoding settings, and validation options.
@@ -75,16 +79,19 @@ Examples:
     >>> doc = pugixml.Document.from_file("data.xml", options)
 )")
         .def(py::init<>(), "Create default load options")
-        .def_readwrite("preserve_whitespace", &atom::extra::pugixml::LoadOptions::preserve_whitespace,
+        .def_readwrite("preserve_whitespace",
+                       &atom::extra::pugixml::LoadOptions::preserve_whitespace,
                        "Whether to preserve whitespace in text nodes")
-        .def_readwrite("validate_structure", &atom::extra::pugixml::LoadOptions::validate_structure,
+        .def_readwrite("validate_structure",
+                       &atom::extra::pugixml::LoadOptions::validate_structure,
                        "Whether to validate XML structure during parsing")
         .def_readwrite("encoding", &atom::extra::pugixml::LoadOptions::encoding,
                        "Character encoding for the XML document");
 
     // SaveOptions struct
-    py::class_<atom::extra::pugixml::SaveOptions>(m, "SaveOptions",
-                                                  R"(Options for saving XML documents.
+    py::class_<atom::extra::pugixml::SaveOptions>(
+        m, "SaveOptions",
+        R"(Options for saving XML documents.
 
 This struct contains various options that control how XML documents are saved,
 including formatting, encoding, and indentation settings.
@@ -199,9 +206,12 @@ Returns:
 Returns:
     True if the attribute is empty.
 )")
-        .def("__bool__", [](const atom::extra::pugixml::Attribute& self) {
-            return !self.empty();
-        }, R"(Check if the attribute exists and is not empty.)");
+        .def(
+            "__bool__",
+            [](const atom::extra::pugixml::Attribute& self) {
+                return !self.empty();
+            },
+            R"(Check if the attribute exists and is not empty.)");
 
     // Node class
     py::class_<atom::extra::pugixml::Node>(m, "Node",
@@ -215,7 +225,7 @@ Examples:
     >>> print(node.name())
     >>> child = node.child("item")
     >>> print(child.text())
-    >>> 
+    >>>
     >>> # Add new child
     >>> new_child = node.append_child("new_item")
     >>> new_child.set_text("content")
@@ -238,8 +248,7 @@ Returns:
 Returns:
     The text content as a string.
 )")
-        .def("set_name", &atom::extra::pugixml::Node::set_name,
-             py::arg("name"),
+        .def("set_name", &atom::extra::pugixml::Node::set_name, py::arg("name"),
              R"(Set the node name.
 
 Args:
@@ -252,8 +261,7 @@ Args:
 Args:
     value: The new node value.
 )")
-        .def("set_text", &atom::extra::pugixml::Node::set_text,
-             py::arg("text"),
+        .def("set_text", &atom::extra::pugixml::Node::set_text, py::arg("text"),
              R"(Set the text content of the node.
 
 Args:
@@ -279,8 +287,9 @@ Args:
 Returns:
     The newly created child node.
 )")
-        .def("insert_child_after", &atom::extra::pugixml::Node::insert_child_after,
-             py::arg("name"), py::arg("node"),
+        .def("insert_child_after",
+             &atom::extra::pugixml::Node::insert_child_after, py::arg("name"),
+             py::arg("node"),
              R"(Insert a new child node after the specified node.
 
 Args:
@@ -290,8 +299,9 @@ Args:
 Returns:
     The newly created child node.
 )")
-        .def("insert_child_before", &atom::extra::pugixml::Node::insert_child_before,
-             py::arg("name"), py::arg("node"),
+        .def("insert_child_before",
+             &atom::extra::pugixml::Node::insert_child_before, py::arg("name"),
+             py::arg("node"),
              R"(Insert a new child node before the specified node.
 
 Args:
@@ -301,7 +311,9 @@ Args:
 Returns:
     The newly created child node.
 )")
-        .def("remove_child", py::overload_cast<const atom::extra::pugixml::Node&>(&atom::extra::pugixml::Node::remove_child),
+        .def("remove_child",
+             py::overload_cast<const atom::extra::pugixml::Node&>(
+                 &atom::extra::pugixml::Node::remove_child),
              py::arg("node"),
              R"(Remove a child node.
 
@@ -311,7 +323,9 @@ Args:
 Returns:
     True if the node was removed successfully.
 )")
-        .def("remove_child", py::overload_cast<std::string_view>(&atom::extra::pugixml::Node::remove_child),
+        .def("remove_child",
+             py::overload_cast<std::string_view>(
+                 &atom::extra::pugixml::Node::remove_child),
              py::arg("name"),
              R"(Remove a child node by name.
 
@@ -321,8 +335,7 @@ Args:
 Returns:
     True if the node was removed successfully.
 )")
-        .def("child", &atom::extra::pugixml::Node::child,
-             py::arg("name"),
+        .def("child", &atom::extra::pugixml::Node::child, py::arg("name"),
              R"(Get a child node by name.
 
 Args:
@@ -351,8 +364,8 @@ Args:
 Returns:
     The newly created attribute.
 )")
-        .def("prepend_attribute", &atom::extra::pugixml::Node::prepend_attribute,
-             py::arg("name"),
+        .def("prepend_attribute",
+             &atom::extra::pugixml::Node::prepend_attribute, py::arg("name"),
              R"(Prepend a new attribute.
 
 Args:
@@ -361,7 +374,9 @@ Args:
 Returns:
     The newly created attribute.
 )")
-        .def("remove_attribute", py::overload_cast<const atom::extra::pugixml::Attribute&>(&atom::extra::pugixml::Node::remove_attribute),
+        .def("remove_attribute",
+             py::overload_cast<const atom::extra::pugixml::Attribute&>(
+                 &atom::extra::pugixml::Node::remove_attribute),
              py::arg("attr"),
              R"(Remove an attribute.
 
@@ -371,7 +386,9 @@ Args:
 Returns:
     True if the attribute was removed successfully.
 )")
-        .def("remove_attribute", py::overload_cast<std::string_view>(&atom::extra::pugixml::Node::remove_attribute),
+        .def("remove_attribute",
+             py::overload_cast<std::string_view>(
+                 &atom::extra::pugixml::Node::remove_attribute),
              py::arg("name"),
              R"(Remove an attribute by name.
 
@@ -417,9 +434,12 @@ Returns:
 Returns:
     True if the node is empty.
 )")
-        .def("__bool__", [](const atom::extra::pugixml::Node& self) {
-            return !self.empty();
-        }, R"(Check if the node exists and is not empty.)");
+        .def(
+            "__bool__",
+            [](const atom::extra::pugixml::Node& self) {
+                return !self.empty();
+            },
+            R"(Check if the node exists and is not empty.)");
 
     // Document class
     py::class_<atom::extra::pugixml::Document>(m, "Document",
@@ -440,7 +460,8 @@ Examples:
     >>> root = doc.create_root("config")
 )")
         .def_static("from_string", &atom::extra::pugixml::Document::from_string,
-                    py::arg("xml"), py::arg("options") = atom::extra::pugixml::LoadOptions{},
+                    py::arg("xml"),
+                    py::arg("options") = atom::extra::pugixml::LoadOptions{},
                     R"(Parse XML document from a string.
 
 Args:
@@ -454,7 +475,8 @@ Raises:
     ParseException: If the XML cannot be parsed.
 )")
         .def_static("from_file", &atom::extra::pugixml::Document::from_file,
-                    py::arg("path"), py::arg("options") = atom::extra::pugixml::LoadOptions{},
+                    py::arg("path"),
+                    py::arg("options") = atom::extra::pugixml::LoadOptions{},
                     R"(Load XML document from a file.
 
 Args:
@@ -467,8 +489,10 @@ Returns:
 Raises:
     ParseException: If the file cannot be loaded or parsed.
 )")
-        .def_static("create_empty", &atom::extra::pugixml::Document::create_empty,
-                    py::arg("version") = "1.0", py::arg("encoding") = "UTF-8", py::arg("standalone") = "",
+        .def_static("create_empty",
+                    &atom::extra::pugixml::Document::create_empty,
+                    py::arg("version") = "1.0", py::arg("encoding") = "UTF-8",
+                    py::arg("standalone") = "",
                     R"(Create an empty XML document with declaration.
 
 Args:
@@ -485,7 +509,8 @@ Returns:
 Returns:
     The root element node.
 )")
-        .def("document_element", &atom::extra::pugixml::Document::document_element,
+        .def("document_element",
+             &atom::extra::pugixml::Document::document_element,
              R"(Get the document element (same as root).
 
 Returns:
@@ -511,7 +536,8 @@ Returns:
     The document node.
 )")
         .def("save_to_file", &atom::extra::pugixml::Document::save_to_file,
-             py::arg("path"), py::arg("options") = atom::extra::pugixml::SaveOptions{},
+             py::arg("path"),
+             py::arg("options") = atom::extra::pugixml::SaveOptions{},
              R"(Save the document to a file.
 
 Args:
@@ -522,7 +548,8 @@ Raises:
     XmlException: If the file cannot be saved.
 )")
         .def("save_to_stream", &atom::extra::pugixml::Document::save_to_stream,
-             py::arg("stream"), py::arg("options") = atom::extra::pugixml::SaveOptions{},
+             py::arg("stream"),
+             py::arg("options") = atom::extra::pugixml::SaveOptions{},
              R"(Save the document to a stream.
 
 Args:
@@ -549,7 +576,8 @@ Returns:
     // Version information
     m.attr("__version__") = atom::extra::pugixml::version::string;
 
-    py::module_ version_module = m.def_submodule("version", "Version information");
+    py::module_ version_module =
+        m.def_submodule("version", "Version information");
     version_module.attr("major") = atom::extra::pugixml::version::major;
     version_module.attr("minor") = atom::extra::pugixml::version::minor;
     version_module.attr("patch") = atom::extra::pugixml::version::patch;

@@ -114,8 +114,8 @@ private:
 // Template function implementations
 
 auto encryptAES(StringLike auto&& plaintext_arg, StringLike auto&& key_arg,
-                std::vector<unsigned char>& iv, std::vector<unsigned char>& tag)
-    -> std::string {
+                std::vector<unsigned char>& iv,
+                std::vector<unsigned char>& tag) -> std::string {
     const std::string_view plaintext = plaintext_arg;
     const std::string_view key = key_arg;
 

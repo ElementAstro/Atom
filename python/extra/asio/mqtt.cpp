@@ -17,22 +17,22 @@ QoS management, and asynchronous operations.
 
 Examples:
     >>> from atom.extra.asio import mqtt
-    >>> 
+    >>>
     >>> # Create MQTT client
     >>> client = mqtt.Client()
-    >>> 
+    >>>
     >>> # Set up connection options
     >>> options = mqtt.ConnectionOptions()
     >>> options.client_id = "python_client"
     >>> options.username = "user"
     >>> options.password = "pass"
-    >>> 
+    >>>
     >>> # Connect to broker
     >>> client.async_connect("localhost", 1883, options)
-    >>> 
+    >>>
     >>> # Publish message
     >>> client.async_publish("test/topic", "Hello MQTT!", mqtt.QoS.AT_LEAST_ONCE)
-    >>> 
+    >>>
     >>> # Subscribe to topic
     >>> subscription = mqtt.Subscription()
     >>> subscription.topic_filter = "test/+"
@@ -68,11 +68,11 @@ Specifies which MQTT protocol version to use for connections.)")
                          R"(Quality of Service levels for MQTT message delivery.
 
 Defines the delivery guarantees for MQTT messages.)")
-        .value("AT_MOST_ONCE", mqtt::QoS::AT_MOST_ONCE, 
+        .value("AT_MOST_ONCE", mqtt::QoS::AT_MOST_ONCE,
                "Fire and forget delivery (QoS 0)")
-        .value("AT_LEAST_ONCE", mqtt::QoS::AT_LEAST_ONCE, 
+        .value("AT_LEAST_ONCE", mqtt::QoS::AT_LEAST_ONCE,
                "Acknowledged delivery (QoS 1)")
-        .value("EXACTLY_ONCE", mqtt::QoS::EXACTLY_ONCE, 
+        .value("EXACTLY_ONCE", mqtt::QoS::EXACTLY_ONCE,
                "Assured delivery (QoS 2)")
         .export_values();
 
@@ -82,44 +82,80 @@ Defines the delivery guarantees for MQTT messages.)")
 
 Represents standard MQTT error codes and MQTT 5.0 specific codes.)")
         .value("SUCCESS", mqtt::ErrorCode::SUCCESS, "Operation successful")
-        .value("CONNECTION_REFUSED_PROTOCOL", mqtt::ErrorCode::CONNECTION_REFUSED_PROTOCOL,
+        .value("CONNECTION_REFUSED_PROTOCOL",
+               mqtt::ErrorCode::CONNECTION_REFUSED_PROTOCOL,
                "Connection refused - unacceptable protocol version")
-        .value("CONNECTION_REFUSED_IDENTIFIER", mqtt::ErrorCode::CONNECTION_REFUSED_IDENTIFIER,
+        .value("CONNECTION_REFUSED_IDENTIFIER",
+               mqtt::ErrorCode::CONNECTION_REFUSED_IDENTIFIER,
                "Connection refused - identifier rejected")
-        .value("CONNECTION_REFUSED_SERVER_UNAVAILABLE", mqtt::ErrorCode::CONNECTION_REFUSED_SERVER_UNAVAILABLE,
+        .value("CONNECTION_REFUSED_SERVER_UNAVAILABLE",
+               mqtt::ErrorCode::CONNECTION_REFUSED_SERVER_UNAVAILABLE,
                "Connection refused - server unavailable")
-        .value("CONNECTION_REFUSED_BAD_CREDENTIALS", mqtt::ErrorCode::CONNECTION_REFUSED_BAD_CREDENTIALS,
+        .value("CONNECTION_REFUSED_BAD_CREDENTIALS",
+               mqtt::ErrorCode::CONNECTION_REFUSED_BAD_CREDENTIALS,
                "Connection refused - bad user name or password")
-        .value("CONNECTION_REFUSED_NOT_AUTHORIZED", mqtt::ErrorCode::CONNECTION_REFUSED_NOT_AUTHORIZED,
+        .value("CONNECTION_REFUSED_NOT_AUTHORIZED",
+               mqtt::ErrorCode::CONNECTION_REFUSED_NOT_AUTHORIZED,
                "Connection refused - not authorized")
-        .value("UNSPECIFIED_ERROR", mqtt::ErrorCode::UNSPECIFIED_ERROR, "Unspecified error")
-        .value("MALFORMED_PACKET", mqtt::ErrorCode::MALFORMED_PACKET, "Malformed packet")
-        .value("PROTOCOL_ERROR", mqtt::ErrorCode::PROTOCOL_ERROR, "Protocol error")
-        .value("IMPLEMENTATION_SPECIFIC", mqtt::ErrorCode::IMPLEMENTATION_SPECIFIC, "Implementation specific error")
-        .value("UNSUPPORTED_PROTOCOL_VERSION", mqtt::ErrorCode::UNSUPPORTED_PROTOCOL_VERSION, "Unsupported protocol version")
-        .value("CLIENT_IDENTIFIER_NOT_VALID", mqtt::ErrorCode::CLIENT_IDENTIFIER_NOT_VALID, "Client identifier not valid")
-        .value("BAD_USER_NAME_OR_PASSWORD", mqtt::ErrorCode::BAD_USER_NAME_OR_PASSWORD, "Bad user name or password")
-        .value("NOT_AUTHORIZED", mqtt::ErrorCode::NOT_AUTHORIZED, "Not authorized")
-        .value("SERVER_UNAVAILABLE", mqtt::ErrorCode::SERVER_UNAVAILABLE, "Server unavailable")
+        .value("UNSPECIFIED_ERROR", mqtt::ErrorCode::UNSPECIFIED_ERROR,
+               "Unspecified error")
+        .value("MALFORMED_PACKET", mqtt::ErrorCode::MALFORMED_PACKET,
+               "Malformed packet")
+        .value("PROTOCOL_ERROR", mqtt::ErrorCode::PROTOCOL_ERROR,
+               "Protocol error")
+        .value("IMPLEMENTATION_SPECIFIC",
+               mqtt::ErrorCode::IMPLEMENTATION_SPECIFIC,
+               "Implementation specific error")
+        .value("UNSUPPORTED_PROTOCOL_VERSION",
+               mqtt::ErrorCode::UNSUPPORTED_PROTOCOL_VERSION,
+               "Unsupported protocol version")
+        .value("CLIENT_IDENTIFIER_NOT_VALID",
+               mqtt::ErrorCode::CLIENT_IDENTIFIER_NOT_VALID,
+               "Client identifier not valid")
+        .value("BAD_USER_NAME_OR_PASSWORD",
+               mqtt::ErrorCode::BAD_USER_NAME_OR_PASSWORD,
+               "Bad user name or password")
+        .value("NOT_AUTHORIZED", mqtt::ErrorCode::NOT_AUTHORIZED,
+               "Not authorized")
+        .value("SERVER_UNAVAILABLE", mqtt::ErrorCode::SERVER_UNAVAILABLE,
+               "Server unavailable")
         .value("SERVER_BUSY", mqtt::ErrorCode::SERVER_BUSY, "Server busy")
         .value("BANNED", mqtt::ErrorCode::BANNED, "Banned")
-        .value("BAD_AUTHENTICATION_METHOD", mqtt::ErrorCode::BAD_AUTHENTICATION_METHOD, "Bad authentication method")
-        .value("TOPIC_FILTER_INVALID", mqtt::ErrorCode::TOPIC_FILTER_INVALID, "Topic filter invalid")
-        .value("TOPIC_NAME_INVALID", mqtt::ErrorCode::TOPIC_NAME_INVALID, "Topic name invalid")
-        .value("PACKET_IDENTIFIER_IN_USE", mqtt::ErrorCode::PACKET_IDENTIFIER_IN_USE, "Packet identifier in use")
-        .value("PACKET_IDENTIFIER_NOT_FOUND", mqtt::ErrorCode::PACKET_IDENTIFIER_NOT_FOUND, "Packet identifier not found")
-        .value("RECEIVE_MAXIMUM_EXCEEDED", mqtt::ErrorCode::RECEIVE_MAXIMUM_EXCEEDED, "Receive maximum exceeded")
-        .value("TOPIC_ALIAS_INVALID", mqtt::ErrorCode::TOPIC_ALIAS_INVALID, "Topic alias invalid")
-        .value("PACKET_TOO_LARGE", mqtt::ErrorCode::PACKET_TOO_LARGE, "Packet too large")
-        .value("MESSAGE_RATE_TOO_HIGH", mqtt::ErrorCode::MESSAGE_RATE_TOO_HIGH, "Message rate too high")
-        .value("QUOTA_EXCEEDED", mqtt::ErrorCode::QUOTA_EXCEEDED, "Quota exceeded")
-        .value("ADMINISTRATIVE_ACTION", mqtt::ErrorCode::ADMINISTRATIVE_ACTION, "Administrative action")
-        .value("PAYLOAD_FORMAT_INVALID", mqtt::ErrorCode::PAYLOAD_FORMAT_INVALID, "Payload format invalid")
+        .value("BAD_AUTHENTICATION_METHOD",
+               mqtt::ErrorCode::BAD_AUTHENTICATION_METHOD,
+               "Bad authentication method")
+        .value("TOPIC_FILTER_INVALID", mqtt::ErrorCode::TOPIC_FILTER_INVALID,
+               "Topic filter invalid")
+        .value("TOPIC_NAME_INVALID", mqtt::ErrorCode::TOPIC_NAME_INVALID,
+               "Topic name invalid")
+        .value("PACKET_IDENTIFIER_IN_USE",
+               mqtt::ErrorCode::PACKET_IDENTIFIER_IN_USE,
+               "Packet identifier in use")
+        .value("PACKET_IDENTIFIER_NOT_FOUND",
+               mqtt::ErrorCode::PACKET_IDENTIFIER_NOT_FOUND,
+               "Packet identifier not found")
+        .value("RECEIVE_MAXIMUM_EXCEEDED",
+               mqtt::ErrorCode::RECEIVE_MAXIMUM_EXCEEDED,
+               "Receive maximum exceeded")
+        .value("TOPIC_ALIAS_INVALID", mqtt::ErrorCode::TOPIC_ALIAS_INVALID,
+               "Topic alias invalid")
+        .value("PACKET_TOO_LARGE", mqtt::ErrorCode::PACKET_TOO_LARGE,
+               "Packet too large")
+        .value("MESSAGE_RATE_TOO_HIGH", mqtt::ErrorCode::MESSAGE_RATE_TOO_HIGH,
+               "Message rate too high")
+        .value("QUOTA_EXCEEDED", mqtt::ErrorCode::QUOTA_EXCEEDED,
+               "Quota exceeded")
+        .value("ADMINISTRATIVE_ACTION", mqtt::ErrorCode::ADMINISTRATIVE_ACTION,
+               "Administrative action")
+        .value("PAYLOAD_FORMAT_INVALID",
+               mqtt::ErrorCode::PAYLOAD_FORMAT_INVALID,
+               "Payload format invalid")
         .export_values();
 
     // ConnectionOptions struct
-    py::class_<mqtt::ConnectionOptions>(m, "ConnectionOptions",
-                                        R"(Configuration options for establishing an MQTT connection.
+    py::class_<mqtt::ConnectionOptions>(
+        m, "ConnectionOptions",
+        R"(Configuration options for establishing an MQTT connection.
 
 Contains all parameters required to connect to an MQTT broker, including
 authentication, session, will message, protocol version, and TLS settings.
@@ -160,9 +196,11 @@ Examples:
                        "Path to CA certificate file")
         .def_readwrite("cert_file", &mqtt::ConnectionOptions::cert_file,
                        "Path to client certificate file")
-        .def_readwrite("private_key_file", &mqtt::ConnectionOptions::private_key_file,
+        .def_readwrite("private_key_file",
+                       &mqtt::ConnectionOptions::private_key_file,
                        "Path to private key file")
-        .def_readwrite("verify_certificate", &mqtt::ConnectionOptions::verify_certificate,
+        .def_readwrite("verify_certificate",
+                       &mqtt::ConnectionOptions::verify_certificate,
                        "Whether to verify server certificate");
 
     // Message struct
@@ -180,11 +218,14 @@ Examples:
 )")
         .def(py::init<>(), "Create an empty message")
         .def_readwrite("topic", &mqtt::Message::topic, "Topic name")
-        .def_readwrite("payload", &mqtt::Message::payload, "Message payload as bytes")
+        .def_readwrite("payload", &mqtt::Message::payload,
+                       "Message payload as bytes")
         .def_readwrite("qos", &mqtt::Message::qos, "Quality of Service level")
         .def_readwrite("retain", &mqtt::Message::retain, "Retain flag")
-        .def_readwrite("packet_id", &mqtt::Message::packet_id, "Packet identifier")
-        .def_readwrite("message_expiry_interval", &mqtt::Message::message_expiry_interval,
+        .def_readwrite("packet_id", &mqtt::Message::packet_id,
+                       "Packet identifier")
+        .def_readwrite("message_expiry_interval",
+                       &mqtt::Message::message_expiry_interval,
                        "Message expiry interval (MQTT 5.0)")
         .def_readwrite("response_topic", &mqtt::Message::response_topic,
                        "Response topic (MQTT 5.0)")
@@ -194,8 +235,9 @@ Examples:
                        "Content type (MQTT 5.0)");
 
     // Subscription struct
-    py::class_<mqtt::Subscription>(m, "Subscription",
-                                   R"(Represents a subscription to an MQTT topic filter.
+    py::class_<mqtt::Subscription>(
+        m, "Subscription",
+        R"(Represents a subscription to an MQTT topic filter.
 
 Contains topic filter, QoS, and MQTT 5.0 subscription options.
 
@@ -208,11 +250,11 @@ Examples:
         .def(py::init<>(), "Create an empty subscription")
         .def_readwrite("topic_filter", &mqtt::Subscription::topic_filter,
                        "Topic filter to subscribe to")
-        .def_readwrite("qos", &mqtt::Subscription::qos,
-                       "Requested QoS level")
+        .def_readwrite("qos", &mqtt::Subscription::qos, "Requested QoS level")
         .def_readwrite("no_local", &mqtt::Subscription::no_local,
                        "Do not receive own publications (MQTT 5.0)")
-        .def_readwrite("retain_as_published", &mqtt::Subscription::retain_as_published,
+        .def_readwrite("retain_as_published",
+                       &mqtt::Subscription::retain_as_published,
                        "Retain as published flag (MQTT 5.0)")
         .def_readwrite("retain_handling", &mqtt::Subscription::retain_handling,
                        "Retain handling option (MQTT 5.0)");
@@ -225,7 +267,8 @@ Tracks message and byte counts, connection time, and reconnect attempts.)")
         .def(py::init<>(), "Create empty statistics")
         .def_readwrite("messages_sent", &mqtt::ClientStats::messages_sent,
                        "Number of messages sent")
-        .def_readwrite("messages_received", &mqtt::ClientStats::messages_received,
+        .def_readwrite("messages_received",
+                       &mqtt::ClientStats::messages_received,
                        "Number of messages received")
         .def_readwrite("bytes_sent", &mqtt::ClientStats::bytes_sent,
                        "Number of bytes sent")
@@ -277,13 +320,14 @@ Examples:
 Args:
     auto_start_io: If true, automatically starts the IO thread.
 )")
-        .def("async_connect",
-             [](mqtt::Client& self, const std::string& host, uint16_t port,
-                const mqtt::ConnectionOptions& options) {
-                 self.async_connect(host, port, options, nullptr);
-             },
-             py::arg("host"), py::arg("port"), py::arg("options"),
-             R"(Asynchronously connect to the MQTT broker.
+        .def(
+            "async_connect",
+            [](mqtt::Client& self, const std::string& host, uint16_t port,
+               const mqtt::ConnectionOptions& options) {
+                self.async_connect(host, port, options, nullptr);
+            },
+            py::arg("host"), py::arg("port"), py::arg("options"),
+            R"(Asynchronously connect to the MQTT broker.
 
 Args:
     host: Broker hostname or IP address.
@@ -319,18 +363,21 @@ Returns:
 Returns:
     ConnectionState enum value.
 )")
-        .def("async_publish",
-             [](mqtt::Client& self, const std::string& topic,
-                const py::bytes& payload, mqtt::QoS qos, bool retain) {
-                 std::string payload_str = payload;
-                 self.async_publish(topic, std::span<const uint8_t>(
-                     reinterpret_cast<const uint8_t*>(payload_str.data()),
-                     payload_str.size()), qos, retain, nullptr);
-             },
-             py::arg("topic"), py::arg("payload"),
-             py::arg("qos") = mqtt::QoS::AT_MOST_ONCE,
-             py::arg("retain") = false,
-             R"(Asynchronously publish a message to a topic.
+        .def(
+            "async_publish",
+            [](mqtt::Client& self, const std::string& topic,
+               const py::bytes& payload, mqtt::QoS qos, bool retain) {
+                std::string payload_str = payload;
+                self.async_publish(
+                    topic,
+                    std::span<const uint8_t>(
+                        reinterpret_cast<const uint8_t*>(payload_str.data()),
+                        payload_str.size()),
+                    qos, retain, nullptr);
+            },
+            py::arg("topic"), py::arg("payload"),
+            py::arg("qos") = mqtt::QoS::AT_MOST_ONCE, py::arg("retain") = false,
+            R"(Asynchronously publish a message to a topic.
 
 Args:
     topic: Topic string.
@@ -347,12 +394,14 @@ Examples:
     >>> client.async_publish("sensors/temp", b"23.5",
     ...                     mqtt.QoS.AT_LEAST_ONCE, False, on_publish)
 )")
-        .def("async_subscribe",
-             [](mqtt::Client& self, const std::vector<mqtt::Subscription>& subscriptions) {
-                 self.async_subscribe(subscriptions, nullptr);
-             },
-             py::arg("subscriptions"),
-             R"(Asynchronously subscribe to one or more topics.
+        .def(
+            "async_subscribe",
+            [](mqtt::Client& self,
+               const std::vector<mqtt::Subscription>& subscriptions) {
+                self.async_subscribe(subscriptions, nullptr);
+            },
+            py::arg("subscriptions"),
+            R"(Asynchronously subscribe to one or more topics.
 
 Args:
     subscriptions: List of Subscription objects.
@@ -368,12 +417,14 @@ Examples:
     >>> subs[0].qos = mqtt.QoS.AT_LEAST_ONCE
     >>> client.async_subscribe(subs, on_subscribe)
 )")
-        .def("async_unsubscribe",
-             [](mqtt::Client& self, const std::vector<std::string>& topic_filters) {
-                 self.async_unsubscribe(topic_filters, nullptr);
-             },
-             py::arg("topic_filters"),
-             R"(Asynchronously unsubscribe from one or more topics.
+        .def(
+            "async_unsubscribe",
+            [](mqtt::Client& self,
+               const std::vector<std::string>& topic_filters) {
+                self.async_unsubscribe(topic_filters, nullptr);
+            },
+            py::arg("topic_filters"),
+            R"(Asynchronously unsubscribe from one or more topics.
 
 Args:
     topic_filters: List of topic filter strings.

@@ -128,9 +128,10 @@ TEST_F(DecorateTest, RetryDecorator) {
 
     // Test with a function that succeeds on the 2nd attempt
     callCount = 0;
-    int result = retryDec(failNTimes, 1);  // Pass 1 as the parameter to failNTimes
-    EXPECT_EQ(result, 2);  // failNTimes(1) should return 2 after retries
-    EXPECT_EQ(callCount, 2);  // Should have been called twice
+    int result =
+        retryDec(failNTimes, 1);  // Pass 1 as the parameter to failNTimes
+    EXPECT_EQ(result, 2);         // failNTimes(1) should return 2 after retries
+    EXPECT_EQ(callCount, 2);      // Should have been called twice
 
     // Test with a function that succeeds on the 3rd attempt
     callCount = 0;
@@ -142,7 +143,7 @@ TEST_F(DecorateTest, RetryDecorator) {
     callCount = 0;
     EXPECT_THROW(retryDec(failNTimes, 10),
                  std::runtime_error);  // Should fail after all retries
-    EXPECT_EQ(callCount, 4);  // Initial attempt + 3 retries
+    EXPECT_EQ(callCount, 4);           // Initial attempt + 3 retries
 }
 
 // Test cache decorator
@@ -498,13 +499,14 @@ TEST_F(DecorateTest, ThreadSafetyTest) {
     std::atomic<bool> startFlag{false};
 
     for (int i = 0; i < 10; ++i) {
-        threads.emplace_back([&cacheDec, &results, i, incrementFunc, &startFlag]() {
-            // Wait for all threads to be ready
-            while (!startFlag.load()) {
-                std::this_thread::yield();
-            }
-            results[i] = cacheDec(incrementFunc);
-        });
+        threads.emplace_back(
+            [&cacheDec, &results, i, incrementFunc, &startFlag]() {
+                // Wait for all threads to be ready
+                while (!startFlag.load()) {
+                    std::this_thread::yield();
+                }
+                results[i] = cacheDec(incrementFunc);
+            });
     }
 
     // Start all threads simultaneously
@@ -515,9 +517,10 @@ TEST_F(DecorateTest, ThreadSafetyTest) {
         thread.join();
     }
 
-    // Due to cache behavior, most results should be 1, but some might be different
-    // due to race conditions in cache access
-    EXPECT_GE(std::count(results.begin(), results.end(), 1), 5);  // At least half should be cached
+    // Due to cache behavior, most results should be 1, but some might be
+    // different due to race conditions in cache access
+    EXPECT_GE(std::count(results.begin(), results.end(), 1),
+              5);            // At least half should be cached
     EXPECT_LE(counter, 10);  // Function called at most once per thread
 
     // Wait for cache to expire

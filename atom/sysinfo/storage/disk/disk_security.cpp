@@ -22,6 +22,7 @@ Description: System Information Module - Disk Security
 
 #ifdef _WIN32
 #include <windows.h>
+#include <winioctl.h>
 #elif __linux__
 #include <sys/mount.h>
 #include <unistd.h>

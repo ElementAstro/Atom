@@ -54,8 +54,8 @@ auto isValidIPv6(const std::string& ipAddress) -> bool {
     return true;
 }
 
-auto ipToString(const struct sockaddr* addr, char* strBuf, size_t bufSize)
-    -> bool {
+auto ipToString(const struct sockaddr* addr, char* strBuf,
+                size_t bufSize) -> bool {
     if (!addr || !strBuf || bufSize == 0) {
         spdlog::debug("Invalid parameters passed to ipToString");
         return false;

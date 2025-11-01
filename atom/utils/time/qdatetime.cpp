@@ -448,8 +448,8 @@ auto QDateTime::setDate(int year, int month, int day) const -> QDateTime {
     }
 }
 
-auto QDateTime::setTime(int hour, int minute, int second, int ms) const
-    -> QDateTime {
+auto QDateTime::setTime(int hour, int minute, int second,
+                        int ms) const -> QDateTime {
     spdlog::debug(
         "QDateTime::setTime called with hour={}, minute={}, second={}, ms={}",
         hour, minute, second, ms);

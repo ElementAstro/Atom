@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <concepts>
-#include <format>    // C++20 string formatting
+#include <format>  // C++20 string formatting
 #include <optional>
 #include <ranges>           // C++20 ranges library
 #include <source_location>  // C++20 source code location
@@ -374,7 +374,6 @@ struct BracketValidator {
                     bool isOpeningCustomBracket =
                         std::any_of(options.customBracketPairs.begin(),
                                     options.customBracketPairs.end(),
-                                    options.customBracketPairs,
                                     [current](const auto& pair) {
                                         return pair.first == current;
                                     });
@@ -386,7 +385,6 @@ struct BracketValidator {
                         bool isClosingCustomBracket =
                             std::any_of(options.customBracketPairs.begin(),
                                         options.customBracketPairs.end(),
-                                        options.customBracketPairs,
                                         [current](const auto& pair) {
                                             return pair.second == current;
                                         });
@@ -436,10 +434,17 @@ constexpr auto toArray(const char (&str)[N]) noexcept -> std::array<char, N> {
 // Add template specialization for string literals
 template <std::size_t N>
 constexpr auto validateBrackets(const char (&str)[N],
-                                const ValidationOptions& options = {}) noexcept
-    -> typename BracketValidator<N>::ValidationResult {
+                                const ValidationOptions& options) noexcept ->
+    typename BracketValidator<N>::ValidationResult {
     return BracketValidator<N>::validate(std::span<const char, N>{str, N},
                                          options);
+}
+
+template <std::size_t N>
+constexpr auto validateBrackets(const char (&str)[N]) noexcept ->
+    typename BracketValidator<N>::ValidationResult {
+    return BracketValidator<N>::validate(std::span<const char, N>{str, N},
+                                         ValidationOptions{});
 }
 
 // Implement exception-free validation using atom::type::compat::expected
@@ -473,9 +478,11 @@ constexpr auto validateStringNothrow(
     } catch (const ValidationException& e) {
         return atom::type::compat::unexpected<std::string>(e.what());
     } catch (const std::exception& e) {
-        return atom::type::compat::unexpected<std::string>(std::format("Unexpected error: {}", e.what()));
+        return atom::type::compat::unexpected<std::string>(
+            std::format("Unexpected error: {}", e.what()));
     } catch (...) {
-        return atom::type::compat::unexpected<std::string>("Unknown error occurred");
+        return atom::type::compat::unexpected<std::string>(
+            "Unknown error occurred");
     }
 }
 

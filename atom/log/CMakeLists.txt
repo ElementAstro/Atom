@@ -88,6 +88,9 @@ endif()
 
 add_library(loguru SHARED loguru.cpp) # allow BUILD_SHARED_LIBS to decide
                                       # STATIC/SHARED
+if(WIN32)
+  set_target_properties(loguru PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 
 if(NOT PROJECT_IS_TOP_LEVEL)
   add_library(${_namespace}::loguru ALIAS loguru)

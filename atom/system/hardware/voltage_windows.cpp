@@ -225,7 +225,8 @@ std::vector<PowerSourceInfo> WindowsVoltageMonitor::getWMIPowerInfo() const {
         ULONG uReturn = 0;
 
         while (pEnumerator) {
-            hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
+            hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                   &pclsObj, &uReturn);
 
             if (uReturn == 0) {
                 break;
@@ -286,7 +287,8 @@ std::vector<PowerSourceInfo> WindowsVoltageMonitor::getWMIPowerInfo() const {
         ULONG uReturn = 0;
 
         while (pEnumerator) {
-            hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
+            hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                   &pclsObj, &uReturn);
 
             if (uReturn == 0) {
                 break;

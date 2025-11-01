@@ -21,7 +21,6 @@
 #include <string>
 #include <vector>
 
-
 // Check if YAML-cpp is available
 #if __has_include(<yaml-cpp/yaml.h>)
 

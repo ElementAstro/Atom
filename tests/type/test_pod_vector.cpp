@@ -412,7 +412,7 @@ TEST(PodVectorEdgeCaseTest, EdgeCases) {
     PodVector<int> empty_vec;
     EXPECT_TRUE(empty_vec.empty());
     EXPECT_THROW(empty_vec.back(),
-                 std::runtime_error);    // 应该抛出异常，因为向量为空
+                 std::runtime_error);  // 应该抛出异常，因为向量为空
     EXPECT_NO_THROW(empty_vec.clear());  // 清空空向量应该安全
 
     // 零容量预留

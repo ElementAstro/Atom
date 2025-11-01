@@ -847,7 +847,8 @@ int main() {
     // auto found_person = persons.find(
     //     [](const Person& p) -> bool { return p.name.starts_with("B"); });
     // std::cout << "First person with name starting with 'B': "
-    //           << (found_person.has_value() ? found_person->name : "Not found")
+    //           << (found_person.has_value() ? found_person->name : "Not
+    //           found")
     //           << std::endl;
 
     // 12. Contains Operation
@@ -860,9 +861,9 @@ int main() {
     std::cout << "Integers contains 6: " << (contains6 ? "Yes" : "No")
               << std::endl;
 
-    // Note: contains() with mixed types has compilation issues due to type comparison
-    // bool contains_hello = mixed.contains("hello");
-    // std::cout << "Mixed contains 'hello': " << (contains_hello ? "Yes" : "No")
+    // Note: contains() with mixed types has compilation issues due to type
+    // comparison bool contains_hello = mixed.contains("hello"); std::cout <<
+    // "Mixed contains 'hello': " << (contains_hello ? "Yes" : "No")
     //           << std::endl;
 
     // 13. Free Function makeArgsView

@@ -134,11 +134,13 @@ TEST_F(PrintUtilsTest, ErrorPrinting) {
     OutputCapture capture;
 
     printError("This is an error message");
-    EXPECT_TRUE(capture.getCerr().find("This is an error message") != std::string::npos);
+    EXPECT_TRUE(capture.getCerr().find("This is an error message") !=
+                std::string::npos);
 
     capture.clear();
     printWarning("This is a warning message");
-    EXPECT_TRUE(capture.getCout().find("This is a warning message") != std::string::npos);
+    EXPECT_TRUE(capture.getCout().find("This is a warning message") !=
+                std::string::npos);
 }
 
 // Test debug printing
@@ -215,12 +217,11 @@ TEST_F(PrintUtilsTest, TablePrinting) {
         {"Name", "Age", "City"},
         {"Alice", "25", "New York"},
         {"Bob", "30", "London"},
-        {"Charlie", "35", "Tokyo"}
-    };
+        {"Charlie", "35", "Tokyo"}};
 
     printTable(tableData);
     std::string output = capture.getCout();
-    
+
     EXPECT_TRUE(output.find("Name") != std::string::npos);
     EXPECT_TRUE(output.find("Alice") != std::string::npos);
     EXPECT_TRUE(output.find("25") != std::string::npos);
@@ -261,22 +262,22 @@ TEST_F(PrintUtilsTest, LoggingFunctionality) {
 // Test file output
 TEST_F(PrintUtilsTest, FileOutput) {
     const std::string filename = "test_output.txt";
-    
+
     // Clean up any existing file
     std::remove(filename.c_str());
 
     printToFile(filename, "Test message to file");
-    
+
     // Read the file and verify content
     std::ifstream file(filename);
     ASSERT_TRUE(file.is_open());
-    
+
     std::string content;
     std::getline(file, content);
     file.close();
-    
+
     EXPECT_EQ(content, "Test message to file");
-    
+
     // Clean up
     std::remove(filename.c_str());
 }
@@ -287,7 +288,7 @@ TEST_F(PrintUtilsTest, TimestampFunctionality) {
 
     printWithTimestamp("Message with timestamp");
     std::string output = capture.getCout();
-    
+
     EXPECT_TRUE(output.find("Message with timestamp") != std::string::npos);
     // Should contain timestamp format (basic check)
     EXPECT_TRUE(output.find(":") != std::string::npos);
@@ -299,9 +300,9 @@ TEST_F(PrintUtilsTest, MemoryUsagePrinting) {
 
     printMemoryUsage();
     std::string output = capture.getCout();
-    
+
     // Should contain memory-related keywords
-    EXPECT_TRUE(output.find("Memory") != std::string::npos || 
+    EXPECT_TRUE(output.find("Memory") != std::string::npos ||
                 output.find("memory") != std::string::npos ||
                 output.find("MB") != std::string::npos ||
                 output.find("KB") != std::string::npos);
@@ -316,11 +317,12 @@ TEST_F(PrintUtilsTest, ThreadSafePrinting) {
     OutputCapture capture;
 
     for (int t = 0; t < numThreads; ++t) {
-        futures.push_back(std::async(std::launch::async, [t, messagesPerThread]() {
-            for (int i = 0; i < messagesPerThread; ++i) {
-                printThreadSafe("Thread", t, "Message", i);
-            }
-        }));
+        futures.push_back(
+            std::async(std::launch::async, [t, messagesPerThread]() {
+                for (int i = 0; i < messagesPerThread; ++i) {
+                    printThreadSafe("Thread", t, "Message", i);
+                }
+            }));
     }
 
     // Wait for all threads to complete
@@ -329,10 +331,11 @@ TEST_F(PrintUtilsTest, ThreadSafePrinting) {
     }
 
     std::string output = capture.getCout();
-    
+
     // Should contain messages from all threads
     for (int t = 0; t < numThreads; ++t) {
-        EXPECT_TRUE(output.find("Thread " + std::to_string(t)) != std::string::npos);
+        EXPECT_TRUE(output.find("Thread " + std::to_string(t)) !=
+                    std::string::npos);
     }
 }
 
@@ -348,14 +351,16 @@ TEST_F(PrintUtilsTest, PerformanceTest) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Should complete within reasonable time
-    EXPECT_LT(duration.count(), 1000); // 1 second max
+    EXPECT_LT(duration.count(), 1000);  // 1 second max
 
     std::string output = capture.getCout();
     EXPECT_TRUE(output.find("Performance test message 0") != std::string::npos);
-    EXPECT_TRUE(output.find("Performance test message 999") != std::string::npos);
+    EXPECT_TRUE(output.find("Performance test message 999") !=
+                std::string::npos);
 }
 
 // Test edge cases and error handling
@@ -456,9 +461,7 @@ TEST_F(PrintUtilsTest, ComplexDataStructures) {
 
     // Test map with complex values
     std::map<std::string, std::vector<int>> complexMap = {
-        {"first", {1, 2, 3}},
-        {"second", {4, 5, 6}}
-    };
+        {"first", {1, 2, 3}}, {"second", {4, 5, 6}}};
     print(complexMap);
     output = capture.getCout();
     EXPECT_TRUE(output.find("first") != std::string::npos);
@@ -473,7 +476,8 @@ TEST_F(PrintUtilsTest, ConditionalPrinting) {
     setLogLevel(LogLevel::DEBUG_LEVEL);
     printDebug("Debug message should appear");
     std::string output = capture.getCout();
-    EXPECT_TRUE(output.find("Debug message should appear") != std::string::npos);
+    EXPECT_TRUE(output.find("Debug message should appear") !=
+                std::string::npos);
 
     capture.clear();
 
@@ -481,14 +485,17 @@ TEST_F(PrintUtilsTest, ConditionalPrinting) {
     setLogLevel(LogLevel::ERROR_LEVEL);
     printDebug("Debug message should not appear");
     output = capture.getCout();
-    EXPECT_TRUE(output.empty() || output.find("Debug message should not appear") == std::string::npos);
+    EXPECT_TRUE(output.empty() ||
+                output.find("Debug message should not appear") ==
+                    std::string::npos);
 
     capture.clear();
 
     // Error should still appear
     printError("Error message should appear");
     output = capture.getCerr();
-    EXPECT_TRUE(output.find("Error message should appear") != std::string::npos);
+    EXPECT_TRUE(output.find("Error message should appear") !=
+                std::string::npos);
 }
 
 // Test output redirection

@@ -3,7 +3,6 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
-
 using json = nlohmann::json;
 
 namespace atom::extra::asio::sse {

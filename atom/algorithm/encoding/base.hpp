@@ -180,8 +180,8 @@ template <detail::ByteContainer T>
  * @param key The encryption key
  * @return std::string The encrypted string
  */
-[[nodiscard]] auto xorEncrypt(std::string_view plaintext, uint8_t key) noexcept
-    -> std::string;
+[[nodiscard]] auto xorEncrypt(std::string_view plaintext,
+                              uint8_t key) noexcept -> std::string;
 
 /**
  * @brief Decrypts a string using the XOR algorithm.
@@ -190,8 +190,8 @@ template <detail::ByteContainer T>
  * @param key The decryption key
  * @return std::string The decrypted string
  */
-[[nodiscard]] auto xorDecrypt(std::string_view ciphertext, uint8_t key) noexcept
-    -> std::string;
+[[nodiscard]] auto xorDecrypt(std::string_view ciphertext,
+                              uint8_t key) noexcept -> std::string;
 
 /**
  * @brief Decodes a compile-time constant Base64 string.
@@ -290,7 +290,7 @@ constexpr auto encode() {
  * @return Hexadecimal string representation
  */
 [[nodiscard]] auto encodeHex(std::span<const std::uint8_t> data,
-                            bool uppercase = true) noexcept -> std::string;
+                             bool uppercase = true) noexcept -> std::string;
 
 /**
  * @brief Decodes hexadecimal string to binary data.
@@ -309,7 +309,8 @@ constexpr auto encode() {
  * @return URL-encoded string
  */
 [[nodiscard]] auto urlEncode(std::string_view str,
-                            bool encodeSpaceAsPlus = false) noexcept -> std::string;
+                             bool encodeSpaceAsPlus = false) noexcept
+    -> std::string;
 
 /**
  * @brief URL-decodes a string.

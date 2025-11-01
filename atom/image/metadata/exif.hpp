@@ -152,8 +152,8 @@ protected:
      * format.
      * @return The parsed GPS coordinate as a string.
      */
-    auto parseGPSCoordinate(const std::byte* data, bool isLittleEndian)
-        -> std::string;
+    auto parseGPSCoordinate(const std::byte* data,
+                            bool isLittleEndian) -> std::string;
 
     /**
      * @brief Parses a rational number from the EXIF data.
@@ -209,10 +209,10 @@ private:
     std::string m_filename;
     ExifData m_exifData;
 
-    auto parseColorSpace(const std::byte* data, bool isLittleEndian)
-        -> std::string;
-    auto parseOrientation(const std::byte* data, bool isLittleEndian)
-        -> std::string;
+    auto parseColorSpace(const std::byte* data,
+                         bool isLittleEndian) -> std::string;
+    auto parseOrientation(const std::byte* data,
+                          bool isLittleEndian) -> std::string;
 };
 
 }  // namespace atom::image

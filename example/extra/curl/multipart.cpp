@@ -7,7 +7,8 @@
 #include <unordered_map>
 #include <vector>
 
-// Minimal stub implementations since atom-extra-curl has API compatibility issues
+// Minimal stub implementations since atom-extra-curl has API compatibility
+// issues
 
 namespace atom::extra::curl {
 
@@ -15,24 +16,26 @@ namespace atom::extra::curl {
 class MultipartFormData {
 public:
     MultipartFormData() {
-        std::cout << "MultipartFormData created (stub implementation)" << std::endl;
+        std::cout << "MultipartFormData created (stub implementation)"
+                  << std::endl;
     }
 
     void add_field(const std::string& name, const std::string& value) {
-        std::cout << "Adding field (stub): " << name << " = " << value << std::endl;
+        std::cout << "Adding field (stub): " << name << " = " << value
+                  << std::endl;
         fields_[name] = value;
     }
 
-    void add_file(const std::string& name, const std::string& filename, const std::string& content_type = "") {
+    void add_file(const std::string& name, const std::string& filename,
+                  const std::string& content_type = "") {
         std::cout << "Adding file (stub): " << name << " -> " << filename;
-        if (!content_type.empty()) std::cout << " (" << content_type << ")";
+        if (!content_type.empty())
+            std::cout << " (" << content_type << ")";
         std::cout << std::endl;
         files_[name] = filename;
     }
 
-    std::string to_string() const {
-        return "multipart/form-data (stub)";
-    }
+    std::string to_string() const { return "multipart/form-data (stub)"; }
 
 private:
     std::unordered_map<std::string, std::string> fields_;
@@ -46,13 +49,9 @@ public:
     std::string body = "Response body (stub)";
     std::unordered_map<std::string, std::string> headers;
 
-    Response() {
-        headers["Content-Type"] = "application/json";
-    }
+    Response() { headers["Content-Type"] = "application/json"; }
 
-    std::string text() const {
-        return body;
-    }
+    std::string text() const { return body; }
 };
 
 // Stub Session class
@@ -71,7 +70,8 @@ public:
     }
 
     void set_header(const std::string& name, const std::string& value) {
-        std::cout << "Setting header (stub): " << name << " = " << value << std::endl;
+        std::cout << "Setting header (stub): " << name << " = " << value
+                  << std::endl;
         headers_[name] = value;
     }
 
@@ -79,13 +79,16 @@ private:
     std::unordered_map<std::string, std::string> headers_;
 };
 
-} // namespace atom::extra::curl
+}  // namespace atom::extra::curl
 
 using namespace atom::extra::curl;
 
 int main() {
-    std::cout << "=== CURL Multipart Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation due to API compatibility issues." << std::endl;
+    std::cout << "=== CURL Multipart Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation due to API compatibility "
+                 "issues."
+              << std::endl;
 
     try {
         // 1. Basic multipart form submission
@@ -100,7 +103,8 @@ int main() {
 
             auto response = session.post("https://httpbin.org/post", form);
             std::cout << "Status: " << response.status_code << std::endl;
-            std::cout << "Response: " << response.text().substr(0, 100) << "..." << std::endl;
+            std::cout << "Response: " << response.text().substr(0, 100) << "..."
+                      << std::endl;
         }
 
         // 2. File upload with multipart
@@ -115,7 +119,8 @@ int main() {
 
             auto response = session.post("https://httpbin.org/post", form);
             std::cout << "Status: " << response.status_code << std::endl;
-            std::cout << "Upload response: " << response.text().substr(0, 100) << "..." << std::endl;
+            std::cout << "Upload response: " << response.text().substr(0, 100)
+                      << "..." << std::endl;
         }
 
         // 3. Multiple file upload
@@ -142,7 +147,8 @@ int main() {
 
             form.add_field("text_data", "Plain text content");
             form.add_field("json_data", "{\"key\": \"value\", \"number\": 42}");
-            form.add_file("binary_file", "data.bin", "application/octet-stream");
+            form.add_file("binary_file", "data.bin",
+                          "application/octet-stream");
 
             auto response = session.post("https://httpbin.org/post", form);
             std::cout << "Status: " << response.status_code << std::endl;
@@ -158,7 +164,7 @@ int main() {
             // Add many fields
             for (int i = 1; i <= 10; ++i) {
                 form.add_field("field_" + std::to_string(i),
-                              "value_" + std::to_string(i));
+                               "value_" + std::to_string(i));
             }
 
             // Add a large text field
@@ -183,13 +189,17 @@ int main() {
 
             auto response = session.post("https://httpbin.org/post", form);
             std::cout << "Status: " << response.status_code << std::endl;
-            std::cout << "Custom headers with multipart response (stub)" << std::endl;
+            std::cout << "Custom headers with multipart response (stub)"
+                      << std::endl;
         }
 
-        std::cout << "\n=== CURL Multipart Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout
+            << "\n=== CURL Multipart Example Complete (Stub Implementation) ==="
+            << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in CURL multipart examples: " << e.what() << std::endl;
+        std::cerr << "Error in CURL multipart examples: " << e.what()
+                  << std::endl;
         return 1;
     }
 

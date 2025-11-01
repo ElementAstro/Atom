@@ -39,9 +39,8 @@ void registerExceptionTranslations(py::module_& m) {
  * @param m The pybind11 module to bind to
  */
 void bindMimeTypeConfig(py::module_& m) {
-    py::class_<MimeTypeConfig>(
-        m, "MimeTypeConfig",
-        R"(Configuration options for the MimeTypes class.
+    py::class_<MimeTypeConfig>(m, "MimeTypeConfig",
+                               R"(Configuration options for the MimeTypes class.
 
 This class defines various settings that control the behavior of the MimeTypes class,
 such as caching, leniency in MIME type detection, and deep scanning.

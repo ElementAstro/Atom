@@ -26,11 +26,9 @@ Examples:
 import argparse
 import subprocess
 import sys
-import os
-import json
 import time
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 
 class TestRunner:
@@ -50,8 +48,9 @@ class TestRunner:
         if self.verbose or force:
             print(f"[TestRunner] {message}")
 
-    def run_command(self, command: List[str], cwd: Optional[Path] = None,
-                    timeout: int = 300) -> Tuple[int, str, str]:
+    def run_command(
+        self, command: List[str], cwd: Optional[Path] = None, timeout: int = 300
+    ) -> Tuple[int, str, str]:
         """Run a command and return exit code, stdout, stderr"""
         if cwd is None:
             cwd = self.source_dir
@@ -60,11 +59,7 @@ class TestRunner:
 
         try:
             result = subprocess.run(
-                command,
-                cwd=cwd,
-                capture_output=True,
-                text=True,
-                timeout=timeout
+                command, cwd=cwd, capture_output=True, text=True, timeout=timeout
             )
             return result.returncode, result.stdout, result.stderr
         except subprocess.TimeoutExpired:
@@ -79,6 +74,7 @@ class TestRunner:
         if self.build_dir.exists():
             try:
                 import shutil
+
                 shutil.rmtree(self.build_dir)
                 self.log("Build directory cleaned")
                 return True
@@ -95,9 +91,11 @@ class TestRunner:
 
         command = [
             "cmake",
-            "-B", str(self.build_dir),
-            "-S", str(self.source_dir),
-            "-DATOM_EXAMPLE_BUILD_ALL=ON"
+            "-B",
+            str(self.build_dir),
+            "-S",
+            str(self.source_dir),
+            "-DATOM_EXAMPLE_BUILD_ALL=ON",
         ]
 
         exit_code, stdout, stderr = self.run_command(command)
@@ -118,9 +116,10 @@ class TestRunner:
         # Add parallel build if possible
         try:
             import multiprocessing
+
             cpu_count = multiprocessing.cpu_count()
             command.extend(["-j", str(cpu_count)])
-        except:
+        except (OSError, NotImplementedError):
             pass
 
         exit_code, stdout, stderr = self.run_command(command, timeout=600)
@@ -164,7 +163,7 @@ endif()
         # Write temporary CMakeLists.txt
         temp_cmake = self.source_dir / "example" / "temp_CMakeLists.txt"
         try:
-            with open(temp_cmake, 'w') as f:
+            with open(temp_cmake, "w") as f:
                 f.write(test_cmake_content)
 
             # Configure and build test framework
@@ -173,15 +172,17 @@ endif()
             # Configure
             command = [
                 "cmake",
-                "-B", str(test_build_dir),
-                "-S", str(self.source_dir / "example"),
-                "-f", str(temp_cmake)
+                "-B",
+                str(test_build_dir),
+                "-S",
+                str(self.source_dir / "example"),
+                "-f",
+                str(temp_cmake),
             ]
 
             exit_code, stdout, stderr = self.run_command(command)
             if exit_code != 0:
-                self.log(
-                    f"Test framework configuration failed: {stderr}", force=True)
+                self.log(f"Test framework configuration failed: {stderr}", force=True)
                 return False
 
             # Build
@@ -212,7 +213,7 @@ endif()
             self.build_dir / "test_framework" / "example_test_framework",
             self.build_dir / "test_framework" / "example_test_framework.exe",
             self.build_dir / "example" / "example_test_framework",
-            self.build_dir / "example" / "example_test_framework.exe"
+            self.build_dir / "example" / "example_test_framework.exe",
         ]
 
         test_executable = None
@@ -250,13 +251,13 @@ endif()
             ("containers", "containers_high_performance_containers_example"),
             ("meta", "meta_comprehensive_meta_example"),
             ("secret", "secret_basic_test"),
-            ("sysinfo", "sysinfo_header_test")
+            ("sysinfo", "sysinfo_header_test"),
         ]
 
         for module, target in working_examples:
             executable_paths = [
                 self.build_dir / "example" / module / f"{target}.exe",
-                self.build_dir / "example" / module / target
+                self.build_dir / "example" / module / target,
             ]
 
             executable = None
@@ -268,16 +269,15 @@ endif()
             if executable:
                 self.log(f"Testing {module}/{target}...")
                 exit_code, stdout, stderr = self.run_command(
-                    [str(executable)], timeout=30)
+                    [str(executable)], timeout=30
+                )
 
                 if exit_code == 0:
                     results.append(f"✅ [{module}] {target}: PASSED")
                 else:
-                    results.append(
-                        f"❌ [{module}] {target}: FAILED (exit {exit_code})")
+                    results.append(f"❌ [{module}] {target}: FAILED (exit {exit_code})")
             else:
-                results.append(
-                    f"⏭️ [{module}] {target}: SKIPPED (executable not found)")
+                results.append(f"⏭️ [{module}] {target}: SKIPPED (executable not found)")
 
         # Generate summary
         passed = len([r for r in results if "PASSED" in r])
@@ -300,7 +300,7 @@ Summary:
         self.log(f"Generating report: {report_file}")
 
         try:
-            with open(report_file, 'w') as f:
+            with open(report_file, "w") as f:
                 f.write("# Atom Framework Examples Test Report\n\n")
                 f.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
                 f.write("## Test Results\n\n")
@@ -312,8 +312,12 @@ Summary:
         except Exception as e:
             self.log(f"Failed to generate report: {e}", force=True)
 
-    def run_full_test_suite(self, clean_first: bool = False, build_first: bool = False,
-                            report_file: Optional[str] = None) -> int:
+    def run_full_test_suite(
+        self,
+        clean_first: bool = False,
+        build_first: bool = False,
+        report_file: Optional[str] = None,
+    ) -> int:
         """Run the complete test suite"""
         self.log("Starting full test suite...", force=True)
 
@@ -323,7 +327,11 @@ Summary:
                 return 1
 
         # Configure CMake if needed
-        if clean_first or build_first or not (self.build_dir / "CMakeCache.txt").exists():
+        if (
+            clean_first
+            or build_first
+            or not (self.build_dir / "CMakeCache.txt").exists()
+        ):
             if not self.configure_cmake():
                 return 1
 
@@ -350,21 +358,25 @@ def main():
     parser = argparse.ArgumentParser(
         description="Atom Framework Examples Test Runner",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__
+        epilog=__doc__,
     )
 
-    parser.add_argument("--build-dir", default="build",
-                        help="Build directory (default: build)")
-    parser.add_argument("--source-dir", default=".",
-                        help="Source directory (default: .)")
-    parser.add_argument("--verbose", "-v", action="store_true",
-                        help="Enable verbose output")
-    parser.add_argument("--build-first", action="store_true",
-                        help="Build examples before testing")
-    parser.add_argument("--clean-first", action="store_true",
-                        help="Clean build before testing")
-    parser.add_argument("--report", metavar="FILE",
-                        help="Generate test report to file")
+    parser.add_argument(
+        "--build-dir", default="build", help="Build directory (default: build)"
+    )
+    parser.add_argument(
+        "--source-dir", default=".", help="Source directory (default: .)"
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Enable verbose output"
+    )
+    parser.add_argument(
+        "--build-first", action="store_true", help="Build examples before testing"
+    )
+    parser.add_argument(
+        "--clean-first", action="store_true", help="Clean build before testing"
+    )
+    parser.add_argument("--report", metavar="FILE", help="Generate test report to file")
 
     args = parser.parse_args()
 
@@ -377,7 +389,7 @@ def main():
         exit_code = runner.run_full_test_suite(
             clean_first=args.clean_first,
             build_first=args.build_first,
-            report_file=args.report
+            report_file=args.report,
         )
         sys.exit(exit_code)
     except KeyboardInterrupt:

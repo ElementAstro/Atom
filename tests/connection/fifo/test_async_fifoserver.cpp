@@ -1,9 +1,9 @@
-#include "atom/connection/async_fifoserver.hpp"
 #include <gtest/gtest.h>
 #include <chrono>
 #include <filesystem>
 #include <future>
 #include <thread>
+#include "atom/connection/async_fifoserver.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -19,7 +19,8 @@ class AsyncFifoServerTest : public ::testing::Test {
 protected:
     void SetUp() override {
 #ifdef _WIN32
-        fifo_path_ = "\\\\.\\pipe\\test_async_fifo_" + std::to_string(GetCurrentProcessId());
+        fifo_path_ = "\\\\.\\pipe\\test_async_fifo_" +
+                     std::to_string(GetCurrentProcessId());
 #else
         fifo_path_ = "/tmp/test_async_fifo_" + std::to_string(getpid());
 #endif
@@ -118,11 +119,8 @@ TEST_F(AsyncFifoServerTest, SendMultipleMessages) {
     EXPECT_TRUE(server_->isRunning());
 
     const int numMessages = 3;
-    std::vector<std::string> testMessages = {
-        "Message 1",
-        "Message 2",
-        "Message 3"
-    };
+    std::vector<std::string> testMessages = {"Message 1", "Message 2",
+                                             "Message 3"};
 
     std::promise<std::vector<std::string>> messagesPromise;
     auto messagesFuture = messagesPromise.get_future();
@@ -159,7 +157,8 @@ TEST_F(AsyncFifoServerTest, SendMultipleMessages) {
     reader.join();
 
     EXPECT_EQ(receivedMessages.size(), testMessages.size());
-    for (size_t i = 0; i < testMessages.size() && i < receivedMessages.size(); ++i) {
+    for (size_t i = 0; i < testMessages.size() && i < receivedMessages.size();
+         ++i) {
         EXPECT_EQ(receivedMessages[i], testMessages[i]);
     }
 }
@@ -225,7 +224,8 @@ TEST_F(AsyncFifoServerTest, ConcurrentReaders) {
     // Create multiple reader threads
     for (int i = 0; i < numReaders; ++i) {
         readers.emplace_back([this, &promises, i, messagesPerReader]() {
-            std::this_thread::sleep_for(100ms + std::chrono::milliseconds(i * 10));
+            std::this_thread::sleep_for(100ms +
+                                        std::chrono::milliseconds(i * 10));
 
             std::vector<std::string> receivedMessages;
             int fd = open(fifo_path_.c_str(), O_RDONLY);
@@ -381,7 +381,8 @@ TEST_F(AsyncFifoServerTest, ThreadSafety) {
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([this, i, &successCount]() {
             try {
-                std::string message = "Thread_" + std::to_string(i) + "_message";
+                std::string message =
+                    "Thread_" + std::to_string(i) + "_message";
                 server_->sendMessage(message);
                 successCount++;
             } catch (...) {

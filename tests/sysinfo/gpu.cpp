@@ -1,8 +1,8 @@
 #include "atom/sysinfo/gpu.hpp"
 #include <gtest/gtest.h>
+#include <algorithm>
 #include <string>
 #include <vector>
-#include <algorithm>
 
 using namespace atom::system;
 
@@ -33,13 +33,13 @@ TEST_F(GpuTest, GetGPUInfo) {
 
     // Should contain some expected keywords for GPU information
     bool hasGpuKeywords = (gpuInfo.find("GPU") != std::string::npos ||
-                          gpuInfo.find("Graphics") != std::string::npos ||
-                          gpuInfo.find("Video") != std::string::npos ||
-                          gpuInfo.find("Display") != std::string::npos ||
-                          gpuInfo.find("NVIDIA") != std::string::npos ||
-                          gpuInfo.find("AMD") != std::string::npos ||
-                          gpuInfo.find("Intel") != std::string::npos ||
-                          gpuInfo.find("not available") != std::string::npos);
+                           gpuInfo.find("Graphics") != std::string::npos ||
+                           gpuInfo.find("Video") != std::string::npos ||
+                           gpuInfo.find("Display") != std::string::npos ||
+                           gpuInfo.find("NVIDIA") != std::string::npos ||
+                           gpuInfo.find("AMD") != std::string::npos ||
+                           gpuInfo.find("Intel") != std::string::npos ||
+                           gpuInfo.find("not available") != std::string::npos);
 
     EXPECT_TRUE(hasGpuKeywords);
 }
@@ -54,9 +54,7 @@ TEST_F(GpuTest, GetGPUInfoConsistency) {
 
 TEST_F(GpuTest, GetGPUInfoNoThrow) {
     // Test that GPU info retrieval doesn't throw
-    EXPECT_NO_THROW({
-        std::string gpuInfo = getGPUInfo();
-    });
+    EXPECT_NO_THROW({ std::string gpuInfo = getGPUInfo(); });
 }
 
 // ============================================================================
@@ -81,22 +79,23 @@ TEST_F(GpuTest, GetAllMonitorsInfo) {
 
             // Refresh rate should be positive
             EXPECT_GT(monitor.refreshRate, 0);
-            EXPECT_LT(monitor.refreshRate, 1000); // Reasonable upper bound
+            EXPECT_LT(monitor.refreshRate, 1000);  // Reasonable upper bound
 
             // Common resolutions and refresh rates
-            EXPECT_GE(monitor.width, 640);   // At least VGA width
-            EXPECT_GE(monitor.height, 480);  // At least VGA height
-            EXPECT_LE(monitor.width, 16384); // Reasonable upper bound
-            EXPECT_LE(monitor.height, 16384); // Reasonable upper bound
+            EXPECT_GE(monitor.width, 640);     // At least VGA width
+            EXPECT_GE(monitor.height, 480);    // At least VGA height
+            EXPECT_LE(monitor.width, 16384);   // Reasonable upper bound
+            EXPECT_LE(monitor.height, 16384);  // Reasonable upper bound
 
             // Common refresh rates
-            EXPECT_GE(monitor.refreshRate, 30);  // At least 30Hz
-            EXPECT_LE(monitor.refreshRate, 500); // At most 500Hz
+            EXPECT_GE(monitor.refreshRate, 30);   // At least 30Hz
+            EXPECT_LE(monitor.refreshRate, 500);  // At most 500Hz
 
             // Model might be empty on some systems/platforms
             if (!monitor.model.empty()) {
                 EXPECT_GT(monitor.model.length(), 0);
-                EXPECT_LT(monitor.model.length(), 200); // Reasonable upper bound
+                EXPECT_LT(monitor.model.length(),
+                          200);  // Reasonable upper bound
             }
         }
     }
@@ -116,8 +115,9 @@ TEST_F(GpuTest, GetAllMonitorsInfo_Windows) {
         EXPECT_FALSE(monitor.identifier.empty());
 
         // Windows identifier format check
-        EXPECT_TRUE(monitor.identifier.find("\\\\.\\DISPLAY") != std::string::npos ||
-                   monitor.identifier.find("DISPLAY") != std::string::npos);
+        EXPECT_TRUE(monitor.identifier.find("\\\\.\\DISPLAY") !=
+                        std::string::npos ||
+                    monitor.identifier.find("DISPLAY") != std::string::npos);
 
         EXPECT_GT(monitor.width, 0);
         EXPECT_GT(monitor.height, 0);
@@ -182,9 +182,8 @@ TEST_F(GpuTest, MonitorInfoConsistency) {
 
 TEST_F(GpuTest, MonitorInfoNoThrow) {
     // Test that monitor info retrieval doesn't throw
-    EXPECT_NO_THROW({
-        std::vector<MonitorInfo> monitors = getAllMonitorsInfo();
-    });
+    EXPECT_NO_THROW(
+        { std::vector<MonitorInfo> monitors = getAllMonitorsInfo(); });
 }
 
 // ============================================================================
@@ -243,7 +242,8 @@ TEST_F(GpuTest, MultipleMonitorHandling) {
         // Sort and check for uniqueness
         std::sort(identifiers.begin(), identifiers.end());
         auto uniqueEnd = std::unique(identifiers.begin(), identifiers.end());
-        EXPECT_EQ(std::distance(identifiers.begin(), uniqueEnd), monitors.size());
+        EXPECT_EQ(std::distance(identifiers.begin(), uniqueEnd),
+                  monitors.size());
     }
 }
 
@@ -254,7 +254,8 @@ TEST_F(GpuTest, MonitorResolutionValidation) {
     for (const auto& monitor : monitors) {
         if (monitor.width > 0 && monitor.height > 0) {
             // Aspect ratio should be reasonable
-            double aspectRatio = static_cast<double>(monitor.width) / monitor.height;
+            double aspectRatio =
+                static_cast<double>(monitor.width) / monitor.height;
             EXPECT_GT(aspectRatio, 0.5);  // Very tall displays
             EXPECT_LT(aspectRatio, 5.0);  // Very wide displays
 
@@ -264,4 +265,4 @@ TEST_F(GpuTest, MonitorResolutionValidation) {
     }
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

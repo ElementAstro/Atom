@@ -30,30 +30,30 @@ local headers = {
 
 target("atom-extra-dotenv")
     set_kind("static")
-    
+
     -- Add files
     for _, src in ipairs(sources) do
         add_files(src)
     end
-    
+
     for _, hdr in ipairs(headers) do
         add_headerfiles(hdr)
     end
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add system libraries
     add_syslinks("pthread")
-    
+
     -- Windows-specific libraries
     if is_plat("windows") then
         add_syslinks("ws2_32")
     end
-    
+
     -- Set C++ standard
     set_languages("c++20")
-    
+
     -- Installation
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -64,4 +64,3 @@ target("atom-extra-dotenv")
             os.cp(hdr, headerdir)
         end
     end)
-

@@ -6,8 +6,8 @@
 #include <vector>
 
 #ifdef _WIN32
-#include <windows.h>
 #include <aclapi.h>
+#include <windows.h>
 #endif
 
 #include "atom/io/file_permission.hpp"
@@ -341,9 +341,11 @@ TEST_F(FilePermissionTest, AllPermissionCombinations) {
     for (const auto& perm_str : permission_strings) {
         EXPECT_NO_THROW({
             atom::io::changeFilePermissions(test_file, perm_str);
-            std::string result = atom::io::getFilePermissions(test_file.string());
+            std::string result =
+                atom::io::getFilePermissions(test_file.string());
             EXPECT_EQ(result, perm_str);
-        }) << "Failed for permission string: " << perm_str;
+        }) << "Failed for permission string: "
+           << perm_str;
     }
 
     // Restore readable permissions
@@ -354,19 +356,20 @@ TEST_F(FilePermissionTest, AllPermissionCombinations) {
 // Test changeFilePermissions with invalid permission strings
 TEST_F(FilePermissionTest, InvalidPermissionStrings) {
     std::vector<std::string> invalid_strings = {
-        "",           // Empty
-        "rwx",        // Too short
+        "",              // Empty
+        "rwx",           // Too short
         "rwxrwxrwxrwx",  // Too long
-        "abcdefghi",  // Invalid characters
-        "rwxrwxrw",   // Wrong length
-        "rwxrwxrwX",  // Invalid character at end
-        "Rwxrwxrwx",  // Invalid character at start
+        "abcdefghi",     // Invalid characters
+        "rwxrwxrw",      // Wrong length
+        "rwxrwxrwX",     // Invalid character at end
+        "Rwxrwxrwx",     // Invalid character at start
     };
 
     for (const auto& invalid_str : invalid_strings) {
-        EXPECT_THROW({
-            atom::io::changeFilePermissions(test_file, invalid_str);
-        }, std::runtime_error) << "Should throw for: " << invalid_str;
+        EXPECT_THROW(
+            { atom::io::changeFilePermissions(test_file, invalid_str); },
+            std::runtime_error)
+            << "Should throw for: " << invalid_str;
     }
 }
 
@@ -376,14 +379,16 @@ TEST_F(FilePermissionTest, DirectoryPermissions) {
     fs::create_directories(test_directory);
 
     // Get directory permissions
-    std::string dir_perms = atom::io::getFilePermissions(test_directory.string());
+    std::string dir_perms =
+        atom::io::getFilePermissions(test_directory.string());
     EXPECT_FALSE(dir_perms.empty());
     EXPECT_EQ(dir_perms.length(), 9);
 
     // Change directory permissions
     EXPECT_NO_THROW({
         atom::io::changeFilePermissions(test_directory, "rwxr-xr-x");
-        std::string result = atom::io::getFilePermissions(test_directory.string());
+        std::string result =
+            atom::io::getFilePermissions(test_directory.string());
         EXPECT_EQ(result, "rwxr-xr-x");
     });
 
@@ -408,11 +413,7 @@ TEST_F(FilePermissionTest, SelfPermissionsConsistency) {
 // Test compareFileAndSelfPermissions with various permission levels
 TEST_F(FilePermissionTest, CompareVariousPermissionLevels) {
     std::vector<std::string> permission_levels = {
-        "rwxrwxrwx",
-        "rw-rw-rw-",
-        "r--r--r--",
-        "rwx------",
-        "---------",
+        "rwxrwxrwx", "rw-rw-rw-", "r--r--r--", "rwx------", "---------",
     };
 
     for (const auto& perm : permission_levels) {
@@ -435,9 +436,8 @@ TEST_F(FilePermissionTest, SpecialFilePermissions) {
     std::string perms = atom::io::getFilePermissions(empty_file.string());
     EXPECT_FALSE(perms.empty());
 
-    EXPECT_NO_THROW({
-        atom::io::changeFilePermissions(empty_file, "rw-r--r--");
-    });
+    EXPECT_NO_THROW(
+        { atom::io::changeFilePermissions(empty_file, "rw-r--r--"); });
 
     fs::remove(empty_file);
 
@@ -482,7 +482,8 @@ TEST_F(FilePermissionTest, ComparisonEdgeCases) {
     EXPECT_TRUE(result.has_value());
 
     // Restore permissions for cleanup
-    fs::permissions(no_perm_file, fs::perms::owner_write, fs::perm_options::add);
+    fs::permissions(no_perm_file, fs::perms::owner_write,
+                    fs::perm_options::add);
 #endif
 
     fs::remove(no_perm_file);
@@ -493,7 +494,8 @@ TEST_F(FilePermissionTest, ConcurrentPermissionChanges) {
     // Create multiple test files
     std::vector<fs::path> test_files;
     for (int i = 0; i < 5; i++) {
-        fs::path file = test_dir / ("concurrent_perm_" + std::to_string(i) + ".txt");
+        fs::path file =
+            test_dir / ("concurrent_perm_" + std::to_string(i) + ".txt");
         std::ofstream f(file);
         f << "Test";
         f.close();
@@ -509,7 +511,8 @@ TEST_F(FilePermissionTest, ConcurrentPermissionChanges) {
             try {
                 std::string perm = (i % 2 == 0) ? "rw-r--r--" : "rwxr-xr-x";
                 atom::io::changeFilePermissions(test_files[i], perm);
-                std::string result = atom::io::getFilePermissions(test_files[i].string());
+                std::string result =
+                    atom::io::getFilePermissions(test_files[i].string());
                 if (result != perm) {
                     any_failure = true;
                 }
@@ -545,24 +548,24 @@ TEST_F(FilePermissionTest, PermissionStringFormat) {
     };
 
     for (const auto& format : valid_formats) {
-        EXPECT_NO_THROW({
-            atom::io::changeFilePermissions(test_file, format);
-        }) << "Should accept: " << format;
+        EXPECT_NO_THROW({ atom::io::changeFilePermissions(test_file, format); })
+            << "Should accept: " << format;
     }
 
     // Invalid formats
     std::vector<std::string> invalid_formats = {
-        "rwxrwxrw",   // Too short
-        "rwxrwxrwxx", // Too long
-        "rwxrwxrwX",  // Invalid character
-        "123456789",  // Numbers
-        "rwx rwx rwx", // Spaces
+        "rwxrwxrw",     // Too short
+        "rwxrwxrwxx",   // Too long
+        "rwxrwxrwX",    // Invalid character
+        "123456789",    // Numbers
+        "rwx rwx rwx",  // Spaces
     };
 
     for (const auto& format : invalid_formats) {
-        EXPECT_THROW({
-            atom::io::changeFilePermissions(test_file, format);
-        }, std::runtime_error) << "Should reject: " << format;
+        EXPECT_THROW(
+            { atom::io::changeFilePermissions(test_file, format); },
+            std::runtime_error)
+            << "Should reject: " << format;
     }
 }
 
@@ -576,9 +579,8 @@ TEST_F(FilePermissionTest, DirectoryPermissionChanges) {
     EXPECT_EQ(perms.length(), 9);
 
     // Change directory permissions
-    EXPECT_NO_THROW({
-        atom::io::changeFilePermissions(test_directory, "rwxr-xr-x");
-    });
+    EXPECT_NO_THROW(
+        { atom::io::changeFilePermissions(test_directory, "rwxr-xr-x"); });
 
     // Verify change
     perms = atom::io::getFilePermissions(test_directory.string());
@@ -603,7 +605,8 @@ TEST_F(FilePermissionTest, ConcurrentPermissionOperations) {
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([&test_files, i, &success_count]() {
             try {
-                std::string perms = atom::io::getFilePermissions(test_files[i].string());
+                std::string perms =
+                    atom::io::getFilePermissions(test_files[i].string());
                 if (!perms.empty()) {
                     success_count++;
                 }
@@ -623,11 +626,13 @@ TEST_F(FilePermissionTest, ConcurrentPermissionOperations) {
 // Test permission comparison edge cases
 TEST_F(FilePermissionTest, PermissionComparisonEdgeCases) {
     // Test with file that has all permissions
-    fs::permissions(test_file,
-                   fs::perms::owner_all | fs::perms::group_all | fs::perms::others_all,
-                   fs::perm_options::replace);
+    fs::permissions(
+        test_file,
+        fs::perms::owner_all | fs::perms::group_all | fs::perms::others_all,
+        fs::perm_options::replace);
 
-    auto comparison = atom::io::compareFileAndSelfPermissions(test_file.string());
+    auto comparison =
+        atom::io::compareFileAndSelfPermissions(test_file.string());
     EXPECT_TRUE(comparison.has_value());
 
     // Test with file that has no permissions
@@ -644,7 +649,8 @@ TEST_F(FilePermissionTest, PermissionComparisonEdgeCases) {
 
 // Test getSelfPermissions with explicit path
 TEST_F(FilePermissionTest, GetSelfPermissionsWithPath) {
-    std::string self_perms = atom::io::getSelfPermissions(executable_path.string());
+    std::string self_perms =
+        atom::io::getSelfPermissions(executable_path.string());
     EXPECT_FALSE(self_perms.empty());
     EXPECT_EQ(self_perms.length(), 9);
 
@@ -658,19 +664,16 @@ TEST_F(FilePermissionTest, GetSelfPermissionsWithPath) {
 TEST_F(FilePermissionTest, SymbolicPermissionModes) {
     // Test various permission strings
     std::vector<std::string> valid_modes = {
-        "rwxrwxrwx",
-        "rw-rw-rw-",
-        "r--r--r--",
-        "rwxr-xr-x",
-        "---------"
-    };
+        "rwxrwxrwx", "rw-rw-rw-", "r--r--r--", "rwxr-xr-x", "---------"};
 
     for (const auto& mode : valid_modes) {
         EXPECT_NO_THROW({
             atom::io::changeFilePermissions(test_file, mode);
-            std::string result = atom::io::getFilePermissions(test_file.string());
+            std::string result =
+                atom::io::getFilePermissions(test_file.string());
             EXPECT_EQ(result, mode);
-        }) << "Failed for mode: " << mode;
+        }) << "Failed for mode: "
+           << mode;
     }
 }
 
@@ -678,14 +681,16 @@ TEST_F(FilePermissionTest, SymbolicPermissionModes) {
 TEST_F(FilePermissionTest, PermissionPreservation) {
     // Set specific permissions
     atom::io::changeFilePermissions(test_file, "rw-r--r--");
-    std::string original_perms = atom::io::getFilePermissions(test_file.string());
+    std::string original_perms =
+        atom::io::getFilePermissions(test_file.string());
 
     // Copy file
     fs::path copied_file = test_dir / "copied.txt";
     fs::copy_file(test_file, copied_file);
 
     // Check if permissions are preserved (platform-dependent)
-    std::string copied_perms = atom::io::getFilePermissions(copied_file.string());
+    std::string copied_perms =
+        atom::io::getFilePermissions(copied_file.string());
     EXPECT_FALSE(copied_perms.empty());
 }
 
@@ -694,9 +699,9 @@ TEST_F(FilePermissionTest, NonExistentFileHandling) {
     std::string perms = atom::io::getFilePermissions(nonexistent_file.string());
     EXPECT_TRUE(perms.empty());
 
-    EXPECT_THROW({
-        atom::io::changeFilePermissions(nonexistent_file, "rwxrwxrwx");
-    }, std::runtime_error);
+    EXPECT_THROW(
+        { atom::io::changeFilePermissions(nonexistent_file, "rwxrwxrwx"); },
+        std::runtime_error);
 }
 
 // Test permission changes on read-only files

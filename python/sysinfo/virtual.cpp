@@ -7,7 +7,8 @@ namespace py = pybind11;
 using namespace atom::system;
 
 PYBIND11_MODULE(virtual, m) {
-    m.doc() = "Virtualization and container detection module for the atom package";
+    m.doc() =
+        "Virtualization and container detection module for the atom package";
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -64,8 +65,9 @@ Examples:
 )");
 
     // Individual detection methods
-    m.def("check_bios", &checkBIOS,
-          R"(Check BIOS information to identify if the system is a virtual machine.
+    m.def(
+        "check_bios", &checkBIOS,
+        R"(Check BIOS information to identify if the system is a virtual machine.
 
 Inspects the BIOS information for signs that indicate the presence of a virtual machine,
 such as manufacturer strings, version information, and other BIOS characteristics
@@ -98,8 +100,9 @@ Examples:
     ...     print("Virtual network adapter detected")
 )");
 
-    m.def("check_disk", &checkDisk,
-          R"(Check disk information for identifiers commonly used by virtual machines.
+    m.def(
+        "check_disk", &checkDisk,
+        R"(Check disk information for identifiers commonly used by virtual machines.
 
 Inspects the disk information to find identifiers that are typically associated with
 virtual machine disks, such as specific model names, serial numbers, or device paths
@@ -286,6 +289,4 @@ Examples:
     ... else:
     ...     print("Virtualization type could not be determined")
 )");
-
-
 }

@@ -55,8 +55,8 @@ public:
      * @param value The header value.
      * @return Reference to the CurlWrapper object.
      */
-    auto addHeader(const std::string &key, const std::string &value)
-        -> CurlWrapper &;
+    auto addHeader(const std::string &key,
+                   const std::string &value) -> CurlWrapper &;
 
     /**
      * @brief Sets the callback function to be called on error.

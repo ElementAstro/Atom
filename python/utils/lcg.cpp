@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(utils, m) {
@@ -138,10 +137,9 @@ Returns:
 Raises:
     ValueError: If lambda <= 0.
 )")
-        .def(
-            "next_exponential", &atom::utils::LCG::nextExponential,
-            py::arg("lambda") = 1.0,
-            R"(Generates a random number following an Exponential distribution.
+        .def("next_exponential", &atom::utils::LCG::nextExponential,
+             py::arg("lambda") = 1.0,
+             R"(Generates a random number following an Exponential distribution.
 
 Args:
     lambda: The rate parameter (lambda) of the distribution. Defaults to 1.0.

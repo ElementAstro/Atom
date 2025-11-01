@@ -25,14 +25,29 @@ ComponentFactory& ComponentFactory::instance() {
 
 void ComponentFactory::cleanupAll() {
     std::shared_lock lock(poolsMutex_);
-    // Note: In a real implementation, we'd iterate through all pools
-    // For now, this is a placeholder
+    // Iterate through all pools and perform cleanup
+    for (auto& [typeIndex, poolPtr] : pools_) {
+        // Cast to ComponentPool<Component> for cleanup
+        // Note: This assumes all pools derive from a common base or use
+        // Component
+        if (auto* pool =
+                static_cast<ComponentPool<Component>*>(poolPtr.get())) {
+            pool->cleanup();
+        }
+    }
 }
 
 size_t ComponentFactory::getTotalMemoryUsage() const {
     std::shared_lock lock(poolsMutex_);
     size_t total = 0;
-    // Note: In a real implementation, we'd sum up all pool memory usage
+    // Sum up memory usage from all pools
+    for (const auto& [typeIndex, poolPtr] : pools_) {
+        // Cast to ComponentPool<Component> to access getMemoryUsage
+        if (const auto* pool =
+                static_cast<const ComponentPool<Component>*>(poolPtr.get())) {
+            total += pool->getMemoryUsage();
+        }
+    }
     return total;
 }
 

@@ -1,6 +1,6 @@
-#include "atom/connection/async_tcpclient.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include "atom/connection/async_tcpclient.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -9,9 +9,9 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 #endif
+#include <chrono>
 #include <future>
 #include <thread>
-#include <chrono>
 
 using namespace atom::async::connection;
 using namespace std::chrono_literals;
@@ -44,7 +44,9 @@ public:
     }
 
     void setEchoMode(bool echo) { echoMode_ = echo; }
-    void setDelayedResponse(std::chrono::milliseconds delay) { responseDelay_ = delay; }
+    void setDelayedResponse(std::chrono::milliseconds delay) {
+        responseDelay_ = delay;
+    }
 
 private:
     void run() {
@@ -53,7 +55,8 @@ private:
         WSAStartup(MAKEWORD(2, 2), &wsaData);
 #endif
         serverSocket_ = socket(AF_INET, SOCK_STREAM, 0);
-        if (serverSocket_ == -1) return;
+        if (serverSocket_ == -1)
+            return;
 
         struct sockaddr_in serverAddr {};
         serverAddr.sin_family = AF_INET;
@@ -61,9 +64,11 @@ private:
         serverAddr.sin_port = htons(port_);
 
         int opt = 1;
-        setsockopt(serverSocket_, SOL_SOCKET, SO_REUSEADDR, (char*)&opt, sizeof(opt));
+        setsockopt(serverSocket_, SOL_SOCKET, SO_REUSEADDR, (char*)&opt,
+                   sizeof(opt));
 
-        if (bind(serverSocket_, (struct sockaddr*)&serverAddr, sizeof(serverAddr)) < 0) {
+        if (bind(serverSocket_, (struct sockaddr*)&serverAddr,
+                 sizeof(serverAddr)) < 0) {
             return;
         }
 
@@ -75,8 +80,10 @@ private:
             struct sockaddr_in clientAddr {};
             socklen_t clientLen = sizeof(clientAddr);
 
-            int clientSocket = accept(serverSocket_, (struct sockaddr*)&clientAddr, &clientLen);
-            if (clientSocket < 0 || stop_) break;
+            int clientSocket = accept(
+                serverSocket_, (struct sockaddr*)&clientAddr, &clientLen);
+            if (clientSocket < 0 || stop_)
+                break;
 
             std::thread([this, clientSocket]() {
                 handleClient(clientSocket);
@@ -88,7 +95,8 @@ private:
         char buffer[1024];
         while (!stop_) {
             int bytesRead = recv(clientSocket, buffer, sizeof(buffer), 0);
-            if (bytesRead <= 0) break;
+            if (bytesRead <= 0)
+                break;
 
             if (responseDelay_.count() > 0) {
                 std::this_thread::sleep_for(responseDelay_);
@@ -143,9 +151,7 @@ protected:
 
 TEST_F(AsyncTcpClientTest, BasicConnection) {
     bool connected = false;
-    client_->setOnConnectedCallback([&connected]() {
-        connected = true;
-    });
+    client_->setOnConnectedCallback([&connected]() { connected = true; });
 
     ASSERT_TRUE(client_->connect("127.0.0.1", 8081));
 
@@ -175,10 +181,12 @@ TEST_F(AsyncTcpClientTest, ConnectionCallbacks) {
 
     client_->setOnConnectingCallback([&connecting]() { connecting = true; });
     client_->setOnConnectedCallback([&connected]() { connected = true; });
-    client_->setOnDisconnectedCallback([&disconnected]() { disconnected = true; });
-    client_->setOnStateChangedCallback([&lastState](ConnectionState oldState, ConnectionState newState) {
-        lastState = newState;
-    });
+    client_->setOnDisconnectedCallback(
+        [&disconnected]() { disconnected = true; });
+    client_->setOnStateChangedCallback(
+        [&lastState](ConnectionState oldState, ConnectionState newState) {
+            lastState = newState;
+        });
 
     ASSERT_TRUE(client_->connect("127.0.0.1", 8081));
 

@@ -26,28 +26,28 @@ Classes:
 
 Quick Start Example:
     >>> from atom.connection.sshclient import SSHClient
-    >>> 
+    >>>
     >>> # Create SSH client
     >>> client = SSHClient("example.com", 22)
-    >>> 
+    >>>
     >>> # Connect with credentials
     >>> client.connect("username", "password", timeout=10)
-    >>> 
+    >>>
     >>> # Execute commands
     >>> output = []
     >>> client.execute_command("ls -la", output)
     >>> for line in output:
     ...     print(line)
-    >>> 
+    >>>
     >>> # File operations
     >>> client.upload_file("/local/file.txt", "/remote/file.txt")
     >>> client.download_file("/remote/data.txt", "/local/data.txt")
-    >>> 
+    >>>
     >>> # Directory operations
     >>> files = client.list_directory("/remote/path")
     >>> for file in files:
     ...     print(file)
-    >>> 
+    >>>
     >>> client.disconnect()
 
 Advanced Features:
@@ -70,24 +70,24 @@ and performing file operations on remote servers using the SSH protocol.
 
 Examples:
     >>> from atom.connection.sshclient import SSHClient
-    >>> 
+    >>>
     >>> # Create client and connect
     >>> client = SSHClient("example.com", 22)
     >>> client.connect("username", "password")
-    >>> 
+    >>>
     >>> # Execute command
     >>> output = []
     >>> client.execute_command("whoami", output)
     >>> print(output[0])  # username
-    >>> 
+    >>>
     >>> # File operations
     >>> client.upload_file("local.txt", "remote.txt")
     >>> client.download_file("remote.txt", "downloaded.txt")
-    >>> 
+    >>>
     >>> client.disconnect()
 )")
-        .def(py::init<const std::string&, int>(),
-             py::arg("host"), py::arg("port") = atom::connection::DEFAULT_SSH_PORT,
+        .def(py::init<const std::string&, int>(), py::arg("host"),
+             py::arg("port") = atom::connection::DEFAULT_SSH_PORT,
              R"(Constructs an SSHClient for the specified host and port.
 
 Args:
@@ -99,7 +99,7 @@ Examples:
     >>> client = SSHClient("192.168.1.100", 2222)  # Custom port
 )")
         .def("connect", &atom::connection::SSHClient::connect,
-             py::arg("username"), py::arg("password"), 
+             py::arg("username"), py::arg("password"),
              py::arg("timeout") = atom::connection::DEFAULT_TIMEOUT,
              R"(Connects to the SSH server with authentication.
 
@@ -183,7 +183,8 @@ Examples:
     ...     print("File exists")
 )")
         .def("create_directory", &atom::connection::SSHClient::createDirectory,
-             py::arg("remote_path"), py::arg("mode") = atom::connection::DEFAULT_MODE,
+             py::arg("remote_path"),
+             py::arg("mode") = atom::connection::DEFAULT_MODE,
              R"(Creates a directory on the remote server.
 
 Args:
@@ -299,13 +300,13 @@ Examples:
 )")
         .def(
             "__enter__",
-            [](atom::connection::SSHClient& self) -> atom::connection::SSHClient& {
-                return self;
-            },
+            [](atom::connection::SSHClient& self)
+                -> atom::connection::SSHClient& { return self; },
             "Support for context manager protocol")
         .def(
             "__exit__",
-            [](atom::connection::SSHClient& self, py::object, py::object, py::object) {
+            [](atom::connection::SSHClient& self, py::object, py::object,
+               py::object) {
                 if (self.isConnected()) {
                     self.disconnect();
                 }
@@ -315,12 +316,14 @@ Examples:
 #else
     // If libssh is not available, provide a stub implementation
     py::class_<int>(m, "SSHClient")  // Using int as a dummy type
-        .def(py::init([]() {
-            throw std::runtime_error(
-                "SSHClient is not available - libssh library not found. "
-                "Please install libssh development package and recompile.");
-            return 0;  // Never reached
-        }), "SSHClient is not available without libssh");
+        .def(
+            py::init([]() {
+                throw std::runtime_error(
+                    "SSHClient is not available - libssh library not found. "
+                    "Please install libssh development package and recompile.");
+                return 0;  // Never reached
+            }),
+            "SSHClient is not available without libssh");
 
 #endif
 }

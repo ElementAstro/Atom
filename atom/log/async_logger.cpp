@@ -33,7 +33,6 @@ using C++20/23 Coroutines with optimized performance
 #ifdef _WIN32
 #include <sdkddkver.h>
 #define WIN32_LEAN_AND_MEAN
-#include <windef.h>
 #include <windows.h>
 
 #undef ERROR
@@ -46,8 +45,8 @@ namespace atom::log {
 
 using json = nlohmann::json;
 struct LoggerMemoryPool {
-    static constexpr size_t BLOCK_SIZE = 8192;    // 8KB blocks
-    static constexpr size_t MAX_BLOCKS = 2048;    // Max 16MB total
+    static constexpr size_t BLOCK_SIZE = 8192;  // 8KB blocks
+    static constexpr size_t MAX_BLOCKS = 2048;  // Max 16MB total
     static constexpr size_t INITIAL_BLOCKS = 16;  // 预分配块提高启动性能
 
     // 线程安全的单例访问
@@ -106,7 +105,8 @@ private:
             pool_.deallocate(ptr);
         }
 
-        bool do_is_equal(const std::pmr::memory_resource& other) const noexcept override {
+        bool do_is_equal(
+            const std::pmr::memory_resource& other) const noexcept override {
             return this == &other;
         }
 

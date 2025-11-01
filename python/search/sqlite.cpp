@@ -5,7 +5,6 @@
 #include <pybind11/stl.h>
 #include <pybind11/stl_bind.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(sqlite, m) {
@@ -277,7 +276,8 @@ Examples:
     >>> if db.table_exists("users"):
     ...     print("Users table exists")
 )")
-        .def("get_table_schema", &SqliteDB::getTableSchema, py::arg("table_name"),
+        .def("get_table_schema", &SqliteDB::getTableSchema,
+             py::arg("table_name"),
              R"(Get the schema information for a table.
 
 Args:

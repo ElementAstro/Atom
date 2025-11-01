@@ -743,7 +743,8 @@ public:
      */
     template <typename Func, typename... Args>
         requires InvocableWithArgs<Func, Args...> &&
-                 std::is_same_v<std::invoke_result_t<Func, Args...>, ResultType>
+                     std::is_same_v<std::invoke_result_t<Func, Args...>,
+                                    ResultType>
     [[nodiscard]] auto createWorker(Func&& func, Args&&... args)
         -> std::shared_ptr<AsyncWorker<ResultType>>;
 
@@ -1465,10 +1466,9 @@ void AsyncWorker<ResultType>::waitForCompletion() {
 template <typename ResultType>
 template <typename Func, typename... Args>
     requires InvocableWithArgs<Func, Args...> &&
-             std::is_same_v<std::invoke_result_t<Func, Args...>, ResultType>
-[[nodiscard]] auto AsyncWorkerManager<ResultType>::createWorker(Func&& func,
-                                                                Args&&... args)
-    -> std::shared_ptr<AsyncWorker<ResultType>> {
+                 std::is_same_v<std::invoke_result_t<Func, Args...>, ResultType>
+[[nodiscard]] auto AsyncWorkerManager<ResultType>::createWorker(
+    Func&& func, Args&&... args) -> std::shared_ptr<AsyncWorker<ResultType>> {
     auto worker = std::make_shared<AsyncWorker<ResultType>>();
 
     try {

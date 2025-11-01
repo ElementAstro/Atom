@@ -27,7 +27,6 @@
 #include <unordered_set>
 #include <vector>
 
-
 #include <forward_list>
 
 // Atom Meta container traits

@@ -1,9 +1,9 @@
 #include "atom/sysinfo/os.hpp"
-#include "atom/sysinfo/locale.hpp"
 #include <gtest/gtest.h>
-#include <string>
 #include <chrono>
+#include <string>
 #include <thread>
+#include "atom/sysinfo/locale.hpp"
 
 using namespace atom::system;
 
@@ -145,7 +145,7 @@ TEST_F(RealOSTest, UptimeMonitoring) {
     // Uptime difference should be reasonable
     auto uptimeDiff = uptime2.count() - uptime1.count();
     EXPECT_GE(uptimeDiff, 0);
-    EXPECT_LT(uptimeDiff, 10); // Should be less than 10 seconds for this test
+    EXPECT_LT(uptimeDiff, 10);  // Should be less than 10 seconds for this test
 }
 
 TEST_F(RealOSTest, LanguageInfoConsistency) {
@@ -172,9 +172,9 @@ TEST_F(RealOSTest, OSArchitectureValidation) {
     OperatingSystemInfo osInfo = getOperatingSystemInfo();
 
     // Common architectures
-    std::vector<std::string> commonArchitectures = {
-        "x86", "x64", "x86_64", "amd64", "arm", "arm64", "aarch64", "i386", "i686"
-    };
+    std::vector<std::string> commonArchitectures = {"x86",     "x64",  "x86_64",
+                                                    "amd64",   "arm",  "arm64",
+                                                    "aarch64", "i386", "i686"};
 
     bool hasKnownArchitecture = false;
     for (const auto& arch : commonArchitectures) {
@@ -194,9 +194,8 @@ TEST_F(RealOSTest, OSNameValidation) {
 
     // Common OS names
     std::vector<std::string> commonOSNames = {
-        "Windows", "Linux", "macOS", "Darwin", "Ubuntu", "CentOS", "RedHat",
-        "Debian", "Fedora", "SUSE", "FreeBSD", "OpenBSD", "NetBSD"
-    };
+        "Windows", "Linux",  "macOS", "Darwin",  "Ubuntu",  "CentOS", "RedHat",
+        "Debian",  "Fedora", "SUSE",  "FreeBSD", "OpenBSD", "NetBSD"};
 
     bool hasKnownOS = false;
     for (const auto& osName : commonOSNames) {
@@ -255,7 +254,7 @@ TEST_F(RealOSTest, BoundaryConditions) {
     // Uptime should be within reasonable bounds
     std::chrono::seconds uptime = getSystemUptime();
     EXPECT_GT(uptime.count(), 0);
-    EXPECT_LT(uptime.count(), 365LL * 24 * 3600 * 100); // Less than 100 years
+    EXPECT_LT(uptime.count(), 365LL * 24 * 3600 * 100);  // Less than 100 years
 
     // String lengths should be reasonable
     OperatingSystemInfo osInfo = getOperatingSystemInfo();
@@ -276,4 +275,4 @@ TEST_F(RealOSTest, BoundaryConditions) {
     EXPECT_LT(localeInfo.characterEncoding.length(), 200);
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

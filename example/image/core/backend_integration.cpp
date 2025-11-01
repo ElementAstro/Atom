@@ -38,8 +38,8 @@ void demonstrateOpenCVBackend() {
         img.allocate(img_data.size());
 
         // Set dimensions
-        // Note: We need to manually set dimensions since we're creating from raw data
-        // For now, let's create it from a properly sized vector
+        // Note: We need to manually set dimensions since we're creating from
+        // raw data For now, let's create it from a properly sized vector
 
         // Fill with test pattern
         auto* data = reinterpret_cast<uint8_t*>(img.data());
@@ -86,8 +86,8 @@ void demonstrateOpenCVBackend() {
         testMat.setTo(cv::Scalar(128, 64, 192));
 
         blob fromMat(testMat);
-        std::cout << "Created blob from OpenCV Mat: " << fromMat.getCols() << "x"
-                  << fromMat.getRows() << "\n";
+        std::cout << "Created blob from OpenCV Mat: " << fromMat.getCols()
+                  << "x" << fromMat.getRows() << "\n";
 
     } catch (const std::exception& e) {
         std::cerr << "Error in OpenCV backend: " << e.what() << "\n";
@@ -173,7 +173,7 @@ void demonstrateStbImageBackend() {
         // Create a blob that could be saved using stb_image
         const int width = 128, height = 128, channels = 3;
         std::vector<uint8_t> img_data(width * height * channels);
-        
+
         // Fill with a simple pattern
         for (int y = 0; y < height; ++y) {
             for (int x = 0; x < width; ++x) {
@@ -183,10 +183,12 @@ void demonstrateStbImageBackend() {
                 img_data[pixel_idx + 2] = static_cast<uint8_t>((x + y) % 256);
             }
         }
-        
-        blob img(reinterpret_cast<std::byte*>(img_data.data()), img_data.size());
 
-        std::cout << "Created blob suitable for stb_image: " << width << "x" << height << "\n";
+        blob img(reinterpret_cast<std::byte*>(img_data.data()),
+                 img_data.size());
+
+        std::cout << "Created blob suitable for stb_image: " << width << "x"
+                  << height << "\n";
 
         // In a real implementation, you would use stb_image functions like:
         // stbi_write_png("output.png", img.cols(), img.rows(), img.channels(),
@@ -228,7 +230,8 @@ void compareBackendPerformance() {
         // Test blob creation performance
         auto start = high_resolution_clock::now();
         for (int i = 0; i < iterations; ++i) {
-            blob img(reinterpret_cast<std::byte*>(testData.data()), testData.size());
+            blob img(reinterpret_cast<std::byte*>(testData.data()),
+                     testData.size());
             // Prevent optimization
             volatile auto size = img.size();
         }
@@ -241,7 +244,8 @@ void compareBackendPerformance() {
         // Test fast blob creation performance
         start = high_resolution_clock::now();
         for (int i = 0; i < iterations; ++i) {
-            fast_blob img(reinterpret_cast<void*>(testData.data()), testData.size());
+            fast_blob img(reinterpret_cast<void*>(testData.data()),
+                          testData.size());
             // Prevent optimization
             volatile auto size = img.size();
         }

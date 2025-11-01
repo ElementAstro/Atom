@@ -13,7 +13,6 @@
 #include "protocol.hpp"
 #include "types.hpp"
 
-
 /**
  * @file client.hpp
  * @brief Defines the MQTT Client class, providing a modern C++20 MQTT client

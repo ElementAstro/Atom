@@ -45,9 +45,12 @@ private:
 class DerivedTestNonCopyable : public VirtualTestNonCopyable {
 public:
     DerivedTestNonCopyable() : VirtualTestNonCopyable(100) {}
-    explicit DerivedTestNonCopyable(int value) : VirtualTestNonCopyable(value) {}
+    explicit DerivedTestNonCopyable(int value)
+        : VirtualTestNonCopyable(value) {}
 
-    int getValue() const override { return VirtualTestNonCopyable::getValue() * 2; }
+    int getValue() const override {
+        return VirtualTestNonCopyable::getValue() * 2;
+    }
 };
 
 // Basic Construction Tests
@@ -69,7 +72,7 @@ TEST_F(NonCopyableTest, VirtualDestructor) {
     // Test polymorphic destruction
     std::unique_ptr<VirtualTestNonCopyable> derived =
         std::make_unique<DerivedTestNonCopyable>(50);
-    EXPECT_EQ(derived->getValue(), 100); // 50 * 2
+    EXPECT_EQ(derived->getValue(), 100);  // 50 * 2
 }
 
 // Copy Prevention Tests
@@ -131,7 +134,7 @@ TEST_F(NonCopyableTest, MoveAssignment) {
 TEST_F(NonCopyableTest, InheritanceWorks) {
     // Test that inheritance from NonCopyable works correctly
     DerivedTestNonCopyable derived(25);
-    EXPECT_EQ(derived.getValue(), 50); // 25 * 2
+    EXPECT_EQ(derived.getValue(), 50);  // 25 * 2
 
     // Test polymorphic behavior
     VirtualTestNonCopyable* base = &derived;
@@ -142,7 +145,7 @@ TEST_F(NonCopyableTest, PolymorphicBehavior) {
     std::unique_ptr<VirtualTestNonCopyable> base =
         std::make_unique<DerivedTestNonCopyable>(30);
 
-    EXPECT_EQ(base->getValue(), 60); // 30 * 2
+    EXPECT_EQ(base->getValue(), 60);  // 30 * 2
 
     // Test that we can't copy through base pointer
     static_assert(!std::is_copy_constructible_v<VirtualTestNonCopyable>);
@@ -150,7 +153,8 @@ TEST_F(NonCopyableTest, PolymorphicBehavior) {
 
 // Container Tests
 TEST_F(NonCopyableTest, VectorOfNonCopyable) {
-    // Test that we can store NonCopyable objects in containers using move semantics
+    // Test that we can store NonCopyable objects in containers using move
+    // semantics
     std::vector<TestNonCopyable> vec;
 
     // Should be able to emplace_back
@@ -197,7 +201,7 @@ TEST_F(NonCopyableTest, ReturnByValue) {
     // Test function that returns NonCopyable by value
     auto create_object = []() -> TestNonCopyable {
         TestNonCopyable obj(456);
-        return obj; // Should use move semantics
+        return obj;  // Should use move semantics
     };
 
     auto result = create_object();
@@ -222,12 +226,12 @@ TEST_F(NonCopyableTest, RAIIPattern) {
     {
         RAIIResource resource;
         EXPECT_TRUE(resource.isAcquired());
-    } // resource should be automatically released here
+    }  // resource should be automatically released here
 
     // Test with unique_ptr
     auto resource_ptr = std::make_unique<RAIIResource>();
     EXPECT_TRUE(resource_ptr->isAcquired());
-    resource_ptr.reset(); // Explicit cleanup
+    resource_ptr.reset();  // Explicit cleanup
 }
 
 // Thread Safety Tests (conceptual)

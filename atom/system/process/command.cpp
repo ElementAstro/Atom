@@ -60,8 +60,8 @@ auto executeCommandInternal(
     const std::string &command, bool openTerminal,
     const std::function<void(const std::string &)> &processLine, int &status,
     const std::string &input = "", const std::string &username = "",
-    const std::string &domain = "", const std::string &password = "")
-    -> std::string {
+    const std::string &domain = "",
+    const std::string &password = "") -> std::string {
     spdlog::debug("Executing command: {}, openTerminal: {}", command,
                   openTerminal);
 
@@ -102,9 +102,11 @@ auto executeCommandInternal(
         startupInfo.cb = sizeof(startupInfo);
 
         // Convert string to wide string for Windows API
-        int size = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+        int size =
+            MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
         std::wstring commandW(size, 0);
-        MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0], size);
+        MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0],
+                            size);
         if (CreateProcessW(nullptr, &commandW[0], nullptr, nullptr, FALSE, 0,
                            nullptr, nullptr, &startupInfo, &processInfo)) {
             WaitForSingleObject(processInfo.hProcess, INFINITE);
@@ -216,9 +218,11 @@ auto executeCommandStream(
         startupInfo.cb = sizeof(startupInfo);
 
         // Convert string to wide string for Windows API
-        int size = MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
+        int size =
+            MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, nullptr, 0);
         std::wstring commandW(size, 0);
-        MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0], size);
+        MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0],
+                            size);
         if (CreateProcessW(nullptr, &commandW[0], nullptr, nullptr, FALSE,
                            CREATE_NEW_CONSOLE, nullptr, nullptr, &startupInfo,
                            &processInfo)) {
@@ -312,10 +316,10 @@ auto executeCommandWithStatus(const std::string &command)
     return {output, status};
 }
 
-auto executeCommandWithInput(
-    const std::string &command, const std::string &input,
-    const std::function<void(const std::string &)> &processLine)
-    -> std::string {
+auto executeCommandWithInput(const std::string &command,
+                             const std::string &input,
+                             const std::function<void(const std::string &)>
+                                 &processLine) -> std::string {
     spdlog::debug("Executing command with input: {}", command);
     int status = 0;
     auto result =
@@ -363,10 +367,9 @@ void executeCommands(const std::vector<std::string> &commands) {
     spdlog::debug("All commands executed successfully");
 }
 
-auto executeCommandWithEnv(
-    const std::string &command,
-    const std::unordered_map<std::string, std::string> &envVars)
-    -> std::string {
+auto executeCommandWithEnv(const std::string &command,
+                           const std::unordered_map<std::string, std::string>
+                               &envVars) -> std::string {
     spdlog::debug("Executing command with environment: {}", command);
     if (command.empty()) {
         spdlog::warn("Command is empty");
@@ -432,9 +435,11 @@ void killProcessByName(const std::string &processName, int signal) {
 
     do {
         // Convert wide char array to string
-        int size = WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, nullptr, 0, nullptr, nullptr);
+        int size = WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, nullptr,
+                                       0, nullptr, nullptr);
         std::string currentProcess(size - 1, 0);
-        WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, &currentProcess[0], size, nullptr, nullptr);
+        WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, &currentProcess[0],
+                            size, nullptr, nullptr);
         if (currentProcess == processName) {
             HANDLE hProcess =
                 OpenProcess(PROCESS_TERMINATE, FALSE, entry.th32ProcessID);
@@ -538,10 +543,9 @@ auto isCommandAvailable(const std::string &command) -> bool {
     return atom::system::executeCommandSimple(checkCommand);
 }
 
-auto executeCommandAsync(
-    const std::string &command, bool openTerminal,
-    const std::function<void(const std::string &)> &processLine)
-    -> std::future<std::string> {
+auto executeCommandAsync(const std::string &command, bool openTerminal,
+                         const std::function<void(const std::string &)>
+                             &processLine) -> std::future<std::string> {
     spdlog::debug("Executing async command: {}, openTerminal: {}", command,
                   openTerminal);
 
@@ -556,11 +560,11 @@ auto executeCommandAsync(
         });
 }
 
-auto executeCommandWithTimeout(
-    const std::string &command, const std::chrono::milliseconds &timeout,
-    bool openTerminal,
-    const std::function<void(const std::string &)> &processLine)
-    -> std::optional<std::string> {
+auto executeCommandWithTimeout(const std::string &command,
+                               const std::chrono::milliseconds &timeout,
+                               bool openTerminal,
+                               const std::function<void(const std::string &)>
+                                   &processLine) -> std::optional<std::string> {
     spdlog::debug("Executing command with timeout: {}, timeout: {}ms", command,
                   timeout.count());
 

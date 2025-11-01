@@ -1,6 +1,6 @@
-#include "atom/async/async.hpp"
 #include <gtest/gtest.h>
 #include <spdlog/spdlog.h>
+#include "atom/async/async.hpp"
 
 class AsyncWorkerTest : public ::testing::Test {
 protected:

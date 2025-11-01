@@ -110,7 +110,8 @@ public:
     std::optional<T> getWithTimeout(
         const std::chrono::duration<Rep, Period>& timeout) {
         std::unique_lock lock(mutex_);
-        if (!not_empty_.wait_for(lock, timeout, [&] { return !queue_.empty(); })) {
+        if (!not_empty_.wait_for(lock, timeout,
+                                 [&] { return !queue_.empty(); })) {
             return std::nullopt;
         }
         T value = std::move(queue_.front());
@@ -957,10 +958,9 @@ public:
         try {
             std::lock_guard lock(mutex_);
             // Remove expired weak_ptr slots
-            auto it = std::remove_if(slots_.begin(), slots_.end(),
-                                     [](const WeakSlotPtr& weakSlot) {
-                                         return weakSlot.expired();
-                                     });
+            auto it = std::remove_if(
+                slots_.begin(), slots_.end(),
+                [](const WeakSlotPtr& weakSlot) { return weakSlot.expired(); });
             slots_.erase(it, slots_.end());
 
             for (const auto& weakSlot : slots_) {

@@ -25,9 +25,9 @@ Description: Component Registry for Managing Component Lifecycle
 #include <vector>
 
 #include <stdexcept>
+#include "../lifecycle/lifecycle.hpp"
 #include "component.hpp"
 #include "component_pool.hpp"
-#include "../lifecycle/lifecycle.hpp"
 
 class Component;
 

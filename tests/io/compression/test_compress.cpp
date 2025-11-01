@@ -937,19 +937,22 @@ TEST_F(CompressSlicesTest, BackupAndRestore) {
     fs::path backup_file = test_dir / "backup.bak";
 
     // Test uncompressed backup
-    auto result = atom::io::createBackup(source_file.string(), backup_file.string(), false);
+    auto result = atom::io::createBackup(source_file.string(),
+                                         backup_file.string(), false);
     EXPECT_TRUE(result.success);
     EXPECT_TRUE(fs::exists(backup_file));
 
     // Restore from backup
     fs::path restore_file = test_dir / "restored.txt";
-    result = atom::io::restoreFromBackup(backup_file.string(), restore_file.string(), false);
+    result = atom::io::restoreFromBackup(backup_file.string(),
+                                         restore_file.string(), false);
     EXPECT_TRUE(result.success);
     EXPECT_TRUE(fs::exists(restore_file));
 
     // Verify content
     std::ifstream ifs(restore_file);
-    std::string content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    std::string content((std::istreambuf_iterator<char>(ifs)),
+                        std::istreambuf_iterator<char>());
     EXPECT_EQ(content, "This is test data for backup");
 }
 
@@ -966,7 +969,8 @@ TEST_F(CompressSlicesTest, CompressedBackupAndRestore) {
     fs::path backup_file = test_dir / "backup_compressed.bak";
 
     // Test compressed backup
-    auto result = atom::io::createBackup(source_file.string(), backup_file.string(), true);
+    auto result = atom::io::createBackup(source_file.string(),
+                                         backup_file.string(), true);
     EXPECT_TRUE(result.success);
     EXPECT_TRUE(fs::exists(backup_file));
 
@@ -975,7 +979,8 @@ TEST_F(CompressSlicesTest, CompressedBackupAndRestore) {
 
     // Restore from compressed backup
     fs::path restore_file = test_dir / "restored_large.txt";
-    result = atom::io::restoreFromBackup(backup_file.string(), restore_file.string(), true);
+    result = atom::io::restoreFromBackup(backup_file.string(),
+                                         restore_file.string(), true);
     EXPECT_TRUE(result.success);
     EXPECT_TRUE(fs::exists(restore_file));
 
@@ -989,24 +994,27 @@ TEST_F(CompressSlicesTest, DataCompressionDecompression) {
     std::vector<unsigned char> original_data;
     std::string test_string = "This is a test string that will be compressed. ";
     for (int i = 0; i < 100; ++i) {
-        original_data.insert(original_data.end(), test_string.begin(), test_string.end());
+        original_data.insert(original_data.end(), test_string.begin(),
+                             test_string.end());
     }
 
     // Compress data
-    auto [compress_result, compressed_data] = atom::io::compressData(original_data);
+    auto [compress_result, compressed_data] =
+        atom::io::compressData(original_data);
     EXPECT_TRUE(compress_result.success);
     EXPECT_FALSE(compressed_data.empty());
     EXPECT_LT(compressed_data.size(), original_data.size());
 
     // Decompress data
-    auto [decompress_result, decompressed_data] = atom::io::decompressData(
-        compressed_data, original_data.size());
+    auto [decompress_result, decompressed_data] =
+        atom::io::decompressData(compressed_data, original_data.size());
     EXPECT_TRUE(decompress_result.success);
     EXPECT_EQ(decompressed_data.size(), original_data.size());
 
     // Verify data integrity
     EXPECT_EQ(std::memcmp(original_data.data(), decompressed_data.data(),
-                          original_data.size()), 0);
+                          original_data.size()),
+              0);
 }
 
 // Test compression with different levels
@@ -1069,8 +1077,8 @@ TEST_F(CompressSlicesTest, LargeDataCompression) {
     EXPECT_TRUE(compress_result.success);
 
     // Decompress
-    auto [decompress_result, decompressed] = atom::io::decompressData(
-        compressed, large_data.size());
+    auto [decompress_result, decompressed] =
+        atom::io::decompressData(compressed, large_data.size());
     EXPECT_TRUE(decompress_result.success);
     EXPECT_EQ(decompressed.size(), large_data.size());
 }
@@ -1083,12 +1091,14 @@ TEST_F(CompressSlicesTest, ConcurrentCompression) {
 
     for (int i = 0; i < num_threads; ++i) {
         threads.emplace_back([this, i, &success_count]() {
-            std::vector<unsigned char> data(1000, static_cast<unsigned char>(i));
+            std::vector<unsigned char> data(1000,
+                                            static_cast<unsigned char>(i));
             auto [result, compressed] = atom::io::compressData(data);
             if (result.success) {
-                auto [decomp_result, decompressed] = atom::io::decompressData(
-                    compressed, data.size());
-                if (decomp_result.success && decompressed.size() == data.size()) {
+                auto [decomp_result, decompressed] =
+                    atom::io::decompressData(compressed, data.size());
+                if (decomp_result.success &&
+                    decompressed.size() == data.size()) {
                     success_count++;
                 }
             }
@@ -1110,14 +1120,15 @@ TEST_F(CompressSlicesTest, CompressionWithEncryption) {
     options.password = "test_password";
 
     // Compress with encryption
-    auto [compress_result, compressed] = atom::io::compressData(test_data, options);
+    auto [compress_result, compressed] =
+        atom::io::compressData(test_data, options);
     EXPECT_TRUE(compress_result.success);
 
     // Decompress with correct password
     atom::io::DecompressionOptions decomp_options;
     decomp_options.password = "test_password";
-    auto [decompress_result, decompressed] = atom::io::decompressData(
-        compressed, test_data.size(), decomp_options);
+    auto [decompress_result, decompressed] =
+        atom::io::decompressData(compressed, test_data.size(), decomp_options);
 
     // Note: Actual encryption support depends on implementation
     // This test ensures the API accepts encryption options

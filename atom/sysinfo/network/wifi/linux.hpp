@@ -22,7 +22,8 @@ auto getCurrentWifi_impl() -> std::string;
 
 /**
  * @brief Get the current wired network adapter name
- * @return Current wired network adapter description or empty string if not connected
+ * @return Current wired network adapter description or empty string if not
+ * connected
  */
 auto getCurrentWiredNetwork_impl() -> std::string;
 
@@ -64,7 +65,7 @@ auto isConnectedToInternet_impl() -> bool;
  */
 auto measurePing_impl(const std::string& host, int timeout) -> float;
 
-} // namespace atom::system::linux
+}  // namespace atom::system::linux
 
-#endif // __linux__
-#endif // ATOM_SYSTEM_MODULE_WIFI_LINUX_HPP
+#endif  // __linux__
+#endif  // ATOM_SYSTEM_MODULE_WIFI_LINUX_HPP

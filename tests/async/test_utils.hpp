@@ -18,15 +18,15 @@ consistent testing patterns across all components.
 #define ATOM_ASYNC_TEST_UTILS_HPP
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
-#include <future>
 #include <functional>
+#include <future>
 #include <memory>
 #include <random>
 #include <sstream>
+#include <thread>
+#include <vector>
 
 namespace atom::async::test {
 
@@ -48,9 +48,7 @@ public:
         return std::chrono::duration_cast<Duration>(Clock::now() - start_);
     }
 
-    void reset() {
-        start_ = Clock::now();
-    }
+    void reset() { start_ = Clock::now(); }
 
     bool elapsedAtLeast(Duration duration) const {
         return elapsed() >= duration;
@@ -69,13 +67,12 @@ private:
  */
 class ScopedTimer {
 public:
-    explicit ScopedTimer(std::string name)
-        : name_(std::move(name)), timer_() {}
+    explicit ScopedTimer(std::string name) : name_(std::move(name)), timer_() {}
 
     ~ScopedTimer() {
         auto elapsed = timer_.elapsed();
-        std::cout << "[TIMING] " << name_ << ": "
-                  << elapsed.count() << " microseconds" << std::endl;
+        std::cout << "[TIMING] " << name_ << ": " << elapsed.count()
+                  << " microseconds" << std::endl;
     }
 
 private:
@@ -92,7 +89,7 @@ private:
  */
 class ThreadManager {
 public:
-    template<typename Func>
+    template <typename Func>
     void addThread(Func&& func) {
         threads_.emplace_back(std::forward<Func>(func));
     }
@@ -106,13 +103,9 @@ public:
         threads_.clear();
     }
 
-    size_t size() const {
-        return threads_.size();
-    }
+    size_t size() const { return threads_.size(); }
 
-    ~ThreadManager() {
-        joinAll();
-    }
+    ~ThreadManager() { joinAll(); }
 
 private:
     std::vector<std::thread> threads_;
@@ -149,14 +142,14 @@ private:
 /**
  * @brief Helper for testing concurrent operations
  */
-template<typename Func>
+template <typename Func>
 void runConcurrentTest(size_t numThreads, Func&& func) {
     ThreadManager manager;
     TestBarrier barrier(numThreads);
 
     for (size_t i = 0; i < numThreads; ++i) {
         manager.addThread([&barrier, func = std::forward<Func>(func), i]() {
-            barrier.wait(); // Synchronize start
+            barrier.wait();  // Synchronize start
             func(i);
         });
     }
@@ -167,14 +160,14 @@ void runConcurrentTest(size_t numThreads, Func&& func) {
 /**
  * @brief Helper for stress testing with random delays
  */
-template<typename Func>
+template <typename Func>
 void runStressTest(size_t numThreads, size_t operationsPerThread, Func&& func) {
     ThreadManager manager;
     std::atomic<size_t> completedOperations{0};
 
     for (size_t i = 0; i < numThreads; ++i) {
         manager.addThread([&completedOperations, operationsPerThread,
-                          func = std::forward<Func>(func), i]() {
+                           func = std::forward<Func>(func), i]() {
             std::random_device rd;
             std::mt19937 gen(rd());
             std::uniform_int_distribution<> dis(1, 10);
@@ -184,7 +177,8 @@ void runStressTest(size_t numThreads, size_t operationsPerThread, Func&& func) {
                 completedOperations.fetch_add(1);
 
                 // Random small delay to increase contention
-                std::this_thread::sleep_for(std::chrono::microseconds(dis(gen)));
+                std::this_thread::sleep_for(
+                    std::chrono::microseconds(dis(gen)));
             }
         });
     }
@@ -202,11 +196,12 @@ void runStressTest(size_t numThreads, size_t operationsPerThread, Func&& func) {
  */
 class ExceptionTester {
 public:
-    static std::runtime_error createTestException(const std::string& message = "Test exception") {
+    static std::runtime_error createTestException(
+        const std::string& message = "Test exception") {
         return std::runtime_error(message);
     }
 
-    template<typename Func>
+    template <typename Func>
     static void expectNoThrow(Func&& func, const std::string& context = "") {
         try {
             func();
@@ -217,23 +212,27 @@ public:
         }
     }
 
-    template<typename ExceptionType, typename Func>
-    static void expectThrow(Func&& func, const std::string& expectedMessage = "") {
+    template <typename ExceptionType, typename Func>
+    static void expectThrow(Func&& func,
+                            const std::string& expectedMessage = "") {
         try {
             func();
-            FAIL() << "Expected exception of type " << typeid(ExceptionType).name()
-                   << " but none was thrown";
+            FAIL() << "Expected exception of type "
+                   << typeid(ExceptionType).name() << " but none was thrown";
         } catch (const ExceptionType& e) {
             if (!expectedMessage.empty()) {
                 std::string what_str(e.what());
                 EXPECT_TRUE(what_str.find(expectedMessage) != std::string::npos)
-                    << "Expected message '" << expectedMessage << "' not found in '" << what_str << "'";
+                    << "Expected message '" << expectedMessage
+                    << "' not found in '" << what_str << "'";
             }
         } catch (const std::exception& e) {
-            FAIL() << "Expected exception of type " << typeid(ExceptionType).name()
-                   << " but got " << typeid(e).name() << ": " << e.what();
+            FAIL() << "Expected exception of type "
+                   << typeid(ExceptionType).name() << " but got "
+                   << typeid(e).name() << ": " << e.what();
         } catch (...) {
-            FAIL() << "Expected exception of type " << typeid(ExceptionType).name()
+            FAIL() << "Expected exception of type "
+                   << typeid(ExceptionType).name()
                    << " but got unknown exception";
         }
     }
@@ -250,29 +249,19 @@ class ResourceTracker {
 public:
     ResourceTracker() : allocated_(0), deallocated_(0) {}
 
-    void allocate() {
-        allocated_.fetch_add(1);
-    }
+    void allocate() { allocated_.fetch_add(1); }
 
-    void deallocate() {
-        deallocated_.fetch_add(1);
-    }
+    void deallocate() { deallocated_.fetch_add(1); }
 
-    size_t getAllocated() const {
-        return allocated_.load();
-    }
+    size_t getAllocated() const { return allocated_.load(); }
 
-    size_t getDeallocated() const {
-        return deallocated_.load();
-    }
+    size_t getDeallocated() const { return deallocated_.load(); }
 
-    size_t getLeaked() const {
-        return allocated_.load() - deallocated_.load();
-    }
+    size_t getLeaked() const { return allocated_.load() - deallocated_.load(); }
 
     void expectNoLeaks() const {
-        EXPECT_EQ(getLeaked(), 0) << "Resource leak detected: "
-                                  << getLeaked() << " resources not deallocated";
+        EXPECT_EQ(getLeaked(), 0) << "Resource leak detected: " << getLeaked()
+                                  << " resources not deallocated";
     }
 
 private:
@@ -290,9 +279,7 @@ public:
         tracker_.allocate();
     }
 
-    ~ScopedResourceTracker() {
-        tracker_.deallocate();
-    }
+    ~ScopedResourceTracker() { tracker_.deallocate(); }
 
 private:
     ResourceTracker& tracker_;
@@ -307,7 +294,8 @@ private:
  */
 class TestDataGenerator {
 public:
-    static std::vector<int> generateIntegers(size_t count, int min = 0, int max = 1000) {
+    static std::vector<int> generateIntegers(size_t count, int min = 0,
+                                             int max = 1000) {
         std::vector<int> data;
         data.reserve(count);
 
@@ -322,7 +310,9 @@ public:
         return data;
     }
 
-    static std::vector<std::string> generateStrings(size_t count, size_t minLength = 5, size_t maxLength = 20) {
+    static std::vector<std::string> generateStrings(size_t count,
+                                                    size_t minLength = 5,
+                                                    size_t maxLength = 20) {
         std::vector<std::string> data;
         data.reserve(count);
 
@@ -346,8 +336,9 @@ public:
         return data;
     }
 
-    template<typename T>
-    static std::vector<T> generateSequence(size_t count, T start = T{}, T increment = T{1}) {
+    template <typename T>
+    static std::vector<T> generateSequence(size_t count, T start = T{},
+                                           T increment = T{1}) {
         std::vector<T> data;
         data.reserve(count);
 
@@ -368,36 +359,38 @@ public:
 /**
  * @brief Helper macros for common test assertions
  */
-#define EXPECT_TIMING_RANGE(actual, min_duration, max_duration) \
-    do { \
-        auto actual_duration = (actual); \
-        EXPECT_GE(actual_duration, (min_duration)) \
-            << "Duration " << actual_duration.count() << " is less than minimum " \
-            << (min_duration).count(); \
-        EXPECT_LE(actual_duration, (max_duration)) \
-            << "Duration " << actual_duration.count() << " is greater than maximum " \
-            << (max_duration).count(); \
-    } while(0)
+#define EXPECT_TIMING_RANGE(actual, min_duration, max_duration)       \
+    do {                                                              \
+        auto actual_duration = (actual);                              \
+        EXPECT_GE(actual_duration, (min_duration))                    \
+            << "Duration " << actual_duration.count()                 \
+            << " is less than minimum " << (min_duration).count();    \
+        EXPECT_LE(actual_duration, (max_duration))                    \
+            << "Duration " << actual_duration.count()                 \
+            << " is greater than maximum " << (max_duration).count(); \
+    } while (0)
 
-#define EXPECT_EVENTUALLY_TRUE(condition, timeout) \
-    do { \
-        auto start = std::chrono::steady_clock::now(); \
-        while (!(condition) && \
+#define EXPECT_EVENTUALLY_TRUE(condition, timeout)                     \
+    do {                                                               \
+        auto start = std::chrono::steady_clock::now();                 \
+        while (!(condition) &&                                         \
                std::chrono::steady_clock::now() - start < (timeout)) { \
             std::this_thread::sleep_for(std::chrono::milliseconds(1)); \
-        } \
-        EXPECT_TRUE(condition) << "Condition did not become true within timeout"; \
-    } while(0)
+        }                                                              \
+        EXPECT_TRUE(condition)                                         \
+            << "Condition did not become true within timeout";         \
+    } while (0)
 
-#define EXPECT_EVENTUALLY_FALSE(condition, timeout) \
-    do { \
-        auto start = std::chrono::steady_clock::now(); \
-        while ((condition) && \
+#define EXPECT_EVENTUALLY_FALSE(condition, timeout)                    \
+    do {                                                               \
+        auto start = std::chrono::steady_clock::now();                 \
+        while ((condition) &&                                          \
                std::chrono::steady_clock::now() - start < (timeout)) { \
             std::this_thread::sleep_for(std::chrono::milliseconds(1)); \
-        } \
-        EXPECT_FALSE(condition) << "Condition did not become false within timeout"; \
-    } while(0)
+        }                                                              \
+        EXPECT_FALSE(condition)                                        \
+            << "Condition did not become false within timeout";        \
+    } while (0)
 
 }  // namespace atom::async::test
 

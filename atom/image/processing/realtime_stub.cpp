@@ -12,9 +12,7 @@ namespace {
 
 constexpr double kMillisInSecond = 1000.0;
 
-auto clampPositive(double value) -> double {
-    return value < 0.0 ? 0.0 : value;
-}
+auto clampPositive(double value) -> double { return value < 0.0 ? 0.0 : value; }
 
 auto currentTimeMilliseconds() -> double {
     using clock = std::chrono::high_resolution_clock;
@@ -23,7 +21,7 @@ auto currentTimeMilliseconds() -> double {
     return std::chrono::duration<double, std::milli>(epoch).count();
 }
 
-} // namespace
+}  // namespace
 
 bool RealtimeProcessor::initialize(const RealtimeParams& params) {
     {
@@ -47,9 +45,9 @@ bool RealtimeProcessor::initialize(const RealtimeParams& params) {
 }
 
 bool RealtimeProcessor::startCapture(CaptureSource source,
-                                    const std::string& sourcePath,
-                                    FrameCallback frameCallback,
-                                    AnalysisCallback analysisCallback) {
+                                     const std::string& sourcePath,
+                                     FrameCallback frameCallback,
+                                     AnalysisCallback analysisCallback) {
     if (frameCallback) {
         frameCallback_ = std::move(frameCallback);
     }
@@ -91,7 +89,8 @@ void RealtimeProcessor::stop() {
     }
 }
 
-blob RealtimeProcessor::processFrame(const blob& input, const FrameInfo& frameInfo) {
+blob RealtimeProcessor::processFrame(const blob& input,
+                                     const FrameInfo& frameInfo) {
     if (input.isEmpty()) {
         return {};
     }
@@ -118,7 +117,8 @@ blob RealtimeProcessor::processFrame(const blob& input, const FrameInfo& frameIn
     return output;
 }
 
-bool RealtimeProcessor::addFrame(const blob& frame, const FrameInfo& frameInfo) {
+bool RealtimeProcessor::addFrame(const blob& frame,
+                                 const FrameInfo& frameInfo) {
     if (frame.isEmpty()) {
         return false;
     }
@@ -150,16 +150,18 @@ bool RealtimeProcessor::addFrame(const blob& frame, const FrameInfo& frameInfo) 
     return true;
 }
 
-void RealtimeProcessor::setProcessingMode(ProcessingMode mode,
-                                         const std::unordered_map<std::string, double>& params) {
+void RealtimeProcessor::setProcessingMode(
+    ProcessingMode mode,
+    const std::unordered_map<std::string, double>& params) {
     params_.mode = mode;
     for (const auto& [key, value] : params) {
         params_.filterParams[key] = value;
     }
 }
 
-void RealtimeProcessor::addFilter(const std::string& filterName,
-                                 const std::unordered_map<std::string, double>& params) {
+void RealtimeProcessor::addFilter(
+    const std::string& filterName,
+    const std::unordered_map<std::string, double>& params) {
     params_.filters.push_back(filterName);
     for (const auto& [key, value] : params) {
         params_.filterParams[key] = value;
@@ -168,7 +170,8 @@ void RealtimeProcessor::addFilter(const std::string& filterName,
 
 void RealtimeProcessor::removeFilter(const std::string& filterName) {
     auto& filters = params_.filters;
-    filters.erase(std::remove(filters.begin(), filters.end(), filterName), filters.end());
+    filters.erase(std::remove(filters.begin(), filters.end(), filterName),
+                  filters.end());
 }
 
 void RealtimeProcessor::clearFilters() {
@@ -199,9 +202,7 @@ double RealtimeProcessor::getLatency() const {
     return stats_.currentLatency;
 }
 
-bool RealtimeProcessor::isRunning() const {
-    return running_.load();
-}
+bool RealtimeProcessor::isRunning() const { return running_.load(); }
 
 void RealtimeProcessor::pause() {
     paused_.store(true);
@@ -215,13 +216,11 @@ void RealtimeProcessor::resume() {
     stats_.status = running_.load() ? "capturing" : "idle";
 }
 
-bool RealtimeProcessor::isPaused() const {
-    return paused_.load();
-}
+bool RealtimeProcessor::isPaused() const { return paused_.load(); }
 
 bool RealtimeProcessor::startRecording(const std::string& outputPath,
-                                      const std::string& /*codec*/,
-                                      int /*quality*/) {
+                                       const std::string& /*codec*/,
+                                       int /*quality*/) {
     if (outputPath.empty()) {
         return false;
     }
@@ -241,17 +240,13 @@ void RealtimeProcessor::stopRecording() {
     stats_.status = running_.load() ? "capturing" : "idle";
 }
 
-bool RealtimeProcessor::isRecording() const {
-    return recording_.load();
-}
+bool RealtimeProcessor::isRecording() const { return recording_.load(); }
 
 bool RealtimeProcessor::takeSnapshot(const std::string& outputPath) {
     return !outputPath.empty();
 }
 
-void RealtimeProcessor::setTargetFPS(double fps) {
-    params_.targetFPS = fps;
-}
+void RealtimeProcessor::setTargetFPS(double fps) { params_.targetFPS = fps; }
 
 void RealtimeProcessor::setMaxBufferSize(int size) {
     params_.maxBufferSize = size;
@@ -265,7 +260,8 @@ std::vector<std::string> RealtimeProcessor::getAvailableDevices() const {
     return {"synthetic"};
 }
 
-std::vector<std::string> RealtimeProcessor::getSupportedFormats(const std::string& /*devicePath*/) const {
+std::vector<std::string> RealtimeProcessor::getSupportedFormats(
+    const std::string& /*devicePath*/) const {
     return {"RGB", "BGR"};
 }
 
@@ -284,7 +280,8 @@ void RealtimeProcessor::processingThread() {}
 
 void RealtimeProcessor::captureThread() {}
 
-blob RealtimeProcessor::applyProcessingPipeline(const blob& input, const FrameInfo& /*frameInfo*/) {
+blob RealtimeProcessor::applyProcessingPipeline(
+    const blob& input, const FrameInfo& /*frameInfo*/) {
     blob output = input;
     return output;
 }
@@ -300,15 +297,21 @@ void RealtimeProcessor::updateStatistics(double processingTime) {
         stats_.averageLatency = stats_.currentLatency;
     } else {
         stats_.averageLatency =
-            ((stats_.averageLatency * (count - 1.0)) + stats_.currentLatency) / count;
+            ((stats_.averageLatency * (count - 1.0)) + stats_.currentLatency) /
+            count;
     }
 
-    stats_.currentFPS = stats_.currentLatency > 0.0 ? kMillisInSecond / stats_.currentLatency : 0.0;
+    stats_.currentFPS = stats_.currentLatency > 0.0
+                            ? kMillisInSecond / stats_.currentLatency
+                            : 0.0;
     stats_.averageFPS = stats_.framesProcessed > 0 ? stats_.currentFPS : 0.0;
-    stats_.status = running_.load() ? "capturing" : stats_.status.empty() ? "idle" : stats_.status;
+    stats_.status = running_.load()         ? "capturing"
+                    : stats_.status.empty() ? "idle"
+                                            : stats_.status;
 }
 
-bool RealtimeProcessor::initializeCapture(CaptureSource source, const std::string& /*sourcePath*/) {
+bool RealtimeProcessor::initializeCapture(CaptureSource source,
+                                          const std::string& /*sourcePath*/) {
     return source == CaptureSource::SYNTHETIC;
 }
 
@@ -322,7 +325,8 @@ blob RealtimeProcessor::resizeFrame(const blob& input) {
     return output;
 }
 
-blob RealtimeProcessor::convertFormat(const blob& input, const std::string& /*targetFormat*/) {
+blob RealtimeProcessor::convertFormat(const blob& input,
+                                      const std::string& /*targetFormat*/) {
     if (input.isEmpty()) {
         return {};
     }
@@ -330,8 +334,9 @@ blob RealtimeProcessor::convertFormat(const blob& input, const std::string& /*ta
     return output;
 }
 
-std::unique_ptr<RealtimeProcessor> createOptimalRealtimeProcessor(bool /*useGPU*/, int /*numThreads*/) {
+std::unique_ptr<RealtimeProcessor> createOptimalRealtimeProcessor(
+    bool /*useGPU*/, int /*numThreads*/) {
     return std::make_unique<RealtimeProcessor>();
 }
 
-} // namespace atom::image
+}  // namespace atom::image

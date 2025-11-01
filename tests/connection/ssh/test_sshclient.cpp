@@ -1,8 +1,8 @@
-#include "atom/connection/sshclient.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
+#include "atom/connection/sshclient.hpp"
 
 using namespace atom::connection;
 
@@ -36,7 +36,8 @@ protected:
         private_key.close();
 
         std::ofstream public_key(public_key_path_);
-        public_key << "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ dummy_public_key test@example.com\n";
+        public_key << "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ dummy_public_key "
+                      "test@example.com\n";
         public_key.close();
     }
 
@@ -143,17 +144,21 @@ TEST_F(MockSSHClientTest, ExecuteCommandsWithoutConnection) {
 
 TEST_F(MockSSHClientTest, UploadFileWithoutConnection) {
     // Should throw when trying to upload file without connection
-    EXPECT_THROW(client_->uploadFile("local_file.txt", "/remote/path/file.txt"), std::exception);
+    EXPECT_THROW(client_->uploadFile("local_file.txt", "/remote/path/file.txt"),
+                 std::exception);
 }
 
 TEST_F(MockSSHClientTest, DownloadFileWithoutConnection) {
     // Should throw when trying to download file without connection
-    EXPECT_THROW(client_->downloadFile("/remote/path/file.txt", "local_file.txt"), std::exception);
+    EXPECT_THROW(
+        client_->downloadFile("/remote/path/file.txt", "local_file.txt"),
+        std::exception);
 }
 
 TEST_F(MockSSHClientTest, CreateDirectoryWithoutConnection) {
     // Should throw when trying to create directory without connection
-    EXPECT_THROW(client_->createDirectory("/remote/new/directory"), std::exception);
+    EXPECT_THROW(client_->createDirectory("/remote/new/directory"),
+                 std::exception);
 }
 
 TEST_F(MockSSHClientTest, ListDirectoryWithoutConnection) {
@@ -178,16 +183,20 @@ TEST_F(SSHClientTest, ConnectWithPublicKeyInvalidFiles) {
     SSHClient client(host_, port_);
 
     // Should throw when using non-existent key files
-    EXPECT_THROW(client.connectWithPublicKey("testuser", "nonexistent_private_key",
-                                           "nonexistent_public_key", 5), std::exception);
+    EXPECT_THROW(
+        client.connectWithPublicKey("testuser", "nonexistent_private_key",
+                                    "nonexistent_public_key", 5),
+        std::exception);
 }
 
 TEST_F(SSHClientTest, ConnectWithPublicKeyValidFiles) {
     SSHClient client(host_, port_);
 
-    // Should handle key files gracefully (may still fail due to invalid keys or no server)
+    // Should handle key files gracefully (may still fail due to invalid keys or
+    // no server)
     EXPECT_THROW(client.connectWithPublicKey("testuser", private_key_path_,
-                                           public_key_path_, 5), std::exception);
+                                             public_key_path_, 5),
+                 std::exception);
 }
 
 // Test command execution edge cases
@@ -250,19 +259,23 @@ protected:
 
 TEST_F(SSHFileTest, UploadNonexistentFile) {
     // Should throw when trying to upload non-existent file
-    EXPECT_THROW(client_->uploadFile("nonexistent_file.txt", "/remote/path/file.txt"), std::exception);
+    EXPECT_THROW(
+        client_->uploadFile("nonexistent_file.txt", "/remote/path/file.txt"),
+        std::exception);
 }
 
 TEST_F(SSHFileTest, UploadEmptyPath) {
     // Should throw when using empty paths
-    EXPECT_THROW(client_->uploadFile("", "/remote/path/file.txt"), std::exception);
+    EXPECT_THROW(client_->uploadFile("", "/remote/path/file.txt"),
+                 std::exception);
     EXPECT_THROW(client_->uploadFile(test_file_, ""), std::exception);
 }
 
 TEST_F(SSHFileTest, DownloadEmptyPath) {
     // Should throw when using empty paths
     EXPECT_THROW(client_->downloadFile("", "local_file.txt"), std::exception);
-    EXPECT_THROW(client_->downloadFile("/remote/path/file.txt", ""), std::exception);
+    EXPECT_THROW(client_->downloadFile("/remote/path/file.txt", ""),
+                 std::exception);
 }
 
 TEST_F(SSHFileTest, CreateEmptyDirectory) {
@@ -291,7 +304,8 @@ TEST_F(SSHFileTest, GetFileInfoEmptyPath) {
 class SSHTimeoutTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        client_ = std::make_unique<SSHClient>("192.0.2.1", 22);  // Non-routable IP for timeout testing
+        client_ = std::make_unique<SSHClient>(
+            "192.0.2.1", 22);  // Non-routable IP for timeout testing
     }
 
     std::unique_ptr<SSHClient> client_;

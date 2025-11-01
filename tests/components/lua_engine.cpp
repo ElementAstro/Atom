@@ -13,7 +13,7 @@ protected:
     void SetUp() override {
         ScriptEngineConfig config;
         config.language = ScriptLanguage::Lua;
-        config.memoryLimit = 1024 * 1024; // 1MB
+        config.memoryLimit = 1024 * 1024;  // 1MB
         config.executionTimeout = std::chrono::seconds(10);
         config.enableDebug = true;
 
@@ -125,7 +125,7 @@ TEST_F(LuaEngineTest, LuaMathOperations) {
 
     EXPECT_TRUE(result.success);
     if (result.success) {
-        double expected = 4.0 + 3.14159265359; // Approximate pi
+        double expected = 4.0 + 3.14159265359;  // Approximate pi
         EXPECT_NEAR(result.returnValue.get<double>(), expected, 0.001);
     }
 }
@@ -268,7 +268,7 @@ TEST_F(LuaEngineTest, LuaRecursion) {
 
     EXPECT_TRUE(result.success);
     if (result.success) {
-        EXPECT_EQ(result.returnValue.get<int64_t>(), 3628800); // 10!
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 3628800);  // 10!
     }
 }
 
@@ -290,7 +290,7 @@ TEST_F(LuaEngineTest, LuaClosures) {
 
     EXPECT_TRUE(result.success);
     if (result.success) {
-        EXPECT_EQ(result.returnValue.get<int64_t>(), 6); // 1 + 2 + 3
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 6);  // 1 + 2 + 3
     }
 }
 
@@ -344,4 +344,4 @@ TEST(LuaEngineTest, LuaNotEnabled) {
     GTEST_SKIP() << "Lua engine is not enabled in this build";
 }
 
-#endif // ATOM_ENABLE_LUA
+#endif  // ATOM_ENABLE_LUA

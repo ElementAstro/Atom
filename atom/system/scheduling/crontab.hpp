@@ -191,8 +191,8 @@ public:
      * @param newJob The new CronJob object to replace the old one.
      * @return True if the job was updated successfully, false otherwise.
      */
-    auto updateCronJob(const std::string& oldCommand, const CronJob& newJob)
-        -> bool;
+    auto updateCronJob(const std::string& oldCommand,
+                       const CronJob& newJob) -> bool;
 
     /**
      * @brief Updates a Cron job by its unique identifier.
@@ -200,8 +200,8 @@ public:
      * @param newJob The new CronJob object to replace the old one.
      * @return True if the job was updated successfully, false otherwise.
      */
-    auto updateCronJobById(const std::string& id, const CronJob& newJob)
-        -> bool;
+    auto updateCronJobById(const std::string& id,
+                           const CronJob& newJob) -> bool;
 
     /**
      * @brief Views the details of a Cron job with the specified command.

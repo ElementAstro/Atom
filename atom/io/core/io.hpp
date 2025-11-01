@@ -13,6 +13,7 @@
 #include <concepts>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <functional>
 #include <memory>
@@ -83,10 +84,9 @@ enum class PathType { NOT_EXISTS, REGULAR_FILE, DIRECTORY, SYMLINK, OTHER };
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P, typename String = std::string>
-auto createDirectoriesRecursive(const P& basePath,
-                                const std::vector<String>& subdirs,
-                                const CreateDirectoriesOptions& options = {})
-    -> bool;
+auto createDirectoriesRecursive(
+    const P& basePath, const std::vector<String>& subdirs,
+    const CreateDirectoriesOptions& options = {}) -> bool;
 
 /**
  * @brief Creates a directory with date-based path under root directory.
@@ -127,8 +127,8 @@ template <PathLike P, typename String = std::string>
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto renameDirectory(const P1& old_path, const P2& new_path)
-    -> bool;
+[[nodiscard]] auto renameDirectory(const P1& old_path,
+                                   const P2& new_path) -> bool;
 
 /**
  * @brief Moves a directory from one path to another.
@@ -138,8 +138,8 @@ template <PathLike P1, PathLike P2>
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto moveDirectory(const P1& old_path, const P2& new_path)
-    -> bool;
+[[nodiscard]] auto moveDirectory(const P1& old_path,
+                                 const P2& new_path) -> bool;
 
 /**
  * @brief Copies a file from source path to destination path.
@@ -188,8 +188,8 @@ template <PathLike P>
  * @return True if the operation was successful, false otherwise.
  */
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto createSymlink(const P1& target_path, const P2& symlink_path)
-    -> bool;
+[[nodiscard]] auto createSymlink(const P1& target_path,
+                                 const P2& symlink_path) -> bool;
 
 /**
  * @brief Removes a symbolic link with the specified path.
@@ -366,10 +366,9 @@ enum class FileOption { PATH, NAME };
  * @remark The file type is checked by the file extension.
  */
 template <PathLike P>
-[[nodiscard]] auto checkFileTypeInFolder(const P& folderPath,
-                                         std::span<const std::string> fileTypes,
-                                         FileOption fileOption)
-    -> std::vector<std::string>;
+[[nodiscard]] auto checkFileTypeInFolder(
+    const P& folderPath, std::span<const std::string> fileTypes,
+    FileOption fileOption) -> std::vector<std::string>;
 
 /**
  * @brief Check whether the specified file exists and is executable.
@@ -478,8 +477,8 @@ auto countLinesInFile(const P& filePath) -> std::optional<int>;
  * @return std::vector<fs::path> Paths to found executable files
  */
 template <PathLike P>
-auto searchExecutableFiles(const P& dir, std::string_view searchStr)
-    -> std::vector<fs::path>;
+auto searchExecutableFiles(const P& dir,
+                           std::string_view searchStr) -> std::vector<fs::path>;
 
 /**
  * @brief Classify files in a directory by extension
@@ -526,10 +525,9 @@ template <PathLike P>
 }
 
 template <PathLike P, typename String>
-auto createDirectoriesRecursive(const P& basePath,
-                                const std::vector<String>& subdirs,
-                                const CreateDirectoriesOptions& options)
-    -> bool {
+auto createDirectoriesRecursive(
+    const P& basePath, const std::vector<String>& subdirs,
+    const CreateDirectoriesOptions& options) -> bool {
     spdlog::info("createDirectoriesRecursive called with basePath: {}",
                  fs::path(basePath).string());
 
@@ -712,16 +710,16 @@ template <PathLike P, typename String>
 }
 
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto renameDirectory(const P1& old_path, const P2& new_path)
-    -> bool {
+[[nodiscard]] auto renameDirectory(const P1& old_path,
+                                   const P2& new_path) -> bool {
     spdlog::info("renameDirectory called with old_path: {}, new_path: {}",
                  fs::path(old_path).string(), fs::path(new_path).string());
     return moveDirectory(old_path, new_path);
 }
 
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto moveDirectory(const P1& old_path, const P2& new_path)
-    -> bool {
+[[nodiscard]] auto moveDirectory(const P1& old_path,
+                                 const P2& new_path) -> bool {
     spdlog::info("moveDirectory called with old_path: {}, new_path: {}",
                  fs::path(old_path).string(), fs::path(new_path).string());
 
@@ -932,8 +930,8 @@ template <PathLike P>
 }
 
 template <PathLike P1, PathLike P2>
-[[nodiscard]] auto createSymlink(const P1& target_path, const P2& symlink_path)
-    -> bool {
+[[nodiscard]] auto createSymlink(const P1& target_path,
+                                 const P2& symlink_path) -> bool {
     spdlog::info("createSymlink called with target_path: {}, symlink_path: {}",
                  fs::path(target_path).string(),
                  fs::path(symlink_path).string());
@@ -1093,8 +1091,8 @@ inline void walk(const fs::path& root, bool recursive,
 }
 
 // Helper function to build JSON structure
-inline auto buildJsonStructure(const fs::path& root, bool recursive)
-    -> nlohmann::json {
+inline auto buildJsonStructure(const fs::path& root,
+                               bool recursive) -> nlohmann::json {
     spdlog::info("buildJsonStructure called with root: {}, recursive: {}",
                  root.string(), recursive);
 
@@ -1327,11 +1325,11 @@ template <PathLike P>
 
                 if (FileTimeToSystemTime(&creationTime, &sysTime)) {
                     std::array<char, 100> buffer{};
-                    int written = snprintf(
-                        buffer.data(), buffer.size(),
-                        "%04d-%02d-%02d %02d:%02d:%02d", sysTime.wYear,
-                        sysTime.wMonth, sysTime.wDay, sysTime.wHour,
-                        sysTime.wMinute, sysTime.wSecond);
+                    int written =
+                        snprintf(buffer.data(), buffer.size(),
+                                 "%04d-%02d-%02d %02d:%02d:%02d", sysTime.wYear,
+                                 sysTime.wMonth, sysTime.wDay, sysTime.wHour,
+                                 sysTime.wMinute, sysTime.wSecond);
                     if (written > 0 &&
                         static_cast<size_t>(written) < buffer.size()) {
                         fileTimes.first = std::string(buffer.data());
@@ -1383,13 +1381,15 @@ template <PathLike P>
 #endif
 
         // Convert last_write_time to string
-        // C++20 provides better formatting, using std::format when available
+        // Convert file_clock to system_clock in a C++20-portable way
+        auto systemTime =
+            std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                writeTime - fs::file_time_type::clock::now() +
+                std::chrono::system_clock::now());
 #if __cpp_lib_format >= 202106L
-        fileTimes.second = std::format(
-            "{:%Y-%m-%d %H:%M:%S}", std::chrono::file_clock::to_sys(writeTime));
+        fileTimes.second = std::format("{:%Y-%m-%d %H:%M:%S}", systemTime);
 #else
-        // Fallback for C++20 without std::format
-        auto systemTime = std::chrono::file_clock::to_sys(writeTime);
+        // Fallback for environments without std::format
         auto timeT = std::chrono::system_clock::to_time_t(systemTime);
         std::stringstream ss;
         ss << std::put_time(std::localtime(&timeT), "%Y-%m-%d %H:%M:%S");
@@ -1407,10 +1407,9 @@ template <PathLike P>
 }
 
 template <PathLike P>
-[[nodiscard]] auto checkFileTypeInFolder(const P& folderPath,
-                                         std::span<const std::string> fileTypes,
-                                         FileOption fileOption)
-    -> std::vector<std::string> {
+[[nodiscard]] auto checkFileTypeInFolder(
+    const P& folderPath, std::span<const std::string> fileTypes,
+    FileOption fileOption) -> std::vector<std::string> {
     spdlog::info("checkFileTypeInFolder called with folderPath: {}",
                  fs::path(folderPath).string());
 

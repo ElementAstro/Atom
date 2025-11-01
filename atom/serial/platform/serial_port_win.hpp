@@ -6,6 +6,7 @@
 #include <Windows.h>
 #include <devguid.h>
 #include <initguid.h>
+#include <ntddser.h>
 #include <setupapi.h>
 #include <spdlog/spdlog.h>
 #include <atomic>

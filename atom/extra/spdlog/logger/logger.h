@@ -10,8 +10,8 @@
 #include "../utils/timer.h"
 
 #include <spdlog/spdlog.h>
-#include <format>
 #include <cstdint>
+#include <format>
 #include <memory>
 #include <ranges>
 #include <source_location>
@@ -77,8 +77,9 @@ public:
      */
     template <typename... Args>
     void trace(std::format_string<Args...> fmt, Args&&... args) {
-        log_with_location<Args...>(Level::trace, fmt, std::forward<Args>(args)...,
-                          std::source_location::current());
+        log_with_location<Args...>(Level::trace, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
     }
 
     /**
@@ -90,8 +91,9 @@ public:
      */
     template <typename... Args>
     void debug(std::format_string<Args...> fmt, Args&&... args) {
-        log_with_location<Args...>(Level::debug, fmt, std::forward<Args>(args)...,
-                          std::source_location::current());
+        log_with_location<Args...>(Level::debug, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
     }
 
     /**
@@ -103,8 +105,9 @@ public:
      */
     template <typename... Args>
     void info(std::format_string<Args...> fmt, Args&&... args) {
-        log_with_location<Args...>(Level::info, fmt, std::forward<Args>(args)...,
-                          std::source_location::current());
+        log_with_location<Args...>(Level::info, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
     }
 
     /**
@@ -116,8 +119,9 @@ public:
      */
     template <typename... Args>
     void warn(std::format_string<Args...> fmt, Args&&... args) {
-        log_with_location<Args...>(Level::warn, fmt, std::forward<Args>(args)...,
-                          std::source_location::current());
+        log_with_location<Args...>(Level::warn, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
     }
 
     /**
@@ -129,8 +133,9 @@ public:
      */
     template <typename... Args>
     void error(std::format_string<Args...> fmt, Args&&... args) {
-        log_with_location<Args...>(Level::error, fmt, std::forward<Args>(args)...,
-                          std::source_location::current());
+        log_with_location<Args...>(Level::error, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
     }
 
     /**
@@ -142,8 +147,9 @@ public:
      */
     template <typename... Args>
     void critical(std::format_string<Args...> fmt, Args&&... args) {
-        log_with_location<Args...>(Level::critical, fmt, std::forward<Args>(args)...,
-                          std::source_location::current());
+        log_with_location<Args...>(Level::critical, fmt,
+                                   std::forward<Args>(args)...,
+                                   std::source_location::current());
     }
 
     /**
@@ -355,9 +361,10 @@ private:
 };
 
 template <Formattable... Args>
-inline void Logger::log_with_location(
-    Level level, std::format_string<Args...> fmt, Args&&... args,
-    const std::source_location& loc) {
+inline void Logger::log_with_location(Level level,
+                                      std::format_string<Args...> fmt,
+                                      Args&&... args,
+                                      const std::source_location& loc) {
     if (!should_log_internal(level)) {
         return;
     }
@@ -371,10 +378,9 @@ inline void Logger::log_with_location(
     if (file && *file) {
         if (function && *function) {
             message = std::format("[{}:{} {}] {}", file, line, function,
-                                   std::move(message));
+                                  std::move(message));
         } else {
-            message = std::format("[{}:{}] {}", file, line,
-                                   std::move(message));
+            message = std::format("[{}:{}] {}", file, line, std::move(message));
         }
     }
 

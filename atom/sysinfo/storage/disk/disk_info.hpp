@@ -33,7 +33,8 @@ namespace atom::system {
  * @param includeRemovable Whether to include removable drives in the results
  * @return A vector of DiskInfo structures
  */
-[[nodiscard]] auto getDiskInfo(bool includeRemovable = true) -> std::vector<DiskInfo>;
+[[nodiscard]] auto getDiskInfo(bool includeRemovable = true)
+    -> std::vector<DiskInfo>;
 
 /**
  * @brief Retrieves the disk usage information for all available disks.

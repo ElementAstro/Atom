@@ -40,7 +40,7 @@ void bindErrorKind(py::module_& m) {
  */
 void bindError(py::module_& m) {
     py::class_<Error>(m, "Error", "Error type for numeric operations")
-        .def(py::init<ErrorKind, const std::string &>(), py::arg("kind"),
+        .def(py::init<ErrorKind, const std::string&>(), py::arg("kind"),
              py::arg("message"),
              "Create a new Error with the given kind and message")
         .def("kind", &Error::kind, "Get the error kind")
@@ -60,7 +60,7 @@ void bindError(py::module_& m) {
  * @param name The Python class name for this Result type
  * @param doc The documentation string for this Result type
  */
-template<typename T>
+template <typename T>
 void bindResultType(py::module_& m, const char* name, const char* doc) {
     py::class_<Result<T>>(m, name, doc)
         .def(py::init<T>(), py::arg("value"),
@@ -103,12 +103,11 @@ void bindResultTypes(py::module_& m) {
  * @param name The Python class name for this Option type
  * @param doc The documentation string for this Option type
  */
-template<typename T>
+template <typename T>
 void bindOptionType(py::module_& m, const char* name, const char* doc) {
     py::class_<Option<T>>(m, name, doc)
         .def(py::init<>(), "Create a None option")
-        .def(py::init<T>(), py::arg("value"),
-             "Create a Some option with value")
+        .def(py::init<T>(), py::arg("value"), "Create a Some option with value")
         .def("is_some", &Option<T>::is_some, "Check if option has a value")
         .def("is_none", &Option<T>::is_none, "Check if option has no value")
         .def("unwrap", &Option<T>::unwrap, "Get the value, throws if None")
@@ -148,7 +147,7 @@ void bindRangeTypes(py::module_& m) {
              "Create a range from start to end (exclusive or inclusive)")
         .def(
             "__iter__",
-            [](Range<int> &r) { return py::make_iterator(r.begin(), r.end()); })
+            [](Range<int>& r) { return py::make_iterator(r.begin(), r.end()); })
         .def("contains", &Range<int>::contains, py::arg("value"),
              "Check if value is in range")
         .def("__contains__", &Range<int>::contains, py::arg("value"),
@@ -544,5 +543,4 @@ PYBIND11_MODULE(rust_numeric, m) {
 
     // Add module documentation and examples
     addModuleDocumentation(m);
-
 }

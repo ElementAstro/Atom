@@ -126,7 +126,8 @@ public:
     template <typename T, typename UnaryFunction>
     auto transform(UnaryFunction transform_f) const -> cstream<T> {
         T dest;
-        // Only call reserve() if the container supports it (e.g., vector, string)
+        // Only call reserve() if the container supports it (e.g., vector,
+        // string)
         if constexpr (requires { dest.reserve(container_ref_.size()); }) {
             dest.reserve(container_ref_.size());
         }
@@ -211,8 +212,8 @@ public:
      * @return value_type The accumulated value.
      */
     template <typename UnaryFunction = std::plus<value_type>>
-    auto accumulate(value_type initial = {}, UnaryFunction op = {}) const
-        -> value_type {
+    auto accumulate(value_type initial = {},
+                    UnaryFunction op = {}) const -> value_type {
         return std::accumulate(container_ref_.begin(), container_ref_.end(),
                                initial, op);
     }

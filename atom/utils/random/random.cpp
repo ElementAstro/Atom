@@ -30,8 +30,8 @@ const std::string& getDefaultCharset() {
 }
 }  // namespace
 
-auto generateRandomString(int length, const std::string& charset, bool secure)
-    -> std::string {
+auto generateRandomString(int length, const std::string& charset,
+                          bool secure) -> std::string {
     if (length <= 0) {
         THROW_INVALID_ARGUMENT("Length must be a positive integer.");
     }

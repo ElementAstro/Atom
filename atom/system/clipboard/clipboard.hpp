@@ -81,44 +81,44 @@ public:
     ClipboardResult(const T& value) : m_value(value) {}
     ClipboardResult(std::error_code error) noexcept : m_error(error) {}
 
-    constexpr bool has_value() const noexcept { return m_value.has_value(); }
-    constexpr explicit operator bool() const noexcept { return has_value(); }
+    bool has_value() const noexcept { return m_value.has_value(); }
+    explicit operator bool() const noexcept { return has_value(); }
 
-    constexpr const T& value() const& {
+    const T& value() const& {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has no value");
         return *m_value;
     }
 
-    constexpr T& value() & {
+    T& value() & {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has no value");
         return *m_value;
     }
 
-    constexpr T&& value() && {
+    T&& value() && {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has no value");
         return std::move(*m_value);
     }
 
-    constexpr const T& operator*() const& noexcept { return *m_value; }
-    constexpr T& operator*() & noexcept { return *m_value; }
-    constexpr T&& operator*() && noexcept { return std::move(*m_value); }
+    const T& operator*() const& noexcept { return *m_value; }
+    T& operator*() & noexcept { return *m_value; }
+    T&& operator*() && noexcept { return std::move(*m_value); }
 
-    constexpr const T* operator->() const noexcept { return &*m_value; }
-    constexpr T* operator->() noexcept { return &*m_value; }
+    const T* operator->() const noexcept { return &*m_value; }
+    T* operator->() noexcept { return &*m_value; }
 
     std::error_code error() const noexcept { return m_error; }
 
     template <typename U>
-    constexpr T value_or(U&& default_value) const& {
+    T value_or(U&& default_value) const& {
         return has_value() ? *m_value
                            : static_cast<T>(std::forward<U>(default_value));
     }
 
     template <typename U>
-    constexpr T value_or(U&& default_value) && {
+    T value_or(U&& default_value) && {
         return has_value() ? std::move(*m_value)
                            : static_cast<T>(std::forward<U>(default_value));
     }
@@ -136,10 +136,10 @@ public:
     ClipboardResult() noexcept = default;
     ClipboardResult(std::error_code error) noexcept : m_error(error) {}
 
-    constexpr bool has_value() const noexcept { return !m_error; }
-    constexpr explicit operator bool() const noexcept { return has_value(); }
+    bool has_value() const noexcept { return !m_error; }
+    explicit operator bool() const noexcept { return has_value(); }
 
-    constexpr void value() const {
+    void value() const {
         if (!has_value())
             throw std::runtime_error("ClipboardResult has error");
     }

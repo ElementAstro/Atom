@@ -17,7 +17,7 @@
 
 /**
  * @brief Demonstrates scientific image format processing
- * 
+ *
  * This example shows how to handle scientific image formats commonly
  * used in research, astronomy, and scientific imaging applications.
  */
@@ -39,17 +39,21 @@ int main() {
 
         // Create a simulated scientific image with high dynamic range
         cv::Mat scientific_image = cv::Mat::zeros(512, 512, CV_32FC1);
-        
+
         // Simulate scientific data with wide dynamic range
         cv::randu(scientific_image, cv::Scalar(0.0), cv::Scalar(65535.0));
-        
+
         // Add some scientific features (e.g., astronomical objects)
-        cv::circle(scientific_image, cv::Point(128, 128), 30, cv::Scalar(50000.0), -1);
-        cv::circle(scientific_image, cv::Point(384, 384), 20, cv::Scalar(45000.0), -1);
-        cv::circle(scientific_image, cv::Point(256, 100), 15, cv::Scalar(40000.0), -1);
+        cv::circle(scientific_image, cv::Point(128, 128), 30,
+                   cv::Scalar(50000.0), -1);
+        cv::circle(scientific_image, cv::Point(384, 384), 20,
+                   cv::Scalar(45000.0), -1);
+        cv::circle(scientific_image, cv::Point(256, 100), 15,
+                   cv::Scalar(40000.0), -1);
 
         std::cout << "1. Loading scientific image (simulated)\n";
-        std::cout << "   Image size: " << scientific_image.cols << "x" << scientific_image.rows << std::endl;
+        std::cout << "   Image size: " << scientific_image.cols << "x"
+                  << scientific_image.rows << std::endl;
         std::cout << "   Data type: 32-bit floating point\n";
         std::cout << "   Dynamic range: 0.0 - 65535.0\n";
 
@@ -74,22 +78,27 @@ int main() {
         // Percentile-based contrast stretching
         std::vector<float> data;
         if (log_scaled.isContinuous()) {
-            data.assign((float*)log_scaled.data, (float*)log_scaled.data + log_scaled.total());
+            data.assign((float*)log_scaled.data,
+                        (float*)log_scaled.data + log_scaled.total());
         }
         std::sort(data.begin(), data.end());
-        
-        float p1 = data[static_cast<size_t>(data.size() * 0.01)];  // 1st percentile
-        float p99 = data[static_cast<size_t>(data.size() * 0.99)]; // 99th percentile
-        
+
+        float p1 =
+            data[static_cast<size_t>(data.size() * 0.01)];  // 1st percentile
+        float p99 =
+            data[static_cast<size_t>(data.size() * 0.99)];  // 99th percentile
+
         cv::Mat stretched;
-        log_scaled.convertTo(stretched, CV_8UC1, 255.0 / (p99 - p1), -p1 * 255.0 / (p99 - p1));
+        log_scaled.convertTo(stretched, CV_8UC1, 255.0 / (p99 - p1),
+                             -p1 * 255.0 / (p99 - p1));
         std::cout << "4. Percentile-based contrast stretching applied\n";
         std::cout << "   1st percentile: " << p1 << std::endl;
         std::cout << "   99th percentile: " << p99 << std::endl;
 
         // Background subtraction (common in scientific imaging)
         cv::Mat background;
-        cv::medianBlur(stretched, background, 51); // Large kernel for background estimation
+        cv::medianBlur(stretched, background,
+                       51);  // Large kernel for background estimation
         cv::Mat background_subtracted;
         cv::subtract(stretched, background, background_subtracted);
         std::cout << "5. Background subtraction applied\n";
@@ -102,10 +111,11 @@ int main() {
         // Feature detection (e.g., for astronomical objects)
         cv::Mat binary;
         cv::threshold(denoised, binary, 50, 255, cv::THRESH_BINARY);
-        
+
         std::vector<std::vector<cv::Point>> contours;
-        cv::findContours(binary, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
-        
+        cv::findContours(binary, contours, cv::RETR_EXTERNAL,
+                         cv::CHAIN_APPROX_SIMPLE);
+
         std::cout << "7. Feature detection completed\n";
         std::cout << "   Features detected: " << contours.size() << std::endl;
 
@@ -116,21 +126,26 @@ int main() {
                 double cx = moments.m10 / moments.m00;
                 double cy = moments.m01 / moments.m00;
                 double area = cv::contourArea(contours[i]);
-                
-                std::cout << "   Feature " << i+1 << ": center(" << cx << ", " << cy 
-                          << "), area=" << area << std::endl;
+
+                std::cout << "   Feature " << i + 1 << ": center(" << cx << ", "
+                          << cy << "), area=" << area << std::endl;
             }
         }
 
         // Photometry (intensity measurement)
-        cv::Mat photometry_mask = cv::Mat::zeros(scientific_image.size(), CV_8UC1);
+        cv::Mat photometry_mask =
+            cv::Mat::zeros(scientific_image.size(), CV_8UC1);
         for (const auto& contour : contours) {
-            cv::fillPoly(photometry_mask, std::vector<std::vector<cv::Point>>{contour}, cv::Scalar(255));
+            cv::fillPoly(photometry_mask,
+                         std::vector<std::vector<cv::Point>>{contour},
+                         cv::Scalar(255));
         }
-        
-        cv::Scalar total_flux = cv::sum(scientific_image.mul(photometry_mask / 255.0));
+
+        cv::Scalar total_flux =
+            cv::sum(scientific_image.mul(photometry_mask / 255.0));
         std::cout << "8. Photometry analysis completed\n";
-        std::cout << "   Total flux in detected features: " << total_flux[0] << std::endl;
+        std::cout << "   Total flux in detected features: " << total_flux[0]
+                  << std::endl;
 
         std::cout << "\nScientific image processing pipeline completed!\n";
         std::cout << "Common scientific imaging applications:\n";
@@ -145,9 +160,11 @@ int main() {
         return 1;
     }
 #else
-    std::cout << "OpenCV not available. Scientific image processing example cannot run." << std::endl;
+    std::cout << "OpenCV not available. Scientific image processing example "
+                 "cannot run."
+              << std::endl;
     std::cout << "This is a placeholder implementation." << std::endl;
-    
+
     std::cout << "\nScientific image processing would typically include:\n";
     std::cout << "- FITS file handling with header metadata\n";
     std::cout << "- Calibration frame processing (dark, flat, bias)\n";
@@ -156,6 +173,7 @@ int main() {
     std::cout << "- Statistical analysis and uncertainty propagation\n";
 #endif
 
-    std::cout << "\nScientific image format processing example completed." << std::endl;
+    std::cout << "\nScientific image format processing example completed."
+              << std::endl;
     return 0;
 }

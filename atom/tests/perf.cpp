@@ -340,7 +340,8 @@ void Perf::PerfGather::exportToJSON(const std::string& filename) {
     }
 }
 
-[[maybe_unused]] static std::string formatDuration(std::chrono::nanoseconds duration_ns) {
+[[maybe_unused]] static std::string formatDuration(
+    std::chrono::nanoseconds duration_ns) {
     std::ostringstream oss;
     oss << duration_ns.count() << " ns";
 

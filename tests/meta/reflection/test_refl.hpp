@@ -162,11 +162,10 @@ TEST_F(ReflTest, FieldListOperations) {
     using namespace atom::meta;
 
     // Create field list for TestStruct
-    using TestFieldList = FieldList<
-        Field<TStr<'v', 'a', 'l', 'u', 'e'>, int>,
-        Field<TStr<'n', 'a', 'm', 'e'>, std::string>,
-        Field<TStr<'d', 'a', 't', 'a'>, double>
-    >;
+    using TestFieldList =
+        FieldList<Field<TStr<'v', 'a', 'l', 'u', 'e'>, int>,
+                  Field<TStr<'n', 'a', 'm', 'e'>, std::string>,
+                  Field<TStr<'d', 'a', 't', 'a'>, double>>;
 
     // Test field list size
     static_assert(TestFieldList::size() == 3);
@@ -188,9 +187,9 @@ TEST_F(ReflTest, AttrListOperations) {
 
     // Create attribute list
     using TestAttrList = AttrList<
-        Attr<TStr<'s', 'e', 'r', 'i', 'a', 'l', 'i', 'z', 'a', 'b', 'l', 'e'>, bool>,
-        Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>
-    >;
+        Attr<TStr<'s', 'e', 'r', 'i', 'a', 'l', 'i', 'z', 'a', 'b', 'l', 'e'>,
+             bool>,
+        Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>>;
 
     // Test attribute list size
     static_assert(TestAttrList::size() == 2);
@@ -223,15 +222,11 @@ TEST_F(ReflTest, TypeInfoSystem) {
     using namespace atom::meta;
 
     // Test TypeInfo creation
-    using TestTypeInfo = TypeInfo<
-        TStr<'T', 'e', 's', 't', 'S', 't', 'r', 'u', 'c', 't'>,
-        FieldList<
-            Field<TStr<'v', 'a', 'l', 'u', 'e'>, int>,
-            Field<TStr<'n', 'a', 'm', 'e'>, std::string>
-        >,
-        AttrList<>,
-        BaseList<>
-    >;
+    using TestTypeInfo =
+        TypeInfo<TStr<'T', 'e', 's', 't', 'S', 't', 'r', 'u', 'c', 't'>,
+                 FieldList<Field<TStr<'v', 'a', 'l', 'u', 'e'>, int>,
+                           Field<TStr<'n', 'a', 'm', 'e'>, std::string>>,
+                 AttrList<>, BaseList<>>;
 
     // Test TypeInfo properties
     static_assert(TestTypeInfo::fields.size() == 2);
@@ -247,12 +242,12 @@ TEST_F(ReflTest, DFSTraversal) {
     using namespace atom::meta;
 
     // Create type info with inheritance
-    using DerivedTypeInfo = TypeInfo<
-        TStr<'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
-        FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_', 'n', 'a', 'm', 'e'>, std::string>>,
-        AttrList<>,
-        BaseList<BaseStruct>
-    >;
+    using DerivedTypeInfo =
+        TypeInfo<TStr<'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
+                 FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_',
+                                      'n', 'a', 'm', 'e'>,
+                                 std::string>>,
+                 AttrList<>, BaseList<BaseStruct>>;
 
     // Test that DFS traversal works (implementation-specific)
     static_assert(DerivedTypeInfo::bases.size() == 1);
@@ -310,15 +305,10 @@ TEST_F(ReflTest, ReflectionMacros) {
 
     using ManualTypeInfo = TypeInfo<
         TStr<'M', 'a', 'n', 'u', 'a', 'l'>,
-        FieldList<
-            Field<TStr<'f', 'i', 'e', 'l', 'd', '1'>, int>,
-            Field<TStr<'f', 'i', 'e', 'l', 'd', '2'>, std::string>
-        >,
-        AttrList<
-            Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>
-        >,
-        BaseList<>
-    >;
+        FieldList<Field<TStr<'f', 'i', 'e', 'l', 'd', '1'>, int>,
+                  Field<TStr<'f', 'i', 'e', 'l', 'd', '2'>, std::string>>,
+        AttrList<Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>>,
+        BaseList<>>;
 
     static_assert(ManualTypeInfo::fields.size() == 2);
     static_assert(ManualTypeInfo::attrs.size() == 1);
@@ -329,16 +319,12 @@ TEST_F(ReflTest, ReflectionMacros) {
 TEST_F(ReflTest, FieldMetadataExtraction) {
     using namespace atom::meta;
 
-    using TestTypeInfo = TypeInfo<
-        TStr<'T', 'e', 's', 't'>,
-        FieldList<
-            Field<TStr<'i', 'd'>, int>,
-            Field<TStr<'n', 'a', 'm', 'e'>, std::string>,
-            Field<TStr<'v', 'a', 'l', 'u', 'e'>, double>
-        >,
-        AttrList<>,
-        BaseList<>
-    >;
+    using TestTypeInfo =
+        TypeInfo<TStr<'T', 'e', 's', 't'>,
+                 FieldList<Field<TStr<'i', 'd'>, int>,
+                           Field<TStr<'n', 'a', 'm', 'e'>, std::string>,
+                           Field<TStr<'v', 'a', 'l', 'u', 'e'>, double>>,
+                 AttrList<>, BaseList<>>;
 
     // Test field count
     static_assert(TestTypeInfo::fields.size() == 3);
@@ -364,15 +350,13 @@ TEST_F(ReflTest, AttributeMetadataExtraction) {
     using namespace atom::meta;
 
     using TestTypeInfo = TypeInfo<
-        TStr<'T', 'e', 's', 't'>,
-        FieldList<>,
-        AttrList<
-            Attr<TStr<'s', 'e', 'r', 'i', 'a', 'l', 'i', 'z', 'a', 'b', 'l', 'e'>, bool>,
-            Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>,
-            Attr<TStr<'a', 'u', 't', 'h', 'o', 'r'>, std::string>
-        >,
-        BaseList<>
-    >;
+        TStr<'T', 'e', 's', 't'>, FieldList<>,
+        AttrList<Attr<TStr<'s', 'e', 'r', 'i', 'a', 'l', 'i', 'z', 'a', 'b',
+                           'l', 'e'>,
+                      bool>,
+                 Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>,
+                 Attr<TStr<'a', 'u', 't', 'h', 'o', 'r'>, std::string>>,
+        BaseList<>>;
 
     // Test attribute count
     static_assert(TestTypeInfo::attrs.size() == 3);
@@ -400,18 +384,17 @@ TEST_F(ReflTest, InheritanceHierarchyReflection) {
     // Base class type info
     using BaseTypeInfo = TypeInfo<
         TStr<'B', 'a', 's', 'e'>,
-        FieldList<Field<TStr<'b', 'a', 's', 'e', '_', 'v', 'a', 'l', 'u', 'e'>, int>>,
-        AttrList<>,
-        BaseList<>
-    >;
+        FieldList<
+            Field<TStr<'b', 'a', 's', 'e', '_', 'v', 'a', 'l', 'u', 'e'>, int>>,
+        AttrList<>, BaseList<>>;
 
     // Derived class type info
-    using DerivedTypeInfo = TypeInfo<
-        TStr<'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
-        FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_', 'n', 'a', 'm', 'e'>, std::string>>,
-        AttrList<>,
-        BaseList<BaseStruct>
-    >;
+    using DerivedTypeInfo =
+        TypeInfo<TStr<'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
+                 FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_',
+                                      'n', 'a', 'm', 'e'>,
+                                 std::string>>,
+                 AttrList<>, BaseList<BaseStruct>>;
 
     // Test base class has no bases
     static_assert(BaseTypeInfo::bases.size() == 0);
@@ -436,12 +419,13 @@ TEST_F(ReflTest, VirtualBaseClassHandling) {
         std::string derived_data;
     };
 
-    using VirtualDerivedTypeInfo = TypeInfo<
-        TStr<'V', 'i', 'r', 't', 'u', 'a', 'l', 'D', 'e', 'r', 'i', 'v', 'e', 'd'>,
-        FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_', 'd', 'a', 't', 'a'>, std::string>>,
-        AttrList<>,
-        BaseList<VirtualBase>
-    >;
+    using VirtualDerivedTypeInfo =
+        TypeInfo<TStr<'V', 'i', 'r', 't', 'u', 'a', 'l', 'D', 'e', 'r', 'i',
+                      'v', 'e', 'd'>,
+                 FieldList<Field<TStr<'d', 'e', 'r', 'i', 'v', 'e', 'd', '_',
+                                      'd', 'a', 't', 'a'>,
+                                 std::string>>,
+                 AttrList<>, BaseList<VirtualBase>>;
 
     static_assert(VirtualDerivedTypeInfo::bases.size() == 1);
 
@@ -468,12 +452,12 @@ TEST_F(ReflTest, ComplexTypeHierarchies) {
         int impl_data;
     };
 
-    using ImplementationTypeInfo = TypeInfo<
-        TStr<'I', 'm', 'p', 'l', 'e', 'm', 'e', 'n', 't', 'a', 't', 'i', 'o', 'n'>,
-        FieldList<Field<TStr<'i', 'm', 'p', 'l', '_', 'd', 'a', 't', 'a'>, int>>,
-        AttrList<>,
-        BaseList<Interface1, Interface2>
-    >;
+    using ImplementationTypeInfo =
+        TypeInfo<TStr<'I', 'm', 'p', 'l', 'e', 'm', 'e', 'n', 't', 'a', 't',
+                      'i', 'o', 'n'>,
+                 FieldList<Field<
+                     TStr<'i', 'm', 'p', 'l', '_', 'd', 'a', 't', 'a'>, int>>,
+                 AttrList<>, BaseList<Interface1, Interface2>>;
 
     static_assert(ImplementationTypeInfo::bases.size() == 2);
 
@@ -489,17 +473,12 @@ TEST_F(ReflTest, TypeInfoSystemIntegration) {
     using namespace atom::meta;
 
     // Test that reflection system integrates with type_info
-    using IntegratedTypeInfo = TypeInfo<
-        TStr<'I', 'n', 't', 'e', 'g', 'r', 'a', 't', 'e', 'd'>,
-        FieldList<
-            Field<TStr<'i', 'd'>, int>,
-            Field<TStr<'n', 'a', 'm', 'e'>, std::string>
-        >,
-        AttrList<
-            Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>
-        >,
-        BaseList<>
-    >;
+    using IntegratedTypeInfo =
+        TypeInfo<TStr<'I', 'n', 't', 'e', 'g', 'r', 'a', 't', 'e', 'd'>,
+                 FieldList<Field<TStr<'i', 'd'>, int>,
+                           Field<TStr<'n', 'a', 'm', 'e'>, std::string>>,
+                 AttrList<Attr<TStr<'v', 'e', 'r', 's', 'i', 'o', 'n'>, int>>,
+                 BaseList<>>;
 
     // Test type name
     EXPECT_EQ(IntegratedTypeInfo::name.str(), "Integrated");
@@ -527,17 +506,12 @@ TEST_F(ReflTest, CompileTimeReflectionValidation) {
     // Test that reflection information is available at compile time
     using ValidatedTypeInfo = TypeInfo<
         TStr<'V', 'a', 'l', 'i', 'd', 'a', 't', 'e', 'd'>,
-        FieldList<
-            Field<TStr<'f', 'i', 'e', 'l', 'd', '1'>, int>,
-            Field<TStr<'f', 'i', 'e', 'l', 'd', '2'>, double>,
-            Field<TStr<'f', 'i', 'e', 'l', 'd', '3'>, std::string>
-        >,
-        AttrList<
-            Attr<TStr<'a', 't', 't', 'r', '1'>, bool>,
-            Attr<TStr<'a', 't', 't', 'r', '2'>, int>
-        >,
-        BaseList<BaseStruct>
-    >;
+        FieldList<Field<TStr<'f', 'i', 'e', 'l', 'd', '1'>, int>,
+                  Field<TStr<'f', 'i', 'e', 'l', 'd', '2'>, double>,
+                  Field<TStr<'f', 'i', 'e', 'l', 'd', '3'>, std::string>>,
+        AttrList<Attr<TStr<'a', 't', 't', 'r', '1'>, bool>,
+                 Attr<TStr<'a', 't', 't', 'r', '2'>, int>>,
+        BaseList<BaseStruct>>;
 
     // All these checks happen at compile time
     static_assert(ValidatedTypeInfo::fields.size() == 3);
@@ -545,16 +519,28 @@ TEST_F(ReflTest, CompileTimeReflectionValidation) {
     static_assert(ValidatedTypeInfo::bases.size() == 1);
 
     // Test field types are correct
-    static_assert(std::is_same_v<typename ValidatedTypeInfo::fields::template at<0>::Type, int>);
-    static_assert(std::is_same_v<typename ValidatedTypeInfo::fields::template at<1>::Type, double>);
-    static_assert(std::is_same_v<typename ValidatedTypeInfo::fields::template at<2>::Type, std::string>);
+    static_assert(
+        std::is_same_v<typename ValidatedTypeInfo::fields::template at<0>::Type,
+                       int>);
+    static_assert(
+        std::is_same_v<typename ValidatedTypeInfo::fields::template at<1>::Type,
+                       double>);
+    static_assert(
+        std::is_same_v<typename ValidatedTypeInfo::fields::template at<2>::Type,
+                       std::string>);
 
     // Test attribute types are correct
-    static_assert(std::is_same_v<typename ValidatedTypeInfo::attrs::template at<0>::Type, bool>);
-    static_assert(std::is_same_v<typename ValidatedTypeInfo::attrs::template at<1>::Type, int>);
+    static_assert(
+        std::is_same_v<typename ValidatedTypeInfo::attrs::template at<0>::Type,
+                       bool>);
+    static_assert(
+        std::is_same_v<typename ValidatedTypeInfo::attrs::template at<1>::Type,
+                       int>);
 
     // Test base type is correct
-    static_assert(std::is_same_v<typename ValidatedTypeInfo::bases::template at<0>, BaseStruct>);
+    static_assert(
+        std::is_same_v<typename ValidatedTypeInfo::bases::template at<0>,
+                       BaseStruct>);
 }
 
 // Test edge cases and error conditions
@@ -562,12 +548,8 @@ TEST_F(ReflTest, EdgeCasesAndErrorConditions) {
     using namespace atom::meta;
 
     // Test empty type info
-    using EmptyTypeInfo = TypeInfo<
-        TStr<'E', 'm', 'p', 't', 'y'>,
-        FieldList<>,
-        AttrList<>,
-        BaseList<>
-    >;
+    using EmptyTypeInfo = TypeInfo<TStr<'E', 'm', 'p', 't', 'y'>, FieldList<>,
+                                   AttrList<>, BaseList<>>;
 
     static_assert(EmptyTypeInfo::fields.size() == 0);
     static_assert(EmptyTypeInfo::attrs.size() == 0);
@@ -576,12 +558,10 @@ TEST_F(ReflTest, EdgeCasesAndErrorConditions) {
     EXPECT_EQ(EmptyTypeInfo::name.str(), "Empty");
 
     // Test single element lists
-    using SingleFieldTypeInfo = TypeInfo<
-        TStr<'S', 'i', 'n', 'g', 'l', 'e'>,
-        FieldList<Field<TStr<'o', 'n', 'l', 'y'>, int>>,
-        AttrList<>,
-        BaseList<>
-    >;
+    using SingleFieldTypeInfo =
+        TypeInfo<TStr<'S', 'i', 'n', 'g', 'l', 'e'>,
+                 FieldList<Field<TStr<'o', 'n', 'l', 'y'>, int>>, AttrList<>,
+                 BaseList<>>;
 
     static_assert(SingleFieldTypeInfo::fields.size() == 1);
 

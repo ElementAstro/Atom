@@ -16,12 +16,12 @@ unloaded, and managed at runtime.
 **************************************************/
 
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <functional>
 
 #include "atom/components/component.hpp"
 #include "atom/components/core/registry.hpp"
@@ -41,7 +41,8 @@ public:
     virtual std::string getDescription() const = 0;
     virtual bool initialize() = 0;
     virtual void shutdown() = 0;
-    virtual std::shared_ptr<Component> createComponent(const std::string& name) = 0;
+    virtual std::shared_ptr<Component> createComponent(
+        const std::string& name) = 0;
 };
 
 /**
@@ -49,8 +50,10 @@ public:
  */
 class AudioProcessorComponent : public Component {
 public:
-    explicit AudioProcessorComponent(const std::string& name) : Component(name) {
-        std::cout << "AudioProcessorComponent '" << name << "' created" << std::endl;
+    explicit AudioProcessorComponent(const std::string& name)
+        : Component(name) {
+        std::cout << "AudioProcessorComponent '" << name << "' created"
+                  << std::endl;
 
         // Initialize audio processing variables
         addVariable<double>("volume", 1.0);
@@ -92,7 +95,9 @@ class AudioPlugin : public IPlugin {
 public:
     std::string getName() const override { return "AudioPlugin"; }
     std::string getVersion() const override { return "1.0.0"; }
-    std::string getDescription() const override { return "Audio processing plugin"; }
+    std::string getDescription() const override {
+        return "Audio processing plugin";
+    }
 
     bool initialize() override {
         std::cout << "AudioPlugin initialized" << std::endl;
@@ -103,7 +108,8 @@ public:
         std::cout << "AudioPlugin shutdown" << std::endl;
     }
 
-    std::shared_ptr<Component> createComponent(const std::string& name) override {
+    std::shared_ptr<Component> createComponent(
+        const std::string& name) override {
         return std::make_shared<AudioProcessorComponent>(name);
     }
 };
@@ -113,8 +119,10 @@ public:
  */
 class GraphicsRendererComponent : public Component {
 public:
-    explicit GraphicsRendererComponent(const std::string& name) : Component(name) {
-        std::cout << "GraphicsRendererComponent '" << name << "' created" << std::endl;
+    explicit GraphicsRendererComponent(const std::string& name)
+        : Component(name) {
+        std::cout << "GraphicsRendererComponent '" << name << "' created"
+                  << std::endl;
 
         // Initialize graphics variables
         addVariable<int>("width", 1920);
@@ -127,7 +135,8 @@ public:
         def("setResolution", [this](int width, int height) {
             setValue("width", width);
             setValue("height", height);
-            std::cout << "  Resolution set to: " << width << "x" << height << std::endl;
+            std::cout << "  Resolution set to: " << width << "x" << height
+                      << std::endl;
         });
 
         def("setRenderer", [this](const std::string& renderer) {
@@ -141,8 +150,9 @@ public:
             auto renderer = getVariable<std::string>("renderer");
             auto fps = getVariable<double>("fps");
 
-            std::cout << "  Rendering frame at " << width->get() << "x" << height->get()
-                      << " using " << renderer->get() << " (" << fps->get() << " FPS)" << std::endl;
+            std::cout << "  Rendering frame at " << width->get() << "x"
+                      << height->get() << " using " << renderer->get() << " ("
+                      << fps->get() << " FPS)" << std::endl;
         });
     }
 };
@@ -154,7 +164,9 @@ class GraphicsPlugin : public IPlugin {
 public:
     std::string getName() const override { return "GraphicsPlugin"; }
     std::string getVersion() const override { return "2.1.0"; }
-    std::string getDescription() const override { return "Graphics rendering plugin"; }
+    std::string getDescription() const override {
+        return "Graphics rendering plugin";
+    }
 
     bool initialize() override {
         std::cout << "GraphicsPlugin initialized" << std::endl;
@@ -165,7 +177,8 @@ public:
         std::cout << "GraphicsPlugin shutdown" << std::endl;
     }
 
-    std::shared_ptr<Component> createComponent(const std::string& name) override {
+    std::shared_ptr<Component> createComponent(
+        const std::string& name) override {
         return std::make_shared<GraphicsRendererComponent>(name);
     }
 };
@@ -215,7 +228,9 @@ class NetworkPlugin : public IPlugin {
 public:
     std::string getName() const override { return "NetworkPlugin"; }
     std::string getVersion() const override { return "1.5.2"; }
-    std::string getDescription() const override { return "Network communication plugin"; }
+    std::string getDescription() const override {
+        return "Network communication plugin";
+    }
 
     bool initialize() override {
         std::cout << "NetworkPlugin initialized" << std::endl;
@@ -226,7 +241,8 @@ public:
         std::cout << "NetworkPlugin shutdown" << std::endl;
     }
 
-    std::shared_ptr<Component> createComponent(const std::string& name) override {
+    std::shared_ptr<Component> createComponent(
+        const std::string& name) override {
         return std::make_shared<NetworkComponent>(name);
     }
 };
@@ -237,16 +253,13 @@ public:
 class PluginManager {
 private:
     std::unordered_map<std::string, std::unique_ptr<IPlugin>> plugins_;
-    std::unordered_map<std::string, std::vector<std::shared_ptr<Component>>> pluginComponents_;
+    std::unordered_map<std::string, std::vector<std::shared_ptr<Component>>>
+        pluginComponents_;
 
 public:
-    PluginManager() {
-        std::cout << "PluginManager created" << std::endl;
-    }
+    PluginManager() { std::cout << "PluginManager created" << std::endl; }
 
-    ~PluginManager() {
-        unloadAllPlugins();
-    }
+    ~PluginManager() { unloadAllPlugins(); }
 
     bool loadPlugin(std::unique_ptr<IPlugin> plugin) {
         if (!plugin) {
@@ -262,7 +275,8 @@ public:
         }
 
         if (!plugin->initialize()) {
-            std::cerr << "Failed to initialize plugin '" << name << "'" << std::endl;
+            std::cerr << "Failed to initialize plugin '" << name << "'"
+                      << std::endl;
             return false;
         }
 
@@ -306,8 +320,8 @@ public:
         }
     }
 
-    std::shared_ptr<Component> createComponent(const std::string& pluginName,
-                                             const std::string& componentName) {
+    std::shared_ptr<Component> createComponent(
+        const std::string& pluginName, const std::string& componentName) {
         auto it = plugins_.find(pluginName);
         if (it == plugins_.end()) {
             std::cerr << "Plugin '" << pluginName << "' not found" << std::endl;
@@ -336,16 +350,19 @@ public:
         std::cout << "\n=== Loaded Plugins ===" << std::endl;
         for (const auto& pair : plugins_) {
             const auto& plugin = pair.second;
-            std::cout << "Plugin: " << plugin->getName()
-                      << " v" << plugin->getVersion() << std::endl;
-            std::cout << "  Description: " << plugin->getDescription() << std::endl;
-            std::cout << "  Components: " << pluginComponents_.at(pair.first).size() << std::endl;
+            std::cout << "Plugin: " << plugin->getName() << " v"
+                      << plugin->getVersion() << std::endl;
+            std::cout << "  Description: " << plugin->getDescription()
+                      << std::endl;
+            std::cout << "  Components: "
+                      << pluginComponents_.at(pair.first).size() << std::endl;
         }
     }
 };
 
 int main() {
-    std::cout << "=== Atom Component Plugin Architecture Example ===" << std::endl;
+    std::cout << "=== Atom Component Plugin Architecture Example ==="
+              << std::endl;
 
     try {
         // Create plugin manager
@@ -364,36 +381,53 @@ int main() {
         std::cout << "\n2. Creating components from plugins..." << std::endl;
 
         // Create components from plugins
-        auto audioComp = pluginManager.createComponent("AudioPlugin", "MainAudio");
-        auto graphicsComp = pluginManager.createComponent("GraphicsPlugin", "MainRenderer");
-        auto networkComp = pluginManager.createComponent("NetworkPlugin", "GameNetwork");
+        auto audioComp =
+            pluginManager.createComponent("AudioPlugin", "MainAudio");
+        auto graphicsComp =
+            pluginManager.createComponent("GraphicsPlugin", "MainRenderer");
+        auto networkComp =
+            pluginManager.createComponent("NetworkPlugin", "GameNetwork");
 
         std::cout << "\n3. Using plugin components..." << std::endl;
 
         // Use audio component
         if (audioComp) {
             std::vector<std::any> volumeArgs = {std::any(std::string("0.8"))};
-            [[maybe_unused]] auto volumeResult = audioComp->runCommand("setVolume", volumeArgs);
-            std::vector<std::any> effectArgs = {std::any(std::string("reverb"))};
-            [[maybe_unused]] auto effectResult = audioComp->runCommand("applyEffect", effectArgs);
-            [[maybe_unused]] auto processResult = audioComp->runCommand("process", {});
+            [[maybe_unused]] auto volumeResult =
+                audioComp->runCommand("setVolume", volumeArgs);
+            std::vector<std::any> effectArgs = {
+                std::any(std::string("reverb"))};
+            [[maybe_unused]] auto effectResult =
+                audioComp->runCommand("applyEffect", effectArgs);
+            [[maybe_unused]] auto processResult =
+                audioComp->runCommand("process", {});
         }
 
         // Use graphics component
         if (graphicsComp) {
-            std::vector<std::any> resolutionArgs = {std::any(std::string("2560")), std::any(std::string("1440"))};
-            [[maybe_unused]] auto resolutionResult = graphicsComp->runCommand("setResolution", resolutionArgs);
-            std::vector<std::any> rendererArgs = {std::any(std::string("Vulkan"))};
-            [[maybe_unused]] auto rendererResult = graphicsComp->runCommand("setRenderer", rendererArgs);
-            [[maybe_unused]] auto renderResult = graphicsComp->runCommand("render", {});
+            std::vector<std::any> resolutionArgs = {
+                std::any(std::string("2560")), std::any(std::string("1440"))};
+            [[maybe_unused]] auto resolutionResult =
+                graphicsComp->runCommand("setResolution", resolutionArgs);
+            std::vector<std::any> rendererArgs = {
+                std::any(std::string("Vulkan"))};
+            [[maybe_unused]] auto rendererResult =
+                graphicsComp->runCommand("setRenderer", rendererArgs);
+            [[maybe_unused]] auto renderResult =
+                graphicsComp->runCommand("render", {});
         }
 
         // Use network component
         if (networkComp) {
-            std::vector<std::any> connectArgs = {std::any(std::string("game.server.com")), std::any(std::string("9999"))};
-            [[maybe_unused]] auto connectResult = networkComp->runCommand("connect", connectArgs);
-            std::vector<std::any> sendArgs = {std::any(std::string("player_position:100,200,50"))};
-            [[maybe_unused]] auto sendResult = networkComp->runCommand("sendData", sendArgs);
+            std::vector<std::any> connectArgs = {
+                std::any(std::string("game.server.com")),
+                std::any(std::string("9999"))};
+            [[maybe_unused]] auto connectResult =
+                networkComp->runCommand("connect", connectArgs);
+            std::vector<std::any> sendArgs = {
+                std::any(std::string("player_position:100,200,50"))};
+            [[maybe_unused]] auto sendResult =
+                networkComp->runCommand("sendData", sendArgs);
         }
 
         std::cout << "\n4. Plugin hot-swapping demonstration..." << std::endl;
@@ -403,18 +437,25 @@ int main() {
         pluginManager.loadPlugin(std::make_unique<AudioPlugin>());
 
         // Create new component from reloaded plugin
-        auto newAudioComp = pluginManager.createComponent("AudioPlugin", "ReloadedAudio");
+        auto newAudioComp =
+            pluginManager.createComponent("AudioPlugin", "ReloadedAudio");
         if (newAudioComp) {
-            std::vector<std::any> newVolumeArgs = {std::any(std::string("1.2"))};
-            [[maybe_unused]] auto newVolumeResult = newAudioComp->runCommand("setVolume", newVolumeArgs);
-            std::vector<std::any> newEffectArgs = {std::any(std::string("echo"))};
-            [[maybe_unused]] auto newEffectResult = newAudioComp->runCommand("applyEffect", newEffectArgs);
-            [[maybe_unused]] auto newProcessResult = newAudioComp->runCommand("process", {});
+            std::vector<std::any> newVolumeArgs = {
+                std::any(std::string("1.2"))};
+            [[maybe_unused]] auto newVolumeResult =
+                newAudioComp->runCommand("setVolume", newVolumeArgs);
+            std::vector<std::any> newEffectArgs = {
+                std::any(std::string("echo"))};
+            [[maybe_unused]] auto newEffectResult =
+                newAudioComp->runCommand("applyEffect", newEffectArgs);
+            [[maybe_unused]] auto newProcessResult =
+                newAudioComp->runCommand("process", {});
         }
 
         pluginManager.listPlugins();
 
-        std::cout << "\n=== Plugin Architecture Example Complete ===" << std::endl;
+        std::cout << "\n=== Plugin Architecture Example Complete ==="
+                  << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;

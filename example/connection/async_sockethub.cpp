@@ -47,8 +47,8 @@ public:
                 asio::ip::make_address("127.0.0.1"), port);
             socket_.connect(endpoint);
             is_connected_ = true;
-            ExampleLogger::write(name_,
-                        "Connected to server on port " + std::to_string(port));
+            ExampleLogger::write(
+                name_, "Connected to server on port " + std::to_string(port));
 
             // Start reading
             startRead();
@@ -58,11 +58,13 @@ public:
                 try {
                     io_context_.run();
                 } catch (const std::exception& e) {
-                    ExampleLogger::write(name_, std::string("IO error: ") + e.what());
+                    ExampleLogger::write(name_,
+                                         std::string("IO error: ") + e.what());
                 }
             });
         } catch (const std::exception& e) {
-            ExampleLogger::write(name_, std::string("Connection failed: ") + e.what());
+            ExampleLogger::write(name_,
+                                 std::string("Connection failed: ") + e.what());
         }
     }
 
@@ -133,7 +135,8 @@ public:
 
     void run() {
         // Example 1: Create and start a SocketHub
-        ExampleLogger::write("Main", "Example 1: Creating and starting SocketHub");
+        ExampleLogger::write("Main",
+                             "Example 1: Creating and starting SocketHub");
         atom::async::connection::SocketHubConfig config;
         config.use_ssl = false;
         atom::async::connection::SocketHub hub(config);  // non-SSL mode
@@ -144,8 +147,8 @@ public:
             [this](const atom::async::connection::Message& message,
                    size_t client_id) {
                 ExampleLogger::write("MessageHandler",
-                            "Client " + std::to_string(client_id) +
-                                " sent: " + message.asString());
+                                     "Client " + std::to_string(client_id) +
+                                         " sent: " + message.asString());
 
                 // Echo back the message with a prefix
                 std::string response =
@@ -157,19 +160,20 @@ public:
         ExampleLogger::write("Main", "Example 3: Registering connect handler");
         hub.addConnectHandler(
             [this](size_t client_id, const std::string& address) {
-                ExampleLogger::write("ConnectHandler", "Client " +
-                                                  std::to_string(client_id) +
-                                                  " connected from " + address);
+                ExampleLogger::write("ConnectHandler",
+                                     "Client " + std::to_string(client_id) +
+                                         " connected from " + address);
                 connected_clients_.push_back(client_id);
             });
 
         // Example 4: Register disconnection handler
-        ExampleLogger::write("Main", "Example 4: Registering disconnect handler");
+        ExampleLogger::write("Main",
+                             "Example 4: Registering disconnect handler");
         hub.addDisconnectHandler(
             [this](size_t client_id, const std::string& address) {
                 ExampleLogger::write("DisconnectHandler",
-                            "Client " + std::to_string(client_id) +
-                                " disconnected from " + address);
+                                     "Client " + std::to_string(client_id) +
+                                         " disconnected from " + address);
 
                 // Remove from connected clients list
                 connected_clients_.erase(
@@ -181,7 +185,7 @@ public:
         // Example 5: Start the server
         const int PORT = 8080;
         ExampleLogger::write("Main", "Example 5: Starting server on port " +
-                                std::to_string(PORT));
+                                         std::to_string(PORT));
         hub.start(PORT);
 
         if (hub.isRunning()) {
@@ -206,7 +210,8 @@ public:
         }
 
         // Example 7: Send messages from clients
-        ExampleLogger::write("Main", "Example 7: Sending messages from clients");
+        ExampleLogger::write("Main",
+                             "Example 7: Sending messages from clients");
         for (size_t i = 0; i < clients.size(); i++) {
             if (clients[i]->isConnected()) {
                 clients[i]->sendMessage("Hello from client " +
@@ -217,7 +222,8 @@ public:
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         // Example 8: Broadcast message to all clients
-        ExampleLogger::write("Main", "Example 8: Broadcasting message to all clients");
+        ExampleLogger::write("Main",
+                             "Example 8: Broadcasting message to all clients");
         auto broadcast_msg = atom::async::connection::Message::createText(
             "Server broadcast: Hello to all clients!");
         hub.broadcastMessage(broadcast_msg);
@@ -245,8 +251,8 @@ public:
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         // Example 11: Send messages after client disconnect
-        ExampleLogger::write("Main",
-                    "Example 11: Sending messages after client disconnect");
+        ExampleLogger::write(
+            "Main", "Example 11: Sending messages after client disconnect");
         auto disconnect_msg = atom::async::connection::Message::createText(
             "Broadcast after disconnect");
         hub.broadcastMessage(disconnect_msg);
@@ -266,10 +272,11 @@ public:
         }
 
         // Example 13: Check server status after stopping
-        ExampleLogger::write("Main",
-                    "Example 13: Checking server status after stopping");
+        ExampleLogger::write(
+            "Main", "Example 13: Checking server status after stopping");
         if (hub.isRunning()) {
-            ExampleLogger::write("Main", "Server is still running (unexpected)");
+            ExampleLogger::write("Main",
+                                 "Server is still running (unexpected)");
         } else {
             ExampleLogger::write("Main", "Server is stopped (expected)");
         }

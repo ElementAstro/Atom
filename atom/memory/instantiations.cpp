@@ -22,14 +22,16 @@
 namespace atom::memory {
 
 // Arena allocators for common sizes
-// template<size_t N, size_t alignment, bool ThreadSafe, AllocationStrategy Strategy>
+// template<size_t N, size_t alignment, bool ThreadSafe, AllocationStrategy
+// Strategy>
 template class Arena<1024>;
 template class Arena<4096>;
 template class Arena<8192>;
 template class Arena<16384>;
 
 // Short allocators for common types and sizes
-// template<class T, size_t N, size_t Align, bool ThreadSafe, AllocationStrategy Strategy>
+// template<class T, size_t N, size_t Align, bool ThreadSafe, AllocationStrategy
+// Strategy>
 template class ShortAlloc<char, 1024>;
 template class ShortAlloc<int, 1024>;
 template class ShortAlloc<double, 1024>;

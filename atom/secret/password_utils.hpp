@@ -30,17 +30,17 @@ public:
      * @brief Options for password generation.
      */
     struct GenerationOptions {
-        int length = 16;                    ///< Password length.
-        bool includeLowercase = true;       ///< Include lowercase letters.
-        bool includeUppercase = true;       ///< Include uppercase letters.
-        bool includeDigits = true;          ///< Include digits.
-        bool includeSpecial = true;         ///< Include special characters.
-        bool excludeAmbiguous = false;      ///< Exclude ambiguous characters.
-        std::string customCharacters;       ///< Custom character set.
-        int minLowercase = 1;              ///< Minimum lowercase letters.
-        int minUppercase = 1;              ///< Minimum uppercase letters.
-        int minDigits = 1;                 ///< Minimum digits.
-        int minSpecial = 1;                ///< Minimum special characters.
+        int length = 16;                ///< Password length.
+        bool includeLowercase = true;   ///< Include lowercase letters.
+        bool includeUppercase = true;   ///< Include uppercase letters.
+        bool includeDigits = true;      ///< Include digits.
+        bool includeSpecial = true;     ///< Include special characters.
+        bool excludeAmbiguous = false;  ///< Exclude ambiguous characters.
+        std::string customCharacters;   ///< Custom character set.
+        int minLowercase = 1;           ///< Minimum lowercase letters.
+        int minUppercase = 1;           ///< Minimum uppercase letters.
+        int minDigits = 1;              ///< Minimum digits.
+        int minSpecial = 1;             ///< Minimum special characters.
     };
 
     /**
@@ -54,7 +54,8 @@ public:
      * @param options Password generation options.
      * @return Result containing the generated password or error message.
      */
-    static Result<std::string> generatePassword(const GenerationOptions& options);
+    static Result<std::string> generatePassword(
+        const GenerationOptions& options);
 
     /**
      * @brief Generates a password based on PasswordManagerSettings.
@@ -63,8 +64,7 @@ public:
      * @return Result containing the generated password or error message.
      */
     static Result<std::string> generatePassword(
-        const PasswordManagerSettings& settings,
-        int length = 0);
+        const PasswordManagerSettings& settings, int length = 0);
 
     /**
      * @brief Generates a memorable password using word lists.
@@ -74,8 +74,7 @@ public:
      * @return Result containing the generated password or error message.
      */
     static Result<std::string> generateMemorablePassword(
-        int wordCount = 4,
-        const std::string& separator = "-",
+        int wordCount = 4, const std::string& separator = "-",
         bool includeNumbers = true);
 
     /**
@@ -107,8 +106,7 @@ private:
      * @return Modified password.
      */
     static std::string ensureMinimumRequirements(
-        std::string password,
-        const GenerationOptions& options);
+        std::string password, const GenerationOptions& options);
 };
 
 /**
@@ -120,17 +118,17 @@ public:
      * @brief Detailed password analysis results.
      */
     struct AnalysisResult {
-        PasswordStrength strength;          ///< Overall password strength.
-        int score;                         ///< Numerical score (0-100).
-        bool hasLowercase;                 ///< Contains lowercase letters.
-        bool hasUppercase;                 ///< Contains uppercase letters.
-        bool hasDigits;                    ///< Contains digits.
-        bool hasSpecial;                   ///< Contains special characters.
-        bool hasRepeatedChars;             ///< Contains repeated characters.
-        bool hasSequentialChars;           ///< Contains sequential characters.
-        bool isCommonPassword;             ///< Is a commonly used password.
-        std::vector<std::string> suggestions; ///< Improvement suggestions.
-        double entropy;                    ///< Password entropy in bits.
+        PasswordStrength strength;  ///< Overall password strength.
+        int score;                  ///< Numerical score (0-100).
+        bool hasLowercase;          ///< Contains lowercase letters.
+        bool hasUppercase;          ///< Contains uppercase letters.
+        bool hasDigits;             ///< Contains digits.
+        bool hasSpecial;            ///< Contains special characters.
+        bool hasRepeatedChars;      ///< Contains repeated characters.
+        bool hasSequentialChars;    ///< Contains sequential characters.
+        bool isCommonPassword;      ///< Is a commonly used password.
+        std::vector<std::string> suggestions;  ///< Improvement suggestions.
+        double entropy;                        ///< Password entropy in bits.
     };
 
     /**
@@ -147,8 +145,7 @@ public:
      * @return Result containing true if valid or error message.
      */
     static Result<bool> validatePassword(
-        std::string_view password,
-        const PasswordManagerSettings& settings);
+        std::string_view password, const PasswordManagerSettings& settings);
 
     /**
      * @brief Calculates password entropy.
@@ -170,9 +167,8 @@ public:
      * @param guessesPerSecond Guesses per second (default: 1 billion).
      * @return Estimated crack time in seconds.
      */
-    static double estimateCrackTime(
-        std::string_view password,
-        double guessesPerSecond = 1e9);
+    static double estimateCrackTime(std::string_view password,
+                                    double guessesPerSecond = 1e9);
 
 private:
     /**
@@ -214,7 +210,8 @@ public:
      * @param b Second string.
      * @return True if strings are equal.
      */
-    static bool constantTimeEquals(std::string_view a, std::string_view b) noexcept;
+    static bool constantTimeEquals(std::string_view a,
+                                   std::string_view b) noexcept;
 
     /**
      * @brief Performs constant-time memory comparison.
@@ -223,7 +220,8 @@ public:
      * @param size Size of memory blocks.
      * @return True if memory blocks are equal.
      */
-    static bool constantTimeEquals(const void* a, const void* b, size_t size) noexcept;
+    static bool constantTimeEquals(const void* a, const void* b,
+                                   size_t size) noexcept;
 };
 
 }  // namespace atom::secret

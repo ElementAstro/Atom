@@ -241,7 +241,7 @@ auto scanPort(const std::string& host, uint16_t port,
 
         SocketGuard guard(sockfd);
 
-        struct addrinfo hints{};
+        struct addrinfo hints {};
         hints.ai_family = AF_UNSPEC;
         hints.ai_socktype = SOCK_STREAM;
 
@@ -275,8 +275,8 @@ auto scanPort(const std::string& host, uint16_t port,
 }
 
 auto scanPortRange(const std::string& host, uint16_t startPort,
-                   uint16_t endPort, std::chrono::milliseconds timeout)
-    -> std::vector<uint16_t> {
+                   uint16_t endPort,
+                   std::chrono::milliseconds timeout) -> std::vector<uint16_t> {
     std::vector<uint16_t> openPorts;
 
     try {
@@ -291,7 +291,7 @@ auto scanPortRange(const std::string& host, uint16_t startPort,
         }
 
         const size_t portCount = endPort - startPort + 1;
-        openPorts.reserve(std::min(portCount, size_t{100}));
+        openPorts.reserve((std::min)(portCount, size_t{100}));
 
         spdlog::debug("Scanning {} ports on host '{}' from {} to {}", portCount,
                       host, startPort, endPort);
@@ -338,6 +338,5 @@ template bool isPortInUse<int>(int);
 template std::future<bool> isPortInUseAsync<int>(int);
 template std::optional<int> getProcessIDOnPort<int>(int);
 template bool checkAndKillProgramOnPort<int>(int);
-
 
 }  // namespace atom::web

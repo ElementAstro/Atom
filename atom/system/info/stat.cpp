@@ -22,7 +22,8 @@ Description: Python like stat for Windows & Linux
 // Note: Centralized versions exist in atom/utils/text/string.hpp
 // but are kept local here to avoid linking dependencies
 inline std::wstring stringToWString(const std::string& str) {
-    if (str.empty()) return std::wstring();
+    if (str.empty())
+        return std::wstring();
     int size = MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, nullptr, 0);
     std::wstring wstr(size, 0);
     MultiByteToWideChar(CP_UTF8, 0, str.c_str(), -1, &wstr[0], size);
@@ -30,10 +31,13 @@ inline std::wstring stringToWString(const std::string& str) {
 }
 
 inline std::string wstringToString(const std::wstring& wstr) {
-    if (wstr.empty()) return std::string();
-    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (wstr.empty())
+        return std::string();
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0,
+                                   nullptr, nullptr);
     std::string str(size - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr,
+                        nullptr);
     return str;
 }
 #endif
@@ -181,8 +185,7 @@ std::time_t Stat::atime() const {
     if (!statInfo_->accessTime.has_value()) {
 #ifdef _WIN32
         struct _stat64 fileStat;
-        if (_wstat64(stringToWString(path_.string()).c_str(),
-                     &fileStat) != 0) {
+        if (_wstat64(stringToWString(path_.string()).c_str(), &fileStat) != 0) {
             throw std::system_error(
                 std::error_code(errno, std::system_category()),
                 "Failed to get access time for: " + path_.string());
@@ -232,9 +235,8 @@ std::time_t Stat::ctime() const {
     if (!statInfo_->createTime.has_value()) {
 #ifdef _WIN32
         WIN32_FILE_ATTRIBUTE_DATA attr;
-        if (GetFileAttributesExW(
-                stringToWString(path_.string()).c_str(),
-                GetFileExInfoStandard, &attr) == 0) {
+        if (GetFileAttributesExW(stringToWString(path_.string()).c_str(),
+                                 GetFileExInfoStandard, &attr) == 0) {
             throw std::system_error(
                 std::error_code(GetLastError(), std::system_category()),
                 "Failed to get creation time for: " + path_.string());
@@ -274,8 +276,8 @@ int Stat::mode() const {
 #ifdef _WIN32
         // Windows doesn't have a direct equivalent to Unix file mode
         // We'll approximate with a simplified mode
-        DWORD attributes = GetFileAttributesW(
-            stringToWString(path_.string()).c_str());
+        DWORD attributes =
+            GetFileAttributesW(stringToWString(path_.string()).c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) {
             throw std::system_error(
                 std::error_code(GetLastError(), std::system_category()),
@@ -329,33 +331,30 @@ int Stat::uid() const {
         PSECURITY_DESCRIPTOR pSD = nullptr;
 
         DWORD result = GetNamedSecurityInfoW(
-            path_.wstring().c_str(),
-            SE_FILE_OBJECT,
-            OWNER_SECURITY_INFORMATION,
-            &pSidOwner,
-            nullptr,
-            nullptr,
-            nullptr,
-            &pSD
-        );
+            path_.wstring().c_str(), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION,
+            &pSidOwner, nullptr, nullptr, nullptr, &pSD);
 
         if (result == ERROR_SUCCESS && pSidOwner != nullptr) {
             // Convert SID to a numeric value by hashing the SID
-            // This provides a consistent numeric ID for cross-platform compatibility
+            // This provides a consistent numeric ID for cross-platform
+            // compatibility
             DWORD sidLength = GetLengthSid(pSidOwner);
             BYTE* sidBytes = reinterpret_cast<BYTE*>(pSidOwner);
 
             // Simple hash to convert SID to integer
             int userId = 0;
             for (DWORD i = 0; i < sidLength; ++i) {
-                userId = (userId * 31 + sidBytes[i]) & 0x7FFFFFFF; // Keep positive
+                userId =
+                    (userId * 31 + sidBytes[i]) & 0x7FFFFFFF;  // Keep positive
             }
 
             statInfo_->userId = userId;
             LocalFree(pSD);
         } else {
             // Fallback to 0 if we can't get owner information
-            spdlog::warn("Failed to get file owner for: {}, using default UID 0", path_.string());
+            spdlog::warn(
+                "Failed to get file owner for: {}, using default UID 0",
+                path_.string());
             statInfo_->userId = 0;
         }
 #else
@@ -383,15 +382,8 @@ int Stat::gid() const {
         PSECURITY_DESCRIPTOR pSD = nullptr;
 
         DWORD result = GetNamedSecurityInfoW(
-            path_.wstring().c_str(),
-            SE_FILE_OBJECT,
-            GROUP_SECURITY_INFORMATION,
-            nullptr,
-            &pSidGroup,
-            nullptr,
-            nullptr,
-            &pSD
-        );
+            path_.wstring().c_str(), SE_FILE_OBJECT, GROUP_SECURITY_INFORMATION,
+            nullptr, &pSidGroup, nullptr, nullptr, &pSD);
 
         if (result == ERROR_SUCCESS && pSidGroup != nullptr) {
             // Convert SID to a numeric value by hashing the SID
@@ -401,14 +393,17 @@ int Stat::gid() const {
             // Simple hash to convert SID to integer
             int groupId = 0;
             for (DWORD i = 0; i < sidLength; ++i) {
-                groupId = (groupId * 31 + sidBytes[i]) & 0x7FFFFFFF; // Keep positive
+                groupId =
+                    (groupId * 31 + sidBytes[i]) & 0x7FFFFFFF;  // Keep positive
             }
 
             statInfo_->groupId = groupId;
             LocalFree(pSD);
         } else {
             // Fallback to 0 if we can't get group information
-            spdlog::warn("Failed to get file group for: {}, using default GID 0", path_.string());
+            spdlog::warn(
+                "Failed to get file group for: {}, using default GID 0",
+                path_.string());
             statInfo_->groupId = 0;
         }
 #else
@@ -434,13 +429,12 @@ std::uintmax_t Stat::hardLinkCount() const {
     if (!statInfo_->linkCount.has_value()) {
 #ifdef _WIN32
         // Get the hard link count using FindFirstFileNameW in newer Windows
-        HANDLE fileHandle =
-            CreateFileW(stringToWString(path_.string()).c_str(),
-                        FILE_READ_ATTRIBUTES,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                        NULL, OPEN_EXISTING,
-                        FILE_FLAG_BACKUP_SEMANTICS,  // Needed for directories
-                        NULL);
+        HANDLE fileHandle = CreateFileW(
+            stringToWString(path_.string()).c_str(), FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,  // Needed for directories
+            NULL);
 
         if (fileHandle == INVALID_HANDLE_VALUE) {
             throw std::system_error(
@@ -482,9 +476,8 @@ std::uintmax_t Stat::deviceId() const {
     if (!statInfo_->devId.has_value()) {
 #ifdef _WIN32
         WCHAR volumePath[MAX_PATH];
-        if (!GetVolumePathNameW(
-                stringToWString(path_.string()).c_str(),
-                volumePath, MAX_PATH)) {
+        if (!GetVolumePathNameW(stringToWString(path_.string()).c_str(),
+                                volumePath, MAX_PATH)) {
             throw std::system_error(
                 std::error_code(GetLastError(), std::system_category()),
                 "Failed to get volume path for: " + path_.string());
@@ -521,13 +514,12 @@ std::uintmax_t Stat::inodeNumber() const {
 #ifdef _WIN32
         // Windows doesn't have inodes like Unix systems, but we can use file
         // index
-        HANDLE fileHandle =
-            CreateFileW(stringToWString(path_.string()).c_str(),
-                        FILE_READ_ATTRIBUTES,
-                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                        NULL, OPEN_EXISTING,
-                        FILE_FLAG_BACKUP_SEMANTICS,  // Needed for directories
-                        NULL);
+        HANDLE fileHandle = CreateFileW(
+            stringToWString(path_.string()).c_str(), FILE_READ_ATTRIBUTES,
+            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, NULL,
+            OPEN_EXISTING,
+            FILE_FLAG_BACKUP_SEMANTICS,  // Needed for directories
+            NULL);
 
         if (fileHandle == INVALID_HANDLE_VALUE) {
             throw std::system_error(
@@ -596,8 +588,8 @@ std::string Stat::ownerName() const {
     if (!statInfo_->owner.has_value()) {
 #ifdef _WIN32
         HANDLE fileHandle =
-            CreateFileW(stringToWString(path_.string()).c_str(),
-                        READ_CONTROL, FILE_SHARE_READ, NULL, OPEN_EXISTING,
+            CreateFileW(stringToWString(path_.string()).c_str(), READ_CONTROL,
+                        FILE_SHARE_READ, NULL, OPEN_EXISTING,
                         FILE_FLAG_BACKUP_SEMANTICS,  // Needed for directories
                         NULL);
 
@@ -756,8 +748,8 @@ bool Stat::isReadable() const {
     try {
 #ifdef _WIN32
         // Check for read access on Windows
-        DWORD attributes = GetFileAttributesW(
-            stringToWString(path_.string()).c_str());
+        DWORD attributes =
+            GetFileAttributesW(stringToWString(path_.string()).c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) {
             return false;
         }
@@ -778,8 +770,8 @@ bool Stat::isWritable() const {
     try {
 #ifdef _WIN32
         // Check for write access on Windows
-        DWORD attributes = GetFileAttributesW(
-            stringToWString(path_.string()).c_str());
+        DWORD attributes =
+            GetFileAttributesW(stringToWString(path_.string()).c_str());
         if (attributes == INVALID_FILE_ATTRIBUTES) {
             return false;
         }
@@ -790,9 +782,9 @@ bool Stat::isWritable() const {
 
         // Try to open the file for writing
         HANDLE fileHandle =
-            CreateFileW(stringToWString(path_.string()).c_str(),
-                        GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE, NULL,
-                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+            CreateFileW(stringToWString(path_.string()).c_str(), GENERIC_WRITE,
+                        FILE_SHARE_READ | FILE_SHARE_WRITE, NULL, OPEN_EXISTING,
+                        FILE_ATTRIBUTE_NORMAL, NULL);
 
         if (fileHandle == INVALID_HANDLE_VALUE) {
             return false;

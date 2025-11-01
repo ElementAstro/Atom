@@ -339,18 +339,21 @@ auto getNetworkSecurity() -> std::string {
             if (result == ERROR_SUCCESS) {
                 for (DWORD i = 0; i < interfaceList->dwNumberOfItems; ++i) {
                     const auto& wlanInterface = interfaceList->InterfaceInfo[i];
-                    if (wlanInterface.isState == wlan_interface_state_connected) {
+                    if (wlanInterface.isState ==
+                        wlan_interface_state_connected) {
                         WLAN_CONNECTION_ATTRIBUTES* connAttr;
                         DWORD dataSize;
 
                         result = WlanQueryInterface(
                             handle, &wlanInterface.InterfaceGuid,
                             wlan_intf_opcode_current_connection, nullptr,
-                            &dataSize, reinterpret_cast<PVOID*>(&connAttr), nullptr);
+                            &dataSize, reinterpret_cast<PVOID*>(&connAttr),
+                            nullptr);
 
                         if (result == ERROR_SUCCESS) {
                             // Get security type from connection attributes
-                            switch (connAttr->wlanSecurityAttributes.dot11AuthAlgorithm) {
+                            switch (connAttr->wlanSecurityAttributes
+                                        .dot11AuthAlgorithm) {
                                 case DOT11_AUTH_ALGO_80211_OPEN:
                                     security = "Open (No encryption)";
                                     break;
@@ -424,7 +427,9 @@ auto getNetworkSecurity() -> std::string {
         // macOS: Use system_profiler to get security type
         std::string security = "Unknown";
 
-        std::string cmd = "system_profiler SPAirPortDataType 2>/dev/null | grep -A 10 'Current Network' | grep 'Security'";
+        std::string cmd =
+            "system_profiler SPAirPortDataType 2>/dev/null | grep -A 10 "
+            "'Current Network' | grep 'Security'";
         FILE* pipe = popen(cmd.c_str(), "r");
         if (pipe) {
             char buffer[256];
@@ -452,7 +457,8 @@ auto getNetworkSecurity() -> std::string {
                     security = "WPA";
                 } else if (result.find("WEP") != std::string::npos) {
                     security = "WEP";
-                } else if (result.find("None") != std::string::npos || result.find("Open") != std::string::npos) {
+                } else if (result.find("None") != std::string::npos ||
+                           result.find("Open") != std::string::npos) {
                     security = "Open (No encryption)";
                 }
             }

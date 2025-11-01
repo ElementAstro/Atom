@@ -1,10 +1,10 @@
 #pragma once
 
+#include <chrono>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
-#include <mutex>
-#include <chrono>
 
 namespace atom::image::core {
 
@@ -12,10 +12,10 @@ namespace atom::image::core {
  * @brief Cache policy for image cache management
  */
 enum class CachePolicy {
-    LRU,        ///< Least Recently Used
-    LFU,        ///< Least Frequently Used
-    FIFO,       ///< First In First Out
-    RANDOM      ///< Random replacement
+    LRU,    ///< Least Recently Used
+    LFU,    ///< Least Frequently Used
+    FIFO,   ///< First In First Out
+    RANDOM  ///< Random replacement
 };
 
 /**
@@ -28,8 +28,9 @@ struct CacheStats {
     size_t currentSize = 0;
     size_t maxSize = 0;
     double hitRatio() const {
-        return (hitCount + missCount > 0) ?
-               static_cast<double>(hitCount) / (hitCount + missCount) : 0.0;
+        return (hitCount + missCount > 0)
+                   ? static_cast<double>(hitCount) / (hitCount + missCount)
+                   : 0.0;
     }
 };
 
@@ -37,7 +38,7 @@ struct CacheStats {
  * @brief Cache manager for image data
  * @tparam T Type of cached data
  */
-template<typename T>
+template <typename T>
 class CacheManager {
 public:
     /**
@@ -46,7 +47,7 @@ public:
      * @param policy Cache replacement policy
      */
     explicit CacheManager(size_t maxSize = 100 * 1024 * 1024,
-                         CachePolicy policy = CachePolicy::LRU);
+                          CachePolicy policy = CachePolicy::LRU);
 
     /**
      * @brief Destructor
@@ -131,7 +132,8 @@ private:
         size_t accessCount;
 
         CacheEntry(std::shared_ptr<T> d, size_t s)
-            : data(std::move(d)), size(s),
+            : data(std::move(d)),
+              size(s),
               lastAccess(std::chrono::steady_clock::now()),
               accessCount(1) {}
     };
@@ -150,12 +152,13 @@ private:
 
 // Template implementations
 
-template<typename T>
+template <typename T>
 CacheManager<T>::CacheManager(size_t maxSize, CachePolicy policy)
     : maxSize_(maxSize), currentSize_(0), policy_(policy) {}
 
-template<typename T>
-void CacheManager<T>::put(const std::string& key, std::shared_ptr<T> data, size_t size) {
+template <typename T>
+void CacheManager<T>::put(const std::string& key, std::shared_ptr<T> data,
+                          size_t size) {
     std::lock_guard<std::mutex> lock(mutex_);
 
     auto it = cache_.find(key);
@@ -170,7 +173,7 @@ void CacheManager<T>::put(const std::string& key, std::shared_ptr<T> data, size_
     evictIfNeeded();
 }
 
-template<typename T>
+template <typename T>
 std::shared_ptr<T> CacheManager<T>::get(const std::string& key) {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -187,7 +190,7 @@ std::shared_ptr<T> CacheManager<T>::get(const std::string& key) {
     return nullptr;
 }
 
-template<typename T>
+template <typename T>
 bool CacheManager<T>::remove(const std::string& key) {
     std::lock_guard<std::mutex> lock(mutex_);
 
@@ -200,7 +203,7 @@ bool CacheManager<T>::remove(const std::string& key) {
     return false;
 }
 
-template<typename T>
+template <typename T>
 void CacheManager<T>::clear() {
     std::lock_guard<std::mutex> lock(mutex_);
     cache_.clear();
@@ -208,13 +211,13 @@ void CacheManager<T>::clear() {
     stats_.evictionCount = 0;
 }
 
-template<typename T>
+template <typename T>
 bool CacheManager<T>::contains(const std::string& key) const {
     std::lock_guard<std::mutex> lock(mutex_);
     return cache_.find(key) != cache_.end();
 }
 
-template<typename T>
+template <typename T>
 CacheStats CacheManager<T>::getStats() const {
     std::lock_guard<std::mutex> lock(mutex_);
     CacheStats result = stats_;
@@ -223,32 +226,32 @@ CacheStats CacheManager<T>::getStats() const {
     return result;
 }
 
-template<typename T>
+template <typename T>
 void CacheManager<T>::setMaxSize(size_t maxSize) {
     std::lock_guard<std::mutex> lock(mutex_);
     maxSize_ = maxSize;
     evictIfNeeded();
 }
 
-template<typename T>
+template <typename T>
 void CacheManager<T>::setPolicy(CachePolicy policy) {
     std::lock_guard<std::mutex> lock(mutex_);
     policy_ = policy;
 }
 
-template<typename T>
+template <typename T>
 size_t CacheManager<T>::getCurrentSize() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return currentSize_;
 }
 
-template<typename T>
+template <typename T>
 size_t CacheManager<T>::getItemCount() const {
     std::lock_guard<std::mutex> lock(mutex_);
     return cache_.size();
 }
 
-template<typename T>
+template <typename T>
 void CacheManager<T>::evictIfNeeded() {
     while (currentSize_ > maxSize_ && !cache_.empty()) {
         std::string key = selectEvictionCandidate();
@@ -261,7 +264,7 @@ void CacheManager<T>::evictIfNeeded() {
     }
 }
 
-template<typename T>
+template <typename T>
 std::string CacheManager<T>::selectEvictionCandidate() {
     switch (policy_) {
         case CachePolicy::LRU: {
@@ -294,10 +297,10 @@ std::string CacheManager<T>::selectEvictionCandidate() {
     return cache_.begin()->first;
 }
 
-template<typename T>
+template <typename T>
 void CacheManager<T>::updateAccessOrder(const std::string& key) {
     // Implementation depends on the specific cache policy
     // This is a placeholder for LRU-based access tracking
 }
 
-} // namespace atom::image::core
+}  // namespace atom::image::core

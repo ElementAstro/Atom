@@ -1,21 +1,21 @@
 #ifndef ATOM_ERROR_STACKTRACE_HPP
 #define ATOM_ERROR_STACKTRACE_HPP
 
+#include <functional>
+#include <memory>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <functional>
-#include <memory>
 
 // External stacktrace library detection and configuration
 #ifdef ATOM_USE_CPPTRACE
-    #define ATOM_STACKTRACE_BACKEND_CPPTRACE
+#define ATOM_STACKTRACE_BACKEND_CPPTRACE
 #elif defined(ATOM_USE_BACKWARD_CPP)
-    #define ATOM_STACKTRACE_BACKEND_BACKWARD
+#define ATOM_STACKTRACE_BACKEND_BACKWARD
 #elif defined(ATOM_USE_BOOST_STACKTRACE)
-    #define ATOM_STACKTRACE_BACKEND_BOOST
+#define ATOM_STACKTRACE_BACKEND_BOOST
 #else
-    #define ATOM_STACKTRACE_BACKEND_BUILTIN
+#define ATOM_STACKTRACE_BACKEND_BUILTIN
 #endif
 
 namespace atom::error {
@@ -24,16 +24,18 @@ namespace atom::error {
  * @brief Configuration options for stacktrace capture and formatting
  */
 struct StackTraceConfig {
-    int maxDepth = 128;                    ///< Maximum number of frames to capture
-    int skipFrames = 1;                    ///< Number of frames to skip from the top
-    bool includeAddresses = true;          ///< Include memory addresses in output
-    bool includeModules = true;            ///< Include module/library names
-    bool includeSourceInfo = true;         ///< Include source file and line numbers
-    bool demangle = true;                  ///< Demangle C++ function names
-    bool prettify = true;                  ///< Apply prettification to output
-    std::string framePrefix = "\t";        ///< Prefix for each frame line
-    std::string unknownFunction = "<unknown function>";  ///< Placeholder for unknown functions
-    std::string unknownModule = "<unknown module>";      ///< Placeholder for unknown modules
+    int maxDepth = 128;              ///< Maximum number of frames to capture
+    int skipFrames = 1;              ///< Number of frames to skip from the top
+    bool includeAddresses = true;    ///< Include memory addresses in output
+    bool includeModules = true;      ///< Include module/library names
+    bool includeSourceInfo = true;   ///< Include source file and line numbers
+    bool demangle = true;            ///< Demangle C++ function names
+    bool prettify = true;            ///< Apply prettification to output
+    std::string framePrefix = "\t";  ///< Prefix for each frame line
+    std::string unknownFunction =
+        "<unknown function>";  ///< Placeholder for unknown functions
+    std::string unknownModule =
+        "<unknown module>";  ///< Placeholder for unknown modules
 
     /**
      * @brief Custom frame filter function
@@ -48,12 +50,12 @@ struct StackTraceConfig {
  * @brief Information about a single stack frame
  */
 struct StackFrame {
-    void* address = nullptr;               ///< Memory address of the frame
-    std::string function;                  ///< Function name (demangled if available)
-    std::string module;                    ///< Module/library name
-    std::string sourceFile;                ///< Source file name
-    int sourceLine = 0;                    ///< Source line number
-    uintptr_t offset = 0;                  ///< Offset within the function/module
+    void* address = nullptr;  ///< Memory address of the frame
+    std::string function;     ///< Function name (demangled if available)
+    std::string module;       ///< Module/library name
+    std::string sourceFile;   ///< Source file name
+    int sourceLine = 0;       ///< Source line number
+    uintptr_t offset = 0;     ///< Offset within the function/module
 
     /**
      * @brief Convert frame to string representation
@@ -85,19 +87,19 @@ public:
 };
 
 namespace backends {
-    class BuiltinBackend;
-    class CpptraceBackend;
-    class BackwardBackend;
-    class BoostBackend;
-}
+class BuiltinBackend;
+class CpptraceBackend;
+class BackwardBackend;
+class BoostBackend;
+}  // namespace backends
 
 /**
  * @brief Enhanced stack trace class with support for multiple backends
  *
- * This class provides a unified interface for capturing and formatting stack traces
- * using different backend implementations. It supports external libraries like
- * cpptrace, backward-cpp, and boost::stacktrace, with fallback to built-in
- * platform-specific implementations.
+ * This class provides a unified interface for capturing and formatting stack
+ * traces using different backend implementations. It supports external
+ * libraries like cpptrace, backward-cpp, and boost::stacktrace, with fallback
+ * to built-in platform-specific implementations.
  */
 class StackTrace {
 public:
@@ -194,7 +196,8 @@ public:
 
     /**
      * @brief Force use of specific backend
-     * @param backendName Name of backend to use ("auto" for automatic selection)
+     * @param backendName Name of backend to use ("auto" for automatic
+     * selection)
      */
     static void setPreferredBackend(const std::string& backendName);
 
@@ -219,7 +222,8 @@ private:
     /**
      * @brief Create backend by name
      */
-    static std::unique_ptr<StackTraceBackend> createBackend(const std::string& name);
+    static std::unique_ptr<StackTraceBackend> createBackend(
+        const std::string& name);
 };
 
 /**
@@ -229,7 +233,8 @@ class StackTraceBackendFactory {
 public:
     /**
      * @brief Create backend by name
-     * @param name Backend name ("builtin", "cpptrace", "backward", "boost", "auto")
+     * @param name Backend name ("builtin", "cpptrace", "backward", "boost",
+     * "auto")
      * @return Unique pointer to backend, nullptr if not available
      */
     static std::unique_ptr<StackTraceBackend> create(const std::string& name);
@@ -254,66 +259,66 @@ private:
  * @brief Utility functions for stacktrace processing
  */
 namespace stacktrace_utils {
-    /**
-     * @brief Demangle C++ function name
-     * @param mangled Mangled function name
-     * @return Demangled function name, or original if demangling fails
-     */
-    std::string demangle(const std::string& mangled);
+/**
+ * @brief Demangle C++ function name
+ * @param mangled Mangled function name
+ * @return Demangled function name, or original if demangling fails
+ */
+std::string demangle(const std::string& mangled);
 
-    /**
-     * @brief Prettify stacktrace output
-     * @param input Raw stacktrace string
-     * @return Prettified stacktrace string
-     */
-    std::string prettify(const std::string& input);
+/**
+ * @brief Prettify stacktrace output
+ * @param input Raw stacktrace string
+ * @return Prettified stacktrace string
+ */
+std::string prettify(const std::string& input);
 
-    /**
-     * @brief Format memory address
-     * @param address Memory address
-     * @return Formatted address string
-     */
-    std::string formatAddress(uintptr_t address);
+/**
+ * @brief Format memory address
+ * @param address Memory address
+ * @return Formatted address string
+ */
+std::string formatAddress(uintptr_t address);
 
-    /**
-     * @brief Get base name from file path
-     * @param path Full file path
-     * @return Base name (filename only)
-     */
-    std::string getBaseName(const std::string& path);
+/**
+ * @brief Get base name from file path
+ * @param path Full file path
+ * @return Base name (filename only)
+ */
+std::string getBaseName(const std::string& path);
 
-    /**
-     * @brief Check if a string contains a mangled C++ name
-     * @param str String to check
-     * @return true if string appears to contain mangled names
-     */
-    bool containsMangledNames(const std::string& str);
-}
+/**
+ * @brief Check if a string contains a mangled C++ name
+ * @param str String to check
+ * @return true if string appears to contain mangled names
+ */
+bool containsMangledNames(const std::string& str);
+}  // namespace stacktrace_utils
 
 /**
  * @brief Convenience functions for quick stacktrace capture
  */
 namespace stacktrace {
-    /**
-     * @brief Capture current stack trace with default settings
-     * @return String representation of stack trace
-     */
-    std::string current();
+/**
+ * @brief Capture current stack trace with default settings
+ * @return String representation of stack trace
+ */
+std::string current();
 
-    /**
-     * @brief Capture current stack trace with custom depth
-     * @param maxDepth Maximum number of frames to capture
-     * @return String representation of stack trace
-     */
-    std::string current(int maxDepth);
+/**
+ * @brief Capture current stack trace with custom depth
+ * @param maxDepth Maximum number of frames to capture
+ * @return String representation of stack trace
+ */
+std::string current(int maxDepth);
 
-    /**
-     * @brief Capture current stack trace with custom configuration
-     * @param config Configuration options
-     * @return String representation of stack trace
-     */
-    std::string current(const StackTraceConfig& config);
-}
+/**
+ * @brief Capture current stack trace with custom configuration
+ * @param config Configuration options
+ * @return String representation of stack trace
+ */
+std::string current(const StackTraceConfig& config);
+}  // namespace stacktrace
 
 }  // namespace atom::error
 

@@ -14,12 +14,12 @@
  * @version 1.0.0
  */
 
-#include "../core/image_blob.hpp"
-#include <vector>
-#include <string>
-#include <memory>
-#include <unordered_map>
 #include <functional>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include "../core/image_blob.hpp"
 
 namespace atom::image {
 
@@ -28,66 +28,66 @@ namespace atom::image {
  */
 enum class MLModelType {
     // Super-resolution models
-    ESRGAN,         // Enhanced Super-Resolution GAN
-    REAL_ESRGAN,    // Real-ESRGAN
-    SRCNN,          // Super-Resolution CNN
-    VDSR,           // Very Deep Super-Resolution
-    EDSR,           // Enhanced Deep Super-Resolution
-    WAIFU2X,        // Waifu2x anime upscaler
+    ESRGAN,       // Enhanced Super-Resolution GAN
+    REAL_ESRGAN,  // Real-ESRGAN
+    SRCNN,        // Super-Resolution CNN
+    VDSR,         // Very Deep Super-Resolution
+    EDSR,         // Enhanced Deep Super-Resolution
+    WAIFU2X,      // Waifu2x anime upscaler
 
     // Denoising models
-    DNCNN,          // Denoising CNN
-    FFDNet,         // Fast and Flexible Denoising
-    RIDNET,         // Real Image Denoising
-    CBDNet,         // Toward Convolutional Blind Denoising
+    DNCNN,   // Denoising CNN
+    FFDNet,  // Fast and Flexible Denoising
+    RIDNET,  // Real Image Denoising
+    CBDNet,  // Toward Convolutional Blind Denoising
 
     // Style transfer models
-    NEURAL_STYLE,   // Neural Style Transfer
-    FAST_STYLE,     // Fast Style Transfer
-    ADAIN,          // Adaptive Instance Normalization
-    PHOTOREALISTIC, // Photorealistic Style Transfer
+    NEURAL_STYLE,    // Neural Style Transfer
+    FAST_STYLE,      // Fast Style Transfer
+    ADAIN,           // Adaptive Instance Normalization
+    PHOTOREALISTIC,  // Photorealistic Style Transfer
 
     // Image enhancement models
-    DPED,           // DSLR-Quality Photos Enhancement
-    WESPE,          // Weakly Supervised Photo Enhancer
-    MIRNET,         // Learning Enriched Features
-    RETINEX_NET,    // Deep Retinex Decomposition
+    DPED,         // DSLR-Quality Photos Enhancement
+    WESPE,        // Weakly Supervised Photo Enhancer
+    MIRNET,       // Learning Enriched Features
+    RETINEX_NET,  // Deep Retinex Decomposition
 
     // Image restoration models
-    NAFNET,         // Nonlinear Activation Free Network
-    RESTORMER,      // Efficient Transformer for Image Restoration
-    SWINIR,         // SwinIR Image Restoration
-    UFORMER,        // U-shaped Transformer
+    NAFNET,     // Nonlinear Activation Free Network
+    RESTORMER,  // Efficient Transformer for Image Restoration
+    SWINIR,     // SwinIR Image Restoration
+    UFORMER,    // U-shaped Transformer
 
     // Generative models
-    STABLE_DIFFUSION, // Stable Diffusion
-    DALLE,          // DALL-E
-    MIDJOURNEY,     // Midjourney-style generation
-    GAN_PAINT,      // GAN-based inpainting
+    STABLE_DIFFUSION,  // Stable Diffusion
+    DALLE,             // DALL-E
+    MIDJOURNEY,        // Midjourney-style generation
+    GAN_PAINT,         // GAN-based inpainting
 
     // Specialized models
-    COLORIZATION,   // Image colorization
-    INPAINTING,     // Image inpainting
-    OUTPAINTING,    // Image outpainting
-    BACKGROUND_REMOVAL, // Background removal
-    FACE_RESTORATION,   // Face restoration
+    COLORIZATION,        // Image colorization
+    INPAINTING,          // Image inpainting
+    OUTPAINTING,         // Image outpainting
+    BACKGROUND_REMOVAL,  // Background removal
+    FACE_RESTORATION,    // Face restoration
 
-    CUSTOM          // Custom trained model
+    CUSTOM  // Custom trained model
 };
 
 /**
  * @brief ML inference backends
  */
 enum class MLBackend {
-    ONNX,           // ONNX Runtime
-    TENSORRT,       // NVIDIA TensorRT
-    OPENVINO,       // Intel OpenVINO
-    PYTORCH,        // PyTorch
-    TENSORFLOW,     // TensorFlow
-    NCNN,           // NCNN (mobile)
-    MNN,            // MNN (mobile)
-    PADDLE,         // PaddlePaddle
-    AUTO            // Auto-select best backend
+    ONNX,        // ONNX Runtime
+    TENSORRT,    // NVIDIA TensorRT
+    OPENVINO,    // Intel OpenVINO
+    PYTORCH,     // PyTorch
+    TENSORFLOW,  // TensorFlow
+    NCNN,        // NCNN (mobile)
+    MNN,         // MNN (mobile)
+    PADDLE,      // PaddlePaddle
+    AUTO         // Auto-select best backend
 };
 
 /**
@@ -95,39 +95,39 @@ enum class MLBackend {
  */
 struct MLParams {
     // Model parameters
-    std::string modelPath;          // Path to model file
-    MLBackend backend = MLBackend::AUTO; // Inference backend
-    bool useGPU = true;             // Use GPU acceleration
-    int gpuDeviceId = 0;            // GPU device ID
+    std::string modelPath;                // Path to model file
+    MLBackend backend = MLBackend::AUTO;  // Inference backend
+    bool useGPU = true;                   // Use GPU acceleration
+    int gpuDeviceId = 0;                  // GPU device ID
 
     // Processing parameters
-    int batchSize = 1;              // Batch size for processing
-    int tileSize = 512;             // Tile size for large images
-    int overlap = 32;               // Tile overlap
-    bool enableTTA = false;         // Test-time augmentation
+    int batchSize = 1;       // Batch size for processing
+    int tileSize = 512;      // Tile size for large images
+    int overlap = 32;        // Tile overlap
+    bool enableTTA = false;  // Test-time augmentation
 
     // Super-resolution parameters
-    int scaleFactor = 4;            // Upscaling factor
-    bool preserveDetails = true;    // Preserve fine details
+    int scaleFactor = 4;          // Upscaling factor
+    bool preserveDetails = true;  // Preserve fine details
 
     // Denoising parameters
-    double noiseLevel = 25.0;       // Noise level (0-100)
-    bool blindDenoising = true;     // Blind denoising mode
+    double noiseLevel = 25.0;    // Noise level (0-100)
+    bool blindDenoising = true;  // Blind denoising mode
 
     // Style transfer parameters
-    double styleStrength = 1.0;     // Style transfer strength
-    bool preserveColor = false;     // Preserve original colors
+    double styleStrength = 1.0;  // Style transfer strength
+    bool preserveColor = false;  // Preserve original colors
 
     // Enhancement parameters
-    double enhancementStrength = 0.8; // Enhancement strength
-    bool autoAdjust = true;         // Auto-adjust parameters
+    double enhancementStrength = 0.8;  // Enhancement strength
+    bool autoAdjust = true;            // Auto-adjust parameters
 
     // Generation parameters
-    std::string prompt;             // Text prompt for generation
-    std::string negativePrompt;     // Negative prompt
-    int steps = 50;                 // Inference steps
-    double guidanceScale = 7.5;     // Guidance scale
-    int seed = -1;                  // Random seed (-1 = random)
+    std::string prompt;          // Text prompt for generation
+    std::string negativePrompt;  // Negative prompt
+    int steps = 50;              // Inference steps
+    double guidanceScale = 7.5;  // Guidance scale
+    int seed = -1;               // Random seed (-1 = random)
 
     // Custom parameters
     std::unordered_map<std::string, double> customParams;
@@ -137,13 +137,13 @@ struct MLParams {
  * @brief ML processing result
  */
 struct MLResult {
-    blob outputImage;               // Processed image
-    double processingTime = 0.0;    // Processing time in seconds
-    double confidence = 0.0;        // Result confidence
-    std::string modelUsed;          // Model that was used
-    std::unordered_map<std::string, double> metrics; // Quality metrics
-    std::string errorMessage;       // Error message if failed
-    bool success = true;            // Success status
+    blob outputImage;             // Processed image
+    double processingTime = 0.0;  // Processing time in seconds
+    double confidence = 0.0;      // Result confidence
+    std::string modelUsed;        // Model that was used
+    std::unordered_map<std::string, double> metrics;  // Quality metrics
+    std::string errorMessage;                         // Error message if failed
+    bool success = true;                              // Success status
 };
 
 /**
@@ -162,8 +162,8 @@ public:
      * @return Success status
      */
     virtual bool initialize(const std::string& modelDir = "",
-                           MLBackend backend = MLBackend::AUTO,
-                           bool useGPU = true);
+                            MLBackend backend = MLBackend::AUTO,
+                            bool useGPU = true);
 
     /**
      * @brief Apply super-resolution to image
@@ -172,9 +172,9 @@ public:
      * @param params Processing parameters
      * @return Super-resolved image result
      */
-    virtual MLResult superResolution(const blob& input,
-                                    MLModelType model = MLModelType::REAL_ESRGAN,
-                                    const MLParams& params = {}) const;
+    virtual MLResult superResolution(
+        const blob& input, MLModelType model = MLModelType::REAL_ESRGAN,
+        const MLParams& params = {}) const;
 
     /**
      * @brief Apply AI-based denoising
@@ -184,8 +184,8 @@ public:
      * @return Denoised image result
      */
     virtual MLResult denoise(const blob& input,
-                            MLModelType model = MLModelType::DNCNN,
-                            const MLParams& params = {}) const;
+                             MLModelType model = MLModelType::DNCNN,
+                             const MLParams& params = {}) const;
 
     /**
      * @brief Apply neural style transfer
@@ -196,9 +196,9 @@ public:
      * @return Stylized image result
      */
     virtual MLResult styleTransfer(const blob& contentImage,
-                                  const blob& styleImage,
-                                  MLModelType model = MLModelType::FAST_STYLE,
-                                  const MLParams& params = {}) const;
+                                   const blob& styleImage,
+                                   MLModelType model = MLModelType::FAST_STYLE,
+                                   const MLParams& params = {}) const;
 
     /**
      * @brief Apply AI-based image enhancement
@@ -208,8 +208,8 @@ public:
      * @return Enhanced image result
      */
     virtual MLResult enhance(const blob& input,
-                            MLModelType model = MLModelType::MIRNET,
-                            const MLParams& params = {}) const;
+                             MLModelType model = MLModelType::MIRNET,
+                             const MLParams& params = {}) const;
 
     /**
      * @brief Apply image restoration
@@ -219,8 +219,8 @@ public:
      * @return Restored image result
      */
     virtual MLResult restore(const blob& input,
-                            MLModelType model = MLModelType::SWINIR,
-                            const MLParams& params = {}) const;
+                             MLModelType model = MLModelType::SWINIR,
+                             const MLParams& params = {}) const;
 
     /**
      * @brief Generate image from text prompt
@@ -229,9 +229,10 @@ public:
      * @param params Generation parameters
      * @return Generated image result
      */
-    virtual MLResult generateFromText(const std::string& prompt,
-                                     MLModelType model = MLModelType::STABLE_DIFFUSION,
-                                     const MLParams& params = {}) const;
+    virtual MLResult generateFromText(
+        const std::string& prompt,
+        MLModelType model = MLModelType::STABLE_DIFFUSION,
+        const MLParams& params = {}) const;
 
     /**
      * @brief Apply image inpainting
@@ -241,10 +242,9 @@ public:
      * @param params Processing parameters
      * @return Inpainted image result
      */
-    virtual MLResult inpaint(const blob& input,
-                            const blob& mask,
-                            MLModelType model = MLModelType::GAN_PAINT,
-                            const MLParams& params = {}) const;
+    virtual MLResult inpaint(const blob& input, const blob& mask,
+                             MLModelType model = MLModelType::GAN_PAINT,
+                             const MLParams& params = {}) const;
 
     /**
      * @brief Apply image colorization
@@ -254,8 +254,8 @@ public:
      * @return Colorized image result
      */
     virtual MLResult colorize(const blob& input,
-                             MLModelType model = MLModelType::COLORIZATION,
-                             const MLParams& params = {}) const;
+                              MLModelType model = MLModelType::COLORIZATION,
+                              const MLParams& params = {}) const;
 
     /**
      * @brief Remove background from image
@@ -264,9 +264,9 @@ public:
      * @param params Processing parameters
      * @return Image with background removed
      */
-    virtual MLResult removeBackground(const blob& input,
-                                     MLModelType model = MLModelType::BACKGROUND_REMOVAL,
-                                     const MLParams& params = {}) const;
+    virtual MLResult removeBackground(
+        const blob& input, MLModelType model = MLModelType::BACKGROUND_REMOVAL,
+        const MLParams& params = {}) const;
 
     /**
      * @brief Apply face restoration
@@ -275,9 +275,9 @@ public:
      * @param params Processing parameters
      * @return Image with restored faces
      */
-    virtual MLResult restoreFaces(const blob& input,
-                                 MLModelType model = MLModelType::FACE_RESTORATION,
-                                 const MLParams& params = {}) const;
+    virtual MLResult restoreFaces(
+        const blob& input, MLModelType model = MLModelType::FACE_RESTORATION,
+        const MLParams& params = {}) const;
 
     /**
      * @brief Process image with custom model
@@ -287,8 +287,8 @@ public:
      * @return Processed image result
      */
     virtual MLResult processWithCustomModel(const blob& input,
-                                           const std::string& modelPath,
-                                           const MLParams& params = {}) const;
+                                            const std::string& modelPath,
+                                            const MLParams& params = {}) const;
 
     /**
      * @brief Batch process multiple images
@@ -299,8 +299,7 @@ public:
      * @return Vector of processing results
      */
     virtual std::vector<MLResult> batchProcess(
-        const std::vector<blob>& inputs,
-        MLModelType model,
+        const std::vector<blob>& inputs, MLModelType model,
         const MLParams& params = {},
         std::function<void(int, int)> progressCallback = nullptr) const;
 
@@ -309,7 +308,8 @@ public:
      * @param modelType Type of models to list
      * @return Vector of available model names
      */
-    virtual std::vector<std::string> getAvailableModels(MLModelType modelType) const;
+    virtual std::vector<std::string> getAvailableModels(
+        MLModelType modelType) const;
 
     /**
      * @brief Download model from repository
@@ -318,9 +318,9 @@ public:
      * @param progressCallback Download progress callback
      * @return Success status
      */
-    virtual bool downloadModel(MLModelType model,
-                              const std::string& modelDir = "",
-                              std::function<void(int)> progressCallback = nullptr) const;
+    virtual bool downloadModel(
+        MLModelType model, const std::string& modelDir = "",
+        std::function<void(int)> progressCallback = nullptr) const;
 
     /**
      * @brief Check if model is available
@@ -334,7 +334,8 @@ public:
      * @param model Model to get info for
      * @return Model information map
      */
-    virtual std::unordered_map<std::string, std::string> getModelInfo(MLModelType model) const;
+    virtual std::unordered_map<std::string, std::string> getModelInfo(
+        MLModelType model) const;
 
     /**
      * @brief Benchmark model performance
@@ -344,9 +345,7 @@ public:
      * @return Benchmark results
      */
     virtual std::unordered_map<std::string, double> benchmarkModel(
-        MLModelType model,
-        const blob& testImage,
-        int iterations = 10) const;
+        MLModelType model, const blob& testImage, int iterations = 10) const;
 
     /**
      * @brief Set inference backend
@@ -369,7 +368,8 @@ protected:
      * @param params Model parameters
      * @return Success status
      */
-    virtual bool loadModel(MLModelType model, const MLParams& params = {}) const;
+    virtual bool loadModel(MLModelType model,
+                           const MLParams& params = {}) const;
 
     /**
      * @brief Preprocess image for ML model
@@ -378,9 +378,9 @@ protected:
      * @param params Processing parameters
      * @return Preprocessed image data
      */
-    virtual std::vector<float> preprocessImage(const blob& input,
-                                              MLModelType model,
-                                              const MLParams& params = {}) const;
+    virtual std::vector<float> preprocessImage(
+        const blob& input, MLModelType model,
+        const MLParams& params = {}) const;
 
     /**
      * @brief Postprocess ML model output
@@ -391,9 +391,9 @@ protected:
      * @return Postprocessed image blob
      */
     virtual blob postprocessOutput(const std::vector<float>& output,
-                                  MLModelType model,
-                                  const std::pair<int, int>& originalSize,
-                                  const MLParams& params = {}) const;
+                                   MLModelType model,
+                                   const std::pair<int, int>& originalSize,
+                                   const MLParams& params = {}) const;
 
     /**
      * @brief Run inference on preprocessed data
@@ -403,8 +403,8 @@ protected:
      * @return Model output data
      */
     virtual std::vector<float> runInference(const std::vector<float>& input,
-                                           MLModelType model,
-                                           const MLParams& params = {}) const;
+                                            MLModelType model,
+                                            const MLParams& params = {}) const;
 
 private:
     std::string modelDir_;
@@ -419,10 +419,10 @@ private:
  * @param backend Preferred inference backend
  * @return Unique pointer to ML processor
  */
-std::unique_ptr<MLImageProcessor> createOptimalMLProcessor(const std::string& modelDir = "",
-                                                          bool useGPU = true,
-                                                          MLBackend backend = MLBackend::AUTO);
+std::unique_ptr<MLImageProcessor> createOptimalMLProcessor(
+    const std::string& modelDir = "", bool useGPU = true,
+    MLBackend backend = MLBackend::AUTO);
 
-} // namespace atom::image
+}  // namespace atom::image
 
-#endif // ATOM_IMAGE_ML_PROCESSING_HPP
+#endif  // ATOM_IMAGE_ML_PROCESSING_HPP

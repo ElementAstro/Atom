@@ -848,8 +848,6 @@ void error_handling_examples() {
     }
 }
 
-
-
 // 6. Promise coroutine support examples
 void coroutine_examples() {
 #ifdef __cpp_impl_coroutine
@@ -904,7 +902,8 @@ int main() {
         std::cout << "\n====== All Examples Completed ======" << std::endl;
 
         // Allow any background threads to complete before program exit
-        std::cout << "⏳ Waiting for background threads to complete..." << std::endl;
+        std::cout << "⏳ Waiting for background threads to complete..."
+                  << std::endl;
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
         std::cout << "✅ Program completed successfully!" << std::endl;
 

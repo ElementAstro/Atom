@@ -21,13 +21,14 @@
 #ifdef _WIN32
 // clang-format off
 #include <windows.h>
+#include <winioctl.h>
+#include <batclass.h>
 #include <conio.h>
 #include <devguid.h>
 #include <poclass.h>
 #include <powersetting.h>
 #include <setupapi.h>
 // clang-format on
-#include <winnt.h>
 #elif defined(__APPLE__)
 #include <IOKit/ps/IOPSKeys.h>
 #include <IOKit/ps/IOPowerSources.h>
@@ -603,8 +604,9 @@ public:
         BatteryMonitor::stopMonitoring();
     }
 
-    [[nodiscard]] auto getHistory(unsigned int maxEntries) const -> std::vector<
-        std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
+    [[nodiscard]] auto getHistory(unsigned int maxEntries) const
+        -> std::vector<
+            std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
         std::shared_lock lock(m_mutex);
 
         if (maxEntries == 0 || maxEntries >= m_historyData.size()) {
@@ -786,8 +788,9 @@ auto BatteryManager::startMonitoring(unsigned int interval_ms) -> bool {
 
 void BatteryManager::stopMonitoring() { impl->stopMonitoring(); }
 
-auto BatteryManager::getHistory(unsigned int maxEntries) const -> std::vector<
-    std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
+auto BatteryManager::getHistory(unsigned int maxEntries) const
+    -> std::vector<
+        std::pair<std::chrono::system_clock::time_point, BatteryInfo>> {
     return impl->getHistory(maxEntries);
 }
 

@@ -1,4 +1,4 @@
-﻿# 示例目录: memory
+# 示例目录: memory
 cmake_minimum_required(VERSION 3.10)
 
 # 获取子目录名称（用于可执行文件前缀）
@@ -12,30 +12,29 @@ file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 # 为每个CPP文件创建可执行文件
 foreach(CPP_FILE ${CPP_FILES})
-    # 获取不带扩展名的文件名
-    get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
+  # 获取不带扩展名的文件名
+  get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
 
-    # 构造可执行文件名称（子目录名_文件名）
-    set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
+  # 构造可执行文件名称（子目录名_文件名）
+  set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
 
-    # Skip temporarily unstable examples to unlock overall build
-    # Note: short_alloc example has been fixed and is now enabled
-    # if(EXAMPLE_NAME STREQUAL "short_alloc")
-    #     message(STATUS "Skipping memory example: ${EXAMPLE_NAME}")
-    #     continue()
-    # endif()
+  # Skip temporarily unstable examples to unlock overall build Note: short_alloc
+  # example has been fixed and is now enabled if(EXAMPLE_NAME STREQUAL
+  # "short_alloc") message(STATUS "Skipping memory example: ${EXAMPLE_NAME}")
+  # continue() endif()
 
-    # 配置选项，允许单独控制每个示例的构建
-    string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
-    option(ATOM_EXAMPLE_MEMORY_${EXAMPLE_NAME_UPPER} "Build memory example: ${EXAMPLE_NAME}" ${ATOM_EXAMPLE_MEMORY_BUILD_ALL})
+  # 配置选项，允许单独控制每个示例的构建
+  string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
+  option(ATOM_EXAMPLE_MEMORY_${EXAMPLE_NAME_UPPER}
+         "Build memory example: ${EXAMPLE_NAME}"
+         ${ATOM_EXAMPLE_MEMORY_BUILD_ALL})
 
-    # 有条件地添加可执行文件
-    if(ATOM_EXAMPLE_MEMORY_${EXAMPLE_NAME_UPPER})
-        add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-        target_link_libraries(${EXECUTABLE_NAME} atom)
+  # 有条件地添加可执行文件
+  if(ATOM_EXAMPLE_MEMORY_${EXAMPLE_NAME_UPPER})
+    add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
+    target_link_libraries(${EXECUTABLE_NAME} atom)
 
-
-        # 设置IDE文件夹分组
-        set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Memory")
-    endif()
+    # 设置IDE文件夹分组
+    set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Memory")
+  endif()
 endforeach()

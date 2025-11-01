@@ -2,9 +2,9 @@
 
 #include "atom/extra/inicpp/file.hpp"
 
+#include <fstream>
 #include <sstream>
 #include <string>
-#include <fstream>
 #include "atom/error/exception.hpp"
 
 using namespace inicpp;

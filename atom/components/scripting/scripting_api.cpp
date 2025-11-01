@@ -5,9 +5,9 @@
  */
 
 #include "scripting_api.hpp"
+#include "../core/registry.hpp"
 #include "lua_engine.hpp"
 #include "python_engine.hpp"
-#include "../core/registry.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -189,17 +189,16 @@ ScriptValue ComponentScriptingAPI::createComponent(
 
     std::string name = args[0].get<std::string>();
 
-    // TODO: Fix Registry access issue
-    // try {
-    //     auto& registry = ::Registry::instance();
-    //     auto component = registry.createComponent<::Component>(name);
-    //
-    //     if (component) {
-    //         return ScriptValue(true);
-    //     }
-    // } catch (const std::exception&) {
-    //     // Error handling
-    // }
+    try {
+        auto& registry = ::Registry::instance();
+        auto component = registry.createComponent<::Component>(name);
+
+        if (component) {
+            return ScriptValue(true);
+        }
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to create component '{}': {}", name, e.what());
+    }
 
     return ScriptValue(false);
 }
@@ -307,9 +306,18 @@ ScriptValue ComponentScriptingAPI::callCommand(
                 }
             }
 
-            // TODO: Implement component->call method
-            // For now, return false as the method doesn't exist
-            return ScriptValue(false);
+            // Call the command using dispatch
+            try {
+                std::any result = component->dispatch(commandName, commandArgs);
+                // Convert result to ScriptValue (simplified - just return
+                // success)
+                return ScriptValue(true);
+            } catch (const std::exception& e) {
+                spdlog::error(
+                    "Failed to call command '{}' on component '{}': {}",
+                    commandName, componentName, e.what());
+                return ScriptValue(false);
+            }
         }
     } catch (const std::exception&) {
         // Error handling
@@ -332,13 +340,49 @@ ScriptValue ComponentScriptingAPI::getVariable(
         auto& registry = ::Registry::instance();
         auto component = registry.getComponent(componentName);
 
-        if (component) {
-            // TODO: Implement component->getVar method
-            // For now, return empty string as the method doesn't exist
-            return ScriptValue(std::string(""));
+        if (component && component->hasVariable(variableName)) {
+            // Try to get variable as different types
+            // First try string
+            try {
+                auto var = component->getVariable<std::string>(variableName);
+                if (var) {
+                    return ScriptValue(var->get());
+                }
+            } catch (...) {
+                // Try int
+                try {
+                    auto var = component->getVariable<int>(variableName);
+                    if (var) {
+                        return ScriptValue(static_cast<int64_t>(var->get()));
+                    }
+                } catch (...) {
+                    // Try double
+                    try {
+                        auto var = component->getVariable<double>(variableName);
+                        if (var) {
+                            return ScriptValue(var->get());
+                        }
+                    } catch (...) {
+                        // Try bool
+                        try {
+                            auto var =
+                                component->getVariable<bool>(variableName);
+                            if (var) {
+                                return ScriptValue(var->get());
+                            }
+                        } catch (...) {
+                            spdlog::warn(
+                                "Variable '{}' in component '{}' has "
+                                "unsupported type",
+                                variableName, componentName);
+                        }
+                    }
+                }
+            }
         }
-    } catch (const std::exception&) {
-        // Error handling
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to get variable '{}' from component '{}': {}",
+                      variableName, componentName, e.what());
     }
 
     return ScriptValue();
@@ -354,17 +398,45 @@ ScriptValue ComponentScriptingAPI::setVariable(
     std::string componentName = args[0].get<std::string>();
     std::string variableName = args[1].get<std::string>();
 
+    if (args.size() < 3) {
+        spdlog::error(
+            "setVariable requires 3 arguments: componentName, variableName, "
+            "value");
+        return ScriptValue(false);
+    }
+
     try {
         auto& registry = ::Registry::instance();
         auto component = registry.getComponent(componentName);
 
-        if (component) {
-            // TODO: Implement component->setVar method
-            // For now, return true as if the operation succeeded
-            return ScriptValue(true);
+        if (component && component->hasVariable(variableName)) {
+            // Set variable based on the type of the value argument
+            const auto& value = args[2];
+
+            if (value.holds<std::string>()) {
+                component->setValue(variableName, value.get<std::string>());
+                return ScriptValue(true);
+            } else if (value.holds<int64_t>()) {
+                component->setValue(variableName,
+                                    static_cast<int>(value.get<int64_t>()));
+                return ScriptValue(true);
+            } else if (value.holds<double>()) {
+                component->setValue(variableName, value.get<double>());
+                return ScriptValue(true);
+            } else if (value.holds<bool>()) {
+                component->setValue(variableName, value.get<bool>());
+                return ScriptValue(true);
+            } else {
+                spdlog::error("Unsupported value type for variable '{}'",
+                              variableName);
+            }
+        } else {
+            spdlog::error("Component '{}' does not have variable '{}'",
+                          componentName, variableName);
         }
-    } catch (const std::exception&) {
-        // Error handling
+    } catch (const std::exception& e) {
+        spdlog::error("Failed to set variable '{}' in component '{}': {}",
+                      variableName, componentName, e.what());
     }
 
     return ScriptValue(false);

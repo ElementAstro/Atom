@@ -5,7 +5,6 @@
 #include <span>
 #include <vector>
 
-
 #include "protocol.hpp"
 #include "types.hpp"
 

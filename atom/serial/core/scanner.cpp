@@ -495,6 +495,12 @@ std::pair<bool, std::string> SerialPortScanner::is_ch340_device(
 }
 
 #ifdef _WIN32
+#include <initguid.h>
+#include <ntddser.h>
+#include <setupapi.h>
+#ifdef _MSC_VER
+#pragma comment(lib, "setupapi.lib")
+#endif
 
 SerialPortScanner::Result<std::vector<SerialPortScanner::PortInfo>>
 SerialPortScanner::list_available_ports(bool highlight_ch340) {

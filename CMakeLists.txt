@@ -48,9 +48,12 @@ endforeach()
 # -----------------------------------------------------------------------------
 # Options
 # -----------------------------------------------------------------------------
-option(USE_VCPKG "Use vcpkg package manager" ON)
-if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-  # Ensure vcpkg is enabled for MSVC builds
+option(USE_VCPKG "Use vcpkg package manager" OFF)
+# Force vcpkg ON for MSVC builds (but not MSYS2/MinGW)
+if(WIN32
+   AND CMAKE_CXX_COMPILER_ID MATCHES "MSVC"
+   AND NOT DEFINED ENV{MSYSTEM})
+  # Ensure vcpkg is enabled for MSVC builds only (not MSYS2)
   set(USE_VCPKG
       ON
       CACHE BOOL "Enable vcpkg for MSVC" FORCE)
@@ -132,6 +135,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Setup compiler-specific options based on build type and compiler
 if(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
   message(STATUS "Configuring for MSVC compiler")
+  # Work around Windows SDK winnt.h arch detection under some environments
+  add_compile_definitions(ATOM_DISABLE_DBGHELP _AMD64_)
   # Call compiler configuration from compiler_options.cmake
   setup_project_defaults(
     CXX_STANDARD
@@ -159,8 +164,13 @@ add_compile_definitions(ATOM_VERSION="${PROJECT_VERSION}"
 
 # Windows API version definitions
 if(WIN32)
-  add_compile_definitions(_WIN32_WINNT=0x0A00 # Windows 10
-                          WINVER=0x0A00 _WIN32_WINDOWS=0x0A00)
+  add_compile_definitions(
+    _WIN32_WINNT=0x0A00 # Windows 10
+    WINVER=0x0A00
+    _WIN32_WINDOWS=0x0A00
+    NOMINMAX # Prevent Windows.h from defining min/max macros
+    WIN32_LEAN_AND_MEAN # Exclude rarely-used stuff from Windows headers
+  )
 endif()
 
 # -----------------------------------------------------------------------------

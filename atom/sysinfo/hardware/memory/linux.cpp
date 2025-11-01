@@ -186,7 +186,7 @@ auto getPhysicalMemoryInfo() -> MemoryInfo::MemorySlot {
 auto getVirtualMemoryMax() -> unsigned long long {
     spdlog::debug("Getting virtual memory max (Linux)");
 
-    struct sysinfo si{};
+    struct sysinfo si {};
     if (sysinfo(&si) != 0) {
         spdlog::error("Failed to get system info");
         return 0ULL;
@@ -200,7 +200,7 @@ auto getVirtualMemoryMax() -> unsigned long long {
 auto getVirtualMemoryUsed() -> unsigned long long {
     spdlog::debug("Getting virtual memory used (Linux)");
 
-    struct sysinfo si{};
+    struct sysinfo si {};
     if (sysinfo(&si) != 0) {
         spdlog::error("Failed to get system info");
         return 0ULL;
@@ -215,7 +215,7 @@ auto getVirtualMemoryUsed() -> unsigned long long {
 auto getSwapMemoryTotal() -> unsigned long long {
     spdlog::debug("Getting swap memory total (Linux)");
 
-    struct sysinfo si{};
+    struct sysinfo si {};
     if (sysinfo(&si) != 0) {
         spdlog::error("Failed to get system info");
         return 0ULL;
@@ -229,7 +229,7 @@ auto getSwapMemoryTotal() -> unsigned long long {
 auto getSwapMemoryUsed() -> unsigned long long {
     spdlog::debug("Getting swap memory used (Linux)");
 
-    struct sysinfo si{};
+    struct sysinfo si {};
     if (sysinfo(&si) != 0) {
         spdlog::error("Failed to get system info");
         return 0ULL;
@@ -271,7 +271,7 @@ auto getDetailedMemoryStats() -> MemoryInfo {
     spdlog::debug("Getting detailed memory stats (Linux)");
 
     MemoryInfo info;
-    struct sysinfo si{};
+    struct sysinfo si {};
 
     if (sysinfo(&si) == 0) {
         info.totalPhysicalMemory = si.totalram;
@@ -481,7 +481,8 @@ auto getMemoryLoadPercentage() -> float {
     const auto available = availableIt->second;
     const auto used = total - available;
     const auto load = static_cast<float>(used) / total * 100.0f;
-    spdlog::debug("Memory load percentage: {:.2f}% (used: {} kB, total: {} kB)", load, used, total);
+    spdlog::debug("Memory load percentage: {:.2f}% (used: {} kB, total: {} kB)",
+                  load, used, total);
     return load;
 }
 

@@ -128,8 +128,8 @@ template <MessageType T>
 class MessageQueue;
 
 // Note: A previous non-templated MessageAwaiter referencing 'T' was removed
-// because it was invalid at namespace scope. Use MessageQueue<T>::MessageAwaitable
-// defined below for coroutine support.
+// because it was invalid at namespace scope. Use
+// MessageQueue<T>::MessageAwaitable defined below for coroutine support.
 
 /**
  * @brief A message queue that allows subscribers to receive messages of type T.
@@ -420,7 +420,7 @@ public:
                         if (stoken.stop_requested())
                             break;
 
-                    // After wait, re-check queues. Lock is held.
+                        // After wait, re-check queues. Lock is held.
 #ifdef ATOM_USE_LOCKFREE_QUEUE
                         if (m_lockfreeQueue_.pop(
                                 currentMessage)) {  // Pop while lock is held

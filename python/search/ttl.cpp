@@ -24,16 +24,13 @@ void define_cache_class(py::module& m, const char* class_name,
                       std::optional<std::chrono::milliseconds>,
                       atom::search::CacheConfig>(),
              py::arg("ttl"), py::arg("max_capacity"),
-             py::arg("cleanup_interval"),
-             py::arg("config"),
+             py::arg("cleanup_interval"), py::arg("config"),
              "Create TTL cache with configuration options")
         .def(py::init<std::chrono::milliseconds, size_t,
                       std::optional<std::chrono::milliseconds>,
-                      atom::search::CacheConfig,
-                      EvictionCallback>(),
+                      atom::search::CacheConfig, EvictionCallback>(),
              py::arg("ttl"), py::arg("max_capacity"),
-             py::arg("cleanup_interval"),
-             py::arg("config"),
+             py::arg("cleanup_interval"), py::arg("config"),
              py::arg("eviction_callback"),
              "Create TTL cache with configuration and eviction callback")
         .def("put",
@@ -48,18 +45,19 @@ void define_cache_class(py::module& m, const char* class_name,
              py::arg("key"), py::arg("value"), py::arg("custom_ttl"),
              "Insert or update a key-value pair with custom TTL")
         .def("batch_put",
-             py::overload_cast<const std::vector<std::pair<std::string, ValueType>>&>(
+             py::overload_cast<
+                 const std::vector<std::pair<std::string, ValueType>>&>(
                  &CacheType::batch_put),
              py::arg("items"),
              "Batch insertion of multiple key-value pairs with default TTL")
         .def("batch_put",
-             py::overload_cast<const std::vector<std::pair<std::string, ValueType>>&,
-                               std::optional<std::chrono::milliseconds>>(
+             py::overload_cast<
+                 const std::vector<std::pair<std::string, ValueType>>&,
+                 std::optional<std::chrono::milliseconds>>(
                  &CacheType::batch_put),
              py::arg("items"), py::arg("custom_ttl"),
              "Batch insertion of multiple key-value pairs with custom TTL")
-        .def("get", &CacheType::get, py::arg("key"),
-             "Retrieve a value by key")
+        .def("get", &CacheType::get, py::arg("key"), "Retrieve a value by key")
         .def(
             "get_shared",
             [](atom::search::TTLCache<std::string, ValueType>& self,
@@ -89,8 +87,7 @@ void define_cache_class(py::module& m, const char* class_name,
              "Get the maximum capacity of the cache")
         .def("ttl", &CacheType::ttl,
              "Get the default TTL duration for cache items")
-        .def("clear", &CacheType::clear,
-             "Remove all items from the cache")
+        .def("clear", &CacheType::clear, "Remove all items from the cache")
         .def("resize", &CacheType::resize, py::arg("new_capacity"),
              "Resize the cache to a new maximum capacity")
         .def("reserve", &CacheType::reserve, py::arg("size"),
@@ -110,9 +107,8 @@ Examples:
 )")
         .def("__contains__", &CacheType::contains)
         .def("__len__", &CacheType::size)
-        .def("__bool__", [](const CacheType& cache) {
-                 return cache.size() > 0;
-             });
+        .def("__bool__",
+             [](const CacheType& cache) { return cache.size() > 0; });
 }
 
 PYBIND11_MODULE(ttl, m) {
@@ -150,21 +146,22 @@ Examples:
     >>> config.thread_safe = True
 )")
         .def(py::init<>(), "Create a CacheConfig with default settings")
-        .def_readwrite("enable_automatic_cleanup",
-                       &atom::search::CacheConfig::enable_automatic_cleanup,
-                       "Enable automatic cleanup of expired items (default: True)")
+        .def_readwrite(
+            "enable_automatic_cleanup",
+            &atom::search::CacheConfig::enable_automatic_cleanup,
+            "Enable automatic cleanup of expired items (default: True)")
         .def_readwrite("enable_statistics",
                        &atom::search::CacheConfig::enable_statistics,
                        "Enable collection of cache statistics (default: True)")
-        .def_readwrite("thread_safe",
-                       &atom::search::CacheConfig::thread_safe,
+        .def_readwrite("thread_safe", &atom::search::CacheConfig::thread_safe,
                        "Enable thread-safe operations (default: True)")
-        .def_readwrite("cleanup_batch_size",
-                       &atom::search::CacheConfig::cleanup_batch_size,
-                       "Number of items to process in each cleanup batch (default: 100)")
-        .def_readwrite("load_factor",
-                       &atom::search::CacheConfig::load_factor,
-                       "Hash table load factor for performance tuning (default: 0.75)");
+        .def_readwrite(
+            "cleanup_batch_size",
+            &atom::search::CacheConfig::cleanup_batch_size,
+            "Number of items to process in each cleanup batch (default: 100)")
+        .def_readwrite(
+            "load_factor", &atom::search::CacheConfig::load_factor,
+            "Hash table load factor for performance tuning (default: 0.75)");
 
     // Define string cache
     define_cache_class<std::string>(

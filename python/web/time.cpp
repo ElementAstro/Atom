@@ -34,7 +34,7 @@ PYBIND11_MODULE(time, m) {
 
         Examples:
             >>> from atom.web.time import TimeManager, TimeError
-            >>> 
+            >>>
             >>> # Get current system time
             >>> tm = TimeManager()
             >>> current_time = tm.get_system_time()
@@ -87,17 +87,17 @@ Examples:
     ...     print("Need administrator privileges")
 )")
         .value("None", atom::web::TimeError::None, "No error occurred")
-        .value("InvalidParameter", atom::web::TimeError::InvalidParameter, 
+        .value("InvalidParameter", atom::web::TimeError::InvalidParameter,
                "Invalid parameter provided")
-        .value("PermissionDenied", atom::web::TimeError::PermissionDenied, 
+        .value("PermissionDenied", atom::web::TimeError::PermissionDenied,
                "Insufficient permissions for operation")
-        .value("NetworkError", atom::web::TimeError::NetworkError, 
+        .value("NetworkError", atom::web::TimeError::NetworkError,
                "Network-related error occurred")
-        .value("SystemError", atom::web::TimeError::SystemError, 
+        .value("SystemError", atom::web::TimeError::SystemError,
                "System-level error occurred")
-        .value("TimeoutError", atom::web::TimeError::TimeoutError, 
+        .value("TimeoutError", atom::web::TimeError::TimeoutError,
                "Operation timed out")
-        .value("NotSupported", atom::web::TimeError::NotSupported, 
+        .value("NotSupported", atom::web::TimeError::NotSupported,
                "Operation not supported on this platform")
         .export_values();
 
@@ -119,7 +119,7 @@ Examples:
     >>> tm = TimeManager()
     >>> current_time = tm.get_system_time()
 )")
-        .def(py::init<>(), 
+        .def(py::init<>(),
              R"(Constructs a TimeManager.
 
 Initializes the time manager with default implementation.
@@ -143,7 +143,8 @@ Examples:
     >>> print(f"Current timestamp: {timestamp}")
 )")
 
-        .def("get_system_time_point", &atom::web::TimeManager::getSystemTimePoint,
+        .def("get_system_time_point",
+             &atom::web::TimeManager::getSystemTimePoint,
              R"(Gets the current system time with higher precision.
 
 Returns:
@@ -158,24 +159,29 @@ Examples:
     >>> print(f"High precision time: {time_point}")
 )")
 
-        .def("set_system_time", [](atom::web::TimeManager& self, int year, int month, int day, int hour, int minute, int second) {
-            auto error_code = self.setSystemTime(year, month, day, hour, minute, second);
-            if (!error_code) {
-                return atom::web::TimeError::None;
-            }
-            // Map std::error_code to TimeError enum
-            if (error_code == std::errc::invalid_argument) {
-                return atom::web::TimeError::InvalidParameter;
-            } else if (error_code == std::errc::permission_denied) {
-                return atom::web::TimeError::PermissionDenied;
-            } else if (error_code == std::errc::not_supported) {
-                return atom::web::TimeError::NotSupported;
-            } else {
-                return atom::web::TimeError::SystemError;
-            }
-        }, py::arg("year"), py::arg("month"), py::arg("day"),
-           py::arg("hour"), py::arg("minute"), py::arg("second"),
-             R"(Sets the system time.
+        .def(
+            "set_system_time",
+            [](atom::web::TimeManager& self, int year, int month, int day,
+               int hour, int minute, int second) {
+                auto error_code =
+                    self.setSystemTime(year, month, day, hour, minute, second);
+                if (!error_code) {
+                    return atom::web::TimeError::None;
+                }
+                // Map std::error_code to TimeError enum
+                if (error_code == std::errc::invalid_argument) {
+                    return atom::web::TimeError::InvalidParameter;
+                } else if (error_code == std::errc::permission_denied) {
+                    return atom::web::TimeError::PermissionDenied;
+                } else if (error_code == std::errc::not_supported) {
+                    return atom::web::TimeError::NotSupported;
+                } else {
+                    return atom::web::TimeError::SystemError;
+                }
+            },
+            py::arg("year"), py::arg("month"), py::arg("day"), py::arg("hour"),
+            py::arg("minute"), py::arg("second"),
+            R"(Sets the system time.
 
 Args:
     year: The year to set (1970-2038).
@@ -201,23 +207,26 @@ Examples:
     ...         print(f"Failed to set time: {error}")
 )")
 
-        .def("set_system_timezone", [](atom::web::TimeManager& self, const std::string& timezone) {
-            auto error_code = self.setSystemTimezone(timezone);
-            if (!error_code) {
-                return atom::web::TimeError::None;
-            }
-            // Map std::error_code to TimeError enum
-            if (error_code == std::errc::invalid_argument) {
-                return atom::web::TimeError::InvalidParameter;
-            } else if (error_code == std::errc::permission_denied) {
-                return atom::web::TimeError::PermissionDenied;
-            } else if (error_code == std::errc::not_supported) {
-                return atom::web::TimeError::NotSupported;
-            } else {
-                return atom::web::TimeError::SystemError;
-            }
-        }, py::arg("timezone"),
-             R"(Sets the system timezone.
+        .def(
+            "set_system_timezone",
+            [](atom::web::TimeManager& self, const std::string& timezone) {
+                auto error_code = self.setSystemTimezone(timezone);
+                if (!error_code) {
+                    return atom::web::TimeError::None;
+                }
+                // Map std::error_code to TimeError enum
+                if (error_code == std::errc::invalid_argument) {
+                    return atom::web::TimeError::InvalidParameter;
+                } else if (error_code == std::errc::permission_denied) {
+                    return atom::web::TimeError::PermissionDenied;
+                } else if (error_code == std::errc::not_supported) {
+                    return atom::web::TimeError::NotSupported;
+                } else {
+                    return atom::web::TimeError::SystemError;
+                }
+            },
+            py::arg("timezone"),
+            R"(Sets the system timezone.
 
 Args:
     timezone: The timezone to set (e.g., "UTC", "America/New_York").
@@ -236,22 +245,25 @@ Examples:
     ...         print("Timezone set to UTC")
 )")
 
-        .def("sync_time_from_rtc", [](atom::web::TimeManager& self) {
-            auto error_code = self.syncTimeFromRTC();
-            if (!error_code) {
-                return atom::web::TimeError::None;
-            }
-            // Map std::error_code to TimeError enum
-            if (error_code == std::errc::invalid_argument) {
-                return atom::web::TimeError::InvalidParameter;
-            } else if (error_code == std::errc::permission_denied) {
-                return atom::web::TimeError::PermissionDenied;
-            } else if (error_code == std::errc::not_supported) {
-                return atom::web::TimeError::NotSupported;
-            } else {
-                return atom::web::TimeError::SystemError;
-            }
-        }, R"(Synchronizes the system time from the Real-Time Clock (RTC).
+        .def(
+            "sync_time_from_rtc",
+            [](atom::web::TimeManager& self) {
+                auto error_code = self.syncTimeFromRTC();
+                if (!error_code) {
+                    return atom::web::TimeError::None;
+                }
+                // Map std::error_code to TimeError enum
+                if (error_code == std::errc::invalid_argument) {
+                    return atom::web::TimeError::InvalidParameter;
+                } else if (error_code == std::errc::permission_denied) {
+                    return atom::web::TimeError::PermissionDenied;
+                } else if (error_code == std::errc::not_supported) {
+                    return atom::web::TimeError::NotSupported;
+                } else {
+                    return atom::web::TimeError::SystemError;
+                }
+            },
+            R"(Synchronizes the system time from the Real-Time Clock (RTC).
 
 Returns:
     TimeError: Error code indicating success or failure.
@@ -267,9 +279,10 @@ Examples:
     ...         print("Time synchronized from RTC")
 )")
 
-        .def("get_ntp_time", &atom::web::TimeManager::getNtpTime,
-             py::arg("hostname"), py::arg("timeout") = std::chrono::seconds(5),
-             R"(Gets the Network Time Protocol (NTP) time from a specified hostname.
+        .def(
+            "get_ntp_time", &atom::web::TimeManager::getNtpTime,
+            py::arg("hostname"), py::arg("timeout") = std::chrono::seconds(5),
+            R"(Gets the Network Time Protocol (NTP) time from a specified hostname.
 
 Args:
     hostname: The NTP server hostname (e.g., "pool.ntp.org").
@@ -293,8 +306,9 @@ Examples:
     >>> ntp_time = tm.get_ntp_time("time.google.com", timeout=10)
 )")
 
-        .def("has_admin_privileges", &atom::web::TimeManager::hasAdminPrivileges,
-             R"(Checks if the current process has administrative/root privileges.
+        .def(
+            "has_admin_privileges", &atom::web::TimeManager::hasAdminPrivileges,
+            R"(Checks if the current process has administrative/root privileges.
 
 Returns:
     bool: True if the process has admin/root privileges, False otherwise.
@@ -310,10 +324,13 @@ Examples:
 )");
 
     // Convenience functions
-    m.def("get_current_timestamp", []() {
-        atom::web::TimeManager tm;
-        return tm.getSystemTime();
-    }, R"(Convenience function to get the current system timestamp.
+    m.def(
+        "get_current_timestamp",
+        []() {
+            atom::web::TimeManager tm;
+            return tm.getSystemTime();
+        },
+        R"(Convenience function to get the current system timestamp.
 
 Returns:
     int: Current Unix timestamp.
@@ -324,12 +341,16 @@ Examples:
     >>> print(f"Current time: {timestamp}")
 )");
 
-    m.def("check_ntp_server", [](const std::string& hostname, int timeout_seconds = 5) {
-        atom::web::TimeManager tm;
-        auto ntp_time = tm.getNtpTime(hostname, std::chrono::seconds(timeout_seconds));
-        return ntp_time.has_value();
-    }, py::arg("hostname"), py::arg("timeout_seconds") = 5,
-    R"(Convenience function to check if an NTP server is reachable.
+    m.def(
+        "check_ntp_server",
+        [](const std::string& hostname, int timeout_seconds = 5) {
+            atom::web::TimeManager tm;
+            auto ntp_time =
+                tm.getNtpTime(hostname, std::chrono::seconds(timeout_seconds));
+            return ntp_time.has_value();
+        },
+        py::arg("hostname"), py::arg("timeout_seconds") = 5,
+        R"(Convenience function to check if an NTP server is reachable.
 
 Args:
     hostname: The NTP server hostname to test.
@@ -346,10 +367,13 @@ Examples:
     ...     print("NTP server is not reachable")
 )");
 
-    m.def("requires_admin", []() {
-        atom::web::TimeManager tm;
-        return !tm.hasAdminPrivileges();
-    }, R"(Convenience function to check if admin privileges are required.
+    m.def(
+        "requires_admin",
+        []() {
+            atom::web::TimeManager tm;
+            return !tm.hasAdminPrivileges();
+        },
+        R"(Convenience function to check if admin privileges are required.
 
 Returns:
     bool: True if admin privileges are needed for time operations, False otherwise.

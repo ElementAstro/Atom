@@ -20,11 +20,9 @@
 #include <string>
 #include <vector>
 
-
 // Atom Meta facade headers
 #include "atom/meta/any.hpp"
 #include "atom/meta/facade_any.hpp"
-
 
 using namespace atom::meta;
 

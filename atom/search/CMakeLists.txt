@@ -31,6 +31,8 @@ set(HEADERS
     cache/ttl.hpp)
 
 # Dependencies
+find_package(spdlog CONFIG REQUIRED)
+
 if(MSVC)
   find_package(SQLite3 QUIET)
   if(NOT SQLite3_FOUND)
@@ -41,7 +43,7 @@ else()
   find_package(SQLite3 REQUIRED)
 endif()
 
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+set(LIBS loguru spdlog::spdlog ${CMAKE_THREAD_LIBS_INIT})
 if(SQLite3_FOUND)
   list(APPEND LIBS ${SQLite3_LIBRARIES})
 endif()

@@ -4,7 +4,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(fraction, m) {
@@ -182,14 +181,19 @@ Returns:
 Returns:
     True if the fraction is negative, False otherwise.
 )")
-        .def("pow", [](const atom::algorithm::Fraction& f, int exponent) {
-            auto result = f.pow(exponent);
-            if (!result.has_value()) {
-                throw std::overflow_error("Power operation resulted in overflow or invalid result");
-            }
-            return result.value();
-        }, py::arg("exponent"),
-        R"(Raises the fraction to the given power.
+        .def(
+            "pow",
+            [](const atom::algorithm::Fraction& f, int exponent) {
+                auto result = f.pow(exponent);
+                if (!result.has_value()) {
+                    throw std::overflow_error(
+                        "Power operation resulted in overflow or invalid "
+                        "result");
+                }
+                return result.value();
+            },
+            py::arg("exponent"),
+            R"(Raises the fraction to the given power.
 
 Args:
     exponent: The exponent to raise the fraction to
@@ -205,22 +209,30 @@ Examples:
     >>> f.pow(2)  # Returns Fraction(4, 9)
     >>> f.pow(-1) # Returns Fraction(3, 2) (reciprocal)
 )")
-        .def_property_readonly("numerator", [](const atom::algorithm::Fraction& f) {
-            return f.getNumerator();
-        }, "Get the numerator of the fraction.")
+        .def_property_readonly(
+            "numerator",
+            [](const atom::algorithm::Fraction& f) { return f.getNumerator(); },
+            "Get the numerator of the fraction.")
 
-        .def_property_readonly("denominator", [](const atom::algorithm::Fraction& f) {
-            return f.getDenominator();
-        }, "Get the denominator of the fraction.")
+        .def_property_readonly(
+            "denominator",
+            [](const atom::algorithm::Fraction& f) {
+                return f.getDenominator();
+            },
+            "Get the denominator of the fraction.")
 
-        .def_static("from_string", [](const std::string& str) {
-            auto result = atom::algorithm::Fraction::fromString(str);
-            if (!result.has_value()) {
-                throw std::invalid_argument("Invalid fraction string format: " + str);
-            }
-            return result.value();
-        }, py::arg("str"),
-        R"(Creates a fraction from a string representation.
+        .def_static(
+            "from_string",
+            [](const std::string& str) {
+                auto result = atom::algorithm::Fraction::fromString(str);
+                if (!result.has_value()) {
+                    throw std::invalid_argument(
+                        "Invalid fraction string format: " + str);
+                }
+                return result.value();
+            },
+            py::arg("str"),
+            R"(Creates a fraction from a string representation.
 
 Args:
     str: String representation of the fraction (e.g., "3/4", "5", "-2/7")
@@ -339,13 +351,16 @@ Examples:
 )");
 
     // Additional utility functions for fraction operations
-    m.def("reduce_fraction", [](int numerator, int denominator) {
-        if (denominator == 0) {
-            throw std::invalid_argument("Denominator cannot be zero");
-        }
-        return atom::algorithm::Fraction(numerator, denominator);
-    }, py::arg("numerator"), py::arg("denominator"),
-    R"(Creates a fraction and automatically reduces it to lowest terms.
+    m.def(
+        "reduce_fraction",
+        [](int numerator, int denominator) {
+            if (denominator == 0) {
+                throw std::invalid_argument("Denominator cannot be zero");
+            }
+            return atom::algorithm::Fraction(numerator, denominator);
+        },
+        py::arg("numerator"), py::arg("denominator"),
+        R"(Creates a fraction and automatically reduces it to lowest terms.
 
 Args:
     numerator: The numerator
@@ -363,29 +378,46 @@ Examples:
 )");
 
     // Fraction arithmetic helper functions
-    m.def("add_fractions", [](const atom::algorithm::Fraction& a, const atom::algorithm::Fraction& b) {
-        return a + b;
-    }, py::arg("a"), py::arg("b"), "Add two fractions and return the result.");
+    m.def(
+        "add_fractions",
+        [](const atom::algorithm::Fraction& a,
+           const atom::algorithm::Fraction& b) { return a + b; },
+        py::arg("a"), py::arg("b"), "Add two fractions and return the result.");
 
-    m.def("subtract_fractions", [](const atom::algorithm::Fraction& a, const atom::algorithm::Fraction& b) {
-        return a - b;
-    }, py::arg("a"), py::arg("b"), "Subtract two fractions and return the result.");
+    m.def(
+        "subtract_fractions",
+        [](const atom::algorithm::Fraction& a,
+           const atom::algorithm::Fraction& b) { return a - b; },
+        py::arg("a"), py::arg("b"),
+        "Subtract two fractions and return the result.");
 
-    m.def("multiply_fractions", [](const atom::algorithm::Fraction& a, const atom::algorithm::Fraction& b) {
-        return a * b;
-    }, py::arg("a"), py::arg("b"), "Multiply two fractions and return the result.");
+    m.def(
+        "multiply_fractions",
+        [](const atom::algorithm::Fraction& a,
+           const atom::algorithm::Fraction& b) { return a * b; },
+        py::arg("a"), py::arg("b"),
+        "Multiply two fractions and return the result.");
 
-    m.def("divide_fractions", [](const atom::algorithm::Fraction& a, const atom::algorithm::Fraction& b) {
-        return a / b;
-    }, py::arg("a"), py::arg("b"), "Divide two fractions and return the result.");
+    m.def(
+        "divide_fractions",
+        [](const atom::algorithm::Fraction& a,
+           const atom::algorithm::Fraction& b) { return a / b; },
+        py::arg("a"), py::arg("b"),
+        "Divide two fractions and return the result.");
 
     // Fraction comparison helper functions
-    m.def("compare_fractions", [](const atom::algorithm::Fraction& a, const atom::algorithm::Fraction& b) {
-        if (a < b) return -1;
-        if (a > b) return 1;
-        return 0;
-    }, py::arg("a"), py::arg("b"),
-    R"(Compare two fractions.
+    m.def(
+        "compare_fractions",
+        [](const atom::algorithm::Fraction& a,
+           const atom::algorithm::Fraction& b) {
+            if (a < b)
+                return -1;
+            if (a > b)
+                return 1;
+            return 0;
+        },
+        py::arg("a"), py::arg("b"),
+        R"(Compare two fractions.
 
 Args:
     a: First fraction

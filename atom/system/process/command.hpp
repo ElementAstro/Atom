@@ -77,8 +77,9 @@ ATOM_NODISCARD auto executeCommandWithInput(
 auto executeCommandStream(
     const std::string &command, bool openTerminal,
     const std::function<void(const std::string &)> &processLine, int &status,
-    const std::function<bool()> &terminateCondition = [] { return false; })
-    -> std::string;
+    const std::function<bool()> &terminateCondition = [] {
+        return false;
+    }) -> std::string;
 
 /**
  * @brief Execute a list of commands.

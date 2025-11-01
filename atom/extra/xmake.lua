@@ -64,7 +64,7 @@ end
 if has_config("unified_extra") then
     target("atom-extra-unified")
         set_kind("headeronly")
-        
+
         -- Collect all extra targets
         local extra_targets = {
             "atom-extra-asio",
@@ -79,15 +79,15 @@ if has_config("unified_extra") then
             "atom-extra-spdlog",
             "atom-extra-uv"
         }
-        
+
         -- Add dependencies on all extra components
         for _, target_name in ipairs(extra_targets) do
             add_deps(target_name, {public = true})
         end
-        
+
         -- Set C++ standard
         set_languages("c++20")
-        
+
         -- Installation
         on_install(function (target)
             print("Unified extra library installed")
@@ -99,4 +99,3 @@ end
 after_load(function ()
     print("Atom Extra Components configuration completed")
 end)
-

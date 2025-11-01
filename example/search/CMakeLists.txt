@@ -1,4 +1,4 @@
-﻿# 示例目录: search
+# 示例目录: search
 cmake_minimum_required(VERSION 3.10)
 
 # Set C++ standard
@@ -13,28 +13,31 @@ option(ATOM_EXAMPLE_SEARCH_BUILD_ALL "Build all search examples" ON)
 
 # Function to build examples from a directory
 function(build_examples_from_dir DIR_NAME FOLDER_NAME)
-    file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/${DIR_NAME}/*.cpp)
+  file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/${DIR_NAME}/*.cpp)
 
-    foreach(CPP_FILE ${CPP_FILES})
-        # 获取不带扩展名的文件名
-        get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
+  foreach(CPP_FILE ${CPP_FILES})
+    # 获取不带扩展名的文件名
+    get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
 
-        # 构造可执行文件名称（子目录名_目录名_文件名）
-        set(EXECUTABLE_NAME ${SUBDIR_NAME}_${DIR_NAME}_${EXAMPLE_NAME})
+    # 构造可执行文件名称（子目录名_目录名_文件名）
+    set(EXECUTABLE_NAME ${SUBDIR_NAME}_${DIR_NAME}_${EXAMPLE_NAME})
 
-        # 配置选项，允许单独控制每个示例的构建
-        string(TOUPPER ${DIR_NAME}_${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
-        option(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER} "Build search example: ${DIR_NAME}/${EXAMPLE_NAME}" ${ATOM_EXAMPLE_SEARCH_BUILD_ALL})
+    # 配置选项，允许单独控制每个示例的构建
+    string(TOUPPER ${DIR_NAME}_${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
+    option(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER}
+           "Build search example: ${DIR_NAME}/${EXAMPLE_NAME}"
+           ${ATOM_EXAMPLE_SEARCH_BUILD_ALL})
 
-        # 有条件地添加可执行文件
-        if(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER})
-            add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-            target_link_libraries(${EXECUTABLE_NAME} atom)
+    # 有条件地添加可执行文件
+    if(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER})
+      add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
+      target_link_libraries(${EXECUTABLE_NAME} atom)
 
-            # 设置IDE文件夹分组
-            set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Search/${FOLDER_NAME}")
-        endif()
-    endforeach()
+      # 设置IDE文件夹分组
+      set_property(TARGET ${EXECUTABLE_NAME}
+                   PROPERTY FOLDER "Examples/Search/${FOLDER_NAME}")
+    endif()
+  endforeach()
 endfunction()
 
 # Build examples from subdirectories
@@ -49,22 +52,25 @@ file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 # 为每个根目录CPP文件创建可执行文件
 foreach(CPP_FILE ${CPP_FILES})
-    # 获取不带扩展名的文件名
-    get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
+  # 获取不带扩展名的文件名
+  get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
 
-    # 构造可执行文件名称（子目录名_文件名）
-    set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
+  # 构造可执行文件名称（子目录名_文件名）
+  set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
 
-    # 配置选项，允许单独控制每个示例的构建
-    string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
-    option(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER} "Build search example: ${EXAMPLE_NAME}" ${ATOM_EXAMPLE_SEARCH_BUILD_ALL})
+  # 配置选项，允许单独控制每个示例的构建
+  string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
+  option(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER}
+         "Build search example: ${EXAMPLE_NAME}"
+         ${ATOM_EXAMPLE_SEARCH_BUILD_ALL})
 
-    # 有条件地添加可执行文件
-    if(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER})
-        add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-        target_link_libraries(${EXECUTABLE_NAME} atom)
+  # 有条件地添加可执行文件
+  if(ATOM_EXAMPLE_SEARCH_${EXAMPLE_NAME_UPPER})
+    add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
+    target_link_libraries(${EXECUTABLE_NAME} atom)
 
-        # 设置IDE文件夹分组
-        set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Search/Legacy")
-    endif()
+    # 设置IDE文件夹分组
+    set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER
+                                                    "Examples/Search/Legacy")
+  endif()
 endforeach()

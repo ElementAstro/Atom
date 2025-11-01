@@ -270,7 +270,8 @@ void WSClient::startPing() {
                             ping_timer_->expires_after(ping_interval_);
                             ping_timer_->async_wait(net::bind_executor(
                                 ws_->get_executor(),
-                                [this, self = shared_from_this()](beast::error_code timer_ec) {
+                                [this, self = shared_from_this()](
+                                    beast::error_code timer_ec) {
                                     if (!timer_ec && is_connected_) {
                                         startPing();
                                     }

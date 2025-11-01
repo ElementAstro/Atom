@@ -139,7 +139,7 @@ void declare_promise_awaiter(py::module& m, const std::string& type_name) {
     std::string class_name = "PromiseAwaiter" + type_name;
 
     py::class_<PromiseAwaiterT>(m, class_name.c_str(),
-        R"pbdoc(
+                                R"pbdoc(
         Coroutine-compatible awaiter for Promise objects.
 
         This class provides C++20 coroutine support for Promise objects,
@@ -185,7 +185,7 @@ void declare_promise_awaiter_void(py::module& m) {
     using PromiseAwaiterVoid = PromiseAwaiter<void>;
 
     py::class_<PromiseAwaiterVoid>(m, "PromiseAwaiterVoid",
-        R"pbdoc(
+                                   R"pbdoc(
         Coroutine-compatible awaiter for Promise<void> objects.
 
         This class provides C++20 coroutine support for void Promise objects,
@@ -228,7 +228,7 @@ void declare_promise_void(py::module& m) {
     using PromiseVoid = Promise<void>;
 
     py::class_<PromiseVoid, std::shared_ptr<PromiseVoid>>(m, "PromiseVoid",
-        R"pbdoc(
+                                                          R"pbdoc(
         A Promise specialization for void operations.
 
         This class represents a promise that doesn't return a value but signals
@@ -899,9 +899,7 @@ Examples:
 
     m.def(
         "make_cancelled_promise",
-        []() {
-            return createCancelledPromise<py::object>();
-        },
+        []() { return createCancelledPromise<py::object>(); },
         R"(Creates a promise that is immediately cancelled.
 
 Returns:

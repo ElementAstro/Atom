@@ -32,11 +32,12 @@ and advanced lifecycle management features.
 #include <vector>
 
 #include "atom/components/component.hpp"
-#include "atom/components/lifecycle/lifecycle.hpp"
 #include "atom/components/core/registry.hpp"
+#include "atom/components/lifecycle/lifecycle.hpp"
 
-// Note: Registry and Component are in the global namespace, not atom::components
-// LifecycleManager and LifecyclePhase are in atom::components namespace
+// Note: Registry and Component are in the global namespace, not
+// atom::components LifecycleManager and LifecyclePhase are in atom::components
+// namespace
 namespace ac = atom::components;
 
 /**
@@ -81,8 +82,8 @@ public:
         return Component::initialize();
     }
 
-    // Note: activate(), deactivate(), and cleanup() are not virtual methods in Component
-    // Using lifecycle hooks instead for proper lifecycle management
+    // Note: activate(), deactivate(), and cleanup() are not virtual methods in
+    // Component Using lifecycle hooks instead for proper lifecycle management
 };
 
 /**
@@ -204,29 +205,33 @@ void setupLifecycleHooks() {
 
     // Global hooks that apply to all components
     lifecycle.registerGlobalHook(
-        atom::components::LifecyclePhase::PreInitialization, [](Component& component, atom::components::LifecyclePhase phase) {
-            (void)phase; // Suppress unused parameter warning
+        atom::components::LifecyclePhase::PreInitialization,
+        [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase;  // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Pre-initialization hook for: "
                       << component.getName() << std::endl;
         });
 
     lifecycle.registerGlobalHook(
-        atom::components::LifecyclePhase::PostInitialization, [](Component& component, atom::components::LifecyclePhase phase) {
-            (void)phase; // Suppress unused parameter warning
+        atom::components::LifecyclePhase::PostInitialization,
+        [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase;  // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Post-initialization hook for: "
                       << component.getName() << std::endl;
         });
 
     lifecycle.registerGlobalHook(
-        atom::components::LifecyclePhase::PreActivation, [](Component& component, atom::components::LifecyclePhase phase) {
-            (void)phase; // Suppress unused parameter warning
+        atom::components::LifecyclePhase::PreActivation,
+        [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase;  // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Pre-activation hook for: "
                       << component.getName() << std::endl;
         });
 
     lifecycle.registerGlobalHook(
-        atom::components::LifecyclePhase::PostActivation, [](Component& component, atom::components::LifecyclePhase phase) {
-            (void)phase; // Suppress unused parameter warning
+        atom::components::LifecyclePhase::PostActivation,
+        [](Component& component, atom::components::LifecyclePhase phase) {
+            (void)phase;  // Suppress unused parameter warning
             std::cout << "  [GLOBAL] Post-activation hook for: "
                       << component.getName() << std::endl;
         });
@@ -235,21 +240,25 @@ void setupLifecycleHooks() {
     lifecycle.registerHook(
         "Database", ac::LifecyclePhase::PostInitialization,
         [](Component& component, ac::LifecyclePhase phase) {
-            (void)component; (void)phase; // Suppress unused parameter warnings
+            (void)component;
+            (void)phase;  // Suppress unused parameter warnings
             std::cout << "  [DATABASE] Database-specific post-init hook"
                       << std::endl;
         });
 
     lifecycle.registerHook(
-        "WebService", ac::LifecyclePhase::PreActivation, [](Component& component, ac::LifecyclePhase phase) {
-            (void)component; (void)phase; // Suppress unused parameter warnings
+        "WebService", ac::LifecyclePhase::PreActivation,
+        [](Component& component, ac::LifecyclePhase phase) {
+            (void)component;
+            (void)phase;  // Suppress unused parameter warnings
             std::cout << "  [WEB] Web service pre-activation hook" << std::endl;
         });
 
     lifecycle.registerHook(
         "Application", ac::LifecyclePhase::PostActivation,
         [](Component& component, ac::LifecyclePhase phase) {
-            (void)component; (void)phase; // Suppress unused parameter warnings
+            (void)component;
+            (void)phase;  // Suppress unused parameter warnings
             std::cout
                 << "  [APP] Application post-activation hook - system ready!"
                 << std::endl;
@@ -351,9 +360,12 @@ void demonstrateLifecycleExecution() {
         if (component) {
             std::cout << "\nActivating: " << componentName << std::endl;
 
-            lifecycle.executePhase(*component, ac::LifecyclePhase::PreActivation);
-            // Note: Component doesn't have activate() method, using lifecycle phases instead
-            lifecycle.executePhase(*component, ac::LifecyclePhase::PostActivation);
+            lifecycle.executePhase(*component,
+                                   ac::LifecyclePhase::PreActivation);
+            // Note: Component doesn't have activate() method, using lifecycle
+            // phases instead
+            lifecycle.executePhase(*component,
+                                   ac::LifecyclePhase::PostActivation);
             std::cout << "  " << componentName << " activated successfully"
                       << std::endl;
         }
@@ -362,7 +374,8 @@ void demonstrateLifecycleExecution() {
     // Activate the main component
     std::cout << "\nActivating: Application" << std::endl;
     lifecycle.executePhase(*app, ac::LifecyclePhase::PreActivation);
-    // Note: Component doesn't have activate() method, using lifecycle phases instead
+    // Note: Component doesn't have activate() method, using lifecycle phases
+    // instead
     lifecycle.executePhase(*app, ac::LifecyclePhase::PostActivation);
     std::cout << "  Application activated successfully" << std::endl;
 }
@@ -385,14 +398,20 @@ void demonstrateLifecycleShutdown() {
             std::cout << "\nShutting down: " << componentName << std::endl;
 
             // Deactivate
-            lifecycle.executePhase(*component, ac::LifecyclePhase::PreDeactivation);
-            // Note: Component doesn't have deactivate() method, using lifecycle phases instead
-            lifecycle.executePhase(*component, ac::LifecyclePhase::PostDeactivation);
+            lifecycle.executePhase(*component,
+                                   ac::LifecyclePhase::PreDeactivation);
+            // Note: Component doesn't have deactivate() method, using lifecycle
+            // phases instead
+            lifecycle.executePhase(*component,
+                                   ac::LifecyclePhase::PostDeactivation);
 
             // Cleanup
-            lifecycle.executePhase(*component, ac::LifecyclePhase::PreDestruction);
-            // Note: Component doesn't have cleanup() method, using lifecycle phases instead
-            lifecycle.executePhase(*component, ac::LifecyclePhase::PostDestruction);
+            lifecycle.executePhase(*component,
+                                   ac::LifecyclePhase::PreDestruction);
+            // Note: Component doesn't have cleanup() method, using lifecycle
+            // phases instead
+            lifecycle.executePhase(*component,
+                                   ac::LifecyclePhase::PostDestruction);
 
             std::cout << "  " << componentName << " shut down successfully"
                       << std::endl;
@@ -407,11 +426,15 @@ void demonstrateLifecycleHistory() {
 
     std::cout << "\n6. Lifecycle event history:" << std::endl;
 
-    // Note: LifecycleManager doesn't have getHistory() method in current implementation
-    std::cout << "Lifecycle history tracking not available in current implementation" << std::endl;
+    // Note: LifecycleManager doesn't have getHistory() method in current
+    // implementation
+    std::cout
+        << "Lifecycle history tracking not available in current implementation"
+        << std::endl;
 
     // Show last few events
-    std::cout << "Event history display not available in current implementation" << std::endl;
+    std::cout << "Event history display not available in current implementation"
+              << std::endl;
 }
 
 int main() {

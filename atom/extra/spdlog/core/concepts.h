@@ -4,7 +4,6 @@
 #include <format>
 #include <string_view>
 
-
 /**
  * @file concepts.h
  * @brief Concepts for formatting, serialization, logging, event handling, and

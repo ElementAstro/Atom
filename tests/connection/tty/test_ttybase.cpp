@@ -1,9 +1,9 @@
-#include "atom/connection/ttybase.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <chrono>
 #include <future>
 #include <thread>
-#include <chrono>
+#include "atom/connection/ttybase.hpp"
 
 // TTYBase is not in atom::connection namespace
 using namespace std::chrono_literals;
@@ -208,21 +208,19 @@ protected:
 };
 
 TEST_F(TTYBaudRateTest, StandardBaudRates) {
-    std::vector<uint32_t> standardBaudRates = {
-        1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200
-    };
+    std::vector<uint32_t> standardBaudRates = {1200,  2400,  4800,  9600,
+                                               19200, 38400, 57600, 115200};
 
     for (auto baudRate : standardBaudRates) {
-        // All should fail since we don't have a real device, but should not crash
+        // All should fail since we don't have a real device, but should not
+        // crash
         auto response = client_->connect("/dev/ttyUSB0", baudRate, 8, 0, 1);
         EXPECT_NE(response, TTYBase::TTYResponse::OK);
     }
 }
 
 TEST_F(TTYBaudRateTest, HighBaudRates) {
-    std::vector<uint32_t> highBaudRates = {
-        230400, 460800, 921600, 1000000
-    };
+    std::vector<uint32_t> highBaudRates = {230400, 460800, 921600, 1000000};
 
     for (auto baudRate : highBaudRates) {
         auto response = client_->connect("/dev/ttyUSB0", baudRate, 8, 0, 1);
@@ -245,7 +243,8 @@ TEST_F(TTYWordSizeTest, ValidWordSizes) {
 
     for (auto wordSize : validWordSizes) {
         auto response = client_->connect("/dev/ttyUSB0", 9600, wordSize, 0, 1);
-        EXPECT_NE(response, TTYBase::TTYResponse::OK);  // Will fail due to no device
+        EXPECT_NE(response,
+                  TTYBase::TTYResponse::OK);  // Will fail due to no device
     }
 }
 
@@ -264,7 +263,8 @@ TEST_F(TTYParityTest, ValidParitySettings) {
 
     for (auto parity : validParitySettings) {
         auto response = client_->connect("/dev/ttyUSB0", 9600, 8, parity, 1);
-        EXPECT_NE(response, TTYBase::TTYResponse::OK);  // Will fail due to no device
+        EXPECT_NE(response,
+                  TTYBase::TTYResponse::OK);  // Will fail due to no device
     }
 }
 
@@ -283,7 +283,8 @@ TEST_F(TTYStopBitsTest, ValidStopBits) {
 
     for (auto stopBits : validStopBits) {
         auto response = client_->connect("/dev/ttyUSB0", 9600, 8, 0, stopBits);
-        EXPECT_NE(response, TTYBase::TTYResponse::OK);  // Will fail due to no device
+        EXPECT_NE(response,
+                  TTYBase::TTYResponse::OK);  // Will fail due to no device
     }
 }
 

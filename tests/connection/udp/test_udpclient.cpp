@@ -1,9 +1,9 @@
-#include "atom/connection/udpclient.hpp"
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <future>
-#include <thread>
 #include <span>
+#include <thread>
+#include "atom/connection/udpclient.hpp"
 
 using namespace atom::connection;
 

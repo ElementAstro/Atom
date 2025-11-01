@@ -50,8 +50,9 @@ public:
                                                                   Release);
 
         // 连接到 WMI
-        hr = locator->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), NULL, NULL, 0,
-                                    static_cast<LONG>(0), 0, 0, &result.service);
+        hr =
+            locator->ConnectServer(_bstr_t(L"ROOT\\CIMV2"), NULL, NULL, 0,
+                                   static_cast<LONG>(0), 0, 0, &result.service);
         if (FAILED(hr)) {
             result.errorMessage = L"无法连接到 WMI 服务";
             return result;
@@ -121,7 +122,8 @@ public:
         IWbemClassObject* pAdapter = nullptr;
         ULONG returned = 0;
 
-        hr = enumPtr->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pAdapter, &returned);
+        hr = enumPtr->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pAdapter,
+                           &returned);
         if (FAILED(hr) || returned == 0) {
             result.errorMessage = L"找不到指定的网络适配器";
             return result;
@@ -168,7 +170,8 @@ public:
 
         // 获取配置对象
         ULONG uReturn = 0;
-        hr = enumConfigPtr->Next(static_cast<LONG>(WBEM_INFINITE), 1, &result.config, &uReturn);
+        hr = enumConfigPtr->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                 &result.config, &uReturn);
 
         if (FAILED(hr) || uReturn == 0) {
             result.errorMessage = L"无法获取适配器配置";

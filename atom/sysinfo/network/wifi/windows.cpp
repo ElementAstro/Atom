@@ -11,7 +11,6 @@
 #include <memory>
 #include <thread>
 
-
 #undef interface
 
 namespace atom::system::windows {

@@ -41,8 +41,8 @@ constexpr int THREAD_SAFETY_THREAD_COUNT = 4;
 constexpr int STRESS_TEST_DURATION_MS = 5000;
 
 // Memory test configuration
-constexpr size_t TEST_MEMORY_LIMIT = 1024 * 1024; // 1MB
-constexpr size_t LARGE_ALLOCATION_SIZE = 1024 * 1024 * 10; // 10MB
+constexpr size_t TEST_MEMORY_LIMIT = 1024 * 1024;           // 1MB
+constexpr size_t LARGE_ALLOCATION_SIZE = 1024 * 1024 * 10;  // 10MB
 
 // Timeout configuration
 constexpr int DEFAULT_TEST_TIMEOUT_MS = 5000;
@@ -63,72 +63,72 @@ constexpr const char* INVALID_SCRIPT_CONTENT = "invalid syntax !!!";
 // ============================================================================
 
 // Conditional test execution based on feature availability
-#define ATOM_TEST_SKIP_IF_NO_LUA() \
-    do { \
-        if (!ATOM_ENABLE_LUA) { \
+#define ATOM_TEST_SKIP_IF_NO_LUA()                                     \
+    do {                                                               \
+        if (!ATOM_ENABLE_LUA) {                                        \
             GTEST_SKIP() << "Lua engine is not enabled in this build"; \
-        } \
-    } while(0)
+        }                                                              \
+    } while (0)
 
-#define ATOM_TEST_SKIP_IF_NO_PYTHON() \
-    do { \
-        if (!ATOM_ENABLE_PYTHON) { \
+#define ATOM_TEST_SKIP_IF_NO_PYTHON()                                     \
+    do {                                                                  \
+        if (!ATOM_ENABLE_PYTHON) {                                        \
             GTEST_SKIP() << "Python engine is not enabled in this build"; \
-        } \
-    } while(0)
+        }                                                                 \
+    } while (0)
 
-#define ATOM_TEST_SKIP_IF_NO_SIMD() \
-    do { \
-        if (!ATOM_ENABLE_SIMD) { \
+#define ATOM_TEST_SKIP_IF_NO_SIMD()                                          \
+    do {                                                                     \
+        if (!ATOM_ENABLE_SIMD) {                                             \
             GTEST_SKIP() << "SIMD operations are not enabled in this build"; \
-        } \
-    } while(0)
+        }                                                                    \
+    } while (0)
 
-#define ATOM_TEST_SKIP_IF_NO_THREADING() \
-    do { \
-        if (!ATOM_ENABLE_THREADING) { \
+#define ATOM_TEST_SKIP_IF_NO_THREADING()                              \
+    do {                                                              \
+        if (!ATOM_ENABLE_THREADING) {                                 \
             GTEST_SKIP() << "Threading is not enabled in this build"; \
-        } \
-    } while(0)
+        }                                                             \
+    } while (0)
 
 // Performance test helpers
-#define ATOM_PERFORMANCE_TEST(test_name) \
-    TEST(PerformanceTest, test_name)
+#define ATOM_PERFORMANCE_TEST(test_name) TEST(PerformanceTest, test_name)
 
 #define ATOM_BENCHMARK_START() \
     auto benchmark_start = std::chrono::high_resolution_clock::now()
 
-#define ATOM_BENCHMARK_END_AND_CHECK(max_duration_ms) \
-    do { \
-        auto benchmark_end = std::chrono::high_resolution_clock::now(); \
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(benchmark_end - benchmark_start); \
-        EXPECT_LT(duration.count(), max_duration_ms) << "Performance test exceeded expected duration"; \
-    } while(0)
+#define ATOM_BENCHMARK_END_AND_CHECK(max_duration_ms)                          \
+    do {                                                                       \
+        auto benchmark_end = std::chrono::high_resolution_clock::now();        \
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>( \
+            benchmark_end - benchmark_start);                                  \
+        EXPECT_LT(duration.count(), max_duration_ms)                           \
+            << "Performance test exceeded expected duration";                  \
+    } while (0)
 
 // Memory test helpers
-#define ATOM_EXPECT_MEMORY_USAGE_BELOW(max_bytes) \
-    do { \
+#define ATOM_EXPECT_MEMORY_USAGE_BELOW(max_bytes)                             \
+    do {                                                                      \
         /* Implementation would depend on available memory profiling tools */ \
-        /* This is a placeholder for memory usage checking */ \
-    } while(0)
+        /* This is a placeholder for memory usage checking */                 \
+    } while (0)
 
 // Thread safety test helpers
 #define ATOM_THREAD_SAFETY_TEST(test_name, thread_count, iterations) \
-    TEST(ThreadSafetyTest, test_name) { \
-        ATOM_TEST_SKIP_IF_NO_THREADING(); \
-        std::vector<std::thread> threads; \
-        std::atomic<int> success_count{0}; \
-        for (int t = 0; t < thread_count; ++t) { \
+    TEST(ThreadSafetyTest, test_name) {                              \
+        ATOM_TEST_SKIP_IF_NO_THREADING();                            \
+        std::vector<std::thread> threads;                            \
+        std::atomic<int> success_count{0};                           \
+        for (int t = 0; t < thread_count; ++t) {                     \
             threads.emplace_back([&success_count, iterations]() { \
                 for (int i = 0; i < iterations; ++i) {
-
 #define ATOM_THREAD_SAFETY_TEST_END() \
-                } \
-            }); \
-        } \
-        for (auto& thread : threads) { \
-            thread.join(); \
-        } \
+    }                                 \
+    });                               \
+    }                                 \
+    for (auto& thread : threads) {    \
+        thread.join();                \
+    }                                 \
     }
 
 // ============================================================================
@@ -136,11 +136,11 @@ constexpr const char* INVALID_SCRIPT_CONTENT = "invalid syntax !!!";
 // ============================================================================
 
 // Generate test data for various scenarios
-template<typename T>
+template <typename T>
 std::vector<T> generateTestData(size_t count);
 
 // Specializations for common types
-template<>
+template <>
 inline std::vector<int> generateTestData<int>(size_t count) {
     std::vector<int> data;
     data.reserve(count);
@@ -150,7 +150,7 @@ inline std::vector<int> generateTestData<int>(size_t count) {
     return data;
 }
 
-template<>
+template <>
 inline std::vector<std::string> generateTestData<std::string>(size_t count) {
     std::vector<std::string> data;
     data.reserve(count);
@@ -215,7 +215,7 @@ private:
 namespace test_utils {
 
 // Timeout wrapper for long-running tests
-template<typename Func>
+template <typename Func>
 bool runWithTimeout(Func&& func, std::chrono::milliseconds timeout) {
     std::atomic<bool> completed{false};
     std::thread worker([&]() {
@@ -229,7 +229,7 @@ bool runWithTimeout(Func&& func, std::chrono::milliseconds timeout) {
         worker.join();
         return true;
     } else {
-        worker.detach(); // Let it finish in background
+        worker.detach();  // Let it finish in background
         return false;
     }
 }
@@ -250,7 +250,8 @@ public:
     }
 
     std::string randomString(size_t length = 10) {
-        const std::string chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const std::string chars =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         std::string result;
         result.reserve(length);
 
@@ -271,9 +272,9 @@ inline RandomDataGenerator& getRandom() {
     return instance;
 }
 
-} // namespace test_utils
+}  // namespace test_utils
 
-} // namespace atom::test
+}  // namespace atom::test
 
 // ============================================================================
 // Global Test Setup
@@ -286,10 +287,8 @@ inline void setupTestEnvironment() {
 
 // Automatic test environment setup
 namespace {
-    struct TestEnvironmentSetup {
-        TestEnvironmentSetup() {
-            setupTestEnvironment();
-        }
-    };
-    static TestEnvironmentSetup test_env_setup;
+struct TestEnvironmentSetup {
+    TestEnvironmentSetup() { setupTestEnvironment(); }
+};
+static TestEnvironmentSetup test_env_setup;
 }

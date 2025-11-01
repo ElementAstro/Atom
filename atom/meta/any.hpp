@@ -365,8 +365,8 @@ public:
      * \param value The value of the attribute.
      * \return Reference to this BoxedValue.
      */
-    auto setAttr(const std::string& name, const BoxedValue& value)
-        -> BoxedValue& {
+    auto setAttr(const std::string& name,
+                 const BoxedValue& value) -> BoxedValue& {
         std::unique_lock lock(mutex_);
         if (!data_->attrs) {
             data_->attrs = std::make_shared<

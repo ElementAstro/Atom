@@ -287,22 +287,24 @@ int main() {
             std::cout << "\nGrid after BFS flood fill (SIMD not available):"
                       << std::endl;
             printGrid(simdGrid);
-            std::cout << "Filled " << simdFilledCells << " cells using BFS algorithm"
-                      << std::endl;
+            std::cout << "Filled " << simdFilledCells
+                      << " cells using BFS algorithm" << std::endl;
         } catch (const std::exception& e) {
-            std::cout << "SIMD flood fill not supported: " << e.what() << std::endl;
+            std::cout << "SIMD flood fill not supported: " << e.what()
+                      << std::endl;
             // Fallback to regular BFS
             size_t fallbackFilledCells = atom::algorithm::FloodFill::fillBFS(
                 simdGrid, 1, 1, 2, 8, Connectivity::Eight);
             std::cout << "\nUsed fallback BFS algorithm instead" << std::endl;
             printGrid(simdGrid);
-            std::cout << "Filled " << fallbackFilledCells << " cells using fallback BFS"
-                      << std::endl;
+            std::cout << "Filled " << fallbackFilledCells
+                      << " cells using fallback BFS" << std::endl;
         }
 
         // Example using block-optimized flood fill
         {
-            std::vector<std::vector<int>> blockGrid(16, std::vector<int>(16, 1));
+            std::vector<std::vector<int>> blockGrid(16,
+                                                    std::vector<int>(16, 1));
             // Create a checkerboard pattern
             for (int i = 0; i < 16; ++i) {
                 for (int j = 0; j < 16; ++j) {
@@ -319,13 +321,15 @@ int main() {
             blockConfig.useBlockProcessing = true;
             blockConfig.blockSize = 4;
 
-            // Note: fillBlockOptimized is not implemented, using fillBFS instead
+            // Note: fillBlockOptimized is not implemented, using fillBFS
+            // instead
             size_t blockFilledCells = atom::algorithm::FloodFill::fillBFS(
                 blockGrid, 0, 0, 3, 7, blockConfig.connectivity);
 
-            std::cout << "Filled " << blockFilledCells
-                      << " cells using BFS algorithm (block-optimized not available)"
-                      << std::endl;
+            std::cout
+                << "Filled " << blockFilledCells
+                << " cells using BFS algorithm (block-optimized not available)"
+                << std::endl;
         }
 
         // Example demonstrating different connectivity types
@@ -341,21 +345,21 @@ int main() {
 
             // Test 4-way connectivity
             auto grid4Way = connectivityGrid;
-            size_t cells4Way = atom::algorithm::FloodFill::fillBFS(grid4Way, 0, 0, 1, 8,
-                                                                   Connectivity::Four);
+            size_t cells4Way = atom::algorithm::FloodFill::fillBFS(
+                grid4Way, 0, 0, 1, 8, Connectivity::Four);
             std::cout << "\nAfter 4-way connectivity flood fill:" << std::endl;
             printGrid(grid4Way);
-            std::cout << "Filled " << cells4Way << " cells with 4-way connectivity"
-                      << std::endl;
+            std::cout << "Filled " << cells4Way
+                      << " cells with 4-way connectivity" << std::endl;
 
             // Test 8-way connectivity
             auto grid8Way = connectivityGrid;
-            size_t cells8Way = atom::algorithm::FloodFill::fillBFS(grid8Way, 0, 0, 1, 9,
-                                                                   Connectivity::Eight);
+            size_t cells8Way = atom::algorithm::FloodFill::fillBFS(
+                grid8Way, 0, 0, 1, 9, Connectivity::Eight);
             std::cout << "\nAfter 8-way connectivity flood fill:" << std::endl;
             printGrid(grid8Way);
-            std::cout << "Filled " << cells8Way << " cells with 8-way connectivity"
-                      << std::endl;
+            std::cout << "Filled " << cells8Way
+                      << " cells with 8-way connectivity" << std::endl;
         }
 
         // Example demonstrating error handling
@@ -381,8 +385,9 @@ int main() {
                 std::cout << "Unexpectedly succeeded, filled " << invalidCells
                           << " cells" << std::endl;
             } catch (const std::exception& e) {
-                std::cout << "Caught expected error for out-of-bounds coordinates: "
-                          << e.what() << std::endl;
+                std::cout
+                    << "Caught expected error for out-of-bounds coordinates: "
+                    << e.what() << std::endl;
             }
 
             try {
@@ -393,8 +398,8 @@ int main() {
                 std::cout << "Unexpectedly succeeded on empty grid, filled "
                           << emptyCells << " cells" << std::endl;
             } catch (const std::exception& e) {
-                std::cout << "Caught expected error for empty grid: " << e.what()
-                          << std::endl;
+                std::cout << "Caught expected error for empty grid: "
+                          << e.what() << std::endl;
             }
         }
 
@@ -404,8 +409,8 @@ int main() {
 
             // Create a large grid for performance testing
             const int gridSize = 100;
-            std::vector<std::vector<int>> perfGrid(gridSize,
-                                                   std::vector<int>(gridSize, 1));
+            std::vector<std::vector<int>> perfGrid(
+                gridSize, std::vector<int>(gridSize, 1));
 
             // Fill half the grid with target color
             for (int i = 0; i < gridSize / 2; ++i) {
@@ -419,13 +424,13 @@ int main() {
             auto testParallel = perfGrid;
 
             auto start = std::chrono::high_resolution_clock::now();
-            size_t bfsResult = atom::algorithm::FloodFill::fillBFS(testBFS, 0, 0, 2, 7,
-                                                                   Connectivity::Four);
+            size_t bfsResult = atom::algorithm::FloodFill::fillBFS(
+                testBFS, 0, 0, 2, 7, Connectivity::Four);
             auto bfsTime = std::chrono::high_resolution_clock::now() - start;
 
             start = std::chrono::high_resolution_clock::now();
-            size_t dfsResult = atom::algorithm::FloodFill::fillDFS(testDFS, 0, 0, 2, 7,
-                                                                   Connectivity::Four);
+            size_t dfsResult = atom::algorithm::FloodFill::fillDFS(
+                testDFS, 0, 0, 2, 7, Connectivity::Four);
             auto dfsTime = std::chrono::high_resolution_clock::now() - start;
 
             atom::algorithm::FloodFill::FloodFillConfig parallelConfig;
@@ -434,14 +439,17 @@ int main() {
             start = std::chrono::high_resolution_clock::now();
             size_t parallelResult = atom::algorithm::FloodFill::fillParallel(
                 testParallel, 0, 0, 2, 7, parallelConfig);
-            auto parallelTime = std::chrono::high_resolution_clock::now() - start;
+            auto parallelTime =
+                std::chrono::high_resolution_clock::now() - start;
 
             std::cout << "BFS filled " << bfsResult << " cells in "
-                      << std::chrono::duration_cast<std::chrono::microseconds>(bfsTime)
+                      << std::chrono::duration_cast<std::chrono::microseconds>(
+                             bfsTime)
                              .count()
                       << " microseconds" << std::endl;
             std::cout << "DFS filled " << dfsResult << " cells in "
-                      << std::chrono::duration_cast<std::chrono::microseconds>(dfsTime)
+                      << std::chrono::duration_cast<std::chrono::microseconds>(
+                             dfsTime)
                              .count()
                       << " microseconds" << std::endl;
             std::cout << "Parallel filled " << parallelResult << " cells in "
@@ -463,11 +471,13 @@ int main() {
         }
 
         std::cout << "\n=== Summary ===" << std::endl;
-        std::cout << "Flood fill demonstration completed successfully!" << std::endl;
+        std::cout << "Flood fill demonstration completed successfully!"
+                  << std::endl;
         std::cout << "Demonstrated features:" << std::endl;
         std::cout << "- BFS and DFS flood fill algorithms" << std::endl;
         std::cout << "- 4-way and 8-way connectivity" << std::endl;
-        std::cout << "- Parallel processing with configurable options" << std::endl;
+        std::cout << "- Parallel processing with configurable options"
+                  << std::endl;
         std::cout << "- SIMD acceleration (if supported)" << std::endl;
         std::cout << "- Block-optimized processing" << std::endl;
         std::cout << "- Error handling and bounds checking" << std::endl;

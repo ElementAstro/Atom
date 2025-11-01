@@ -291,8 +291,8 @@ public:
      * @param loadDataFunction The function to load the resource.
      * @return A future that completes when the resource is loaded.
      */
-    auto asyncLoad(const String &key, std::function<T()> loadDataFunction)
-        -> Future<void>;
+    auto asyncLoad(const String &key,
+                   std::function<T()> loadDataFunction) -> Future<void>;
 
     /**
      * @brief Sets the maximum size of the cache.
@@ -463,7 +463,7 @@ auto ResourceCache<T>::contains(const String &key) const -> bool {
         if ((now - it->second.second) >= expIt->second) {
             // Expired: release shared lock and remove the key
             lock.unlock();
-            const_cast<ResourceCache<T>*>(this)->remove(key);
+            const_cast<ResourceCache<T> *>(this)->remove(key);
             return false;
         }
     }
@@ -643,9 +643,8 @@ auto ResourceCache<T>::isExpired(const String &key) const -> bool {
 }
 
 template <Cacheable T>
-auto ResourceCache<T>::asyncLoad(const String &key,
-                                 std::function<T()> loadDataFunction)
-    -> Future<void> {
+auto ResourceCache<T>::asyncLoad(
+    const String &key, std::function<T()> loadDataFunction) -> Future<void> {
     return std::async(std::launch::async, [this, key, loadDataFunction]() {
         try {
             T value = loadDataFunction();

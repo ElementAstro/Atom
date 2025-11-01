@@ -37,8 +37,8 @@ Description: Some useful spinlock implementations
 // Platform-specific includes
 #if defined(_WIN32) || defined(_WIN64)
 #define ATOM_PLATFORM_WINDOWS
-#include "../../../cmake/WindowsCompat.hpp"
 #include <synchapi.h>
+#include "../../../cmake/WindowsCompat.hpp"
 #elif defined(__APPLE__)
 #define ATOM_PLATFORM_MACOS
 #include <dispatch/dispatch.h>

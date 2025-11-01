@@ -24,7 +24,8 @@ class PowerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Create mock power manager for controlled testing
-        mockPowerManager = std::make_unique<::testing::NiceMock<MockPowerManager>>();
+        mockPowerManager =
+            std::make_unique<::testing::NiceMock<MockPowerManager>>();
 
         // Set up default behavior for the mock
         ON_CALL(*mockPowerManager, shutdown())
@@ -43,9 +44,7 @@ protected:
             .WillByDefault(::testing::Return(true));
     }
 
-    void TearDown() override {
-        mockPowerManager.reset();
-    }
+    void TearDown() override { mockPowerManager.reset(); }
 
     std::unique_ptr<MockPowerManager> mockPowerManager;
 };
@@ -72,8 +71,7 @@ TEST_F(PowerTest, ShutdownFailure) {
 // Test reboot function
 TEST_F(PowerTest, RebootSuccess) {
     // Test successful reboot
-    EXPECT_CALL(*mockPowerManager, reboot())
-        .WillOnce(::testing::Return(true));
+    EXPECT_CALL(*mockPowerManager, reboot()).WillOnce(::testing::Return(true));
 
     bool result = mockPowerManager->reboot();
     EXPECT_TRUE(result);
@@ -81,8 +79,7 @@ TEST_F(PowerTest, RebootSuccess) {
 
 TEST_F(PowerTest, RebootFailure) {
     // Test reboot failure
-    EXPECT_CALL(*mockPowerManager, reboot())
-        .WillOnce(::testing::Return(false));
+    EXPECT_CALL(*mockPowerManager, reboot()).WillOnce(::testing::Return(false));
 
     bool result = mockPowerManager->reboot();
     EXPECT_FALSE(result);
@@ -109,8 +106,7 @@ TEST_F(PowerTest, HibernateFailure) {
 
 // Test suspend function (if available)
 TEST_F(PowerTest, SuspendSuccess) {
-    EXPECT_CALL(*mockPowerManager, suspend())
-        .WillOnce(::testing::Return(true));
+    EXPECT_CALL(*mockPowerManager, suspend()).WillOnce(::testing::Return(true));
 
     bool result = mockPowerManager->suspend();
     EXPECT_TRUE(result);
@@ -126,16 +122,14 @@ TEST_F(PowerTest, SuspendFailure) {
 
 // Test logoff function (if available)
 TEST_F(PowerTest, LogoffSuccess) {
-    EXPECT_CALL(*mockPowerManager, logoff())
-        .WillOnce(::testing::Return(true));
+    EXPECT_CALL(*mockPowerManager, logoff()).WillOnce(::testing::Return(true));
 
     bool result = mockPowerManager->logoff();
     EXPECT_TRUE(result);
 }
 
 TEST_F(PowerTest, LogoffFailure) {
-    EXPECT_CALL(*mockPowerManager, logoff())
-        .WillOnce(::testing::Return(false));
+    EXPECT_CALL(*mockPowerManager, logoff()).WillOnce(::testing::Return(false));
 
     bool result = mockPowerManager->logoff();
     EXPECT_FALSE(result);
@@ -146,8 +140,7 @@ TEST_F(PowerTest, MultipleOperationsSequence) {
     // Test that multiple power operations can be called in sequence
     EXPECT_CALL(*mockPowerManager, hibernate())
         .WillOnce(::testing::Return(true));
-    EXPECT_CALL(*mockPowerManager, suspend())
-        .WillOnce(::testing::Return(true));
+    EXPECT_CALL(*mockPowerManager, suspend()).WillOnce(::testing::Return(true));
     EXPECT_CALL(*mockPowerManager, shutdown())
         .WillOnce(::testing::Return(true));
 
@@ -160,12 +153,11 @@ TEST_F(PowerTest, MultipleOperationsSequence) {
 class PowerEdgeCaseTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockPowerManager = std::make_unique<::testing::NiceMock<MockPowerManager>>();
+        mockPowerManager =
+            std::make_unique<::testing::NiceMock<MockPowerManager>>();
     }
 
-    void TearDown() override {
-        mockPowerManager.reset();
-    }
+    void TearDown() override { mockPowerManager.reset(); }
 
     std::unique_ptr<MockPowerManager> mockPowerManager;
 };
@@ -175,7 +167,8 @@ TEST_F(PowerEdgeCaseTest, RapidSuccessiveCalls) {
     // Test that rapid successive calls are handled properly
     EXPECT_CALL(*mockPowerManager, shutdown())
         .Times(3)
-        .WillRepeatedly(::testing::Return(false)); // Should fail on rapid calls
+        .WillRepeatedly(
+            ::testing::Return(false));  // Should fail on rapid calls
 
     for (int i = 0; i < 3; ++i) {
         bool result = mockPowerManager->shutdown();
@@ -239,8 +232,7 @@ TEST_F(PowerTest, LinuxSpecificOperations) {
 // macOS-specific power management tests
 TEST_F(PowerTest, MacOSSpecificOperations) {
     // Test macOS-specific power operations
-    EXPECT_CALL(*mockPowerManager, suspend())
-        .WillOnce(::testing::Return(true));
+    EXPECT_CALL(*mockPowerManager, suspend()).WillOnce(::testing::Return(true));
 
     bool result = mockPowerManager->suspend();
     EXPECT_TRUE(result);
@@ -250,8 +242,7 @@ TEST_F(PowerTest, MacOSSpecificOperations) {
 // Test additional power functions
 TEST_F(PowerTest, LogoutSuccess) {
     // Test successful logout
-    EXPECT_CALL(*mockPowerManager, logoff())
-        .WillOnce(::testing::Return(true));
+    EXPECT_CALL(*mockPowerManager, logoff()).WillOnce(::testing::Return(true));
 
     bool result = mockPowerManager->logoff();
     EXPECT_TRUE(result);
@@ -259,8 +250,7 @@ TEST_F(PowerTest, LogoutSuccess) {
 
 TEST_F(PowerTest, LogoutFailure) {
     // Test logout failure
-    EXPECT_CALL(*mockPowerManager, logoff())
-        .WillOnce(::testing::Return(false));
+    EXPECT_CALL(*mockPowerManager, logoff()).WillOnce(::testing::Return(false));
 
     bool result = mockPowerManager->logoff();
     EXPECT_FALSE(result);
@@ -326,15 +316,14 @@ TEST_F(PowerTest, SetScreenBrightnessEdgeCases) {
 class PowerPerformanceTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        mockPowerManager = std::make_unique<::testing::NiceMock<MockPowerManager>>();
+        mockPowerManager =
+            std::make_unique<::testing::NiceMock<MockPowerManager>>();
 
         ON_CALL(*mockPowerManager, shutdown())
             .WillByDefault(::testing::Return(true));
     }
 
-    void TearDown() override {
-        mockPowerManager.reset();
-    }
+    void TearDown() override { mockPowerManager.reset(); }
 
     std::unique_ptr<MockPowerManager> mockPowerManager;
 };
@@ -348,7 +337,8 @@ TEST_F(PowerPerformanceTest, PowerOperationResponseTime) {
     bool result = mockPowerManager->shutdown();
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_TRUE(result);
     // Power operations should complete quickly (within 100ms for mock)

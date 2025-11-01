@@ -1,15 +1,15 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include <vector>
-#include <string>
-#include <memory>
 #include <cmath>
+#include <memory>
+#include <string>
+#include <vector>
 
-#include "atom/image/processing/gpu_acceleration.hpp"
 #include "atom/image/core/image_blob.hpp"
+#include "atom/image/processing/gpu_acceleration.hpp"
 #include "test_utils.hpp"
 
 namespace atom::image::test {
@@ -34,14 +34,18 @@ protected:
     }
 
     void createTestImages() {
-        auto gradientData = TestDataGenerator::generateGradientImage(128, 128, 3);
+        auto gradientData =
+            TestDataGenerator::generateGradientImage(128, 128, 3);
         gradient_image = blob(gradientData.data(), gradientData.size());
 
-        auto solidData = TestDataGenerator::generateSolidColor(128, 128, 3, {128, 128, 128});
+        auto solidData =
+            TestDataGenerator::generateSolidColor(128, 128, 3, {128, 128, 128});
         solid_image = blob(solidData.data(), solidData.size());
 
-        auto checkerboardData = TestDataGenerator::generateCheckerboard(128, 128, 3, 8);
-        checkerboard_image = blob(checkerboardData.data(), checkerboardData.size());
+        auto checkerboardData =
+            TestDataGenerator::generateCheckerboard(128, 128, 3, 8);
+        checkerboard_image =
+            blob(checkerboardData.data(), checkerboardData.size());
     }
 
     std::unique_ptr<GPUImageProcessor> gpuProcessor;
@@ -57,19 +61,17 @@ TEST_F(GPUAccelerationTest, BackendAvailability) {
     bool vulkanAvailable = GPUContext::isBackendAvailable(GPUBackend::VULKAN);
     bool metalAvailable = GPUContext::isBackendAvailable(GPUBackend::METAL);
 
-    EXPECT_TRUE(cudaAvailable || openclAvailable || vulkanAvailable || metalAvailable || true);
+    EXPECT_TRUE(cudaAvailable || openclAvailable || vulkanAvailable ||
+                metalAvailable || true);
 }
 
 TEST_F(GPUAccelerationTest, OptimalBackend) {
     auto backend = GPUContext::getOptimalBackend();
 
-    EXPECT_TRUE(backend == GPUBackend::CUDA ||
-                backend == GPUBackend::OPENCL ||
-                backend == GPUBackend::VULKAN ||
-                backend == GPUBackend::METAL ||
+    EXPECT_TRUE(backend == GPUBackend::CUDA || backend == GPUBackend::OPENCL ||
+                backend == GPUBackend::VULKAN || backend == GPUBackend::METAL ||
                 backend == GPUBackend::DIRECTCOMPUTE ||
-                backend == GPUBackend::HIP ||
-                backend == GPUBackend::SYCL ||
+                backend == GPUBackend::HIP || backend == GPUBackend::SYCL ||
                 backend == GPUBackend::AUTO);
 }
 
@@ -90,7 +92,7 @@ TEST_F(GPUAccelerationTest, ProcessorInitialization) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     EXPECT_TRUE(gpuAvailable);
     EXPECT_NE(gpuProcessor, nullptr);
 }
@@ -100,9 +102,9 @@ TEST_F(GPUAccelerationTest, ImageUpload) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto buffer = gpuProcessor->uploadImage(gradient_image);
-    
+
     EXPECT_NE(buffer, nullptr);
     EXPECT_TRUE(buffer->isValid());
     EXPECT_GT(buffer->getSize(), 0);
@@ -113,10 +115,10 @@ TEST_F(GPUAccelerationTest, ImageUploadEmpty) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     blob empty_image;
     auto buffer = gpuProcessor->uploadImage(empty_image);
-    
+
     // Should handle empty image gracefully
     EXPECT_TRUE(buffer == nullptr || !buffer->isValid());
 }
@@ -126,12 +128,12 @@ TEST_F(GPUAccelerationTest, ImageDownload) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto buffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(buffer, nullptr);
-    
+
     auto downloaded = gpuProcessor->downloadImage(*buffer, 128, 128, 3);
-    
+
     EXPECT_FALSE(downloaded.isEmpty());
     EXPECT_EQ(downloaded.size(), gradient_image.size());
 }
@@ -141,12 +143,13 @@ TEST_F(GPUAccelerationTest, GaussianBlur) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
-    auto outputBuffer = gpuProcessor->gaussianBlur(*inputBuffer, 1.0f, 5, 128, 128, 3);
-    
+
+    auto outputBuffer =
+        gpuProcessor->gaussianBlur(*inputBuffer, 1.0f, 5, 128, 128, 3);
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -156,12 +159,13 @@ TEST_F(GPUAccelerationTest, ImageResize) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
-    auto outputBuffer = gpuProcessor->resize(*inputBuffer, 128, 128, 64, 64, 3, "linear");
-    
+
+    auto outputBuffer =
+        gpuProcessor->resize(*inputBuffer, 128, 128, 64, 64, 3, "linear");
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -171,12 +175,13 @@ TEST_F(GPUAccelerationTest, ColorSpaceConversion) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
-    auto outputBuffer = gpuProcessor->convertColorSpace(*inputBuffer, "RGB", "GRAY", 128, 128);
-    
+
+    auto outputBuffer =
+        gpuProcessor->convertColorSpace(*inputBuffer, "RGB", "GRAY", 128, 128);
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -186,12 +191,13 @@ TEST_F(GPUAccelerationTest, HistogramEqualization) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
-    auto outputBuffer = gpuProcessor->equalizeHistogram(*inputBuffer, 128, 128, 3);
-    
+
+    auto outputBuffer =
+        gpuProcessor->equalizeHistogram(*inputBuffer, 128, 128, 3);
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -201,12 +207,13 @@ TEST_F(GPUAccelerationTest, EdgeDetection) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(checkerboard_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
-    auto outputBuffer = gpuProcessor->detectEdges(*inputBuffer, "sobel", 50.0f, 150.0f, 128, 128);
-    
+
+    auto outputBuffer = gpuProcessor->detectEdges(*inputBuffer, "sobel", 50.0f,
+                                                  150.0f, 128, 128);
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -216,13 +223,15 @@ TEST_F(GPUAccelerationTest, MorphologicalOperations) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(checkerboard_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
-    std::vector<std::vector<int>> structElement = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
-    auto outputBuffer = gpuProcessor->morphological(*inputBuffer, "erode", structElement, 128, 128, 3);
-    
+
+    std::vector<std::vector<int>> structElement = {
+        {1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
+    auto outputBuffer = gpuProcessor->morphological(*inputBuffer, "erode",
+                                                    structElement, 128, 128, 3);
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -232,18 +241,16 @@ TEST_F(GPUAccelerationTest, Convolution) {
     if (!gpuAvailable) {
         GTEST_SKIP() << "GPU not available";
     }
-    
+
     auto inputBuffer = gpuProcessor->uploadImage(gradient_image);
     ASSERT_NE(inputBuffer, nullptr);
-    
+
     std::vector<std::vector<float>> kernel = {
-        {0.0f, -1.0f, 0.0f},
-        {-1.0f, 5.0f, -1.0f},
-        {0.0f, -1.0f, 0.0f}
-    };
-    
-    auto outputBuffer = gpuProcessor->convolve(*inputBuffer, kernel, 128, 128, 3);
-    
+        {0.0f, -1.0f, 0.0f}, {-1.0f, 5.0f, -1.0f}, {0.0f, -1.0f, 0.0f}};
+
+    auto outputBuffer =
+        gpuProcessor->convolve(*inputBuffer, kernel, 128, 128, 3);
+
     EXPECT_NE(outputBuffer, nullptr);
     EXPECT_TRUE(outputBuffer->isValid());
 }
@@ -291,10 +298,12 @@ TEST_F(GPUAccelerationTest, DISABLED_PerformanceGPUOperations) {
     auto result = gpuProcessor->downloadImage(*blurred, 1024, 1024, 3);
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_FALSE(result.isEmpty());
-    std::cout << "GPU processing took " << duration.count() << " ms" << std::endl;
+    std::cout << "GPU processing took " << duration.count() << " ms"
+              << std::endl;
 }
 
 // Test batch processing on GPU
@@ -339,8 +348,8 @@ TEST_F(GPUAccelerationTest, CustomKernel) {
 
     try {
         std::vector<size_t> globalWorkSize = {128 * 128 * 3};
-        auto outputBuffer = gpuProcessor->applyCustomKernel(*inputBuffer, kernelSource,
-                                                           "simple_kernel", globalWorkSize);
+        auto outputBuffer = gpuProcessor->applyCustomKernel(
+            *inputBuffer, kernelSource, "simple_kernel", globalWorkSize);
 
         if (outputBuffer) {
             EXPECT_TRUE(outputBuffer->isValid());
@@ -387,7 +396,8 @@ TEST_F(GPUAccelerationTest, ResizeInterpolationMethods) {
     std::vector<std::string> methods = {"nearest", "linear", "cubic"};
 
     for (const auto& method : methods) {
-        auto outputBuffer = gpuProcessor->resize(*inputBuffer, 128, 128, 64, 64, 3, method);
+        auto outputBuffer =
+            gpuProcessor->resize(*inputBuffer, 128, 128, 64, 64, 3, method);
         EXPECT_NE(outputBuffer, nullptr) << "Failed for method: " << method;
         if (outputBuffer) {
             EXPECT_TRUE(outputBuffer->isValid());
@@ -408,14 +418,16 @@ TEST_F(GPUAccelerationTest, EdgeDetectionMethods) {
 
     for (const auto& method : methods) {
         try {
-            auto outputBuffer = gpuProcessor->detectEdges(*inputBuffer, method, 50.0f, 150.0f, 128, 128);
+            auto outputBuffer = gpuProcessor->detectEdges(
+                *inputBuffer, method, 50.0f, 150.0f, 128, 128);
             EXPECT_NE(outputBuffer, nullptr) << "Failed for method: " << method;
             if (outputBuffer) {
                 EXPECT_TRUE(outputBuffer->isValid());
             }
         } catch (const std::exception& e) {
             // Some methods may not be implemented
-            GTEST_SKIP() << "Method " << method << " not available: " << e.what();
+            GTEST_SKIP() << "Method " << method
+                         << " not available: " << e.what();
         }
     }
 }
@@ -429,19 +441,22 @@ TEST_F(GPUAccelerationTest, MorphologicalOperationTypes) {
     auto inputBuffer = gpuProcessor->uploadImage(checkerboard_image);
     ASSERT_NE(inputBuffer, nullptr);
 
-    std::vector<std::vector<int>> structElement = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
+    std::vector<std::vector<int>> structElement = {
+        {1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
     std::vector<std::string> operations = {"erode", "dilate", "open", "close"};
 
     for (const auto& op : operations) {
         try {
-            auto outputBuffer = gpuProcessor->morphological(*inputBuffer, op, structElement, 128, 128, 3);
+            auto outputBuffer = gpuProcessor->morphological(
+                *inputBuffer, op, structElement, 128, 128, 3);
             EXPECT_NE(outputBuffer, nullptr) << "Failed for operation: " << op;
             if (outputBuffer) {
                 EXPECT_TRUE(outputBuffer->isValid());
             }
         } catch (const std::exception& e) {
             // Some operations may not be implemented
-            GTEST_SKIP() << "Operation " << op << " not available: " << e.what();
+            GTEST_SKIP() << "Operation " << op
+                         << " not available: " << e.what();
         }
     }
 }
@@ -458,11 +473,8 @@ TEST_F(GPUAccelerationTest, MemoryTypes) {
     }
 
     std::vector<GPUMemoryType> memTypes = {
-        GPUMemoryType::DEVICE,
-        GPUMemoryType::HOST,
-        GPUMemoryType::UNIFIED,
-        GPUMemoryType::PINNED
-    };
+        GPUMemoryType::DEVICE, GPUMemoryType::HOST, GPUMemoryType::UNIFIED,
+        GPUMemoryType::PINNED};
 
     for (const auto& memType : memTypes) {
         try {
@@ -491,5 +503,4 @@ TEST_F(GPUAccelerationTest, RoundTripConsistency) {
     EXPECT_FALSE(downloaded.isEmpty());
 }
 
-} // namespace atom::image::test
-
+}  // namespace atom::image::test

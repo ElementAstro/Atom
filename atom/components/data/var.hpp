@@ -75,7 +75,7 @@ public:
      */
     template <typename T, typename C>
         requires std::is_copy_constructible_v<T>
-    void addVariable(const std::string& name, T C::* memberPointer, C& instance,
+    void addVariable(const std::string& name, T C::*memberPointer, C& instance,
                      const std::string& description = "",
                      const std::string& alias = "",
                      const std::string& group = "");
@@ -250,8 +250,11 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
                 "Variable with name '{}' already exists, not adding alias",
                 alias);
         } else {
-            // Create alias entry with empty alias field to distinguish it from primary
-            variables_[alias] = {variables_[name].variable, variables_[name].description, "", variables_[name].group};
+            // Create alias entry with empty alias field to distinguish it from
+            // primary
+            variables_[alias] = {variables_[name].variable,
+                                 variables_[name].description, "",
+                                 variables_[name].group};
             if (!group.empty()) {
                 groups_[group].insert(alias);
             }
@@ -261,7 +264,7 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
 
 template <typename T, typename C>
     requires std::is_copy_constructible_v<T>
-void VariableManager::addVariable(const std::string& name, T C::* memberPointer,
+void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
                                   C& instance, const std::string& description,
                                   const std::string& alias,
                                   const std::string& group) {
@@ -378,7 +381,8 @@ void VariableManager::setValue(const std::string& name, T newValue) {
 
             if (auto* rangePtr = std::any_cast<Range>(&rangeIt->second)) {
                 if (newValue < rangePtr->min || newValue > rangePtr->max) {
-                    // Note: Removed spdlog::error call to avoid std::vector formatting issues
+                    // Note: Removed spdlog::error call to avoid std::vector
+                    // formatting issues
                     THROW_INVALID_ARGUMENT(
                         "Value out of range for variable '{}'", name);
                 }

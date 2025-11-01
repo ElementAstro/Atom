@@ -387,8 +387,8 @@ inline auto computeHash(const std::any& value) noexcept -> usize {
  * @param tolerance Allowed difference (for fuzzy matching)
  * @return bool True if hashes match within tolerance
  */
-inline auto verifyHash(usize hash1, usize hash2, usize tolerance = 0) noexcept
-    -> bool {
+inline auto verifyHash(usize hash1, usize hash2,
+                       usize tolerance = 0) noexcept -> bool {
     return (hash1 == hash2) ||
            (tolerance > 0 &&
             (hash1 >= hash2 ? hash1 - hash2 : hash2 - hash1) <= tolerance);
@@ -402,8 +402,8 @@ inline auto verifyHash(usize hash1, usize hash2, usize tolerance = 0) noexcept
  * @param basis Initial basis value for hashing.
  * @return constexpr usize Hash value of the string.
  */
-constexpr auto hash(const char* str, usize basis = 2166136261u) noexcept
-    -> usize {
+constexpr auto hash(const char* str,
+                    usize basis = 2166136261u) noexcept -> usize {
 #if defined(__AVX2__)
     __m256i hash_vec = _mm256_set1_epi64x(basis);
     const __m256i prime = _mm256_set1_epi64x(16777619u);

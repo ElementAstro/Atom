@@ -134,8 +134,9 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
             std::max(2u, std::thread::hardware_concurrency());
         const size_t chunkSize = length / numThreads;
 
-        std::vector<::atom::type::compat::expected<ValidationResult, std::string>> results(
-            numThreads);
+        std::vector<
+            ::atom::type::compat::expected<ValidationResult, std::string>>
+            results(numThreads);
         std::vector<std::thread> threads;
         std::latch completion_latch(
             numThreads);  // C++20 thread synchronization primitive
@@ -160,10 +161,10 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
                     }
                     results[i] = std::move(chunkResult);
                 } catch (const std::exception& e) {
-                    results[i] = std::unexpected(
+                    results[i] = ::atom::type::compat::unexpected(
                         std::format("Error in chunk {}: {}", i, e.what()));
                 } catch (...) {
-                    results[i] = std::unexpected(
+                    results[i] = ::atom::type::compat::unexpected(
                         std::format("Unknown error in chunk {}", i));
                 }
                 completion_latch.count_down();
@@ -227,26 +228,25 @@ auto parallelValidation(T&& str, const ValidationOptions& options)
 
         return finalResult;
     } catch (const std::exception& e) {
-        return std::unexpected(
+        return ::atom::type::compat::unexpected(
             std::format("Parallel validation error: {}", e.what()));
     } catch (...) {
-        return std::unexpected("Unknown error in parallel validation");
+        return ::atom::type::compat::unexpected(
+            "Unknown error in parallel validation");
     }
 }
 
 }  // namespace atom::utils
 
-// Implement main validation logic using std::expected
+// Implement main validation logic using atom::type::compat::expected
 template <StringLike T>
 auto validateImpl(T&& str, const ValidationOptions& options)
-    -> std::expected<ValidationResult, std::string> {
+    -> ::atom::type::compat::expected<ValidationResult, std::string> {
     // Input validation result
-    ValidationResult result{
-        .isValid = true,
-        .invalidBrackets = {},
-        .errorMessages = {},
-        .sourceLocation = {}
-    };
+    ValidationResult result{.isValid = true,
+                            .invalidBrackets = {},
+                            .errorMessages = {},
+                            .sourceLocation = {}};
 
     try {
         auto span = getDataSpan(str);
@@ -409,16 +409,19 @@ auto validateImpl(T&& str, const ValidationOptions& options)
         return result;
     } catch (const std::exception& e) {
         // Log error and return unexpected value
-        return std::unexpected(std::format("Validation error: {}", e.what()));
+        return ::atom::type::compat::unexpected(
+            std::format("Validation error: {}", e.what()));
     } catch (...) {
-        return std::unexpected("Unknown validation error occurred");
+        return ::atom::type::compat::unexpected(
+            "Unknown validation error occurred");
     }
 }
 
-// Implement isValidBracket using std::expected for error handling
+// Implement isValidBracket using ::atom::type::compat::expected for error
+// handling
 template <StringLike T>
 auto isValidBracket(T&& str, const ValidationOptions& options)
-    -> std::expected<ValidationResult, std::string> {
+    -> ::atom::type::compat::expected<ValidationResult, std::string> {
     try {
         // Get string size
         size_t size;
@@ -432,10 +435,11 @@ auto isValidBracket(T&& str, const ValidationOptions& options)
         // Use standard processing for small strings
         return validateImpl(std::forward<T>(str), options);
     } catch (const std::exception& e) {
-        return std::unexpected(
+        return ::atom::type::compat::unexpected(
             std::format("String validation failed: {}", e.what()));
     } catch (...) {
-        return std::unexpected("Unknown error during string validation");
+        return ::atom::type::compat::unexpected(
+            "Unknown error during string validation");
     }
 }
 
@@ -443,58 +447,58 @@ auto isValidBracket(T&& str, const ValidationOptions& options)
 // Standard string types
 template auto isValidBracket<std::string>(std::string&&,
                                           const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<const std::string&>(const std::string&,
                                                  const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<std::string&>(std::string&,
                                            const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 
 // String view types
 template auto isValidBracket<std::string_view>(std::string_view&&,
                                                const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<const std::string_view&>(const std::string_view&,
                                                       const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<std::string_view&>(std::string_view&,
                                                 const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 
 // C-string types
 template auto isValidBracket<const char*>(const char*&&,
                                           const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<const char*&>(const char*&,
                                            const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<char*>(char*&&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<char*&>(char*&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 
 // Unicode string support instantiations
 #ifdef __cpp_lib_char8_t
 template auto isValidBracket<std::u8string>(std::u8string&&,
                                             const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<const std::u8string&>(const std::u8string&,
                                                    const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<std::u8string&>(std::u8string&,
                                              const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 
 template auto isValidBracket<std::u8string_view>(std::u8string_view&&,
                                                  const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<const std::u8string_view&>(
     const std::u8string_view&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto isValidBracket<std::u8string_view&>(std::u8string_view&,
                                                   const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 #endif
 
 // Unicode char16_t support
@@ -503,19 +507,19 @@ template auto isValidBracket<std::u8string_view&>(std::u8string_view&,
 
 // Explicit instantiations for validateImpl
 template auto validateImpl<std::string>(std::string&&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto validateImpl<const std::string&>(const std::string&,
                                                const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto validateImpl<std::string_view>(std::string_view&&,
                                              const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto validateImpl<const std::string_view&>(const std::string_view&,
                                                     const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto validateImpl<const char*>(const char*&&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 template auto validateImpl<char*>(char*&&, const ValidationOptions&)
-    -> std::expected<ValidationResult, std::string>;
+    -> ::atom::type::compat::expected<ValidationResult, std::string>;
 
 }  // namespace atom::utils

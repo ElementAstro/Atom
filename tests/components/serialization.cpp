@@ -24,7 +24,8 @@ public:
 class SerializationTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        component_ = std::make_shared<TestSerializationComponent>("SerializationTestComponent");
+        component_ = std::make_shared<TestSerializationComponent>(
+            "SerializationTestComponent");
 
         // Set up default options
         options_.format = SerializationFormat::JSON;
@@ -46,7 +47,8 @@ class JsonSerializerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         serializer_ = std::make_unique<JsonSerializer>();
-        component_ = std::make_shared<TestSerializationComponent>("JsonTestComponent");
+        component_ =
+            std::make_shared<TestSerializationComponent>("JsonTestComponent");
 
         options_.format = SerializationFormat::JSON;
         options_.includeMetadata = true;
@@ -64,7 +66,8 @@ class BinarySerializerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         serializer_ = std::make_unique<BinarySerializer>();
-        component_ = std::make_shared<TestSerializationComponent>("BinaryTestComponent");
+        component_ =
+            std::make_shared<TestSerializationComponent>("BinaryTestComponent");
 
         options_.format = SerializationFormat::Binary;
         options_.includeMetadata = true;
@@ -82,7 +85,8 @@ class SerializationManagerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         manager_ = &SerializationManager::instance();
-        component_ = std::make_shared<TestSerializationComponent>("ManagerTestComponent");
+        component_ = std::make_shared<TestSerializationComponent>(
+            "ManagerTestComponent");
     }
 
     SerializationManager* manager_;
@@ -212,7 +216,8 @@ TEST_F(JsonSerializerTest, DeserializeComponent) {
     ASSERT_TRUE(serializeResult.success);
 
     // Then deserialize it
-    auto deserializeResult = serializer_->deserialize(serializeResult.data, options_);
+    auto deserializeResult =
+        serializer_->deserialize(serializeResult.data, options_);
 
     EXPECT_TRUE(deserializeResult.success);
     EXPECT_NE(deserializeResult.component, nullptr);
@@ -239,7 +244,8 @@ TEST_F(JsonSerializerTest, RoundTripSerialization) {
     ASSERT_TRUE(serializeResult.success);
 
     // Deserialize
-    auto deserializeResult = serializer_->deserialize(serializeResult.data, options_);
+    auto deserializeResult =
+        serializer_->deserialize(serializeResult.data, options_);
     ASSERT_TRUE(deserializeResult.success);
     ASSERT_NE(deserializeResult.component, nullptr);
 
@@ -278,7 +284,7 @@ TEST_F(BinarySerializerTest, SerializeComponent) {
     // Verify binary header magic number
     if (result.data.size() >= 4) {
         uint32_t magic = *reinterpret_cast<const uint32_t*>(result.data.data());
-        EXPECT_EQ(magic, 0x41544F4D); // "ATOM"
+        EXPECT_EQ(magic, 0x41544F4D);  // "ATOM"
     }
 }
 
@@ -302,7 +308,8 @@ TEST_F(BinarySerializerTest, DeserializeComponent) {
     ASSERT_TRUE(serializeResult.success);
 
     // Then deserialize it
-    auto deserializeResult = serializer_->deserialize(serializeResult.data, options_);
+    auto deserializeResult =
+        serializer_->deserialize(serializeResult.data, options_);
 
     EXPECT_TRUE(deserializeResult.success);
     EXPECT_NE(deserializeResult.component, nullptr);
@@ -310,7 +317,8 @@ TEST_F(BinarySerializerTest, DeserializeComponent) {
 }
 
 TEST_F(BinarySerializerTest, DeserializeInvalidData) {
-    std::vector<uint8_t> invalidData = {0x00, 0x01, 0x02, 0x03}; // Invalid magic
+    std::vector<uint8_t> invalidData = {0x00, 0x01, 0x02,
+                                        0x03};  // Invalid magic
 
     auto result = serializer_->deserialize(invalidData, options_);
 
@@ -331,7 +339,8 @@ TEST_F(SerializationManagerTest, Singleton) {
 
 TEST_F(SerializationManagerTest, RegisterSerializer) {
     auto customSerializer = std::make_unique<JsonSerializer>();
-    manager_->registerSerializer(SerializationFormat::Custom, std::move(customSerializer));
+    manager_->registerSerializer(SerializationFormat::Custom,
+                                 std::move(customSerializer));
 
     EXPECT_TRUE(manager_->hasSerializer(SerializationFormat::Custom));
 }
@@ -355,7 +364,8 @@ TEST_F(SerializationManagerTest, DeserializeWithManager) {
     ASSERT_TRUE(serializeResult.success);
 
     // Then deserialize
-    auto deserializeResult = manager_->deserialize(serializeResult.data, options);
+    auto deserializeResult =
+        manager_->deserialize(serializeResult.data, options);
 
     EXPECT_TRUE(deserializeResult.success);
     EXPECT_NE(deserializeResult.component, nullptr);
@@ -363,7 +373,7 @@ TEST_F(SerializationManagerTest, DeserializeWithManager) {
 
 TEST_F(SerializationManagerTest, UnsupportedFormat) {
     SerializationOptions options;
-    options.format = static_cast<SerializationFormat>(99); // Invalid format
+    options.format = static_cast<SerializationFormat>(99);  // Invalid format
 
     auto result = manager_->serialize(*component_, options);
 

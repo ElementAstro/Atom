@@ -173,12 +173,12 @@ private:
 
     // Distribution factory methods
     template <typename T>
-    auto getIntDistribution(int min, int max)
-        -> std::uniform_int_distribution<T>&;
+    auto getIntDistribution(int min,
+                            int max) -> std::uniform_int_distribution<T>&;
 
     template <typename T>
-    auto getRealDistribution(T min, T max)
-        -> std::uniform_real_distribution<T>&;
+    auto getRealDistribution(T min,
+                             T max) -> std::uniform_real_distribution<T>&;
 
     // Thread safety helpers
     template <typename Func>
@@ -257,8 +257,8 @@ public:
      *
      * @throws RandomGenerationError if count is negative or min > max
      */
-    auto generateIntegers(int count, int min = 0, int max = -1)
-        -> std::vector<int>;
+    auto generateIntegers(int count, int min = 0,
+                          int max = -1) -> std::vector<int>;
 
     /**
      * @brief Generates a single random integer.
@@ -279,8 +279,8 @@ public:
      *
      * @throws RandomGenerationError if count is negative or min > max
      */
-    auto generateReals(int count, double min = 0.0, double max = 1.0)
-        -> std::vector<double>;
+    auto generateReals(int count, double min = 0.0,
+                       double max = 1.0) -> std::vector<double>;
 
     /**
      * @brief Generates a single random real number.
@@ -315,8 +315,8 @@ public:
      * @throws RandomGenerationError if count is negative or probability is out
      * of range
      */
-    auto generateBooleans(int count, double trueProbability = 0.5)
-        -> std::vector<bool>;
+    auto generateBooleans(int count,
+                          double trueProbability = 0.5) -> std::vector<bool>;
 
     /**
      * @brief Generates a single random boolean.
@@ -375,8 +375,8 @@ public:
      *
      * @throws RandomGenerationError if depth or maxElementsPerLevel is negative
      */
-    auto generateRandomJSON(int depth = 2, int maxElementsPerLevel = 4)
-        -> std::string;
+    auto generateRandomJSON(int depth = 2,
+                            int maxElementsPerLevel = 4) -> std::string;
 
     /**
      * @brief Generates a random XML string.
@@ -386,8 +386,8 @@ public:
      *
      * @throws RandomGenerationError if depth or maxElementsPerLevel is negative
      */
-    auto generateRandomXML(int depth = 2, int maxElementsPerLevel = 3)
-        -> std::string;
+    auto generateRandomXML(int depth = 2,
+                           int maxElementsPerLevel = 3) -> std::string;
 
     /**
      * @brief Performs a fuzz test on a given function with random inputs.
@@ -404,10 +404,10 @@ public:
      * @throws RandomGenerationError if iterations is negative
      */
     template <typename Func, typename... Args>
-    auto fuzzTest(
-        Func testFunc, int iterations, std::function<Args()>... argGenerators,
-        std::function<void(const std::exception&)> exceptionHandler = nullptr)
-        -> int;
+    auto fuzzTest(Func testFunc, int iterations,
+                  std::function<Args()>... argGenerators,
+                  std::function<void(const std::exception&)> exceptionHandler =
+                      nullptr) -> int;
 
     /**
      * @brief Generates a random IPv4 address.
@@ -415,9 +415,8 @@ public:
      * allowed ranges for each segment
      * @return A random IPv4 address.
      */
-    auto generateIPv4Address(
-        const std::vector<std::pair<int, int>>& includedSegmentRanges = {})
-        -> std::string;
+    auto generateIPv4Address(const std::vector<std::pair<int, int>>&
+                                 includedSegmentRanges = {}) -> std::string;
 
     /**
      * @brief Generates a random MAC address.
@@ -425,8 +424,8 @@ public:
      * @param separator Separator character between segments (default: ':')
      * @return A random MAC address.
      */
-    auto generateMACAddress(bool upperCase = false, char separator = ':')
-        -> std::string;
+    auto generateMACAddress(bool upperCase = false,
+                            char separator = ':') -> std::string;
 
     /**
      * @brief Generates a random URL.
@@ -448,8 +447,8 @@ public:
      *
      * @throws RandomGenerationError if count is negative or stddev is negative
      */
-    auto generateNormalDistribution(int count, double mean, double stddev)
-        -> std::vector<double>;
+    auto generateNormalDistribution(int count, double mean,
+                                    double stddev) -> std::vector<double>;
 
     /**
      * @brief Generates a vector of random numbers following an exponential
@@ -460,8 +459,8 @@ public:
      *
      * @throws RandomGenerationError if count is negative or lambda is negative
      */
-    auto generateExponentialDistribution(int count, double lambda)
-        -> std::vector<double>;
+    auto generateExponentialDistribution(int count,
+                                         double lambda) -> std::vector<double>;
 
     /**
      * @brief Serializes data to a JSON string.
@@ -482,8 +481,8 @@ public:
      * @throws RandomGenerationError if count is negative
      */
     template <typename T>
-    auto generateVector(int count, std::function<T()> generator)
-        -> std::vector<T>;
+    auto generateVector(int count,
+                        std::function<T()> generator) -> std::vector<T>;
 
     /**
      * @brief Generates a map of random key-value pairs.
@@ -584,8 +583,8 @@ public:
      * @throws RandomGenerationError if nodes is negative or edgeProbability is
      * out of range
      */
-    auto generateGraph(int nodes, double edgeProbability)
-        -> std::vector<std::vector<int>>;
+    auto generateGraph(int nodes,
+                       double edgeProbability) -> std::vector<std::vector<int>>;
 
     /**
      * @brief Generates a vector of random key-value pairs.
@@ -736,9 +735,8 @@ auto RandomDataGenerator::serializeToJSON(const T& data) -> std::string {
 }
 
 template <typename T>
-auto RandomDataGenerator::generateVector(int count,
-                                         std::function<T()> generator)
-    -> std::vector<T> {
+auto RandomDataGenerator::generateVector(
+    int count, std::function<T()> generator) -> std::vector<T> {
     validateCount(count, "count");
 
     return withExclusiveLock([&]() {
@@ -752,9 +750,8 @@ auto RandomDataGenerator::generateVector(int count,
 }
 
 template <typename T, typename Distribution>
-auto RandomDataGenerator::generateCustomDistribution(int count,
-                                                     Distribution& distribution)
-    -> std::vector<T> {
+auto RandomDataGenerator::generateCustomDistribution(
+    int count, Distribution& distribution) -> std::vector<T> {
     validateCount(count, "count");
 
     return withExclusiveLock([&]() {
@@ -768,11 +765,10 @@ auto RandomDataGenerator::generateCustomDistribution(int count,
 }
 
 template <typename K, typename V>
-auto RandomDataGenerator::generateMap(int count,
-                                      std::function<K()> keyGenerator,
-                                      std::function<V()> valueGenerator,
-                                      bool allowDuplicateKeys)
-    -> std::map<K, V> {
+auto RandomDataGenerator::generateMap(
+    int count, std::function<K()> keyGenerator,
+    std::function<V()> valueGenerator,
+    bool allowDuplicateKeys) -> std::map<K, V> {
     validateCount(count, "count");
 
     return withExclusiveLock([&]() {
@@ -833,10 +829,9 @@ auto RandomDataGenerator::generateSortedVector(
 }
 
 template <typename T>
-auto RandomDataGenerator::generateUniqueVector(int count,
-                                               std::function<T()> generator,
-                                               int maxAttempts)
-    -> std::vector<T> {
+auto RandomDataGenerator::generateUniqueVector(
+    int count, std::function<T()> generator,
+    int maxAttempts) -> std::vector<T> {
     validateCount(count, "count");
     if (maxAttempts < 0) {
         maxAttempts = count * 10;  // Default to 10x count

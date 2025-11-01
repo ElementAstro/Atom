@@ -67,23 +67,28 @@ private:
         addVariable<int>("constrained_int", 50, "Integer with range [0, 100]");
         setRange<int>("constrained_int", 0, 100);
 
-        addVariable<double>("constrained_double", 0.5, "Double with range [0.0, 1.0]");
+        addVariable<double>("constrained_double", 0.5,
+                            "Double with range [0.0, 1.0]");
         setRange<double>("constrained_double", 0.0, 1.0);
 
         // String with predefined options
-        addVariable<std::string>("enum_string", "option1", "String with predefined options");
-        std::vector<std::string> stringOptions = {"option1", "option2", "option3", "option4"};
+        addVariable<std::string>("enum_string", "option1",
+                                 "String with predefined options");
+        std::vector<std::string> stringOptions = {"option1", "option2",
+                                                  "option3", "option4"};
         setStringOptions("enum_string", stringOptions);
 
         // Additional constrained variables for demonstration
         addVariable<int>("percentage", 50, "Percentage value [0-100]");
         setRange<int>("percentage", 0, 100);
 
-        addVariable<double>("temperature", 20.0, "Temperature in Celsius [-273.15, 1000.0]");
+        addVariable<double>("temperature", 20.0,
+                            "Temperature in Celsius [-273.15, 1000.0]");
         setRange<double>("temperature", -273.15, 1000.0);
 
         addVariable<std::string>("log_level", "INFO", "Logging level");
-        std::vector<std::string> logLevels = {"DEBUG", "INFO", "WARN", "ERROR", "FATAL"};
+        std::vector<std::string> logLevels = {"DEBUG", "INFO", "WARN", "ERROR",
+                                              "FATAL"};
         setStringOptions("log_level", logLevels);
     }
 
@@ -155,59 +160,71 @@ private:
             std::cout << "\nTesting variable constraints..." << std::endl;
 
             // Test valid range values
-            std::cout << "Setting constrained_int to 75 (valid)..." << std::endl;
+            std::cout << "Setting constrained_int to 75 (valid)..."
+                      << std::endl;
             try {
                 setValue("constrained_int", 75);
                 auto var = getVariable<int>("constrained_int");
-                std::cout << "Success! Value set to: " << (var ? var->get() : 0) << std::endl;
+                std::cout << "Success! Value set to: " << (var ? var->get() : 0)
+                          << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Error: " << e.what() << std::endl;
             }
 
             // Test invalid range values
-            std::cout << "Setting constrained_int to 150 (invalid)..." << std::endl;
+            std::cout << "Setting constrained_int to 150 (invalid)..."
+                      << std::endl;
             try {
                 setValue("constrained_int", 150);
                 auto var = getVariable<int>("constrained_int");
-                std::cout << "Unexpected success! Value set to: " << (var ? var->get() : 0) << std::endl;
+                std::cout << "Unexpected success! Value set to: "
+                          << (var ? var->get() : 0) << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Expected error: " << e.what() << std::endl;
             }
 
             // Test double range constraints
-            std::cout << "Setting constrained_double to 0.8 (valid)..." << std::endl;
+            std::cout << "Setting constrained_double to 0.8 (valid)..."
+                      << std::endl;
             try {
                 setValue("constrained_double", 0.8);
                 auto var = getVariable<double>("constrained_double");
-                std::cout << "Success! Value set to: " << (var ? var->get() : 0.0) << std::endl;
+                std::cout << "Success! Value set to: "
+                          << (var ? var->get() : 0.0) << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Error: " << e.what() << std::endl;
             }
 
-            std::cout << "Setting constrained_double to 1.5 (invalid)..." << std::endl;
+            std::cout << "Setting constrained_double to 1.5 (invalid)..."
+                      << std::endl;
             try {
                 setValue("constrained_double", 1.5);
                 auto var = getVariable<double>("constrained_double");
-                std::cout << "Unexpected success! Value set to: " << (var ? var->get() : 0.0) << std::endl;
+                std::cout << "Unexpected success! Value set to: "
+                          << (var ? var->get() : 0.0) << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Expected error: " << e.what() << std::endl;
             }
 
             // Test string options
-            std::cout << "Setting enum_string to 'option2' (valid)..." << std::endl;
+            std::cout << "Setting enum_string to 'option2' (valid)..."
+                      << std::endl;
             try {
                 setValue("enum_string", std::string("option2"));
                 auto var = getVariable<std::string>("enum_string");
-                std::cout << "Success! Value set to: " << (var ? var->get() : "unknown") << std::endl;
+                std::cout << "Success! Value set to: "
+                          << (var ? var->get() : "unknown") << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Error: " << e.what() << std::endl;
             }
 
-            std::cout << "Setting enum_string to 'invalid_option' (invalid)..." << std::endl;
+            std::cout << "Setting enum_string to 'invalid_option' (invalid)..."
+                      << std::endl;
             try {
                 setValue("enum_string", std::string("invalid_option"));
                 auto var = getVariable<std::string>("enum_string");
-                std::cout << "Unexpected success! Value set to: " << (var ? var->get() : "unknown") << std::endl;
+                std::cout << "Unexpected success! Value set to: "
+                          << (var ? var->get() : "unknown") << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Expected error: " << e.what() << std::endl;
             }
@@ -217,7 +234,8 @@ private:
             try {
                 setValue("percentage", 85);
                 auto var = getVariable<int>("percentage");
-                std::cout << "Success! Value set to: " << (var ? var->get() : 0) << std::endl;
+                std::cout << "Success! Value set to: " << (var ? var->get() : 0)
+                          << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Error: " << e.what() << std::endl;
             }
@@ -226,7 +244,8 @@ private:
             try {
                 setValue("percentage", 150);
                 auto var = getVariable<int>("percentage");
-                std::cout << "Unexpected success! Value set to: " << (var ? var->get() : 0) << std::endl;
+                std::cout << "Unexpected success! Value set to: "
+                          << (var ? var->get() : 0) << std::endl;
             } catch (const std::exception& e) {
                 std::cout << "Expected error: " << e.what() << std::endl;
             }
@@ -235,17 +254,22 @@ private:
         def("demonstrateTracking", []() {
             std::cout << "\nDemonstrating variable tracking..." << std::endl;
 
-            // Note: getVariableManager() method doesn't exist in Component base class
-            // Variable tracking not available in current implementation
-            std::cout << "Variable tracking not available in current implementation" << std::endl;
+            // Note: getVariableManager() method doesn't exist in Component base
+            // class Variable tracking not available in current implementation
+            std::cout
+                << "Variable tracking not available in current implementation"
+                << std::endl;
         });
 
         def("serializeVariables", []() {
             std::cout << "\nSerializing variables to JSON..." << std::endl;
 
-            // Note: getVariableManager() method doesn't exist in Component base class
-            // Variable serialization not available in current implementation
-            std::cout << "Variable serialization not available in current implementation" << std::endl;
+            // Note: getVariableManager() method doesn't exist in Component base
+            // class Variable serialization not available in current
+            // implementation
+            std::cout << "Variable serialization not available in current "
+                         "implementation"
+                      << std::endl;
         });
     }
 };
@@ -260,13 +284,16 @@ void demonstrateBasicVariables() {
         registry.createComponent<VariableComponent>("VarComponent");
 
     std::cout << "\n1. Initial variable state:" << std::endl;
-    [[maybe_unused]] auto printResult = component->runCommand("printAllVariables", {});
+    [[maybe_unused]] auto printResult =
+        component->runCommand("printAllVariables", {});
 
     std::cout << "\n2. Modifying variables:" << std::endl;
-    [[maybe_unused]] auto modifyResult = component->runCommand("modifyVariables", {});
+    [[maybe_unused]] auto modifyResult =
+        component->runCommand("modifyVariables", {});
 
     std::cout << "\n3. Printing variables after modification:" << std::endl;
-    [[maybe_unused]] auto printResult2 = component->runCommand("printAllVariables", {});
+    [[maybe_unused]] auto printResult2 =
+        component->runCommand("printAllVariables", {});
 }
 
 void demonstrateConstraints() {
@@ -276,7 +303,8 @@ void demonstrateConstraints() {
     auto component = registry.getComponent("VarComponent");
 
     if (component) {
-        [[maybe_unused]] auto constraintResult = component->runCommand("testConstraints", {});
+        [[maybe_unused]] auto constraintResult =
+            component->runCommand("testConstraints", {});
         std::cout << "Constraint testing completed successfully!" << std::endl;
     } else {
         std::cout << "Component not found!" << std::endl;
@@ -290,7 +318,8 @@ void demonstrateTracking() {
     auto component = registry.getComponent("VarComponent");
 
     if (component) {
-        [[maybe_unused]] auto trackingResult = component->runCommand("demonstrateTracking", {});
+        [[maybe_unused]] auto trackingResult =
+            component->runCommand("demonstrateTracking", {});
         std::cout << "Variable tracking demonstration completed!" << std::endl;
     } else {
         std::cout << "Component not found!" << std::endl;
@@ -304,8 +333,10 @@ void demonstrateSerialization() {
     auto component = registry.getComponent("VarComponent");
 
     if (component) {
-        [[maybe_unused]] auto serializationResult = component->runCommand("serializeVariables", {});
-        std::cout << "Variable serialization demonstration completed!" << std::endl;
+        [[maybe_unused]] auto serializationResult =
+            component->runCommand("serializeVariables", {});
+        std::cout << "Variable serialization demonstration completed!"
+                  << std::endl;
     } else {
         std::cout << "Component not found!" << std::endl;
     }

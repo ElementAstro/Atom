@@ -106,17 +106,55 @@ public:
     }
 
     bool setArgument(int index, const GPUBuffer& buffer) override {
+        // Fallback implementation: validate parameters and log for debugging
+        // In a real GPU implementation, this would bind the buffer to the
+        // kernel
+        [[maybe_unused]] auto bufferSize = buffer.getSize();
+        [[maybe_unused]] auto bufferType = buffer.getMemoryType();
+
+        // Validate index is reasonable
+        if (index < 0 || index > 100) {
+            return false;
+        }
+
         // Store buffer reference for fallback execution
         return true;
     }
 
     bool setArgument(int index, const void* data, size_t size) override {
+        // Fallback implementation: validate parameters
+        // In a real GPU implementation, this would copy the data to kernel
+        // arguments
+
+        // Validate parameters
+        if (index < 0 || index > 100 || data == nullptr || size == 0) {
+            return false;
+        }
+
         // Store scalar argument for fallback execution
         return true;
     }
 
     bool execute(const std::vector<size_t>& globalWorkSize,
                  const std::vector<size_t>& localWorkSize) override {
+        // Fallback implementation: validate work sizes
+        // In a real GPU implementation, this would launch the kernel
+
+        // Validate work sizes are reasonable
+        if (globalWorkSize.empty() || localWorkSize.empty()) {
+            return false;
+        }
+
+        for (size_t size : globalWorkSize) {
+            if (size == 0)
+                return false;
+        }
+
+        for (size_t size : localWorkSize) {
+            if (size == 0)
+                return false;
+        }
+
         // Fallback CPU execution would go here
         return true;
     }
@@ -151,7 +189,8 @@ public:
                                             GPUMemoryType memoryType) override {
         auto buffer = std::make_unique<FallbackGPUBuffer>();
         if (buffer->allocate(size, memoryType)) {
-            return std::move(buffer);
+            return buffer;  // RVO (Return Value Optimization) - no std::move
+                            // needed
         }
         return nullptr;
     }
@@ -270,6 +309,11 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::convolve(
         return nullptr;
     }
 
+    // Validate kernel dimensions
+    if (kernel.empty() || kernel[0].empty()) {
+        return nullptr;
+    }
+
     try {
         // Create output buffer
         size_t outputSize = width * height * channels;
@@ -279,14 +323,48 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::convolve(
             return nullptr;
         }
 
-        // In a real implementation, this would:
-        // 1. Create convolution kernel
-        // 2. Set kernel arguments (input, output, kernel weights, dimensions)
-        // 3. Execute kernel with appropriate work group sizes
-        // 4. Return output buffer
+        // Get or create convolution kernel
+        std::string kernelName = "convolve_" + std::to_string(kernel.size()) +
+                                 "x" + std::to_string(kernel[0].size());
 
-        // For fallback, just copy input to output
-        output->copyFrom(input, 0, 0, outputSize);
+        auto gpuKernel = kernels_.find(kernelName);
+        if (gpuKernel == kernels_.end()) {
+            // Create new kernel
+            auto newKernel = context_->createKernel();
+            if (newKernel && newKernel->loadFromSource(
+                                 getKernelSource("convolve"), "convolve")) {
+                kernels_[kernelName] = std::move(newKernel);
+                gpuKernel = kernels_.find(kernelName);
+            }
+        }
+
+        if (gpuKernel != kernels_.end()) {
+            // Flatten kernel weights for GPU
+            std::vector<float> flatKernel;
+            flatKernel.reserve(kernel.size() * kernel[0].size());
+            for (const auto& row : kernel) {
+                flatKernel.insert(flatKernel.end(), row.begin(), row.end());
+            }
+
+            // Set kernel arguments
+            gpuKernel->second->setArgument(0, input);
+            gpuKernel->second->setArgument(1, *output);
+            gpuKernel->second->setArgument(2, flatKernel.data(),
+                                           flatKernel.size() * sizeof(float));
+            gpuKernel->second->setArgument(3, &width, sizeof(int));
+            gpuKernel->second->setArgument(4, &height, sizeof(int));
+            gpuKernel->second->setArgument(5, &channels, sizeof(int));
+
+            // Execute kernel
+            std::vector<size_t> globalWorkSize = {static_cast<size_t>(width),
+                                                  static_cast<size_t>(height)};
+            std::vector<size_t> localWorkSize = {16, 16};
+
+            gpuKernel->second->execute(globalWorkSize, localWorkSize);
+        } else {
+            // Fallback: just copy input to output if kernel creation failed
+            output->copyFrom(input, 0, 0, outputSize);
+        }
 
         return output;
     } catch (const std::exception&) {
@@ -301,6 +379,12 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::resize(
         return nullptr;
     }
 
+    // Validate dimensions
+    if (srcWidth <= 0 || srcHeight <= 0 || dstWidth <= 0 || dstHeight <= 0 ||
+        channels <= 0) {
+        return nullptr;
+    }
+
     try {
         size_t outputSize = dstWidth * dstHeight * channels;
         auto output = context_->createBuffer(outputSize, GPUMemoryType::DEVICE);
@@ -309,11 +393,50 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::resize(
             return nullptr;
         }
 
-        // In a real implementation, this would use GPU kernels for
-        // bilinear/bicubic interpolation For fallback, just copy input (no
-        // actual resizing)
-        size_t copySize = std::min(input.getSize(), outputSize);
-        output->copyFrom(input, 0, 0, copySize);
+        // Get or create resize kernel based on interpolation method
+        std::string kernelName = "resize_" + interpolation;
+
+        auto gpuKernel = kernels_.find(kernelName);
+        if (gpuKernel == kernels_.end()) {
+            // Create new kernel
+            auto newKernel = context_->createKernel();
+            if (newKernel && newKernel->loadFromSource(
+                                 getKernelSource("resize"), "resize")) {
+                kernels_[kernelName] = std::move(newKernel);
+                gpuKernel = kernels_.find(kernelName);
+            }
+        }
+
+        if (gpuKernel != kernels_.end()) {
+            // Set interpolation mode (0=nearest, 1=linear, 2=cubic)
+            int interpMode = 0;
+            if (interpolation == "linear" || interpolation == "bilinear") {
+                interpMode = 1;
+            } else if (interpolation == "cubic" || interpolation == "bicubic") {
+                interpMode = 2;
+            }
+
+            // Set kernel arguments
+            gpuKernel->second->setArgument(0, input);
+            gpuKernel->second->setArgument(1, *output);
+            gpuKernel->second->setArgument(2, &srcWidth, sizeof(int));
+            gpuKernel->second->setArgument(3, &srcHeight, sizeof(int));
+            gpuKernel->second->setArgument(4, &dstWidth, sizeof(int));
+            gpuKernel->second->setArgument(5, &dstHeight, sizeof(int));
+            gpuKernel->second->setArgument(6, &channels, sizeof(int));
+            gpuKernel->second->setArgument(7, &interpMode, sizeof(int));
+
+            // Execute kernel
+            std::vector<size_t> globalWorkSize = {
+                static_cast<size_t>(dstWidth), static_cast<size_t>(dstHeight)};
+            std::vector<size_t> localWorkSize = {16, 16};
+
+            gpuKernel->second->execute(globalWorkSize, localWorkSize);
+        } else {
+            // Fallback: just copy input (no actual resizing)
+            size_t copySize = std::min(input.getSize(), outputSize);
+            output->copyFrom(input, 0, 0, copySize);
+        }
 
         return output;
     } catch (const std::exception&) {
@@ -384,6 +507,11 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::morphological(
         return nullptr;
     }
 
+    // Validate structuring element
+    if (structElement.empty() || structElement[0].empty()) {
+        return nullptr;
+    }
+
     try {
         size_t outputSize = width * height * channels;
         auto output = context_->createBuffer(outputSize, GPUMemoryType::DEVICE);
@@ -392,9 +520,64 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::morphological(
             return nullptr;
         }
 
-        // In a real implementation, this would apply morphological operations
-        // (erosion, dilation, etc.) For fallback, just copy input
-        output->copyFrom(input, 0, 0, outputSize);
+        // Get or create morphological kernel based on operation
+        std::string kernelName = "morphological_" + operation;
+
+        auto gpuKernel = kernels_.find(kernelName);
+        if (gpuKernel == kernels_.end()) {
+            // Create new kernel
+            auto newKernel = context_->createKernel();
+            if (newKernel &&
+                newKernel->loadFromSource(getKernelSource("morphological"),
+                                          "morphological")) {
+                kernels_[kernelName] = std::move(newKernel);
+                gpuKernel = kernels_.find(kernelName);
+            }
+        }
+
+        if (gpuKernel != kernels_.end()) {
+            // Determine operation type (0=erode, 1=dilate, 2=open, 3=close)
+            int opType = 0;
+            if (operation == "dilate" || operation == "dilation") {
+                opType = 1;
+            } else if (operation == "open" || operation == "opening") {
+                opType = 2;
+            } else if (operation == "close" || operation == "closing") {
+                opType = 3;
+            }
+
+            // Flatten structuring element
+            std::vector<int> flatStruct;
+            flatStruct.reserve(structElement.size() * structElement[0].size());
+            for (const auto& row : structElement) {
+                flatStruct.insert(flatStruct.end(), row.begin(), row.end());
+            }
+
+            int structWidth = static_cast<int>(structElement[0].size());
+            int structHeight = static_cast<int>(structElement.size());
+
+            // Set kernel arguments
+            gpuKernel->second->setArgument(0, input);
+            gpuKernel->second->setArgument(1, *output);
+            gpuKernel->second->setArgument(2, flatStruct.data(),
+                                           flatStruct.size() * sizeof(int));
+            gpuKernel->second->setArgument(3, &structWidth, sizeof(int));
+            gpuKernel->second->setArgument(4, &structHeight, sizeof(int));
+            gpuKernel->second->setArgument(5, &width, sizeof(int));
+            gpuKernel->second->setArgument(6, &height, sizeof(int));
+            gpuKernel->second->setArgument(7, &channels, sizeof(int));
+            gpuKernel->second->setArgument(8, &opType, sizeof(int));
+
+            // Execute kernel
+            std::vector<size_t> globalWorkSize = {static_cast<size_t>(width),
+                                                  static_cast<size_t>(height)};
+            std::vector<size_t> localWorkSize = {16, 16};
+
+            gpuKernel->second->execute(globalWorkSize, localWorkSize);
+        } else {
+            // Fallback: just copy input
+            output->copyFrom(input, 0, 0, outputSize);
+        }
 
         return output;
     } catch (const std::exception&) {
@@ -419,11 +602,53 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::detectEdges(
             return nullptr;
         }
 
-        // In a real implementation, this would apply edge detection algorithms
-        // (Sobel, Canny, etc.) For fallback, just copy input (truncated to
-        // single channel)
-        size_t copySize = std::min(input.getSize(), outputSize);
-        output->copyFrom(input, 0, 0, copySize);
+        // Get or create edge detection kernel based on method
+        std::string kernelName = "edge_" + method;
+
+        auto gpuKernel = kernels_.find(kernelName);
+        if (gpuKernel == kernels_.end()) {
+            // Create new kernel
+            auto newKernel = context_->createKernel();
+            if (newKernel &&
+                newKernel->loadFromSource(getKernelSource("edge_detection"),
+                                          "detect_edges")) {
+                kernels_[kernelName] = std::move(newKernel);
+                gpuKernel = kernels_.find(kernelName);
+            }
+        }
+
+        if (gpuKernel != kernels_.end()) {
+            // Determine edge detection method (0=sobel, 1=canny, 2=prewitt,
+            // 3=scharr)
+            int methodType = 0;
+            if (method == "canny") {
+                methodType = 1;
+            } else if (method == "prewitt") {
+                methodType = 2;
+            } else if (method == "scharr") {
+                methodType = 3;
+            }
+
+            // Set kernel arguments
+            gpuKernel->second->setArgument(0, input);
+            gpuKernel->second->setArgument(1, *output);
+            gpuKernel->second->setArgument(2, &width, sizeof(int));
+            gpuKernel->second->setArgument(3, &height, sizeof(int));
+            gpuKernel->second->setArgument(4, &methodType, sizeof(int));
+            gpuKernel->second->setArgument(5, &threshold1, sizeof(float));
+            gpuKernel->second->setArgument(6, &threshold2, sizeof(float));
+
+            // Execute kernel
+            std::vector<size_t> globalWorkSize = {static_cast<size_t>(width),
+                                                  static_cast<size_t>(height)};
+            std::vector<size_t> localWorkSize = {16, 16};
+
+            gpuKernel->second->execute(globalWorkSize, localWorkSize);
+        } else {
+            // Fallback: just copy input (truncated to single channel)
+            size_t copySize = std::min(input.getSize(), outputSize);
+            output->copyFrom(input, 0, 0, copySize);
+        }
 
         return output;
     } catch (const std::exception&) {
@@ -728,8 +953,26 @@ std::unordered_map<std::string, size_t> GPUImageProcessor::optimizeKernelParams(
     // Calculate optimal work group sizes based on device capabilities
     size_t maxWorkGroupSize = deviceInfo.maxWorkGroupSize;
 
-    // For 2D image processing, use square work groups when possible
-    size_t workGroupSize = 16;  // Common choice for image processing
+    // Different operations may benefit from different work group sizes
+    size_t workGroupSize = 16;  // Default for most image operations
+
+    // Adjust based on operation type
+    if (operation == "convolve" || operation == "morphological") {
+        // Convolution and morphological ops benefit from larger work groups
+        workGroupSize = 32;
+    } else if (operation == "edge_detection" || operation == "sobel") {
+        // Edge detection can use medium work groups
+        workGroupSize = 16;
+    } else if (operation == "resize" || operation == "transform") {
+        // Resize operations can use smaller work groups for better load
+        // balancing
+        workGroupSize = 8;
+    } else if (operation == "blur" || operation == "gaussian") {
+        // Blur operations benefit from larger work groups
+        workGroupSize = 32;
+    }
+
+    // Ensure work group size doesn't exceed device limits
     while (workGroupSize * workGroupSize > maxWorkGroupSize &&
            workGroupSize > 1) {
         workGroupSize /= 2;
@@ -746,6 +989,15 @@ std::unordered_map<std::string, size_t> GPUImageProcessor::optimizeKernelParams(
 
     params["global_work_size_x"] = globalX;
     params["global_work_size_y"] = globalY;
+
+    // Add operation-specific parameters
+    if (operation == "convolve") {
+        params["use_local_memory"] = 1;
+        params["tile_size"] = workGroupSize + 2;  // Account for kernel overlap
+    } else if (operation == "blur") {
+        params["use_separable_filter"] =
+            1;  // Use separable convolution for efficiency
+    }
 
     return params;
 }
@@ -791,17 +1043,80 @@ std::unique_ptr<GPUBuffer> GPUImageProcessor::gaussianBlur(
 std::vector<GPUDeviceInfo> GPUContext::getAvailableDevices(GPUBackend backend) {
     std::vector<GPUDeviceInfo> devices;
 
-    // For fallback implementation, return a single CPU device
-    GPUDeviceInfo cpuDevice;
-    cpuDevice.name = "CPU Fallback Device";
-    cpuDevice.vendor = "Generic";
-    cpuDevice.totalMemory = 1024 * 1024 * 1024;  // 1GB
-    cpuDevice.computeUnits = 1;
-    cpuDevice.maxWorkGroupSize = 256;
-    cpuDevice.supportsDouble = true;
-    cpuDevice.supportsHalf = false;
+    // Filter devices by backend type
+    // In a real implementation, this would query the actual GPU devices
+    // For now, we return appropriate fallback devices based on backend
 
-    devices.push_back(cpuDevice);
+    if (backend == GPUBackend::AUTO) {
+        // AUTO: return all available devices from all backends
+        // For fallback, return a generic CPU device
+        GPUDeviceInfo cpuDevice;
+        cpuDevice.deviceId = 0;
+        cpuDevice.name = "CPU Fallback Device (Auto)";
+        cpuDevice.vendor = "Generic";
+        cpuDevice.backend = GPUBackend::AUTO;
+        cpuDevice.totalMemory = 1024 * 1024 * 1024;  // 1GB
+        cpuDevice.freeMemory = 512 * 1024 * 1024;    // 512MB
+        cpuDevice.computeUnits = 1;
+        cpuDevice.maxWorkGroupSize = 256;
+        cpuDevice.supportsDouble = true;
+        cpuDevice.supportsHalf = false;
+        devices.push_back(cpuDevice);
+    } else {
+        // Specific backend requested
+        // Check if backend is available before returning devices
+        if (isBackendAvailable(backend)) {
+            GPUDeviceInfo device;
+            device.deviceId = 0;
+            device.backend = backend;
+            device.totalMemory = 1024 * 1024 * 1024;  // 1GB
+            device.freeMemory = 512 * 1024 * 1024;    // 512MB
+            device.computeUnits = 1;
+            device.maxWorkGroupSize = 256;
+            device.supportsDouble = true;
+            device.supportsHalf = false;
+
+            // Set backend-specific properties
+            switch (backend) {
+                case GPUBackend::CUDA:
+                    device.name = "CUDA Fallback Device";
+                    device.vendor = "NVIDIA";
+                    break;
+                case GPUBackend::OPENCL:
+                    device.name = "OpenCL Fallback Device";
+                    device.vendor = "Generic";
+                    break;
+                case GPUBackend::VULKAN:
+                    device.name = "Vulkan Fallback Device";
+                    device.vendor = "Generic";
+                    break;
+                case GPUBackend::METAL:
+                    device.name = "Metal Fallback Device";
+                    device.vendor = "Apple";
+                    break;
+                case GPUBackend::DIRECTCOMPUTE:
+                    device.name = "DirectCompute Fallback Device";
+                    device.vendor = "Microsoft";
+                    break;
+                case GPUBackend::HIP:
+                    device.name = "HIP Fallback Device";
+                    device.vendor = "AMD";
+                    break;
+                case GPUBackend::SYCL:
+                    device.name = "SYCL Fallback Device";
+                    device.vendor = "Intel";
+                    break;
+                default:
+                    device.name = "Unknown Backend Device";
+                    device.vendor = "Generic";
+                    break;
+            }
+
+            devices.push_back(device);
+        }
+        // If backend not available, return empty vector
+    }
+
     return devices;
 }
 

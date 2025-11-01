@@ -1,10 +1,10 @@
-#include "atom/connection/sshserver.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <chrono>
 #include <filesystem>
 #include <fstream>
 #include <thread>
-#include <chrono>
+#include "atom/connection/sshserver.hpp"
 
 using namespace atom::connection;
 using namespace std::chrono_literals;
@@ -13,7 +13,8 @@ class SshServerTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Create a temporary config file for testing
-        config_file_ = std::filesystem::temp_directory_path() / "test_ssh_config";
+        config_file_ =
+            std::filesystem::temp_directory_path() / "test_ssh_config";
         createTestConfig();
 
         server_ = std::make_unique<SshServer>(config_file_);
@@ -32,7 +33,8 @@ protected:
     }
 
     void createTestConfig() {
-        host_key_file_ = std::filesystem::temp_directory_path() / "test_host_key";
+        host_key_file_ =
+            std::filesystem::temp_directory_path() / "test_host_key";
 
         // Create a dummy host key file
         std::ofstream host_key(host_key_file_);
@@ -225,7 +227,8 @@ TEST_F(SshServerTest, SetLogLevel) {
 
 TEST_F(SshServerTest, AddRemoveAuthorizedKey) {
     std::string testUser = "testuser";
-    std::string testKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com";
+    std::string testKey =
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com";
 
     EXPECT_NO_THROW(server_->addAuthorizedKey(testUser, testKey));
 
@@ -243,11 +246,13 @@ TEST_F(SshServerTest, AddInvalidAuthorizedKey) {
     std::string testUser = "testuser";
     std::string invalidKey = "invalid_key_format";
 
-    EXPECT_THROW(server_->addAuthorizedKey(testUser, invalidKey), std::exception);
+    EXPECT_THROW(server_->addAuthorizedKey(testUser, invalidKey),
+                 std::exception);
 }
 
 TEST_F(SshServerTest, AddAuthorizedKeyEmptyUser) {
-    std::string testKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com";
+    std::string testKey =
+        "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQ test@example.com";
 
     EXPECT_THROW(server_->addAuthorizedKey("", testKey), std::exception);
 }
@@ -261,7 +266,8 @@ TEST_F(SshServerTest, GetAuthorizedKeysNonexistentUser) {
 class SshServerCallbackTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        config_file_ = std::filesystem::temp_directory_path() / "test_ssh_callback_config";
+        config_file_ =
+            std::filesystem::temp_directory_path() / "test_ssh_callback_config";
         createTestConfig();
         server_ = std::make_unique<SshServer>(config_file_);
     }
@@ -278,7 +284,8 @@ protected:
     }
 
     void createTestConfig() {
-        host_key_file_ = std::filesystem::temp_directory_path() / "test_callback_host_key";
+        host_key_file_ =
+            std::filesystem::temp_directory_path() / "test_callback_host_key";
 
         std::ofstream host_key(host_key_file_);
         host_key << "-----BEGIN OPENSSH PRIVATE KEY-----\n";
@@ -314,9 +321,8 @@ TEST_F(SshServerCallbackTest, SetNewConnectionCallback) {
 TEST_F(SshServerCallbackTest, SetConnectionClosedCallback) {
     bool callbackCalled = false;
 
-    server_->setConnectionClosedCallback([&](const SshConnection& connection) {
-        callbackCalled = true;
-    });
+    server_->setConnectionClosedCallback(
+        [&](const SshConnection& connection) { callbackCalled = true; });
 
     // Callback is set, but won't be called without actual connections
     EXPECT_FALSE(callbackCalled);
@@ -326,11 +332,12 @@ TEST_F(SshServerCallbackTest, SetAuthFailureCallback) {
     bool callbackCalled = false;
     std::string receivedUser, receivedReason;
 
-    server_->setAuthFailureCallback([&](const std::string& user, const std::string& reason) {
-        callbackCalled = true;
-        receivedUser = user;
-        receivedReason = reason;
-    });
+    server_->setAuthFailureCallback(
+        [&](const std::string& user, const std::string& reason) {
+            callbackCalled = true;
+            receivedUser = user;
+            receivedReason = reason;
+        });
 
     // Callback is set, but won't be called without actual auth failures
     EXPECT_FALSE(callbackCalled);
@@ -340,7 +347,8 @@ TEST_F(SshServerCallbackTest, SetAuthFailureCallback) {
 class SshServerThreadSafetyTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        config_file_ = std::filesystem::temp_directory_path() / "test_ssh_thread_config";
+        config_file_ =
+            std::filesystem::temp_directory_path() / "test_ssh_thread_config";
         createTestConfig();
         server_ = std::make_unique<SshServer>(config_file_);
     }
@@ -357,7 +365,8 @@ protected:
     }
 
     void createTestConfig() {
-        host_key_file_ = std::filesystem::temp_directory_path() / "test_thread_host_key";
+        host_key_file_ =
+            std::filesystem::temp_directory_path() / "test_thread_host_key";
 
         std::ofstream host_key(host_key_file_);
         host_key << "-----BEGIN OPENSSH PRIVATE KEY-----\n";

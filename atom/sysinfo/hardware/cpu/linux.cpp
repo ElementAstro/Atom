@@ -1263,13 +1263,14 @@ auto getCpuSocketType() -> std::string {
                     modelName.find("Core i7") != std::string::npos ||
                     modelName.find("Core i5") != std::string::npos ||
                     modelName.find("Core i3") != std::string::npos) {
-
                     if (modelName.find("12th Gen") != std::string::npos ||
                         modelName.find("13th Gen") != std::string::npos ||
                         modelName.find("14th Gen") != std::string::npos) {
                         socketType = "LGA1700";
-                    } else if (modelName.find("10th Gen") != std::string::npos ||
-                               modelName.find("11th Gen") != std::string::npos) {
+                    } else if (modelName.find("10th Gen") !=
+                                   std::string::npos ||
+                               modelName.find("11th Gen") !=
+                                   std::string::npos) {
                         socketType = "LGA1200";
                     } else if (modelName.find("8th Gen") != std::string::npos ||
                                modelName.find("9th Gen") != std::string::npos) {
@@ -1307,7 +1308,8 @@ auto getCpuSocketType() -> std::string {
                     } else {
                         socketType = "AMD EPYC Socket";
                     }
-                } else if (modelName.find("Threadripper") != std::string::npos) {
+                } else if (modelName.find("Threadripper") !=
+                           std::string::npos) {
                     if (modelName.find("3000") != std::string::npos) {
                         socketType = "sTRX4";
                     } else if (modelName.find("2000") != std::string::npos ||
@@ -1321,7 +1323,8 @@ auto getCpuSocketType() -> std::string {
         }
     }
 
-    spdlog::info("Linux CPU Socket Type: {} (inferred from CPU model)", socketType);
+    spdlog::info("Linux CPU Socket Type: {} (inferred from CPU model)",
+                 socketType);
 
     std::lock_guard<std::mutex> lock(g_cacheMutex);
     g_cpuInfoCache.socketType = socketType;

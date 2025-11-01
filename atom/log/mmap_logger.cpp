@@ -743,12 +743,11 @@ private:
     }
 
     // Format log message with optimized string handling
-    [[nodiscard]] auto formatMessage(LogLevel level,
-                                     MmapLogger::Category category,
-                                     std::string_view msg,
-                                     const std::source_location& location)
-        -> std::string {
-        auto timestamp = atom::utils::getChinaTimestampString();  // Get timestamp
+    [[nodiscard]] auto formatMessage(
+        LogLevel level, MmapLogger::Category category, std::string_view msg,
+        const std::source_location& location) -> std::string {
+        auto timestamp =
+            atom::utils::getChinaTimestampString();  // Get timestamp
         auto threadName = getThreadName();
         auto levelStr = logLevelToString(level);
         auto categoryStr = categoryToString(category);

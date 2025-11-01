@@ -1,8 +1,8 @@
-#include <thread>
-#include <random>
 #include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <random>
+#include <thread>
 
 #include "atom/algorithm/flood.hpp"
 
@@ -187,9 +187,8 @@ PYBIND11_MODULE(flood_fill, m) {
             config.loadBalancingFactor = 1.5f;
 
             // Call C++ function
-            atom::algorithm::FloodFill::fillParallel(cpp_grid, start_x, start_y,
-                                                     target_color, fill_color,
-                                                     config);
+            atom::algorithm::FloodFill::fillParallel(
+                cpp_grid, start_x, start_y, target_color, fill_color, config);
 
             // Convert back to numpy array
             return vector_to_numpy(cpp_grid);

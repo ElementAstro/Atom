@@ -1,10 +1,10 @@
 #include "atom/sysinfo/wifi.hpp"
 #include <gtest/gtest.h>
-#include <string>
-#include <vector>
 #include <algorithm>
 #include <chrono>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace atom::system;
 
@@ -54,8 +54,8 @@ TEST_F(WifiTest, GetNetworkStats) {
         EXPECT_GE(stats.latency, 0.0);
         EXPECT_GE(stats.packetLoss, 0.0);
         EXPECT_LE(stats.packetLoss, 100.0);
-        EXPECT_GE(stats.signalStrength, -150.0); // Reasonable lower bound
-        EXPECT_LE(stats.signalStrength, 0.0);    // Signal strength is negative
+        EXPECT_GE(stats.signalStrength, -150.0);  // Reasonable lower bound
+        EXPECT_LE(stats.signalStrength, 0.0);     // Signal strength is negative
     });
 }
 
@@ -70,7 +70,7 @@ TEST_F(WifiTest, GetInterfaceNames) {
         // Validate interface names
         for (const auto& interface : interfaces) {
             EXPECT_FALSE(interface.empty());
-            EXPECT_LT(interface.length(), 100); // Reasonable length
+            EXPECT_LT(interface.length(), 100);  // Reasonable length
         }
     });
 }
@@ -83,7 +83,7 @@ TEST_F(WifiTest, ScanAvailableNetworks) {
         // Networks can be empty if no WiFi adapter or no networks found
         for (const auto& network : networks) {
             EXPECT_FALSE(network.empty());
-            EXPECT_LT(network.length(), 100); // Reasonable SSID length
+            EXPECT_LT(network.length(), 100);  // Reasonable SSID length
         }
     });
 }
@@ -131,7 +131,7 @@ TEST_F(WifiTest, GetConnectedDevices) {
         // Devices list can be empty
         for (const auto& device : devices) {
             EXPECT_FALSE(device.empty());
-            EXPECT_LT(device.length(), 200); // Reasonable device name length
+            EXPECT_LT(device.length(), 200);  // Reasonable device name length
         }
     });
 }
@@ -265,4 +265,4 @@ TEST_F(RealWifiTest, StringFieldValidation) {
     }
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

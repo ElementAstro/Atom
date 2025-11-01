@@ -114,12 +114,11 @@
                   #module_name, e.what());                                    \
         }                                                                     \
     }                                                                         \
-    extern "C" auto module_name##_getInstance()                               \
-        -> std::shared_ptr<Component> {                                       \
+    extern "C" auto module_name##_getInstance()->std::shared_ptr<Component> { \
         LOG_F(INFO, "Getting instance of module: {}", #module_name);          \
         return Registry::instance().getComponent(#module_name);               \
     }                                                                         \
-    extern "C" auto module_name##_getVersion() -> const char* {               \
+    extern "C" auto module_name##_getVersion()->const char* {                 \
         return ATOM_VERSION;                                                  \
     }
 #endif
@@ -160,7 +159,7 @@
     };                                                                        \
     inline ModuleInitializer module_initializer;                              \
     }                                                                         \
-    auto module_name##_getInstance() -> std::shared_ptr<Component> {          \
+    auto module_name##_getInstance()->std::shared_ptr<Component> {            \
         return Registry::instance().getComponent(#module_name);               \
     }
 #endif

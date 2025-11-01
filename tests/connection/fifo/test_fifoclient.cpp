@@ -1,9 +1,9 @@
-#include "atom/connection/fifoclient.hpp"
 #include <gtest/gtest.h>
 #include <chrono>
 #include <filesystem>
 #include <future>
 #include <thread>
+#include "atom/connection/fifoclient.hpp"
 #include "atom/connection/fifoserver.hpp"
 
 using namespace atom::connection;
@@ -45,9 +45,11 @@ TEST_F(FifoClientTest, ReadFromFifo) {
     std::string message = "Hello, FIFO!";
     server_->sendMessage(message);
 
-    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
-        return client_->read(0, std::chrono::milliseconds(5000));
-    });
+    auto future =
+        std::async(std::launch::async,
+                   [&]() -> atom::type::expected<std::string, std::error_code> {
+                       return client_->read(0, std::chrono::milliseconds(5000));
+                   });
 
     auto status = future.wait_for(std::chrono::seconds(6));
     ASSERT_EQ(status, std::future_status::ready);
@@ -63,9 +65,11 @@ TEST_F(FifoClientTest, WriteAndReadWithTimeout) {
     std::string message = "Hello, FIFO!";
     ASSERT_TRUE(client_->write(message, std::chrono::seconds(1)));
 
-    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
-        return client_->read(0, std::chrono::milliseconds(1000));
-    });
+    auto future =
+        std::async(std::launch::async,
+                   [&]() -> atom::type::expected<std::string, std::error_code> {
+                       return client_->read(0, std::chrono::milliseconds(1000));
+                   });
 
     auto status = future.wait_for(std::chrono::seconds(2));
     ASSERT_EQ(status, std::future_status::ready);
@@ -78,9 +82,11 @@ TEST_F(FifoClientTest, WriteAndReadWithTimeout) {
 TEST_F(FifoClientTest, ReadTimeout) {
     ASSERT_TRUE(client_->isOpen());
 
-    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
-        return client_->read(0, std::chrono::milliseconds(1000));
-    });
+    auto future =
+        std::async(std::launch::async,
+                   [&]() -> atom::type::expected<std::string, std::error_code> {
+                       return client_->read(0, std::chrono::milliseconds(1000));
+                   });
 
     auto status = future.wait_for(std::chrono::seconds(2));
     ASSERT_EQ(status, std::future_status::ready);
@@ -112,9 +118,11 @@ TEST_F(FifoClientTest, ReadWithZeroSize) {
     std::string message = "Test message";
     server_->sendMessage(message);
 
-    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
-        return client_->read(0, std::chrono::milliseconds(2000));
-    });
+    auto future =
+        std::async(std::launch::async,
+                   [&]() -> atom::type::expected<std::string, std::error_code> {
+                       return client_->read(0, std::chrono::milliseconds(2000));
+                   });
 
     auto status = future.wait_for(std::chrono::seconds(3));
     ASSERT_EQ(status, std::future_status::ready);
@@ -165,9 +173,11 @@ TEST_F(FifoClientTest, ReadAfterServerStop) {
     // Stop the server
     server_->stop();
 
-    auto future = std::async(std::launch::async, [&]() -> atom::type::expected<std::string, std::error_code> {
-        return client_->read(100, std::chrono::milliseconds(1000));
-    });
+    auto future = std::async(
+        std::launch::async,
+        [&]() -> atom::type::expected<std::string, std::error_code> {
+            return client_->read(100, std::chrono::milliseconds(1000));
+        });
 
     auto status = future.wait_for(std::chrono::seconds(2));
     ASSERT_EQ(status, std::future_status::ready);

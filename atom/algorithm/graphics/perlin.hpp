@@ -75,9 +75,8 @@ public:
 
     [[nodiscard]] auto generateNoiseMap(
         i32 width, i32 height, f64 scale, i32 octaves, f64 persistence,
-        f64 /*lacunarity*/,
-        i32 seed = std::default_random_engine::default_seed) const
-        -> std::vector<std::vector<f64>> {
+        f64 /*lacunarity*/, i32 seed = std::default_random_engine::default_seed)
+        const -> std::vector<std::vector<f64>> {
         std::vector<std::vector<f64>> noiseMap(height, std::vector<f64>(width));
         std::default_random_engine prng(seed);
         std::uniform_real_distribution<f64> dist(-10000, 10000);

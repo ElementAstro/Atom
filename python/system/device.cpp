@@ -15,17 +15,17 @@ PYBIND11_MODULE(device, m) {
 
         Examples:
             >>> from atom.system import device
-            >>> 
+            >>>
             >>> # Enumerate USB devices
             >>> usb_devices = device.enumerate_usb_devices()
             >>> for dev in usb_devices:
             ...     print(f"USB Device: {dev.description} at {dev.address}")
-            >>> 
+            >>>
             >>> # Enumerate serial ports
             >>> serial_ports = device.enumerate_serial_ports()
             >>> for port in serial_ports:
             ...     print(f"Serial Port: {port.description} at {port.address}")
-            >>> 
+            >>>
             >>> # Enumerate Bluetooth devices
             >>> bt_devices = device.enumerate_bluetooth_devices()
             >>> for dev in bt_devices:
@@ -65,13 +65,12 @@ Examples:
     ...     print(f"Device: {dev.description}")
     ...     print(f"Address: {dev.address}")
 )")
-        .def(py::init<>(),
-             "Constructs an empty DeviceInfo object.")
+        .def(py::init<>(), "Constructs an empty DeviceInfo object.")
         .def(py::init<const std::string&, const std::string&>(),
              py::arg("description"), py::arg("address"),
              "Constructs a DeviceInfo object with description and address.")
         .def_readwrite("description", &atom::system::DeviceInfo::description,
-                      R"(Device description or name.
+                       R"(Device description or name.
 
 This field contains a human-readable description of the device,
 such as the device name, model, or manufacturer information.
@@ -81,7 +80,7 @@ Examples:
     >>> print(dev.description)  # "USB Mass Storage"
 )")
         .def_readwrite("address", &atom::system::DeviceInfo::address,
-                      R"(Device address or identifier.
+                       R"(Device address or identifier.
 
 This field contains the device address, path, or unique identifier
 that can be used to access or reference the device.
@@ -90,10 +89,11 @@ Examples:
     >>> dev = device.DeviceInfo("USB Mass Storage", "/dev/sdb1")
     >>> print(dev.address)  # "/dev/sdb1"
 )")
-        .def("__repr__", [](const atom::system::DeviceInfo& self) {
-            return "<DeviceInfo(description='" + self.description + 
-                   "', address='" + self.address + "')>";
-        })
+        .def("__repr__",
+             [](const atom::system::DeviceInfo& self) {
+                 return "<DeviceInfo(description='" + self.description +
+                        "', address='" + self.address + "')>";
+             })
         .def("__str__", [](const atom::system::DeviceInfo& self) {
             return self.description + " at " + self.address;
         });
@@ -143,7 +143,7 @@ Examples:
     >>> print(f"Found {len(serial_ports)} serial ports:")
     >>> for port in serial_ports:
     ...     print(f"  {port.description} at {port.address}")
-    >>> 
+    >>>
     >>> # Filter for specific port types
     >>> usb_serial = [p for p in serial_ports if "USB" in p.description]
     >>> print(f"USB serial ports: {len(usb_serial)}")
@@ -156,7 +156,8 @@ Note:
 )");
 
     // Bluetooth device enumeration
-    m.def("enumerate_bluetooth_devices", &atom::system::enumerateBluetoothDevices,
+    m.def("enumerate_bluetooth_devices",
+          &atom::system::enumerateBluetoothDevices,
           R"(Enumerate all Bluetooth devices in the system.
 
 This function scans for discoverable Bluetooth devices in the vicinity
@@ -185,25 +186,29 @@ Note:
     - Bluetooth adapter to be enabled
     - Appropriate permissions (may require administrator/root privileges)
     - Target devices to be in discoverable mode
-    
+
     On some systems, this operation may require user confirmation or
     may be restricted by security policies.
 )");
 
     // Utility functions for device management
-    m.def("get_device_count", []() -> py::dict {
-        auto usb_devices = atom::system::enumerateUsbDevices();
-        auto serial_ports = atom::system::enumerateSerialPorts();
-        auto bt_devices = atom::system::enumerateBluetoothDevices();
-        
-        py::dict result;
-        result["usb"] = usb_devices.size();
-        result["serial"] = serial_ports.size();
-        result["bluetooth"] = bt_devices.size();
-        result["total"] = usb_devices.size() + serial_ports.size() + bt_devices.size();
-        
-        return result;
-    }, R"(Get count of devices by type.
+    m.def(
+        "get_device_count",
+        []() -> py::dict {
+            auto usb_devices = atom::system::enumerateUsbDevices();
+            auto serial_ports = atom::system::enumerateSerialPorts();
+            auto bt_devices = atom::system::enumerateBluetoothDevices();
+
+            py::dict result;
+            result["usb"] = usb_devices.size();
+            result["serial"] = serial_ports.size();
+            result["bluetooth"] = bt_devices.size();
+            result["total"] =
+                usb_devices.size() + serial_ports.size() + bt_devices.size();
+
+            return result;
+        },
+        R"(Get count of devices by type.
 
 Returns:
     Dictionary containing device counts by type and total count.
@@ -217,36 +222,39 @@ Examples:
     >>> print(f"Total devices: {counts['total']}")
 )");
 
-    m.def("find_devices_by_description", [](const std::string& pattern) -> py::list {
-        py::list result;
-        
-        // Search USB devices
-        auto usb_devices = atom::system::enumerateUsbDevices();
-        for (const auto& dev : usb_devices) {
-            if (dev.description.find(pattern) != std::string::npos) {
-                result.append(dev);
+    m.def(
+        "find_devices_by_description",
+        [](const std::string& pattern) -> py::list {
+            py::list result;
+
+            // Search USB devices
+            auto usb_devices = atom::system::enumerateUsbDevices();
+            for (const auto& dev : usb_devices) {
+                if (dev.description.find(pattern) != std::string::npos) {
+                    result.append(dev);
+                }
             }
-        }
-        
-        // Search serial ports
-        auto serial_ports = atom::system::enumerateSerialPorts();
-        for (const auto& dev : serial_ports) {
-            if (dev.description.find(pattern) != std::string::npos) {
-                result.append(dev);
+
+            // Search serial ports
+            auto serial_ports = atom::system::enumerateSerialPorts();
+            for (const auto& dev : serial_ports) {
+                if (dev.description.find(pattern) != std::string::npos) {
+                    result.append(dev);
+                }
             }
-        }
-        
-        // Search Bluetooth devices
-        auto bt_devices = atom::system::enumerateBluetoothDevices();
-        for (const auto& dev : bt_devices) {
-            if (dev.description.find(pattern) != std::string::npos) {
-                result.append(dev);
+
+            // Search Bluetooth devices
+            auto bt_devices = atom::system::enumerateBluetoothDevices();
+            for (const auto& dev : bt_devices) {
+                if (dev.description.find(pattern) != std::string::npos) {
+                    result.append(dev);
+                }
             }
-        }
-        
-        return result;
-    }, py::arg("pattern"),
-          R"(Find devices by description pattern.
+
+            return result;
+        },
+        py::arg("pattern"),
+        R"(Find devices by description pattern.
 
 Args:
     pattern: String pattern to search for in device descriptions.
@@ -258,34 +266,37 @@ Examples:
     >>> from atom.system import device
     >>> # Find all USB devices
     >>> usb_devices = device.find_devices_by_description("USB")
-    >>> 
+    >>>
     >>> # Find Arduino devices
     >>> arduino_devices = device.find_devices_by_description("Arduino")
-    >>> 
+    >>>
     >>> # Find serial devices
     >>> serial_devices = device.find_devices_by_description("Serial")
 )");
 
-    m.def("get_all_devices", []() -> py::list {
-        py::list result;
-        
-        auto usb_devices = atom::system::enumerateUsbDevices();
-        for (const auto& dev : usb_devices) {
-            result.append(dev);
-        }
-        
-        auto serial_ports = atom::system::enumerateSerialPorts();
-        for (const auto& dev : serial_ports) {
-            result.append(dev);
-        }
-        
-        auto bt_devices = atom::system::enumerateBluetoothDevices();
-        for (const auto& dev : bt_devices) {
-            result.append(dev);
-        }
-        
-        return result;
-    }, R"(Get all devices from all categories.
+    m.def(
+        "get_all_devices",
+        []() -> py::list {
+            py::list result;
+
+            auto usb_devices = atom::system::enumerateUsbDevices();
+            for (const auto& dev : usb_devices) {
+                result.append(dev);
+            }
+
+            auto serial_ports = atom::system::enumerateSerialPorts();
+            for (const auto& dev : serial_ports) {
+                result.append(dev);
+            }
+
+            auto bt_devices = atom::system::enumerateBluetoothDevices();
+            for (const auto& dev : bt_devices) {
+                result.append(dev);
+            }
+
+            return result;
+        },
+        R"(Get all devices from all categories.
 
 Returns:
     List of all DeviceInfo objects from USB, serial, and Bluetooth categories.

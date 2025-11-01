@@ -228,9 +228,8 @@ PYBIND11_MODULE(generator, m) {
     declare_two_way_generator_void_receive<std::string>(m, "StringVoid");
 
     // Functions to create generators from ranges
-    m.def(
-        "from_range_int", &create_from_range<int>, py::arg("range"),
-        R"(Creates a generator that yields each element in a list of integers.
+    m.def("from_range_int", &create_from_range<int>, py::arg("range"),
+          R"(Creates a generator that yields each element in a list of integers.
 
 Args:
     range: The list of integers to yield elements from
@@ -346,42 +345,43 @@ Examples:
 
     // Utility functions for generator management and testing
     m.def(
-        "benchmark_generator_performance",
-        [](size_t num_elements) -> py::dict {
-            using namespace std::chrono;
+         "benchmark_generator_performance",
+         [](size_t num_elements) -> py::dict {
+             using namespace std::chrono;
 
-            py::dict results;
+             py::dict results;
 
-            // Benchmark range generator
-            auto start = high_resolution_clock::now();
+             // Benchmark range generator
+             auto start = high_resolution_clock::now();
 
-            auto gen = create_range<int>(0, static_cast<int>(num_elements));
-            size_t count = 0;
-            for (auto value : gen) {
-                count++;
-                // Simulate some work
-                volatile int dummy = value;
-                (void)dummy;
-            }
+             auto gen = create_range<int>(0, static_cast<int>(num_elements));
+             size_t count = 0;
+             for (auto value : gen) {
+                 count++;
+                 // Simulate some work
+                 volatile int dummy = value;
+                 (void)dummy;
+             }
 
-            auto end = high_resolution_clock::now();
-            auto duration = duration_cast<microseconds>(end - start);
+             auto end = high_resolution_clock::now();
+             auto duration = duration_cast<microseconds>(end - start);
 
-            // Calculate statistics
-            double total_time_us = duration.count();
-            double elements_per_second = (num_elements * 1000000.0) / total_time_us;
-            double avg_time_per_element = total_time_us / num_elements;
+             // Calculate statistics
+             double total_time_us = duration.count();
+             double elements_per_second =
+                 (num_elements * 1000000.0) / total_time_us;
+             double avg_time_per_element = total_time_us / num_elements;
 
-            results[py::str("num_elements")] = num_elements;
-            results[py::str("total_time_us")] = total_time_us;
-            results[py::str("elements_per_second")] = elements_per_second;
-            results[py::str("avg_time_per_element_us")] = avg_time_per_element;
-            results[py::str("elements_processed")] = count;
+             results[py::str("num_elements")] = num_elements;
+             results[py::str("total_time_us")] = total_time_us;
+             results[py::str("elements_per_second")] = elements_per_second;
+             results[py::str("avg_time_per_element_us")] = avg_time_per_element;
+             results[py::str("elements_processed")] = count;
 
-            return results;
-        },
-        py::arg("num_elements") = 100000,
-        R"pbdoc(
+             return results;
+         },
+         py::arg("num_elements") = 100000,
+         R"pbdoc(
         Benchmark generator performance with a range generator.
 
         Args:
@@ -396,25 +396,25 @@ Examples:
             >>> print(f"Avg time per element: {results['avg_time_per_element_us']:.2f} μs")
         )pbdoc")
 
-    .def(
-        "create_fibonacci_generator",
-        [](int limit) -> atom::async::TwoWayGenerator<int, void> {
-            int a = 0, b = 1;
-            for (int i = 0; i < limit; ++i) {
-                if (i == 0) {
-                    co_yield a;
-                } else if (i == 1) {
-                    co_yield b;
-                } else {
-                    int next = a + b;
-                    a = b;
-                    b = next;
-                    co_yield next;
+        .def(
+            "create_fibonacci_generator",
+            [](int limit) -> atom::async::TwoWayGenerator<int, void> {
+                int a = 0, b = 1;
+                for (int i = 0; i < limit; ++i) {
+                    if (i == 0) {
+                        co_yield a;
+                    } else if (i == 1) {
+                        co_yield b;
+                    } else {
+                        int next = a + b;
+                        a = b;
+                        b = next;
+                        co_yield next;
+                    }
                 }
-            }
-        },
-        py::arg("limit"),
-        R"pbdoc(
+            },
+            py::arg("limit"),
+            R"pbdoc(
         Create a generator that yields Fibonacci numbers.
 
         Args:
@@ -429,29 +429,31 @@ Examples:
             ...     print(fib_gen.next())  # Prints first 10 Fibonacci numbers
         )pbdoc")
 
-    .def(
-        "create_prime_generator",
-        [](int limit) -> atom::async::TwoWayGenerator<int, void> {
-            auto is_prime = [](int n) {
-                if (n < 2) return false;
-                for (int i = 2; i * i <= n; ++i) {
-                    if (n % i == 0) return false;
-                }
-                return true;
-            };
+        .def(
+            "create_prime_generator",
+            [](int limit) -> atom::async::TwoWayGenerator<int, void> {
+                auto is_prime = [](int n) {
+                    if (n < 2)
+                        return false;
+                    for (int i = 2; i * i <= n; ++i) {
+                        if (n % i == 0)
+                            return false;
+                    }
+                    return true;
+                };
 
-            int count = 0;
-            int num = 2;
-            while (count < limit) {
-                if (is_prime(num)) {
-                    co_yield num;
-                    count++;
+                int count = 0;
+                int num = 2;
+                while (count < limit) {
+                    if (is_prime(num)) {
+                        co_yield num;
+                        count++;
+                    }
+                    num++;
                 }
-                num++;
-            }
-        },
-        py::arg("limit"),
-        R"pbdoc(
+            },
+            py::arg("limit"),
+            R"pbdoc(
         Create a generator that yields prime numbers.
 
         Args:
@@ -466,22 +468,23 @@ Examples:
             ...     print(prime_gen.next())  # Prints first 5 primes: 2, 3, 5, 7, 11
         )pbdoc")
 
-    .def(
-        "create_transform_generator",
-        [](const std::vector<int>& data, py::function transform_func) -> atom::async::TwoWayGenerator<py::object, void> {
-            for (const auto& item : data) {
-                py::gil_scoped_acquire acquire;
-                try {
-                    auto result = transform_func(item);
-                    co_yield result;
-                } catch (const py::error_already_set& e) {
-                    // Skip items that cause transformation errors
-                    continue;
+        .def(
+            "create_transform_generator",
+            [](const std::vector<int>& data, py::function transform_func)
+                -> atom::async::TwoWayGenerator<py::object, void> {
+                for (const auto& item : data) {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        auto result = transform_func(item);
+                        co_yield result;
+                    } catch (const py::error_already_set& e) {
+                        // Skip items that cause transformation errors
+                        continue;
+                    }
                 }
-            }
-        },
-        py::arg("data"), py::arg("transform_func"),
-        R"pbdoc(
+            },
+            py::arg("data"), py::arg("transform_func"),
+            R"pbdoc(
         Create a generator that applies a transformation function to each element.
 
         Args:
@@ -498,23 +501,24 @@ Examples:
             ...     print(transform_gen.next())  # Prints 1, 4, 9, 16, 25
         )pbdoc")
 
-    .def(
-        "create_filter_generator",
-        [](const std::vector<int>& data, py::function filter_func) -> atom::async::TwoWayGenerator<int, void> {
-            for (const auto& item : data) {
-                py::gil_scoped_acquire acquire;
-                try {
-                    if (filter_func(item).cast<bool>()) {
-                        co_yield item;
+        .def(
+            "create_filter_generator",
+            [](const std::vector<int>& data, py::function filter_func)
+                -> atom::async::TwoWayGenerator<int, void> {
+                for (const auto& item : data) {
+                    py::gil_scoped_acquire acquire;
+                    try {
+                        if (filter_func(item).cast<bool>()) {
+                            co_yield item;
+                        }
+                    } catch (const py::error_already_set& e) {
+                        // Skip items that cause filter errors
+                        continue;
                     }
-                } catch (const py::error_already_set& e) {
-                    // Skip items that cause filter errors
-                    continue;
                 }
-            }
-        },
-        py::arg("data"), py::arg("filter_func"),
-        R"pbdoc(
+            },
+            py::arg("data"), py::arg("filter_func"),
+            R"pbdoc(
         Create a generator that filters elements based on a predicate function.
 
         Args:

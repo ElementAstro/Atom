@@ -144,7 +144,8 @@ TEST_F(DemangleHelperTest, ModifierTypeDemangling) {
                 (ptr_type.find("*") != std::string::npos ||
                  ptr_type.find("pointer") != std::string::npos));
 
-    // Reference type - demangling may strip modifiers, so just check for base type
+    // Reference type - demangling may strip modifiers, so just check for base
+    // type
     std::string ref_type = atom::meta::DemangleHelper::demangleType<int&>();
     EXPECT_TRUE(ref_type.find("int") != std::string::npos);
 

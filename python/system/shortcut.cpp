@@ -16,21 +16,21 @@ PYBIND11_MODULE(shortcut, m) {
 
         Examples:
             >>> from atom.system import shortcut
-            >>> 
+            >>>
             >>> # Create a shortcut detector
             >>> detector = shortcut.ShortcutDetector()
-            >>> 
+            >>>
             >>> # Create a shortcut (Ctrl+Alt+F1)
             >>> my_shortcut = shortcut.Shortcut(0x70, True, True, False, False)  # F1 key
             >>> print(f"Shortcut: {my_shortcut.to_string()}")
-            >>> 
+            >>>
             >>> # Check if shortcut is captured
             >>> result = detector.is_shortcut_captured(my_shortcut)
             >>> if result.status == shortcut.ShortcutStatus.Available:
             ...     print("Shortcut is available for use")
             >>> elif result.status == shortcut.ShortcutStatus.CapturedByApp:
             ...     print(f"Shortcut captured by: {result.capturing_application}")
-            >>> 
+            >>>
             >>> # Check for keyboard hooks
             >>> if detector.has_keyboard_hook_installed():
             ...     processes = detector.get_processes_with_keyboard_hooks()
@@ -73,9 +73,11 @@ Examples:
 )")
         .value("Available", shortcut_detector::ShortcutStatus::Available,
                "Shortcut is available for registration")
-        .value("CapturedByApp", shortcut_detector::ShortcutStatus::CapturedByApp,
+        .value("CapturedByApp",
+               shortcut_detector::ShortcutStatus::CapturedByApp,
                "Shortcut is captured by an application")
-        .value("CapturedBySystem", shortcut_detector::ShortcutStatus::CapturedBySystem,
+        .value("CapturedBySystem",
+               shortcut_detector::ShortcutStatus::CapturedBySystem,
                "Shortcut is captured by system component")
         .value("Reserved", shortcut_detector::ShortcutStatus::Reserved,
                "Shortcut is reserved by the operating system")
@@ -102,35 +104,41 @@ Examples:
     >>> if result.details:
     ...     print(f"Details: {result.details}")
 )")
-        .def(py::init<>(),
-             "Constructs an empty ShortcutCheckResult.")
-        .def_readwrite("status", &shortcut_detector::ShortcutCheckResult::status,
-                      "Status of the shortcut")
-        .def_readwrite("capturing_application", 
-                      &shortcut_detector::ShortcutCheckResult::capturingApplication,
-                      "Name of capturing application (if applicable)")
-        .def_readwrite("details", &shortcut_detector::ShortcutCheckResult::details,
-                      "Additional details about the shortcut status")
-        .def("__repr__", [](const shortcut_detector::ShortcutCheckResult& self) {
-            std::string status_str;
-            switch (self.status) {
-                case shortcut_detector::ShortcutStatus::Available:
-                    status_str = "Available"; break;
-                case shortcut_detector::ShortcutStatus::CapturedByApp:
-                    status_str = "CapturedByApp"; break;
-                case shortcut_detector::ShortcutStatus::CapturedBySystem:
-                    status_str = "CapturedBySystem"; break;
-                case shortcut_detector::ShortcutStatus::Reserved:
-                    status_str = "Reserved"; break;
-            }
-            return "<ShortcutCheckResult(status=" + status_str + 
-                   ", app='" + self.capturingApplication + "')>";
-        });
+        .def(py::init<>(), "Constructs an empty ShortcutCheckResult.")
+        .def_readwrite("status",
+                       &shortcut_detector::ShortcutCheckResult::status,
+                       "Status of the shortcut")
+        .def_readwrite(
+            "capturing_application",
+            &shortcut_detector::ShortcutCheckResult::capturingApplication,
+            "Name of capturing application (if applicable)")
+        .def_readwrite("details",
+                       &shortcut_detector::ShortcutCheckResult::details,
+                       "Additional details about the shortcut status")
+        .def("__repr__",
+             [](const shortcut_detector::ShortcutCheckResult& self) {
+                 std::string status_str;
+                 switch (self.status) {
+                     case shortcut_detector::ShortcutStatus::Available:
+                         status_str = "Available";
+                         break;
+                     case shortcut_detector::ShortcutStatus::CapturedByApp:
+                         status_str = "CapturedByApp";
+                         break;
+                     case shortcut_detector::ShortcutStatus::CapturedBySystem:
+                         status_str = "CapturedBySystem";
+                         break;
+                     case shortcut_detector::ShortcutStatus::Reserved:
+                         status_str = "Reserved";
+                         break;
+                 }
+                 return "<ShortcutCheckResult(status=" + status_str +
+                        ", app='" + self.capturingApplication + "')>";
+             });
 
     // Shortcut structure
-    py::class_<shortcut_detector::Shortcut>(
-        m, "Shortcut",
-        R"(Represents a keyboard shortcut.
+    py::class_<shortcut_detector::Shortcut>(m, "Shortcut",
+                                            R"(Represents a keyboard shortcut.
 
 This class defines a keyboard shortcut consisting of a virtual key code
 and modifier keys (Ctrl, Alt, Shift, Windows key).
@@ -146,13 +154,13 @@ Examples:
     >>> # Create Ctrl+Alt+F1 shortcut
     >>> shortcut = shortcut.Shortcut(0x70, True, True, False, False)
     >>> print(shortcut.to_string())  # "Ctrl+Alt+F1"
-    >>> 
+    >>>
     >>> # Create simple F5 shortcut
     >>> f5_shortcut = shortcut.Shortcut(0x74)  # F5 key only
     >>> print(f5_shortcut.to_string())  # "F5"
 )")
-        .def(py::init<uint32_t, bool, bool, bool, bool>(),
-             py::arg("key"), py::arg("with_ctrl") = false, py::arg("with_alt") = false,
+        .def(py::init<uint32_t, bool, bool, bool, bool>(), py::arg("key"),
+             py::arg("with_ctrl") = false, py::arg("with_alt") = false,
              py::arg("with_shift") = false, py::arg("with_win") = false,
              R"(Construct a new Shortcut.
 
@@ -166,23 +174,23 @@ Args:
 Examples:
     >>> # Ctrl+C
     >>> ctrl_c = shortcut.Shortcut(0x43, True)  # 'C' key with Ctrl
-    >>> 
+    >>>
     >>> # Alt+Tab
     >>> alt_tab = shortcut.Shortcut(0x09, False, True)  # Tab with Alt
-    >>> 
+    >>>
     >>> # Ctrl+Shift+Esc
     >>> task_mgr = shortcut.Shortcut(0x1B, True, False, True)  # Esc with Ctrl+Shift
 )")
         .def_readwrite("vk_code", &shortcut_detector::Shortcut::vkCode,
-                      "Virtual key code")
+                       "Virtual key code")
         .def_readwrite("ctrl", &shortcut_detector::Shortcut::ctrl,
-                      "Control key required")
+                       "Control key required")
         .def_readwrite("alt", &shortcut_detector::Shortcut::alt,
-                      "Alt key required")
+                       "Alt key required")
         .def_readwrite("shift", &shortcut_detector::Shortcut::shift,
-                      "Shift key required")
+                       "Shift key required")
         .def_readwrite("win", &shortcut_detector::Shortcut::win,
-                      "Windows key required")
+                       "Windows key required")
         .def("to_string", &shortcut_detector::Shortcut::toString,
              R"(Convert to human-readable string.
 
@@ -218,9 +226,10 @@ Examples:
     >>> print(shortcut1 == shortcut2)  # True
 )")
         .def("__hash__", &shortcut_detector::Shortcut::hash)
-        .def("__repr__", [](const shortcut_detector::Shortcut& self) {
-            return "<Shortcut('" + self.toString() + "')>";
-        })
+        .def("__repr__",
+             [](const shortcut_detector::Shortcut& self) {
+                 return "<Shortcut('" + self.toString() + "')>";
+             })
         .def("__str__", &shortcut_detector::Shortcut::toString);
 
     // ShortcutDetector class
@@ -234,20 +243,21 @@ It can also detect keyboard hook installations.
 
 Examples:
     >>> detector = shortcut.ShortcutDetector()
-    >>> 
+    >>>
     >>> # Check a specific shortcut
     >>> my_shortcut = shortcut.Shortcut(0x70, True, True)  # Ctrl+Alt+F1
     >>> result = detector.is_shortcut_captured(my_shortcut)
-    >>> 
+    >>>
     >>> # Check for keyboard hooks
     >>> if detector.has_keyboard_hook_installed():
     ...     print("Keyboard hooks detected")
 )")
-        .def(py::init<>(),
-             "Construct a new Shortcut Detector.")
-        .def("is_shortcut_captured", &shortcut_detector::ShortcutDetector::isShortcutCaptured,
-             py::arg("shortcut"),
-             R"(Check if a shortcut is captured by the system or another application.
+        .def(py::init<>(), "Construct a new Shortcut Detector.")
+        .def(
+            "is_shortcut_captured",
+            &shortcut_detector::ShortcutDetector::isShortcutCaptured,
+            py::arg("shortcut"),
+            R"(Check if a shortcut is captured by the system or another application.
 
 Args:
     shortcut: The shortcut to check.
@@ -258,7 +268,7 @@ Returns:
 Examples:
     >>> shortcut = shortcut.Shortcut(0x70, True, True)  # Ctrl+Alt+F1
     >>> result = detector.is_shortcut_captured(shortcut)
-    >>> 
+    >>>
     >>> if result.status == shortcut.ShortcutStatus.Available:
     ...     print("Shortcut is available")
     >>> elif result.status == shortcut.ShortcutStatus.CapturedByApp:
@@ -268,7 +278,8 @@ Examples:
     >>> elif result.status == shortcut.ShortcutStatus.Reserved:
     ...     print("Reserved by operating system")
 )")
-        .def("has_keyboard_hook_installed", &shortcut_detector::ShortcutDetector::hasKeyboardHookInstalled,
+        .def("has_keyboard_hook_installed",
+             &shortcut_detector::ShortcutDetector::hasKeyboardHookInstalled,
              R"(Check if a keyboard hook is currently installed.
 
 Returns:
@@ -287,9 +298,10 @@ Note:
     purposes (e.g., global hotkey managers, accessibility software) or
     potentially malicious purposes (e.g., keyloggers).
 )")
-        .def("get_processes_with_keyboard_hooks", 
-             &shortcut_detector::ShortcutDetector::getProcessesWithKeyboardHooks,
-             R"(Get a list of processes with keyboard hooks.
+        .def(
+            "get_processes_with_keyboard_hooks",
+            &shortcut_detector::ShortcutDetector::getProcessesWithKeyboardHooks,
+            R"(Get a list of processes with keyboard hooks.
 
 Returns:
     List of process names that have keyboard hooks installed.

@@ -48,4 +48,3 @@ target("atom-containers")
             os.cp(hdr, headerdir)
         end
     end)
-

@@ -464,11 +464,13 @@ private:
     void cleanup_expired_items(UniqueLock<std::shared_mutex>& lock) noexcept;
 
     // Helper methods for get operations
-    template<typename LockType>
-    std::optional<Value> get_impl(const Key& key, bool update_access_time, LockType& lock);
+    template <typename LockType>
+    std::optional<Value> get_impl(const Key& key, bool update_access_time,
+                                  LockType& lock);
 
-    template<typename LockType>
-    ValuePtr get_shared_impl(const Key& key, bool update_access_time, LockType& lock);
+    template <typename LockType>
+    ValuePtr get_shared_impl(const Key& key, bool update_access_time,
+                             LockType& lock);
 };
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
@@ -1208,7 +1210,7 @@ void TTLCache<Key, Value, Hash, KeyEqual>::cleanup_expired_items(
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
-template<typename LockType>
+template <typename LockType>
 std::optional<Value> TTLCache<Key, Value, Hash, KeyEqual>::get_impl(
     const Key& key, bool update_access_time, LockType& lock) {
     auto map_it = cache_map_.find(key);
@@ -1250,10 +1252,11 @@ std::optional<Value> TTLCache<Key, Value, Hash, KeyEqual>::get_impl(
 }
 
 template <typename Key, typename Value, typename Hash, typename KeyEqual>
-template<typename LockType>
+template <typename LockType>
 typename TTLCache<Key, Value, Hash, KeyEqual>::ValuePtr
-TTLCache<Key, Value, Hash, KeyEqual>::get_shared_impl(
-    const Key& key, bool update_access_time, LockType& lock) {
+TTLCache<Key, Value, Hash, KeyEqual>::get_shared_impl(const Key& key,
+                                                      bool update_access_time,
+                                                      LockType& lock) {
     auto map_it = cache_map_.find(key);
     if (map_it == cache_map_.end()) {
         if (config_.enable_statistics) {

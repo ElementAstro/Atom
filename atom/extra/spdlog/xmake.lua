@@ -34,25 +34,25 @@ local headers = {
 
 target("atom-extra-spdlog")
     set_kind("static")
-    
+
     -- Add files
     for _, src in ipairs(sources) do
         add_files(src)
     end
-    
+
     for _, hdr in ipairs(headers) do
         add_headerfiles(hdr)
     end
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
-    
+
     -- Add packages
     add_packages("spdlog", "fmt")
-    
+
     -- Set C++ standard
     set_languages("c++23")
-    
+
     -- Installation
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -63,4 +63,3 @@ target("atom-extra-spdlog")
             os.cp(hdr, headerdir)
         end
     end)
-

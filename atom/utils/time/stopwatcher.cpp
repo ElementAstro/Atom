@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <spdlog/spdlog.h>
+#include "atom/type/compat.hpp"
 #include "atom/type/json.hpp"
 
 namespace atom::utils {
@@ -25,7 +26,7 @@ using namespace std::literals::chrono_literals;
 ScopedStopWatch::ScopedStopWatch(std::string_view name) : stopwatch_(name) {
     auto result = stopwatch_.start();
     if (!result) {
-        spdlog::warn("Failed to start ScopedStopWatch: {}",
+        spdlog::warn("Failed to start ScopedStopWatch: error code {}",
                      static_cast<int>(result.error()));
     }
 }
@@ -36,7 +37,7 @@ ScopedStopWatch::~ScopedStopWatch() {
         spdlog::info("ScopedStopWatch '{}' completed in {} ms",
                      stopwatch_.getName(), stopwatch_.elapsedMilliseconds());
     } else {
-        spdlog::warn("Failed to stop ScopedStopWatch: {}",
+        spdlog::warn("Failed to stop ScopedStopWatch: error code {}",
                      static_cast<int>(result.error()));
     }
 }
@@ -65,12 +66,14 @@ public:
 
     ~Impl() { stopAutoLapThread(); }
 
-    [[nodiscard]] auto start() -> std::expected<void, StopWatcherError> {
+    [[nodiscard]] auto start()
+        -> ::atom::type::compat::expected<void, StopWatcherError> {
         std::unique_lock lock(mutex_);
         try {
             if (state_ == StopWatcherState::Running) {
                 spdlog::warn("StopWatcher '{}' already running", name_);
-                return std::unexpected(StopWatcherError::AlreadyRunning);
+                return ::atom::type::compat::unexpected(
+                    StopWatcherError::AlreadyRunning);
             }
 
             if (state_ == StopWatcherState::Idle ||
@@ -97,13 +100,15 @@ public:
         }
     }
 
-    [[nodiscard]] auto stop() -> std::expected<void, StopWatcherError> {
+    [[nodiscard]] auto stop()
+        -> ::atom::type::compat::expected<void, StopWatcherError> {
         std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Running) {
                 spdlog::warn("Attempted to stop non-running StopWatcher '{}'",
                              name_);
-                return std::unexpected(StopWatcherError::NotRunning);
+                return ::atom::type::compat::unexpected(
+                    StopWatcherError::NotRunning);
             }
 
             auto stopTime = Clock::now();
@@ -142,13 +147,15 @@ public:
         }
     }
 
-    [[nodiscard]] auto pause() -> std::expected<void, StopWatcherError> {
+    [[nodiscard]] auto pause()
+        -> ::atom::type::compat::expected<void, StopWatcherError> {
         std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Running) {
                 spdlog::warn("Attempted to pause non-running StopWatcher '{}'",
                              name_);
-                return std::unexpected(StopWatcherError::NotRunning);
+                return ::atom::type::compat::unexpected(
+                    StopWatcherError::NotRunning);
             }
 
             pauseTime_ = Clock::now();
@@ -169,13 +176,15 @@ public:
         }
     }
 
-    [[nodiscard]] auto resume() -> std::expected<void, StopWatcherError> {
+    [[nodiscard]] auto resume()
+        -> ::atom::type::compat::expected<void, StopWatcherError> {
         std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Paused) {
                 spdlog::warn("Attempted to resume non-paused StopWatcher '{}'",
                              name_);
-                return std::unexpected(StopWatcherError::NotPaused);
+                return ::atom::type::compat::unexpected(
+                    StopWatcherError::NotPaused);
             }
 
             auto resumeTime = Clock::now();
@@ -222,13 +231,15 @@ public:
         }
     }
 
-    [[nodiscard]] auto lap() -> std::expected<double, StopWatcherError> {
+    [[nodiscard]] auto lap()
+        -> ::atom::type::compat::expected<double, StopWatcherError> {
         std::unique_lock lock(mutex_);
         try {
             if (state_ != StopWatcherState::Running) {
                 spdlog::warn("Cannot record lap: StopWatcher '{}' not running",
                              name_);
-                return std::unexpected(StopWatcherError::NotRunning);
+                return ::atom::type::compat::unexpected(
+                    StopWatcherError::NotRunning);
             }
 
             auto lapTime = Clock::now();
@@ -400,27 +411,30 @@ public:
 
     [[nodiscard]] auto registerCallback(std::function<void()> callback,
                                         int milliseconds)
-        -> std::expected<void, StopWatcherError> {
+        -> ::atom::type::compat::expected<void, StopWatcherError> {
         std::unique_lock lock(mutex_);
         try {
             if (milliseconds < 0) {
                 spdlog::error("Invalid callback interval: {} ms", milliseconds);
-                return std::unexpected(StopWatcherError::InvalidInterval);
+                return ::atom::type::compat::unexpected(
+                    StopWatcherError::InvalidInterval);
             }
             callbacks_.emplace_back(std::move(callback), milliseconds);
             spdlog::info("Callback registered for {} ms", milliseconds);
             return {};
         } catch (const std::exception& e) {
             spdlog::error("Error registering callback: {}", e.what());
-            return std::unexpected(StopWatcherError::CallbackFailed);
+            return ::atom::type::compat::unexpected(
+                StopWatcherError::CallbackFailed);
         }
     }
 
     [[nodiscard]] auto enableAutoLap(int intervalMs)
-        -> std::expected<void, StopWatcherError> {
+        -> ::atom::type::compat::expected<void, StopWatcherError> {
         if (intervalMs <= 0) {
             spdlog::error("Invalid auto-lap interval: {} ms", intervalMs);
-            return std::unexpected(StopWatcherError::InvalidInterval);
+            return ::atom::type::compat::unexpected(
+                StopWatcherError::InvalidInterval);
         }
 
         std::unique_lock lock(mutex_);
@@ -594,25 +608,30 @@ StopWatcher::~StopWatcher() = default;
 StopWatcher::StopWatcher(StopWatcher&&) noexcept = default;
 auto StopWatcher::operator=(StopWatcher&&) noexcept -> StopWatcher& = default;
 
-auto StopWatcher::start() -> std::expected<void, StopWatcherError> {
+auto StopWatcher::start()
+    -> ::atom::type::compat::expected<void, StopWatcherError> {
     return impl_->start();
 }
 
-auto StopWatcher::stop() -> std::expected<void, StopWatcherError> {
+auto StopWatcher::stop()
+    -> ::atom::type::compat::expected<void, StopWatcherError> {
     return impl_->stop();
 }
 
-auto StopWatcher::pause() -> std::expected<void, StopWatcherError> {
+auto StopWatcher::pause()
+    -> ::atom::type::compat::expected<void, StopWatcherError> {
     return impl_->pause();
 }
 
-auto StopWatcher::resume() -> std::expected<void, StopWatcherError> {
+auto StopWatcher::resume()
+    -> ::atom::type::compat::expected<void, StopWatcherError> {
     return impl_->resume();
 }
 
 void StopWatcher::reset() { impl_->reset(); }
 
-auto StopWatcher::lap() -> std::expected<double, StopWatcherError> {
+auto StopWatcher::lap()
+    -> ::atom::type::compat::expected<double, StopWatcherError> {
     return impl_->lap();
 }
 
@@ -654,7 +673,7 @@ auto StopWatcher::getLapCount() const -> size_t { return impl_->getLapCount(); }
 
 auto StopWatcher::registerCallbackImpl(std::function<void()> callback,
                                        int milliseconds)
-    -> std::expected<void, StopWatcherError> {
+    -> ::atom::type::compat::expected<void, StopWatcherError> {
     return impl_->registerCallback(std::move(callback), milliseconds);
 }
 
@@ -670,7 +689,7 @@ auto StopWatcher::createChildStopWatch(std::string_view name)
 }
 
 auto StopWatcher::enableAutoLap(int intervalMs)
-    -> std::expected<void, StopWatcherError> {
+    -> ::atom::type::compat::expected<void, StopWatcherError> {
     return impl_->enableAutoLap(intervalMs);
 }
 

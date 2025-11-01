@@ -16,7 +16,6 @@ Description: System Information Module - CPU Common Implementation
 #include <spdlog/spdlog.h>
 #include <regex>
 
-
 namespace atom::system {
 
 // Cache variables (moved out of anonymous namespace)

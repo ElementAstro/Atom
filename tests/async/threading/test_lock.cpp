@@ -14,15 +14,15 @@ Tests various lock implementations, concurrent access patterns, and edge cases.
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <thread>
+#include <vector>
 
-#include "atom/async/threading/lock.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/threading/lock.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -46,7 +46,7 @@ protected:
     }
 
     // Helper function to test basic lock functionality
-    template<typename LockType>
+    template <typename LockType>
     void testBasicLockFunctionality() {
         LockType lock;
         std::atomic<int> counter{0};
@@ -57,16 +57,17 @@ protected:
         const int incrementsPerThread = 100;
 
         for (int i = 0; i < numThreads; ++i) {
-            threads.emplace_back([&lock, &counter, &ready, incrementsPerThread]() {
-                while (!ready.load()) {
-                    std::this_thread::yield();
-                }
+            threads.emplace_back(
+                [&lock, &counter, &ready, incrementsPerThread]() {
+                    while (!ready.load()) {
+                        std::this_thread::yield();
+                    }
 
-                for (int j = 0; j < incrementsPerThread; ++j) {
-                    std::lock_guard<LockType> guard(lock);
-                    ++counter;
-                }
-            });
+                    for (int j = 0; j < incrementsPerThread; ++j) {
+                        std::lock_guard<LockType> guard(lock);
+                        ++counter;
+                    }
+                });
         }
 
         ready.store(true);
@@ -79,7 +80,7 @@ protected:
     }
 
     // Helper function to test tryLock functionality
-    template<typename LockType>
+    template <typename LockType>
     void testTryLockFunctionality() {
         LockType lock;
         std::atomic<bool> lockAcquired{false};
@@ -111,9 +112,7 @@ TEST_F(LockTest, SpinlockBasicFunctionality) {
     testBasicLockFunctionality<Spinlock>();
 }
 
-TEST_F(LockTest, SpinlockTryLock) {
-    testTryLockFunctionality<Spinlock>();
-}
+TEST_F(LockTest, SpinlockTryLock) { testTryLockFunctionality<Spinlock>(); }
 
 TEST_F(LockTest, TicketSpinlockBasicFunctionality) {
     testBasicLockFunctionality<TicketSpinlock>();
@@ -153,7 +152,7 @@ TEST_F(LockTest, AtomicWaitLockTryLock) {
 
 // Test CountingSemaphore
 TEST_F(LockTest, CountingSemaphoreBasicFunctionality) {
-    CountingSemaphore<5> semaphore(3); // Allow 3 concurrent accesses
+    CountingSemaphore<5> semaphore(3);  // Allow 3 concurrent accesses
     std::atomic<int> activeCount{0};
     std::atomic<int> maxActiveCount{0};
 
@@ -166,7 +165,8 @@ TEST_F(LockTest, CountingSemaphoreBasicFunctionality) {
 
             int current = activeCount.fetch_add(1) + 1;
             int expected = maxActiveCount.load();
-            while (current > expected && !maxActiveCount.compare_exchange_weak(expected, current)) {
+            while (current > expected &&
+                   !maxActiveCount.compare_exchange_weak(expected, current)) {
                 expected = maxActiveCount.load();
             }
 
@@ -190,10 +190,12 @@ TEST_F(LockTest, LockFactoryCreation) {
     auto spinlock = LockFactory::createLock(LockFactory::LockType::SPINLOCK);
     EXPECT_NE(spinlock, nullptr);
 
-    auto ticketSpinlock = LockFactory::createLock(LockFactory::LockType::TICKET_SPINLOCK);
+    auto ticketSpinlock =
+        LockFactory::createLock(LockFactory::LockType::TICKET_SPINLOCK);
     EXPECT_NE(ticketSpinlock, nullptr);
 
-    auto adaptiveSpinlock = LockFactory::createLock(LockFactory::LockType::ADAPTIVE_SPINLOCK);
+    auto adaptiveSpinlock =
+        LockFactory::createLock(LockFactory::LockType::ADAPTIVE_SPINLOCK);
     EXPECT_NE(adaptiveSpinlock, nullptr);
 }
 
@@ -224,10 +226,11 @@ TEST_F(LockTest, LockPerformanceComparison) {
         }
 
         auto end = std::chrono::high_resolution_clock::now();
-        auto spinlockTime = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+        auto spinlockTime =
+            std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
         EXPECT_EQ(counter.load(), 4 * numOperations);
-        EXPECT_GT(spinlockTime.count(), 0); // Just ensure it took some time
+        EXPECT_GT(spinlockTime.count(), 0);  // Just ensure it took some time
     }
 }
 
@@ -277,9 +280,9 @@ TEST_F(LockTest, WindowsSharedMutexBasicFunctionality) {
 
     // Test exclusive (write) lock
     std::thread writer([&mutex, &writerCount, &readerCount]() {
-        std::this_thread::sleep_for(25ms); // Let readers start
+        std::this_thread::sleep_for(25ms);  // Let readers start
         mutex.lock();
-        EXPECT_EQ(readerCount.load(), 0); // No readers when writer has lock
+        EXPECT_EQ(readerCount.load(), 0);  // No readers when writer has lock
         writerCount.fetch_add(1);
         std::this_thread::sleep_for(50ms);
         writerCount.fetch_sub(1);
@@ -327,28 +330,28 @@ TEST_F(LockTest, BoostSpinlockTryLock) {
 TEST_F(LockTest, HighContentionScenario) {
     Spinlock lock;
     std::atomic<int> counter{0};
-    const int numThreads = getMaxThreads() * 2; // Create high contention
+    const int numThreads = getMaxThreads() * 2;  // Create high contention
     const int incrementsPerThread = 1000;
 
-    runStressTest(numThreads, incrementsPerThread,
-                  [&lock, &counter](size_t /*threadId*/, size_t /*operationId*/) {
-        std::lock_guard<Spinlock> guard(lock);
-        ++counter;
-        // Simulate some work while holding the lock
-        volatile int dummy = 0;
-        for (int i = 0; i < 10; ++i) {
-            dummy += i;
-        }
-    });
+    runStressTest(
+        numThreads, incrementsPerThread,
+        [&lock, &counter](size_t /*threadId*/, size_t /*operationId*/) {
+            std::lock_guard<Spinlock> guard(lock);
+            ++counter;
+            // Simulate some work while holding the lock
+            volatile int dummy = 0;
+            for (int i = 0; i < 10; ++i) {
+                dummy += i;
+            }
+        });
 
     EXPECT_EQ(counter.load(), numThreads * incrementsPerThread);
 }
 
 /*
-// Test lock fairness (best effort) - DISABLED due to TicketSpinlock API incompatibility
-TEST_F(LockTest, LockFairness) {
-    TicketSpinlock lock; // Ticket spinlock should be more fair
-    std::vector<std::atomic<int>> threadCounts(10);
+// Test lock fairness (best effort) - DISABLED due to TicketSpinlock API
+incompatibility TEST_F(LockTest, LockFairness) { TicketSpinlock lock; // Ticket
+spinlock should be more fair std::vector<std::atomic<int>> threadCounts(10);
     std::atomic<bool> stopTest{false};
 
     std::vector<std::thread> threads;
@@ -371,19 +374,20 @@ TEST_F(LockTest, LockFairness) {
 
     // Check that no thread was completely starved
     for (int i = 0; i < 10; ++i) {
-        EXPECT_GT(threadCounts[i].load(), 0) << "Thread " << i << " was starved";
+        EXPECT_GT(threadCounts[i].load(), 0) << "Thread " << i << " was
+starved";
     }
 
-    // Check that the distribution is somewhat fair (no thread got more than 10x another)
-    int minCount = threadCounts[0].load();
-    int maxCount = threadCounts[0].load();
-    for (int i = 1; i < 10; ++i) {
-        minCount = std::min(minCount, threadCounts[i].load());
-        maxCount = std::max(maxCount, threadCounts[i].load());
+    // Check that the distribution is somewhat fair (no thread got more than 10x
+another) int minCount = threadCounts[0].load(); int maxCount =
+threadCounts[0].load(); for (int i = 1; i < 10; ++i) { minCount =
+std::min(minCount, threadCounts[i].load()); maxCount = std::max(maxCount,
+threadCounts[i].load());
     }
 
     if (minCount > 0) {
-        EXPECT_LE(maxCount / minCount, 10) << "Lock fairness test failed: max/min ratio too high";
+        EXPECT_LE(maxCount / minCount, 10) << "Lock fairness test failed:
+max/min ratio too high";
     }
 }
 */
@@ -398,7 +402,7 @@ TEST_F(LockTest, AdaptiveSpinlockBehavior) {
     std::thread longTask([&lock, &longTaskRunning]() {
         lock.lock();
         longTaskRunning.store(true);
-        std::this_thread::sleep_for(100ms); // Hold lock for a while
+        std::this_thread::sleep_for(100ms);  // Hold lock for a while
         lock.unlock();
     });
 
@@ -420,7 +424,7 @@ TEST_F(LockTest, AdaptiveSpinlockBehavior) {
     auto elapsed = std::chrono::steady_clock::now() - start;
 
     EXPECT_TRUE(shortTaskCompleted);
-    EXPECT_GE(elapsed, 90ms); // Should have waited for the long task
+    EXPECT_GE(elapsed, 90ms);  // Should have waited for the long task
 }
 
 }  // namespace atom::async::threading::test

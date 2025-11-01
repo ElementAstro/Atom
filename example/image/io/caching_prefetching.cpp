@@ -16,16 +16,16 @@
  * - Performance optimization
  */
 
-#include <iostream>
-#include <unordered_map>
-#include <list>
-#include <string>
-#include <memory>
 #include <chrono>
-#include <thread>
-#include <future>
-#include <mutex>
 #include <filesystem>
+#include <future>
+#include <iostream>
+#include <list>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <unordered_map>
 
 using namespace std;
 namespace fs = std::filesystem;
@@ -43,8 +43,12 @@ struct ImageData {
     size_t access_count;
 
     ImageData(const string& p, size_t w, size_t h, size_t c)
-        : path(p), width(w), height(h), channels(c),
-          load_time(chrono::steady_clock::now()), access_count(0) {
+        : path(p),
+          width(w),
+          height(h),
+          channels(c),
+          load_time(chrono::steady_clock::now()),
+          access_count(0) {
         data.resize(w * h * c);
         // Simulate image data
         fill(data.begin(), data.end(), 128);
@@ -75,7 +79,8 @@ private:
 
 public:
     ImageCache(size_t max_size = 100, size_t max_memory_mb = 512)
-        : max_size_(max_size), max_memory_(max_memory_mb * 1024 * 1024),
+        : max_size_(max_size),
+          max_memory_(max_memory_mb * 1024 * 1024),
           current_memory_(0) {}
 
     /**
@@ -87,11 +92,13 @@ public:
         auto it = cache_map_.find(path);
         if (it != cache_map_.end()) {
             // Move to front (most recently used)
-            lru_list_.splice(lru_list_.begin(), lru_list_, it->second.list_iter);
+            lru_list_.splice(lru_list_.begin(), lru_list_,
+                             it->second.list_iter);
             it->second.image->access_count++;
 
-            cout << "Cache HIT: " << path << " (access count: "
-                 << it->second.image->access_count << ")" << endl;
+            cout << "Cache HIT: " << path
+                 << " (access count: " << it->second.image->access_count << ")"
+                 << endl;
             return it->second.image;
         }
 
@@ -118,9 +125,8 @@ public:
         vector<future<void>> futures;
 
         for (const auto& path : paths) {
-            futures.push_back(async(launch::async, [this, path]() {
-                this->getImage(path);
-            }));
+            futures.push_back(
+                async(launch::async, [this, path]() { this->getImage(path); }));
         }
 
         // Wait for all prefetch operations to complete
@@ -139,8 +145,8 @@ public:
 
         cout << "\n=== Cache Statistics ===" << endl;
         cout << "Cache size: " << cache_map_.size() << "/" << max_size_ << endl;
-        cout << "Memory usage: " << (current_memory_ / 1024 / 1024)
-             << "/" << (max_memory_ / 1024 / 1024) << " MB" << endl;
+        cout << "Memory usage: " << (current_memory_ / 1024 / 1024) << "/"
+             << (max_memory_ / 1024 / 1024) << " MB" << endl;
 
         cout << "Cached images:" << endl;
         for (const auto& node : lru_list_) {
@@ -193,18 +199,20 @@ private:
         cache_map_[path] = new_node;
         current_memory_ += image->getMemorySize();
 
-        cout << "Added to cache: " << fs::path(path).filename().string()
-             << " (" << (image->getMemorySize() / 1024) << " KB)" << endl;
+        cout << "Added to cache: " << fs::path(path).filename().string() << " ("
+             << (image->getMemorySize() / 1024) << " KB)" << endl;
     }
 
     void evictLeastRecentlyUsed() {
-        if (lru_list_.empty()) return;
+        if (lru_list_.empty())
+            return;
 
         auto& last_node = lru_list_.back();
         current_memory_ -= last_node.image->getMemorySize();
 
-        cout << "Evicted from cache: " << fs::path(last_node.key).filename().string()
-             << " (accessed " << last_node.image->access_count << " times)" << endl;
+        cout << "Evicted from cache: "
+             << fs::path(last_node.key).filename().string() << " (accessed "
+             << last_node.image->access_count << " times)" << endl;
 
         cache_map_.erase(last_node.key);
         lru_list_.pop_back();
@@ -225,16 +233,19 @@ public:
      * @brief Sequential prefetching strategy
      */
     void sequentialPrefetch(const vector<string>& paths, size_t lookahead = 3) {
-        cout << "\nSequential prefetching (lookahead: " << lookahead << "):" << endl;
+        cout << "\nSequential prefetching (lookahead: " << lookahead
+             << "):" << endl;
 
         for (size_t i = 0; i < paths.size(); ++i) {
             // Process current image
-            cout << "Processing: " << fs::path(paths[i]).filename().string() << endl;
+            cout << "Processing: " << fs::path(paths[i]).filename().string()
+                 << endl;
             auto current = cache_.getImage(paths[i]);
 
             // Prefetch next images
             vector<string> prefetch_paths;
-            for (size_t j = i + 1; j < min(i + 1 + lookahead, paths.size()); ++j) {
+            for (size_t j = i + 1; j < min(i + 1 + lookahead, paths.size());
+                 ++j) {
                 prefetch_paths.push_back(paths[j]);
             }
 
@@ -254,7 +265,8 @@ public:
      * @brief Predictive prefetching based on access patterns
      */
     void predictivePrefetch(const vector<string>& frequently_accessed) {
-        cout << "\nPredictive prefetching for frequently accessed images:" << endl;
+        cout << "\nPredictive prefetching for frequently accessed images:"
+             << endl;
         cache_.prefetchImages(frequently_accessed);
     }
 };
@@ -266,20 +278,20 @@ void demonstrateCachingPrefetching() {
     cout << "=== Image Caching and Prefetching Demo ===" << endl;
 
     // Create image cache
-    ImageCache cache(10, 64); // 10 images max, 64MB max memory
+    ImageCache cache(10, 64);  // 10 images max, 64MB max memory
 
     // Sample image paths
     vector<string> image_paths = {
         "image001.jpg", "image002.jpg", "image003.jpg", "image004.jpg",
         "image005.jpg", "image006.jpg", "image007.jpg", "image008.jpg",
-        "image009.jpg", "image010.jpg", "image011.jpg", "image012.jpg"
-    };
+        "image009.jpg", "image010.jpg", "image011.jpg", "image012.jpg"};
 
     // 1. Basic caching demonstration
     cout << "\n1. Basic Caching:" << endl;
     for (int i = 0; i < 3; ++i) {
         cout << "\nRound " << (i + 1) << ":" << endl;
-        for (const auto& path : vector<string>(image_paths.begin(), image_paths.begin() + 5)) {
+        for (const auto& path :
+             vector<string>(image_paths.begin(), image_paths.begin() + 5)) {
             cache.getImage(path);
         }
     }
@@ -306,7 +318,8 @@ void demonstrateCachingPrefetching() {
 
     // 4. Predictive prefetching
     cout << "\n4. Predictive Prefetching:" << endl;
-    vector<string> frequently_accessed = {"image001.jpg", "image005.jpg", "image010.jpg"};
+    vector<string> frequently_accessed = {"image001.jpg", "image005.jpg",
+                                          "image010.jpg"};
     prefetch_manager.predictivePrefetch(frequently_accessed);
 
     cache.printCacheStats();

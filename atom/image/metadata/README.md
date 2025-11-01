@@ -62,6 +62,7 @@ exif.writeToFile("photo_modified.jpg");
 #### Supported EXIF Tags
 
 **Basic Information**
+
 - Camera make and model
 - Software used
 - Date and time
@@ -69,6 +70,7 @@ exif.writeToFile("photo_modified.jpg");
 - Color space
 
 **Camera Settings**
+
 - Aperture (F-number)
 - Shutter speed
 - ISO sensitivity
@@ -79,6 +81,7 @@ exif.writeToFile("photo_modified.jpg");
 - Metering mode
 
 **GPS Data**
+
 - Latitude and longitude
 - Altitude
 - Direction
@@ -86,6 +89,7 @@ exif.writeToFile("photo_modified.jpg");
 - Timestamp
 
 **Advanced Tags**
+
 - Lens information
 - Color profile
 - Thumbnail data
@@ -238,12 +242,14 @@ auto exif = cache.get("photo1.jpg");
 ## Format Support
 
 ### EXIF-Compatible Formats
+
 - **JPEG**: Full EXIF support
 - **TIFF**: Complete metadata support
 - **RAW**: Camera-specific metadata
 - **HEIF**: Modern EXIF support
 
 ### Limited Support
+
 - **PNG**: Text chunks for basic metadata
 - **WebP**: XMP metadata support
 - **BMP**: No standard metadata support
@@ -282,10 +288,12 @@ exif.setDateTime(timestamp, "en_US");
 ## Dependencies
 
 ### Required
+
 - atom-error: Error handling framework
 - atom-image-core: Core image functionality
 
 ### Optional
+
 - libexif: Enhanced EXIF support
 - exiv2: Advanced metadata library
 - libiptc: IPTC metadata support

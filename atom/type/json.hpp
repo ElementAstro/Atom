@@ -2300,7 +2300,7 @@ JSON_HEDLEY_DIAGNOSTIC_POP
 #else
 #include <stdint.h>
 #define JSON_HEDLEY_IS_CONSTEXPR_(expr) \
-    _Generic((1 ? (void*)((intptr_t)*0) : (int*)0), int*: 1, void*: 0)
+    _Generic((1 ? (void*)((intptr_t) * 0) : (int*)0), int*: 1, void*: 0)
 #endif
 #elif defined(JSON_HEDLEY_GCC_VERSION) ||            \
     defined(JSON_HEDLEY_INTEL_VERSION) ||            \
@@ -6791,9 +6791,10 @@ std::size_t hash(const BasicJsonType& j) {
             return seed;
         }
 
-        default:                 // LCOV_EXCL_LINE
-            JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                 // LCOV_EXCL_LINE
+        default:  // LCOV_EXCL_LINE
+            JSON_ASSERT(
+                false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                         // LCOV_EXCL_LINE
             return 0;  // LCOV_EXCL_LINE
     }
 }
@@ -7253,10 +7254,11 @@ contiguous_bytes_input_adapter input_adapter(CharT b) {
 }
 
 template <typename T, std::size_t N>
-auto input_adapter(T (&array)[N]) -> decltype(input_adapter(
-    array,
-    array +
-        N))  // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
+auto input_adapter(T (&array)[N])
+    -> decltype(input_adapter(
+        array,
+        array +
+            N))  // NOLINT(cppcoreguidelines-avoid-c-arrays,hicpp-avoid-c-arrays,modernize-avoid-c-arrays)
 {
     return input_adapter(array, array + N);
 }
@@ -9023,8 +9025,9 @@ private:
 
             // all other characters are rejected outside scan_number()
             default:  // LCOV_EXCL_LINE
-                JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                     // LCOV_EXCL_LINE
+                JSON_ASSERT(
+                    false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                             // LCOV_EXCL_LINE
         }
 
     scan_number_minus:
@@ -9419,11 +9422,10 @@ public:
             if (static_cast<unsigned char>(c) <= '\x1F') {
                 // escape control characters
                 std::array<char, 9> cs{{}};
-                static_cast<void>((
-                    std::
-                        snprintf)(cs.data(), cs.size(), "<U+%.4X>",
-                                  static_cast<unsigned char>(
-                                      c)));  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+                static_cast<void>((std::snprintf)(
+                    cs.data(), cs.size(), "<U+%.4X>",
+                    static_cast<unsigned char>(
+                        c)));  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
                 result += cs.data();
             } else {
                 // add character as is
@@ -9863,8 +9865,9 @@ public:
 
             case input_format_t::json:  // LCOV_EXCL_LINE
             default:                    // LCOV_EXCL_LINE
-                JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                     // LCOV_EXCL_LINE
+                JSON_ASSERT(
+                    false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                             // LCOV_EXCL_LINE
         }
 
         // strict mode: next byte must be EOF
@@ -10087,11 +10090,10 @@ private:
             default:  // anything else not supported (yet)
             {
                 std::array<char, 3> cr{{}};
-                static_cast<void>((
-                    std::
-                        snprintf)(cr.data(), cr.size(), "%.2hhX",
-                                  static_cast<unsigned char>(
-                                      element_type)));  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+                static_cast<void>((std::snprintf)(
+                    cr.data(), cr.size(), "%.2hhX",
+                    static_cast<unsigned char>(
+                        element_type)));  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
                 const std::string cr_str{cr.data()};
                 return sax->parse_error(
                     element_type_parse_position, cr_str,
@@ -10616,8 +10618,9 @@ private:
                     }
 
                     default:  // LCOV_EXCL_LINE
-                        JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                             // LCOV_EXCL_LINE
+                        JSON_ASSERT(
+                            false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                                     // LCOV_EXCL_LINE
                         return false;  // LCOV_EXCL_LINE
                 }
             }
@@ -11864,9 +11867,9 @@ private:
                                               "size"),
                             nullptr));
                 }
-                result =
-                    static_cast<std::size_t>(number);  // NOLINT(bugprone-signed-char-misuse,cert-str34-c):
-                                                       // number is not a char
+                result = static_cast<std::size_t>(
+                    number);  // NOLINT(bugprone-signed-char-misuse,cert-str34-c):
+                              // number is not a char
                 return true;
             }
 
@@ -12798,11 +12801,10 @@ private:
     */
     std::string get_token_string() const {
         std::array<char, 3> cr{{}};
-        static_cast<void>((
-            std::
-                snprintf)(cr.data(), cr.size(), "%.2hhX",
-                          static_cast<unsigned char>(
-                              current)));  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
+        static_cast<void>((std::snprintf)(
+            cr.data(), cr.size(), "%.2hhX",
+            static_cast<unsigned char>(
+                current)));  // NOLINT(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
         return std::string{cr.data()};
     }
 
@@ -12840,8 +12842,9 @@ private:
 
             case input_format_t::json:  // LCOV_EXCL_LINE
             default:                    // LCOV_EXCL_LINE
-                JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                     // LCOV_EXCL_LINE
+                JSON_ASSERT(
+                    false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                             // LCOV_EXCL_LINE
         }
 
         return concat(error_msg, ' ', context, ": ", detail);
@@ -18792,8 +18795,9 @@ public:
             }
 
             default:  // LCOV_EXCL_LINE
-                JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                     // LCOV_EXCL_LINE
+                JSON_ASSERT(
+                    false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                             // LCOV_EXCL_LINE
         }
     }
 
@@ -18886,29 +18890,20 @@ public:
                                 (ensure_ascii && (codepoint >= 0x7F))) {
                                 if (codepoint <= 0xFFFF) {
                                     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-                                    static_cast<void>(
-                                        (std::snprintf)(string_buffer.data() +
-                                                            bytes,
-                                                        7, "\\u%04x",
-                                                        static_cast<
-                                                            std::uint16_t>(
-                                                            codepoint)));
+                                    static_cast<void>((std::snprintf)(
+                                        string_buffer.data() + bytes, 7,
+                                        "\\u%04x",
+                                        static_cast<std::uint16_t>(codepoint)));
                                     bytes += 6;
                                 } else {
                                     // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-                                    static_cast<void>(
-                                        (std::snprintf)(string_buffer.data() +
-                                                            bytes,
-                                                        13, "\\u%04x\\u%04x",
-                                                        static_cast<
-                                                            std::uint16_t>(
-                                                            0xD7C0u +
-                                                            (codepoint >> 10u)),
-                                                        static_cast<
-                                                            std::uint16_t>(
-                                                            0xDC00u +
-                                                            (codepoint &
-                                                             0x3FFu))));
+                                    static_cast<void>((std::snprintf)(
+                                        string_buffer.data() + bytes, 13,
+                                        "\\u%04x\\u%04x",
+                                        static_cast<std::uint16_t>(
+                                            0xD7C0u + (codepoint >> 10u)),
+                                        static_cast<std::uint16_t>(
+                                            0xDC00u + (codepoint & 0x3FFu))));
                                     bytes += 12;
                                 }
                             } else {
@@ -19005,8 +19000,9 @@ public:
                         }
 
                         default:  // LCOV_EXCL_LINE
-                            JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                                 // LCOV_EXCL_LINE
+                            JSON_ASSERT(
+                                false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                                         // LCOV_EXCL_LINE
                     }
                     break;
                 }
@@ -19062,8 +19058,9 @@ public:
                 }
 
                 default:  // LCOV_EXCL_LINE
-                    JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                         // LCOV_EXCL_LINE
+                    JSON_ASSERT(
+                        false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                                 // LCOV_EXCL_LINE
             }
         }
     }
@@ -19269,9 +19266,8 @@ private:
 
         // the actual conversion
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-vararg,hicpp-vararg)
-        std::ptrdiff_t len =
-            (std::snprintf)(number_buffer.data(), number_buffer.size(), "%.*g",
-                            d, x);
+        std::ptrdiff_t len = (std::snprintf)(
+            number_buffer.data(), number_buffer.size(), "%.*g", d, x);
 
         // negative value indicates an error
         JSON_ASSERT(len > 0);
@@ -19401,8 +19397,9 @@ private:
      * Must never be called.
      */
     number_unsigned_t remove_sign(number_unsigned_t x) {
-        JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                             // LCOV_EXCL_LINE
+        JSON_ASSERT(
+            false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                     // LCOV_EXCL_LINE
         return x;  // LCOV_EXCL_LINE
     }
 
@@ -20613,8 +20610,9 @@ public:
                 m_data.m_type = value_t::discarded;
                 break;
             default:  // LCOV_EXCL_LINE
-                JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                     // LCOV_EXCL_LINE
+                JSON_ASSERT(
+                    false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                             // LCOV_EXCL_LINE
         }
         JSON_ASSERT(m_data.m_type == val.type());
         set_parents();
@@ -24546,8 +24544,9 @@ public:
                 case value_t::binary:           // LCOV_EXCL_LINE
                 case value_t::discarded:        // LCOV_EXCL_LINE
                 default:                        // LCOV_EXCL_LINE
-                    JSON_ASSERT(false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
-                                         // LCOV_EXCL_LINE
+                    JSON_ASSERT(
+                        false);  // NOLINT(cert-dcl03-c,hicpp-static-assert,misc-static-assert)
+                                 // LCOV_EXCL_LINE
             }
         };
 
@@ -24959,8 +24958,9 @@ struct less<
 NLOHMANN_BASIC_JSON_TPL_DECLARATION
 inline void swap(
     nlohmann::NLOHMANN_BASIC_JSON_TPL& j1,
-    nlohmann::NLOHMANN_BASIC_JSON_TPL& j2) noexcept(  // NOLINT(readability-inconsistent-declaration-parameter-name,
-                                                      // cert-dcl58-cpp)
+    nlohmann::NLOHMANN_BASIC_JSON_TPL&
+        j2) noexcept(  // NOLINT(readability-inconsistent-declaration-parameter-name,
+                       // cert-dcl58-cpp)
     is_nothrow_move_constructible<nlohmann::NLOHMANN_BASIC_JSON_TPL>::
         value &&  // NOLINT(misc-redundant-expression,cppcoreguidelines-noexcept-swap,performance-noexcept-swap)
     is_nothrow_move_assignable<nlohmann::NLOHMANN_BASIC_JSON_TPL>::value) {

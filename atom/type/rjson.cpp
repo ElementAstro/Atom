@@ -64,14 +64,30 @@ auto JsonValue::toString() const -> std::string {
             std::string result = "\"";
             for (char c : escaped) {
                 switch (c) {
-                    case '"': result += "\\\""; break;
-                    case '\\': result += "\\\\"; break;
-                    case '\b': result += "\\b"; break;
-                    case '\f': result += "\\f"; break;
-                    case '\n': result += "\\n"; break;
-                    case '\r': result += "\\r"; break;
-                    case '\t': result += "\\t"; break;
-                    default: result += c; break;
+                    case '"':
+                        result += "\\\"";
+                        break;
+                    case '\\':
+                        result += "\\\\";
+                        break;
+                    case '\b':
+                        result += "\\b";
+                        break;
+                    case '\f':
+                        result += "\\f";
+                        break;
+                    case '\n':
+                        result += "\\n";
+                        break;
+                    case '\r':
+                        result += "\\r";
+                        break;
+                    case '\t':
+                        result += "\\t";
+                        break;
+                    default:
+                        result += c;
+                        break;
                 }
             }
             result += "\"";
@@ -140,8 +156,8 @@ auto JsonParser::parse(const std::string& str) -> JsonValue {
     return parseValue(str, index);
 }
 
-auto JsonParser::parseValue(const std::string& str, size_t& index)
-    -> JsonValue {
+auto JsonParser::parseValue(const std::string& str,
+                            size_t& index) -> JsonValue {
     skipWhitespace(str, index);
     if (index >= str.size()) {
         THROW_INVALID_ARGUMENT("Unexpected end of JSON input");
@@ -168,8 +184,8 @@ auto JsonParser::parseValue(const std::string& str, size_t& index)
     THROW_INVALID_ARGUMENT("Invalid JSON value");
 }
 
-auto JsonParser::parseString(const std::string& str, size_t& index)
-    -> std::string {
+auto JsonParser::parseString(const std::string& str,
+                             size_t& index) -> std::string {
     ++index;  // Skip opening quote
     std::string result;
     while (index < str.size() && str[index] != '"') {
@@ -186,11 +202,12 @@ auto JsonParser::parseString(const std::string& str, size_t& index)
     return result;
 }
 
-auto JsonParser::parseEscapedChar(const std::string& str, size_t& index)
-    -> char {
+auto JsonParser::parseEscapedChar(const std::string& str,
+                                  size_t& index) -> char {
     ++index;  // Skip backslash
     if (index >= str.size()) {
-        THROW_INVALID_ARGUMENT("Unexpected end of JSON input in escape sequence");
+        THROW_INVALID_ARGUMENT(
+            "Unexpected end of JSON input in escape sequence");
     }
     switch (str[index++]) {
         case '"':
@@ -229,7 +246,8 @@ auto JsonParser::parseNumber(const std::string& str, size_t& index) -> double {
         }
     }
 
-    while (index < str.size() && ((std::isdigit(str[index]) != 0) || str[index] == '.')) {
+    while (index < str.size() &&
+           ((std::isdigit(str[index]) != 0) || str[index] == '.')) {
         if (str[index] == '.') {
             if (hasDecimal) {
                 THROW_INVALID_ARGUMENT(
@@ -239,7 +257,9 @@ auto JsonParser::parseNumber(const std::string& str, size_t& index) -> double {
             ++index;
             // After decimal point, there must be at least one digit
             if (index >= str.size() || (std::isdigit(str[index]) == 0)) {
-                THROW_INVALID_ARGUMENT("Invalid number format: decimal point must be followed by digits");
+                THROW_INVALID_ARGUMENT(
+                    "Invalid number format: decimal point must be followed by "
+                    "digits");
             }
         } else {
             ++index;
@@ -286,8 +306,8 @@ void JsonParser::parseNull(const std::string& str, size_t& index) {
     }
 }
 
-auto JsonParser::parseObject(const std::string& str, size_t& index)
-    -> JsonObject {
+auto JsonParser::parseObject(const std::string& str,
+                             size_t& index) -> JsonObject {
     ++index;  // Skip opening '{'
     JsonObject obj;
     skipWhitespace(str, index);
@@ -336,8 +356,8 @@ auto JsonParser::parseObject(const std::string& str, size_t& index)
     return obj;
 }
 
-auto JsonParser::parseArray(const std::string& str, size_t& index)
-    -> JsonArray {
+auto JsonParser::parseArray(const std::string& str,
+                            size_t& index) -> JsonArray {
     ++index;  // Skip opening '['
     JsonArray arr;
     skipWhitespace(str, index);

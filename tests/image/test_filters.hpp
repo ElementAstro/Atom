@@ -1,15 +1,15 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include <vector>
 #include <array>
-#include <memory>
 #include <cmath>
+#include <memory>
+#include <vector>
 
-#include "atom/image/processing/filters.hpp"
 #include "atom/image/core/image_blob.hpp"
+#include "atom/image/processing/filters.hpp"
 #include "test_utils.hpp"
 
 namespace atom::image::test {
@@ -19,14 +19,12 @@ protected:
     void SetUp() override {
         filter = std::make_unique<ImageFilter>();
         fileManager = std::make_unique<TestFileManager>();
-        
+
         // Create test images
         createTestImages();
     }
 
-    void TearDown() override {
-        fileManager->cleanup();
-    }
+    void TearDown() override { fileManager->cleanup(); }
 
     void createTestImages() {
         // Create a simple gradient image
@@ -34,26 +32,32 @@ protected:
         gradient_image = blob(gradientData.data(), gradientData.size());
 
         // Create a checkerboard pattern
-        auto checkerboardData = TestDataGenerator::generateCheckerboard(32, 32, 1, 4);
-        checkerboard_image = blob(checkerboardData.data(), checkerboardData.size());
+        auto checkerboardData =
+            TestDataGenerator::generateCheckerboard(32, 32, 1, 4);
+        checkerboard_image =
+            blob(checkerboardData.data(), checkerboardData.size());
 
         // Create a noisy image
-        auto noisyData = TestDataGenerator::generateRandomNoise(32, 32, 1, 12345);
+        auto noisyData =
+            TestDataGenerator::generateRandomNoise(32, 32, 1, 12345);
         noisy_image = blob(noisyData.data(), noisyData.size());
 
         // Create a solid color image
-        auto solidData = TestDataGenerator::generateSolidColor(32, 32, 1, {128});
+        auto solidData =
+            TestDataGenerator::generateSolidColor(32, 32, 1, {128});
         solid_image = blob(solidData.data(), solidData.size());
 
         // Create an edge test image (circle)
-        auto circleData = TestDataGenerator::generateCircularPattern(32, 32, 1, 10);
+        auto circleData =
+            TestDataGenerator::generateCircularPattern(32, 32, 1, 10);
         circle_image = blob(circleData.data(), circleData.size());
     }
 
     std::unique_ptr<ImageFilter> filter;
     std::unique_ptr<TestFileManager> fileManager;
-    
-    blob gradient_image, checkerboard_image, noisy_image, solid_image, circle_image;
+
+    blob gradient_image, checkerboard_image, noisy_image, solid_image,
+        circle_image;
 };
 
 // Test basic Gaussian blur filter
@@ -62,8 +66,9 @@ TEST_F(FiltersTest, GaussianBlurFilter) {
     params.sigma = 1.0;
     params.kernelSize = 5;
 
-    auto result = filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
-    
+    auto result =
+        filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -73,8 +78,9 @@ TEST_F(FiltersTest, BoxBlurFilter) {
     FilterParams params;
     params.kernelSize = 3;
 
-    auto result = filter->applyFilter(gradient_image, FilterType::BOX_BLUR, params);
-    
+    auto result =
+        filter->applyFilter(gradient_image, FilterType::BOX_BLUR, params);
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -85,8 +91,9 @@ TEST_F(FiltersTest, MotionBlurFilter) {
     params.angle = 45.0;
     params.distance = 5;
 
-    auto result = filter->applyFilter(gradient_image, FilterType::MOTION_BLUR, params);
-    
+    auto result =
+        filter->applyFilter(gradient_image, FilterType::MOTION_BLUR, params);
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -94,17 +101,14 @@ TEST_F(FiltersTest, MotionBlurFilter) {
 // Test sharpening filters
 TEST_F(FiltersTest, SharpeningFilters) {
     std::vector<FilterType> sharpenFilters = {
-        FilterType::SHARPEN,
-        FilterType::UNSHARP_MASK,
-        FilterType::HIGH_PASS
-    };
+        FilterType::SHARPEN, FilterType::UNSHARP_MASK, FilterType::HIGH_PASS};
 
     for (const auto& filterType : sharpenFilters) {
         FilterParams params;
         params.strength = 1.5;
-        
+
         auto result = filter->applyFilter(gradient_image, filterType, params);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), gradient_image.size());
     }
@@ -113,15 +117,12 @@ TEST_F(FiltersTest, SharpeningFilters) {
 // Test edge detection filters
 TEST_F(FiltersTest, EdgeDetectionFilters) {
     std::vector<FilterType> edgeFilters = {
-        FilterType::SOBEL,
-        FilterType::PREWITT,
-        FilterType::ROBERTS,
-        FilterType::LAPLACIAN
-    };
+        FilterType::SOBEL, FilterType::PREWITT, FilterType::ROBERTS,
+        FilterType::LAPLACIAN};
 
     for (const auto& filterType : edgeFilters) {
         auto result = filter->applyFilter(circle_image, filterType);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), circle_image.size());
     }
@@ -135,7 +136,7 @@ TEST_F(FiltersTest, CannyEdgeDetection) {
     params.kernelSize = 3;
 
     auto result = filter->applyFilter(circle_image, FilterType::CANNY, params);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), circle_image.size());
 }
@@ -146,14 +147,16 @@ TEST_F(FiltersTest, NoiseReductionFilters) {
     params.kernelSize = 5;
 
     // Test median filter
-    auto medianResult = filter->applyFilter(noisy_image, FilterType::MEDIAN, params);
+    auto medianResult =
+        filter->applyFilter(noisy_image, FilterType::MEDIAN, params);
     EXPECT_GT(medianResult.size(), 0);
     EXPECT_EQ(medianResult.size(), noisy_image.size());
 
     // Test bilateral filter
     params.sigmaColor = 75.0;
     params.sigmaSpace = 75.0;
-    auto bilateralResult = filter->applyFilter(noisy_image, FilterType::BILATERAL, params);
+    auto bilateralResult =
+        filter->applyFilter(noisy_image, FilterType::BILATERAL, params);
     EXPECT_GT(bilateralResult.size(), 0);
     EXPECT_EQ(bilateralResult.size(), noisy_image.size());
 }
@@ -165,8 +168,9 @@ TEST_F(FiltersTest, NonLocalMeansDenoising) {
     params.templateWindowSize = 7;
     params.searchWindowSize = 21;
 
-    auto result = filter->applyFilter(noisy_image, FilterType::NON_LOCAL_MEANS, params);
-    
+    auto result =
+        filter->applyFilter(noisy_image, FilterType::NON_LOCAL_MEANS, params);
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), noisy_image.size());
 }
@@ -174,19 +178,14 @@ TEST_F(FiltersTest, NonLocalMeansDenoising) {
 // Test morphological operations
 TEST_F(FiltersTest, MorphologicalOperations) {
     std::vector<FilterType> morphOps = {
-        FilterType::EROSION,
-        FilterType::DILATION,
-        FilterType::OPENING,
-        FilterType::CLOSING,
-        FilterType::GRADIENT,
-        FilterType::TOP_HAT,
-        FilterType::BLACK_HAT
-    };
+        FilterType::EROSION,  FilterType::DILATION, FilterType::OPENING,
+        FilterType::CLOSING,  FilterType::GRADIENT, FilterType::TOP_HAT,
+        FilterType::BLACK_HAT};
 
     for (const auto& operation : morphOps) {
-        auto result = filter->applyMorphological(checkerboard_image, operation, 
-                                               StructuringElement::RECTANGLE, 3);
-        
+        auto result = filter->applyMorphological(
+            checkerboard_image, operation, StructuringElement::RECTANGLE, 3);
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), checkerboard_image.size());
     }
@@ -195,16 +194,13 @@ TEST_F(FiltersTest, MorphologicalOperations) {
 // Test different structuring elements
 TEST_F(FiltersTest, StructuringElements) {
     std::vector<StructuringElement> elements = {
-        StructuringElement::RECTANGLE,
-        StructuringElement::ELLIPSE,
-        StructuringElement::CROSS,
-        StructuringElement::DIAMOND
-    };
+        StructuringElement::RECTANGLE, StructuringElement::ELLIPSE,
+        StructuringElement::CROSS, StructuringElement::DIAMOND};
 
     for (const auto& element : elements) {
-        auto result = filter->applyMorphological(checkerboard_image, FilterType::EROSION, 
-                                               element, 3);
-        
+        auto result = filter->applyMorphological(
+            checkerboard_image, FilterType::EROSION, element, 3);
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), checkerboard_image.size());
     }
@@ -214,13 +210,10 @@ TEST_F(FiltersTest, StructuringElements) {
 TEST_F(FiltersTest, CustomConvolutionKernel) {
     // Create a simple edge detection kernel
     std::vector<std::vector<double>> edgeKernel = {
-        {-1, -1, -1},
-        {-1,  8, -1},
-        {-1, -1, -1}
-    };
+        {-1, -1, -1}, {-1, 8, -1}, {-1, -1, -1}};
 
     auto result = filter->applyCustomKernel(gradient_image, edgeKernel, true);
-    
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -230,8 +223,9 @@ TEST_F(FiltersTest, SeparableFilter) {
     // Create Gaussian kernels
     std::vector<double> gaussianKernel = {0.25, 0.5, 0.25};
 
-    auto result = filter->applySeparableFilter(gradient_image, gaussianKernel, gaussianKernel);
-    
+    auto result = filter->applySeparableFilter(gradient_image, gaussianKernel,
+                                               gaussianKernel);
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
 }
@@ -239,19 +233,17 @@ TEST_F(FiltersTest, SeparableFilter) {
 // Test frequency domain filters
 TEST_F(FiltersTest, FrequencyDomainFilters) {
     std::vector<FilterType> freqFilters = {
-        FilterType::LOW_PASS,
-        FilterType::HIGH_PASS_FREQ,
-        FilterType::BAND_PASS,
-        FilterType::BAND_STOP
-    };
+        FilterType::LOW_PASS, FilterType::HIGH_PASS_FREQ, FilterType::BAND_PASS,
+        FilterType::BAND_STOP};
 
     for (const auto& filterType : freqFilters) {
         FilterParams params;
         params.cutoffFreq = 0.3;
         params.bandwidth = 0.1;
-        
-        auto result = filter->applyFrequencyFilter(gradient_image, filterType, params);
-        
+
+        auto result =
+            filter->applyFrequencyFilter(gradient_image, filterType, params);
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), gradient_image.size());
     }
@@ -263,8 +255,9 @@ TEST_F(FiltersTest, AdaptiveFiltering) {
     params.sigma = 1.0;
     params.kernelSize = 5;
 
-    auto result = filter->applyAdaptiveFilter(noisy_image, FilterType::GAUSSIAN_BLUR, 7, params);
-    
+    auto result = filter->applyAdaptiveFilter(
+        noisy_image, FilterType::GAUSSIAN_BLUR, 7, params);
+
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), noisy_image.size());
 }
@@ -272,16 +265,12 @@ TEST_F(FiltersTest, AdaptiveFiltering) {
 // Test artistic filters
 TEST_F(FiltersTest, ArtisticFilters) {
     std::vector<FilterType> artisticFilters = {
-        FilterType::EMBOSS,
-        FilterType::EDGE_ENHANCE,
-        FilterType::FIND_EDGES,
-        FilterType::SMOOTH,
-        FilterType::SMOOTH_MORE
-    };
+        FilterType::EMBOSS, FilterType::EDGE_ENHANCE, FilterType::FIND_EDGES,
+        FilterType::SMOOTH, FilterType::SMOOTH_MORE};
 
     for (const auto& filterType : artisticFilters) {
         auto result = filter->applyFilter(gradient_image, filterType);
-        
+
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), gradient_image.size());
     }
@@ -290,24 +279,26 @@ TEST_F(FiltersTest, ArtisticFilters) {
 // Test filter parameter validation
 TEST_F(FiltersTest, FilterParameterValidation) {
     FilterParams params;
-    
+
     // Test invalid kernel size (even number)
     params.kernelSize = 4;
-    EXPECT_THROW(filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params), 
-                 std::invalid_argument);
-    
+    EXPECT_THROW(
+        filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params),
+        std::invalid_argument);
+
     // Test negative sigma
     params.kernelSize = 3;
     params.sigma = -1.0;
-    EXPECT_THROW(filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params), 
-                 std::invalid_argument);
+    EXPECT_THROW(
+        filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params),
+        std::invalid_argument);
 }
 
 // Test empty image handling
 TEST_F(FiltersTest, EmptyImageHandling) {
     blob emptyImage;
-    
-    EXPECT_THROW(filter->applyFilter(emptyImage, FilterType::GAUSSIAN_BLUR), 
+
+    EXPECT_THROW(filter->applyFilter(emptyImage, FilterType::GAUSSIAN_BLUR),
                  std::invalid_argument);
 }
 
@@ -321,8 +312,10 @@ TEST_F(FiltersTest, FilterChaining) {
     sharpenParams.strength = 1.5;
 
     // Apply blur first, then sharpen
-    auto blurred = filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, blurParams);
-    auto sharpened = filter->applyFilter(blurred, FilterType::SHARPEN, sharpenParams);
+    auto blurred = filter->applyFilter(gradient_image,
+                                       FilterType::GAUSSIAN_BLUR, blurParams);
+    auto sharpened =
+        filter->applyFilter(blurred, FilterType::SHARPEN, sharpenParams);
 
     EXPECT_GT(sharpened.size(), 0);
     EXPECT_EQ(sharpened.size(), gradient_image.size());
@@ -332,16 +325,15 @@ TEST_F(FiltersTest, FilterChaining) {
 TEST_F(FiltersTest, KernelNormalization) {
     // Create an unnormalized kernel
     std::vector<std::vector<double>> unnormalizedKernel = {
-        {1, 2, 1},
-        {2, 4, 2},
-        {1, 2, 1}
-    };
+        {1, 2, 1}, {2, 4, 2}, {1, 2, 1}};
 
     // Test with normalization
-    auto normalizedResult = filter->applyCustomKernel(gradient_image, unnormalizedKernel, true);
+    auto normalizedResult =
+        filter->applyCustomKernel(gradient_image, unnormalizedKernel, true);
 
     // Test without normalization
-    auto unnormalizedResult = filter->applyCustomKernel(gradient_image, unnormalizedKernel, false);
+    auto unnormalizedResult =
+        filter->applyCustomKernel(gradient_image, unnormalizedKernel, false);
 
     EXPECT_GT(normalizedResult.size(), 0);
     EXPECT_GT(unnormalizedResult.size(), 0);
@@ -355,10 +347,7 @@ TEST_F(FiltersTest, EdgeHandlingConvolution) {
     blob smallImage(smallData.data(), smallData.size());
 
     std::vector<std::vector<double>> kernel = {
-        {0, -1, 0},
-        {-1, 4, -1},
-        {0, -1, 0}
-    };
+        {0, -1, 0}, {-1, 4, -1}, {0, -1, 0}};
 
     auto result = filter->applyCustomKernel(smallImage, kernel, true);
 
@@ -371,13 +360,15 @@ TEST_F(FiltersTest, LargeKernelPerformance) {
     // Create a large Gaussian kernel
     FilterParams params;
     params.sigma = 5.0;
-    params.kernelSize = 15; // Large kernel
+    params.kernelSize = 15;  // Large kernel
 
     auto start = std::chrono::high_resolution_clock::now();
-    auto result = filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
+    auto result =
+        filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
     auto end = std::chrono::high_resolution_clock::now();
 
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
@@ -396,7 +387,8 @@ TEST_F(FiltersTest, DifferentDataTypes) {
     params.sigma = 1.0;
     params.kernelSize = 3;
 
-    auto result = filter->applyFilter(floatImage, FilterType::GAUSSIAN_BLUR, params);
+    auto result =
+        filter->applyFilter(floatImage, FilterType::GAUSSIAN_BLUR, params);
 
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), floatImage.size());
@@ -408,14 +400,10 @@ TEST_F(FiltersTest, CustomStructuringElement) {
     params.structElement = StructuringElement::CUSTOM;
 
     // Create a custom structuring element (cross shape)
-    params.customKernel = {
-        {0, 1, 0},
-        {1, 1, 1},
-        {0, 1, 0}
-    };
+    params.customKernel = {{0, 1, 0}, {1, 1, 1}, {0, 1, 0}};
 
-    auto result = filter->applyMorphological(checkerboard_image, FilterType::EROSION,
-                                           StructuringElement::CUSTOM, 3);
+    auto result = filter->applyMorphological(
+        checkerboard_image, FilterType::EROSION, StructuringElement::CUSTOM, 3);
 
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), checkerboard_image.size());
@@ -429,7 +417,8 @@ TEST_F(FiltersTest, FrequencyDomainParameterVariations) {
         FilterParams params;
         params.cutoffFreq = cutoff;
 
-        auto result = filter->applyFrequencyFilter(gradient_image, FilterType::LOW_PASS, params);
+        auto result = filter->applyFrequencyFilter(
+            gradient_image, FilterType::LOW_PASS, params);
 
         EXPECT_GT(result.size(), 0);
         EXPECT_EQ(result.size(), gradient_image.size());
@@ -442,7 +431,8 @@ TEST_F(FiltersTest, NotchFilter) {
     params.cutoffFreq = 0.3;
     params.bandwidth = 0.05;
 
-    auto result = filter->applyFrequencyFilter(gradient_image, FilterType::NOTCH, params);
+    auto result =
+        filter->applyFrequencyFilter(gradient_image, FilterType::NOTCH, params);
 
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), gradient_image.size());
@@ -451,7 +441,7 @@ TEST_F(FiltersTest, NotchFilter) {
 // Test Wiener filter for noise reduction
 TEST_F(FiltersTest, WienerFilter) {
     FilterParams params;
-    params.sigma = 2.0; // Noise variance estimate
+    params.sigma = 2.0;  // Noise variance estimate
 
     auto result = filter->applyFilter(noisy_image, FilterType::WIENER, params);
 
@@ -465,7 +455,8 @@ TEST_F(FiltersTest, RadialBlurFilter) {
     params.strength = 0.5;
     params.kernelSize = 7;
 
-    auto result = filter->applyFilter(circle_image, FilterType::RADIAL_BLUR, params);
+    auto result =
+        filter->applyFilter(circle_image, FilterType::RADIAL_BLUR, params);
 
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), circle_image.size());
@@ -478,18 +469,21 @@ TEST_F(FiltersTest, ExtremeParameters) {
     // Test with very small sigma
     params.sigma = 0.1;
     params.kernelSize = 3;
-    auto result1 = filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
+    auto result1 =
+        filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
     EXPECT_GT(result1.size(), 0);
 
     // Test with very large sigma
     params.sigma = 10.0;
-    params.kernelSize = 31; // Large kernel for large sigma
-    auto result2 = filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
+    params.kernelSize = 31;  // Large kernel for large sigma
+    auto result2 =
+        filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
     EXPECT_GT(result2.size(), 0);
 
     // Test with maximum strength
     params.strength = 10.0;
-    auto result3 = filter->applyFilter(gradient_image, FilterType::SHARPEN, params);
+    auto result3 =
+        filter->applyFilter(gradient_image, FilterType::SHARPEN, params);
     EXPECT_GT(result3.size(), 0);
 }
 
@@ -509,7 +503,8 @@ TEST_F(FiltersTest, ConcurrentFilterOperations) {
         threads.emplace_back([this, &params, &successCount, &errorCount]() {
             for (int i = 0; i < operationsPerThread; ++i) {
                 try {
-                    auto result = filter->applyFilter(gradient_image, FilterType::GAUSSIAN_BLUR, params);
+                    auto result = filter->applyFilter(
+                        gradient_image, FilterType::GAUSSIAN_BLUR, params);
                     if (result.size() == gradient_image.size()) {
                         successCount.fetch_add(1);
                     } else {
@@ -541,10 +536,11 @@ TEST_F(FiltersTest, DISABLED_MemoryEfficiencyTest) {
     params.kernelSize = 7;
 
     // Test that large image filtering doesn't cause memory issues
-    auto result = filter->applyFilter(largeImage, FilterType::GAUSSIAN_BLUR, params);
+    auto result =
+        filter->applyFilter(largeImage, FilterType::GAUSSIAN_BLUR, params);
 
     EXPECT_GT(result.size(), 0);
     EXPECT_EQ(result.size(), largeImage.size());
 }
 
-} // namespace atom::image::test
+}  // namespace atom::image::test

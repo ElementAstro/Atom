@@ -77,8 +77,8 @@ public:
      * @return The compressed data
      * @throws MatrixCompressException if compression fails
      */
-    static auto compressParallel(const Matrix& matrix, i32 thread_count = 0)
-        -> CompressedData;
+    static auto compressParallel(const Matrix& matrix,
+                                 i32 thread_count = 0) -> CompressedData;
 
     /**
      * @brief Decompresses data into a matrix.
@@ -88,8 +88,8 @@ public:
      * @return The decompressed matrix.
      * @throws MatrixDecompressException if decompression fails.
      */
-    static auto decompress(const CompressedData& compressed, i32 rows, i32 cols)
-        -> Matrix;
+    static auto decompress(const CompressedData& compressed, i32 rows,
+                           i32 cols) -> Matrix;
 
     /**
      * @brief Decompress a large matrix using multiple threads
@@ -119,9 +119,8 @@ public:
      * @return The generated random matrix.
      * @throws std::invalid_argument if rows or cols are not positive.
      */
-    static auto generateRandomMatrix(i32 rows, i32 cols,
-                                     std::string_view charset = "ABCD")
-        -> Matrix;
+    static auto generateRandomMatrix(
+        i32 rows, i32 cols, std::string_view charset = "ABCD") -> Matrix;
 
     /**
      * @brief Saves the compressed data to a file.
@@ -293,8 +292,8 @@ auto MatrixCompressor::upsample(const M& matrix, i32 factor) -> Matrix {
 template <MatrixLike M1, MatrixLike M2>
     requires std::same_as<std::decay_t<decltype(std::declval<M1>()[0][0])>,
                           std::decay_t<decltype(std::declval<M2>()[0][0])>>
-auto MatrixCompressor::calculateMSE(const M1& matrix1, const M2& matrix2)
-    -> f64 {
+auto MatrixCompressor::calculateMSE(const M1& matrix1,
+                                    const M2& matrix2) -> f64 {
     if (matrix1.empty() || matrix2.empty() ||
         matrix1.size() != matrix2.size() ||
         matrix1[0].size() != matrix2[0].size()) {

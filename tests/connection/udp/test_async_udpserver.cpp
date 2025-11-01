@@ -1,18 +1,18 @@
-#include "atom/connection/async_udpserver.hpp"
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
+#include <atomic>
+#include <chrono>
 #include <future>
 #include <thread>
-#include <chrono>
-#include <atomic>
+#include "atom/connection/async_udpserver.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 #endif
 
 using namespace atom::async::connection;
@@ -20,9 +20,7 @@ using namespace std::chrono_literals;
 
 class AsyncUdpServerTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        server_ = std::make_unique<UdpSocketHub>();
-    }
+    void SetUp() override { server_ = std::make_unique<UdpSocketHub>(); }
 
     void TearDown() override {
         if (server_) {
@@ -141,13 +139,11 @@ TEST_F(AsyncUdpServerTest, MultipleMessageHandlers) {
     std::atomic<int> handler1Count{0};
     std::atomic<int> handler2Count{0};
 
-    server_->addMessageHandler([&](const std::string&, const std::string&, unsigned short) {
-        handler1Count++;
-    });
+    server_->addMessageHandler([&](const std::string&, const std::string&,
+                                   unsigned short) { handler1Count++; });
 
-    server_->addMessageHandler([&](const std::string&, const std::string&, unsigned short) {
-        handler2Count++;
-    });
+    server_->addMessageHandler([&](const std::string&, const std::string&,
+                                   unsigned short) { handler2Count++; });
 
     ASSERT_TRUE(server_->start(12404));
 
@@ -196,10 +192,12 @@ TEST_F(AsyncUdpServerTest, ErrorHandler) {
 
     bool errorHandlerCalled = false;
 
-    server_->addErrorHandler([&](const std::string& error, const std::error_code& code) {
+    server_->addErrorHandler([&](const std::string& error,
+                                 const std::error_code& code) {
         if (!errorHandlerCalled) {
             errorHandlerCalled = true;
-            errorPromise.set_value(error + " Code: " + std::to_string(code.value()));
+            errorPromise.set_value(error +
+                                   " Code: " + std::to_string(code.value()));
         }
     });
 
@@ -239,7 +237,7 @@ TEST_F(AsyncUdpServerTest, SendToSpecificEndpoint) {
                 socklen_t senderLen = sizeof(senderAddr);
 
                 int received = recvfrom(sock, buffer, sizeof(buffer), 0,
-                                      (sockaddr*)&senderAddr, &senderLen);
+                                        (sockaddr*)&senderAddr, &senderLen);
                 if (received > 0) {
                     messagePromise.set_value(std::string(buffer, received));
                 }
@@ -273,7 +271,8 @@ TEST_F(AsyncUdpServerTest, BroadcastMessage) {
     std::string broadcastMessage = "Broadcast test message";
     EXPECT_TRUE(server_->broadcast(broadcastMessage, 12408));
 
-    // Broadcast testing requires special network setup, so we just verify the call succeeds
+    // Broadcast testing requires special network setup, so we just verify the
+    // call succeeds
 }
 
 TEST_F(AsyncUdpServerTest, MulticastOperations) {
@@ -383,9 +382,8 @@ TEST_F(AsyncUdpServerTest, ResetStatistics) {
 TEST_F(AsyncUdpServerTest, ConcurrentClients) {
     std::atomic<int> messagesReceived{0};
 
-    server_->addMessageHandler([&](const std::string&, const std::string&, unsigned short) {
-        messagesReceived++;
-    });
+    server_->addMessageHandler([&](const std::string&, const std::string&,
+                                   unsigned short) { messagesReceived++; });
 
     ASSERT_TRUE(server_->start(12412));
 
@@ -410,7 +408,8 @@ TEST_F(AsyncUdpServerTest, ConcurrentClients) {
                     serverAddr.sin_port = htons(12412);
                     inet_pton(AF_INET, "127.0.0.1", &serverAddr.sin_addr);
 
-                    std::string message = "Client" + std::to_string(i) + "_Msg" + std::to_string(j);
+                    std::string message = "Client" + std::to_string(i) +
+                                          "_Msg" + std::to_string(j);
                     sendto(sock, message.c_str(), message.length(), 0,
                            (sockaddr*)&serverAddr, sizeof(serverAddr));
 

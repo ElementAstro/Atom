@@ -24,18 +24,18 @@ local headers = {
 
 target("atom-extra-inicpp")
     set_kind("headeronly")
-    
+
     -- Add headers
     for _, hdr in ipairs(headers) do
         add_headerfiles(hdr)
     end
-    
+
     -- Include directories
     add_includedirs(".", {public = true})
-    
+
     -- Set C++ standard
     set_languages("c++20")
-    
+
     -- Installation
     on_install(function (target)
         local installdir = target:installdir() or "$(prefix)"
@@ -45,4 +45,3 @@ target("atom-extra-inicpp")
             os.cp(hdr, headerdir)
         end
     end)
-

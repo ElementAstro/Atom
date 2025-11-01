@@ -20,12 +20,15 @@ Description: UUID Generator
 #include <chrono>
 #include <cstring>
 #include <fstream>
+#include <future>
 #include <iomanip>
 #include <limits>
+#include <mutex>
 #include <random>
 #include <regex>
 #include <sstream>
 #include <stdexcept>
+#include <thread>
 
 #if defined(_WIN32)
 // clang-format off
@@ -313,10 +316,11 @@ auto UUID::toString() const -> std::string {
     }
 }
 
-auto UUID::fromString(std::string_view str) -> type::expected<UUID, UuidError> {
+auto UUID::fromString(std::string_view str)
+    -> ::atom::type::compat::expected<UUID, UuidError> {
     // Check if the string is a valid UUID format
     if (!isValidUUID(str)) {
-        return type::unexpected(UuidError::InvalidFormat);
+        return ::atom::type::compat::unexpected(UuidError::InvalidFormat);
     }
 
     try {
@@ -330,7 +334,8 @@ auto UUID::fromString(std::string_view str) -> type::expected<UUID, UuidError> {
             }
 
             if (pos + 2 > str.size()) {
-                return type::unexpected(UuidError::InvalidLength);
+                return ::atom::type::compat::unexpected(
+                    UuidError::InvalidLength);
             }
 
             // Extract two hex chars and convert to byte
@@ -339,7 +344,8 @@ auto UUID::fromString(std::string_view str) -> type::expected<UUID, UuidError> {
                 byte = static_cast<uint8_t>(
                     std::stoi(std::string(hexPair), nullptr, 16));
             } catch (...) {
-                return type::unexpected(UuidError::ConversionFailed);
+                return ::atom::type::compat::unexpected(
+                    UuidError::ConversionFailed);
             }
 
             pos += 2;
@@ -347,12 +353,12 @@ auto UUID::fromString(std::string_view str) -> type::expected<UUID, UuidError> {
         }
 
         if (count != 16) {
-            return type::unexpected(UuidError::InvalidLength);
+            return ::atom::type::compat::unexpected(UuidError::InvalidLength);
         }
 
         return uuid;
     } catch (...) {
-        return type::unexpected(UuidError::InternalError);
+        return ::atom::type::compat::unexpected(UuidError::InternalError);
     }
 }
 
@@ -420,8 +426,8 @@ auto UUID::variant() const noexcept -> uint8_t {
     return (data_[8] & 0xC0) >> 6;
 }
 
-auto UUID::generateV3(const UUID& namespace_uuid, std::string_view name)
-    -> UUID {
+auto UUID::generateV3(const UUID& namespace_uuid,
+                      std::string_view name) -> UUID {
     return generateNameBased<EVP_md5>(namespace_uuid, name, 3);
 }
 
@@ -431,7 +437,7 @@ auto UUID::generateV4() -> UUID {
         // generation
         static thread_local std::random_device rd;
         static thread_local std::mt19937_64 gen(rd());
-        std::uniform_int_distribution<uint8_t> dist(0, 255);
+        std::uniform_int_distribution<unsigned int> dist(0, 255);
 
         std::array<uint8_t, 16> uuid_data;
 
@@ -451,8 +457,8 @@ auto UUID::generateV4() -> UUID {
     }
 }
 
-auto UUID::generateV5(const UUID& namespace_uuid, std::string_view name)
-    -> UUID {
+auto UUID::generateV5(const UUID& namespace_uuid,
+                      std::string_view name) -> UUID {
     return generateNameBased<EVP_sha1>(namespace_uuid, name, 5);
 }
 
@@ -519,7 +525,7 @@ void UUID::generateRandom() {
         std::random_device rd;
         std::mt19937_64 gen(rd());
         std::uniform_int_distribution<uint32_t> dist(
-            0, std::numeric_limits<uint32_t>::max());
+            0, (std::numeric_limits<uint32_t>::max)());
 
         // Fill 4 bytes at a time for better performance
         for (size_t i = 0; i < data_.size(); i += 4) {
@@ -771,7 +777,11 @@ auto generateUniqueUUID() -> std::string {
         auto cpuSerial = getCPUSerial();
         auto timestamp =
             std::chrono::system_clock::now().time_since_epoch().count();
+#ifdef _WIN32
+        auto pid = static_cast<uint64_t>(GetCurrentProcessId());
+#else
         auto pid = static_cast<uint64_t>(getpid());
+#endif
 
         // Use a cryptographic hash to mix the inputs
         EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
@@ -799,8 +809,8 @@ auto generateUniqueUUID() -> std::string {
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(0, 255);
-        for (auto& byte : random_bytes) {
-            byte = static_cast<unsigned char>(dis(gen));
+        for (size_t i = 0; i < random_bytes.size(); ++i) {
+            random_bytes[i] = static_cast<unsigned char>(dis(gen));
         }
         EVP_DigestUpdate(mdctx, random_bytes.data(), random_bytes.size());
 
@@ -814,7 +824,8 @@ auto generateUniqueUUID() -> std::string {
         // Format as UUID
         std::ostringstream oss;
         oss << std::hex << std::setfill('0');
-        for (unsigned int i = 0; i < std::min(hash_len, 16u); i++) {
+        unsigned int maxLen = hash_len < 16u ? hash_len : 16u;
+        for (unsigned int i = 0; i < maxLen; i++) {
             oss << std::setw(2) << static_cast<int>(hash[i]);
         }
 
@@ -840,7 +851,7 @@ auto generateUniqueUUID() -> std::string {
 
         static std::random_device rd;
         static std::mt19937_64 gen(rd());
-        static std::uniform_int_distribution<uint8_t> dis(0, 255);
+        static std::uniform_int_distribution<unsigned int> dis(0, 255);
 
         std::array<uint8_t, 16> data;
         for (auto& byte : data) {
@@ -980,19 +991,19 @@ template <typename RNG>
 FastUUIDGenerator<RNG>::FastUUIDGenerator()
     : generator(new RNG(std::random_device()())),
       distribution(std::numeric_limits<uint64_t>::min(),
-                   std::numeric_limits<uint64_t>::max()) {}
+                   (std::numeric_limits<uint64_t>::max)()) {}
 
 template <typename RNG>
 FastUUIDGenerator<RNG>::FastUUIDGenerator(uint64_t seed)
     : generator(new RNG(seed)),
       distribution(std::numeric_limits<uint64_t>::min(),
-                   std::numeric_limits<uint64_t>::max()) {}
+                   (std::numeric_limits<uint64_t>::max)()) {}
 
 template <typename RNG>
 FastUUIDGenerator<RNG>::FastUUIDGenerator(RNG& gen)
     : generator(gen),
       distribution(std::numeric_limits<uint64_t>::min(),
-                   std::numeric_limits<uint64_t>::max()) {}
+                   (std::numeric_limits<uint64_t>::max)()) {}
 
 template <typename RNG>
 FastUUID FastUUIDGenerator<RNG>::getUUID() {
@@ -1030,7 +1041,7 @@ std::vector<FastUUID> generateUUIDBatch(size_t count) {
 // Parallel batch generation using C++20 concurrency features
 std::vector<FastUUID> generateUUIDBatchParallel(size_t count) {
     const size_t hardware_threads = std::thread::hardware_concurrency();
-    const size_t num_threads = std::max(1u, hardware_threads);
+    const size_t num_threads = (std::max)(1u, hardware_threads);
     const size_t batch_size = count / num_threads + (count % num_threads != 0);
 
     std::vector<FastUUID> result(count);

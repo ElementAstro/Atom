@@ -2,10 +2,10 @@
 #define ATOM_SEARCH_TEST_DATABASE_INTEGRATION_HPP
 
 #include <gtest/gtest.h>
-#include <memory>
-#include <vector>
-#include <string>
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
 // Note: These tests are designed for when the full implementation is available
 // Currently commented out due to linking issues, but ready for integration
@@ -30,7 +30,8 @@ public:
     std::string content;
     std::vector<std::string> tags;
 
-    MockDocument(const std::string& id, const std::string& content, const std::vector<std::string>& tags)
+    MockDocument(const std::string& id, const std::string& content,
+                 const std::vector<std::string>& tags)
         : id(id), content(content), tags(tags) {}
 };
 
@@ -38,9 +39,7 @@ class MockSearchEngine {
 public:
     std::vector<MockDocument> documents;
 
-    void addDocument(const MockDocument& doc) {
-        documents.push_back(doc);
-    }
+    void addDocument(const MockDocument& doc) { documents.push_back(doc); }
 
     std::vector<MockDocument> searchByTag(const std::string& tag) {
         std::vector<MockDocument> results;
@@ -65,13 +64,9 @@ public:
         return results;
     }
 
-    void clear() {
-        documents.clear();
-    }
+    void clear() { documents.clear(); }
 
-    size_t size() const {
-        return documents.size();
-    }
+    size_t size() const { return documents.size(); }
 };
 
 class DatabaseIntegrationTest : public ::testing::Test {
@@ -104,9 +99,12 @@ TEST_F(DatabaseIntegrationTest, SearchEngineWithMockDatabase) {
     // Test the integration pattern with mock objects
 
     // Add documents to search engine
-    searchEngine->addDocument(MockDocument("1", "Hello world", {"greeting", "world"}));
-    searchEngine->addDocument(MockDocument("2", "Goodbye world", {"farewell", "world"}));
-    searchEngine->addDocument(MockDocument("3", "Hello universe", {"greeting", "universe"}));
+    searchEngine->addDocument(
+        MockDocument("1", "Hello world", {"greeting", "world"}));
+    searchEngine->addDocument(
+        MockDocument("2", "Goodbye world", {"farewell", "world"}));
+    searchEngine->addDocument(
+        MockDocument("3", "Hello universe", {"greeting", "universe"}));
 
     // Test tag-based search
     auto worldResults = searchEngine->searchByTag("world");
@@ -130,8 +128,7 @@ TEST_F(DatabaseIntegrationTest, DocumentPersistencePattern) {
     std::vector<MockDocument> documentsToSave = {
         MockDocument("doc1", "First document content", {"tag1", "tag2"}),
         MockDocument("doc2", "Second document content", {"tag2", "tag3"}),
-        MockDocument("doc3", "Third document content", {"tag1", "tag3"})
-    };
+        MockDocument("doc3", "Third document content", {"tag1", "tag3"})};
 
     // Add to search engine
     for (const auto& doc : documentsToSave) {
@@ -160,11 +157,11 @@ TEST_F(DatabaseIntegrationTest, SearchIndexSynchronization) {
     // Initial state
     EXPECT_EQ(searchEngine->size(), 0);
 
-    // Simulate adding documents (would trigger both database insert and index update)
+    // Simulate adding documents (would trigger both database insert and index
+    // update)
     std::vector<MockDocument> initialDocs = {
         MockDocument("sync1", "Synchronization test 1", {"sync", "test"}),
-        MockDocument("sync2", "Synchronization test 2", {"sync", "demo"})
-    };
+        MockDocument("sync2", "Synchronization test 2", {"sync", "demo"})};
 
     for (const auto& doc : initialDocs) {
         // In real implementation:
@@ -184,8 +181,10 @@ TEST_F(DatabaseIntegrationTest, SearchIndexSynchronization) {
     // 1. Update database record
     // 2. Update search index
     searchEngine->clear();
-    searchEngine->addDocument(MockDocument("sync1", "Updated synchronization test 1", {"sync", "updated"}));
-    searchEngine->addDocument(MockDocument("sync2", "Synchronization test 2", {"sync", "demo"}));
+    searchEngine->addDocument(MockDocument(
+        "sync1", "Updated synchronization test 1", {"sync", "updated"}));
+    searchEngine->addDocument(
+        MockDocument("sync2", "Synchronization test 2", {"sync", "demo"}));
 
     // Verify update
     auto updatedResults = searchEngine->searchByTag("updated");
@@ -194,14 +193,15 @@ TEST_F(DatabaseIntegrationTest, SearchIndexSynchronization) {
 }
 
 TEST_F(DatabaseIntegrationTest, TransactionalConsistency) {
-    // Test pattern for maintaining consistency between database and search index
+    // Test pattern for maintaining consistency between database and search
+    // index
 
     // Simulate transaction: add multiple documents atomically
     std::vector<MockDocument> transactionDocs = {
         MockDocument("tx1", "Transaction document 1", {"transaction", "batch"}),
         MockDocument("tx2", "Transaction document 2", {"transaction", "batch"}),
-        MockDocument("tx3", "Transaction document 3", {"transaction", "batch"})
-    };
+        MockDocument("tx3", "Transaction document 3",
+                     {"transaction", "batch"})};
 
     // In real implementation, this would be wrapped in a database transaction
     // BEGIN TRANSACTION
@@ -219,7 +219,8 @@ TEST_F(DatabaseIntegrationTest, TransactionalConsistency) {
 
     } catch (...) {
         // ROLLBACK TRANSACTION
-        // In case of error, both database and search index should be rolled back
+        // In case of error, both database and search index should be rolled
+        // back
         searchEngine->clear();
         throw;
     }
@@ -234,8 +235,7 @@ TEST_F(DatabaseIntegrationTest, BulkOperationsPattern) {
         bulkDocs.emplace_back(
             "bulk" + std::to_string(i),
             "Bulk document content " + std::to_string(i),
-            std::vector<std::string>{"bulk", "doc" + std::to_string(i % 10)}
-        );
+            std::vector<std::string>{"bulk", "doc" + std::to_string(i % 10)});
     }
 
     // Simulate bulk insert
@@ -253,7 +253,8 @@ TEST_F(DatabaseIntegrationTest, BulkOperationsPattern) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     // Verify all documents were added
     EXPECT_EQ(searchEngine->size(), 1000);
@@ -263,14 +264,16 @@ TEST_F(DatabaseIntegrationTest, BulkOperationsPattern) {
     EXPECT_EQ(bulkResults.size(), 1000);
 
     // Performance should be reasonable
-    EXPECT_LT(duration.count(), 5000); // Less than 5 seconds for 1000 documents
+    EXPECT_LT(duration.count(),
+              5000);  // Less than 5 seconds for 1000 documents
 }
 
 TEST_F(DatabaseIntegrationTest, ErrorHandlingPattern) {
     // Test error handling in integrated operations
 
     // Add some initial documents
-    searchEngine->addDocument(MockDocument("error1", "Error test document", {"error", "test"}));
+    searchEngine->addDocument(
+        MockDocument("error1", "Error test document", {"error", "test"}));
     EXPECT_EQ(searchEngine->size(), 1);
 
     // Simulate error scenario (e.g., database constraint violation)
@@ -282,11 +285,13 @@ TEST_F(DatabaseIntegrationTest, ErrorHandlingPattern) {
             throw std::runtime_error("Simulated database error");
         }
 
-        searchEngine->addDocument(MockDocument("error2", "This should not be added", {"error", "failed"}));
+        searchEngine->addDocument(MockDocument(
+            "error2", "This should not be added", {"error", "failed"}));
 
     } catch (const std::exception& e) {
         // Error handling: ensure search index remains consistent
-        // In real implementation, this would involve rolling back both database and index changes
+        // In real implementation, this would involve rolling back both database
+        // and index changes
         EXPECT_STREQ(e.what(), "Simulated database error");
     }
 
@@ -302,7 +307,8 @@ TEST_F(DatabaseIntegrationTest, ConcurrentAccessPattern) {
 
     std::vector<std::thread> threads;
     std::atomic<int> successCount{0};
-    std::mutex searchEngineMutex; // In real implementation, this would be handled by the search engine
+    std::mutex searchEngineMutex;  // In real implementation, this would be
+                                   // handled by the search engine
 
     // Launch multiple threads that add documents concurrently
     for (int i = 0; i < 5; ++i) {
@@ -310,10 +316,11 @@ TEST_F(DatabaseIntegrationTest, ConcurrentAccessPattern) {
             try {
                 for (int j = 0; j < 10; ++j) {
                     MockDocument doc(
-                        "concurrent_" + std::to_string(i) + "_" + std::to_string(j),
-                        "Concurrent document " + std::to_string(i) + " " + std::to_string(j),
-                        {"concurrent", "thread" + std::to_string(i)}
-                    );
+                        "concurrent_" + std::to_string(i) + "_" +
+                            std::to_string(j),
+                        "Concurrent document " + std::to_string(i) + " " +
+                            std::to_string(j),
+                        {"concurrent", "thread" + std::to_string(i)});
 
                     // In real implementation:
                     // 1. Acquire database connection from pool
@@ -339,7 +346,8 @@ TEST_F(DatabaseIntegrationTest, ConcurrentAccessPattern) {
     }
 
     // Verify results
-    EXPECT_EQ(successCount, 50); // All operations should succeed with proper locking
+    EXPECT_EQ(successCount,
+              50);  // All operations should succeed with proper locking
     EXPECT_EQ(searchEngine->size(), 50);
 
     auto concurrentResults = searchEngine->searchByTag("concurrent");

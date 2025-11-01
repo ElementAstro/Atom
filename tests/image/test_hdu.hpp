@@ -2,46 +2,58 @@
 
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
 #include <filesystem>
 #include <fstream>
 #include <random>
 #include <string>
-#include <vector>
 #include <tuple>
+#include <vector>
 
-#include "atom/image/formats/hdu.hpp"
-#include "atom/image/formats/fits_header.hpp"
 #include "atom/image/formats/fits_data.hpp"
+#include "atom/image/formats/fits_header.hpp"
+#include "atom/image/formats/hdu.hpp"
 
 namespace fs = std::filesystem;
 
 // Helper function to create a temporary FITS file for testing
-inline std::string createTempFitsFile(int width = 10, int height = 10, int channels = 1) {
+inline std::string createTempFitsFile(int width = 10, int height = 10,
+                                      int channels = 1) {
     // Create a temporary file
-    std::string tempFilePath = (fs::temp_directory_path() /
-                               fs::path("test_hdu_temp_" + std::to_string(std::random_device{}()) + ".fits")).string();
+    std::string tempFilePath =
+        (fs::temp_directory_path() /
+         fs::path("test_hdu_temp_" + std::to_string(std::random_device{}()) +
+                  ".fits"))
+            .string();
 
     // Create a simple FITS file with basic header
     std::ofstream outFile(tempFilePath, std::ios::binary);
 
     // Write FITS header
-    outFile << "SIMPLE  =                    T / Standard FITS format" << std::string(80-44, ' ') << std::endl;
-    outFile << "BITPIX  =                   32 / Bits per pixel" << std::string(80-42, ' ') << std::endl;
-    outFile << "NAXIS   =                    2 / Number of axes" << std::string(80-42, ' ') << std::endl;
-    outFile << "NAXIS1  =                   " << std::setw(2) << width << " / Width" << std::string(80-38, ' ') << std::endl;
-    outFile << "NAXIS2  =                   " << std::setw(2) << height << " / Height" << std::string(80-39, ' ') << std::endl;
+    outFile << "SIMPLE  =                    T / Standard FITS format"
+            << std::string(80 - 44, ' ') << std::endl;
+    outFile << "BITPIX  =                   32 / Bits per pixel"
+            << std::string(80 - 42, ' ') << std::endl;
+    outFile << "NAXIS   =                    2 / Number of axes"
+            << std::string(80 - 42, ' ') << std::endl;
+    outFile << "NAXIS1  =                   " << std::setw(2) << width
+            << " / Width" << std::string(80 - 38, ' ') << std::endl;
+    outFile << "NAXIS2  =                   " << std::setw(2) << height
+            << " / Height" << std::string(80 - 39, ' ') << std::endl;
     if (channels > 1) {
-        outFile << "NAXIS3  =                   " << std::setw(2) << channels << " / Channels" << std::string(80-41, ' ') << std::endl;
+        outFile << "NAXIS3  =                   " << std::setw(2) << channels
+                << " / Channels" << std::string(80 - 41, ' ') << std::endl;
     }
-    outFile << "END" << std::string(80-3, ' ') << std::endl;
+    outFile << "END" << std::string(80 - 3, ' ') << std::endl;
 
     // Pad header to multiple of 2880 bytes
-    int headerBlocks = 1; // Start with one for the header we've already written
+    int headerBlocks =
+        1;  // Start with one for the header we've already written
     int bytesWritten = headerBlocks * 2880;
-    int paddingRequired = bytesWritten - (7 * 80); // 7 header cards written so far
+    int paddingRequired =
+        bytesWritten - (7 * 80);  // 7 header cards written so far
     outFile << std::string(paddingRequired, ' ');
 
     // Write simple data (all zeros)
@@ -61,9 +73,11 @@ class ImageHDUTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Create temp files with different dimensions
-        tempFilePaths.push_back(createTempFitsFile(10, 10, 1));  // Grayscale image
+        tempFilePaths.push_back(
+            createTempFitsFile(10, 10, 1));  // Grayscale image
         tempFilePaths.push_back(createTempFitsFile(10, 10, 3));  // RGB image
-        tempFilePaths.push_back(createTempFitsFile(100, 100, 1)); // Larger image
+        tempFilePaths.push_back(
+            createTempFitsFile(100, 100, 1));  // Larger image
     }
 
     void TearDown() override {
@@ -91,7 +105,8 @@ protected:
 
     // Create an ImageHDU with test pattern and specific data type
     template <FitsNumeric T>
-    std::unique_ptr<ImageHDU> createTestImageHDU(int width, int height, int channels = 1) {
+    std::unique_ptr<ImageHDU> createTestImageHDU(int width, int height,
+                                                 int channels = 1) {
         auto hdu = std::make_unique<ImageHDU>();
         fillTestData<T>(*hdu, width, height, channels);
         return hdu;
@@ -133,7 +148,8 @@ TEST_F(ImageHDUTest, WriteHDUToFile) {
     auto hdu = createTestImageHDU<int32_t>(20, 15, 1);
 
     // Write to a new file
-    std::string outputPath = (fs::temp_directory_path() / "test_hdu_write.fits").string();
+    std::string outputPath =
+        (fs::temp_directory_path() / "test_hdu_write.fits").string();
     std::ofstream outputFile(outputPath, std::ios::binary);
 
     ASSERT_NO_THROW(hdu->writeHDU(outputFile));
@@ -211,7 +227,8 @@ TEST_F(ImageHDUTest, PixelAccess_Float) {
     auto hdu = createTestImageHDU<float>(15, 10);
 
     // Check a few pixels
-    EXPECT_FLOAT_EQ(hdu->getPixel<float>(5, 5), static_cast<float>((5 + 5 * 2) % 255));
+    EXPECT_FLOAT_EQ(hdu->getPixel<float>(5, 5),
+                    static_cast<float>((5 + 5 * 2) % 255));
     EXPECT_FLOAT_EQ(hdu->getPixel<float>(0, 0), 0.0f);
 
     // Modify a pixel
@@ -227,7 +244,8 @@ TEST_F(ImageHDUTest, PixelAccess_Double) {
 
     // Check multi-channel access
     for (int c = 0; c < 3; ++c) {
-        EXPECT_DOUBLE_EQ(hdu->getPixel<double>(5, 5, c), static_cast<double>((5 + 5 * 2) % 255));
+        EXPECT_DOUBLE_EQ(hdu->getPixel<double>(5, 5, c),
+                         static_cast<double>((5 + 5 * 2) % 255));
     }
 
     // Modify different channels
@@ -254,7 +272,7 @@ TEST_F(ImageHDUTest, ComputeImageStats_Int) {
 
     // For our pattern, we know some properties
     EXPECT_EQ(stats.min, 0);
-    EXPECT_EQ(stats.max, 57); // (19 + 19*2) % 255 = 57
+    EXPECT_EQ(stats.max, 57);  // (19 + 19*2) % 255 = 57
 }
 
 TEST_F(ImageHDUTest, ComputeImageStats_Float) {
@@ -279,15 +297,13 @@ TEST_F(ImageHDUTest, ApplyFilter) {
     auto hdu = createTestImageHDU<float>(20, 10);
 
     // Create a simple box blur kernel (3x3)
-    std::vector<double> kernelData = {
-        1.0/9.0, 1.0/9.0, 1.0/9.0,
-        1.0/9.0, 1.0/9.0, 1.0/9.0,
-        1.0/9.0, 1.0/9.0, 1.0/9.0
-    };
+    std::vector<double> kernelData = {1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0,
+                                      1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0,
+                                      1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0};
 
     std::vector<std::span<const double>> kernel;
     for (int i = 0; i < 3; ++i) {
-        kernel.push_back(std::span<const double>(&kernelData[i*3], 3));
+        kernel.push_back(std::span<const double>(&kernelData[i * 3], 3));
     }
 
     // Store original value for comparison
@@ -297,24 +313,24 @@ TEST_F(ImageHDUTest, ApplyFilter) {
     ASSERT_NO_THROW(hdu->applyFilter<float>(kernel));
 
     // After box blur, center pixels should be the average of their neighborhood
-    // But exact equality can be affected by boundary conditions, so we just verify it changed
+    // But exact equality can be affected by boundary conditions, so we just
+    // verify it changed
     EXPECT_NE(hdu->getPixel<float>(5, 5), originalValue);
 }
 
 // Test parallel filtering
 TEST_F(ImageHDUTest, ApplyFilterParallel) {
-    auto hdu = createTestImageHDU<float>(50, 50); // Larger image for parallel processing
+    auto hdu = createTestImageHDU<float>(
+        50, 50);  // Larger image for parallel processing
 
     // Create a simple box blur kernel (3x3)
-    std::vector<double> kernelData = {
-        1.0/9.0, 1.0/9.0, 1.0/9.0,
-        1.0/9.0, 1.0/9.0, 1.0/9.0,
-        1.0/9.0, 1.0/9.0, 1.0/9.0
-    };
+    std::vector<double> kernelData = {1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0,
+                                      1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0,
+                                      1.0 / 9.0, 1.0 / 9.0, 1.0 / 9.0};
 
     std::vector<std::span<const double>> kernel;
     for (int i = 0; i < 3; ++i) {
-        kernel.push_back(std::span<const double>(&kernelData[i*3], 3));
+        kernel.push_back(std::span<const double>(&kernelData[i * 3], 3));
     }
 
     // Store original values at several positions
@@ -372,7 +388,7 @@ TEST_F(ImageHDUTest, CreateThumbnail) {
 
     // The width should be 20 and height should be proportionally scaled
     EXPECT_EQ(width, 20);
-    EXPECT_EQ(height, 10); // 50/100 * 20 = 10
+    EXPECT_EQ(height, 10);  // 50/100 * 20 = 10
 
     // Test with invalid size
     EXPECT_THROW(hdu->createThumbnail<float>(0), std::invalid_argument);
@@ -406,7 +422,8 @@ TEST_F(ImageHDUTest, ExtractROI) {
 
 // Test async statistics computation
 TEST_F(ImageHDUTest, ComputeImageStatsAsync) {
-    auto hdu = createTestImageHDU<float>(100, 100); // Larger image for async test
+    auto hdu =
+        createTestImageHDU<float>(100, 100);  // Larger image for async test
 
     // Compute stats asynchronously
     auto statsTask = hdu->computeImageStatsAsync<float>();
@@ -455,16 +472,16 @@ TEST_F(ImageHDUTest, ApplyMathOperation) {
     auto hdu = createTestImageHDU<float>(20, 10);
 
     // Apply a multiply-by-2 operation
-    ASSERT_NO_THROW(hdu->applyMathOperation<float>([](float val) { return val * 2.0f; }));
+    ASSERT_NO_THROW(
+        hdu->applyMathOperation<float>([](float val) { return val * 2.0f; }));
 
     // Check a sample point
     float originalValue = static_cast<float>((5 + 5 * 2) % 255);
     EXPECT_FLOAT_EQ(hdu->getPixel<float>(5, 5), originalValue * 2.0f);
 
     // Apply a complex operation
-    ASSERT_NO_THROW(hdu->applyMathOperation<float>([](float val) {
-        return std::sin(val) * 100.0f;
-    }));
+    ASSERT_NO_THROW(hdu->applyMathOperation<float>(
+        [](float val) { return std::sin(val) * 100.0f; }));
 
     // Check the result is changed
     EXPECT_NE(hdu->getPixel<float>(5, 5), originalValue * 2.0f);
@@ -484,7 +501,7 @@ TEST_F(ImageHDUTest, ComputeHistogram) {
     double sum = 0.0;
     for (double binCount : histogram) {
         sum += binCount;
-        EXPECT_GE(binCount, 0.0); // Bin counts should be non-negative
+        EXPECT_GE(binCount, 0.0);  // Bin counts should be non-negative
     }
     EXPECT_EQ(sum, 50 * 50);
 
@@ -532,7 +549,8 @@ TEST_F(ImageHDUTest, DetectEdges) {
     EXPECT_NE(hdu->getPixel<float>(25, 25), originalValue);
 
     // Test invalid method
-    EXPECT_THROW(hdu->detectEdges<float>("invalid_method"), std::invalid_argument);
+    EXPECT_THROW(hdu->detectEdges<float>("invalid_method"),
+std::invalid_argument);
 }
 */
 
@@ -569,7 +587,8 @@ TEST_F(ImageHDUTest, CompressionDecompression) {
     }
 
     // Test invalid algorithm
-    EXPECT_THROW(hdu->compressData<float>("invalid_algorithm"), std::invalid_argument);
+    EXPECT_THROW(hdu->compressData<float>("invalid_algorithm"),
+std::invalid_argument);
 }
 */
 
@@ -595,8 +614,8 @@ TEST_F(ImageHDUTest, NoiseAdditionAndRemoval) {
     int idx = 0;
     for (int y = 0; y < 30 && !dataChanged; ++y) {
         for (int x = 0; x < 30 && !dataChanged; ++x) {
-            if (std::abs(hdu->getPixel<float>(x, y) - originalData[idx++]) > 1e-6) {
-                dataChanged = true;
+            if (std::abs(hdu->getPixel<float>(x, y) - originalData[idx++]) >
+1e-6) { dataChanged = true;
             }
         }
     }
@@ -606,13 +625,15 @@ TEST_F(ImageHDUTest, NoiseAdditionAndRemoval) {
     ASSERT_NO_THROW(hdu->removeNoise<float>("median", 3));
 
     // Test invalid parameters
-    EXPECT_THROW(hdu->addNoise<float>("invalid_noise", 10.0), std::invalid_argument);
-    EXPECT_THROW(hdu->removeNoise<float>("median", 0), std::invalid_argument);
+    EXPECT_THROW(hdu->addNoise<float>("invalid_noise", 10.0),
+std::invalid_argument); EXPECT_THROW(hdu->removeNoise<float>("median", 0),
+std::invalid_argument);
 }
 */
 
 // Test Fourier transform and filtering
-// NOTE: Disabled - applyFourierTransform/applyFrequencyFilter methods not implemented
+// NOTE: Disabled - applyFourierTransform/applyFrequencyFilter methods not
+// implemented
 /*
 TEST_F(ImageHDUTest, FourierTransformAndFiltering) {
     auto hdu = createTestImageHDU<float>(32, 32); // Power of 2 size for FFT
@@ -627,7 +648,8 @@ TEST_F(ImageHDUTest, FourierTransformAndFiltering) {
     ASSERT_NO_THROW(hdu->applyFourierTransform<float>(true));
 
     // Test invalid parameters
-    EXPECT_THROW(hdu->applyFrequencyFilter<float>("invalid_filter", 0.5), std::invalid_argument);
+    EXPECT_THROW(hdu->applyFrequencyFilter<float>("invalid_filter", 0.5),
+std::invalid_argument);
 }
 */
 
@@ -658,8 +680,10 @@ TEST_F(ImageHDUTest, ApplyMorphology) {
     ASSERT_NO_THROW(hdu->applyMorphology<uint8_t>("erode", 3));
 
     // Test invalid parameters
-    EXPECT_THROW(hdu->applyMorphology<uint8_t>("invalid_op", 3), std::invalid_argument);
-    EXPECT_THROW(hdu->applyMorphology<uint8_t>("dilate", 4), std::invalid_argument); // Kernel size should be odd
+    EXPECT_THROW(hdu->applyMorphology<uint8_t>("invalid_op", 3),
+                 std::invalid_argument);
+    EXPECT_THROW(hdu->applyMorphology<uint8_t>("dilate", 4),
+                 std::invalid_argument);  // Kernel size should be odd
 }
 
 // Main function removed - handled by test_runner.cpp

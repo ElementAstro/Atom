@@ -22,12 +22,12 @@ PYBIND11_MODULE(clipboard, m) {
             >>> from atom.system import clipboard
             >>> # Get clipboard instance
             >>> clip = clipboard.Clipboard.instance()
-            >>> 
+            >>>
             >>> # Text operations
             >>> clip.set_text("Hello, World!")
             >>> text = clip.get_text()
             >>> print(text)  # "Hello, World!"
-            >>> 
+            >>>
             >>> # Check clipboard contents
             >>> if clip.has_text():
             ...     print("Clipboard contains text")
@@ -70,16 +70,20 @@ Examples:
 )")
         .def(py::init<unsigned int>(), py::arg("value"),
              "Constructs a ClipboardFormat with the specified value.")
-        .def_property_readonly("value", [](const clip::ClipboardFormat& self) {
-            return static_cast<unsigned int>(self);
-        }, "Gets the format identifier value.")
+        .def_property_readonly(
+            "value",
+            [](const clip::ClipboardFormat& self) {
+                return static_cast<unsigned int>(self);
+            },
+            "Gets the format identifier value.")
         .def("__eq__", &clip::ClipboardFormat::operator==)
         .def("__int__", [](const clip::ClipboardFormat& self) {
             return static_cast<unsigned int>(self);
         });
 
     // Predefined formats namespace
-    auto formats_module = m.def_submodule("formats", "Predefined clipboard formats");
+    auto formats_module =
+        m.def_submodule("formats", "Predefined clipboard formats");
     formats_module.attr("TEXT") = clip::formats::TEXT;
     formats_module.attr("HTML") = clip::formats::HTML;
     formats_module.attr("IMAGE_TIFF") = clip::formats::IMAGE_TIFF;
@@ -126,9 +130,11 @@ Examples:
         .def("__bool__", &clip::ClipboardResult<std::string>::operator bool)
         .def("value", &clip::ClipboardResult<std::string>::value)
         .def("error", &clip::ClipboardResult<std::string>::error)
-        .def("value_or", &clip::ClipboardResult<std::string>::value_or<std::string>,
+        .def("value_or",
+             &clip::ClipboardResult<std::string>::value_or<std::string>,
              py::arg("default_value"),
-             "Returns the value if available, otherwise returns the default value.");
+             "Returns the value if available, otherwise returns the default "
+             "value.");
 
     // Main Clipboard class
     py::class_<clip::Clipboard>(
@@ -145,19 +151,19 @@ the global clipboard instance.
 Examples:
     >>> from atom.system import clipboard
     >>> clip = clipboard.Clipboard.instance()
-    >>> 
+    >>>
     >>> # Text operations
     >>> clip.set_text("Hello, World!")
     >>> text = clip.get_text()
-    >>> 
+    >>>
     >>> # Safe operations (no exceptions)
     >>> result = clip.set_text_safe("Safe text")
     >>> if result:
     ...     print("Text set successfully")
 )")
         .def_static("instance", &clip::Clipboard::instance,
-                   py::return_value_policy::reference,
-                   R"(Get the singleton instance of the Clipboard.
+                    py::return_value_policy::reference,
+                    R"(Get the singleton instance of the Clipboard.
 
 Returns:
     Reference to the singleton Clipboard instance.
@@ -265,7 +271,8 @@ Examples:
     >>> if clip.has_image():
     ...     print("Clipboard contains an image")
 )")
-        .def("contains_format", &clip::Clipboard::containsFormat, py::arg("format"),
+        .def("contains_format", &clip::Clipboard::containsFormat,
+             py::arg("format"),
              R"(Check if clipboard contains data in a specific format.
 
 Args:
@@ -291,8 +298,8 @@ Examples:
 )")
 
         // Change monitoring
-        .def("register_change_callback", &clip::Clipboard::registerChangeCallback,
-             py::arg("callback"),
+        .def("register_change_callback",
+             &clip::Clipboard::registerChangeCallback, py::arg("callback"),
              R"(Register a callback for clipboard change notifications.
 
 Args:
@@ -306,8 +313,8 @@ Examples:
     ...     print("Clipboard changed!")
     >>> callback_id = clip.register_change_callback(on_change)
 )")
-        .def("unregister_change_callback", &clip::Clipboard::unregisterChangeCallback,
-             py::arg("callback_id"),
+        .def("unregister_change_callback",
+             &clip::Clipboard::unregisterChangeCallback, py::arg("callback_id"),
              R"(Unregister a clipboard change callback.
 
 Args:
@@ -340,8 +347,8 @@ Examples:
 
         // Static format registration
         .def_static("register_format", &clip::Clipboard::registerFormat,
-                   py::arg("format_name"),
-                   R"(Register a custom clipboard format.
+                    py::arg("format_name"),
+                    R"(Register a custom clipboard format.
 
 Args:
     format_name: Name of the custom format.
@@ -355,9 +362,10 @@ Raises:
 Examples:
     >>> custom_format = clipboard.Clipboard.register_format("MyCustomFormat")
 )")
-        .def_static("register_format_safe", &clip::Clipboard::registerFormatSafe,
-                   py::arg("format_name"),
-                   R"(Register a custom clipboard format (non-throwing version).
+        .def_static(
+            "register_format_safe", &clip::Clipboard::registerFormatSafe,
+            py::arg("format_name"),
+            R"(Register a custom clipboard format (non-throwing version).
 
 Args:
     format_name: Name of the custom format.
@@ -372,15 +380,18 @@ Examples:
 )")
 
         // Binary data operations
-        .def("set_data", [](clip::Clipboard& self, clip::ClipboardFormat format, py::bytes data) {
-            std::string str_data = data;
-            std::span<const std::byte> byte_span(
-                reinterpret_cast<const std::byte*>(str_data.data()),
-                str_data.size()
-            );
-            self.setData(format, byte_span);
-        }, py::arg("format"), py::arg("data"),
-             R"(Set binary data to the clipboard in a specific format.
+        .def(
+            "set_data",
+            [](clip::Clipboard& self, clip::ClipboardFormat format,
+               py::bytes data) {
+                std::string str_data = data;
+                std::span<const std::byte> byte_span(
+                    reinterpret_cast<const std::byte*>(str_data.data()),
+                    str_data.size());
+                self.setData(format, byte_span);
+            },
+            py::arg("format"), py::arg("data"),
+            R"(Set binary data to the clipboard in a specific format.
 
 Args:
     format: The clipboard format identifier.
@@ -393,15 +404,18 @@ Examples:
     >>> data = b"Binary data content"
     >>> clip.set_data(clipboard.formats.RTF, data)
 )")
-        .def("set_data_safe", [](clip::Clipboard& self, clip::ClipboardFormat format, py::bytes data) {
-            std::string str_data = data;
-            std::span<const std::byte> byte_span(
-                reinterpret_cast<const std::byte*>(str_data.data()),
-                str_data.size()
-            );
-            return self.setDataSafe(format, byte_span);
-        }, py::arg("format"), py::arg("data"),
-             R"(Set binary data to the clipboard (non-throwing version).
+        .def(
+            "set_data_safe",
+            [](clip::Clipboard& self, clip::ClipboardFormat format,
+               py::bytes data) {
+                std::string str_data = data;
+                std::span<const std::byte> byte_span(
+                    reinterpret_cast<const std::byte*>(str_data.data()),
+                    str_data.size());
+                return self.setDataSafe(format, byte_span);
+            },
+            py::arg("format"), py::arg("data"),
+            R"(Set binary data to the clipboard (non-throwing version).
 
 Args:
     format: The clipboard format identifier.
@@ -415,11 +429,16 @@ Examples:
     >>> if not result:
     ...     print(f"Failed: {result.error()}")
 )")
-        .def("get_data", [](clip::Clipboard& self, clip::ClipboardFormat format) -> py::bytes {
-            auto data = self.getData(format);
-            return py::bytes(reinterpret_cast<const char*>(data.data()), data.size());
-        }, py::arg("format"),
-             R"(Get binary data from the clipboard.
+        .def(
+            "get_data",
+            [](clip::Clipboard& self,
+               clip::ClipboardFormat format) -> py::bytes {
+                auto data = self.getData(format);
+                return py::bytes(reinterpret_cast<const char*>(data.data()),
+                                 data.size());
+            },
+            py::arg("format"),
+            R"(Get binary data from the clipboard.
 
 Args:
     format: The clipboard format identifier to retrieve.
@@ -434,16 +453,22 @@ Examples:
     >>> data = clip.get_data(clipboard.formats.RTF)
     >>> print(f"Retrieved {len(data)} bytes")
 )")
-        .def("get_data_safe", [](clip::Clipboard& self, clip::ClipboardFormat format) {
-            auto result = self.getDataSafe(format);
-            if (result) {
-                auto& data = result.value();
-                return py::make_tuple(true, py::bytes(reinterpret_cast<const char*>(data.data()), data.size()));
-            } else {
-                return py::make_tuple(false, py::bytes());
-            }
-        }, py::arg("format"),
-             R"(Get binary data from the clipboard (non-throwing version).
+        .def(
+            "get_data_safe",
+            [](clip::Clipboard& self, clip::ClipboardFormat format) {
+                auto result = self.getDataSafe(format);
+                if (result) {
+                    auto& data = result.value();
+                    return py::make_tuple(
+                        true,
+                        py::bytes(reinterpret_cast<const char*>(data.data()),
+                                  data.size()));
+                } else {
+                    return py::make_tuple(false, py::bytes());
+                }
+            },
+            py::arg("format"),
+            R"(Get binary data from the clipboard (non-throwing version).
 
 Args:
     format: The clipboard format identifier to retrieve.
@@ -456,7 +481,8 @@ Examples:
     >>> if success:
     ...     print(f"Retrieved {len(data)} bytes")
 )")
-        .def("get_format_name", &clip::Clipboard::getFormatName, py::arg("format"),
+        .def("get_format_name", &clip::Clipboard::getFormatName,
+             py::arg("format"),
              R"(Get human-readable name for a clipboard format.
 
 Args:
@@ -472,8 +498,10 @@ Examples:
     >>> name = clip.get_format_name(clipboard.formats.TEXT)
     >>> print(f"Format name: {name}")
 )")
-        .def("get_format_name_safe", &clip::Clipboard::getFormatNameSafe, py::arg("format"),
-             R"(Get human-readable name for a clipboard format (non-throwing version).
+        .def(
+            "get_format_name_safe", &clip::Clipboard::getFormatNameSafe,
+            py::arg("format"),
+            R"(Get human-readable name for a clipboard format (non-throwing version).
 
 Args:
     format: The format identifier.

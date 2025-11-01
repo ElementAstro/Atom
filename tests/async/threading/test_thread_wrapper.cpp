@@ -9,19 +9,20 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Thread Wrapper
-Tests thread lifecycle, exception handling, stop tokens, and platform-specific behavior.
+Tests thread lifecycle, exception handling, stop tokens, and platform-specific
+behavior.
 
 **************************************************/
 
 #include <gtest/gtest.h>
 #include <atomic>
 #include <chrono>
-#include <stdexcept>
 #include <future>
+#include <stdexcept>
 
-#include "atom/async/threading/thread_wrapper.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/threading/thread_wrapper.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -92,9 +93,7 @@ TEST_F(ThreadWrapperTest, ExceptionHandling) {
     Thread thread;
     const std::string errorMessage = "Test exception";
 
-    thread.start([&errorMessage] {
-        throw std::runtime_error(errorMessage);
-    });
+    thread.start([&errorMessage] { throw std::runtime_error(errorMessage); });
 
     EXPECT_THROW(thread.join(), std::runtime_error);
 }
@@ -125,7 +124,7 @@ TEST_F(ThreadWrapperTest, ThreadTimeout) {
     // Set a short timeout
     bool joinedInTime = thread.joinFor(50ms);
 
-    EXPECT_FALSE(joinedInTime); // Should timeout
+    EXPECT_FALSE(joinedInTime);  // Should timeout
     EXPECT_TRUE(thread.running());
 
     // Wait for actual completion
@@ -183,9 +182,7 @@ TEST_F(ThreadWrapperTest, ThreadId) {
     Thread thread;
     std::atomic<std::thread::id> threadId{};
 
-    thread.start([&threadId] {
-        threadId = std::this_thread::get_id();
-    });
+    thread.start([&threadId] { threadId = std::this_thread::get_id(); });
 
     thread.join();
 
@@ -203,7 +200,8 @@ TEST_F(ThreadWrapperTest, Detach) {
     });
 
     thread.detach();
-    EXPECT_FALSE(thread.running()); // After detach, running() should return false
+    EXPECT_FALSE(
+        thread.running());  // After detach, running() should return false
 
     // Wait for execution to complete
     std::this_thread::sleep_for(100ms);
@@ -289,7 +287,8 @@ TEST_F(ThreadWrapperTest, ThreadPoolBehavior) {
 
         threadPool[threadIndex]->start([&completedTasks, taskId] {
             // Simulate work
-            std::this_thread::sleep_for(std::chrono::milliseconds(10 + taskId % 20));
+            std::this_thread::sleep_for(
+                std::chrono::milliseconds(10 + taskId % 20));
             completedTasks.fetch_add(1);
         });
     }
@@ -312,9 +311,7 @@ TEST_F(ThreadWrapperTest, CustomExceptionPropagation) {
     };
 
     Thread thread;
-    thread.start([]() {
-        throw CustomException();
-    });
+    thread.start([]() { throw CustomException(); });
 
     EXPECT_THROW(thread.join(), CustomException);
 }
@@ -361,7 +358,7 @@ TEST_F(ThreadWrapperTest, ResourceCleanup) {
         });
 
         thread.join();
-    } // Thread destructor should not affect resource cleanup
+    }  // Thread destructor should not affect resource cleanup
 
     // Resource should be properly cleaned up
     tracker.expectNoLeaks();
@@ -418,10 +415,11 @@ TEST_F(ThreadWrapperTest, PerformanceCharacteristics) {
 
     // Performance should be reasonable (this is a rough check)
     // Creating and joining 1000 threads should take less than 10 seconds
-    EXPECT_LT(elapsed.count(), 10000000); // 10 seconds in microseconds
+    EXPECT_LT(elapsed.count(), 10000000);  // 10 seconds in microseconds
 
     std::cout << "Thread creation/join performance: "
-              << elapsed.count() / numIterations << " microseconds per thread" << std::endl;
+              << elapsed.count() / numIterations << " microseconds per thread"
+              << std::endl;
 }
 
 // Test thread with move-only types
@@ -448,9 +446,7 @@ TEST_F(ThreadWrapperTest, StateTransitions) {
     EXPECT_FALSE(thread.running());
 
     // After start
-    thread.start([]() {
-        std::this_thread::sleep_for(50ms);
-    });
+    thread.start([]() { std::this_thread::sleep_for(50ms); });
 
     EXPECT_TRUE(thread.running());
 
@@ -468,18 +464,19 @@ TEST_F(ThreadWrapperTest, LambdaCaptureVariations) {
     std::string localString = "test";
     std::atomic<bool> executed{false};
 
-    thread.start([localVar, localString = std::move(localString), &executed]() mutable {
-        localVar += 5;
-        localString += "_modified";
+    thread.start(
+        [localVar, localString = std::move(localString), &executed]() mutable {
+            localVar += 5;
+            localString += "_modified";
 
-        EXPECT_EQ(localVar, 15);
-        EXPECT_EQ(localString, "test_modified");
-        executed = true;
-    });
+            EXPECT_EQ(localVar, 15);
+            EXPECT_EQ(localString, "test_modified");
+            executed = true;
+        });
 
     thread.join();
     EXPECT_TRUE(executed);
-    EXPECT_EQ(localVar, 10); // Original should be unchanged
+    EXPECT_EQ(localVar, 10);  // Original should be unchanged
 }
 
 }  // namespace atom::async::threading::test

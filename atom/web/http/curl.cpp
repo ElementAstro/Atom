@@ -33,13 +33,12 @@ public:
 
     auto setUrl(const std::string &url) -> CurlWrapper::Impl &;
     auto setRequestMethod(const std::string &method) -> CurlWrapper::Impl &;
-    auto addHeader(const std::string &key, const std::string &value)
-        -> CurlWrapper::Impl &;
+    auto addHeader(const std::string &key,
+                   const std::string &value) -> CurlWrapper::Impl &;
     auto setOnErrorCallback(std::function<void(CURLcode)> callback)
         -> CurlWrapper::Impl &;
-    auto setOnResponseCallback(
-        std::function<void(const std::string &)> callback)
-        -> CurlWrapper::Impl &;
+    auto setOnResponseCallback(std::function<void(const std::string &)>
+                                   callback) -> CurlWrapper::Impl &;
     auto setTimeout(long timeout) -> CurlWrapper::Impl &;
     auto setFollowLocation(bool follow) -> CurlWrapper::Impl &;
     auto setRequestBody(const std::string &data) -> CurlWrapper::Impl &;
@@ -65,8 +64,8 @@ private:
 
     static auto writeCallback(void *contents, size_t size, size_t nmemb,
                               void *userp) -> size_t;
-    static auto readCallback(void *ptr, size_t size, size_t nmemb, void *userp)
-        -> size_t;
+    static auto readCallback(void *ptr, size_t size, size_t nmemb,
+                             void *userp) -> size_t;
     void updateHeaders();
 };
 
@@ -84,8 +83,8 @@ auto CurlWrapper::setRequestMethod(const std::string &method) -> CurlWrapper & {
     return *this;
 }
 
-auto CurlWrapper::addHeader(const std::string &key, const std::string &value)
-    -> CurlWrapper & {
+auto CurlWrapper::addHeader(const std::string &key,
+                            const std::string &value) -> CurlWrapper & {
     pImpl_->addHeader(key, value);
     return *this;
 }
@@ -127,8 +126,8 @@ auto CurlWrapper::setProxy(const std::string &proxy) -> CurlWrapper & {
     return *this;
 }
 
-auto CurlWrapper::setSSLOptions(bool verifyPeer, bool verifyHost)
-    -> CurlWrapper & {
+auto CurlWrapper::setSSLOptions(bool verifyPeer,
+                                bool verifyHost) -> CurlWrapper & {
     pImpl_->setSSLOptions(verifyPeer, verifyHost);
     return *this;
 }
@@ -190,9 +189,8 @@ auto CurlWrapper::Impl::setRequestMethod(const std::string &method)
     return *this;
 }
 
-auto CurlWrapper::Impl::addHeader(const std::string &key,
-                                  const std::string &value)
-    -> CurlWrapper::Impl & {
+auto CurlWrapper::Impl::addHeader(
+    const std::string &key, const std::string &value) -> CurlWrapper::Impl & {
     spdlog::info("Adding header: {}: {}", key, value);
     std::string header = key + ": " + value;
     headersList_ = curl_slist_append(headersList_, header.c_str());
@@ -281,8 +279,8 @@ auto CurlWrapper::Impl::setProxy(const std::string &proxy)
     return *this;
 }
 
-auto CurlWrapper::Impl::setSSLOptions(bool verifyPeer, bool verifyHost)
-    -> CurlWrapper::Impl & {
+auto CurlWrapper::Impl::setSSLOptions(bool verifyPeer,
+                                      bool verifyHost) -> CurlWrapper::Impl & {
     spdlog::info("Setting SSL options: verifyPeer={}, verifyHost={}",
                  verifyPeer, verifyHost);
     curl_easy_setopt(handle_, CURLOPT_SSL_VERIFYPEER, verifyPeer ? 1L : 0L);

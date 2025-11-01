@@ -26,7 +26,8 @@ Examples:
     ...     print(e.get_line())
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"),
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"),
              R"(Constructs an Exception object.
 
 Args:
@@ -65,13 +66,14 @@ Returns:
 Returns:
     str: The message associated with the exception
 )")
-        .def("get_thread_id",
-             [](const atom::error::Exception& ex) {
-                 std::ostringstream oss;
-                 oss << ex.getThreadId();
-                 return oss.str();
-             },
-             R"(Gets the ID of the thread where the exception occurred.
+        .def(
+            "get_thread_id",
+            [](const atom::error::Exception& ex) {
+                std::ostringstream oss;
+                oss << ex.getThreadId();
+                return oss.str();
+            },
+            R"(Gets the ID of the thread where the exception occurred.
 
 Returns:
     str: String representation of the thread ID
@@ -93,7 +95,7 @@ Examples:
     ...     print(e.what())
 )")
         .def(py::init<const char*, int, const char*, int, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), 
+             py::arg("file"), py::arg("line"), py::arg("func"),
              py::arg("error_code"), py::arg("message"),
              R"(Constructs a SystemErrorException.
 
@@ -113,7 +115,8 @@ Args:
 General runtime error that occurs during program execution.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // LogicError class
     py::class_<atom::error::LogicError, atom::error::Exception>(
@@ -123,7 +126,8 @@ General runtime error that occurs during program execution.
 Represents errors in program logic that could be detected before runtime.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // UnlawfulOperation class
     py::class_<atom::error::UnlawfulOperation, atom::error::Exception>(
@@ -133,7 +137,8 @@ Represents errors in program logic that could be detected before runtime.
 Represents an operation that is not allowed in the current state.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // OutOfRange class
     py::class_<atom::error::OutOfRange, atom::error::Exception>(
@@ -143,7 +148,8 @@ Represents an operation that is not allowed in the current state.
 Represents an attempt to access an element outside valid range.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // OverflowException class
     py::class_<atom::error::OverflowException, atom::error::Exception>(
@@ -153,7 +159,8 @@ Represents an attempt to access an element outside valid range.
 Represents arithmetic overflow.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // UnderflowException class
     py::class_<atom::error::UnderflowException, atom::error::Exception>(
@@ -163,7 +170,8 @@ Represents arithmetic overflow.
 Represents arithmetic underflow.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // LengthException class
     py::class_<atom::error::LengthException, atom::error::Exception>(
@@ -173,7 +181,8 @@ Represents arithmetic underflow.
 Represents an error related to length constraints.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // Unkown class
     py::class_<atom::error::Unkown, atom::error::Exception>(
@@ -183,7 +192,8 @@ Represents an error related to length constraints.
 Represents an unknown or unclassified error.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // Object-related exceptions
     py::class_<atom::error::ObjectAlreadyExist, atom::error::Exception>(
@@ -193,7 +203,8 @@ Represents an unknown or unclassified error.
 Thrown when attempting to create an object that already exists.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::ObjectAlreadyInitialized, atom::error::Exception>(
         m, "ObjectAlreadyInitialized",
@@ -202,7 +213,8 @@ Thrown when attempting to create an object that already exists.
 Thrown when attempting to initialize an already initialized object.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::ObjectNotExist, atom::error::Exception>(
         m, "ObjectNotExist",
@@ -211,7 +223,8 @@ Thrown when attempting to initialize an already initialized object.
 Thrown when attempting to access a non-existent object.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::ObjectUninitialized, atom::error::Exception>(
         m, "ObjectUninitialized",
@@ -220,7 +233,8 @@ Thrown when attempting to access a non-existent object.
 Thrown when attempting to use an uninitialized object.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::SystemCollapse, atom::error::Exception>(
         m, "SystemCollapse",
@@ -229,7 +243,8 @@ Thrown when attempting to use an uninitialized object.
 Represents a critical system failure.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::NullPointer, atom::error::Exception>(
         m, "NullPointer",
@@ -238,7 +253,8 @@ Represents a critical system failure.
 Thrown when a null pointer is dereferenced.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::NotFound, atom::error::Exception>(
         m, "NotFound",
@@ -247,7 +263,8 @@ Thrown when a null pointer is dereferenced.
 Thrown when a requested resource is not found.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // Argument-related exceptions
     py::class_<atom::error::WrongArgument, atom::error::Exception>(
@@ -257,7 +274,8 @@ Thrown when a requested resource is not found.
 Thrown when an argument has an incorrect value.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::InvalidArgument, atom::error::Exception>(
         m, "InvalidArgument",
@@ -266,7 +284,8 @@ Thrown when an argument has an incorrect value.
 Thrown when an argument is invalid.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::MissingArgument, atom::error::Exception>(
         m, "MissingArgument",
@@ -275,7 +294,8 @@ Thrown when an argument is invalid.
 Thrown when a required argument is missing.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // File-related exceptions
     py::class_<atom::error::FileNotFound, atom::error::Exception>(
@@ -285,7 +305,8 @@ Thrown when a required argument is missing.
 Thrown when a file cannot be found.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FileNotReadable, atom::error::Exception>(
         m, "FileNotReadable",
@@ -294,7 +315,8 @@ Thrown when a file cannot be found.
 Thrown when a file cannot be read.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FileNotWritable, atom::error::Exception>(
         m, "FileNotWritable",
@@ -303,7 +325,8 @@ Thrown when a file cannot be read.
 Thrown when a file cannot be written to.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToOpenFile, atom::error::Exception>(
         m, "FailToOpenFile",
@@ -312,7 +335,8 @@ Thrown when a file cannot be written to.
 Thrown when a file cannot be opened.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToCloseFile, atom::error::Exception>(
         m, "FailToCloseFile",
@@ -321,7 +345,8 @@ Thrown when a file cannot be opened.
 Thrown when a file cannot be closed.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToCreateFile, atom::error::Exception>(
         m, "FailToCreateFile",
@@ -330,7 +355,8 @@ Thrown when a file cannot be closed.
 Thrown when a file cannot be created.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToDeleteFile, atom::error::Exception>(
         m, "FailToDeleteFile",
@@ -339,7 +365,8 @@ Thrown when a file cannot be created.
 Thrown when a file cannot be deleted.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToCopyFile, atom::error::Exception>(
         m, "FailToCopyFile",
@@ -348,7 +375,8 @@ Thrown when a file cannot be deleted.
 Thrown when a file cannot be copied.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToMoveFile, atom::error::Exception>(
         m, "FailToMoveFile",
@@ -357,7 +385,8 @@ Thrown when a file cannot be copied.
 Thrown when a file cannot be moved.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToReadFile, atom::error::Exception>(
         m, "FailToReadFile",
@@ -366,7 +395,8 @@ Thrown when a file cannot be moved.
 Thrown when a file cannot be read.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToWriteFile, atom::error::Exception>(
         m, "FailToWriteFile",
@@ -375,7 +405,8 @@ Thrown when a file cannot be read.
 Thrown when a file cannot be written to.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // Dynamic library exceptions
     py::class_<atom::error::FailToLoadDll, atom::error::Exception>(
@@ -385,7 +416,8 @@ Thrown when a file cannot be written to.
 Thrown when a dynamic library cannot be loaded.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToUnloadDll, atom::error::Exception>(
         m, "FailToUnloadDll",
@@ -394,7 +426,8 @@ Thrown when a dynamic library cannot be loaded.
 Thrown when a dynamic library cannot be unloaded.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToLoadSymbol, atom::error::Exception>(
         m, "FailToLoadSymbol",
@@ -403,7 +436,8 @@ Thrown when a dynamic library cannot be unloaded.
 Thrown when a symbol cannot be loaded from a dynamic library.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // Process exceptions
     py::class_<atom::error::FailToCreateProcess, atom::error::Exception>(
@@ -413,7 +447,8 @@ Thrown when a symbol cannot be loaded from a dynamic library.
 Thrown when a process cannot be created.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::FailToTerminateProcess, atom::error::Exception>(
         m, "FailToTerminateProcess",
@@ -422,7 +457,8 @@ Thrown when a process cannot be created.
 Thrown when a process cannot be terminated.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // JSON exceptions
     py::class_<atom::error::JsonParseError, atom::error::Exception>(
@@ -432,7 +468,8 @@ Thrown when a process cannot be terminated.
 Thrown when JSON parsing fails.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::JsonValueError, atom::error::Exception>(
         m, "JsonValueError",
@@ -441,7 +478,8 @@ Thrown when JSON parsing fails.
 Thrown when a JSON value is invalid or unexpected.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     // Network exceptions
     py::class_<atom::error::CurlInitializationError, atom::error::Exception>(
@@ -451,7 +489,8 @@ Thrown when a JSON value is invalid or unexpected.
 Thrown when CURL library initialization fails.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 
     py::class_<atom::error::CurlRuntimeError, atom::error::Exception>(
         m, "CurlRuntimeError",
@@ -460,6 +499,6 @@ Thrown when CURL library initialization fails.
 Thrown when a CURL operation fails at runtime.
 )")
         .def(py::init<const char*, int, const char*, std::string>(),
-             py::arg("file"), py::arg("line"), py::arg("func"), py::arg("message"));
+             py::arg("file"), py::arg("line"), py::arg("func"),
+             py::arg("message"));
 }
-

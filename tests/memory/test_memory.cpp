@@ -463,15 +463,16 @@ TEST_F(MemoryPoolTest, PMRInterfaceEdgeCases) {
     MemoryPool<std::byte, 4096> pool2;
     std::pmr::memory_resource* mr2 = &pool2;
 
-    EXPECT_TRUE(mr->is_equal(*mr));   // Same resource
-    EXPECT_FALSE(mr->is_equal(*mr2)); // Different resource
+    EXPECT_TRUE(mr->is_equal(*mr));    // Same resource
+    EXPECT_FALSE(mr->is_equal(*mr2));  // Different resource
 }
 
 TEST_F(MemoryPoolTest, BlockSizeStrategyEdgeCases) {
     // Test with strategy that returns very small size
     class MinimalSizeStrategy : public BlockSizeStrategy {
     public:
-        [[nodiscard]] size_t calculate(size_t requested_size) const noexcept override {
+        [[nodiscard]] size_t calculate(
+            size_t requested_size) const noexcept override {
             return std::max(requested_size, static_cast<size_t>(64));
         }
     };
@@ -586,7 +587,8 @@ TEST_F(MemoryPoolTest, AllocationFailureScenarios) {
     MemoryPool<int> pool;
 
     // Test allocation that exceeds maximum block size
-    EXPECT_THROW([[maybe_unused]] auto temp1 = pool.allocate(10000), atom::memory::MemoryPoolException);
+    EXPECT_THROW([[maybe_unused]] auto temp1 = pool.allocate(10000),
+                 atom::memory::MemoryPoolException);
 
     // Pool should remain functional after exception
     int* ptr = pool.allocate(10);
@@ -599,7 +601,8 @@ TEST_F(MemoryPoolTest, PMRAllocationFailures) {
     std::pmr::memory_resource* mr = &pool;
 
     // Test allocation that exceeds pool capacity
-    EXPECT_THROW([[maybe_unused]] auto temp2 = mr->allocate(2000, alignof(std::max_align_t)),
+    EXPECT_THROW([[maybe_unused]] auto temp2 =
+                     mr->allocate(2000, alignof(std::max_align_t)),
                  atom::memory::MemoryPoolException);
 
     // Test with invalid alignment (very large)
@@ -616,7 +619,8 @@ TEST_F(MemoryPoolTest, TaggedAllocationFailures) {
     MemoryPool<int> pool;
 
     // Test tagged allocation that exceeds block size
-    EXPECT_THROW([[maybe_unused]] auto temp4 = pool.allocateTagged(10000, "test", "file.cpp", 42),
+    EXPECT_THROW([[maybe_unused]] auto temp4 =
+                     pool.allocateTagged(10000, "test", "file.cpp", 42),
                  atom::memory::MemoryPoolException);
 
     // Pool should remain functional
@@ -633,15 +637,16 @@ TEST_F(MemoryPoolTest, InvalidDeallocations) {
 
     // Deallocate with zero size (should not crash)
     int* ptr = pool.allocate(10);
-    pool.deallocate(ptr, 0);  // This might be undefined behavior
-    pool.deallocate(ptr, 10); // Proper deallocation
+    pool.deallocate(ptr, 0);   // This might be undefined behavior
+    pool.deallocate(ptr, 10);  // Proper deallocation
 }
 
 TEST_F(MemoryPoolTest, BlockSizeStrategyExceptions) {
     // Test with strategy that might throw (though it shouldn't)
     class ThrowingStrategy : public BlockSizeStrategy {
     public:
-        [[nodiscard]] size_t calculate(size_t requested_size) const noexcept override {
+        [[nodiscard]] size_t calculate(
+            size_t requested_size) const noexcept override {
             // Even though marked noexcept, test robustness
             return requested_size * 2;
         }
@@ -706,7 +711,8 @@ TEST_F(MemoryPoolTest, ConcurrentAllocationDeallocation) {
 
     // Create threads that continuously allocate and deallocate
     for (int i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&pool, &totalAllocations, &totalDeallocations, operationsPerThread]() {
+        threads.emplace_back([&pool, &totalAllocations, &totalDeallocations,
+                              operationsPerThread]() {
             std::vector<int*> localPtrs;
             localPtrs.reserve(operationsPerThread / 2);
 
@@ -752,11 +758,13 @@ TEST_F(MemoryPoolTest, ConcurrentTaggedOperations) {
     std::atomic<int> taggedAllocations{0};
 
     for (int i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&pool, &taggedAllocations, operationsPerThread, i]() {
+        threads.emplace_back([&pool, &taggedAllocations, operationsPerThread,
+                              i]() {
             std::vector<int*> localPtrs;
 
             for (int j = 0; j < operationsPerThread; ++j) {
-                std::string tag = "Thread_" + std::to_string(i) + "_Alloc_" + std::to_string(j);
+                std::string tag = "Thread_" + std::to_string(i) + "_Alloc_" +
+                                  std::to_string(j);
                 std::string file = "test_file_" + std::to_string(i) + ".cpp";
 
                 int* ptr = pool.allocateTagged(5, tag, file, j);
@@ -796,7 +804,8 @@ TEST_F(MemoryPoolTest, ConcurrentCompaction) {
     std::vector<std::thread> threads;
     std::atomic<bool> stopFlag{false};
 
-    // Thread that continuously allocates and deallocates to create fragmentation
+    // Thread that continuously allocates and deallocates to create
+    // fragmentation
     threads.emplace_back([&pool, &stopFlag]() {
         std::vector<int*> ptrs;
         while (!stopFlag.load()) {

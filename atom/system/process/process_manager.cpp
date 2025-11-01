@@ -13,6 +13,12 @@
 #include <sstream>
 
 #if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <iphlpapi.h>
 #include <psapi.h>
 #include <tchar.h>
@@ -59,15 +65,15 @@ public:
     ProcessManagerImpl &operator=(ProcessManagerImpl &&) = delete;
 
     auto createProcess(const std::string &command,
-                       const std::string &identifier, bool isBackground)
-        -> bool {
+                       const std::string &identifier,
+                       bool isBackground) -> bool {
         if (processes.size() >= static_cast<size_t>(m_maxProcesses)) {
             spdlog::error("Maximum number of managed processes reached: {}",
                           m_maxProcesses);
             THROW_PROCESS_ERROR("Maximum number of managed processes reached.");
         }
 
-        pid_t pid;
+        int pid;
 #ifdef _WIN32
         STARTUPINFOA si;
         PROCESS_INFORMATION pi;
@@ -198,13 +204,15 @@ public:
         std::unique_lock lock(mtx);
         size_t initialCount = processes.size();
 
-        for (auto processIt = processes.begin(); processIt != processes.end();) {
-            HANDLE hProcess = OpenProcess(SYNCHRONIZE | PROCESS_QUERY_INFORMATION,
-                                         FALSE, processIt->pid);
+        for (auto processIt = processes.begin();
+             processIt != processes.end();) {
+            HANDLE hProcess = OpenProcess(
+                SYNCHRONIZE | PROCESS_QUERY_INFORMATION, FALSE, processIt->pid);
 
             if (hProcess == nullptr) {
                 // Process no longer exists or we don't have access
-                spdlog::info("Process no longer accessible: PID={}", processIt->pid);
+                spdlog::info("Process no longer accessible: PID={}",
+                             processIt->pid);
                 processIt = processes.erase(processIt);
                 cv.notify_all();
                 continue;
@@ -214,8 +222,9 @@ public:
             DWORD exitCode = 0;
             if (GetExitCodeProcess(hProcess, &exitCode)) {
                 if (exitCode != STILL_ACTIVE) {
-                    spdlog::info("Process terminated naturally: PID={}, exit code={}",
-                               processIt->pid, exitCode);
+                    spdlog::info(
+                        "Process terminated naturally: PID={}, exit code={}",
+                        processIt->pid, exitCode);
                     CloseHandle(hProcess);
                     processIt = processes.erase(processIt);
                     cv.notify_all();
@@ -223,7 +232,7 @@ public:
                 }
             } else {
                 spdlog::error("Error querying process PID {}: {}",
-                            processIt->pid, GetLastError());
+                              processIt->pid, GetLastError());
                 CloseHandle(hProcess);
                 processIt = processes.erase(processIt);
                 continue;
@@ -235,7 +244,7 @@ public:
 
         if (processes.size() != initialCount) {
             spdlog::debug("Process monitoring completed. Active processes: {}",
-                        processes.size());
+                          processes.size());
         }
         return true;
 #elif defined(__linux__) || defined(__APPLE__)
@@ -295,8 +304,8 @@ public:
         THROW_PROCESS_ERROR("Process handle not found.");
     }
 #else
-    static auto getProcFilePath(int pid, const std::string &file)
-        -> std::string {
+    static auto getProcFilePath(int pid,
+                                const std::string &file) -> std::string {
         std::string path = "/proc/" + std::to_string(pid) + "/" + file;
         if (access(path.c_str(), F_OK) != 0) {
             spdlog::error("Process file {} not found for PID {}", file, pid);
@@ -347,8 +356,8 @@ auto ProcessManager::terminateProcess(int pid, int signal) -> bool {
     }
 }
 
-auto ProcessManager::terminateProcessByName(const std::string &name, int signal)
-    -> bool {
+auto ProcessManager::terminateProcessByName(const std::string &name,
+                                            int signal) -> bool {
     try {
         return impl->terminateProcessByName(name, signal);
     } catch (const ProcessException &e) {
@@ -397,8 +406,8 @@ auto ProcessManager::getProcessOutput(const std::string &identifier)
 }
 
 auto ProcessManager::runScript(const std::string &script,
-                               const std::string &identifier, bool isBackground)
-    -> bool {
+                               const std::string &identifier,
+                               bool isBackground) -> bool {
     try {
         return impl->runScript(script, identifier, isBackground);
     } catch (const ProcessException &e) {
@@ -430,8 +439,8 @@ auto ProcessManager::getProcessHandle(int pid) const -> void * {
     }
 }
 #else
-auto ProcessManager::getProcFilePath(int pid, const std::string &file)
-    -> std::string {
+auto ProcessManager::getProcFilePath(int pid,
+                                     const std::string &file) -> std::string {
     try {
         return ProcessManagerImpl::getProcFilePath(pid, file);
     } catch (const ProcessException &e) {

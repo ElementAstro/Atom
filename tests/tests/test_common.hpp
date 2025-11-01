@@ -17,14 +17,14 @@ that can be used across all test modules to ensure consistency.
 #pragma once
 
 #include <gtest/gtest.h>
-#include <memory>
-#include <string>
-#include <vector>
 #include <chrono>
-#include <thread>
-#include <random>
-#include <fstream>
 #include <filesystem>
+#include <fstream>
+#include <memory>
+#include <random>
+#include <string>
+#include <thread>
+#include <vector>
 
 namespace atom::test {
 
@@ -44,7 +44,8 @@ constexpr size_t DEFAULT_THREAD_COUNT = 4;
 class TestDataGenerator {
 public:
     static std::string generateRandomString(size_t length) {
-        const std::string charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const std::string charset =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
         std::random_device rd;
         std::mt19937 gen(rd());
         std::uniform_int_distribution<> dis(0, charset.size() - 1);
@@ -69,7 +70,8 @@ public:
         return result;
     }
 
-    static std::vector<int> generateRandomIntegers(size_t count, int min = 0, int max = 1000) {
+    static std::vector<int> generateRandomIntegers(size_t count, int min = 0,
+                                                   int max = 1000) {
         std::vector<int> result(count);
         std::random_device rd;
         std::mt19937 gen(rd());
@@ -88,21 +90,19 @@ public:
 
 class PerformanceTimer {
 public:
-    void start() {
-        start_time_ = std::chrono::high_resolution_clock::now();
-    }
+    void start() { start_time_ = std::chrono::high_resolution_clock::now(); }
 
-    void stop() {
-        end_time_ = std::chrono::high_resolution_clock::now();
-    }
+    void stop() { end_time_ = std::chrono::high_resolution_clock::now(); }
 
     double getElapsedMilliseconds() const {
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time_ - start_time_);
+        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+            end_time_ - start_time_);
         return duration.count() / 1000.0;
     }
 
     double getElapsedSeconds() const {
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time_ - start_time_);
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+            end_time_ - start_time_);
         return duration.count() / 1000.0;
     }
 
@@ -141,11 +141,10 @@ public:
         createTestDirectory();
     }
 
-    ~TestFileManager() {
-        cleanupTestDirectory();
-    }
+    ~TestFileManager() { cleanupTestDirectory(); }
 
-    std::string createTestFile(const std::string& filename, const std::string& content = "") {
+    std::string createTestFile(const std::string& filename,
+                               const std::string& content = "") {
         std::string filepath = test_directory_ + "/" + filename;
         std::ofstream file(filepath);
         if (file.is_open()) {
@@ -156,9 +155,7 @@ public:
         return filepath;
     }
 
-    std::string getTestDirectory() const {
-        return test_directory_;
-    }
+    std::string getTestDirectory() const { return test_directory_; }
 
     void cleanupTestDirectory() {
         try {
@@ -189,8 +186,9 @@ private:
 
 class ThreadTestHelper {
 public:
-    template<typename Func>
-    static void runConcurrentTest(Func&& func, size_t thread_count = DEFAULT_THREAD_COUNT) {
+    template <typename Func>
+    static void runConcurrentTest(Func&& func,
+                                  size_t thread_count = DEFAULT_THREAD_COUNT) {
         std::vector<std::thread> threads;
         std::vector<std::exception_ptr> exceptions(thread_count);
 
@@ -225,34 +223,34 @@ public:
 // Test Macros
 // ============================================================================
 
-#define EXPECT_PERFORMANCE_BETTER_THAN(code, max_time_ms) \
-    do { \
-        atom::test::PerformanceTimer timer; \
-        timer.start(); \
-        { code } \
-        timer.stop(); \
-        EXPECT_LT(timer.getElapsedMilliseconds(), max_time_ms) \
-            << "Performance test failed: took " << timer.getElapsedMilliseconds() \
-            << "ms, expected less than " << max_time_ms << "ms"; \
-    } while(0)
+#define EXPECT_PERFORMANCE_BETTER_THAN(code, max_time_ms)                  \
+    do {                                                                   \
+        atom::test::PerformanceTimer timer;                                \
+        timer.start();                                                     \
+        {code} timer.stop();                                               \
+        EXPECT_LT(timer.getElapsedMilliseconds(), max_time_ms)             \
+            << "Performance test failed: took "                            \
+            << timer.getElapsedMilliseconds() << "ms, expected less than " \
+            << max_time_ms << "ms";                                        \
+    } while (0)
 
-#define EXPECT_NO_MEMORY_LEAKS(code) \
-    do { \
-        size_t initial_memory = atom::test::MemoryTracker::getCurrentMemoryUsage(); \
-        { code } \
-        size_t final_memory = atom::test::MemoryTracker::getCurrentMemoryUsage(); \
+#define EXPECT_NO_MEMORY_LEAKS(code)                                 \
+    do {                                                             \
+        size_t initial_memory =                                      \
+            atom::test::MemoryTracker::getCurrentMemoryUsage();      \
+        {code} size_t final_memory =                                 \
+            atom::test::MemoryTracker::getCurrentMemoryUsage();      \
         EXPECT_FALSE(atom::test::MemoryTracker::detectMemoryLeaks()) \
-            << "Memory leak detected"; \
-    } while(0)
+            << "Memory leak detected";                               \
+    } while (0)
 
-#define EXPECT_THREAD_SAFE(code, thread_count) \
-    do { \
-        EXPECT_NO_THROW({ \
-            atom::test::ThreadTestHelper::runConcurrentTest([&]() { \
-                code \
-            }, thread_count); \
-        }) << "Thread safety test failed"; \
-    } while(0)
+#define EXPECT_THREAD_SAFE(code, thread_count)                              \
+    do {                                                                    \
+        EXPECT_NO_THROW({                                                   \
+            atom::test::ThreadTestHelper::runConcurrentTest([&]() { code }, \
+                                                            thread_count);  \
+        }) << "Thread safety test failed";                                  \
+    } while (0)
 
 // ============================================================================
 // Common Test Fixtures
@@ -276,4 +274,4 @@ protected:
     std::unique_ptr<PerformanceTimer> timer_;
 };
 
-} // namespace atom::test
+}  // namespace atom::test

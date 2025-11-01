@@ -90,8 +90,8 @@ concept DelimiterPredicate =
  * @return true if the string starts with the prefix, otherwise false.
  * @throws None
  */
-[[nodiscard]] auto startsWith(std::string_view str, std::string_view prefix)
-    -> bool;
+[[nodiscard]] auto startsWith(std::string_view str,
+                              std::string_view prefix) -> bool;
 
 /**
  * @brief Checks if the given string ends with the specified suffix.
@@ -101,8 +101,8 @@ concept DelimiterPredicate =
  * @return true if the string ends with the suffix, otherwise false.
  * @throws None
  */
-[[nodiscard]] auto endsWith(std::string_view str, std::string_view suffix)
-    -> bool;
+[[nodiscard]] auto endsWith(std::string_view str,
+                            std::string_view suffix) -> bool;
 
 /**
  * @brief Splits a string into multiple strings.
@@ -113,8 +113,8 @@ concept DelimiterPredicate =
  * @throws std::bad_alloc If memory allocation fails.
  */
 [[nodiscard("the result of splitString is not used")]]
-auto splitString(std::string_view str, char delimiter)
-    -> std::vector<std::string>;
+auto splitString(std::string_view str,
+                 char delimiter) -> std::vector<std::string>;
 
 /**
  * @brief Concatenates an array of strings into a single string with a specified
@@ -189,15 +189,15 @@ auto explode(std::string_view text, char symbol) -> std::vector<std::string>;
  * @throws std::bad_alloc If memory allocation fails.
  */
 [[nodiscard("the result of trim is not used")]]
-auto trim(std::string_view line, std::string_view symbols = " \n\r\t")
-    -> std::string;
+auto trim(std::string_view line,
+          std::string_view symbols = " \n\r\t") -> std::string;
 
-auto nstrtok(std::string_view& str, const std::string_view& delims)
-    -> std::optional<std::string_view>;
+auto nstrtok(std::string_view& str,
+             const std::string_view& delims) -> std::optional<std::string_view>;
 
 auto parallelReplaceString(std::string_view text, std::string_view oldStr,
-                           std::string_view newStr, size_t threshold = 10000)
-    -> std::string;
+                           std::string_view newStr,
+                           size_t threshold = 10000) -> std::string;
 
 auto parallelSVVtoSV(std::span<const std::string_view> svv,
                      size_t threshold = 1000) -> std::vector<std::string>;
@@ -261,8 +261,8 @@ auto stof(std::string_view str, std::size_t* idx = nullptr) -> float;
  * @throws std::out_of_range If the converted value would fall out of the range.
  */
 [[nodiscard("the result of stoi is not used")]]
-auto stoi(std::string_view str, std::size_t* idx = nullptr, int base = 10)
-    -> int;
+auto stoi(std::string_view str, std::size_t* idx = nullptr,
+          int base = 10) -> int;
 
 /**
  * @brief Converts a string to a long integer.
@@ -275,8 +275,8 @@ auto stoi(std::string_view str, std::size_t* idx = nullptr, int base = 10)
  * @throws std::out_of_range If the converted value would fall out of the range.
  */
 [[nodiscard("the result of stol is not used")]]
-auto stol(std::string_view str, std::size_t* idx = nullptr, int base = 10)
-    -> long;
+auto stol(std::string_view str, std::size_t* idx = nullptr,
+          int base = 10) -> long;
 
 /**
  * @brief Extracts tokens from string, using the delimiter provided.
@@ -449,10 +449,9 @@ private:
  * @return SplitString object that can be iterated over or collected.
  * @throws None
  */
-[[nodiscard]] inline auto split(std::string_view str,
-                                std::string_view delimiter, bool trim = false,
-                                bool skipEmpty = false)
-    -> SplitString<std::string_view> {
+[[nodiscard]] inline auto split(
+    std::string_view str, std::string_view delimiter, bool trim = false,
+    bool skipEmpty = false) -> SplitString<std::string_view> {
     return SplitString<std::string_view>{str, delimiter, trim, skipEmpty};
 }
 
@@ -467,8 +466,8 @@ private:
  * @throws None
  */
 [[nodiscard]] inline auto split(std::string_view str, char delimiter,
-                                bool trim = false, bool skipEmpty = false)
-    -> SplitString<char> {
+                                bool trim = false,
+                                bool skipEmpty = false) -> SplitString<char> {
     return SplitString<char>{str, delimiter, trim, skipEmpty};
 }
 
@@ -484,8 +483,8 @@ private:
  */
 template <DelimiterPredicate Func>
 [[nodiscard]] inline auto split(std::string_view str, Func delimiter,
-                                bool trim = false, bool skipEmpty = false)
-    -> SplitString<Func> {
+                                bool trim = false,
+                                bool skipEmpty = false) -> SplitString<Func> {
     return SplitString<Func>{str, std::move(delimiter), trim, skipEmpty};
 }
 

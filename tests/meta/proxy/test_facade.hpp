@@ -99,9 +99,12 @@ TEST_F(FacadeTest, ConstraintMerging) {
     // Test constraint merging (should take the more restrictive constraint)
     auto merged = merge_constraints(c1, c2);
 
-    EXPECT_EQ(merged.copyability, constraint_level::trivial);  // More restrictive
-    EXPECT_EQ(merged.relocatability, constraint_level::trivial);  // More restrictive
-    EXPECT_EQ(merged.destructibility, constraint_level::nothrow);  // More restrictive
+    EXPECT_EQ(merged.copyability,
+              constraint_level::trivial);  // More restrictive
+    EXPECT_EQ(merged.relocatability,
+              constraint_level::trivial);  // More restrictive
+    EXPECT_EQ(merged.destructibility,
+              constraint_level::nothrow);                    // More restrictive
     EXPECT_EQ(merged.thread_safety, thread_safety::unique);  // More restrictive
 }
 
@@ -300,15 +303,16 @@ TEST_F(FacadeTest, SkillBasedDispatch) {
 
     // Define skills for testing
     struct ReadSkill {
-        template<typename T>
+        template <typename T>
         auto operator()(const T& obj) const -> decltype(obj.read()) {
             return obj.read();
         }
     };
 
     struct WriteSkill {
-        template<typename T>
-        auto operator()(T& obj, const std::string& data) const -> decltype(obj.write(data)) {
+        template <typename T>
+        auto operator()(T& obj, const std::string& data) const
+            -> decltype(obj.write(data)) {
             return obj.write(data);
         }
     };
@@ -369,13 +373,14 @@ TEST_F(FacadeTest, ThreadSafety) {
     std::vector<std::thread> threads;
 
     for (int i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&sharedProxy, &completedThreads, incrementsPerThread]() {
-            for (int j = 0; j < incrementsPerThread; ++j) {
-                int currentValue = sharedProxy->getValue();
-                sharedProxy->setValue(currentValue + 1);
-            }
-            completedThreads.fetch_add(1);
-        });
+        threads.emplace_back(
+            [&sharedProxy, &completedThreads, incrementsPerThread]() {
+                for (int j = 0; j < incrementsPerThread; ++j) {
+                    int currentValue = sharedProxy->getValue();
+                    sharedProxy->setValue(currentValue + 1);
+                }
+                completedThreads.fetch_add(1);
+            });
     }
 
     for (auto& thread : threads) {
@@ -396,9 +401,11 @@ TEST_F(FacadeTest, VTableDispatch) {
 
     for (int i = 0; i < 5; ++i) {
         if (i % 2 == 0) {
-            proxies.emplace_back(TestImplementation(i, "test_" + std::to_string(i)));
+            proxies.emplace_back(
+                TestImplementation(i, "test_" + std::to_string(i)));
         } else {
-            proxies.emplace_back(AnotherImplementation(i * 10, "another_" + std::to_string(i)));
+            proxies.emplace_back(
+                AnotherImplementation(i * 10, "another_" + std::to_string(i)));
         }
     }
 
@@ -477,9 +484,11 @@ TEST_F(FacadeTest, PerformanceCharacteristics) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
-    // Ensure operations complete in reasonable time (adjust threshold as needed)
+    // Ensure operations complete in reasonable time (adjust threshold as
+    // needed)
     EXPECT_LT(duration.count(), 100000);  // Less than 100ms for 10k operations
 }
 
@@ -494,11 +503,13 @@ TEST_F(FacadeTest, ConstraintValidation) {
 
         // Non-copyable
         ConstrainedImplementation(const ConstrainedImplementation&) = delete;
-        ConstrainedImplementation& operator=(const ConstrainedImplementation&) = delete;
+        ConstrainedImplementation& operator=(const ConstrainedImplementation&) =
+            delete;
 
         // Movable
         ConstrainedImplementation(ConstrainedImplementation&&) = default;
-        ConstrainedImplementation& operator=(ConstrainedImplementation&&) = default;
+        ConstrainedImplementation& operator=(ConstrainedImplementation&&) =
+            default;
 
         int getValue() const override { return value_; }
         void setValue(int value) override { value_ = value; }

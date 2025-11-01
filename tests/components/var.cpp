@@ -170,9 +170,12 @@ TEST(VariableManagerTest, GetAllVariables) {
     EXPECT_EQ(allVars.size(), 3);
 
     // Check that all variables are present
-    EXPECT_TRUE(std::find(allVars.begin(), allVars.end(), "var1") != allVars.end());
-    EXPECT_TRUE(std::find(allVars.begin(), allVars.end(), "var2") != allVars.end());
-    EXPECT_TRUE(std::find(allVars.begin(), allVars.end(), "var3") != allVars.end());
+    EXPECT_TRUE(std::find(allVars.begin(), allVars.end(), "var1") !=
+                allVars.end());
+    EXPECT_TRUE(std::find(allVars.begin(), allVars.end(), "var2") !=
+                allVars.end());
+    EXPECT_TRUE(std::find(allVars.begin(), allVars.end(), "var3") !=
+                allVars.end());
 }
 
 TEST(VariableManagerTest, GetVariablesByGroup) {
@@ -200,9 +203,7 @@ TEST(VariableManagerTest, ForEachVariable) {
     vm.addVariable("var3", 3);
 
     int count = 0;
-    vm.forEachVariable([&count](const std::string&, const auto&) {
-        count++;
-    });
+    vm.forEachVariable([&count](const std::string&, const auto&) { count++; });
 
     EXPECT_EQ(count, 3);
 }
@@ -217,7 +218,8 @@ TEST(VariableManagerTest, DuplicateVariableName) {
     vm.addVariable("duplicate", 42);
 
     // Adding duplicate should throw
-    EXPECT_THROW(vm.addVariable("duplicate", 100), atom::error::ObjectAlreadyExist);
+    EXPECT_THROW(vm.addVariable("duplicate", 100),
+                 atom::error::ObjectAlreadyExist);
 }
 
 TEST(VariableManagerTest, RangeValidationDifferentTypes) {
@@ -282,7 +284,8 @@ TEST(VariableManagerTest, TypeMismatchInSetValue) {
 TEST(VariableManagerTest, GetNonExistentVariable) {
     VariableManager vm;
 
-    EXPECT_THROW(vm.getVariable<int>("nonexistent"), atom::error::ObjectNotExist);
+    EXPECT_THROW(vm.getVariable<int>("nonexistent"),
+                 atom::error::ObjectNotExist);
 }
 
 TEST(VariableManagerTest, SetValueForNonExistentVariable) {

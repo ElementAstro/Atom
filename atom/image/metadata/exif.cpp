@@ -51,8 +51,8 @@ auto ExifParser::readUint32Le(const std::byte* data) -> uint32_t {
            (std::to_integer<uint32_t>(data[3]) << BYTE_SHIFT_24);
 }
 
-auto ExifParser::parseRational(const std::byte* data, bool isLittleEndian)
-    -> double {
+auto ExifParser::parseRational(const std::byte* data,
+                               bool isLittleEndian) -> double {
     uint32_t numerator =
         isLittleEndian ? readUint32Le(data) : readUint32Be(data);
     uint32_t denominator =
@@ -61,8 +61,8 @@ auto ExifParser::parseRational(const std::byte* data, bool isLittleEndian)
                             : static_cast<double>(numerator) / denominator;
 }
 
-auto ExifParser::parseGPSCoordinate(const std::byte* data, bool isLittleEndian)
-    -> std::string {
+auto ExifParser::parseGPSCoordinate(const std::byte* data,
+                                    bool isLittleEndian) -> std::string {
     double degrees = parseRational(data, isLittleEndian);
     double minutes = parseRational(data + RATIONAL_SIZE, isLittleEndian);
     double seconds = parseRational(data + 2 * RATIONAL_SIZE, isLittleEndian);
@@ -71,8 +71,8 @@ auto ExifParser::parseGPSCoordinate(const std::byte* data, bool isLittleEndian)
 }
 
 auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
-                          const std::byte* tiffStart, size_t bufferSize)
-    -> bool {
+                          const std::byte* tiffStart,
+                          size_t bufferSize) -> bool {
     uint16_t entryCount =
         isLittleEndian ? readUint16Le(data) : readUint16Be(data);
     data += 2;
@@ -166,8 +166,8 @@ auto ExifParser::parseIFD(const std::byte* data, bool isLittleEndian,
     return true;
 }
 
-auto ExifParser::parseColorSpace(const std::byte* data, bool isLittleEndian)
-    -> std::string {
+auto ExifParser::parseColorSpace(const std::byte* data,
+                                 bool isLittleEndian) -> std::string {
     uint16_t colorSpace =
         isLittleEndian ? readUint16Le(data) : readUint16Be(data);
     switch (colorSpace) {
@@ -180,8 +180,8 @@ auto ExifParser::parseColorSpace(const std::byte* data, bool isLittleEndian)
     }
 }
 
-auto ExifParser::parseOrientation(const std::byte* data, bool isLittleEndian)
-    -> std::string {
+auto ExifParser::parseOrientation(const std::byte* data,
+                                  bool isLittleEndian) -> std::string {
     uint16_t orientation =
         isLittleEndian ? readUint16Le(data) : readUint16Be(data);
     switch (orientation) {

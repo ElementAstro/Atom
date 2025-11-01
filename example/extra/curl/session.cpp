@@ -2,14 +2,15 @@
  * session.cpp - CURL Session Example (Minimal Stub Implementation)
  */
 
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <unordered_map>
-#include <chrono>
 
 using namespace std::chrono_literals;
 
-// Minimal stub implementations since atom-extra-curl has API compatibility issues
+// Minimal stub implementations since atom-extra-curl has API compatibility
+// issues
 
 namespace atom::extra::curl {
 
@@ -30,13 +31,9 @@ public:
         return it != headers.end() ? it->second : "";
     }
 
-    std::string text() const {
-        return body;
-    }
+    std::string text() const { return body; }
 
-    std::string url() const {
-        return "https://httpbin.org/get (stub)";
-    }
+    std::string url() const { return "https://httpbin.org/get (stub)"; }
 };
 
 // Stub Session class
@@ -53,7 +50,8 @@ public:
         return response;
     }
 
-    Response post(const std::string& url, const std::string& body, const std::string& content_type = "") {
+    Response post(const std::string& url, const std::string& body,
+                  const std::string& content_type = "") {
         std::cout << "POST request (stub): " << url << std::endl;
         std::cout << "  Body: " << body.substr(0, 50) << "..." << std::endl;
         Response response;
@@ -76,28 +74,33 @@ public:
     }
 
     void set_header(const std::string& name, const std::string& value) {
-        std::cout << "Setting header (stub): " << name << " = " << value << std::endl;
+        std::cout << "Setting header (stub): " << name << " = " << value
+                  << std::endl;
         headers_[name] = value;
     }
 
     void set_timeout(std::chrono::seconds timeout) {
-        std::cout << "Setting timeout (stub): " << timeout.count() << " seconds" << std::endl;
+        std::cout << "Setting timeout (stub): " << timeout.count() << " seconds"
+                  << std::endl;
         timeout_ = timeout;
     }
 
     void set_auth(const std::string& username, const std::string& password) {
-        std::cout << "Setting auth (stub): " << username << " / " << password << std::endl;
+        std::cout << "Setting auth (stub): " << username << " / " << password
+                  << std::endl;
         auth_username_ = username;
         auth_password_ = password;
     }
 
     void set_verify_ssl(bool verify) {
-        std::cout << "Setting SSL verification (stub): " << (verify ? "true" : "false") << std::endl;
+        std::cout << "Setting SSL verification (stub): "
+                  << (verify ? "true" : "false") << std::endl;
         verify_ssl_ = verify;
     }
 
     void set_follow_redirects(bool follow) {
-        std::cout << "Setting follow redirects (stub): " << (follow ? "true" : "false") << std::endl;
+        std::cout << "Setting follow redirects (stub): "
+                  << (follow ? "true" : "false") << std::endl;
         follow_redirects_ = follow;
     }
 
@@ -110,13 +113,16 @@ private:
     bool follow_redirects_ = false;
 };
 
-} // namespace atom::extra::curl
+}  // namespace atom::extra::curl
 
 using namespace atom::extra::curl;
 
 int main() {
-    std::cout << "=== CURL Session Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation due to API compatibility issues." << std::endl;
+    std::cout << "=== CURL Session Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation due to API compatibility "
+                 "issues."
+              << std::endl;
 
     try {
         // 1. Basic GET request
@@ -126,19 +132,23 @@ int main() {
             auto response = session.get("https://httpbin.org/get");
 
             std::cout << "Status: " << response.status_code << std::endl;
-            std::cout << "Content-Type: " << response.header("Content-Type") << std::endl;
-            std::cout << "Response: " << response.text().substr(0, 200) << "..." << std::endl;
+            std::cout << "Content-Type: " << response.header("Content-Type")
+                      << std::endl;
+            std::cout << "Response: " << response.text().substr(0, 200) << "..."
+                      << std::endl;
         }
 
         // 2. POST request with form data
         std::cout << "\n2. POST Request with Form Data:" << std::endl;
         {
             Session session;
-            std::string json_data = R"({"name": "John", "age": 30, "city": "New York"})";
+            std::string json_data =
+                R"({"name": "John", "age": 30, "city": "New York"})";
             auto response = session.post("https://httpbin.org/post", json_data);
 
             std::cout << "Status: " << response.status_code << std::endl;
-            std::cout << "Response: " << response.text().substr(0, 200) << "..." << std::endl;
+            std::cout << "Response: " << response.text().substr(0, 200) << "..."
+                      << std::endl;
         }
 
         // 3. Custom headers
@@ -151,7 +161,8 @@ int main() {
 
             auto response = session.get("https://httpbin.org/headers");
             std::cout << "Status: " << response.status_code << std::endl;
-            std::cout << "Response: " << response.text().substr(0, 400) << "..." << std::endl;
+            std::cout << "Response: " << response.text().substr(0, 400) << "..."
+                      << std::endl;
         }
 
         // 4. Timeout handling
@@ -170,11 +181,13 @@ int main() {
         {
             Session session;
             session.set_header("Content-Type", "application/json");
-            std::string json_data = R"({"updated": true, "timestamp": 1234567890})";
+            std::string json_data =
+                R"({"updated": true, "timestamp": 1234567890})";
             auto response = session.put("https://httpbin.org/put", json_data);
 
             std::cout << "Status: " << response.status_code << std::endl;
-            std::cout << "Response: " << response.text().substr(0, 300) << "..." << std::endl;
+            std::cout << "Response: " << response.text().substr(0, 300) << "..."
+                      << std::endl;
         }
 
         // 6. DELETE request
@@ -192,7 +205,8 @@ int main() {
             Session session;
             session.set_auth("testuser", "testpass");
 
-            auto response = session.get("https://httpbin.org/basic-auth/testuser/testpass");
+            auto response =
+                session.get("https://httpbin.org/basic-auth/testuser/testpass");
             std::cout << "Status: " << response.status_code << std::endl;
             std::cout << "Authentication test completed (stub)" << std::endl;
         }
@@ -215,14 +229,18 @@ int main() {
             session.set_follow_redirects(true);
 
             auto response = session.get("https://httpbin.org/redirect/3");
-            std::cout << "Final URL after redirects: " << response.url() << std::endl;
+            std::cout << "Final URL after redirects: " << response.url()
+                      << std::endl;
             std::cout << "Status: " << response.status_code << std::endl;
         }
 
-        std::cout << "\n=== CURL Session Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout
+            << "\n=== CURL Session Example Complete (Stub Implementation) ==="
+            << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in CURL session examples: " << e.what() << std::endl;
+        std::cerr << "Error in CURL session examples: " << e.what()
+                  << std::endl;
         return 1;
     }
 

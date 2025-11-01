@@ -121,7 +121,7 @@ std::string getFileSystemType(const std::string& path) {
     return result;
 
 #elif __linux__ || __ANDROID__
-    struct statfs buffer{};
+    struct statfs buffer {};
     if (statfs(path.c_str(), &buffer) != 0) {
         spdlog::error("Failed to get file system type for {}: {}", path,
                       strerror(errno));
@@ -145,7 +145,7 @@ std::string getFileSystemType(const std::string& path) {
     return "Unknown";
 
 #elif __APPLE__
-    struct statfs buffer{};
+    struct statfs buffer {};
     if (statfs(path.c_str(), &buffer) != 0) {
         spdlog::error("Failed to get file system type for {}: {}", path,
                       strerror(errno));
@@ -157,7 +157,7 @@ std::string getFileSystemType(const std::string& path) {
     return result;
 
 #elif defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__)
-    struct statfs buffer{};
+    struct statfs buffer {};
     if (statfs(path.c_str(), &buffer) != 0) {
         spdlog::error("Failed to get file system type for {}: {}", path,
                       strerror(errno));
@@ -169,7 +169,7 @@ std::string getFileSystemType(const std::string& path) {
     return result;
 
 #else
-    struct statvfs buffer{};
+    struct statvfs buffer {};
     if (statvfs(path.c_str(), &buffer) != 0) {
         spdlog::error("Failed to get file system type for {}: {}", path,
                       strerror(errno));

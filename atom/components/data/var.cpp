@@ -89,7 +89,8 @@ void VariableManager::removeVariable(const std::string& name) {
             // This might be an alias entry, find the primary
             std::string primaryName;
             for (const auto& [key, value] : variables_) {
-                if (key != name && !value.alias.empty() && value.alias == name) {
+                if (key != name && !value.alias.empty() &&
+                    value.alias == name) {
                     primaryName = key;
                     break;
                 }

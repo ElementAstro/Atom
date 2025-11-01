@@ -69,46 +69,50 @@ void HttpClient::gracefulClose() {
     }
 }
 
-auto HttpClient::request(
-    http::verb method, std::string_view host, std::string_view port,
-    std::string_view target, int version, std::string_view content_type,
-    std::string_view body,
-    const std::unordered_map<std::string, std::string>& headers)
-    -> http::response<http::string_body> {
+auto HttpClient::request(http::verb method, std::string_view host,
+                         std::string_view port, std::string_view target,
+                         int version, std::string_view content_type,
+                         std::string_view body,
+                         const std::unordered_map<std::string, std::string>&
+                             headers) -> http::response<http::string_body> {
     validateHostPort(host, port);
 
     // Use manual timeout mechanism for reliable timeout handling
-    auto request_future = std::async(std::launch::async, [this, method, host, port, target, version, content_type, body, &headers]() -> http::response<http::string_body> {
-        http::request<http::string_body> req;
-        setupRequest(req, method, host, target, version, content_type, body,
-                     headers);
+    auto request_future = std::async(
+        std::launch::async,
+        [this, method, host, port, target, version, content_type, body,
+         &headers]() -> http::response<http::string_body> {
+            http::request<http::string_body> req;
+            setupRequest(req, method, host, target, version, content_type, body,
+                         headers);
 
-        spdlog::debug("Sending {} request to {}:{}{}",
-                      std::string(http::to_string(method)), host, port, target);
+            spdlog::debug("Sending {} request to {}:{}{}",
+                          std::string(http::to_string(method)), host, port,
+                          target);
 
-        auto const results =
-            resolver_.resolve(std::string(host), std::string(port));
+            auto const results =
+                resolver_.resolve(std::string(host), std::string(port));
 
-        // Set timeout before connect
-        stream_.expires_after(timeout_);
-        stream_.connect(results);
+            // Set timeout before connect
+            stream_.expires_after(timeout_);
+            stream_.connect(results);
 
-        // Set timeout before write
-        stream_.expires_after(timeout_);
-        http::write(stream_, req);
+            // Set timeout before write
+            stream_.expires_after(timeout_);
+            http::write(stream_, req);
 
-        // Set timeout before read - this is critical for timeout handling
-        stream_.expires_after(timeout_);
-        beast::flat_buffer buffer;
-        http::response<http::string_body> res;
-        http::read(stream_, buffer, res);
+            // Set timeout before read - this is critical for timeout handling
+            stream_.expires_after(timeout_);
+            beast::flat_buffer buffer;
+            http::response<http::string_body> res;
+            http::read(stream_, buffer, res);
 
-        spdlog::debug("Received response: {} {}", static_cast<int>(res.result()),
-                      res.reason());
+            spdlog::debug("Received response: {} {}",
+                          static_cast<int>(res.result()), res.reason());
 
-        gracefulClose();
-        return res;
-    });
+            gracefulClose();
+            return res;
+        });
 
     // Wait for the request with timeout
     if (request_future.wait_for(timeout_) == std::future_status::timeout) {
@@ -214,7 +218,8 @@ void HttpClient::downloadFile(std::string_view host, std::string_view port,
         std::error_code ec;
         if (!std::filesystem::exists(parent, ec) &&
             !std::filesystem::create_directories(parent, ec)) {
-            throw std::runtime_error("Failed to create directory: " + parent.string());
+            throw std::runtime_error("Failed to create directory: " +
+                                     parent.string());
         }
     }
 
@@ -244,22 +249,21 @@ auto HttpClient::requestWithRetry(
     for (int attempt = 0; attempt < retry_count; ++attempt) {
         try {
             spdlog::debug("Request attempt {} of {}", attempt + 1, retry_count);
-            auto response = request(method, host, port, target, version, content_type,
-                                  body, headers);
+            auto response = request(method, host, port, target, version,
+                                    content_type, body, headers);
 
             // Check if we should retry based on status code
             if (response.result() == http::status::service_unavailable ||
                 response.result() == http::status::bad_gateway ||
                 response.result() == http::status::gateway_timeout) {
-
                 if (attempt + 1 == retry_count) {
                     spdlog::error("All retry attempts failed with status: {}",
-                                static_cast<int>(response.result()));
-                    return response; // Return the last response
+                                  static_cast<int>(response.result()));
+                    return response;  // Return the last response
                 }
 
                 spdlog::warn("Request attempt {} failed with status: {}",
-                           attempt + 1, static_cast<int>(response.result()));
+                             attempt + 1, static_cast<int>(response.result()));
                 auto delay = std::chrono::milliseconds(100 << attempt);
                 std::this_thread::sleep_for(delay);
                 continue;

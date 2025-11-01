@@ -17,6 +17,8 @@
 #include <intrin.h>
 #include <tchar.h>
 #include <windows.h>
+#define popen _popen
+#define pclose _pclose
 #else
 #include <cpuid.h>
 #include <sys/utsname.h>

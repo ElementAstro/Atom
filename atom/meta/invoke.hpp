@@ -245,7 +245,7 @@ template <typename R, typename T, typename... Args>
  * \return Callable that returns member variable reference
  */
 template <typename T, typename M>
-[[nodiscard]] constexpr auto delayMemberVarInvoke(M T::* memberVar, T* obj) {
+[[nodiscard]] constexpr auto delayMemberVarInvoke(M T::*memberVar, T* obj) {
     return [memberVar, obj]() -> M& {
         if (obj == nullptr) [[unlikely]] {
             THROW_INVALID_ARGUMENT(

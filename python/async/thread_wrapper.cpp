@@ -112,7 +112,8 @@ PYBIND11_MODULE(thread_wrapper, m) {
 
     // Register exception classes
     py::register_exception<atom::async::ThreadException>(m, "ThreadException");
-    py::register_exception<atom::async::ThreadPoolException>(m, "ThreadPoolException");
+    py::register_exception<atom::async::ThreadPoolException>(
+        m, "ThreadPoolException");
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -292,11 +293,14 @@ Returns:
             )pbdoc")
         .def(
             "start_periodic",
-            [](atom::async::Thread& self, py::function func, std::chrono::milliseconds interval) {
-                self.startPeriodic([func]() {
-                    py::gil_scoped_acquire acquire;
-                    func();
-                }, interval);
+            [](atom::async::Thread& self, py::function func,
+               std::chrono::milliseconds interval) {
+                self.startPeriodic(
+                    [func]() {
+                        py::gil_scoped_acquire acquire;
+                        func();
+                    },
+                    interval);
             },
             py::arg("func"), py::arg("interval"),
             R"pbdoc(
@@ -308,7 +312,8 @@ Returns:
             )pbdoc")
         .def(
             "start_delayed",
-            [](atom::async::Thread& self, std::chrono::milliseconds delay, py::function func) {
+            [](atom::async::Thread& self, std::chrono::milliseconds delay,
+               py::function func) {
                 self.startDelayed(delay, [func]() {
                     py::gil_scoped_acquire acquire;
                     func();
@@ -345,8 +350,7 @@ Returns:
             Returns:
                 bool: True if the thread finished within the timeout, False otherwise.
             )pbdoc")
-        .def("swap", &atom::async::Thread::swap,
-             py::arg("other"),
+        .def("swap", &atom::async::Thread::swap, py::arg("other"),
              R"pbdoc(
              Swap this thread with another thread.
 
@@ -390,8 +394,9 @@ Returns:
 
              Note: This is an advanced feature for platform-specific operations.
              )pbdoc")
-        .def_static("get_hardware_concurrency", &atom::async::Thread::getHardwareConcurrency,
-             R"pbdoc(
+        .def_static("get_hardware_concurrency",
+                    &atom::async::Thread::getHardwareConcurrency,
+                    R"pbdoc(
              Get the number of concurrent threads supported by the implementation.
 
              Returns:
@@ -399,9 +404,9 @@ Returns:
 
              This is useful for determining optimal thread pool sizes.
              )pbdoc")
-        .def_static("set_current_thread_name", &atom::async::Thread::setCurrentThreadName,
-             py::arg("name"),
-             R"pbdoc(
+        .def_static("set_current_thread_name",
+                    &atom::async::Thread::setCurrentThreadName, py::arg("name"),
+                    R"pbdoc(
              Set the name of the current thread for debugging purposes.
 
              Args:
@@ -533,9 +538,8 @@ Returns:
             R"(Checks if the operation has completed.)");
 
     // Task class binding (C++20 coroutine Task)
-    py::class_<atom::async::Task<py::object>>(
-        m, "Task",
-        R"pbdoc(
+    py::class_<atom::async::Task<py::object>>(m, "Task",
+                                              R"pbdoc(
         A simple C++20 coroutine task wrapper.
 
         This class provides a coroutine-based asynchronous programming model
@@ -550,9 +554,10 @@ Returns:
             >>> task.set_completion_callback(lambda: print("Task completed"))
             >>> result = task.get_result()
         )pbdoc")
-        .def("__repr__", [](const atom::async::Task<py::object>&) {
-            return "<Task coroutine object>";
-        })
+        .def("__repr__",
+             [](const atom::async::Task<py::object>&) {
+                 return "<Task coroutine object>";
+             })
         .def("is_completed", &atom::async::Task<py::object>::isCompleted,
              R"pbdoc(
              Check if the task has completed.
@@ -605,17 +610,17 @@ Returns:
              )pbdoc");
 
     // Task void specialization
-    py::class_<atom::async::Task<void>>(
-        m, "TaskVoid",
-        R"pbdoc(
+    py::class_<atom::async::Task<void>>(m, "TaskVoid",
+                                        R"pbdoc(
         A C++20 coroutine task wrapper for void operations.
 
         This specialization is optimized for tasks that don't return a value
         but may still need completion tracking and exception handling.
         )pbdoc")
-        .def("__repr__", [](const atom::async::Task<void>&) {
-            return "<TaskVoid coroutine object>";
-        })
+        .def("__repr__",
+             [](const atom::async::Task<void>&) {
+                 return "<TaskVoid coroutine object>";
+             })
         .def("is_completed", &atom::async::Task<void>::isCompleted,
              R"pbdoc(
              Check if the void task has completed.
@@ -864,9 +869,7 @@ Returns:
 
     m.def(
         "get_thread_count",
-        []() {
-            return atom::async::globalThreadPool().getThreadCount();
-        },
+        []() { return atom::async::globalThreadPool().getThreadCount(); },
         R"pbdoc(
         Get the number of threads in the global thread pool.
 
@@ -876,9 +879,7 @@ Returns:
 
     m.def(
         "get_active_thread_count",
-        []() {
-            return atom::async::globalThreadPool().getActiveThreadCount();
-        },
+        []() { return atom::async::globalThreadPool().getActiveThreadCount(); },
         R"pbdoc(
         Get the number of active threads in the global thread pool.
 
@@ -888,9 +889,7 @@ Returns:
 
     m.def(
         "get_pending_task_count",
-        []() {
-            return atom::async::globalThreadPool().getPendingTaskCount();
-        },
+        []() { return atom::async::globalThreadPool().getPendingTaskCount(); },
         R"pbdoc(
         Get the number of pending tasks in the global thread pool.
 
@@ -901,9 +900,7 @@ Returns:
     // Thread synchronization utilities
     m.def(
         "wait_for_all_threads",
-        []() {
-            atom::async::globalThreadPool().waitForAllTasks();
-        },
+        []() { atom::async::globalThreadPool().waitForAllTasks(); },
         R"pbdoc(
         Wait for all pending tasks in the global thread pool to complete.
 
@@ -914,9 +911,7 @@ Returns:
 
     m.def(
         "shutdown_thread_pool",
-        []() {
-            atom::async::globalThreadPool().shutdown();
-        },
+        []() { atom::async::globalThreadPool().shutdown(); },
         R"pbdoc(
         Shutdown the global thread pool gracefully.
 
@@ -931,10 +926,14 @@ Returns:
         "get_cpu_usage",
         []() -> py::dict {
             py::dict result;
-            result["hardware_concurrency"] = std::thread::hardware_concurrency();
-            result["active_threads"] = atom::async::globalThreadPool().getActiveThreadCount();
-            result["total_threads"] = atom::async::globalThreadPool().getThreadCount();
-            result["pending_tasks"] = atom::async::globalThreadPool().getPendingTaskCount();
+            result["hardware_concurrency"] =
+                std::thread::hardware_concurrency();
+            result["active_threads"] =
+                atom::async::globalThreadPool().getActiveThreadCount();
+            result["total_threads"] =
+                atom::async::globalThreadPool().getThreadCount();
+            result["pending_tasks"] =
+                atom::async::globalThreadPool().getPendingTaskCount();
             return result;
         },
         R"pbdoc(

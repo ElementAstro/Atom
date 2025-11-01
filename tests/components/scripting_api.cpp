@@ -2,12 +2,12 @@
 #include "atom/components/component.hpp"
 
 #include <gtest/gtest.h>
+#include <atomic>
 #include <memory>
 #include <string>
-#include <vector>
-#include <unordered_map>
 #include <thread>
-#include <atomic>
+#include <unordered_map>
+#include <vector>
 
 using namespace atom::components::scripting;
 
@@ -23,17 +23,15 @@ protected:
         stringValue_ = ScriptValue("Hello World");
 
         // Create array value
-        std::vector<ScriptValue> arrayData = {
-            ScriptValue(1), ScriptValue(2), ScriptValue(3)
-        };
+        std::vector<ScriptValue> arrayData = {ScriptValue(1), ScriptValue(2),
+                                              ScriptValue(3)};
         arrayValue_ = ScriptValue(arrayData);
 
         // Create object value
         std::unordered_map<std::string, ScriptValue> objectData = {
             {"key1", ScriptValue("value1")},
             {"key2", ScriptValue(123)},
-            {"key3", ScriptValue(true)}
-        };
+            {"key3", ScriptValue(true)}};
         objectValue_ = ScriptValue(objectData);
     }
 
@@ -57,9 +55,7 @@ protected:
         api_->initialize();
     }
 
-    void TearDown() override {
-        api_->shutdown();
-    }
+    void TearDown() override { api_->shutdown(); }
 
     ComponentScriptingAPI* api_;
     std::shared_ptr<Component> component_;
@@ -68,9 +64,12 @@ protected:
 // Mock ScriptEngine for testing
 class MockScriptEngine : public IScriptEngine {
 public:
-    bool initialize(const ScriptEngineConfig& /*config*/) override { return true; }
+    bool initialize(const ScriptEngineConfig& /*config*/) override {
+        return true;
+    }
 
-    ScriptResult executeScript(const std::string& script, const std::string& /*context*/ = "") override {
+    ScriptResult executeScript(const std::string& script,
+                               const std::string& /*context*/ = "") override {
         ScriptResult result;
         if (script.find("invalid") != std::string::npos) {
             result.success = false;
@@ -89,22 +88,26 @@ public:
         return result;
     }
 
-    ScriptResult callFunction(const std::string& functionName, const std::vector<ScriptValue>& args = {}) override {
+    ScriptResult callFunction(
+        const std::string& functionName,
+        const std::vector<ScriptValue>& args = {}) override {
         ScriptResult result;
         result.success = true;
         if (functionName == "testFunc" && args.size() == 2) {
-            result.returnValue = ScriptValue(30); // Mock addition result
+            result.returnValue = ScriptValue(30);  // Mock addition result
         }
         return result;
     }
 
-    void setGlobal(const std::string& /*name*/, const ScriptValue& /*value*/) override {}
+    void setGlobal(const std::string& /*name*/,
+                   const ScriptValue& /*value*/) override {}
 
     std::optional<ScriptValue> getGlobal(const std::string& /*name*/) override {
         return ScriptValue(42);
     }
 
-    void registerFunction(const std::string& /*name*/, ScriptFunction /*function*/) override {}
+    void registerFunction(const std::string& /*name*/,
+                          ScriptFunction /*function*/) override {}
 
     ScriptLanguage getLanguage() const override { return ScriptLanguage::Auto; }
 };
@@ -165,7 +168,8 @@ TEST_F(ScriptValueTest, StringConstruction) {
 }
 
 TEST_F(ScriptValueTest, ArrayConstruction) {
-    EXPECT_TRUE(std::holds_alternative<std::vector<ScriptValue>>(arrayValue_.value));
+    EXPECT_TRUE(
+        std::holds_alternative<std::vector<ScriptValue>>(arrayValue_.value));
 
     const auto& array = std::get<std::vector<ScriptValue>>(arrayValue_.value);
     EXPECT_EQ(array.size(), 3);
@@ -175,9 +179,11 @@ TEST_F(ScriptValueTest, ArrayConstruction) {
 }
 
 TEST_F(ScriptValueTest, ObjectConstruction) {
-    EXPECT_TRUE(objectValue_.holds<std::unordered_map<std::string, ScriptValue>>());
+    EXPECT_TRUE(
+        objectValue_.holds<std::unordered_map<std::string, ScriptValue>>());
 
-    const auto& object = objectValue_.get<std::unordered_map<std::string, ScriptValue>>();
+    const auto& object =
+        objectValue_.get<std::unordered_map<std::string, ScriptValue>>();
     EXPECT_EQ(object.size(), 3);
     EXPECT_TRUE(object.find("key1") != object.end());
     EXPECT_TRUE(object.find("key2") != object.end());
@@ -215,7 +221,8 @@ TEST_F(ScriptValueTest, ArrayAccess) {
 }
 
 TEST_F(ScriptValueTest, ObjectAccess) {
-    const auto& object = objectValue_.get<std::unordered_map<std::string, ScriptValue>>();
+    const auto& object =
+        objectValue_.get<std::unordered_map<std::string, ScriptValue>>();
     EXPECT_EQ(object.at("key1").get<std::string>(), "value1");
     EXPECT_EQ(object.at("key2").get<int64_t>(), 123);
     EXPECT_EQ(object.at("key3").get<bool>(), true);
@@ -258,7 +265,8 @@ TEST_F(ComponentScriptingAPITest, ExecuteScript) {
 
     auto result = api_->execute(script, false, ScriptLanguage::Auto);
 
-    // Result depends on implementation - should either succeed or fail gracefully
+    // Result depends on implementation - should either succeed or fail
+    // gracefully
     EXPECT_TRUE(result.success || !result.errorMessage.empty());
 }
 
@@ -297,7 +305,8 @@ TEST_F(ComponentScriptingAPITest, RegisterComponent) {
     ASSERT_NE(engine, nullptr);
 
     // Register a component with the engine
-    EXPECT_NO_THROW(api_->registerComponent("TestComponent", component_, *engine));
+    EXPECT_NO_THROW(
+        api_->registerComponent("TestComponent", component_, *engine));
 }
 
 TEST_F(ComponentScriptingAPITest, GetGlobalStatistics) {

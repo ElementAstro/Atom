@@ -700,7 +700,8 @@ std::optional<std::string> getDeviceSerialNumber(
 #endif
 }
 
-std::variant<int, std::string> getDiskHealth(const std::string& /*devicePath*/) {
+std::variant<int, std::string> getDiskHealth(
+    const std::string& /*devicePath*/) {
 #ifdef _WIN32
     spdlog::info("Disk health check not fully implemented for Windows");
     return "Not implemented for Windows yet";

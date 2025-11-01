@@ -14,8 +14,8 @@ Tests desktop environment and window manager detection.
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <string>
 #include <algorithm>
+#include <string>
 
 #include "atom/sysinfo/wm.hpp"
 
@@ -43,19 +43,22 @@ TEST_F(WmTest, GetSystemInfo) {
     SystemInfo sysInfo = getSystemInfo();
 
     // Should not throw and return a valid structure
-    EXPECT_TRUE(true); // Basic structure test
+    EXPECT_TRUE(true);  // Basic structure test
 
-    // Desktop environment should be a string (might be empty on headless systems)
-    EXPECT_TRUE(sysInfo.desktopEnvironment.empty() || !sysInfo.desktopEnvironment.empty());
+    // Desktop environment should be a string (might be empty on headless
+    // systems)
+    EXPECT_TRUE(sysInfo.desktopEnvironment.empty() ||
+                !sysInfo.desktopEnvironment.empty());
 
     // If desktop environment is detected, it should be reasonable
     if (!sysInfo.desktopEnvironment.empty()) {
         EXPECT_GT(sysInfo.desktopEnvironment.length(), 0);
-        EXPECT_LT(sysInfo.desktopEnvironment.length(), 100); // Reasonable upper bound
+        EXPECT_LT(sysInfo.desktopEnvironment.length(),
+                  100);  // Reasonable upper bound
 
         // Should not contain only whitespace
         EXPECT_FALSE(std::all_of(sysInfo.desktopEnvironment.begin(),
-                                sysInfo.desktopEnvironment.end(), ::isspace));
+                                 sysInfo.desktopEnvironment.end(), ::isspace));
     }
 }
 
@@ -69,18 +72,18 @@ TEST_F(WmTest, DesktopEnvironmentDetection) {
 
         // Common desktop environments
         bool isKnownDE = (de.find("GNOME") != std::string::npos ||
-                         de.find("KDE") != std::string::npos ||
-                         de.find("XFCE") != std::string::npos ||
-                         de.find("LXDE") != std::string::npos ||
-                         de.find("MATE") != std::string::npos ||
-                         de.find("Cinnamon") != std::string::npos ||
-                         de.find("Unity") != std::string::npos ||
-                         de.find("Budgie") != std::string::npos ||
-                         de.find("Pantheon") != std::string::npos ||
-                         de.find("Fluent") != std::string::npos ||
-                         de.find("Windows") != std::string::npos ||
-                         de.find("macOS") != std::string::npos ||
-                         de.find("Aqua") != std::string::npos);
+                          de.find("KDE") != std::string::npos ||
+                          de.find("XFCE") != std::string::npos ||
+                          de.find("LXDE") != std::string::npos ||
+                          de.find("MATE") != std::string::npos ||
+                          de.find("Cinnamon") != std::string::npos ||
+                          de.find("Unity") != std::string::npos ||
+                          de.find("Budgie") != std::string::npos ||
+                          de.find("Pantheon") != std::string::npos ||
+                          de.find("Fluent") != std::string::npos ||
+                          de.find("Windows") != std::string::npos ||
+                          de.find("macOS") != std::string::npos ||
+                          de.find("Aqua") != std::string::npos);
 
         // Note: This might fail for unknown DEs, which is acceptable
         if (isKnownDE) {
@@ -94,30 +97,33 @@ TEST_F(WmTest, WindowManagerDetection) {
     SystemInfo sysInfo = getSystemInfo();
 
     // Window manager should be a string (might be empty)
-    EXPECT_TRUE(sysInfo.windowManager.empty() || !sysInfo.windowManager.empty());
+    EXPECT_TRUE(sysInfo.windowManager.empty() ||
+                !sysInfo.windowManager.empty());
 
     // If window manager is detected, it should be reasonable
     if (!sysInfo.windowManager.empty()) {
         EXPECT_GT(sysInfo.windowManager.length(), 0);
-        EXPECT_LT(sysInfo.windowManager.length(), 100); // Reasonable upper bound
+        EXPECT_LT(sysInfo.windowManager.length(),
+                  100);  // Reasonable upper bound
 
         // Should not contain only whitespace
         EXPECT_FALSE(std::all_of(sysInfo.windowManager.begin(),
-                                sysInfo.windowManager.end(), ::isspace));
+                                 sysInfo.windowManager.end(), ::isspace));
 
         // Common window managers
         std::string wm = sysInfo.windowManager;
-        bool isKnownWM = (wm.find("Mutter") != std::string::npos ||
-                         wm.find("KWin") != std::string::npos ||
-                         wm.find("Xfwm") != std::string::npos ||
-                         wm.find("Openbox") != std::string::npos ||
-                         wm.find("i3") != std::string::npos ||
-                         wm.find("bspwm") != std::string::npos ||
-                         wm.find("awesome") != std::string::npos ||
-                         wm.find("dwm") != std::string::npos ||
-                         wm.find("Fluxbox") != std::string::npos ||
-                         wm.find("Desktop Window Manager") != std::string::npos ||
-                         wm.find("Quartz Compositor") != std::string::npos);
+        bool isKnownWM =
+            (wm.find("Mutter") != std::string::npos ||
+             wm.find("KWin") != std::string::npos ||
+             wm.find("Xfwm") != std::string::npos ||
+             wm.find("Openbox") != std::string::npos ||
+             wm.find("i3") != std::string::npos ||
+             wm.find("bspwm") != std::string::npos ||
+             wm.find("awesome") != std::string::npos ||
+             wm.find("dwm") != std::string::npos ||
+             wm.find("Fluxbox") != std::string::npos ||
+             wm.find("Desktop Window Manager") != std::string::npos ||
+             wm.find("Quartz Compositor") != std::string::npos);
 
         // Note: This might fail for unknown WMs, which is acceptable
         if (isKnownWM) {
@@ -136,11 +142,11 @@ TEST_F(WmTest, ThemeInformation) {
     // If theme is detected, it should be reasonable
     if (!sysInfo.wmTheme.empty()) {
         EXPECT_GT(sysInfo.wmTheme.length(), 0);
-        EXPECT_LT(sysInfo.wmTheme.length(), 200); // Reasonable upper bound
+        EXPECT_LT(sysInfo.wmTheme.length(), 200);  // Reasonable upper bound
 
         // Should not contain only whitespace
-        EXPECT_FALSE(std::all_of(sysInfo.wmTheme.begin(),
-                                sysInfo.wmTheme.end(), ::isspace));
+        EXPECT_FALSE(std::all_of(sysInfo.wmTheme.begin(), sysInfo.wmTheme.end(),
+                                 ::isspace));
     }
 }
 
@@ -154,11 +160,11 @@ TEST_F(WmTest, IconInformation) {
     // If icons are detected, they should be reasonable
     if (!sysInfo.icons.empty()) {
         EXPECT_GT(sysInfo.icons.length(), 0);
-        EXPECT_LT(sysInfo.icons.length(), 200); // Reasonable upper bound
+        EXPECT_LT(sysInfo.icons.length(), 200);  // Reasonable upper bound
 
         // Should not contain only whitespace
-        EXPECT_FALSE(std::all_of(sysInfo.icons.begin(),
-                                sysInfo.icons.end(), ::isspace));
+        EXPECT_FALSE(
+            std::all_of(sysInfo.icons.begin(), sysInfo.icons.end(), ::isspace));
     }
 }
 
@@ -172,11 +178,11 @@ TEST_F(WmTest, FontInformation) {
     // If font is detected, it should be reasonable
     if (!sysInfo.font.empty()) {
         EXPECT_GT(sysInfo.font.length(), 0);
-        EXPECT_LT(sysInfo.font.length(), 200); // Reasonable upper bound
+        EXPECT_LT(sysInfo.font.length(), 200);  // Reasonable upper bound
 
         // Should not contain only whitespace
-        EXPECT_FALSE(std::all_of(sysInfo.font.begin(),
-                                sysInfo.font.end(), ::isspace));
+        EXPECT_FALSE(
+            std::all_of(sysInfo.font.begin(), sysInfo.font.end(), ::isspace));
     }
 }
 
@@ -190,11 +196,11 @@ TEST_F(WmTest, CursorInformation) {
     // If cursor is detected, it should be reasonable
     if (!sysInfo.cursor.empty()) {
         EXPECT_GT(sysInfo.cursor.length(), 0);
-        EXPECT_LT(sysInfo.cursor.length(), 200); // Reasonable upper bound
+        EXPECT_LT(sysInfo.cursor.length(), 200);  // Reasonable upper bound
 
         // Should not contain only whitespace
-        EXPECT_FALSE(std::all_of(sysInfo.cursor.begin(),
-                                sysInfo.cursor.end(), ::isspace));
+        EXPECT_FALSE(std::all_of(sysInfo.cursor.begin(), sysInfo.cursor.end(),
+                                 ::isspace));
     }
 }
 
@@ -227,8 +233,10 @@ TEST_F(WmTest, PlatformSpecificBehavior) {
     // On Windows, we might detect Desktop Window Manager
     if (!sysInfo.windowManager.empty()) {
         // Windows-specific window managers
-        bool isWindowsWM = (sysInfo.windowManager.find("Desktop Window Manager") != std::string::npos ||
-                           sysInfo.windowManager.find("DWM") != std::string::npos);
+        bool isWindowsWM =
+            (sysInfo.windowManager.find("Desktop Window Manager") !=
+                 std::string::npos ||
+             sysInfo.windowManager.find("DWM") != std::string::npos);
 
         if (isWindowsWM) {
             EXPECT_TRUE(isWindowsWM);
@@ -237,8 +245,9 @@ TEST_F(WmTest, PlatformSpecificBehavior) {
 
     // Desktop environment might be "Fluent" or similar on Windows
     if (!sysInfo.desktopEnvironment.empty()) {
-        bool isWindowsDE = (sysInfo.desktopEnvironment.find("Fluent") != std::string::npos ||
-                           sysInfo.desktopEnvironment.find("Windows") != std::string::npos);
+        bool isWindowsDE =
+            (sysInfo.desktopEnvironment.find("Fluent") != std::string::npos ||
+             sysInfo.desktopEnvironment.find("Windows") != std::string::npos);
 
         if (isWindowsDE) {
             EXPECT_TRUE(isWindowsDE);
@@ -249,8 +258,10 @@ TEST_F(WmTest, PlatformSpecificBehavior) {
 #ifdef __APPLE__
     // On macOS, we might detect Aqua or Quartz Compositor
     if (!sysInfo.windowManager.empty()) {
-        bool isMacWM = (sysInfo.windowManager.find("Quartz Compositor") != std::string::npos ||
-                       sysInfo.windowManager.find("WindowServer") != std::string::npos);
+        bool isMacWM =
+            (sysInfo.windowManager.find("Quartz Compositor") !=
+                 std::string::npos ||
+             sysInfo.windowManager.find("WindowServer") != std::string::npos);
 
         if (isMacWM) {
             EXPECT_TRUE(isMacWM);
@@ -258,8 +269,9 @@ TEST_F(WmTest, PlatformSpecificBehavior) {
     }
 
     if (!sysInfo.desktopEnvironment.empty()) {
-        bool isMacDE = (sysInfo.desktopEnvironment.find("Aqua") != std::string::npos ||
-                       sysInfo.desktopEnvironment.find("macOS") != std::string::npos);
+        bool isMacDE =
+            (sysInfo.desktopEnvironment.find("Aqua") != std::string::npos ||
+             sysInfo.desktopEnvironment.find("macOS") != std::string::npos);
 
         if (isMacDE) {
             EXPECT_TRUE(isMacDE);
@@ -270,10 +282,11 @@ TEST_F(WmTest, PlatformSpecificBehavior) {
 #ifdef __linux__
     // On Linux, we might detect various DEs and WMs
     if (!sysInfo.desktopEnvironment.empty()) {
-        bool isLinuxDE = (sysInfo.desktopEnvironment.find("GNOME") != std::string::npos ||
-                         sysInfo.desktopEnvironment.find("KDE") != std::string::npos ||
-                         sysInfo.desktopEnvironment.find("XFCE") != std::string::npos ||
-                         sysInfo.desktopEnvironment.find("LXDE") != std::string::npos);
+        bool isLinuxDE =
+            (sysInfo.desktopEnvironment.find("GNOME") != std::string::npos ||
+             sysInfo.desktopEnvironment.find("KDE") != std::string::npos ||
+             sysInfo.desktopEnvironment.find("XFCE") != std::string::npos ||
+             sysInfo.desktopEnvironment.find("LXDE") != std::string::npos);
 
         // Note: This might fail for other Linux DEs, which is acceptable
         if (isLinuxDE) {
@@ -289,9 +302,7 @@ TEST_F(WmTest, PlatformSpecificBehavior) {
 
 TEST_F(WmTest, NoThrowGuarantee) {
     // Test that getSystemInfo provides no-throw guarantee
-    EXPECT_NO_THROW({
-        SystemInfo info = getSystemInfo();
-    });
+    EXPECT_NO_THROW({ SystemInfo info = getSystemInfo(); });
 }
 
 TEST_F(WmTest, HeadlessSystemHandling) {
@@ -305,7 +316,8 @@ TEST_F(WmTest, HeadlessSystemHandling) {
     // If no desktop environment is detected, window manager might also be empty
     if (sysInfo.desktopEnvironment.empty()) {
         // This is acceptable for headless systems
-        EXPECT_TRUE(sysInfo.windowManager.empty() || !sysInfo.windowManager.empty());
+        EXPECT_TRUE(sysInfo.windowManager.empty() ||
+                    !sysInfo.windowManager.empty());
     }
 }
 
@@ -324,4 +336,4 @@ TEST_F(WmTest, StructureAlignment) {
     });
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

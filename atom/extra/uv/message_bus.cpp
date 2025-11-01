@@ -1,40 +1,43 @@
 #include "message_bus.hpp"
 
 #include <spdlog/spdlog.h>
-#include <unordered_map>
-#include <mutex>
-#include <shared_mutex>
-#include <queue>
-#include <functional>
-#include <typeindex>
 #include <any>
+#include <functional>
+#include <mutex>
+#include <queue>
+#include <shared_mutex>
+#include <typeindex>
+#include <unordered_map>
 
 namespace msgbus {
 
 // Implementation struct for PIMPL
 struct MessageBus::Impl {
-    using HandlerMap = std::unordered_map<uint64_t, std::function<void(const std::any&)>>;
+    using HandlerMap =
+        std::unordered_map<uint64_t, std::function<void(const std::any&)>>;
     using TopicHandlers = std::unordered_map<std::string, HandlerMap>;
     using TypeHandlers = std::unordered_map<std::type_index, TopicHandlers>;
-    
+
     mutable std::shared_mutex handlers_mutex;
     TypeHandlers handlers;
-    
+
     mutable std::mutex message_queue_mutex;
     std::queue<std::function<void()>> message_queue;
-    
-    std::atomic<std::chrono::milliseconds> avg_delivery_time{std::chrono::milliseconds(0)};
+
+    std::atomic<std::chrono::milliseconds> avg_delivery_time{
+        std::chrono::milliseconds(0)};
 };
 
 // MessageBus constructor
 MessageBus::MessageBus(const BackPressureConfig& config)
-    : config_(config), shutdown_(false), handler_id_counter_(0), pimpl_(std::make_unique<Impl>()) {
+    : config_(config),
+      shutdown_(false),
+      handler_id_counter_(0),
+      pimpl_(std::make_unique<Impl>()) {
     spdlog::info("MessageBus initialized with max queue size: {}",
                  config_.max_queue_size);
 }
-MessageBus::~MessageBus() { 
-    shutdown(); 
-}
+MessageBus::~MessageBus() { shutdown(); }
 
 void MessageBus::shutdown() {
     bool expected = false;
@@ -65,13 +68,15 @@ void MessageBus::process_messages() {
     }
 
     auto end_time = std::chrono::steady_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
 
     // Update average delivery time (simple exponential moving average)
     auto current_avg = pimpl_->avg_delivery_time.load();
-    auto new_avg = std::chrono::milliseconds(
-        (current_avg.count() * 9 + duration.count()) / 10  // 0.9 weight on old average
-    );
+    auto new_avg =
+        std::chrono::milliseconds((current_avg.count() * 9 + duration.count()) /
+                                  10  // 0.9 weight on old average
+        );
     pimpl_->avg_delivery_time.store(new_avg);
 }
 
@@ -96,6 +101,5 @@ MessageBus::QueueStats MessageBus::get_stats() const {
                       .total_handlers = total_handlers,
                       .avg_delivery_time = pimpl_->avg_delivery_time.load()};
 }
-
 
 }  // namespace msgbus

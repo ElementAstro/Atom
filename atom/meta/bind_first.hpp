@@ -176,8 +176,7 @@ template <typename F, typename O>
  * \return Function that returns reference to the member variable
  */
 template <typename O, typename T, typename Class>
-[[nodiscard]] constexpr auto bindMember(T Class::* member,
-                                        O&& object) noexcept {
+[[nodiscard]] constexpr auto bindMember(T Class::*member, O&& object) noexcept {
     return [member, object = std::forward<O>(object)]() -> T& {
         return removeConstPointer(getPointer(object))->*member;
     };
@@ -314,8 +313,6 @@ template <typename O, typename Ret, typename... Param>
         return (object.get()->*func)(std::forward<Param>(param)...);
     };
 }
-
-
 
 }  // namespace atom::meta
 

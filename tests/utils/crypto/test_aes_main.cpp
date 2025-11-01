@@ -18,14 +18,14 @@
 using namespace atom::utils;
 
 // Explicit using declarations to help with namespace resolution
-using atom::utils::encryptAES;
-using atom::utils::decryptAES;
-using atom::utils::compress;
-using atom::utils::decompress;
-using atom::utils::calculateSha256;
 using atom::utils::calculateSha224;
+using atom::utils::calculateSha256;
 using atom::utils::calculateSha384;
 using atom::utils::calculateSha512;
+using atom::utils::compress;
+using atom::utils::decompress;
+using atom::utils::decryptAES;
+using atom::utils::encryptAES;
 
 // Helper function to print section headers
 void printSection(const std::string& title) {

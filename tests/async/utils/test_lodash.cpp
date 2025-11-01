@@ -9,19 +9,20 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Lodash Utilities
-Tests debounce, throttle, and functional utility patterns with edge cases and concurrent access.
+Tests debounce, throttle, and functional utility patterns with edge cases and
+concurrent access.
 
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
+#include <thread>
+#include <vector>
 
-#include "atom/async/utils/lodash.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/utils/lodash.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -40,18 +41,14 @@ protected:
         lastCallValue = 0;
     }
 
-    void TearDown() override {
-        AsyncTestBase::TearDown();
-    }
+    void TearDown() override { AsyncTestBase::TearDown(); }
 
     // Helper variables for testing
     std::atomic<int> callCount{0};
     std::atomic<int> lastCallValue{0};
 
     // Helper functions for testing
-    void incrementCounter() {
-        callCount.fetch_add(1);
-    }
+    void incrementCounter() { callCount.fetch_add(1); }
 
     void setLastValue(int value) {
         lastCallValue.store(value);
@@ -89,7 +86,8 @@ TEST_F(LodashTest, DebounceBasicFunctionality) {
 
 // Test debounce with arguments
 TEST_F(LodashTest, DebounceWithArguments) {
-    auto debounced = Debounce([this](int value) { setLastValue(value); }, 100ms);
+    auto debounced =
+        Debounce([this](int value) { setLastValue(value); }, 100ms);
 
     debounced(10);
     debounced(20);
@@ -127,7 +125,8 @@ TEST_F(LodashTest, DebounceLeadingEdge) {
 
 // Test debounce with maxWait
 TEST_F(LodashTest, DebounceWithMaxWait) {
-    auto debounced = Debounce([this]() { incrementCounter(); }, 200ms, false, 100ms);
+    auto debounced =
+        Debounce([this]() { incrementCounter(); }, 200ms, false, 100ms);
 
     // Call repeatedly to trigger maxWait
     for (int i = 0; i < 10; ++i) {
@@ -218,7 +217,8 @@ TEST_F(LodashTest, ThrottleBasicFunctionality) {
 
 // Test throttle with arguments
 TEST_F(LodashTest, ThrottleWithArguments) {
-    auto throttled = Throttle([this](int value) { setLastValue(value); }, 100ms);
+    auto throttled =
+        Throttle([this](int value) { setLastValue(value); }, 100ms);
 
     throttled(10);
     EXPECT_EQ(callCount.load(), 1);
@@ -226,7 +226,7 @@ TEST_F(LodashTest, ThrottleWithArguments) {
 
     throttled(20);
     throttled(30);
-    EXPECT_EQ(callCount.load(), 1); // Still throttled
+    EXPECT_EQ(callCount.load(), 1);  // Still throttled
 
     std::this_thread::sleep_for(150ms);
 
@@ -253,7 +253,8 @@ TEST_F(LodashTest, ThrottleNoLeading) {
 
 // Test throttle with trailing edge
 TEST_F(LodashTest, ThrottleWithTrailing) {
-    auto throttled = Throttle([this]() { incrementCounter(); }, 100ms, true, true);
+    auto throttled =
+        Throttle([this]() { incrementCounter(); }, 100ms, true, true);
 
     // First call executes immediately
     throttled();
@@ -273,7 +274,8 @@ TEST_F(LodashTest, ThrottleWithTrailing) {
 
 // Test throttle cancel
 TEST_F(LodashTest, ThrottleCancel) {
-    auto throttled = Throttle([this]() { incrementCounter(); }, 100ms, true, true);
+    auto throttled =
+        Throttle([this]() { incrementCounter(); }, 100ms, true, true);
 
     throttled();
     EXPECT_EQ(callCount.load(), 1);
@@ -329,14 +331,15 @@ TEST_F(LodashTest, DebounceFactory) {
     DebounceFactory factory(100ms, false);
 
     auto debounced1 = factory.create([this]() { incrementCounter(); });
-    auto debounced2 = factory.create([this](int value) { setLastValue(value); });
+    auto debounced2 =
+        factory.create([this](int value) { setLastValue(value); });
 
     debounced1();
     debounced2(42);
 
     std::this_thread::sleep_for(150ms);
 
-    EXPECT_EQ(callCount.load(), 2); // Both should have been called
+    EXPECT_EQ(callCount.load(), 2);  // Both should have been called
     EXPECT_EQ(lastCallValue.load(), 42);
 }
 
@@ -345,12 +348,13 @@ TEST_F(LodashTest, ThrottleFactory) {
     ThrottleFactory factory(100ms, true, false);
 
     auto throttled1 = factory.create([this]() { incrementCounter(); });
-    auto throttled2 = factory.create([this](int value) { setLastValue(value); });
+    auto throttled2 =
+        factory.create([this](int value) { setLastValue(value); });
 
     throttled1();
     throttled2(99);
 
-    EXPECT_EQ(callCount.load(), 2); // Both should execute immediately
+    EXPECT_EQ(callCount.load(), 2);  // Both should execute immediately
     EXPECT_EQ(lastCallValue.load(), 99);
 }
 
@@ -360,26 +364,23 @@ TEST_F(LodashTest, ThrottleFactory) {
 
 // Test debounce with negative delay
 TEST_F(LodashTest, DebounceNegativeDelay) {
-    EXPECT_THROW(
-        Debounce([this]() { incrementCounter(); }, std::chrono::milliseconds(-100)),
-        std::invalid_argument
-    );
+    EXPECT_THROW(Debounce([this]() { incrementCounter(); },
+                          std::chrono::milliseconds(-100)),
+                 std::invalid_argument);
 }
 
 // Test debounce with negative maxWait
 TEST_F(LodashTest, DebounceNegativeMaxWait) {
-    EXPECT_THROW(
-        Debounce([this]() { incrementCounter(); }, 100ms, false, std::chrono::milliseconds(-50)),
-        std::invalid_argument
-    );
+    EXPECT_THROW(Debounce([this]() { incrementCounter(); }, 100ms, false,
+                          std::chrono::milliseconds(-50)),
+                 std::invalid_argument);
 }
 
 // Test throttle with negative interval
 TEST_F(LodashTest, ThrottleNegativeInterval) {
-    EXPECT_THROW(
-        Throttle([this]() { incrementCounter(); }, std::chrono::milliseconds(-100)),
-        std::invalid_argument
-    );
+    EXPECT_THROW(Throttle([this]() { incrementCounter(); },
+                          std::chrono::milliseconds(-100)),
+                 std::invalid_argument);
 }
 
 // Test debounce with zero delay
@@ -435,7 +436,7 @@ TEST_F(LodashTest, DebounceConcurrentAccess) {
 
     // Should have been called at least once
     EXPECT_GT(callCount.load(), 0);
-    EXPECT_LT(callCount.load(), numThreads * 10); // But not for every call
+    EXPECT_LT(callCount.load(), numThreads * 10);  // But not for every call
 }
 
 // Test throttle concurrent access
@@ -484,7 +485,7 @@ TEST_F(LodashTest, DebouncePerformance) {
     auto elapsed = timer.elapsed();
 
     // Performance should be reasonable
-    EXPECT_LT(elapsed.count(), 100000); // Less than 100ms for 1000 calls
+    EXPECT_LT(elapsed.count(), 100000);  // Less than 100ms for 1000 calls
 
     std::cout << "Debounce performance: " << numCalls << " calls in "
               << elapsed.count() << " microseconds" << std::endl;
@@ -504,7 +505,7 @@ TEST_F(LodashTest, ThrottlePerformance) {
     auto elapsed = timer.elapsed();
 
     // Performance should be reasonable
-    EXPECT_LT(elapsed.count(), 100000); // Less than 100ms for 1000 calls
+    EXPECT_LT(elapsed.count(), 100000);  // Less than 100ms for 1000 calls
 
     std::cout << "Throttle performance: " << numCalls << " calls in "
               << elapsed.count() << " microseconds" << std::endl;
@@ -519,14 +520,16 @@ TEST_F(LodashTest, DebounceResourceCleanup) {
     auto& tracker = getResourceTracker();
 
     {
-        auto debounced = Debounce([&tracker]() {
-            atom::async::test::ScopedResourceTracker resource(tracker);
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }, 50ms);
+        auto debounced = Debounce(
+            [&tracker]() {
+                atom::async::test::ScopedResourceTracker resource(tracker);
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            },
+            50ms);
 
         debounced();
-        std::this_thread::sleep_for(100ms); // Let it execute
-    } // Debounce destructor should clean up
+        std::this_thread::sleep_for(100ms);  // Let it execute
+    }  // Debounce destructor should clean up
 
     // Give some time for cleanup
     std::this_thread::sleep_for(50ms);
@@ -538,15 +541,17 @@ TEST_F(LodashTest, ThrottleResourceCleanup) {
     auto& tracker = getResourceTracker();
 
     {
-        auto throttled = Throttle([&tracker]() {
-            atom::async::test::ScopedResourceTracker resource(tracker);
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        }, 50ms, true, true);
+        auto throttled = Throttle(
+            [&tracker]() {
+                atom::async::test::ScopedResourceTracker resource(tracker);
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            },
+            50ms, true, true);
 
         throttled();
-        throttled(); // Should trigger trailing call
-        std::this_thread::sleep_for(100ms); // Let trailing call execute
-    } // Throttle destructor should clean up
+        throttled();                         // Should trigger trailing call
+        std::this_thread::sleep_for(100ms);  // Let trailing call execute
+    }  // Throttle destructor should clean up
 
     // Give some time for cleanup
     std::this_thread::sleep_for(50ms);
@@ -559,9 +564,8 @@ TEST_F(LodashTest, ThrottleResourceCleanup) {
 
 // Test debounce with exception in function
 TEST_F(LodashTest, DebounceExceptionHandling) {
-    auto debounced = Debounce([]() {
-        throw std::runtime_error("Test exception");
-    }, 50ms);
+    auto debounced =
+        Debounce([]() { throw std::runtime_error("Test exception"); }, 50ms);
 
     // Should not throw from operator()
     EXPECT_NO_THROW(debounced());
@@ -578,9 +582,8 @@ TEST_F(LodashTest, DebounceExceptionHandling) {
 
 // Test throttle with exception in function
 TEST_F(LodashTest, ThrottleExceptionHandling) {
-    auto throttled = Throttle([]() {
-        throw std::runtime_error("Test exception");
-    }, 50ms);
+    auto throttled =
+        Throttle([]() { throw std::runtime_error("Test exception"); }, 50ms);
 
     // Should not throw from operator()
     EXPECT_NO_THROW(throttled());

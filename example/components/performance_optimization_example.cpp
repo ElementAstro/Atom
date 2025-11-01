@@ -461,13 +461,15 @@ void demonstrateBasicProfiling() {
     std::cout << "\n2. Running basic profiled operations..." << std::endl;
 
     // Test basic operations with profiling
-    [[maybe_unused]] auto result1 = component->runCommand("sequentialAccess", {});
+    [[maybe_unused]] auto result1 =
+        component->runCommand("sequentialAccess", {});
     [[maybe_unused]] auto result2 = component->runCommand("randomAccess", {});
     [[maybe_unused]] auto result3 = component->runCommand("hashLookup", {});
     [[maybe_unused]] auto result4 = component->runCommand("linearSearch", {});
 
     // Print initial profile report
-    [[maybe_unused]] auto reportResult = component->runCommand("getProfileReport", {});
+    [[maybe_unused]] auto reportResult =
+        component->runCommand("getProfileReport", {});
 }
 
 void demonstrateAlgorithmOptimization() {
@@ -486,16 +488,17 @@ void demonstrateAlgorithmOptimization() {
     // Note: Slow sort is disabled for large datasets to avoid excessive runtime
     std::cout << "Running fast sort..." << std::endl;
     auto fastResult = component->runCommand("fastSort", {});
-    std::cout << "Fast sort result: " << std::any_cast<std::string>(fastResult) << std::endl;
+    std::cout << "Fast sort result: " << std::any_cast<std::string>(fastResult)
+              << std::endl;
 
     std::cout << "\n4. Comparing computation optimizations..." << std::endl;
     std::vector<std::any> compArgs = {
         std::any(std::string("unoptimizedComputation")),
         std::any(std::string("optimizedComputation")),
-        std::any(std::string("3"))
-    };
+        std::any(std::string("3"))};
     auto compResult = component->runCommand("compareOperations", compArgs);
-    std::cout << "Computation comparison: " << std::any_cast<std::string>(compResult) << std::endl;
+    std::cout << "Computation comparison: "
+              << std::any_cast<std::string>(compResult) << std::endl;
 }
 
 void demonstrateMemoryOptimization() {
@@ -513,19 +516,18 @@ void demonstrateMemoryOptimization() {
     std::vector<std::any> allocArgs = {
         std::any(std::string("inefficientAllocation")),
         std::any(std::string("efficientAllocation")),
-        std::any(std::string("5"))
-    };
+        std::any(std::string("5"))};
     auto allocResult = component->runCommand("compareOperations", allocArgs);
-    std::cout << "Allocation comparison: " << std::any_cast<std::string>(allocResult) << std::endl;
+    std::cout << "Allocation comparison: "
+              << std::any_cast<std::string>(allocResult) << std::endl;
 
     std::cout << "\n6. Comparing memory access patterns..." << std::endl;
     std::vector<std::any> accessArgs = {
         std::any(std::string("randomAccess")),
-        std::any(std::string("sequentialAccess")),
-        std::any(std::string("10"))
-    };
+        std::any(std::string("sequentialAccess")), std::any(std::string("10"))};
     auto accessResult = component->runCommand("compareOperations", accessArgs);
-    std::cout << "Access pattern comparison: " << std::any_cast<std::string>(accessResult) << std::endl;
+    std::cout << "Access pattern comparison: "
+              << std::any_cast<std::string>(accessResult) << std::endl;
 }
 
 void demonstrateLookupOptimization() {
@@ -540,13 +542,12 @@ void demonstrateLookupOptimization() {
     }
 
     std::cout << "\n7. Comparing lookup strategies..." << std::endl;
-    std::vector<std::any> lookupArgs = {
-        std::any(std::string("linearSearch")),
-        std::any(std::string("hashLookup")),
-        std::any(std::string("5"))
-    };
+    std::vector<std::any> lookupArgs = {std::any(std::string("linearSearch")),
+                                        std::any(std::string("hashLookup")),
+                                        std::any(std::string("5"))};
     auto lookupResult = component->runCommand("compareOperations", lookupArgs);
-    std::cout << "Lookup comparison: " << std::any_cast<std::string>(lookupResult) << std::endl;
+    std::cout << "Lookup comparison: "
+              << std::any_cast<std::string>(lookupResult) << std::endl;
 }
 
 void demonstrateBatchOptimization() {
@@ -564,11 +565,10 @@ void demonstrateBatchOptimization() {
               << std::endl;
     std::vector<std::any> batchArgs = {
         std::any(std::string("individualOperations")),
-        std::any(std::string("batchOperations")),
-        std::any(std::string("10"))
-    };
+        std::any(std::string("batchOperations")), std::any(std::string("10"))};
     auto batchResult = component->runCommand("compareOperations", batchArgs);
-    std::cout << "Batch processing comparison: " << std::any_cast<std::string>(batchResult) << std::endl;
+    std::cout << "Batch processing comparison: "
+              << std::any_cast<std::string>(batchResult) << std::endl;
 }
 
 void demonstrateComprehensiveBenchmark() {
@@ -585,7 +585,8 @@ void demonstrateComprehensiveBenchmark() {
     std::cout << "\n9. Running comprehensive benchmark suite..." << std::endl;
 
     // Reset profiler for clean benchmark
-    [[maybe_unused]] auto resetResult = component->runCommand("resetProfiler", {});
+    [[maybe_unused]] auto resetResult =
+        component->runCommand("resetProfiler", {});
 
     // Run multiple iterations of each operation
     std::vector<std::pair<std::string, int>> benchmarks = {
@@ -597,15 +598,16 @@ void demonstrateComprehensiveBenchmark() {
         std::cout << "\nBenchmarking " << benchmark.first << "..." << std::endl;
         std::vector<std::any> benchArgs = {
             std::any(benchmark.first),
-            std::any(std::to_string(benchmark.second))
-        };
+            std::any(std::to_string(benchmark.second))};
         auto result = component->runCommand("runBenchmark", benchArgs);
-        std::cout << "Result: " << std::any_cast<std::string>(result) << std::endl;
+        std::cout << "Result: " << std::any_cast<std::string>(result)
+                  << std::endl;
     }
 
     // Final comprehensive report
     std::cout << "\n=== Final Performance Report ===" << std::endl;
-    [[maybe_unused]] auto finalReportResult = component->runCommand("getProfileReport", {});
+    [[maybe_unused]] auto finalReportResult =
+        component->runCommand("getProfileReport", {});
 }
 
 void demonstrateOptimizationRecommendations() {

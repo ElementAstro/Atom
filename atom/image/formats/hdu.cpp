@@ -1961,7 +1961,8 @@ void ImageHDU::applyMorphology(const std::string& operation, int kernelSize,
 }
 
 // Explicit template instantiations for implemented methods only
-template std::vector<double> ImageHDU::computeHistogram<unsigned char>(int, int) const;
+template std::vector<double> ImageHDU::computeHistogram<unsigned char>(
+    int, int) const;
 template std::vector<double> ImageHDU::computeHistogram<short>(int, int) const;
 template std::vector<double> ImageHDU::computeHistogram<int>(int, int) const;
 template std::vector<double> ImageHDU::computeHistogram<float>(int, int) const;
@@ -1973,7 +1974,8 @@ template void ImageHDU::equalizeHistogram<int>(int);
 template void ImageHDU::equalizeHistogram<float>(int);
 template void ImageHDU::equalizeHistogram<double>(int);
 
-template void ImageHDU::applyMorphology<unsigned char>(const std::string&, int, int);
+template void ImageHDU::applyMorphology<unsigned char>(const std::string&, int,
+                                                       int);
 template void ImageHDU::applyMorphology<short>(const std::string&, int, int);
 template void ImageHDU::applyMorphology<int>(const std::string&, int, int);
 template void ImageHDU::applyMorphology<float>(const std::string&, int, int);

@@ -29,7 +29,8 @@ public:
      * @brief 从路径字符串构造
      * @param path 格式为 "section.subsection.field" 的路径字符串
      */
-    explicit PathQuery(std::string_view path) : pathParts_(splitPath(std::string(path))) {}
+    explicit PathQuery(std::string_view path)
+        : pathParts_(splitPath(std::string(path))) {}
 
     /**
      * @brief 从路径部分构造

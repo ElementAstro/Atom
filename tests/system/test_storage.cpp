@@ -18,10 +18,14 @@ using atom::system::StorageMonitor;
 class MockFileSystem {
 public:
     MOCK_METHOD(bool, exists, (const std::string& path), (const));
-    MOCK_METHOD(std::uintmax_t, space_available, (const std::string& path), (const));
-    MOCK_METHOD(std::uintmax_t, space_capacity, (const std::string& path), (const));
-    MOCK_METHOD(std::vector<std::string>, list_directories, (const std::string& path), (const));
-    MOCK_METHOD(std::vector<std::string>, list_files, (const std::string& path), (const));
+    MOCK_METHOD(std::uintmax_t, space_available, (const std::string& path),
+                (const));
+    MOCK_METHOD(std::uintmax_t, space_capacity, (const std::string& path),
+                (const));
+    MOCK_METHOD(std::vector<std::string>, list_directories,
+                (const std::string& path), (const));
+    MOCK_METHOD(std::vector<std::string>, list_files, (const std::string& path),
+                (const));
 };
 
 class StorageMonitorTest : public ::testing::Test {
@@ -31,19 +35,23 @@ protected:
         storageMonitor = std::make_unique<StorageMonitor>();
 
         // Create mock filesystem
-        mockFileSystem = std::make_unique<::testing::NiceMock<MockFileSystem>>();
+        mockFileSystem =
+            std::make_unique<::testing::NiceMock<MockFileSystem>>();
 
         // Set up default behavior for mock filesystem
         ON_CALL(*mockFileSystem, exists(::testing::_))
             .WillByDefault(::testing::Return(true));
         ON_CALL(*mockFileSystem, space_available(::testing::_))
-            .WillByDefault(::testing::Return(1024 * 1024 * 1024)); // 1GB available
+            .WillByDefault(
+                ::testing::Return(1024 * 1024 * 1024));  // 1GB available
         ON_CALL(*mockFileSystem, space_capacity(::testing::_))
-            .WillByDefault(::testing::Return(2048 * 1024 * 1024)); // 2GB total
+            .WillByDefault(::testing::Return(2048 * 1024 * 1024));  // 2GB total
         ON_CALL(*mockFileSystem, list_directories(::testing::_))
-            .WillByDefault(::testing::Return(std::vector<std::string>{"dir1", "dir2"}));
+            .WillByDefault(
+                ::testing::Return(std::vector<std::string>{"dir1", "dir2"}));
         ON_CALL(*mockFileSystem, list_files(::testing::_))
-            .WillByDefault(::testing::Return(std::vector<std::string>{"file1.txt", "file2.txt"}));
+            .WillByDefault(::testing::Return(
+                std::vector<std::string>{"file1.txt", "file2.txt"}));
 
         // Test paths
         testPath1 = "/test/path1";
@@ -165,7 +173,8 @@ TEST_F(StorageMonitorTest, ListAllStorage) {
 
 TEST_F(StorageMonitorTest, ListFiles) {
     EXPECT_CALL(*mockFileSystem, list_files(testPath1))
-        .WillOnce(::testing::Return(std::vector<std::string>{"test1.txt", "test2.txt"}));
+        .WillOnce(::testing::Return(
+            std::vector<std::string>{"test1.txt", "test2.txt"}));
 
     EXPECT_NO_THROW(storageMonitor->listFiles(testPath1));
 }
@@ -180,7 +189,8 @@ TEST_F(StorageMonitorTest, GetStorageInfo) {
 
 TEST_F(StorageMonitorTest, GetStorageInfoNonexistentPath) {
     std::string info = storageMonitor->getStorageInfo("/nonexistent/path");
-    // Should return some info even for nonexistent paths (may be empty or error message)
+    // Should return some info even for nonexistent paths (may be empty or error
+    // message)
     EXPECT_NO_THROW(storageMonitor->getStorageInfo("/nonexistent/path"));
 }
 
@@ -220,7 +230,8 @@ class StorageMonitorErrorTest : public ::testing::Test {
 protected:
     void SetUp() override {
         storageMonitor = std::make_unique<StorageMonitor>();
-        mockFileSystem = std::make_unique<::testing::NiceMock<MockFileSystem>>();
+        mockFileSystem =
+            std::make_unique<::testing::NiceMock<MockFileSystem>>();
     }
 
     void TearDown() override {
@@ -257,9 +268,7 @@ TEST_F(StorageMonitorErrorTest, ConcurrentAccess) {
     std::vector<std::thread> threads;
     std::atomic<int> callbackCount{0};
 
-    auto callback = [&callbackCount](const std::string&) {
-        callbackCount++;
-    };
+    auto callback = [&callbackCount](const std::string&) { callbackCount++; };
 
     storageMonitor->registerCallback(callback);
 
@@ -298,9 +307,7 @@ protected:
 TEST_F(StorageMonitorPerformanceTest, CallbackPerformance) {
     std::atomic<int> callbackCount{0};
 
-    auto callback = [&callbackCount](const std::string&) {
-        callbackCount++;
-    };
+    auto callback = [&callbackCount](const std::string&) { callbackCount++; };
 
     storageMonitor->registerCallback(callback);
 
@@ -312,7 +319,8 @@ TEST_F(StorageMonitorPerformanceTest, CallbackPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(callbackCount.load(), 1000);
     // Should complete within reasonable time (1 second for 1000 callbacks)

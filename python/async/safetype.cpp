@@ -526,9 +526,8 @@ Returns:
             "Support for iteration over list elements.");
 
     // SafeType class binding - Thread-safe wrapper for any type
-    py::class_<atom::async::SafeType<py::object>>(
-        m, "SafeType",
-        R"pbdoc(
+    py::class_<atom::async::SafeType<py::object>>(m, "SafeType",
+                                                  R"pbdoc(
         Thread-safe wrapper for any type with read-write lock protection.
 
         SafeType provides thread-safe access to any wrapped value using shared_mutex
@@ -580,8 +579,8 @@ Returns:
                  >>> print(current)  # 42
              )pbdoc")
         .def("set",
-             static_cast<void (atom::async::SafeType<py::object>::*)(const py::object&)>(
-                 &atom::async::SafeType<py::object>::set),
+             static_cast<void (atom::async::SafeType<py::object>::*)(
+                 const py::object&)>(&atom::async::SafeType<py::object>::set),
              py::arg("value"),
              R"pbdoc(
              Set a new value (thread-safe write).
@@ -596,7 +595,8 @@ Returns:
              )pbdoc")
         .def(
             "modify",
-            [](atom::async::SafeType<py::object>& self, py::function func) -> py::object {
+            [](atom::async::SafeType<py::object>& self,
+               py::function func) -> py::object {
                 return self.modify([func](py::object& value) -> py::object {
                     py::gil_scoped_acquire acquire;
                     try {
@@ -607,7 +607,7 @@ Returns:
                 });
             },
             py::arg("func"),
-             R"pbdoc(
+            R"pbdoc(
              Modify the value using a function (thread-safe write).
 
              Args:
@@ -627,7 +627,8 @@ Returns:
              )pbdoc")
         .def(
             "read",
-            [](const atom::async::SafeType<py::object>& self, py::function func) -> py::object {
+            [](const atom::async::SafeType<py::object>& self,
+               py::function func) -> py::object {
                 return self.read([func](const py::object& value) -> py::object {
                     py::gil_scoped_acquire acquire;
                     try {
@@ -638,7 +639,7 @@ Returns:
                 });
             },
             py::arg("func"),
-             R"pbdoc(
+            R"pbdoc(
              Read the value using a function (thread-safe read-only access).
 
              Args:
@@ -658,11 +659,10 @@ Returns:
              )pbdoc")
         .def(
             "swap",
-            [](atom::async::SafeType<py::object>& self, atom::async::SafeType<py::object>& other) {
-                self.swap(other);
-            },
+            [](atom::async::SafeType<py::object>& self,
+               atom::async::SafeType<py::object>& other) { self.swap(other); },
             py::arg("other"),
-             R"pbdoc(
+            R"pbdoc(
              Swap values with another SafeType (thread-safe).
 
              Args:
@@ -742,21 +742,21 @@ Examples:
 )");
 
     m.def(
-        "create_lock_free_list",
-        [](const py::list& items) {
-            auto list_ptr =  // Renamed to avoid conflict with std::list
-                std::make_shared<atom::async::LockFreeList<py::object>>();
-            // Add items in reverse order to maintain original list order when
-            // pushing to front
-            for (ssize_t i = static_cast<ssize_t>(items.size()) - 1; i >= 0;
-                 --i) {
-                list_ptr->pushFront(
-                    items[i].cast<py::object>());  // items[i] is py::handle
-            }
-            return list_ptr;
-        },
-        py::arg("items") = py::list(),
-        R"(Create a new LockFreeList with initial elements.
+         "create_lock_free_list",
+         [](const py::list& items) {
+             auto list_ptr =  // Renamed to avoid conflict with std::list
+                 std::make_shared<atom::async::LockFreeList<py::object>>();
+             // Add items in reverse order to maintain original list order when
+             // pushing to front
+             for (ssize_t i = static_cast<ssize_t>(items.size()) - 1; i >= 0;
+                  --i) {
+                 list_ptr->pushFront(
+                     items[i].cast<py::object>());  // items[i] is py::handle
+             }
+             return list_ptr;
+         },
+         py::arg("items") = py::list(),
+         R"(Create a new LockFreeList with initial elements.
 
 Args:
     items: Initial items to add to the list (optional).
@@ -772,13 +772,14 @@ Examples:
     >>> lst.front() # Should be item3
 )")
 
-    .def(
-        "create_safe_type",
-        [](py::object initial_value) {
-            return std::make_shared<atom::async::SafeType<py::object>>(initial_value);
-        },
-        py::arg("initial_value") = py::none(),
-        R"pbdoc(
+        .def(
+            "create_safe_type",
+            [](py::object initial_value) {
+                return std::make_shared<atom::async::SafeType<py::object>>(
+                    initial_value);
+            },
+            py::arg("initial_value") = py::none(),
+            R"pbdoc(
         Create a new SafeType with an initial value.
 
         Args:
@@ -795,54 +796,57 @@ Examples:
 
     // Utility functions for performance testing and benchmarking
     m.def(
-        "benchmark_lock_free_stack",
-        [](size_t num_operations, size_t num_threads) -> py::dict {
-            using namespace std::chrono;
+         "benchmark_lock_free_stack",
+         [](size_t num_operations, size_t num_threads) -> py::dict {
+             using namespace std::chrono;
 
-            py::dict results;
-            auto stack = std::make_shared<atom::async::LockFreeStack<py::object>>();
+             py::dict results;
+             auto stack =
+                 std::make_shared<atom::async::LockFreeStack<py::object>>();
 
-            // Benchmark push operations
-            auto start = high_resolution_clock::now();
+             // Benchmark push operations
+             auto start = high_resolution_clock::now();
 
-            for (size_t i = 0; i < num_operations; ++i) {
-                stack->push(py::cast(i));
-            }
+             for (size_t i = 0; i < num_operations; ++i) {
+                 stack->push(py::cast(i));
+             }
 
-            auto end = high_resolution_clock::now();
-            auto push_duration = duration_cast<microseconds>(end - start);
+             auto end = high_resolution_clock::now();
+             auto push_duration = duration_cast<microseconds>(end - start);
 
-            // Benchmark pop operations
-            start = high_resolution_clock::now();
-            size_t successful_pops = 0;
+             // Benchmark pop operations
+             start = high_resolution_clock::now();
+             size_t successful_pops = 0;
 
-            for (size_t i = 0; i < num_operations; ++i) {
-                auto result = stack->pop();
-                if (result.has_value()) {
-                    successful_pops++;
-                }
-            }
+             for (size_t i = 0; i < num_operations; ++i) {
+                 auto result = stack->pop();
+                 if (result.has_value()) {
+                     successful_pops++;
+                 }
+             }
 
-            end = high_resolution_clock::now();
-            auto pop_duration = duration_cast<microseconds>(end - start);
+             end = high_resolution_clock::now();
+             auto pop_duration = duration_cast<microseconds>(end - start);
 
-            // Calculate statistics
-            double push_ops_per_second = (num_operations * 1000000.0) / push_duration.count();
-            double pop_ops_per_second = (num_operations * 1000000.0) / pop_duration.count();
+             // Calculate statistics
+             double push_ops_per_second =
+                 (num_operations * 1000000.0) / push_duration.count();
+             double pop_ops_per_second =
+                 (num_operations * 1000000.0) / pop_duration.count();
 
-            results[py::str("num_operations")] = num_operations;
-            results[py::str("num_threads")] = num_threads;
-            results[py::str("push_time_us")] = push_duration.count();
-            results[py::str("pop_time_us")] = pop_duration.count();
-            results[py::str("push_ops_per_second")] = push_ops_per_second;
-            results[py::str("pop_ops_per_second")] = pop_ops_per_second;
-            results[py::str("successful_pops")] = successful_pops;
-            results[py::str("final_stack_size")] = stack->size();
+             results[py::str("num_operations")] = num_operations;
+             results[py::str("num_threads")] = num_threads;
+             results[py::str("push_time_us")] = push_duration.count();
+             results[py::str("pop_time_us")] = pop_duration.count();
+             results[py::str("push_ops_per_second")] = push_ops_per_second;
+             results[py::str("pop_ops_per_second")] = pop_ops_per_second;
+             results[py::str("successful_pops")] = successful_pops;
+             results[py::str("final_stack_size")] = stack->size();
 
-            return results;
-        },
-        py::arg("num_operations") = 10000, py::arg("num_threads") = 1,
-        R"pbdoc(
+             return results;
+         },
+         py::arg("num_operations") = 10000, py::arg("num_threads") = 1,
+         R"pbdoc(
         Benchmark lock-free stack performance.
 
         Args:
@@ -858,66 +862,70 @@ Examples:
             >>> print(f"Pop ops/sec: {results['pop_ops_per_second']:.2f}")
         )pbdoc")
 
-    .def(
-        "benchmark_safe_type",
-        [](size_t num_operations) -> py::dict {
-            using namespace std::chrono;
+        .def(
+            "benchmark_safe_type",
+            [](size_t num_operations) -> py::dict {
+                using namespace std::chrono;
 
-            py::dict results;
-            atom::async::SafeType<py::object> safe_value(py::cast(0));
+                py::dict results;
+                atom::async::SafeType<py::object> safe_value(py::cast(0));
 
-            // Benchmark read operations
-            auto start = high_resolution_clock::now();
+                // Benchmark read operations
+                auto start = high_resolution_clock::now();
 
-            for (size_t i = 0; i < num_operations; ++i) {
-                volatile auto value = safe_value.get();
-                (void)value; // Suppress unused variable warning
-            }
+                for (size_t i = 0; i < num_operations; ++i) {
+                    volatile auto value = safe_value.get();
+                    (void)value;  // Suppress unused variable warning
+                }
 
-            auto end = high_resolution_clock::now();
-            auto read_duration = duration_cast<microseconds>(end - start);
+                auto end = high_resolution_clock::now();
+                auto read_duration = duration_cast<microseconds>(end - start);
 
-            // Benchmark write operations
-            start = high_resolution_clock::now();
+                // Benchmark write operations
+                start = high_resolution_clock::now();
 
-            for (size_t i = 0; i < num_operations; ++i) {
-                safe_value.set(py::cast(i));
-            }
+                for (size_t i = 0; i < num_operations; ++i) {
+                    safe_value.set(py::cast(i));
+                }
 
-            end = high_resolution_clock::now();
-            auto write_duration = duration_cast<microseconds>(end - start);
+                end = high_resolution_clock::now();
+                auto write_duration = duration_cast<microseconds>(end - start);
 
-            // Benchmark modify operations
-            start = high_resolution_clock::now();
+                // Benchmark modify operations
+                start = high_resolution_clock::now();
 
-            for (size_t i = 0; i < num_operations; ++i) {
-                safe_value.modify([](py::object& value) {
-                    auto int_val = value.cast<int>();
-                    value = py::cast(int_val + 1);
-                });
-            }
+                for (size_t i = 0; i < num_operations; ++i) {
+                    safe_value.modify([](py::object& value) {
+                        auto int_val = value.cast<int>();
+                        value = py::cast(int_val + 1);
+                    });
+                }
 
-            end = high_resolution_clock::now();
-            auto modify_duration = duration_cast<microseconds>(end - start);
+                end = high_resolution_clock::now();
+                auto modify_duration = duration_cast<microseconds>(end - start);
 
-            // Calculate statistics
-            double read_ops_per_second = (num_operations * 1000000.0) / read_duration.count();
-            double write_ops_per_second = (num_operations * 1000000.0) / write_duration.count();
-            double modify_ops_per_second = (num_operations * 1000000.0) / modify_duration.count();
+                // Calculate statistics
+                double read_ops_per_second =
+                    (num_operations * 1000000.0) / read_duration.count();
+                double write_ops_per_second =
+                    (num_operations * 1000000.0) / write_duration.count();
+                double modify_ops_per_second =
+                    (num_operations * 1000000.0) / modify_duration.count();
 
-            results[py::str("num_operations")] = num_operations;
-            results[py::str("read_time_us")] = read_duration.count();
-            results[py::str("write_time_us")] = write_duration.count();
-            results[py::str("modify_time_us")] = modify_duration.count();
-            results[py::str("read_ops_per_second")] = read_ops_per_second;
-            results[py::str("write_ops_per_second")] = write_ops_per_second;
-            results[py::str("modify_ops_per_second")] = modify_ops_per_second;
-            results[py::str("final_value")] = safe_value.get();
+                results[py::str("num_operations")] = num_operations;
+                results[py::str("read_time_us")] = read_duration.count();
+                results[py::str("write_time_us")] = write_duration.count();
+                results[py::str("modify_time_us")] = modify_duration.count();
+                results[py::str("read_ops_per_second")] = read_ops_per_second;
+                results[py::str("write_ops_per_second")] = write_ops_per_second;
+                results[py::str("modify_ops_per_second")] =
+                    modify_ops_per_second;
+                results[py::str("final_value")] = safe_value.get();
 
-            return results;
-        },
-        py::arg("num_operations") = 10000,
-        R"pbdoc(
+                return results;
+            },
+            py::arg("num_operations") = 10000,
+            R"pbdoc(
         Benchmark SafeType performance for read, write, and modify operations.
 
         Args:

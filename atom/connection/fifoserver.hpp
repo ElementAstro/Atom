@@ -19,12 +19,12 @@ Description: FIFO Server
 #include <functional>
 #include <future>
 
-#include "fifoclient.hpp"  // For MessagePriority enum
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <string>
 #include <string_view>
+#include "fifoclient.hpp"  // For MessagePriority enum
 
 namespace atom::connection {
 

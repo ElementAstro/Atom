@@ -15,6 +15,7 @@ Description: Crash Report
 #ifndef ATOM_SYSTEM_CRASH_HPP
 #define ATOM_SYSTEM_CRASH_HPP
 
+#include <string>
 #include <string_view>
 
 namespace atom::system {

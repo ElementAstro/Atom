@@ -16,14 +16,14 @@ Description: Comprehensive tests for UTF conversion utilities
 #define ATOM_UTILS_TEST_UTF_HPP
 
 #include <gtest/gtest.h>
+#include <future>
+#include <random>
 #include <string>
 #include <string_view>
-#include <vector>
-#include <random>
 #include <thread>
-#include <future>
-#include "atom/utils/text/utf.hpp"
+#include <vector>
 #include "atom/error/exception.hpp"
+#include "atom/utils/text/utf.hpp"
 
 namespace atom::utils::test {
 
@@ -32,37 +32,37 @@ protected:
     void SetUp() override {
         // Basic ASCII test string
         asciiString = "Hello, World!";
-        
+
         // UTF-8 string with various Unicode characters
         utf8String = "Hello, 世界! 🌍 Ñoël";
-        
+
         // UTF-16 string with various Unicode characters
         utf16String = u"Hello, 世界! 🌍 Ñoël";
-        
-        // UTF-32 string with various Unicode characters  
+
+        // UTF-32 string with various Unicode characters
         utf32String = U"Hello, 世界! 🌍 Ñoël";
-        
+
         // Empty strings for edge case testing
         emptyString = "";
         emptyU16String = u"";
         emptyU32String = U"";
-        
+
         // Very long string for performance testing
         longString.reserve(10000);
         for (int i = 0; i < 1000; ++i) {
             longString += "Test string with Unicode: 世界 🌍 ";
         }
-        
+
         // Invalid UTF-8 sequences for error testing
         invalidUtf8Sequences = {
-            "\xFF\xFE",           // Invalid start bytes
-            "\x80\x80",           // Continuation bytes without start
-            "\xC0\x80",           // Overlong encoding
-            "\xE0\x80\x80",       // Overlong encoding
-            "\xF0\x80\x80\x80",   // Overlong encoding
-            "\xC2",               // Incomplete sequence
-            "\xE0\x80",           // Incomplete sequence
-            "\xF0\x80\x80"        // Incomplete sequence
+            "\xFF\xFE",          // Invalid start bytes
+            "\x80\x80",          // Continuation bytes without start
+            "\xC0\x80",          // Overlong encoding
+            "\xE0\x80\x80",      // Overlong encoding
+            "\xF0\x80\x80\x80",  // Overlong encoding
+            "\xC2",              // Incomplete sequence
+            "\xE0\x80",          // Incomplete sequence
+            "\xF0\x80\x80"       // Incomplete sequence
         };
     }
 
@@ -76,13 +76,13 @@ protected:
     std::u32string emptyU32String;
     std::string longString;
     std::vector<std::string> invalidUtf8Sequences;
-    
+
     // Helper function to generate random UTF-8 string
     std::string generateRandomUTF8(size_t length) {
         std::random_device rd;
         std::mt19937 gen(rd());
-        std::uniform_int_distribution<> dis(0x20, 0x7E); // Printable ASCII
-        
+        std::uniform_int_distribution<> dis(0x20, 0x7E);  // Printable ASCII
+
         std::string result;
         result.reserve(length);
         for (size_t i = 0; i < length; ++i) {
@@ -100,10 +100,10 @@ TEST_F(UTFConversionTest, UTF8Validation) {
     EXPECT_TRUE(isValidUTF8(emptyString));
     EXPECT_TRUE(isValidUTF8("Simple ASCII"));
     EXPECT_TRUE(isValidUTF8("UTF-8: café"));
-    
+
     // Invalid UTF-8 sequences
     for (const auto& invalid : invalidUtf8Sequences) {
-        EXPECT_FALSE(isValidUTF8(invalid)) 
+        EXPECT_FALSE(isValidUTF8(invalid))
             << "String should be invalid: " << invalid;
     }
 }
@@ -209,16 +209,18 @@ TEST_F(UTFConversionTest, InvalidUTF8ErrorHandling) {
 TEST_F(UTFConversionTest, LargeStringPerformance) {
     // Test conversion performance with large strings
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     auto utf16Result = utf8toUtF16(longString);
     auto utf32Result = utf8toUtF32(longString);
-    
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     // Should complete within reasonable time (adjust threshold as needed)
-    EXPECT_LT(duration.count(), 1000) << "Conversion took too long: " << duration.count() << "ms";
-    
+    EXPECT_LT(duration.count(), 1000)
+        << "Conversion took too long: " << duration.count() << "ms";
+
     // Results should not be empty
     EXPECT_FALSE(utf16Result.empty());
     EXPECT_FALSE(utf32Result.empty());
@@ -228,29 +230,31 @@ TEST_F(UTFConversionTest, LargeStringPerformance) {
 TEST_F(UTFConversionTest, ThreadSafety) {
     const int numThreads = 10;
     const int conversionsPerThread = 100;
-    
+
     std::vector<std::future<bool>> futures;
-    
+
     for (int i = 0; i < numThreads; ++i) {
-        futures.push_back(std::async(std::launch::async, [this, conversionsPerThread]() {
-            for (int j = 0; j < conversionsPerThread; ++j) {
-                try {
-                    auto utf16 = utf8toUtF16(utf8String);
-                    auto utf32 = utf8toUtF32(utf8String);
-                    auto backToUtf8_16 = utf16toUtF8(utf16);
-                    auto backToUtf8_32 = utf32toUtF8(utf32);
-                    
-                    if (backToUtf8_16 != utf8String || backToUtf8_32 != utf8String) {
+        futures.push_back(
+            std::async(std::launch::async, [this, conversionsPerThread]() {
+                for (int j = 0; j < conversionsPerThread; ++j) {
+                    try {
+                        auto utf16 = utf8toUtF16(utf8String);
+                        auto utf32 = utf8toUtF32(utf8String);
+                        auto backToUtf8_16 = utf16toUtF8(utf16);
+                        auto backToUtf8_32 = utf32toUtF8(utf32);
+
+                        if (backToUtf8_16 != utf8String ||
+                            backToUtf8_32 != utf8String) {
+                            return false;
+                        }
+                    } catch (const std::exception&) {
                         return false;
                     }
-                } catch (const std::exception&) {
-                    return false;
                 }
-            }
-            return true;
-        }));
+                return true;
+            }));
     }
-    
+
     // Wait for all threads and check results
     for (auto& future : futures) {
         EXPECT_TRUE(future.get()) << "Thread safety test failed";
@@ -261,17 +265,18 @@ TEST_F(UTFConversionTest, ThreadSafety) {
 TEST_F(UTFConversionTest, SpecialUnicodeCharacters) {
     // Test with various special Unicode characters
     std::vector<std::string> specialStrings = {
-        "🌍🌎🌏",           // Emojis
-        "𝕳𝖊𝖑𝖑𝖔",           // Mathematical symbols
-        "Ω≈ç√∫˜µ≤≥÷",        // Mathematical operators
-        "™®©",              // Trademark symbols
-        "←↑→↓↔↕",           // Arrows
-        "αβγδεζηθικλμνξοπρστυφχψω", // Greek letters
+        "🌍🌎🌏",                    // Emojis
+        "𝕳𝖊𝖑𝖑𝖔",                     // Mathematical symbols
+        "Ω≈ç√∫˜µ≤≥÷",                // Mathematical operators
+        "™®©",                       // Trademark symbols
+        "←↑→↓↔↕",                    // Arrows
+        "αβγδεζηθικλμνξοπρστυφχψω",  // Greek letters
     };
-    
+
     for (const auto& str : specialStrings) {
-        EXPECT_TRUE(isValidUTF8(str)) << "Special string should be valid UTF-8: " << str;
-        
+        EXPECT_TRUE(isValidUTF8(str))
+            << "Special string should be valid UTF-8: " << str;
+
         // Test conversions
         auto utf16 = utf8toUtF16(str);
         auto utf32 = utf8toUtF32(str);
@@ -279,9 +284,11 @@ TEST_F(UTFConversionTest, SpecialUnicodeCharacters) {
         // Test round-trip
         auto backToUtf8_16 = utf16toUtF8(utf16);
         auto backToUtf8_32 = utf32toUtF8(utf32);
-        
-        EXPECT_EQ(str, backToUtf8_16) << "UTF-8 -> UTF-16 -> UTF-8 round-trip failed";
-        EXPECT_EQ(str, backToUtf8_32) << "UTF-8 -> UTF-32 -> UTF-8 round-trip failed";
+
+        EXPECT_EQ(str, backToUtf8_16)
+            << "UTF-8 -> UTF-16 -> UTF-8 round-trip failed";
+        EXPECT_EQ(str, backToUtf8_32)
+            << "UTF-8 -> UTF-32 -> UTF-8 round-trip failed";
     }
 }
 

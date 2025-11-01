@@ -35,17 +35,31 @@ struct SERTimestamp {
     std::chrono::system_clock::time_point toTimePoint() const {
         using namespace std::chrono;
         // SER timestamps are nanoseconds since 2001-01-01
-        static const auto serEpoch = sys_days{January / 1 / 2001};
-        return serEpoch + std::chrono::nanoseconds{nanoseconds};
+        static const auto serEpoch =
+            std::chrono::sys_days{std::chrono::year{2001} /
+                                  std::chrono::January / std::chrono::day{1}};
+        auto epochTime =
+            std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                serEpoch);
+        auto nsDuration = std::chrono::nanoseconds{nanoseconds};
+        auto sysDuration =
+            std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                nsDuration);
+        return epochTime + sysDuration;
     }
 
     static SERTimestamp fromTimePoint(
         const std::chrono::system_clock::time_point& tp) {
         using namespace std::chrono;
         // SER timestamps are nanoseconds since 2001-01-01
-        static const auto serEpoch = sys_days{January / 1 / 2001};
+        static const auto serEpoch =
+            std::chrono::sys_days{std::chrono::year{2001} /
+                                  std::chrono::January / std::chrono::day{1}};
+        auto epochTime =
+            std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                serEpoch);
         return SERTimestamp{static_cast<uint64_t>(
-            duration_cast<std::chrono::nanoseconds>(tp - serEpoch).count())};
+            duration_cast<std::chrono::nanoseconds>(tp - epochTime).count())};
     }
 
     static SERTimestamp now() {

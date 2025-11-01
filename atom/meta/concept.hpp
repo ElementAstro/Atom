@@ -20,8 +20,14 @@
 #include <vector>
 #include "atom/containers/high_performance.hpp"
 
+#if defined(_MSVC_LANG)
+#if _MSVC_LANG < 202002L
+#error "C++20 is required for this library"
+#endif
+#elif defined(__cplusplus)
 #if __cplusplus < 202002L
 #error "C++20 is required for this library"
+#endif
 #endif
 
 //==============================================================================

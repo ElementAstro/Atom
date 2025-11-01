@@ -1,8 +1,8 @@
 #include "atom/error/stacktrace.hpp"
 
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/functional.h>
 
 namespace py = pybind11;
 
@@ -51,27 +51,35 @@ Examples:
 )")
         .def(py::init<>(), "Constructs a StackTraceConfig with default values.")
         .def_readwrite("max_depth", &atom::error::StackTraceConfig::maxDepth,
-                      "Maximum number of frames to capture")
-        .def_readwrite("skip_frames", &atom::error::StackTraceConfig::skipFrames,
-                      "Number of frames to skip from the top")
-        .def_readwrite("include_addresses", &atom::error::StackTraceConfig::includeAddresses,
-                      "Include memory addresses in output")
-        .def_readwrite("include_modules", &atom::error::StackTraceConfig::includeModules,
-                      "Include module/library names")
-        .def_readwrite("include_source_info", &atom::error::StackTraceConfig::includeSourceInfo,
-                      "Include source file and line numbers")
+                       "Maximum number of frames to capture")
+        .def_readwrite("skip_frames",
+                       &atom::error::StackTraceConfig::skipFrames,
+                       "Number of frames to skip from the top")
+        .def_readwrite("include_addresses",
+                       &atom::error::StackTraceConfig::includeAddresses,
+                       "Include memory addresses in output")
+        .def_readwrite("include_modules",
+                       &atom::error::StackTraceConfig::includeModules,
+                       "Include module/library names")
+        .def_readwrite("include_source_info",
+                       &atom::error::StackTraceConfig::includeSourceInfo,
+                       "Include source file and line numbers")
         .def_readwrite("demangle", &atom::error::StackTraceConfig::demangle,
-                      "Demangle C++ function names")
+                       "Demangle C++ function names")
         .def_readwrite("prettify", &atom::error::StackTraceConfig::prettify,
-                      "Apply prettification to output")
-        .def_readwrite("frame_prefix", &atom::error::StackTraceConfig::framePrefix,
-                      "Prefix for each frame line")
-        .def_readwrite("unknown_function", &atom::error::StackTraceConfig::unknownFunction,
-                      "Placeholder for unknown functions")
-        .def_readwrite("unknown_module", &atom::error::StackTraceConfig::unknownModule,
-                      "Placeholder for unknown modules")
-        .def_readwrite("frame_filter", &atom::error::StackTraceConfig::frameFilter,
-                      "Custom frame filter function");
+                       "Apply prettification to output")
+        .def_readwrite("frame_prefix",
+                       &atom::error::StackTraceConfig::framePrefix,
+                       "Prefix for each frame line")
+        .def_readwrite("unknown_function",
+                       &atom::error::StackTraceConfig::unknownFunction,
+                       "Placeholder for unknown functions")
+        .def_readwrite("unknown_module",
+                       &atom::error::StackTraceConfig::unknownModule,
+                       "Placeholder for unknown modules")
+        .def_readwrite("frame_filter",
+                       &atom::error::StackTraceConfig::frameFilter,
+                       "Custom frame filter function");
 
     // StackFrame struct binding
     py::class_<atom::error::StackFrame>(
@@ -97,19 +105,20 @@ Examples:
 )")
         .def(py::init<>(), "Constructs an empty StackFrame.")
         .def_readwrite("address", &atom::error::StackFrame::address,
-                      "Memory address of the frame")
+                       "Memory address of the frame")
         .def_readwrite("function", &atom::error::StackFrame::function,
-                      "Function name (demangled if available)")
+                       "Function name (demangled if available)")
         .def_readwrite("module", &atom::error::StackFrame::module,
-                      "Module/library name")
+                       "Module/library name")
         .def_readwrite("source_file", &atom::error::StackFrame::sourceFile,
-                      "Source file name")
+                       "Source file name")
         .def_readwrite("source_line", &atom::error::StackFrame::sourceLine,
-                      "Source line number")
+                       "Source line number")
         .def_readwrite("offset", &atom::error::StackFrame::offset,
-                      "Offset within the function/module")
+                       "Offset within the function/module")
         .def("to_string",
-             py::overload_cast<const atom::error::StackTraceConfig&>(&atom::error::StackFrame::toString, py::const_),
+             py::overload_cast<const atom::error::StackTraceConfig&>(
+                 &atom::error::StackFrame::toString, py::const_),
              py::arg("config") = atom::error::StackTraceConfig(),
              R"(Convert frame to string representation.
 
@@ -119,15 +128,15 @@ Args:
 Returns:
     str: String representation of the frame
 )")
-        .def("__str__",
-             [](const atom::error::StackFrame& frame) {
-                 return frame.toString();
-             },
-             "Returns a string representation of the stack frame.")
-        .def("__repr__",
-             [](const atom::error::StackFrame& frame) {
-                 return "<StackFrame: " + frame.function + ">";
-             });
+        .def(
+            "__str__",
+            [](const atom::error::StackFrame& frame) {
+                return frame.toString();
+            },
+            "Returns a string representation of the stack frame.")
+        .def("__repr__", [](const atom::error::StackFrame& frame) {
+            return "<StackFrame: " + frame.function + ">";
+        });
 
     // StackTrace class binding
     py::class_<atom::error::StackTrace>(
@@ -154,7 +163,8 @@ Examples:
     >>> trace = StackTrace(config)
 )")
         .def(py::init<>(),
-             "Constructs a StackTrace object and captures the current stack trace.")
+             "Constructs a StackTrace object and captures the current stack "
+             "trace.")
         .def(py::init<const atom::error::StackTraceConfig&>(),
              py::arg("config"),
              R"(Constructs a StackTrace with custom configuration.
@@ -162,15 +172,17 @@ Examples:
 Args:
     config (StackTraceConfig): Configuration options for stack trace capture
 )")
-        .def("to_string",
-             py::overload_cast<>(&atom::error::StackTrace::toString, py::const_),
-             R"(Get the string representation of the stack trace.
+        .def(
+            "to_string",
+            py::overload_cast<>(&atom::error::StackTrace::toString, py::const_),
+            R"(Get the string representation of the stack trace.
 
 Returns:
     str: A string representing the captured stack trace with enhanced details.
 )")
         .def("to_string",
-             py::overload_cast<const atom::error::StackTraceConfig&>(&atom::error::StackTrace::toString, py::const_),
+             py::overload_cast<const atom::error::StackTraceConfig&>(
+                 &atom::error::StackTrace::toString, py::const_),
              py::arg("config"),
              R"(Get the string representation with custom configuration.
 
@@ -204,45 +216,53 @@ Returns:
 Returns:
     str: Name of the backend used
 )")
-        .def_static("set_default_config", &atom::error::StackTrace::setDefaultConfig,
-                   py::arg("config"),
-                   R"(Set global default configuration.
+        .def_static("set_default_config",
+                    &atom::error::StackTrace::setDefaultConfig,
+                    py::arg("config"),
+                    R"(Set global default configuration.
 
 Args:
     config (StackTraceConfig): Default configuration to use for new StackTrace instances
 )")
-        .def_static("get_default_config", &atom::error::StackTrace::getDefaultConfig,
-                   py::return_value_policy::reference,
-                   R"(Get global default configuration.
+        .def_static("get_default_config",
+                    &atom::error::StackTrace::getDefaultConfig,
+                    py::return_value_policy::reference,
+                    R"(Get global default configuration.
 
 Returns:
     StackTraceConfig: Current default configuration
 )")
-        .def_static("get_available_backends", &atom::error::StackTrace::getAvailableBackends,
-                   R"(Get available backends.
+        .def_static("get_available_backends",
+                    &atom::error::StackTrace::getAvailableBackends,
+                    R"(Get available backends.
 
 Returns:
     list[str]: List of available backend names
 )")
-        .def_static("set_preferred_backend", &atom::error::StackTrace::setPreferredBackend,
-                   py::arg("backend_name"),
-                   R"(Force use of specific backend.
+        .def_static("set_preferred_backend",
+                    &atom::error::StackTrace::setPreferredBackend,
+                    py::arg("backend_name"),
+                    R"(Force use of specific backend.
 
 Args:
     backend_name (str): Name of backend to use ("auto" for automatic selection)
 )")
         // Python-specific methods
-        .def("__str__",
-             py::overload_cast<>(&atom::error::StackTrace::toString, py::const_),
-             "Returns a string representation of the stack trace.")
-        .def("__repr__", [](const atom::error::StackTrace& st) {
-            return "<StackTrace: " + std::to_string(st.size()) + " frames, backend=" + st.getBackendName() + ">";
-        })
+        .def(
+            "__str__",
+            py::overload_cast<>(&atom::error::StackTrace::toString, py::const_),
+            "Returns a string representation of the stack trace.")
+        .def("__repr__",
+             [](const atom::error::StackTrace& st) {
+                 return "<StackTrace: " + std::to_string(st.size()) +
+                        " frames, backend=" + st.getBackendName() + ">";
+             })
         .def("__len__", &atom::error::StackTrace::size,
              "Returns the number of frames in the stack trace.")
-        .def("__bool__", [](const atom::error::StackTrace& st) {
-            return !st.empty();
-        }, "Returns True if the stack trace is not empty.");
+        .def(
+            "__bool__",
+            [](const atom::error::StackTrace& st) { return !st.empty(); },
+            "Returns True if the stack trace is not empty.");
 
     // Utility functions from stacktrace_utils namespace
     m.def("demangle", &atom::error::stacktrace_utils::demangle,
@@ -300,8 +320,8 @@ Examples:
     file.cpp
 )");
 
-    m.def("contains_mangled_names", &atom::error::stacktrace_utils::containsMangledNames,
-          py::arg("str"),
+    m.def("contains_mangled_names",
+          &atom::error::stacktrace_utils::containsMangledNames, py::arg("str"),
           R"(Check if a string contains a mangled C++ name.
 
 Args:
@@ -312,8 +332,7 @@ Returns:
 )");
 
     // Convenience functions from stacktrace namespace
-    m.def("current",
-          py::overload_cast<>(&atom::error::stacktrace::current),
+    m.def("current", py::overload_cast<>(&atom::error::stacktrace::current),
           R"(Capture current stack trace with default settings.
 
 Returns:
@@ -325,8 +344,7 @@ Examples:
     >>> print(trace_str)
 )");
 
-    m.def("current",
-          py::overload_cast<int>(&atom::error::stacktrace::current),
+    m.def("current", py::overload_cast<int>(&atom::error::stacktrace::current),
           py::arg("max_depth"),
           R"(Capture current stack trace with custom depth.
 
@@ -338,7 +356,8 @@ Returns:
 )");
 
     m.def("current",
-          py::overload_cast<const atom::error::StackTraceConfig&>(&atom::error::stacktrace::current),
+          py::overload_cast<const atom::error::StackTraceConfig&>(
+              &atom::error::stacktrace::current),
           py::arg("config"),
           R"(Capture current stack trace with custom configuration.
 

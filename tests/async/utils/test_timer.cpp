@@ -9,20 +9,21 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Timer
-Tests task scheduling, priorities, repeat counts, edge cases, and platform-specific timer implementations.
+Tests task scheduling, priorities, repeat counts, edge cases, and
+platform-specific timer implementations.
 
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <thread>
+#include <vector>
 
-#include "atom/async/utils/timer.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/utils/timer.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -50,9 +51,7 @@ TEST_F(TimerTest, BasicSetTimeout) {
     Timer timer;
     std::atomic<bool> executed{false};
 
-    auto future = timer.setTimeout([&executed]() {
-        executed = true;
-    }, 100);
+    auto future = timer.setTimeout([&executed]() { executed = true; }, 100);
 
     // Should not be executed immediately
     EXPECT_FALSE(executed);
@@ -65,9 +64,7 @@ TEST_F(TimerTest, BasicSetTimeout) {
 TEST_F(TimerTest, SetTimeoutWithReturnValue) {
     Timer timer;
 
-    auto future = timer.setTimeout([]() -> int {
-        return 42;
-    }, 50);
+    auto future = timer.setTimeout([]() -> int { return 42; }, 50);
 
     int result = future.get();
     EXPECT_EQ(result, 42);
@@ -77,9 +74,8 @@ TEST_F(TimerTest, SetTimeoutWithArguments) {
     Timer timer;
     std::atomic<int> result{0};
 
-    auto future = timer.setTimeout([&result](int a, int b) {
-        result = a + b;
-    }, 50, 10, 20);
+    auto future = timer.setTimeout([&result](int a, int b) { result = a + b; },
+                                   50, 10, 20);
 
     future.wait();
     EXPECT_EQ(result.load(), 30);
@@ -89,9 +85,8 @@ TEST_F(TimerTest, SetInterval) {
     Timer timer;
     std::atomic<int> count{0};
 
-    timer.setInterval([&count]() {
-        count.fetch_add(1);
-    }, 50, 5, 0); // Execute 5 times
+    timer.setInterval([&count]() { count.fetch_add(1); }, 50, 5,
+                      0);  // Execute 5 times
 
     // Wait for all executions
     std::this_thread::sleep_for(400ms);
@@ -105,16 +100,20 @@ TEST_F(TimerTest, SetIntervalWithPriority) {
     std::mutex orderMutex;
 
     // High priority task
-    timer.setInterval([&executionOrder, &orderMutex]() {
-        std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(1);
-    }, 100, 2, 10); // High priority
+    timer.setInterval(
+        [&executionOrder, &orderMutex]() {
+            std::lock_guard<std::mutex> lock(orderMutex);
+            executionOrder.push_back(1);
+        },
+        100, 2, 10);  // High priority
 
     // Low priority task
-    timer.setInterval([&executionOrder, &orderMutex]() {
-        std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(2);
-    }, 100, 2, 1); // Low priority
+    timer.setInterval(
+        [&executionOrder, &orderMutex]() {
+            std::lock_guard<std::mutex> lock(orderMutex);
+            executionOrder.push_back(2);
+        },
+        100, 2, 1);  // Low priority
 
     // Wait for executions
     std::this_thread::sleep_for(300ms);
@@ -128,9 +127,7 @@ TEST_F(TimerTest, AddTask) {
     Timer timer;
     std::atomic<bool> executed{false};
 
-    auto future = timer.addTask([&executed]() {
-        executed = true;
-    }, 100, 1, 5);
+    auto future = timer.addTask([&executed]() { executed = true; }, 100, 1, 5);
 
     future.wait();
     EXPECT_TRUE(executed);
@@ -140,9 +137,9 @@ TEST_F(TimerTest, AddTaskWithRepeat) {
     Timer timer;
     std::atomic<int> count{0};
 
-    auto future = timer.addTask([&count]() -> int {
-        return count.fetch_add(1) + 1;
-    }, 50, 3, 5); // Repeat 3 times
+    auto future =
+        timer.addTask([&count]() -> int { return count.fetch_add(1) + 1; }, 50,
+                      3, 5);  // Repeat 3 times
 
     // Wait for completion
     std::this_thread::sleep_for(250ms);
@@ -154,9 +151,7 @@ TEST_F(TimerTest, TimerCallback) {
     Timer timer;
     std::atomic<int> callbackCount{0};
 
-    timer.setCallback([&callbackCount]() {
-        callbackCount.fetch_add(1);
-    });
+    timer.setCallback([&callbackCount]() { callbackCount.fetch_add(1); });
 
     // Add multiple tasks
     timer.setTimeout([]() {}, 50);
@@ -174,9 +169,7 @@ TEST_F(TimerTest, TimerStart) {
     std::atomic<bool> executed{false};
 
     // Add task before starting
-    timer.setTimeout([&executed]() {
-        executed = true;
-    }, 100);
+    timer.setTimeout([&executed]() { executed = true; }, 100);
 
     EXPECT_FALSE(executed);
 
@@ -191,9 +184,8 @@ TEST_F(TimerTest, TimerStop) {
     Timer timer;
     std::atomic<int> count{0};
 
-    timer.setInterval([&count]() {
-        count.fetch_add(1);
-    }, 50, -1, 0); // Infinite repeat
+    timer.setInterval([&count]() { count.fetch_add(1); }, 50, -1,
+                      0);  // Infinite repeat
 
     timer.start();
 
@@ -210,16 +202,15 @@ TEST_F(TimerTest, TimerStop) {
     int countAfterStop = count.load();
 
     // Count should not have increased significantly after stop
-    EXPECT_LE(countAfterStop - countAfterStart, 1); // Allow for one more execution due to timing
+    EXPECT_LE(countAfterStop - countAfterStart,
+              1);  // Allow for one more execution due to timing
 }
 
 TEST_F(TimerTest, TimerRestart) {
     Timer timer;
     std::atomic<int> count{0};
 
-    timer.setTimeout([&count]() {
-        count.fetch_add(1);
-    }, 100);
+    timer.setTimeout([&count]() { count.fetch_add(1); }, 100);
 
     timer.start();
     std::this_thread::sleep_for(150ms);
@@ -227,9 +218,7 @@ TEST_F(TimerTest, TimerRestart) {
 
     // Restart with new task
     timer.stop();
-    timer.setTimeout([&count]() {
-        count.fetch_add(10);
-    }, 100);
+    timer.setTimeout([&count]() { count.fetch_add(10); }, 100);
 
     timer.start();
     std::this_thread::sleep_for(150ms);
@@ -249,9 +238,9 @@ TEST_F(TimerTest, ConcurrentTaskAddition) {
     for (int i = 0; i < numThreads; ++i) {
         threads.emplace_back([&timer, &totalExecuted, tasksPerThread]() {
             for (int j = 0; j < tasksPerThread; ++j) {
-                timer.setTimeout([&totalExecuted]() {
-                    totalExecuted.fetch_add(1);
-                }, 50 + j * 10);
+                timer.setTimeout(
+                    [&totalExecuted]() { totalExecuted.fetch_add(1); },
+                    50 + j * 10);
             }
         });
     }
@@ -275,10 +264,12 @@ TEST_F(TimerTest, TaskPriorityOrdering) {
 
     // Add tasks with different priorities (higher number = higher priority)
     for (int priority = 1; priority <= 5; ++priority) {
-        timer.addTask([&executionOrder, &orderMutex, priority]() {
-            std::lock_guard<std::mutex> lock(orderMutex);
-            executionOrder.push_back(priority);
-        }, 100, 1, priority);
+        timer.addTask(
+            [&executionOrder, &orderMutex, priority]() {
+                std::lock_guard<std::mutex> lock(orderMutex);
+                executionOrder.push_back(priority);
+            },
+            100, 1, priority);
     }
 
     // Wait for execution
@@ -295,7 +286,8 @@ TEST_F(TimerTest, TaskPriorityOrdering) {
             break;
         }
     }
-    // This is a probabilistic test - in most cases, we should see some high priority tasks first
+    // This is a probabilistic test - in most cases, we should see some high
+    // priority tasks first
 }
 
 TEST_F(TimerTest, ExceptionInTask) {
@@ -305,14 +297,11 @@ TEST_F(TimerTest, ExceptionInTask) {
     timer.start();
 
     // Add a task that throws
-    timer.setTimeout([]() {
-        throw std::runtime_error("Test exception");
-    }, 50);
+    timer.setTimeout([]() { throw std::runtime_error("Test exception"); }, 50);
 
     // Add a normal task after the throwing one
-    timer.setTimeout([&normalTaskExecuted]() {
-        normalTaskExecuted = true;
-    }, 100);
+    timer.setTimeout([&normalTaskExecuted]() { normalTaskExecuted = true; },
+                     100);
 
     // Wait for execution
     std::this_thread::sleep_for(200ms);
@@ -327,11 +316,12 @@ TEST_F(TimerTest, TaskValidation) {
     // Valid parameters should not throw
     EXPECT_NO_THROW(Timer::validateTaskParams(100, 5));
     EXPECT_NO_THROW(Timer::validateTaskParams(0, 1));
-    EXPECT_NO_THROW(Timer::validateTaskParams(1000, -1)); // Infinite repeat
+    EXPECT_NO_THROW(Timer::validateTaskParams(1000, -1));  // Infinite repeat
 
     // Invalid parameters should throw
     EXPECT_THROW(Timer::validateTaskParams(100, 0), std::invalid_argument);
-    EXPECT_THROW(Timer::validateTaskParams(100, -2), std::invalid_argument); // Only -1 allowed for infinite
+    EXPECT_THROW(Timer::validateTaskParams(100, -2),
+                 std::invalid_argument);  // Only -1 allowed for infinite
 }
 
 TEST_F(TimerTest, TimerDestructor) {
@@ -339,13 +329,12 @@ TEST_F(TimerTest, TimerDestructor) {
 
     {
         Timer timer;
-        timer.setInterval([&count]() {
-            count.fetch_add(1);
-        }, 50, -1, 0); // Infinite repeat
+        timer.setInterval([&count]() { count.fetch_add(1); }, 50, -1,
+                          0);  // Infinite repeat
 
         timer.start();
         std::this_thread::sleep_for(150ms);
-    } // Timer destructor should stop all tasks
+    }  // Timer destructor should stop all tasks
 
     int countAfterDestruction = count.load();
 
@@ -365,9 +354,8 @@ TEST_F(TimerTest, HighFrequencyTasks) {
 
     // Add many high-frequency tasks
     for (int i = 0; i < 100; ++i) {
-        timer.setTimeout([&count]() {
-            count.fetch_add(1);
-        }, 10 + i); // Staggered timing
+        timer.setTimeout([&count]() { count.fetch_add(1); },
+                         10 + i);  // Staggered timing
     }
 
     // Wait for execution
@@ -385,16 +373,16 @@ TEST_F(TimerTest, LongRunningTask) {
     timer.start();
 
     // Add a long-running task
-    timer.setTimeout([&longTaskStarted, &longTaskFinished]() {
-        longTaskStarted = true;
-        std::this_thread::sleep_for(200ms);
-        longTaskFinished = true;
-    }, 50);
+    timer.setTimeout(
+        [&longTaskStarted, &longTaskFinished]() {
+            longTaskStarted = true;
+            std::this_thread::sleep_for(200ms);
+            longTaskFinished = true;
+        },
+        50);
 
     // Add a short task that should execute after the long one starts
-    timer.setTimeout([&shortTaskExecuted]() {
-        shortTaskExecuted = true;
-    }, 100);
+    timer.setTimeout([&shortTaskExecuted]() { shortTaskExecuted = true; }, 100);
 
     // Wait for both tasks
     std::this_thread::sleep_for(400ms);
@@ -414,10 +402,12 @@ TEST_F(TimerTest, ResourceCleanup) {
         // Add tasks that use resources
         std::vector<EnhancedFuture<void>> futures;
         for (int i = 0; i < 5; ++i) {
-            auto future = timer.setTimeout([&tracker]() {
-                atom::async::test::ScopedResourceTracker resource(tracker);
-                std::this_thread::sleep_for(10ms);
-            }, 50 + i * 10);
+            auto future = timer.setTimeout(
+                [&tracker]() {
+                    atom::async::test::ScopedResourceTracker resource(tracker);
+                    std::this_thread::sleep_for(10ms);
+                },
+                50 + i * 10);
             futures.push_back(std::move(future));
         }
 
@@ -425,7 +415,7 @@ TEST_F(TimerTest, ResourceCleanup) {
         for (auto& future : futures) {
             future.wait();
         }
-    } // Timer destructor should clean up properly
+    }  // Timer destructor should clean up properly
 
     // Give some time for cleanup
     std::this_thread::sleep_for(50ms);

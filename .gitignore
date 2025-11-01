@@ -53,6 +53,7 @@
 
 # Build directories
 build/
+build-msvc/
 cmake-build-*/
 out/
 _build/
@@ -70,6 +71,7 @@ CPackSourceConfig.cmake
 
 # CMake temporary files
 .cmake/
+cmake_config*.log
 
 # -----------------------------------------------------------------------------
 # Package Managers
@@ -142,7 +144,6 @@ coverage.xml
 cover/
 
 # Virtual environments
-.env
 .venv
 env/
 venv/
@@ -278,7 +279,6 @@ tramp
 # Sphinx documentation
 docs/_build/
 docs/build/
-_build/
 
 # Doxygen
 doc/html/
@@ -299,7 +299,6 @@ doxygen_warnings.txt
 
 # Xmake
 .xmake/
-build/
 
 # Bazel
 bazel-*
@@ -313,8 +312,6 @@ Thumbs.db
 Thumbs.db:encryptable
 ehthumbs.db
 ehthumbs_vista.db
-*.tmp
-*.temp
 Desktop.ini
 $RECYCLE.BIN/
 *.cab
@@ -458,6 +455,18 @@ nlohmann/
 # Temporary documentation files
 *SUMMARY.md
 *_SUMMARY.md
+
+# Build output and logs
+build_output.txt
+test_results.txt
+preset_list.txt
+vcpkg_location.txt
+
+# Generated distribution files
+dist/
+
+# LLM documentation (generated)
+llmdoc/
 
 # -----------------------------------------------------------------------------
 # End of .gitignore

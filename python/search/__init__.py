@@ -34,7 +34,8 @@ Examples:
 
 # Import core search functionality
 try:
-    from .search import SearchEngine, Document
+    from .search import Document, SearchEngine
+
     __all__ = ["SearchEngine", "Document"]
 except ImportError:
     __all__ = []
@@ -42,18 +43,21 @@ except ImportError:
 # Import cache modules
 try:
     from . import cache
+
     __all__.extend(["cache"])
 except ImportError:
     pass
 
 try:
     from . import lru
+
     __all__.extend(["lru"])
 except ImportError:
     pass
 
 try:
     from . import ttl
+
     __all__.extend(["ttl"])
 except ImportError:
     pass
@@ -61,12 +65,14 @@ except ImportError:
 # Import database modules
 try:
     from . import mysql
+
     __all__.extend(["mysql"])
 except ImportError:
     pass
 
 try:
     from . import sqlite
+
     __all__.extend(["sqlite"])
 except ImportError:
     pass

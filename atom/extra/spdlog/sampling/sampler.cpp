@@ -97,8 +97,7 @@ bool LogSampler::burst_sample() {
         last_burst = now;
     }
 
-    size_t max_burst =
-        static_cast<size_t>(sample_rate_ * 10);
+    size_t max_burst = static_cast<size_t>(sample_rate_ * 10);
     bool should_log = burst_counter++ < max_burst;
 
     if (!should_log) {

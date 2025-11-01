@@ -10,13 +10,17 @@
 
 // Helper function to convert BSTR to std::string (MinGW compatible)
 static std::string BSTRToString(BSTR bstr) {
-    if (!bstr) return "";
+    if (!bstr)
+        return "";
 
-    int len = WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
-    if (len <= 0) return "";
+    int len =
+        WideCharToMultiByte(CP_UTF8, 0, bstr, -1, nullptr, 0, nullptr, nullptr);
+    if (len <= 0)
+        return "";
 
     std::string result(len - 1, '\0');
-    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, bstr, -1, &result[0], len, nullptr,
+                        nullptr);
     return result;
 }
 
@@ -24,7 +28,10 @@ static std::string BSTRToString(BSTR bstr) {
 class BSTRWrapper {
 public:
     explicit BSTRWrapper(const wchar_t* str) : bstr_(SysAllocString(str)) {}
-    ~BSTRWrapper() { if (bstr_) SysFreeString(bstr_); }
+    ~BSTRWrapper() {
+        if (bstr_)
+            SysFreeString(bstr_);
+    }
 
     BSTRWrapper(const BSTRWrapper&) = delete;
     BSTRWrapper& operator=(const BSTRWrapper&) = delete;
@@ -65,9 +72,8 @@ public:
         BSTRWrapper wql(L"WQL");
         BSTRWrapper query((L"SELECT * FROM " + wmiClass).c_str());
         HRESULT hres = pSvc->ExecQuery(
-            wql, query,
-            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
-            &pEnumerator);
+            wql, query, WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+            nullptr, &pEnumerator);
 
         if (FAILED(hres)) {
             spdlog::error("WMI query execution failed with HRESULT: 0x{:x}",
@@ -77,8 +83,8 @@ public:
         }
 
         while (pEnumerator) {
-            HRESULT hr =
-                pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
+            HRESULT hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                           &pclsObj, &uReturn);
             if (0 == uReturn) {
                 break;
             }
@@ -127,9 +133,8 @@ public:
         BSTRWrapper wql2(L"WQL");
         BSTRWrapper query2((L"SELECT * FROM " + wmiClass).c_str());
         HRESULT hres = pSvc->ExecQuery(
-            wql2, query2,
-            WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY, nullptr,
-            &pEnumerator);
+            wql2, query2, WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY,
+            nullptr, &pEnumerator);
 
         if (FAILED(hres)) {
             spdlog::error("WMI query execution failed with HRESULT: 0x{:x}",
@@ -139,8 +144,8 @@ public:
         }
 
         while (pEnumerator) {
-            HRESULT hr =
-                pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1, &pclsObj, &uReturn);
+            HRESULT hr = pEnumerator->Next(static_cast<LONG>(WBEM_INFINITE), 1,
+                                           &pclsObj, &uReturn);
             if (0 == uReturn) {
                 break;
             }
@@ -167,8 +172,8 @@ public:
      * @param pSvc WMI services pointer
      * @return true if initialization successful, false otherwise
      */
-    static auto initializeWmi(IWbemLocator*& pLoc, IWbemServices*& pSvc)
-        -> bool {
+    static auto initializeWmi(IWbemLocator*& pLoc,
+                              IWbemServices*& pSvc) -> bool {
         spdlog::debug("Initializing WMI components");
 
         HRESULT hres = CoInitializeEx(nullptr, COINIT_MULTITHREADED);
@@ -201,8 +206,8 @@ public:
         }
 
         BSTRWrapper rootCimv2(L"ROOT\\CIMV2");
-        hres = pLoc->ConnectServer(rootCimv2, nullptr, nullptr, 0,
-                                   0, 0, 0, &pSvc);
+        hres =
+            pLoc->ConnectServer(rootCimv2, nullptr, nullptr, 0, 0, 0, 0, &pSvc);
 
         if (FAILED(hres)) {
             spdlog::error("Failed to connect to WMI namespace. HRESULT: 0x{:x}",
@@ -284,8 +289,8 @@ public:
      * @param key Optional key to search for in the file
      * @return File content or value associated with key
      */
-    auto readFile(const std::string& path, const std::string& key = "") const
-        -> std::string {
+    auto readFile(const std::string& path,
+                  const std::string& key = "") const -> std::string {
         spdlog::debug("Reading file: {}", path);
 
         if (!std::filesystem::exists(path)) {

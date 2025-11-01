@@ -16,13 +16,13 @@
  * - Metadata preservation
  */
 
-#include <iostream>
-#include <string>
-#include <map>
-#include <vector>
-#include <iomanip>
-#include <sstream>
 #include <ctime>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <string>
+#include <vector>
 
 using namespace std;
 
@@ -67,8 +67,14 @@ struct ExifData {
     // Additional metadata
     map<string, string> custom_fields;
 
-    ExifData() : width(0), height(0), bits_per_sample(8), has_gps(false),
-                 gps_latitude(0.0), gps_longitude(0.0), gps_altitude(0.0) {}
+    ExifData()
+        : width(0),
+          height(0),
+          bits_per_sample(8),
+          has_gps(false),
+          gps_latitude(0.0),
+          gps_longitude(0.0),
+          gps_altitude(0.0) {}
 };
 
 /**
@@ -84,7 +90,8 @@ public:
 
         ExifData exif;
 
-        // Simulate reading EXIF data (in real implementation, would use library like libexif)
+        // Simulate reading EXIF data (in real implementation, would use library
+        // like libexif)
         exif.make = "Canon";
         exif.model = "EOS R5";
         exif.software = "Adobe Lightroom 6.0";
@@ -165,9 +172,13 @@ public:
         // GPS information
         if (exif.has_gps) {
             cout << "\nGPS Information:" << endl;
-            cout << "  Latitude: " << fixed << setprecision(6) << exif.gps_latitude << "° " << exif.gps_latitude_ref << endl;
-            cout << "  Longitude: " << fixed << setprecision(6) << exif.gps_longitude << "° " << exif.gps_longitude_ref << endl;
-            cout << "  Altitude: " << fixed << setprecision(1) << exif.gps_altitude << " m" << endl;
+            cout << "  Latitude: " << fixed << setprecision(6)
+                 << exif.gps_latitude << "° " << exif.gps_latitude_ref << endl;
+            cout << "  Longitude: " << fixed << setprecision(6)
+                 << exif.gps_longitude << "° " << exif.gps_longitude_ref
+                 << endl;
+            cout << "  Altitude: " << fixed << setprecision(1)
+                 << exif.gps_altitude << " m" << endl;
         } else {
             cout << "\nGPS Information: Not available" << endl;
         }
@@ -214,11 +225,13 @@ public:
     /**
      * @brief Update specific EXIF fields
      */
-    static bool updateExifFields(const string& image_path, const map<string, string>& updates) {
+    static bool updateExifFields(const string& image_path,
+                                 const map<string, string>& updates) {
         cout << "Updating EXIF fields in: " << image_path << endl;
 
         for (const auto& update : updates) {
-            cout << "  Updating " << update.first << " to: " << update.second << endl;
+            cout << "  Updating " << update.first << " to: " << update.second
+                 << endl;
         }
 
         cout << "  EXIF fields updated successfully" << endl;
@@ -283,13 +296,16 @@ public:
 
         // Estimate timezone (very rough approximation)
         int timezone_offset = static_cast<int>(exif.gps_longitude / 15.0);
-        cout << "Estimated timezone offset: UTC" << (timezone_offset >= 0 ? "+" : "") << timezone_offset << endl;
+        cout << "Estimated timezone offset: UTC"
+             << (timezone_offset >= 0 ? "+" : "") << timezone_offset << endl;
 
         // Altitude analysis
         if (exif.gps_altitude > 0) {
-            cout << "Altitude: " << fixed << setprecision(1) << exif.gps_altitude << " meters" << endl;
+            cout << "Altitude: " << fixed << setprecision(1)
+                 << exif.gps_altitude << " meters" << endl;
             if (exif.gps_altitude > 2000) {
-                cout << "  High altitude location (may affect exposure)" << endl;
+                cout << "  High altitude location (may affect exposure)"
+                     << endl;
             }
         }
     }
@@ -300,22 +316,29 @@ private:
         int iso = 0;
         try {
             iso = stoi(exif.iso_speed);
-        } catch (...) {}
+        } catch (...) {
+        }
 
         if (iso > 0) {
             cout << "  ISO " << iso << ": ";
-            if (iso <= 100) cout << "Low noise, excellent quality";
-            else if (iso <= 800) cout << "Good quality, minimal noise";
-            else if (iso <= 3200) cout << "Moderate noise, acceptable quality";
-            else cout << "High noise, consider noise reduction";
+            if (iso <= 100)
+                cout << "Low noise, excellent quality";
+            else if (iso <= 800)
+                cout << "Good quality, minimal noise";
+            else if (iso <= 3200)
+                cout << "Moderate noise, acceptable quality";
+            else
+                cout << "High noise, consider noise reduction";
             cout << endl;
         }
 
         // Analyze aperture
         cout << "  Aperture " << exif.aperture << ": ";
-        if (exif.aperture.find("1.4") != string::npos || exif.aperture.find("2.8") != string::npos) {
+        if (exif.aperture.find("1.4") != string::npos ||
+            exif.aperture.find("2.8") != string::npos) {
             cout << "Wide aperture, shallow depth of field";
-        } else if (exif.aperture.find("8") != string::npos || exif.aperture.find("11") != string::npos) {
+        } else if (exif.aperture.find("8") != string::npos ||
+                   exif.aperture.find("11") != string::npos) {
             cout << "Narrow aperture, deep depth of field";
         } else {
             cout << "Moderate aperture, balanced depth of field";
@@ -328,9 +351,12 @@ private:
             string speed_str = exif.shutter_speed.substr(2);
             try {
                 int speed = stoi(speed_str);
-                if (speed >= 500) cout << "Fast shutter, freezes motion";
-                else if (speed >= 60) cout << "Moderate shutter, slight motion blur possible";
-                else cout << "Slow shutter, motion blur likely";
+                if (speed >= 500)
+                    cout << "Fast shutter, freezes motion";
+                else if (speed >= 60)
+                    cout << "Moderate shutter, slight motion blur possible";
+                else
+                    cout << "Slow shutter, motion blur likely";
             } catch (...) {
                 cout << "Custom shutter speed";
             }
@@ -347,27 +373,37 @@ private:
         try {
             int focal_length = stoi(fl_str);
             if (focal_length < 35) {
-                cout << "    Wide angle lens - good for landscapes, architecture" << endl;
+                cout
+                    << "    Wide angle lens - good for landscapes, architecture"
+                    << endl;
             } else if (focal_length <= 85) {
-                cout << "    Standard lens - versatile for general photography" << endl;
+                cout << "    Standard lens - versatile for general photography"
+                     << endl;
             } else if (focal_length <= 200) {
-                cout << "    Telephoto lens - good for portraits, wildlife" << endl;
+                cout << "    Telephoto lens - good for portraits, wildlife"
+                     << endl;
             } else {
-                cout << "    Super telephoto - specialized for distant subjects" << endl;
+                cout << "    Super telephoto - specialized for distant subjects"
+                     << endl;
             }
-        } catch (...) {}
+        } catch (...) {
+        }
     }
 
     static void analyzeImageQuality(const ExifData& exif) {
-        cout << "  Resolution: " << exif.width << "x" << exif.height
-             << " (" << fixed << setprecision(1) << (exif.width * exif.height / 1000000.0) << " MP)" << endl;
-        cout << "  Bit depth: " << exif.bits_per_sample << " bits per channel" << endl;
+        cout << "  Resolution: " << exif.width << "x" << exif.height << " ("
+             << fixed << setprecision(1)
+             << (exif.width * exif.height / 1000000.0) << " MP)" << endl;
+        cout << "  Bit depth: " << exif.bits_per_sample << " bits per channel"
+             << endl;
         cout << "  Color space: " << exif.color_space << endl;
 
         if (exif.bits_per_sample >= 14) {
-            cout << "    High bit depth - excellent for post-processing" << endl;
+            cout << "    High bit depth - excellent for post-processing"
+                 << endl;
         } else if (exif.bits_per_sample >= 10) {
-            cout << "    Good bit depth - suitable for moderate editing" << endl;
+            cout << "    Good bit depth - suitable for moderate editing"
+                 << endl;
         } else {
             cout << "    Standard bit depth - limited editing headroom" << endl;
         }
@@ -388,7 +424,8 @@ private:
         }
 
         if (exif.exposure_mode == "Manual") {
-            cout << "    Full manual control - experienced photographer" << endl;
+            cout << "    Full manual control - experienced photographer"
+                 << endl;
         }
     }
 };
@@ -418,11 +455,9 @@ void demonstrateExifHandling() {
 
     // 5. Modify EXIF data
     cout << "\n5. EXIF Data Modification:" << endl;
-    map<string, string> updates = {
-        {"Artist", "Updated Photographer"},
-        {"Copyright", "© 2024 Updated Copyright"},
-        {"ImageDescription", "Updated description"}
-    };
+    map<string, string> updates = {{"Artist", "Updated Photographer"},
+                                   {"Copyright", "© 2024 Updated Copyright"},
+                                   {"ImageDescription", "Updated description"}};
     ExifWriter::updateExifFields("modified_image.jpg", updates);
 
     // 6. Write new EXIF data

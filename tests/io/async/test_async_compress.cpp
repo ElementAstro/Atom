@@ -37,22 +37,25 @@ protected:
         fs::create_directories(output_dir_);
 
         // Create test files with content
-        createTestFile(input_dir_ / "test1.txt", "This is test file 1 content.");
-        createTestFile(input_dir_ / "test2.txt", "This is test file 2 with different content.");
-        createTestFile(input_dir_ / "test3.txt", std::string(50000, 'x')); // Larger file
+        createTestFile(input_dir_ / "test1.txt",
+                       "This is test file 1 content.");
+        createTestFile(input_dir_ / "test2.txt",
+                       "This is test file 2 with different content.");
+        createTestFile(input_dir_ / "test3.txt",
+                       std::string(50000, 'x'));  // Larger file
 
         // Create a subdirectory with files
         fs::create_directories(input_dir_ / "subdir");
-        createTestFile(input_dir_ / "subdir" / "subfile1.txt", "Subdirectory file content.");
+        createTestFile(input_dir_ / "subdir" / "subfile1.txt",
+                       "Subdirectory file content.");
 
         // Set up io_context and work guard to keep io_context running
-        work_guard_ = std::make_unique<asio::executor_work_guard<asio::io_context::executor_type>>(
+        work_guard_ = std::make_unique<
+            asio::executor_work_guard<asio::io_context::executor_type>>(
             io_context_.get_executor());
 
         // Start io_context in a separate thread
-        io_thread_ = std::thread([this]() {
-            io_context_.run();
-        });
+        io_thread_ = std::thread([this]() { io_context_.run(); });
     }
 
     void TearDown() override {
@@ -103,10 +106,12 @@ protected:
     }
 
     // Wait for an operation to complete
-    void waitForCompletion(std::chrono::milliseconds timeout = std::chrono::seconds(5)) {
+    void waitForCompletion(
+        std::chrono::milliseconds timeout = std::chrono::seconds(5)) {
         std::unique_lock<std::mutex> lock(completion_mutex_);
-        ASSERT_TRUE(completion_cv_.wait_for(lock, timeout, [this] { return operation_completed_; }))
-            << "Operation timed out";
+        ASSERT_TRUE(completion_cv_.wait_for(lock, timeout, [this] {
+            return operation_completed_;
+        })) << "Operation timed out";
         operation_completed_ = false;
     }
 
@@ -119,7 +124,8 @@ protected:
     }
 
     asio::io_context io_context_;
-    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>> work_guard_;
+    std::unique_ptr<asio::executor_work_guard<asio::io_context::executor_type>>
+        work_guard_;
     std::thread io_thread_;
 
     fs::path test_dir_;
@@ -137,7 +143,8 @@ TEST_F(AsyncCompressTest, SingleFileCompressorBasicOperation) {
     fs::path output_file = output_dir_ / "test1.txt.gz";
 
     // Create a completion handler
-    auto handler = [this](const asio::error_code& ec, std::size_t bytes_transferred) {
+    auto handler = [this](const asio::error_code& ec,
+                          std::size_t bytes_transferred) {
         EXPECT_FALSE(ec) << "Error in async operation: " << ec.message();
         signalCompletion();
     };
@@ -162,7 +169,8 @@ TEST_F(AsyncCompressTest, DirectoryCompressorBasicOperation) {
     fs::path output_file = output_dir_ / "all_files.gz";
 
     // Create a completion handler
-    auto handler = [this](const asio::error_code& ec, std::size_t bytes_transferred) {
+    auto handler = [this](const asio::error_code& ec,
+                          std::size_t bytes_transferred) {
         EXPECT_FALSE(ec) << "Error in async operation: " << ec.message();
         signalCompletion();
     };
@@ -262,7 +270,8 @@ TEST_F(AsyncCompressTest, DirectoryDecompressorBasicOperation) {
         }
     }
 
-    EXPECT_TRUE(found_decompressed_file) << "No decompressed files were created";
+    EXPECT_TRUE(found_decompressed_file)
+        << "No decompressed files were created";
 }
 
 // Test error handling for input files that don't exist
@@ -271,11 +280,13 @@ TEST_F(AsyncCompressTest, CompressorErrorHandlingNonExistentFile) {
     fs::path output_file = output_dir_ / "error_output.gz";
 
     // Expect an exception when trying to compress a non-existent file
-    EXPECT_THROW({
-        auto compressor = std::make_shared<SingleFileCompressor>(
-            io_context_, non_existent_file, output_file);
-        compressor->start();
-    }, std::runtime_error);
+    EXPECT_THROW(
+        {
+            auto compressor = std::make_shared<SingleFileCompressor>(
+                io_context_, non_existent_file, output_file);
+            compressor->start();
+        },
+        std::runtime_error);
 }
 
 // Test error handling for invalid output paths
@@ -284,11 +295,13 @@ TEST_F(AsyncCompressTest, CompressorErrorHandlingInvalidOutputPath) {
     fs::path invalid_output_file = fs::path("/non_existent_dir") / "output.gz";
 
     // Expect an exception when trying to write to an invalid path
-    EXPECT_THROW({
-        auto compressor = std::make_shared<SingleFileCompressor>(
-            io_context_, input_file, invalid_output_file);
-        compressor->start();
-    }, std::runtime_error);
+    EXPECT_THROW(
+        {
+            auto compressor = std::make_shared<SingleFileCompressor>(
+                io_context_, input_file, invalid_output_file);
+            compressor->start();
+        },
+        std::runtime_error);
 }
 
 // Test ZIP operations
@@ -304,14 +317,15 @@ TEST_F(AsyncCompressTest, ZipOperations) {
 
     // Create a ZIP file for testing using system commands
     std::string cmd = "zip -j " + zip_file.string() + " " +
-                     (input_dir_ / "test1.txt").string() + " " +
-                     (input_dir_ / "test2.txt").string();
+                      (input_dir_ / "test1.txt").string() + " " +
+                      (input_dir_ / "test2.txt").string();
     int result = std::system(cmd.c_str());
     ASSERT_EQ(result, 0) << "Failed to create test ZIP file";
 
     // Test ListFilesInZip
     {
-        auto list_files = std::make_shared<ListFilesInZip>(io_context_, zip_file.string());
+        auto list_files =
+            std::make_shared<ListFilesInZip>(io_context_, zip_file.string());
         list_files->start();
 
         // Wait for io operations to complete
@@ -346,7 +360,8 @@ TEST_F(AsyncCompressTest, ZipOperations) {
 
     // Test GetZipFileSize
     {
-        auto get_size = std::make_shared<GetZipFileSize>(io_context_, zip_file.string());
+        auto get_size =
+            std::make_shared<GetZipFileSize>(io_context_, zip_file.string());
         get_size->start();
 
         // Wait for io operations to complete
@@ -420,11 +435,9 @@ TEST_F(AsyncCompressTest, ConcurrentCompression) {
 // Test compressing and then decompressing to verify data integrity
 TEST_F(AsyncCompressTest, CompressDecompressRoundTrip) {
     // Original files
-    std::vector<fs::path> input_files = {
-        input_dir_ / "test1.txt",
-        input_dir_ / "test2.txt",
-        input_dir_ / "test3.txt"
-    };
+    std::vector<fs::path> input_files = {input_dir_ / "test1.txt",
+                                         input_dir_ / "test2.txt",
+                                         input_dir_ / "test3.txt"};
 
     // Create separate output directories for each file
     for (size_t i = 0; i < input_files.size(); ++i) {
@@ -447,10 +460,11 @@ TEST_F(AsyncCompressTest, CompressDecompressRoundTrip) {
         {
             auto decompressor = std::make_shared<SingleFileDecompressor>(
                 io_context_, compressed_file, decomp_dir);
-            decompressor->start([this](const asio::error_code& ec, std::size_t) {
-                EXPECT_FALSE(ec);
-                signalCompletion();
-            });
+            decompressor->start(
+                [this](const asio::error_code& ec, std::size_t) {
+                    EXPECT_FALSE(ec);
+                    signalCompletion();
+                });
             waitForCompletion();
         }
 
@@ -458,17 +472,16 @@ TEST_F(AsyncCompressTest, CompressDecompressRoundTrip) {
         fs::path original_name = input_files[i].filename();
 
         // Verify content matches
-        EXPECT_TRUE(fileContentsEqual(
-            input_files[i],
-            decomp_dir / original_name
-        )) << "Round-trip content does not match for file " << i;
+        EXPECT_TRUE(
+            fileContentsEqual(input_files[i], decomp_dir / original_name))
+            << "Round-trip content does not match for file " << i;
     }
 }
 
 // Test compression levels and performance
 TEST_F(AsyncCompressTest, CompressionPerformance) {
-    // This test would typically measure and compare compression times and ratios
-    // For different files or compression settings
+    // This test would typically measure and compare compression times and
+    // ratios For different files or compression settings
 
     // Create a large test file
     fs::path large_file = input_dir_ / "large_file.txt";
@@ -499,7 +512,8 @@ TEST_F(AsyncCompressTest, CompressionPerformance) {
     // Record end time
     auto end_time = std::chrono::high_resolution_clock::now();
     auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        end_time - start_time).count();
+                        end_time - start_time)
+                        .count();
 
     // Calculate compression ratio
     double original_size = static_cast<double>(fs::file_size(large_file));
@@ -513,7 +527,8 @@ TEST_F(AsyncCompressTest, CompressionPerformance) {
     std::cout << "Compression ratio: " << compression_ratio << ":1\n";
 
     // Expect reasonable compression ratio for our test data
-    EXPECT_GT(compression_ratio, 2.0) << "Compression ratio is lower than expected";
+    EXPECT_GT(compression_ratio, 2.0)
+        << "Compression ratio is lower than expected";
 }
 
 // Test error handling for non-existent input file
@@ -525,13 +540,13 @@ TEST_F(AsyncCompressTest, NonExistentInputFile) {
         io_context_, non_existent, output_file);
 
     bool error_occurred = false;
-    compressor->start([this, &error_occurred](const asio::error_code& ec,
-                                             std::size_t) {
-        if (ec) {
-            error_occurred = true;
-        }
-        signalCompletion();
-    });
+    compressor->start(
+        [this, &error_occurred](const asio::error_code& ec, std::size_t) {
+            if (ec) {
+                error_occurred = true;
+            }
+            signalCompletion();
+        });
 
     waitForCompletion();
     EXPECT_TRUE(error_occurred);
@@ -543,17 +558,19 @@ TEST_F(AsyncCompressTest, ConcurrentCompressions) {
     std::atomic<int> completed{0};
 
     for (int i = 0; i < num_concurrent; ++i) {
-        fs::path input = input_dir_ / ("test" + std::to_string(i % 3 + 1) + ".txt");
+        fs::path input =
+            input_dir_ / ("test" + std::to_string(i % 3 + 1) + ".txt");
         fs::path output = output_dir_ / ("output" + std::to_string(i) + ".gz");
 
-        auto compressor = std::make_shared<SingleFileCompressor>(
-            io_context_, input, output);
+        auto compressor =
+            std::make_shared<SingleFileCompressor>(io_context_, input, output);
 
-        compressor->start([&completed](const asio::error_code& ec, std::size_t) {
-            if (!ec) {
-                completed++;
-            }
-        });
+        compressor->start(
+            [&completed](const asio::error_code& ec, std::size_t) {
+                if (!ec) {
+                    completed++;
+                }
+            });
     }
 
     // Wait for all to complete
@@ -594,13 +611,13 @@ TEST_F(AsyncCompressTest, CorruptedFileDecompression) {
         io_context_, corrupted_file, output_dir_);
 
     bool error_occurred = false;
-    decompressor->start([this, &error_occurred](const asio::error_code& ec,
-                                               std::size_t) {
-        if (ec) {
-            error_occurred = true;
-        }
-        signalCompletion();
-    });
+    decompressor->start(
+        [this, &error_occurred](const asio::error_code& ec, std::size_t) {
+            if (ec) {
+                error_occurred = true;
+            }
+            signalCompletion();
+        });
 
     waitForCompletion();
     // Should handle corrupted file gracefully
@@ -614,7 +631,7 @@ TEST_F(AsyncCompressTest, LargeDirectoryCompression) {
 
     for (int i = 0; i < 50; ++i) {
         createTestFile(large_dir / ("file" + std::to_string(i) + ".txt"),
-                      "Content for file " + std::to_string(i));
+                       "Content for file " + std::to_string(i));
     }
 
     fs::path output_file = output_dir_ / "large_dir.gz";

@@ -25,6 +25,11 @@ Description: TCP Client Class
 #include <ws2tcpip.h>
 #ifdef _MSC_VER
 #pragma comment(lib, "ws2_32.lib")
+// MSVC doesn't define ssize_t, but MinGW does
+#ifndef _SSIZE_T_DEFINED
+#define _SSIZE_T_DEFINED
+typedef int ssize_t;
+#endif
 #endif
 #else
 #include <arpa/inet.h>

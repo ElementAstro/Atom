@@ -243,8 +243,8 @@ public:
     auto unifiedDiff(std::span<const std::string> vec1,
                      std::span<const std::string> vec2,
                      std::string_view label1 = "a",
-                     std::string_view label2 = "b", int context = 3)
-        -> DiffVector<std::string>;
+                     std::string_view label2 = "b",
+                     int context = 3) -> DiffVector<std::string>;
 
     /**
      * @brief Set the algorithm and performance options.
@@ -281,11 +281,10 @@ public:
      * @return A vector of strings representing the unified diff.
      * @throws InvalidInputException If the input parameters are invalid.
      */
-    static auto unifiedDiff(std::span<const std::string> vec1,
-                            std::span<const std::string> vec2,
-                            std::string_view label1, std::string_view label2,
-                            int context, const DiffOptions& options)
-        -> DiffVector<std::string>;
+    static auto unifiedDiff(
+        std::span<const std::string> vec1, std::span<const std::string> vec2,
+        std::string_view label1, std::string_view label2, int context,
+        const DiffOptions& options) -> DiffVector<std::string>;
 
 private:
     class Impl;                    /// Implementation detail class.
@@ -391,12 +390,11 @@ public:
     /**
      * @brief Static version of makeFile method.
      */
-    static auto makeFile(std::span<const std::string> fromlines,
-                         std::span<const std::string> tolines,
-                         std::string_view fromdesc, std::string_view todesc,
-                         const DiffOptions& options,
-                         const HtmlDiffOptions& htmlOptions = HtmlDiffOptions{})
-        -> DiffResult;
+    static auto makeFile(
+        std::span<const std::string> fromlines,
+        std::span<const std::string> tolines, std::string_view fromdesc,
+        std::string_view todesc, const DiffOptions& options,
+        const HtmlDiffOptions& htmlOptions = HtmlDiffOptions{}) -> DiffResult;
 
     /**
      * @brief Static version of makeTable method.
@@ -422,11 +420,10 @@ private:
  * @return A vector of strings containing the close matches.
  * @throws InvalidInputException If n <= 0 or cutoff is outside valid range.
  */
-auto getCloseMatches(std::string_view word,
-                     std::span<const std::string> possibilities, int n = 3,
-                     double cutoff = 0.6,
-                     const DiffOptions& options = DiffOptions{})
-    -> DiffVector<std::string>;
+auto getCloseMatches(
+    std::string_view word, std::span<const std::string> possibilities,
+    int n = 3, double cutoff = 0.6,
+    const DiffOptions& options = DiffOptions{}) -> DiffVector<std::string>;
 
 /**
  * @class FuzzyMatcher

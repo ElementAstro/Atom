@@ -6,7 +6,8 @@
 #include <string>
 #include <vector>
 
-// Minimal stub implementations since atom-extra-pugixml has API compatibility issues
+// Minimal stub implementations since atom-extra-pugixml has API compatibility
+// issues
 
 namespace atom::extra::pugixml {
 
@@ -15,9 +16,7 @@ class Node {
 public:
     Node() = default;
 
-    std::string text() const {
-        return "Sample text content (stub)";
-    }
+    std::string text() const { return "Sample text content (stub)"; }
 
     std::string attribute(const std::string& name) const {
         std::cout << "Getting attribute: " << name << " (stub)" << std::endl;
@@ -39,7 +38,8 @@ public:
     }
 
     void set_attribute(const std::string& name, const std::string& value) {
-        std::cout << "Setting attribute " << name << " = " << value << " (stub)" << std::endl;
+        std::cout << "Setting attribute " << name << " = " << value << " (stub)"
+                  << std::endl;
     }
 
     Node append_child(const std::string& name) {
@@ -50,9 +50,7 @@ public:
 
 class Document {
 public:
-    Document() {
-        std::cout << "XML Document created (stub)" << std::endl;
-    }
+    Document() { std::cout << "XML Document created (stub)" << std::endl; }
 
     bool load_file(const std::string& filename) {
         std::cout << "Loading XML file: " << filename << " (stub)" << std::endl;
@@ -60,7 +58,8 @@ public:
     }
 
     bool load_string(const std::string& xml) {
-        std::cout << "Loading XML string: " << xml.substr(0, 50) << "... (stub)" << std::endl;
+        std::cout << "Loading XML string: " << xml.substr(0, 50) << "... (stub)"
+                  << std::endl;
         return true;
     }
 
@@ -70,7 +69,8 @@ public:
     }
 
     void save_to_file(const std::string& filename) const {
-        std::cout << "Saving XML to file: " << filename << " (stub)" << std::endl;
+        std::cout << "Saving XML to file: " << filename << " (stub)"
+                  << std::endl;
     }
 
     std::string to_string() const {
@@ -78,13 +78,16 @@ public:
     }
 };
 
-} // namespace atom::extra::pugixml
+}  // namespace atom::extra::pugixml
 
 using namespace atom::extra::pugixml;
 
 int main() {
-    std::cout << "=== PugiXML Basic Usage Example (Stub Implementation) ===" << std::endl;
-    std::cout << "Note: This is a stub implementation due to API compatibility issues." << std::endl;
+    std::cout << "=== PugiXML Basic Usage Example (Stub Implementation) ==="
+              << std::endl;
+    std::cout << "Note: This is a stub implementation due to API compatibility "
+                 "issues."
+              << std::endl;
 
     try {
         // 1. Loading XML from file
@@ -97,14 +100,16 @@ int main() {
                 auto root = doc.root();
                 auto books = root.children();
 
-                std::cout << "Found " << books.size() << " books (stub)" << std::endl;
+                std::cout << "Found " << books.size() << " books (stub)"
+                          << std::endl;
 
                 for (const auto& book : books) {
                     auto title = book.child("title").text();
                     auto author = book.child("author").text();
                     auto year = book.attribute("year");
 
-                    std::cout << "Book: " << title << " by " << author << " (" << year << ")" << std::endl;
+                    std::cout << "Book: " << title << " by " << author << " ("
+                              << year << ")" << std::endl;
                 }
             }
         }
@@ -132,7 +137,8 @@ int main() {
 
             Document doc;
             if (doc.load_string(xml_content)) {
-                std::cout << "XML string loaded successfully (stub)" << std::endl;
+                std::cout << "XML string loaded successfully (stub)"
+                          << std::endl;
 
                 auto root = doc.root();
                 for (const auto& book : root.children()) {
@@ -140,7 +146,8 @@ int main() {
                     auto price = book.child("price").text();
                     auto currency = book.child("price").attribute("currency");
 
-                    std::cout << "Book: " << title << " - " << price << " " << currency << std::endl;
+                    std::cout << "Book: " << title << " - " << price << " "
+                              << currency << std::endl;
                 }
             }
         }
@@ -174,10 +181,12 @@ int main() {
         std::cout << "\n4. XPath-like Queries (Simulated):" << std::endl;
         {
             Document doc;
-            doc.load_string("<catalog><book><title>Sample Book</title></book></catalog>");
+            doc.load_string(
+                "<catalog><book><title>Sample Book</title></book></catalog>");
 
             auto root = doc.root();
-            std::cout << "Simulating XPath query: //book/title (stub)" << std::endl;
+            std::cout << "Simulating XPath query: //book/title (stub)"
+                      << std::endl;
             std::cout << "Found title: Sample Book" << std::endl;
         }
 
@@ -186,18 +195,24 @@ int main() {
         {
             Document doc;
             if (!doc.load_file("non_existent_file.xml")) {
-                std::cout << "Failed to load non-existent file (expected) (stub)" << std::endl;
+                std::cout
+                    << "Failed to load non-existent file (expected) (stub)"
+                    << std::endl;
             }
 
             if (!doc.load_string("invalid xml content")) {
-                std::cout << "Failed to parse invalid XML (expected) (stub)" << std::endl;
+                std::cout << "Failed to parse invalid XML (expected) (stub)"
+                          << std::endl;
             }
         }
 
-        std::cout << "\n=== PugiXML Basic Usage Example Complete (Stub Implementation) ===" << std::endl;
+        std::cout << "\n=== PugiXML Basic Usage Example Complete (Stub "
+                     "Implementation) ==="
+                  << std::endl;
 
     } catch (const std::exception& e) {
-        std::cerr << "Error in PugiXML basic usage examples: " << e.what() << std::endl;
+        std::cerr << "Error in PugiXML basic usage examples: " << e.what()
+                  << std::endl;
         return 1;
     }
 

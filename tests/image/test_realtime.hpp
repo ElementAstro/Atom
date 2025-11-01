@@ -1,17 +1,17 @@
 #pragma once
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
+#include <gtest/gtest.h>
 
-#include <vector>
-#include <string>
-#include <memory>
 #include <atomic>
 #include <chrono>
+#include <memory>
+#include <string>
 #include <thread>
+#include <vector>
 
-#include "atom/image/processing/realtime.hpp"
 #include "atom/image/core/image_blob.hpp"
+#include "atom/image/processing/realtime.hpp"
 #include "test_utils.hpp"
 
 namespace atom::image::test {
@@ -39,10 +39,12 @@ protected:
         auto frame1Data = TestDataGenerator::generateGradientImage(320, 240, 3);
         test_frame1 = blob(frame1Data.data(), frame1Data.size());
 
-        auto frame2Data = TestDataGenerator::generateCheckerboard(320, 240, 3, 8);
+        auto frame2Data =
+            TestDataGenerator::generateCheckerboard(320, 240, 3, 8);
         test_frame2 = blob(frame2Data.data(), frame2Data.size());
 
-        auto frame3Data = TestDataGenerator::generateCircularPattern(320, 240, 50);
+        auto frame3Data =
+            TestDataGenerator::generateCircularPattern(320, 240, 50);
         test_frame3 = blob(frame3Data.data(), frame3Data.size());
     }
 
@@ -90,7 +92,7 @@ TEST_F(RealtimeProcessingTest, ProcessEmptyFrame) {
 
     blob empty_frame;
     auto result = processor->processFrame(empty_frame);
-    
+
     EXPECT_TRUE(result.isEmpty());
 }
 
@@ -99,10 +101,10 @@ TEST_F(RealtimeProcessingTest, AddFrameToQueue) {
     RealtimeParams params;
     params.maxBufferSize = 3;
     processor->initialize(params);
-    
+
     FrameInfo info;
     info.frameNumber = 0;
-    
+
     bool added = processor->addFrame(test_frame1, info);
     EXPECT_TRUE(added);
 }
@@ -111,10 +113,11 @@ TEST_F(RealtimeProcessingTest, AddFrameToQueue) {
 TEST_F(RealtimeProcessingTest, FrameCallback) {
     processor->initialize();
 
-    processor->setFrameCallback([this](const blob& frame, const FrameInfo& /*info*/) {
-        frameCallbackCount++;
-        EXPECT_FALSE(frame.isEmpty());
-    });
+    processor->setFrameCallback(
+        [this](const blob& frame, const FrameInfo& /*info*/) {
+            frameCallbackCount++;
+            EXPECT_FALSE(frame.isEmpty());
+        });
 
     FrameInfo info;
     processor->processFrame(test_frame1, info);
@@ -126,12 +129,13 @@ TEST_F(RealtimeProcessingTest, FrameCallback) {
 // Test analysis callback
 TEST_F(RealtimeProcessingTest, AnalysisCallback) {
     processor->initialize();
-    
-    processor->setAnalysisCallback([this](const std::unordered_map<std::string, double>& analysis) {
-        analysisCallbackCount++;
-        EXPECT_GT(analysis.size(), 0);
-    });
-    
+
+    processor->setAnalysisCallback(
+        [this](const std::unordered_map<std::string, double>& analysis) {
+            analysisCallbackCount++;
+            EXPECT_GT(analysis.size(), 0);
+        });
+
     // Analysis callback may or may not be called depending on processing mode
     FrameInfo info;
     processor->processFrame(test_frame1, info);
@@ -140,10 +144,10 @@ TEST_F(RealtimeProcessingTest, AnalysisCallback) {
 // Test processing mode setting
 TEST_F(RealtimeProcessingTest, SetProcessingMode) {
     processor->initialize();
-    
+
     std::unordered_map<std::string, double> params;
     params["strength"] = 1.5;
-    
+
     EXPECT_NO_THROW({
         processor->setProcessingMode(ProcessingMode::FILTER, params);
         processor->setProcessingMode(ProcessingMode::ENHANCE, params);
@@ -154,10 +158,10 @@ TEST_F(RealtimeProcessingTest, SetProcessingMode) {
 // Test filter management
 TEST_F(RealtimeProcessingTest, FilterManagement) {
     processor->initialize();
-    
+
     std::unordered_map<std::string, double> params;
     params["sigma"] = 1.0;
-    
+
     EXPECT_NO_THROW({
         processor->addFilter("gaussian_blur", params);
         processor->addFilter("sharpen", params);
@@ -169,9 +173,9 @@ TEST_F(RealtimeProcessingTest, FilterManagement) {
 // Test statistics retrieval
 TEST_F(RealtimeProcessingTest, GetStatistics) {
     processor->initialize();
-    
+
     auto stats = processor->getStatistics();
-    
+
     EXPECT_GE(stats.averageFPS, 0.0);
     EXPECT_GE(stats.currentFPS, 0.0);
     EXPECT_GE(stats.averageLatency, 0.0);
@@ -183,7 +187,7 @@ TEST_F(RealtimeProcessingTest, GetStatistics) {
 // Test FPS retrieval
 TEST_F(RealtimeProcessingTest, GetCurrentFPS) {
     processor->initialize();
-    
+
     double fps = processor->getCurrentFPS();
     EXPECT_GE(fps, 0.0);
 }
@@ -264,12 +268,14 @@ TEST_F(RealtimeProcessingTest, CaptureSynthetic) {
     processor->initialize();
 
     bool callbackInvoked = false;
-    processor->setFrameCallback([&callbackInvoked](const blob& /*frame*/, const FrameInfo& /*info*/) {
-        callbackInvoked = true;
-    });
+    processor->setFrameCallback(
+        [&callbackInvoked](const blob& /*frame*/, const FrameInfo& /*info*/) {
+            callbackInvoked = true;
+        });
 
     try {
-        bool started = processor->startCapture(CaptureSource::SYNTHETIC, "", nullptr, nullptr);
+        bool started = processor->startCapture(CaptureSource::SYNTHETIC, "",
+                                               nullptr, nullptr);
 
         if (started) {
             EXPECT_TRUE(processor->isRunning());
@@ -286,9 +292,7 @@ TEST_F(RealtimeProcessingTest, CaptureSynthetic) {
 TEST_F(RealtimeProcessingTest, StopWithoutStart) {
     processor->initialize();
 
-    EXPECT_NO_THROW({
-        processor->stop();
-    });
+    EXPECT_NO_THROW({ processor->stop(); });
 }
 
 TEST_F(RealtimeProcessingTest, MultipleInitialization) {
@@ -299,25 +303,19 @@ TEST_F(RealtimeProcessingTest, MultipleInitialization) {
 TEST_F(RealtimeProcessingTest, VeryHighTargetFPS) {
     processor->initialize();
 
-    EXPECT_NO_THROW({
-        processor->setTargetFPS(1000.0);
-    });
+    EXPECT_NO_THROW({ processor->setTargetFPS(1000.0); });
 }
 
 TEST_F(RealtimeProcessingTest, VeryLowTargetFPS) {
     processor->initialize();
 
-    EXPECT_NO_THROW({
-        processor->setTargetFPS(1.0);
-    });
+    EXPECT_NO_THROW({ processor->setTargetFPS(1.0); });
 }
 
 TEST_F(RealtimeProcessingTest, ZeroBufferSize) {
     processor->initialize();
 
-    EXPECT_NO_THROW({
-        processor->setMaxBufferSize(0);
-    });
+    EXPECT_NO_THROW({ processor->setMaxBufferSize(0); });
 }
 
 // Test recording functionality
@@ -354,7 +352,7 @@ TEST_F(RealtimeProcessingTest, SnapshotCapture) {
 
         bool saved = processor->takeSnapshot(outputPath);
         // May or may not succeed depending on implementation
-        EXPECT_TRUE(saved || !saved); // Just verify it doesn't crash
+        EXPECT_TRUE(saved || !saved);  // Just verify it doesn't crash
     } catch (const std::exception& e) {
         GTEST_SKIP() << "Snapshot not available: " << e.what();
     }
@@ -385,14 +383,10 @@ TEST_F(RealtimeProcessingTest, ProcessingModes) {
     processor->initialize();
 
     std::vector<ProcessingMode> modes = {
-        ProcessingMode::PASSTHROUGH,
-        ProcessingMode::FILTER,
-        ProcessingMode::ENHANCE,
-        ProcessingMode::DETECT,
-        ProcessingMode::TRACK,
-        ProcessingMode::ANALYZE,
-        ProcessingMode::CUSTOM
-    };
+        ProcessingMode::PASSTHROUGH, ProcessingMode::FILTER,
+        ProcessingMode::ENHANCE,     ProcessingMode::DETECT,
+        ProcessingMode::TRACK,       ProcessingMode::ANALYZE,
+        ProcessingMode::CUSTOM};
 
     FrameInfo info;
     for (const auto& mode : modes) {
@@ -409,9 +403,10 @@ TEST_F(RealtimeProcessingTest, ConcurrentFrameProcessing) {
     processor->initialize(params);
 
     std::atomic<int> processedCount{0};
-    processor->setFrameCallback([&processedCount](const blob& /*frame*/, const FrameInfo& /*info*/) {
-        processedCount++;
-    });
+    processor->setFrameCallback(
+        [&processedCount](const blob& /*frame*/, const FrameInfo& /*info*/) {
+            processedCount++;
+        });
 
     // Add multiple frames
     for (int i = 0; i < 5; ++i) {
@@ -506,7 +501,8 @@ TEST_F(RealtimeProcessingTest, DISABLED_PerformanceFrameProcessing) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     double fps = (numFrames * 1000.0) / duration.count();
 
@@ -543,5 +539,4 @@ TEST_F(RealtimeProcessingTest, ThreadSafeStatistics) {
     SUCCEED();
 }
 
-} // namespace atom::image::test
-
+}  // namespace atom::image::test

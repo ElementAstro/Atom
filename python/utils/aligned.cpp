@@ -6,7 +6,8 @@
 namespace py = pybind11;
 
 PYBIND11_MODULE(aligned, m) {
-    m.doc() = "Memory alignment validation utilities module for the atom package";
+    m.doc() =
+        "Memory alignment validation utilities module for the atom package";
 
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
@@ -25,9 +26,10 @@ PYBIND11_MODULE(aligned, m) {
     // Utility functions for alignment validation
     m.def(
         "is_valid_alignment",
-        [](std::size_t impl_size, std::size_t impl_align, std::size_t storage_size,
-           std::size_t storage_align) -> bool {
-            return (storage_size >= impl_size) && (storage_align % impl_align == 0);
+        [](std::size_t impl_size, std::size_t impl_align,
+           std::size_t storage_size, std::size_t storage_align) -> bool {
+            return (storage_size >= impl_size) &&
+                   (storage_align % impl_align == 0);
         },
         py::arg("impl_size"), py::arg("impl_align"), py::arg("storage_size"),
         py::arg("storage_align"),
@@ -55,8 +57,8 @@ Examples:
 
     m.def(
         "validate_alignment",
-        [](std::size_t impl_size, std::size_t impl_align, std::size_t storage_size,
-           std::size_t storage_align) -> void {
+        [](std::size_t impl_size, std::size_t impl_align,
+           std::size_t storage_size, std::size_t storage_align) -> void {
             if (storage_size < impl_size) {
                 throw std::invalid_argument(
                     "StorageSize must be greater than or equal to ImplSize");

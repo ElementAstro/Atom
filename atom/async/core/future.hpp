@@ -315,8 +315,7 @@ public:
           callbacks_(std::make_shared<LockfreeCallbackContainer>())
 #else
           ,
-          callbacks_(std::make_shared<
-                        std::vector<std::function<void(T)>>>())
+          callbacks_(std::make_shared<std::vector<std::function<void(T)>>>())
 #endif
     {
     }
@@ -1037,7 +1036,8 @@ protected:
 };
 
 /**
- * @brief Forward declaration for makeOptimizedFuture used by makeEnhancedFuture.
+ * @brief Forward declaration for makeOptimizedFuture used by
+ * makeEnhancedFuture.
  */
 template <typename F, typename... Args>
     requires ValidCallable<F, Args...>
@@ -1070,8 +1070,10 @@ auto makeEnhancedFuture(F&& f, Args&&... args) {
 template <std::input_iterator InputIt>
 auto whenAll(InputIt first, InputIt last,
              std::optional<std::chrono::milliseconds> timeout = std::nullopt)
-    -> std::future<std::vector<
-        decltype(std::declval<typename std::iterator_traits<InputIt>::value_type>().get())>> {
+    -> std::future<
+        std::vector<decltype(std::declval<typename std::iterator_traits<
+                                 InputIt>::value_type>()
+                                 .get())>> {
     using EnhancedFutureType =
         typename std::iterator_traits<InputIt>::value_type;
     using ValueType = decltype(std::declval<EnhancedFutureType>().get());
@@ -1178,9 +1180,10 @@ auto whenAll(InputIt first, InputIt last,
 template <typename... Futures>
     requires(FutureCompatible<future_value_t<std::decay_t<Futures>>> &&
              ...)  // Ensure results are FutureCompatible
-auto whenAll(Futures&&... futures) -> std::future<
-    std::tuple<future_value_t<std::decay_t<Futures>>...>> {  // Ensure decay for
-                                                             // future_value_t
+auto whenAll(Futures&&... futures)
+    -> std::future<std::tuple<
+        future_value_t<std::decay_t<Futures>>...>> {  // Ensure decay for
+                                                      // future_value_t
 
     auto promise = std::make_shared<
         std::promise<std::tuple<future_value_t<std::decay_t<Futures>>...>>>();
@@ -1197,8 +1200,7 @@ auto whenAll(Futures&&... futures) -> std::future<
             // Check validity before calling get()
             std::apply(
                 [](auto&... fs) {
-                    if (((!fs.isReady() && !fs.isCancelled()) ||
-                         ...)) {
+                    if (((!fs.isReady() && !fs.isCancelled()) || ...)) {
                         // For EnhancedFuture, check isReady() or isCancelled()
                         // A more generic check: if it's not done and not going
                         // to be done. This check needs to be adapted for

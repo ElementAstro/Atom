@@ -166,8 +166,8 @@ private:
      * @param index The current index in the string.
      * @return The parsed string.
      */
-    static auto parseString(const std::string& str, size_t& index)
-        -> std::string;
+    static auto parseString(const std::string& str,
+                            size_t& index) -> std::string;
 
     /**
      * @brief Parses a JSON number from a string.
@@ -198,8 +198,8 @@ private:
      * @param index The current index in the string.
      * @return The parsed JsonObject.
      */
-    static auto parseObject(const std::string& str, size_t& index)
-        -> JsonObject;
+    static auto parseObject(const std::string& str,
+                            size_t& index) -> JsonObject;
 
     /**
      * @brief Parses a JSON array from a string.

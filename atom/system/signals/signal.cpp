@@ -297,7 +297,9 @@ auto SignalHandlerRegistry::getStandardCrashSignals() -> std::set<SignalID> {
 }
 
 SafeSignalManager::SafeSignalManager(size_t threadCount, size_t queueSize)
-    : maxQueueSize_(queueSize), initialThreadCount_(threadCount), initialized_(false) {
+    : maxQueueSize_(queueSize),
+      initialThreadCount_(threadCount),
+      initialized_(false) {
 #ifdef ATOM_USE_BOOST
 #else
 #endif
@@ -306,14 +308,16 @@ SafeSignalManager::SafeSignalManager(size_t threadCount, size_t queueSize)
     // They will be created lazily when first needed
     workerThreads_.reserve(threadCount);
 
-    // Don't log during static initialization - defer until explicit initialization
+    // Don't log during static initialization - defer until explicit
+    // initialization
 }
 
 void SafeSignalManager::ensureInitialized() {
     if (!initialized_.load(std::memory_order_acquire)) {
         std::lock_guard<std::mutex> lock(initMutex_);
         if (!initialized_.load(std::memory_order_relaxed)) {
-            // Create worker threads now that we're safely past static initialization
+            // Create worker threads now that we're safely past static
+            // initialization
             for (size_t i = 0; i < initialThreadCount_; ++i) {
                 workerThreads_.emplace_back([this](std::stop_token stopToken) {
                     this->processSignals(stopToken);
@@ -322,7 +326,8 @@ void SafeSignalManager::ensureInitialized() {
 
             try {
                 spdlog::info(
-                    "SafeSignalManager initialized with {} worker threads and queue size {}",
+                    "SafeSignalManager initialized with {} worker threads and "
+                    "queue size {}",
                     initialThreadCount_, maxQueueSize_);
             } catch (...) {
                 // Suppress logging errors if spdlog isn't ready
@@ -364,7 +369,8 @@ int SafeSignalManager::addSafeSignalHandler(SignalID signal,
 
     try {
         spdlog::info(
-            "Added safe signal handler for signal {} with priority {} and ID {}",
+            "Added safe signal handler for signal {} with priority {} and ID "
+            "{}",
             signal, priority, handlerId);
     } catch (...) {
         // Suppress logging errors if spdlog isn't ready
@@ -450,7 +456,8 @@ void SafeSignalManager::safeSignalDispatcher(int signal) {
 
 auto SafeSignalManager::getInstance() -> SafeSignalManager& {
     // Use default parameters that are safe during static initialization
-    static SafeSignalManager instance(0, 1000);  // 0 threads initially, will be created lazily
+    static SafeSignalManager instance(
+        0, 1000);  // 0 threads initially, will be created lazily
     return instance;
 }
 

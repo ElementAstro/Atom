@@ -39,8 +39,6 @@ bool AsyncFile::validatePath(std::string_view path) noexcept {
     return ::atom::io::path_utils::validatePath(path);
 }
 
-
-
 #ifndef ATOM_USE_ASIO
 template <typename F>
 void AsyncFile::scheduleTimeout(std::chrono::milliseconds timeout,
@@ -52,7 +50,8 @@ void AsyncFile::scheduleTimeout(std::chrono::milliseconds timeout,
 }
 #endif
 
-bool AsyncFile::validatePermissions(std::string_view path, bool write_access) noexcept {
+bool AsyncFile::validatePermissions(std::string_view path,
+                                    bool write_access) noexcept {
     if (!validatePath(path)) {
         return false;
     }
@@ -68,7 +67,8 @@ bool AsyncFile::validatePermissions(std::string_view path, bool write_access) no
 
         // Check if file/directory exists
         if (!std::filesystem::exists(fs_path)) {
-            // For write operations, check if parent directory exists and is writable
+            // For write operations, check if parent directory exists and is
+            // writable
             if (write_access) {
                 auto parent = fs_path.parent_path();
 
@@ -113,8 +113,8 @@ bool AsyncFile::validatePermissions(std::string_view path, bool write_access) no
         // Basic permission check (this is platform-dependent)
         using perms_t = std::filesystem::perms;
         bool readable = (perms & perms_t::owner_read) != perms_t::none ||
-                       (perms & perms_t::group_read) != perms_t::none ||
-                       (perms & perms_t::others_read) != perms_t::none;
+                        (perms & perms_t::group_read) != perms_t::none ||
+                        (perms & perms_t::others_read) != perms_t::none;
 
         if (!readable) {
             return false;
@@ -123,8 +123,8 @@ bool AsyncFile::validatePermissions(std::string_view path, bool write_access) no
         // Check write permissions if required
         if (write_access) {
             bool writable = (perms & perms_t::owner_write) != perms_t::none ||
-                           (perms & perms_t::group_write) != perms_t::none ||
-                           (perms & perms_t::others_write) != perms_t::none;
+                            (perms & perms_t::group_write) != perms_t::none ||
+                            (perms & perms_t::others_write) != perms_t::none;
             return writable;
         }
 
@@ -156,7 +156,8 @@ std::string AsyncFile::sanitizeFilename(std::string_view filename) noexcept {
     }
 
     // Trim leading/trailing spaces and dots
-    while (!result.empty() && (result.front() == ' ' || result.front() == '.')) {
+    while (!result.empty() &&
+           (result.front() == ' ' || result.front() == '.')) {
         result.erase(0, 1);
     }
     while (!result.empty() && (result.back() == ' ' || result.back() == '.')) {
@@ -176,16 +177,17 @@ std::string AsyncFile::sanitizeFilename(std::string_view filename) noexcept {
 #ifdef _WIN32
     // Check for reserved names on Windows and append suffix if needed
     std::string upper_result = result;
-    std::transform(upper_result.begin(), upper_result.end(), upper_result.begin(), ::toupper);
+    std::transform(upper_result.begin(), upper_result.end(),
+                   upper_result.begin(), ::toupper);
 
     const std::vector<std::string> reserved_names = {
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"
-    };
+        "CON",  "PRN",  "AUX",  "NUL",  "COM1", "COM2", "COM3", "COM4",
+        "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3",
+        "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9"};
 
     for (const auto& reserved : reserved_names) {
-        if (upper_result == reserved || upper_result.starts_with(reserved + ".")) {
+        if (upper_result == reserved ||
+            upper_result.starts_with(reserved + ".")) {
             result += "_file";
             break;
         }
@@ -277,14 +279,16 @@ void AsyncFile::asyncBatchRead(
 /**
  * @brief High-performance SIMD-optimized buffer comparison
  *
- * Uses vectorized instructions (AVX2/SSE4.2) when available for optimal performance.
- * Falls back to standard library implementation on unsupported platforms.
+ * Uses vectorized instructions (AVX2/SSE4.2) when available for optimal
+ * performance. Falls back to standard library implementation on unsupported
+ * platforms.
  *
  * @param buffer1 First buffer to compare
  * @param buffer2 Second buffer to compare
  * @return true if buffers are identical, false otherwise
  */
-bool AsyncFile::simdBufferCompare(std::span<const char> buffer1, std::span<const char> buffer2) noexcept {
+bool AsyncFile::simdBufferCompare(std::span<const char> buffer1,
+                                  std::span<const char> buffer2) noexcept {
     if (buffer1.size() != buffer2.size()) {
         return false;
     }
@@ -301,8 +305,10 @@ bool AsyncFile::simdBufferCompare(std::span<const char> buffer1, std::span<const
     // Process 32 bytes at a time with AVX2
     size_t i = 0;
     for (; i + 32 <= size; i += 32) {
-        __m256i chunk1 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data1 + i));
-        __m256i chunk2 = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data2 + i));
+        __m256i chunk1 =
+            _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data1 + i));
+        __m256i chunk2 =
+            _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data2 + i));
         __m256i cmp = _mm256_cmpeq_epi8(chunk1, chunk2);
         int mask = _mm256_movemask_epi8(cmp);
         if (mask != 0xFFFFFFFF) {
@@ -321,8 +327,10 @@ bool AsyncFile::simdBufferCompare(std::span<const char> buffer1, std::span<const
     // Process 16 bytes at a time with SSE4.2
     size_t i = 0;
     for (; i + 16 <= size; i += 16) {
-        __m128i chunk1 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data1 + i));
-        __m128i chunk2 = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data2 + i));
+        __m128i chunk1 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i*>(data1 + i));
+        __m128i chunk2 =
+            _mm_loadu_si128(reinterpret_cast<const __m128i*>(data2 + i));
         __m128i cmp = _mm_cmpeq_epi8(chunk1, chunk2);
         int mask = _mm_movemask_epi8(cmp);
         if (mask != 0xFFFF) {
@@ -353,7 +361,8 @@ bool AsyncFile::simdBufferCompare(std::span<const char> buffer1, std::span<const
  * @param target Byte value to find
  * @return Position of first occurrence or std::string::npos if not found
  */
-size_t AsyncFile::simdFindByte(std::span<const char> buffer, char target) noexcept {
+size_t AsyncFile::simdFindByte(std::span<const char> buffer,
+                               char target) noexcept {
     if (buffer.empty()) {
         return std::string::npos;
     }
@@ -367,7 +376,8 @@ size_t AsyncFile::simdFindByte(std::span<const char> buffer, char target) noexce
 
     // Process 32 bytes at a time
     for (; i + 32 <= size; i += 32) {
-        __m256i chunk = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data + i));
+        __m256i chunk =
+            _mm256_loadu_si256(reinterpret_cast<const __m256i*>(data + i));
         __m256i cmp = _mm256_cmpeq_epi8(chunk, target_vec);
         int mask = _mm256_movemask_epi8(cmp);
 
@@ -389,7 +399,8 @@ size_t AsyncFile::simdFindByte(std::span<const char> buffer, char target) noexce
 
     // Process 16 bytes at a time
     for (; i + 16 <= size; i += 16) {
-        __m128i chunk = _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i));
+        __m128i chunk =
+            _mm_loadu_si128(reinterpret_cast<const __m128i*>(data + i));
         __m128i cmp = _mm_cmpeq_epi8(chunk, target_vec);
         int mask = _mm_movemask_epi8(cmp);
 
@@ -408,15 +419,16 @@ size_t AsyncFile::simdFindByte(std::span<const char> buffer, char target) noexce
 #else
     // Fallback to standard library
     auto it = std::find(buffer.begin(), buffer.end(), target);
-    return it != buffer.end() ? std::distance(buffer.begin(), it) : std::string::npos;
+    return it != buffer.end() ? std::distance(buffer.begin(), it)
+                              : std::string::npos;
 #endif
 }
 
 /**
  * @brief SIMD-optimized memory initialization
  *
- * Efficiently sets all bytes in a buffer to a specific value using vectorized instructions.
- * Processes 32 bytes at a time with AVX2 or 16 bytes with SSE4.2.
+ * Efficiently sets all bytes in a buffer to a specific value using vectorized
+ * instructions. Processes 32 bytes at a time with AVX2 or 16 bytes with SSE4.2.
  *
  * @param buffer Buffer to initialize
  * @param value Byte value to set
@@ -461,12 +473,15 @@ void AsyncFile::simdMemorySet(std::span<char> buffer, char value) noexcept {
 #endif
 }
 
-void AsyncFile::asyncBatchWrite(std::span<const std::pair<std::string, std::string>> file_data_pairs,
-                               std::function<void(AsyncResult<void>)> callback) {
+void AsyncFile::asyncBatchWrite(
+    std::span<const std::pair<std::string, std::string>> file_data_pairs,
+    std::function<void(AsyncResult<void>)> callback) {
     if (file_data_pairs.empty()) {
         if (callback) {
-            auto result = AsyncResult<void>::error_result("Empty file-data pairs list");
-            executeAsync([result = std::move(result), callback = std::move(callback)]() mutable {
+            auto result =
+                AsyncResult<void>::error_result("Empty file-data pairs list");
+            executeAsync([result = std::move(result),
+                          callback = std::move(callback)]() mutable {
                 callback(std::move(result));
             });
         }
@@ -480,43 +495,49 @@ void AsyncFile::asyncBatchWrite(std::span<const std::pair<std::string, std::stri
     for (size_t i = 0; i < total_files; ++i) {
         const auto& [filename, data] = file_data_pairs[i];
 
-        asyncWrite(filename, std::span<const char>(data.data(), data.size()),
-                  [i, total_files, completed, errors, callback](AsyncResult<void> result) {
-            if (!result.success) {
-                (*errors)[i] = result.error_message;
-            }
+        asyncWrite(
+            filename, std::span<const char>(data.data(), data.size()),
+            [i, total_files, completed, errors,
+             callback](AsyncResult<void> result) {
+                if (!result.success) {
+                    (*errors)[i] = result.error_message;
+                }
 
-            size_t current_completed = completed->fetch_add(1) + 1;
-            if (current_completed == total_files) {
-                // All operations completed
-                std::string error_messages;
-                for (size_t j = 0; j < total_files; ++j) {
-                    if (!(*errors)[j].empty()) {
-                        if (!error_messages.empty()) {
-                            error_messages += "; ";
+                size_t current_completed = completed->fetch_add(1) + 1;
+                if (current_completed == total_files) {
+                    // All operations completed
+                    std::string error_messages;
+                    for (size_t j = 0; j < total_files; ++j) {
+                        if (!(*errors)[j].empty()) {
+                            if (!error_messages.empty()) {
+                                error_messages += "; ";
+                            }
+                            error_messages += "File " + std::to_string(j) +
+                                              ": " + (*errors)[j];
                         }
-                        error_messages += "File " + std::to_string(j) + ": " + (*errors)[j];
+                    }
+
+                    if (error_messages.empty()) {
+                        auto final_result = AsyncResult<void>::success_result();
+                        callback(std::move(final_result));
+                    } else {
+                        auto final_result = AsyncResult<void>::error_result(
+                            std::move(error_messages));
+                        callback(std::move(final_result));
                     }
                 }
-
-                if (error_messages.empty()) {
-                    auto final_result = AsyncResult<void>::success_result();
-                    callback(std::move(final_result));
-                } else {
-                    auto final_result = AsyncResult<void>::error_result(std::move(error_messages));
-                    callback(std::move(final_result));
-                }
-            }
-        });
+            });
     }
 }
 
-void AsyncFile::asyncBatchDelete(std::span<const std::string> files,
-                                std::function<void(AsyncResult<void>)> callback) {
+void AsyncFile::asyncBatchDelete(
+    std::span<const std::string> files,
+    std::function<void(AsyncResult<void>)> callback) {
     if (files.empty()) {
         if (callback) {
             auto result = AsyncResult<void>::error_result("Empty file list");
-            executeAsync([result = std::move(result), callback = std::move(callback)]() mutable {
+            executeAsync([result = std::move(result),
+                          callback = std::move(callback)]() mutable {
                 callback(std::move(result));
             });
         }
@@ -528,7 +549,8 @@ void AsyncFile::asyncBatchDelete(std::span<const std::string> files,
     auto errors = std::make_shared<std::vector<std::string>>(total_files);
 
     for (size_t i = 0; i < total_files; ++i) {
-        asyncDelete(files[i], [i, total_files, completed, errors, callback](AsyncResult<void> result) {
+        asyncDelete(files[i], [i, total_files, completed, errors,
+                               callback](AsyncResult<void> result) {
             if (!result.success) {
                 (*errors)[i] = result.error_message;
             }
@@ -542,7 +564,8 @@ void AsyncFile::asyncBatchDelete(std::span<const std::string> files,
                         if (!error_messages.empty()) {
                             error_messages += "; ";
                         }
-                        error_messages += "File " + std::to_string(j) + ": " + (*errors)[j];
+                        error_messages +=
+                            "File " + std::to_string(j) + ": " + (*errors)[j];
                     }
                 }
 
@@ -550,7 +573,8 @@ void AsyncFile::asyncBatchDelete(std::span<const std::string> files,
                     auto final_result = AsyncResult<void>::success_result();
                     callback(std::move(final_result));
                 } else {
-                    auto final_result = AsyncResult<void>::error_result(std::move(error_messages));
+                    auto final_result = AsyncResult<void>::error_result(
+                        std::move(error_messages));
                     callback(std::move(final_result));
                 }
             }
@@ -585,58 +609,111 @@ template void AsyncFile::scheduleTimeout<std::function<void()>>(
 template std::string AsyncFile::toString<std::string>(std::string&&);
 template std::string AsyncFile::toString<std::string_view>(std::string_view&&);
 template std::string AsyncFile::toString<const char*>(const char*&&);
-template std::string AsyncFile::toString<std::filesystem::path>(std::filesystem::path&&);
+template std::string AsyncFile::toString<std::filesystem::path>(
+    std::filesystem::path&&);
 
 // AsyncRead instantiations
-template void AsyncFile::asyncRead<std::string>(std::string&&, std::function<void(AsyncResult<std::string>)>);
-template void AsyncFile::asyncRead<std::string_view>(std::string_view&&, std::function<void(AsyncResult<std::string>)>);
-template void AsyncFile::asyncRead<const char*>(const char*&&, std::function<void(AsyncResult<std::string>)>);
-template void AsyncFile::asyncRead<std::filesystem::path>(std::filesystem::path&&, std::function<void(AsyncResult<std::string>)>);
+template void AsyncFile::asyncRead<std::string>(
+    std::string&&, std::function<void(AsyncResult<std::string>)>);
+template void AsyncFile::asyncRead<std::string_view>(
+    std::string_view&&, std::function<void(AsyncResult<std::string>)>);
+template void AsyncFile::asyncRead<const char*>(
+    const char*&&, std::function<void(AsyncResult<std::string>)>);
+template void AsyncFile::asyncRead<std::filesystem::path>(
+    std::filesystem::path&&, std::function<void(AsyncResult<std::string>)>);
 
 // AsyncWrite instantiations
-template void AsyncFile::asyncWrite<std::string>(std::string&&, std::span<const char>, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncWrite<std::string_view>(std::string_view&&, std::span<const char>, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncWrite<const char*>(const char*&&, std::span<const char>, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncWrite<std::filesystem::path>(std::filesystem::path&&, std::span<const char>, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncWrite<std::string>(
+    std::string&&, std::span<const char>,
+    std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncWrite<std::string_view>(
+    std::string_view&&, std::span<const char>,
+    std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncWrite<const char*>(
+    const char*&&, std::span<const char>,
+    std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncWrite<std::filesystem::path>(
+    std::filesystem::path&&, std::span<const char>,
+    std::function<void(AsyncResult<void>)>);
 
 // AsyncDelete instantiations
-template void AsyncFile::asyncDelete<std::string>(std::string&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncDelete<std::string_view>(std::string_view&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncDelete<const char*>(const char*&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncDelete<std::filesystem::path>(std::filesystem::path&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncDelete<std::string>(
+    std::string&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncDelete<std::string_view>(
+    std::string_view&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncDelete<const char*>(
+    const char*&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncDelete<std::filesystem::path>(
+    std::filesystem::path&&, std::function<void(AsyncResult<void>)>);
 
 // AsyncStat instantiations
-template void AsyncFile::asyncStat<std::string>(std::string&&, std::function<void(AsyncResult<std::filesystem::file_status>)>);
-template void AsyncFile::asyncStat<std::string_view>(std::string_view&&, std::function<void(AsyncResult<std::filesystem::file_status>)>);
-template void AsyncFile::asyncStat<const char*>(const char*&&, std::function<void(AsyncResult<std::filesystem::file_status>)>);
-template void AsyncFile::asyncStat<std::filesystem::path>(std::filesystem::path&&, std::function<void(AsyncResult<std::filesystem::file_status>)>);
+template void AsyncFile::asyncStat<std::string>(
+    std::string&&,
+    std::function<void(AsyncResult<std::filesystem::file_status>)>);
+template void AsyncFile::asyncStat<std::string_view>(
+    std::string_view&&,
+    std::function<void(AsyncResult<std::filesystem::file_status>)>);
+template void AsyncFile::asyncStat<const char*>(
+    const char*&&,
+    std::function<void(AsyncResult<std::filesystem::file_status>)>);
+template void AsyncFile::asyncStat<std::filesystem::path>(
+    std::filesystem::path&&,
+    std::function<void(AsyncResult<std::filesystem::file_status>)>);
 
 // AsyncChangePermissions instantiations
-template void AsyncFile::asyncChangePermissions<std::string>(std::string&&, std::filesystem::perms, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncChangePermissions<std::string_view>(std::string_view&&, std::filesystem::perms, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncChangePermissions<const char*>(const char*&&, std::filesystem::perms, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncChangePermissions<std::filesystem::path>(std::filesystem::path&&, std::filesystem::perms, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncChangePermissions<std::string>(
+    std::string&&, std::filesystem::perms,
+    std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncChangePermissions<std::string_view>(
+    std::string_view&&, std::filesystem::perms,
+    std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncChangePermissions<const char*>(
+    const char*&&, std::filesystem::perms,
+    std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncChangePermissions<std::filesystem::path>(
+    std::filesystem::path&&, std::filesystem::perms,
+    std::function<void(AsyncResult<void>)>);
 
 // AsyncExists instantiations
-template void AsyncFile::asyncExists<std::string>(std::string&&, std::function<void(AsyncResult<bool>)>);
-template void AsyncFile::asyncExists<std::string_view>(std::string_view&&, std::function<void(AsyncResult<bool>)>);
-template void AsyncFile::asyncExists<const char*>(const char*&&, std::function<void(AsyncResult<bool>)>);
-template void AsyncFile::asyncExists<std::filesystem::path>(std::filesystem::path&&, std::function<void(AsyncResult<bool>)>);
+template void AsyncFile::asyncExists<std::string>(
+    std::string&&, std::function<void(AsyncResult<bool>)>);
+template void AsyncFile::asyncExists<std::string_view>(
+    std::string_view&&, std::function<void(AsyncResult<bool>)>);
+template void AsyncFile::asyncExists<const char*>(
+    const char*&&, std::function<void(AsyncResult<bool>)>);
+template void AsyncFile::asyncExists<std::filesystem::path>(
+    std::filesystem::path&&, std::function<void(AsyncResult<bool>)>);
 
 // Directory operations instantiations
-template void AsyncFile::asyncCreateDirectory<std::string>(std::string&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncCreateDirectory<std::string_view>(std::string_view&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncCreateDirectory<const char*>(const char*&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncCreateDirectory<std::filesystem::path>(std::filesystem::path&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncCreateDirectory<std::string>(
+    std::string&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncCreateDirectory<std::string_view>(
+    std::string_view&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncCreateDirectory<const char*>(
+    const char*&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncCreateDirectory<std::filesystem::path>(
+    std::filesystem::path&&, std::function<void(AsyncResult<void>)>);
 
-template void AsyncFile::asyncRemoveDirectory<std::string>(std::string&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncRemoveDirectory<std::string_view>(std::string_view&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncRemoveDirectory<const char*>(const char*&&, std::function<void(AsyncResult<void>)>);
-template void AsyncFile::asyncRemoveDirectory<std::filesystem::path>(std::filesystem::path&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncRemoveDirectory<std::string>(
+    std::string&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncRemoveDirectory<std::string_view>(
+    std::string_view&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncRemoveDirectory<const char*>(
+    const char*&&, std::function<void(AsyncResult<void>)>);
+template void AsyncFile::asyncRemoveDirectory<std::filesystem::path>(
+    std::filesystem::path&&, std::function<void(AsyncResult<void>)>);
 
-template void AsyncFile::asyncListDirectory<std::string>(std::string&&, std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
-template void AsyncFile::asyncListDirectory<std::string_view>(std::string_view&&, std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
-template void AsyncFile::asyncListDirectory<const char*>(const char*&&, std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
-template void AsyncFile::asyncListDirectory<std::filesystem::path>(std::filesystem::path&&, std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
+template void AsyncFile::asyncListDirectory<std::string>(
+    std::string&&,
+    std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
+template void AsyncFile::asyncListDirectory<std::string_view>(
+    std::string_view&&,
+    std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
+template void AsyncFile::asyncListDirectory<const char*>(
+    const char*&&,
+    std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
+template void AsyncFile::asyncListDirectory<std::filesystem::path>(
+    std::filesystem::path&&,
+    std::function<void(AsyncResult<std::vector<std::filesystem::path>>)>);
 
 }  // namespace atom::async::io

@@ -13,12 +13,12 @@
  * @version 1.0.0
  */
 
-#include "../core/image_blob.hpp"
-#include <string>
-#include <vector>
-#include <unordered_map>
-#include <memory>
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+#include "../core/image_blob.hpp"
 
 namespace atom::image {
 
@@ -51,8 +51,8 @@ enum class ImageFormat {
     RAF,
     PEF,
     X3F,
-    DCM,    // DICOM
-    NII,    // NIfTI
+    DCM,  // DICOM
+    NII,  // NIfTI
     HDF5,
     CUSTOM
 };
@@ -104,7 +104,8 @@ public:
      * @param filePath Path to the image file
      * @return Format detection result
      */
-    virtual FormatDetectionResult detectFromFile(const std::filesystem::path& filePath) const;
+    virtual FormatDetectionResult detectFromFile(
+        const std::filesystem::path& filePath) const;
 
     /**
      * @brief Detect format from memory buffer
@@ -112,7 +113,8 @@ public:
      * @param size Size of the data buffer
      * @return Format detection result
      */
-    virtual FormatDetectionResult detectFromMemory(const void* data, size_t size) const;
+    virtual FormatDetectionResult detectFromMemory(const void* data,
+                                                   size_t size) const;
 
     /**
      * @brief Detect format from blob
@@ -126,7 +128,8 @@ public:
      * @param extension File extension (with or without dot)
      * @return Format detection result
      */
-    virtual FormatDetectionResult detectFromExtension(const std::string& extension) const;
+    virtual FormatDetectionResult detectFromExtension(
+        const std::string& extension) const;
 
     /**
      * @brief Get MIME type for format
@@ -188,7 +191,8 @@ protected:
      * @param signature Magic signature to match
      * @return True if signature matches
      */
-    virtual bool checkSignature(const uint8_t* data, size_t size, const MagicSignature& signature) const;
+    virtual bool checkSignature(const uint8_t* data, size_t size,
+                                const MagicSignature& signature) const;
 
     /**
      * @brief Analyze file header for additional metadata

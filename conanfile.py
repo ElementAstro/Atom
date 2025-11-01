@@ -4,13 +4,14 @@ Conan package configuration for Atom library
 Provides comprehensive package management with modular component support.
 """
 
-from conan import ConanFile
-from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout, CMakeDeps
-from conan.tools.files import copy, save, load, collect_libs
-from conan.tools.scm import Git
-from conan.errors import ConanInvalidConfiguration
-import os
 import json
+import os
+
+from conan import ConanFile
+from conan.errors import ConanInvalidConfiguration
+from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+from conan.tools.files import copy, save
+
 
 class AtomConan(ConanFile):
     name = "atom"
@@ -28,7 +29,6 @@ class AtomConan(ConanFile):
     options = {
         "shared": [True, False],
         "fPIC": [True, False],
-
         # Core components
         "with_algorithm": [True, False],
         "with_async": [True, False],
@@ -45,33 +45,28 @@ class AtomConan(ConanFile):
         "with_sysinfo": [True, False],
         "with_system": [True, False],
         "with_web": [True, False],
-
         # Meta-packages
         "with_networking": [True, False],
         "with_imaging": [True, False],
         "with_full": [True, False],
-
         # Optional features
         "with_python": [True, False],
         "with_examples": [True, False],
         "with_tests": [True, False],
         "with_docs": [True, False],
-
         # Boost features
         "with_boost_lockfree": [True, False],
         "with_boost_graph": [True, False],
         "with_boost_intrusive": [True, False],
-
         # External integrations
         "with_cfitsio": [True, False],
         "with_ssh": [True, False],
-        "with_readline": [True, False]
+        "with_readline": [True, False],
     }
 
     default_options = {
         "shared": False,
         "fPIC": True,
-
         # Core components (minimal by default)
         "with_algorithm": False,
         "with_async": False,
@@ -88,27 +83,23 @@ class AtomConan(ConanFile):
         "with_sysinfo": False,
         "with_system": False,
         "with_web": False,
-
         # Meta-packages
         "with_networking": False,
         "with_imaging": False,
         "with_full": False,
-
         # Optional features
         "with_python": False,
         "with_examples": False,
         "with_tests": False,
         "with_docs": False,
-
         # Boost features
         "with_boost_lockfree": False,
         "with_boost_graph": False,
         "with_boost_intrusive": False,
-
         # External integrations
         "with_cfitsio": False,
         "with_ssh": False,
-        "with_readline": False
+        "with_readline": False,
     }
 
     # Component dependencies mapping
@@ -127,14 +118,14 @@ class AtomConan(ConanFile):
         "serial": ["error", "log", "io"],
         "sysinfo": ["error", "log"],
         "system": ["error", "log", "sysinfo"],
-        "web": ["error", "log", "async", "connection"]
+        "web": ["error", "log", "async", "connection"],
     }
 
     # Meta-package definitions
     _meta_packages = {
         "networking": ["connection", "web", "async"],
         "imaging": ["image", "io", "algorithm"],
-        "full": list(_component_deps.keys())
+        "full": list(_component_deps.keys()),
     }
 
     def export(self):
@@ -144,8 +135,13 @@ class AtomConan(ConanFile):
 
     def export_sources(self):
         """Export source files."""
-        copy(self, "*", src=self.recipe_folder, dst=self.export_sources_folder,
-             excludes=["build", "dist", "*.pyc", "__pycache__"])
+        copy(
+            self,
+            "*",
+            src=self.recipe_folder,
+            dst=self.export_sources_folder,
+            excludes=["build", "dist", "*.pyc", "__pycache__"],
+        )
 
     def config_options(self):
         """Configure options based on platform."""
@@ -185,7 +181,9 @@ class AtomConan(ConanFile):
                     for dep in deps:
                         if dep in self._component_deps:
                             dep_option = f"with_{dep}"
-                            if hasattr(self.options, dep_option) and not getattr(self.options, dep_option):
+                            if hasattr(self.options, dep_option) and not getattr(
+                                self.options, dep_option
+                            ):
                                 setattr(self.options, dep_option, True)
                                 changed = True
 
@@ -260,7 +258,9 @@ class AtomConan(ConanFile):
 
         # Component options
         for component in self._component_deps.keys():
-            tc.variables[f"ATOM_BUILD_{component.upper()}"] = getattr(self.options, f"with_{component}")
+            tc.variables[f"ATOM_BUILD_{component.upper()}"] = getattr(
+                self.options, f"with_{component}"
+            )
 
         # Feature options
         tc.variables["ATOM_USE_CFITSIO"] = self.options.with_cfitsio
@@ -287,7 +287,12 @@ class AtomConan(ConanFile):
         cmake.install()
 
         # Copy license
-        copy(self, "LICENSE", src=self.source_folder, dst=os.path.join(self.package_folder, "licenses"))
+        copy(
+            self,
+            "LICENSE",
+            src=self.source_folder,
+            dst=os.path.join(self.package_folder, "licenses"),
+        )
 
         # Create component manifest
         self._create_component_manifest()
@@ -298,7 +303,7 @@ class AtomConan(ConanFile):
             "name": self.name,
             "version": self.version,
             "components": {},
-            "features": {}
+            "features": {},
         }
 
         # Add enabled components
@@ -306,14 +311,21 @@ class AtomConan(ConanFile):
             if getattr(self.options, f"with_{component}"):
                 manifest["components"][component] = {
                     "enabled": True,
-                    "dependencies": self._component_deps[component]
+                    "dependencies": self._component_deps[component],
                 }
 
         # Add enabled features
         feature_options = [
-            "python", "examples", "tests", "docs",
-            "boost_lockfree", "boost_graph", "boost_intrusive",
-            "cfitsio", "ssh", "readline"
+            "python",
+            "examples",
+            "tests",
+            "docs",
+            "boost_lockfree",
+            "boost_graph",
+            "boost_intrusive",
+            "cfitsio",
+            "ssh",
+            "readline",
         ]
 
         for feature in feature_options:
@@ -321,7 +333,9 @@ class AtomConan(ConanFile):
                 manifest["features"][feature] = True
 
         # Save manifest
-        manifest_path = os.path.join(self.package_folder, "share", "atom", "manifest.json")
+        manifest_path = os.path.join(
+            self.package_folder, "share", "atom", "manifest.json"
+        )
         os.makedirs(os.path.dirname(manifest_path), exist_ok=True)
         save(self, manifest_path, json.dumps(manifest, indent=2))
 
@@ -352,7 +366,9 @@ class AtomConan(ConanFile):
         for component in self._component_deps.keys():
             if getattr(self.options, f"with_{component}"):
                 self.cpp_info.components[component].libs = [f"atom-{component}"]
-                self.cpp_info.components[component].set_property("cmake_target_name", f"atom::{component}")
+                self.cpp_info.components[component].set_property(
+                    "cmake_target_name", f"atom::{component}"
+                )
 
         # pkg-config
         self.cpp_info.set_property("pkg_config_name", "atom")

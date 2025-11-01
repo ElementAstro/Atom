@@ -8,20 +8,21 @@
 
 Date: 2024-12-22
 
-Description: Comprehensive error formatting system with customizable output formats
+Description: Comprehensive error formatting system with customizable output
+formats
 
 **************************************************/
 
 #ifndef ATOM_ERROR_FORMATTER_HPP
 #define ATOM_ERROR_FORMATTER_HPP
 
+#include <functional>
+#include <locale>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <vector>
-#include <functional>
-#include <locale>
-#include <sstream>
 
 #include "error_context.hpp"
 
@@ -69,22 +70,24 @@ enum class Color {
 class ErrorFormatter {
 public:
     virtual ~ErrorFormatter() = default;
-    
+
     /**
      * @brief Format error context to string
      */
     virtual std::string format(std::shared_ptr<ErrorContext> context) = 0;
-    
+
     /**
      * @brief Format multiple error contexts
      */
-    virtual std::string formatMultiple(const std::vector<std::shared_ptr<ErrorContext>>& contexts);
-    
+    virtual std::string formatMultiple(
+        const std::vector<std::shared_ptr<ErrorContext>>& contexts);
+
     /**
      * @brief Set formatting options
      */
-    virtual void setOption(const std::string& key, const std::string& value) = 0;
-    
+    virtual void setOption(const std::string& key,
+                           const std::string& value) = 0;
+
     /**
      * @brief Get formatting options
      */
@@ -97,7 +100,7 @@ public:
 class PlainTextFormatter : public ErrorFormatter {
 public:
     PlainTextFormatter();
-    
+
     std::string format(std::shared_ptr<ErrorContext> context) override;
     void setOption(const std::string& key, const std::string& value) override;
     std::string getOption(const std::string& key) const override;
@@ -116,9 +119,10 @@ private:
 class JsonFormatter : public ErrorFormatter {
 public:
     JsonFormatter();
-    
+
     std::string format(std::shared_ptr<ErrorContext> context) override;
-    std::string formatMultiple(const std::vector<std::shared_ptr<ErrorContext>>& contexts) override;
+    std::string formatMultiple(
+        const std::vector<std::shared_ptr<ErrorContext>>& contexts) override;
     void setOption(const std::string& key, const std::string& value) override;
     std::string getOption(const std::string& key) const override;
 
@@ -126,9 +130,11 @@ private:
     std::unordered_map<std::string, std::string> options_;
     bool prettyPrint_;
     int indentSize_;
-    
+
     std::string escapeJsonString(const std::string& str) const;
-    std::string formatJsonValue(const std::string& key, const std::string& value, bool isLast = false) const;
+    std::string formatJsonValue(const std::string& key,
+                                const std::string& value,
+                                bool isLast = false) const;
 };
 
 /**
@@ -137,7 +143,7 @@ private:
 class ColoredFormatter : public ErrorFormatter {
 public:
     ColoredFormatter();
-    
+
     std::string format(std::shared_ptr<ErrorContext> context) override;
     void setOption(const std::string& key, const std::string& value) override;
     std::string getOption(const std::string& key) const override;
@@ -146,7 +152,7 @@ private:
     std::unordered_map<std::string, std::string> options_;
     std::unordered_map<ErrorSeverity, Color> severityColors_;
     bool enableColors_;
-    
+
     std::string colorize(const std::string& text, Color color) const;
     Color getSeverityColor(ErrorSeverity severity) const;
 };
@@ -157,9 +163,10 @@ private:
 class HtmlFormatter : public ErrorFormatter {
 public:
     HtmlFormatter();
-    
+
     std::string format(std::shared_ptr<ErrorContext> context) override;
-    std::string formatMultiple(const std::vector<std::shared_ptr<ErrorContext>>& contexts) override;
+    std::string formatMultiple(
+        const std::vector<std::shared_ptr<ErrorContext>>& contexts) override;
     void setOption(const std::string& key, const std::string& value) override;
     std::string getOption(const std::string& key) const override;
 
@@ -167,7 +174,7 @@ private:
     std::unordered_map<std::string, std::string> options_;
     bool includeCSS_;
     std::string cssStyle_;
-    
+
     std::string escapeHtml(const std::string& str) const;
     std::string getSeverityClass(ErrorSeverity severity) const;
 };
@@ -178,7 +185,7 @@ private:
 class StructuredFormatter : public ErrorFormatter {
 public:
     StructuredFormatter();
-    
+
     std::string format(std::shared_ptr<ErrorContext> context) override;
     void setOption(const std::string& key, const std::string& value) override;
     std::string getOption(const std::string& key) const override;
@@ -188,8 +195,9 @@ private:
     std::string fieldSeparator_;
     std::string keyValueSeparator_;
     std::vector<std::string> fieldOrder_;
-    
-    std::string formatField(const std::string& key, const std::string& value) const;
+
+    std::string formatField(const std::string& key,
+                            const std::string& value) const;
 };
 
 /**
@@ -198,47 +206,52 @@ private:
 class ErrorLocalizer {
 public:
     ErrorLocalizer();
-    
+
     /**
      * @brief Set current locale
      */
     void setLocale(const std::string& locale);
-    
+
     /**
      * @brief Get current locale
      */
     std::string getCurrentLocale() const;
-    
+
     /**
      * @brief Add translation for error code
      */
-    void addTranslation(const std::string& locale, int errorCode, const std::string& message);
-    
+    void addTranslation(const std::string& locale, int errorCode,
+                        const std::string& message);
+
     /**
      * @brief Add translation for severity level
      */
-    void addSeverityTranslation(const std::string& locale, ErrorSeverity severity, const std::string& translation);
-    
+    void addSeverityTranslation(const std::string& locale,
+                                ErrorSeverity severity,
+                                const std::string& translation);
+
     /**
      * @brief Add translation for category
      */
-    void addCategoryTranslation(const std::string& locale, ErrorCategory category, const std::string& translation);
-    
+    void addCategoryTranslation(const std::string& locale,
+                                ErrorCategory category,
+                                const std::string& translation);
+
     /**
      * @brief Get localized error message
      */
     std::string getLocalizedMessage(int errorCode) const;
-    
+
     /**
      * @brief Get localized severity string
      */
     std::string getLocalizedSeverity(ErrorSeverity severity) const;
-    
+
     /**
      * @brief Get localized category string
      */
     std::string getLocalizedCategory(ErrorCategory category) const;
-    
+
     /**
      * @brief Load translations from file
      */
@@ -246,9 +259,14 @@ public:
 
 private:
     std::string currentLocale_;
-    std::unordered_map<std::string, std::unordered_map<int, std::string>> errorTranslations_;
-    std::unordered_map<std::string, std::unordered_map<ErrorSeverity, std::string>> severityTranslations_;
-    std::unordered_map<std::string, std::unordered_map<ErrorCategory, std::string>> categoryTranslations_;
+    std::unordered_map<std::string, std::unordered_map<int, std::string>>
+        errorTranslations_;
+    std::unordered_map<std::string,
+                       std::unordered_map<ErrorSeverity, std::string>>
+        severityTranslations_;
+    std::unordered_map<std::string,
+                       std::unordered_map<ErrorCategory, std::string>>
+        categoryTranslations_;
 };
 
 /**
@@ -260,24 +278,29 @@ public:
      * @brief Create formatter by output format
      */
     static std::unique_ptr<ErrorFormatter> createFormatter(OutputFormat format);
-    
+
     /**
      * @brief Register custom formatter
      */
-    static void registerFormatter(const std::string& name, std::function<std::unique_ptr<ErrorFormatter>()> factory);
-    
+    static void registerFormatter(
+        const std::string& name,
+        std::function<std::unique_ptr<ErrorFormatter>()> factory);
+
     /**
      * @brief Create custom formatter by name
      */
-    static std::unique_ptr<ErrorFormatter> createCustomFormatter(const std::string& name);
-    
+    static std::unique_ptr<ErrorFormatter> createCustomFormatter(
+        const std::string& name);
+
     /**
      * @brief Get available formatter names
      */
     static std::vector<std::string> getAvailableFormatters();
 
 private:
-    static std::unordered_map<std::string, std::function<std::unique_ptr<ErrorFormatter>()>> customFormatters_;
+    static std::unordered_map<std::string,
+                              std::function<std::unique_ptr<ErrorFormatter>()>>
+        customFormatters_;
 };
 
 /**
@@ -286,49 +309,54 @@ private:
 class ErrorDisplayManager {
 public:
     ErrorDisplayManager();
-    
+
     /**
      * @brief Set default formatter
      */
     void setDefaultFormatter(std::unique_ptr<ErrorFormatter> formatter);
-    
+
     /**
      * @brief Add formatter for specific output format
      */
-    void addFormatter(OutputFormat format, std::unique_ptr<ErrorFormatter> formatter);
-    
+    void addFormatter(OutputFormat format,
+                      std::unique_ptr<ErrorFormatter> formatter);
+
     /**
      * @brief Display error using specified format
      */
-    void displayError(std::shared_ptr<ErrorContext> context, OutputFormat format = OutputFormat::Plain);
-    
+    void displayError(std::shared_ptr<ErrorContext> context,
+                      OutputFormat format = OutputFormat::Plain);
+
     /**
      * @brief Display multiple errors
      */
-    void displayErrors(const std::vector<std::shared_ptr<ErrorContext>>& contexts, OutputFormat format = OutputFormat::Plain);
-    
+    void displayErrors(
+        const std::vector<std::shared_ptr<ErrorContext>>& contexts,
+        OutputFormat format = OutputFormat::Plain);
+
     /**
      * @brief Set output stream
      */
     void setOutputStream(std::ostream& stream);
-    
+
     /**
      * @brief Set error localizer
      */
     void setLocalizer(std::shared_ptr<ErrorLocalizer> localizer);
-    
+
     /**
      * @brief Enable/disable automatic display
      */
     void setAutoDisplay(bool enabled);
 
 private:
-    std::unordered_map<OutputFormat, std::unique_ptr<ErrorFormatter>> formatters_;
+    std::unordered_map<OutputFormat, std::unique_ptr<ErrorFormatter>>
+        formatters_;
     std::unique_ptr<ErrorFormatter> defaultFormatter_;
     std::ostream* outputStream_;
     std::shared_ptr<ErrorLocalizer> localizer_;
     bool autoDisplay_;
-    
+
     ErrorFormatter* getFormatter(OutputFormat format);
 };
 
@@ -338,11 +366,11 @@ private:
 class TemplateFormatter : public ErrorFormatter {
 public:
     explicit TemplateFormatter(const std::string& templateStr);
-    
+
     std::string format(std::shared_ptr<ErrorContext> context) override;
     void setOption(const std::string& key, const std::string& value) override;
     std::string getOption(const std::string& key) const override;
-    
+
     /**
      * @brief Set template string
      */
@@ -351,23 +379,31 @@ public:
 private:
     std::string templateStr_;
     std::unordered_map<std::string, std::string> options_;
-    
+
     std::string processTemplate(std::shared_ptr<ErrorContext> context) const;
-    std::string replaceVariables(const std::string& str, const std::unordered_map<std::string, std::string>& variables) const;
+    std::string replaceVariables(
+        const std::string& str,
+        const std::unordered_map<std::string, std::string>& variables) const;
 };
 
 /**
  * @brief Convenience macros for error formatting
  */
-#define FORMAT_ERROR_PLAIN(context) \
-    atom::error::ErrorFormatterFactory::createFormatter(atom::error::OutputFormat::Plain)->format(context)
+#define FORMAT_ERROR_PLAIN(context)                      \
+    atom::error::ErrorFormatterFactory::createFormatter( \
+        atom::error::OutputFormat::Plain)                \
+        ->format(context)
 
-#define FORMAT_ERROR_JSON(context) \
-    atom::error::ErrorFormatterFactory::createFormatter(atom::error::OutputFormat::Json)->format(context)
+#define FORMAT_ERROR_JSON(context)                       \
+    atom::error::ErrorFormatterFactory::createFormatter( \
+        atom::error::OutputFormat::Json)                 \
+        ->format(context)
 
-#define FORMAT_ERROR_COLORED(context) \
-    atom::error::ErrorFormatterFactory::createFormatter(atom::error::OutputFormat::Colored)->format(context)
+#define FORMAT_ERROR_COLORED(context)                    \
+    atom::error::ErrorFormatterFactory::createFormatter( \
+        atom::error::OutputFormat::Colored)              \
+        ->format(context)
 
-} // namespace atom::error
+}  // namespace atom::error
 
-#endif // ATOM_ERROR_FORMATTER_HPP
+#endif  // ATOM_ERROR_FORMATTER_HPP

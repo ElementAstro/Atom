@@ -47,28 +47,30 @@ protected:
         make_field<SimpleType>("id", "The unique identifier", &SimpleType::id),
         make_field<SimpleType>("name", "The display name", &SimpleType::name),
         make_field<SimpleType>("value", "A numeric value", &SimpleType::value),
-        make_field<SimpleType>("active", "Whether the item is active", &SimpleType::active),
+        make_field<SimpleType>("active", "Whether the item is active",
+                               &SimpleType::active),
         make_field<SimpleType>("tags", "Associated tags", &SimpleType::tags),
-        make_field<SimpleType>("numbers", "Associated numbers", &SimpleType::numbers)
-    );
+        make_field<SimpleType>("numbers", "Associated numbers",
+                               &SimpleType::numbers));
 
-    Reflectable<TypeWithValidation> validationTypeReflection = Reflectable<TypeWithValidation>(
-        make_field<TypeWithValidation>(
-            "age", "User age", &TypeWithValidation::age, true, 0,
-            [](const int& age) { return age >= 0 && age <= 120; }),
-        make_field<TypeWithValidation>(
-            "email", "User email", &TypeWithValidation::email, true, "",
-            [](const std::string& email) {
-                return email.find('@') != std::string::npos &&
-                        email.find('.') != std::string::npos;
-            })
-    );
+    Reflectable<TypeWithValidation> validationTypeReflection =
+        Reflectable<TypeWithValidation>(
+            make_field<TypeWithValidation>(
+                "age", "User age", &TypeWithValidation::age, true, 0,
+                [](const int& age) { return age >= 0 && age <= 120; }),
+            make_field<TypeWithValidation>(
+                "email", "User email", &TypeWithValidation::email, true, "",
+                [](const std::string& email) {
+                    return email.find('@') != std::string::npos &&
+                           email.find('.') != std::string::npos;
+                }));
 
     Reflectable<NestedType> nestedTypeReflection = Reflectable<NestedType>(
         make_field<NestedType>("id", "The nested type ID", &NestedType::id),
-        make_field<NestedType>("description", "A description", &NestedType::description),
-        make_field<NestedType>("inner", "The inner simple type", &NestedType::inner, simpleTypeReflection)
-    );
+        make_field<NestedType>("description", "A description",
+                               &NestedType::description),
+        make_field<NestedType>("inner", "The inner simple type",
+                               &NestedType::inner, simpleTypeReflection));
 
     void SetUp() override {
         // No need to reinitialize in SetUp, already initialized in declaration
@@ -357,9 +359,10 @@ TEST_F(RTypeTest, OptionalFieldsWithDefaultValues) {
     auto optionalReflection = Reflectable<SimpleType>(
         make_field<SimpleType>("id", "The ID", &SimpleType::id, true),
         make_field<SimpleType>("name", "The name", &SimpleType::name, true),
-        make_field<SimpleType>("value", "The value", &SimpleType::value, false, 99.9),
-        make_field<SimpleType>("active", "Is active", &SimpleType::active, false, true)
-    );
+        make_field<SimpleType>("value", "The value", &SimpleType::value, false,
+                               99.9),
+        make_field<SimpleType>("active", "Is active", &SimpleType::active,
+                               false, true));
 
     JsonObject json;
     json["id"] = JsonValue(static_cast<double>(42));

@@ -33,7 +33,7 @@ including STL containers, custom types, and complex data structures.
 #include <variant>
 #include <vector>
 
-#include "scripting_api.hpp"
+#include "../scripting/scripting_api.hpp"
 
 namespace atom::components::scripting {
 

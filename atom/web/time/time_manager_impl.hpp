@@ -142,8 +142,8 @@ private:
     };
 
 #ifdef _WIN32
-    auto getTimeZoneInformationByName(const std::string& timezone, DWORD* tzId)
-        -> bool;
+    auto getTimeZoneInformationByName(const std::string& timezone,
+                                      DWORD* tzId) -> bool;
 #endif
 
     void updateTimeCache();

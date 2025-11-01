@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 /**
@@ -311,8 +310,7 @@ Args:
 Returns:
     True if connection was initiated successfully, False otherwise
 )")
-        .def("connect_async",
-             &atom::async::connection::TcpClient::connectAsync,
+        .def("connect_async", &atom::async::connection::TcpClient::connectAsync,
              py::arg("host"), py::arg("port"),
              R"(Connects asynchronously to a TCP server.
 
@@ -352,8 +350,7 @@ Args:
 Examples:
     >>> client.set_heartbeat_interval(30000)  # 30 second heartbeat
 )")
-        .def("send", &atom::async::connection::TcpClient::send,
-             py::arg("data"),
+        .def("send", &atom::async::connection::TcpClient::send, py::arg("data"),
              R"(Sends raw data to the server.
 
 Args:
@@ -528,7 +525,8 @@ Returns:
 Examples:
     >>> print(f"Connected to: {client.get_remote_address()}")
 )")
-        .def("get_remote_port", &atom::async::connection::TcpClient::getRemotePort,
+        .def("get_remote_port",
+             &atom::async::connection::TcpClient::getRemotePort,
              R"(Gets the remote server port.
 
 Returns:
@@ -722,7 +720,8 @@ Examples:
     m.def(
         "test_connection",
         [](const std::string& host, int port,
-           std::chrono::milliseconds timeout = std::chrono::milliseconds(5000)) {
+           std::chrono::milliseconds timeout =
+               std::chrono::milliseconds(5000)) {
             atom::async::connection::ConnectionConfig config;
             config.connect_timeout = timeout;
             atom::async::connection::TcpClient client(config);
@@ -834,18 +833,24 @@ Examples:
 void addModuleDocumentation(py::module_& m) {
     // Module documentation is set in the PYBIND11_MODULE macro
     // Add module-level constants
-    m.def("get_default_connect_timeout", []() { return 5000; },
-          "Gets the default connection timeout in milliseconds");
-    m.def("get_default_read_timeout", []() { return 5000; },
-          "Gets the default read timeout in milliseconds");
-    m.def("get_default_write_timeout", []() { return 5000; },
-          "Gets the default write timeout in milliseconds");
-    m.def("get_default_heartbeat_interval", []() { return 30000; },
-          "Gets the default heartbeat interval in milliseconds");
-    m.def("get_default_reconnect_attempts", []() { return 3; },
-          "Gets the default number of reconnection attempts");
-    m.def("get_default_reconnect_delay", []() { return 1000; },
-          "Gets the default reconnection delay in milliseconds");
+    m.def(
+        "get_default_connect_timeout", []() { return 5000; },
+        "Gets the default connection timeout in milliseconds");
+    m.def(
+        "get_default_read_timeout", []() { return 5000; },
+        "Gets the default read timeout in milliseconds");
+    m.def(
+        "get_default_write_timeout", []() { return 5000; },
+        "Gets the default write timeout in milliseconds");
+    m.def(
+        "get_default_heartbeat_interval", []() { return 30000; },
+        "Gets the default heartbeat interval in milliseconds");
+    m.def(
+        "get_default_reconnect_attempts", []() { return 3; },
+        "Gets the default number of reconnection attempts");
+    m.def(
+        "get_default_reconnect_delay", []() { return 1000; },
+        "Gets the default reconnection delay in milliseconds");
 }
 
 PYBIND11_MODULE(tcpclient, m) {

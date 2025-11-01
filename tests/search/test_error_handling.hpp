@@ -2,9 +2,9 @@
 #define ATOM_SEARCH_TEST_ERROR_HANDLING_HPP
 
 #include <gtest/gtest.h>
+#include <memory>
 #include <stdexcept>
 #include <string>
-#include <memory>
 #include <vector>
 
 // Note: These tests are designed for when the full implementation is available
@@ -113,11 +113,13 @@ public:
 
     void addDocument(const MockDocument& doc) {
         if (simulateErrors_ && doc.getId() == "error_trigger") {
-            throw MockSearchOperationException("Simulated error during document addition");
+            throw MockSearchOperationException(
+                "Simulated error during document addition");
         }
 
         if (documents_.count(doc.getId())) {
-            throw std::invalid_argument("Document ID already exists: " + doc.getId());
+            throw std::invalid_argument("Document ID already exists: " +
+                                        doc.getId());
         }
 
         documents_[doc.getId()] = std::make_shared<MockDocument>(doc);
@@ -125,7 +127,8 @@ public:
 
     void removeDocument(const std::string& docId) {
         if (simulateErrors_ && docId == "error_trigger") {
-            throw MockSearchOperationException("Simulated error during document removal");
+            throw MockSearchOperationException(
+                "Simulated error during document removal");
         }
 
         auto it = documents_.find(docId);
@@ -137,7 +140,8 @@ public:
 
     void updateDocument(const MockDocument& doc) {
         if (simulateErrors_ && doc.getId() == "error_trigger") {
-            throw MockSearchOperationException("Simulated error during document update");
+            throw MockSearchOperationException(
+                "Simulated error during document update");
         }
 
         if (!documents_.count(doc.getId())) {
@@ -146,9 +150,11 @@ public:
         documents_[doc.getId()] = std::make_shared<MockDocument>(doc);
     }
 
-    std::vector<std::shared_ptr<MockDocument>> searchByTag(const std::string& tag) {
+    std::vector<std::shared_ptr<MockDocument>> searchByTag(
+        const std::string& tag) {
         if (simulateErrors_ && tag == "error_trigger") {
-            throw MockSearchOperationException("Simulated error during tag search");
+            throw MockSearchOperationException(
+                "Simulated error during tag search");
         }
 
         std::vector<std::shared_ptr<MockDocument>> results;
@@ -163,24 +169,29 @@ public:
         return results;
     }
 
-    std::vector<std::shared_ptr<MockDocument>> fuzzySearchByTag(const std::string& tag, int tolerance) {
+    std::vector<std::shared_ptr<MockDocument>> fuzzySearchByTag(
+        const std::string& tag, int tolerance) {
         if (tolerance < 0) {
             throw std::invalid_argument("Tolerance cannot be negative");
         }
         if (tolerance > 100) {
-            throw std::invalid_argument("Tolerance too high: " + std::to_string(tolerance));
+            throw std::invalid_argument("Tolerance too high: " +
+                                        std::to_string(tolerance));
         }
         if (simulateErrors_ && tag == "error_trigger") {
-            throw MockSearchOperationException("Simulated error during fuzzy search");
+            throw MockSearchOperationException(
+                "Simulated error during fuzzy search");
         }
 
         // Simple implementation for testing
         return searchByTag(tag);
     }
 
-    std::vector<std::shared_ptr<MockDocument>> searchByContent(const std::string& query) {
+    std::vector<std::shared_ptr<MockDocument>> searchByContent(
+        const std::string& query) {
         if (simulateErrors_ && query == "error_trigger") {
-            throw MockSearchOperationException("Simulated error during content search");
+            throw MockSearchOperationException(
+                "Simulated error during content search");
         }
 
         std::vector<std::shared_ptr<MockDocument>> results;
@@ -212,9 +223,7 @@ public:
         // Simulate load operation
     }
 
-    void setErrorSimulation(bool enable) {
-        simulateErrors_ = enable;
-    }
+    void setErrorSimulation(bool enable) { simulateErrors_ = enable; }
 };
 
 class ErrorHandlingTest : public ::testing::Test {
@@ -235,7 +244,8 @@ protected:
 
 // Document Validation Exception Tests
 TEST_F(ErrorHandlingTest, DocumentValidationEmptyId) {
-    EXPECT_THROW(MockDocument("", "Valid content"), MockDocumentValidationException);
+    EXPECT_THROW(MockDocument("", "Valid content"),
+                 MockDocumentValidationException);
 }
 
 TEST_F(ErrorHandlingTest, DocumentValidationEmptyContent) {
@@ -249,12 +259,14 @@ TEST_F(ErrorHandlingTest, DocumentValidationEmptyTag) {
 
 TEST_F(ErrorHandlingTest, DocumentValidationLongId) {
     std::string longId(300, 'A');
-    EXPECT_THROW(MockDocument(longId, "Valid content"), MockDocumentValidationException);
+    EXPECT_THROW(MockDocument(longId, "Valid content"),
+                 MockDocumentValidationException);
 }
 
 TEST_F(ErrorHandlingTest, DocumentValidationLongContent) {
     std::string longContent(1000001, 'A');
-    EXPECT_THROW(MockDocument("valid_id", longContent), MockDocumentValidationException);
+    EXPECT_THROW(MockDocument("valid_id", longContent),
+                 MockDocumentValidationException);
 }
 
 TEST_F(ErrorHandlingTest, DocumentValidationLongTag) {
@@ -283,7 +295,8 @@ TEST_F(ErrorHandlingTest, DocumentAddTagValidation) {
 
 // Document Not Found Exception Tests
 TEST_F(ErrorHandlingTest, RemoveNonexistentDocument) {
-    EXPECT_THROW(engine->removeDocument("nonexistent"), MockDocumentNotFoundException);
+    EXPECT_THROW(engine->removeDocument("nonexistent"),
+                 MockDocumentNotFoundException);
 }
 
 TEST_F(ErrorHandlingTest, UpdateNonexistentDocument) {
@@ -302,28 +315,36 @@ TEST_F(ErrorHandlingTest, AddDuplicateDocument) {
 
 // Search Operation Exception Tests
 TEST_F(ErrorHandlingTest, SearchOperationErrors) {
-    EXPECT_THROW(errorEngine->searchByTag("error_trigger"), MockSearchOperationException);
-    EXPECT_THROW(errorEngine->searchByContent("error_trigger"), MockSearchOperationException);
-    EXPECT_THROW(errorEngine->fuzzySearchByTag("error_trigger", 1), MockSearchOperationException);
+    EXPECT_THROW(errorEngine->searchByTag("error_trigger"),
+                 MockSearchOperationException);
+    EXPECT_THROW(errorEngine->searchByContent("error_trigger"),
+                 MockSearchOperationException);
+    EXPECT_THROW(errorEngine->fuzzySearchByTag("error_trigger", 1),
+                 MockSearchOperationException);
 }
 
 TEST_F(ErrorHandlingTest, DocumentOperationErrors) {
     MockDocument errorDoc("error_trigger", "Error content");
 
-    EXPECT_THROW(errorEngine->addDocument(errorDoc), MockSearchOperationException);
-    EXPECT_THROW(errorEngine->removeDocument("error_trigger"), MockSearchOperationException);
-    EXPECT_THROW(errorEngine->updateDocument(errorDoc), MockSearchOperationException);
+    EXPECT_THROW(errorEngine->addDocument(errorDoc),
+                 MockSearchOperationException);
+    EXPECT_THROW(errorEngine->removeDocument("error_trigger"),
+                 MockSearchOperationException);
+    EXPECT_THROW(errorEngine->updateDocument(errorDoc),
+                 MockSearchOperationException);
 }
 
 // File I/O Exception Tests
 TEST_F(ErrorHandlingTest, SaveIndexErrors) {
     EXPECT_THROW(engine->saveIndex(""), std::invalid_argument);
-    EXPECT_THROW(errorEngine->saveIndex("error_trigger"), std::ios_base::failure);
+    EXPECT_THROW(errorEngine->saveIndex("error_trigger"),
+                 std::ios_base::failure);
 }
 
 TEST_F(ErrorHandlingTest, LoadIndexErrors) {
     EXPECT_THROW(engine->loadIndex(""), std::invalid_argument);
-    EXPECT_THROW(errorEngine->loadIndex("error_trigger"), std::ios_base::failure);
+    EXPECT_THROW(errorEngine->loadIndex("error_trigger"),
+                 std::ios_base::failure);
 }
 
 // Parameter Validation Exception Tests
@@ -361,7 +382,7 @@ TEST_F(ErrorHandlingTest, ExceptionSafetyDuringUpdate) {
 
     // Try to update with invalid document
     try {
-        MockDocument invalidUpdate("test", ""); // Empty content
+        MockDocument invalidUpdate("test", "");  // Empty content
         engine->updateDocument(invalidUpdate);
         FAIL() << "Expected exception was not thrown";
     } catch (const MockDocumentValidationException&) {
@@ -396,7 +417,8 @@ TEST_F(ErrorHandlingTest, ExceptionSafetyDuringSearch) {
 TEST_F(ErrorHandlingTest, ResourceCleanupAfterExceptions) {
     // Add some documents
     for (int i = 0; i < 10; ++i) {
-        MockDocument doc("doc" + std::to_string(i), "Content " + std::to_string(i));
+        MockDocument doc("doc" + std::to_string(i),
+                         "Content " + std::to_string(i));
         engine->addDocument(doc);
     }
 
@@ -439,7 +461,8 @@ TEST_F(ErrorHandlingTest, MemoryLeakPrevention) {
 
     // All engines should be properly destructible
     engines.clear();
-    SUCCEED(); // If we reach here without crashes, memory management is working
+    SUCCEED();  // If we reach here without crashes, memory management is
+                // working
 }
 
 // Concurrent Exception Handling Tests
@@ -454,7 +477,8 @@ TEST_F(ErrorHandlingTest, ConcurrentExceptionHandling) {
             try {
                 // Some operations will succeed
                 if (i % 2 == 0) {
-                    MockDocument validDoc("thread_" + std::to_string(i), "Valid content");
+                    MockDocument validDoc("thread_" + std::to_string(i),
+                                          "Valid content");
                     engine->addDocument(validDoc);
                     successCount++;
                 } else {
@@ -474,8 +498,8 @@ TEST_F(ErrorHandlingTest, ConcurrentExceptionHandling) {
         thread.join();
     }
 
-    EXPECT_EQ(successCount, 5); // Half should succeed
-    EXPECT_EQ(exceptionCount, 5); // Half should fail with validation exception
+    EXPECT_EQ(successCount, 5);    // Half should succeed
+    EXPECT_EQ(exceptionCount, 5);  // Half should fail with validation exception
 }
 
 // Error Recovery Tests
@@ -486,7 +510,8 @@ TEST_F(ErrorHandlingTest, ErrorRecoveryAfterFailedOperations) {
     // Operations should fail
     MockDocument doc("test", "Test content");
     EXPECT_THROW(errorEngine->addDocument(doc), MockSearchOperationException);
-    EXPECT_THROW(errorEngine->searchByTag("test"), MockSearchOperationException);
+    EXPECT_THROW(errorEngine->searchByTag("test"),
+                 MockSearchOperationException);
 
     // Disable error simulation
     errorEngine->setErrorSimulation(false);
@@ -494,7 +519,7 @@ TEST_F(ErrorHandlingTest, ErrorRecoveryAfterFailedOperations) {
     // Operations should now succeed
     EXPECT_NO_THROW(errorEngine->addDocument(doc));
     auto results = errorEngine->searchByTag("test");
-    EXPECT_EQ(results.size(), 0); // No documents with "test" tag yet
+    EXPECT_EQ(results.size(), 0);  // No documents with "test" tag yet
 
     // Add document with tag and search again
     MockDocument docWithTag("test2", "Test content", {"test"});
@@ -568,7 +593,8 @@ TEST_F(ErrorHandlingTest, PerformanceWithFrequentExceptions) {
                 engine->addDocument(invalidDoc);
             } else {
                 // This will succeed
-                MockDocument validDoc("valid_" + std::to_string(i), "Valid content");
+                MockDocument validDoc("valid_" + std::to_string(i),
+                                      "Valid content");
                 engine->addDocument(validDoc);
                 successCount++;
             }
@@ -578,11 +604,13 @@ TEST_F(ErrorHandlingTest, PerformanceWithFrequentExceptions) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    EXPECT_GT(successCount, 600); // Most should succeed
-    EXPECT_GT(exceptionCount, 300); // Some should fail
-    EXPECT_LT(duration.count(), 5000); // Should complete within 5 seconds even with exceptions
+    EXPECT_GT(successCount, 600);    // Most should succeed
+    EXPECT_GT(exceptionCount, 300);  // Some should fail
+    EXPECT_LT(duration.count(),
+              5000);  // Should complete within 5 seconds even with exceptions
 }
 
 // TODO: Add these tests when full implementation is available
@@ -590,13 +618,16 @@ TEST_F(ErrorHandlingTest, PerformanceWithFrequentExceptions) {
 TEST_F(ErrorHandlingTest, RealExceptionTypes) {
     // Test with actual exception types
     EXPECT_THROW(Document("", "content"), DocumentValidationException);
-    EXPECT_THROW(SearchEngine().removeDocument("nonexistent"), DocumentNotFoundException);
+    EXPECT_THROW(SearchEngine().removeDocument("nonexistent"),
+DocumentNotFoundException);
 }
 
 TEST_F(ErrorHandlingTest, FileSystemExceptions) {
     SearchEngine engine;
-    EXPECT_THROW(engine.saveIndex("/invalid/path/file.json"), std::ios_base::failure);
-    EXPECT_THROW(engine.loadIndex("/nonexistent/file.json"), std::ios_base::failure);
+    EXPECT_THROW(engine.saveIndex("/invalid/path/file.json"),
+std::ios_base::failure);
+    EXPECT_THROW(engine.loadIndex("/nonexistent/file.json"),
+std::ios_base::failure);
 }
 
 TEST_F(ErrorHandlingTest, ThreadingExceptions) {

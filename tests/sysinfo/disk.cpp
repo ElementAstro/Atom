@@ -1,10 +1,10 @@
 #include "atom/sysinfo/disk.hpp"
 #include <gtest/gtest.h>
-#include <string>
-#include <vector>
 #include <algorithm>
 #include <chrono>
+#include <string>
 #include <thread>
+#include <vector>
 
 using namespace atom::system;
 
@@ -155,8 +155,9 @@ TEST_F(RealDiskTest, DiskInfoConsistency) {
         // Free space and usage might change slightly, but should be close
         if (disks1[i].totalSpace > 0) {
             float spaceDiff = std::abs(static_cast<float>(disks1[i].freeSpace) -
-                                     static_cast<float>(disks2[i].freeSpace));
-            float tolerance = static_cast<float>(disks1[i].totalSpace) * 0.01f; // 1% tolerance
+                                       static_cast<float>(disks2[i].freeSpace));
+            float tolerance = static_cast<float>(disks1[i].totalSpace) *
+                              0.01f;  // 1% tolerance
             EXPECT_LT(spaceDiff, tolerance);
         }
     }
@@ -188,21 +189,18 @@ TEST_F(RealDiskTest, DiskSpaceCalculations) {
 
         // Usage percentage calculation
         if (disk.totalSpace > 0) {
-            float calculatedUsage = (static_cast<float>(usedSpace) / disk.totalSpace) * 100.0f;
-            EXPECT_NEAR(disk.usagePercent, calculatedUsage, 1.0f); // Allow 1% tolerance
+            float calculatedUsage =
+                (static_cast<float>(usedSpace) / disk.totalSpace) * 100.0f;
+            EXPECT_NEAR(disk.usagePercent, calculatedUsage,
+                        1.0f);  // Allow 1% tolerance
         }
     }
 }
 
 TEST_F(RealDiskTest, DriveModelEdgeCases) {
     // Test drive model with edge cases
-    std::vector<std::string> testPaths = {
-        "",
-        "/",
-        "C:\\",
-        "/invalid/path",
-        "invalid_path_12345"
-    };
+    std::vector<std::string> testPaths = {"", "/", "C:\\", "/invalid/path",
+                                          "invalid_path_12345"};
 
     for (const auto& path : testPaths) {
         EXPECT_NO_THROW({
@@ -242,8 +240,10 @@ TEST_F(RealDiskTest, BoundaryConditions) {
         EXPECT_LE(disk.usagePercent, 100.0f);
 
         // Test reasonable upper bounds
-        EXPECT_LT(disk.totalSpace, 1000ULL * 1024 * 1024 * 1024 * 1024); // Less than 1000TB
-        EXPECT_LT(disk.freeSpace, 1000ULL * 1024 * 1024 * 1024 * 1024); // Less than 1000TB
+        EXPECT_LT(disk.totalSpace,
+                  1000ULL * 1024 * 1024 * 1024 * 1024);  // Less than 1000TB
+        EXPECT_LT(disk.freeSpace,
+                  1000ULL * 1024 * 1024 * 1024 * 1024);  // Less than 1000TB
 
         // Test path length boundaries
         EXPECT_GT(disk.path.length(), 0);
@@ -294,4 +294,4 @@ TEST_F(RealDiskTest, EmptyDiskListHandling) {
     }
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

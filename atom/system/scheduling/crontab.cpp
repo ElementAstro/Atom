@@ -294,8 +294,13 @@ auto CronManager::listCronJobs() -> std::vector<CronJob> {
     const std::string cmd = "crontab -l";
     std::array<char, 128> buffer;
 
+#if defined(_WIN32)
+    std::unique_ptr<FILE, int (*)(FILE*)> pipe(_popen(cmd.c_str(), "r"),
+                                               _pclose);
+#else
     using pclose_t = int (*)(FILE*);
     std::unique_ptr<FILE, pclose_t> pipe(popen(cmd.c_str(), "r"), pclose);
+#endif
     if (!pipe) {
         spdlog::error("Failed to list Cron jobs");
         return currentJobs;
@@ -556,8 +561,8 @@ auto CronManager::disableCronJob(const std::string& command) -> bool {
     return false;
 }
 
-auto CronManager::setJobEnabledById(const std::string& id, bool enabled)
-    -> bool {
+auto CronManager::setJobEnabledById(const std::string& id,
+                                    bool enabled) -> bool {
     auto it = jobIndex_.find(id);
     if (it != jobIndex_.end()) {
         jobs_[it->second].enabled_ = enabled;
@@ -755,8 +760,8 @@ auto CronManager::setJobPriority(const std::string& id, int priority) -> bool {
     return false;
 }
 
-auto CronManager::setJobMaxRetries(const std::string& id, int maxRetries)
-    -> bool {
+auto CronManager::setJobMaxRetries(const std::string& id,
+                                   int maxRetries) -> bool {
     if (maxRetries < 0) {
         spdlog::error("Invalid max retries value {}. Must be non-negative",
                       maxRetries);
@@ -801,8 +806,8 @@ auto CronManager::getJobExecutionHistory(const std::string& id)
     return {};
 }
 
-auto CronManager::recordJobExecutionResult(const std::string& id, bool success)
-    -> bool {
+auto CronManager::recordJobExecutionResult(const std::string& id,
+                                           bool success) -> bool {
     auto it = jobIndex_.find(id);
     if (it != jobIndex_.end()) {
         CronJob& job = jobs_[it->second];

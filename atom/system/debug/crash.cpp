@@ -16,6 +16,7 @@ Description: Crash Report
 
 #include <ctime>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <iomanip>
 #include <sstream>
@@ -25,13 +26,21 @@ Description: Crash Report
 #endif
 
 #ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
-#include <dbghelp.h>
+// Disable minidump functionality for now due to header compatibility issues
+#define ATOM_DISABLE_MINIDUMP 1
 #ifdef _MSC_VER
 #pragma comment(lib, "dbghelp.lib")
 #endif
 #endif
 
+#include "../info/env.hpp"
 #include "atom/error/stacktrace.hpp"
 #include "atom/sysinfo/cpu.hpp"
 #include "atom/sysinfo/disk.hpp"
@@ -40,7 +49,6 @@ Description: Crash Report
 #include "atom/system/core/platform.hpp"
 #include "atom/utils/time.hpp"
 #include "crash_quotes.hpp"
-#include "../info/env.hpp"
 
 #include <spdlog/spdlog.h>
 
@@ -120,7 +128,8 @@ void saveCrashLog(std::string_view error_msg) {
 #else
         localtime_r(&nowC, &localTime);
 #endif
-        sss << "Program crashed at: " << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S") << "\n";
+        sss << "Program crashed at: "
+            << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S") << "\n";
         sss << std::format("Error message: {}\n\n", error_msg);
 
         sss << "==================== Stack Trace ====================\n";
@@ -170,7 +179,7 @@ void saveCrashLog(std::string_view error_msg) {
             throw std::runtime_error("Failed to write crash log file");
         }
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(ATOM_DISABLE_MINIDUMP)
         try {
             std::stringstream dumpFileName;
             dumpFileName << "crash_report/crash_"
@@ -199,13 +208,13 @@ void saveCrashLog(std::string_view error_msg) {
                     spdlog::error("Failed to write minidump file {}, error: {}",
                                   dumpFile, GetLastError());
                 }
+
                 CloseHandle(hFile);
             }
         } catch (const std::exception& e) {
             spdlog::error("Exception while creating minidump: {}", e.what());
         }
 #endif
-
     } catch (const std::exception& e) {
         spdlog::critical("Critical error while saving crash log: {}", e.what());
 
@@ -222,8 +231,8 @@ void saveCrashLog(std::string_view error_msg) {
                 localtime_r(&nowC, &localTime);
 #endif
                 emergencyLog << "Emergency crash log - "
-                            << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S")
-                            << ": " << error_msg << "\n";
+                             << std::put_time(&localTime, "%Y-%m-%d %H:%M:%S")
+                             << ": " << error_msg << "\n";
                 emergencyLog << std::format("Error saving full crash log: {}\n",
                                             e.what());
                 emergencyLog.close();

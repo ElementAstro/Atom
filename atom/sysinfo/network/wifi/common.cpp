@@ -34,7 +34,7 @@ auto getAddresses(int family, IF_ADDRS* addrs) -> int {
     do {
         *addrs = (IP_ADAPTER_ADDRESSES*)HeapAlloc(GetProcessHeap(), 0, bufLen);
         if (*addrs == nullptr) {
-            spdlog::error( "HeapAlloc failed");
+            spdlog::error("HeapAlloc failed");
             return -1;
         }
 
@@ -50,7 +50,7 @@ auto getAddresses(int family, IF_ADDRS* addrs) -> int {
         iter++;
     } while ((rv == ERROR_BUFFER_OVERFLOW) && (iter < 3));
     if (rv != NO_ERROR) {
-        spdlog::error( "GetAdaptersAddresses failed");
+        spdlog::error("GetAdaptersAddresses failed");
         return -1;
     }
     return 0;
@@ -63,4 +63,4 @@ auto getAddresses(int family, IF_ADDRS* addrs) -> int {
 // Note: The platform-specific implementations of measurePing
 // are in their respective platform files
 
-} // namespace atom::system
+}  // namespace atom::system

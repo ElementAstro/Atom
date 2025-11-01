@@ -47,16 +47,16 @@ TEST_F(VirtualTest, GetHypervisorVendor) {
     // If vendor is detected, it should be a known vendor
     if (!vendor.empty()) {
         EXPECT_GT(vendor.length(), 0);
-        EXPECT_LT(vendor.length(), 100); // Reasonable upper bound
+        EXPECT_LT(vendor.length(), 100);  // Reasonable upper bound
 
         // Common hypervisor vendors
         bool isKnownVendor = (vendor.find("VMware") != std::string::npos ||
-                             vendor.find("VirtualBox") != std::string::npos ||
-                             vendor.find("Microsoft") != std::string::npos ||
-                             vendor.find("Xen") != std::string::npos ||
-                             vendor.find("KVM") != std::string::npos ||
-                             vendor.find("QEMU") != std::string::npos ||
-                             vendor.find("Hyper-V") != std::string::npos);
+                              vendor.find("VirtualBox") != std::string::npos ||
+                              vendor.find("Microsoft") != std::string::npos ||
+                              vendor.find("Xen") != std::string::npos ||
+                              vendor.find("KVM") != std::string::npos ||
+                              vendor.find("QEMU") != std::string::npos ||
+                              vendor.find("Hyper-V") != std::string::npos);
 
         // Note: This might fail on unknown hypervisors, which is acceptable
         if (isKnownVendor) {
@@ -155,7 +155,8 @@ TEST_F(VirtualTest, IsContainer) {
     // Should return a boolean value without throwing
     EXPECT_TRUE(isContainerEnv || !isContainerEnv);
 
-    // If we're in a Docker container, general container detection should also be true
+    // If we're in a Docker container, general container detection should also
+    // be true
     if (isDockerContainer()) {
         EXPECT_TRUE(isContainerEnv);
     }
@@ -174,11 +175,10 @@ TEST_F(VirtualTest, GetContainerType) {
         EXPECT_GT(containerType.length(), 0);
 
         // Common container types
-        bool isKnownType = (containerType == "Docker" ||
-                           containerType == "LXC" ||
-                           containerType == "LXD" ||
-                           containerType == "Kubernetes" ||
-                           containerType == "Podman");
+        bool isKnownType =
+            (containerType == "Docker" || containerType == "LXC" ||
+             containerType == "LXD" || containerType == "Kubernetes" ||
+             containerType == "Podman");
 
         // Note: This might fail for unknown container types
         if (isKnownType) {
@@ -204,7 +204,7 @@ TEST_F(VirtualTest, GetVirtualizationConfidence) {
 
     // If we're definitely in a VM, confidence should be high
     if (isVirtualMachine()) {
-        EXPECT_GT(confidence, 0.5); // At least 50% confidence
+        EXPECT_GT(confidence, 0.5);  // At least 50% confidence
     }
 }
 
@@ -222,11 +222,11 @@ TEST_F(VirtualTest, GetVirtualizationType) {
 
         // Common virtualization types
         bool isKnownType = (virtType.find("VMware") != std::string::npos ||
-                           virtType.find("VirtualBox") != std::string::npos ||
-                           virtType.find("Hyper-V") != std::string::npos ||
-                           virtType.find("KVM") != std::string::npos ||
-                           virtType.find("QEMU") != std::string::npos ||
-                           virtType.find("Xen") != std::string::npos);
+                            virtType.find("VirtualBox") != std::string::npos ||
+                            virtType.find("Hyper-V") != std::string::npos ||
+                            virtType.find("KVM") != std::string::npos ||
+                            virtType.find("QEMU") != std::string::npos ||
+                            virtType.find("Xen") != std::string::npos);
 
         if (isKnownType) {
             EXPECT_TRUE(isKnownType);
@@ -274,7 +274,8 @@ TEST_F(VirtualTest, LogicalConsistency) {
         EXPECT_TRUE(isVM);
     }
 
-    // If we have a virtualization type other than "Unknown", we should be in a VM
+    // If we have a virtualization type other than "Unknown", we should be in a
+    // VM
     if (!type.empty() && type != "Unknown") {
         EXPECT_TRUE(isVM);
     }
@@ -302,4 +303,4 @@ TEST_F(VirtualTest, NoThrowGuarantee) {
     EXPECT_NO_THROW(getVirtualizationType());
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test

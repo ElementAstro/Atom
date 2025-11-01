@@ -69,10 +69,10 @@ inline constexpr bool is_simd_compatible_v = is_simd_compatible<T>::value;
 template <typename T>
 struct is_batch_processable {
     template <typename U>
-    static auto test(int)
-        -> decltype(std::declval<U&>().batchUpdate(),
-                    std::declval<U&>().getUpdateData(),
-                    std::declval<U&>().getUpdateDataSize(), std::true_type{});
+    static auto test(int) -> decltype(std::declval<U&>().batchUpdate(),
+                                      std::declval<U&>().getUpdateData(),
+                                      std::declval<U&>().getUpdateDataSize(),
+                                      std::true_type{});
 
     template <typename>
     static std::false_type test(...);
@@ -497,7 +497,8 @@ struct hash<std::vector<std::type_index>> {
     std::size_t operator()(const std::vector<std::type_index>& vec) const {
         std::size_t seed = vec.size();
         for (const auto& i : vec) {
-            seed ^= std::hash<std::type_index>{}(i) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+            seed ^= std::hash<std::type_index>{}(i) + 0x9e3779b9 + (seed << 6) +
+                    (seed >> 2);
         }
         return seed;
     }

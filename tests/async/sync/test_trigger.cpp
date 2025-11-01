@@ -14,16 +14,16 @@ Tests the event-driven callback system with parameter support.
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <future>
 #include <mutex>
+#include <thread>
+#include <vector>
 
-#include "atom/async/sync/trigger.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/sync/trigger.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -95,12 +95,14 @@ TEST_F(TriggerTest, MultipleCallbacks) {
     std::string callback1Value, callback2Value;
 
     // Register multiple callbacks for the same event
-    auto callback1 = [&callback1Called, &callback1Value](const std::string& value) {
+    auto callback1 = [&callback1Called,
+                      &callback1Value](const std::string& value) {
         callback1Value = value;
         callback1Called++;
     };
 
-    auto callback2 = [&callback2Called, &callback2Value](const std::string& value) {
+    auto callback2 = [&callback2Called,
+                      &callback2Value](const std::string& value) {
         callback2Value = value;
         callback2Called++;
     };
@@ -133,23 +135,29 @@ TEST_F(TriggerTest, CallbackPriorities) {
     // Register callbacks with different priorities
     auto highPriorityCallback = [&executionOrder, &orderMutex](int) {
         std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(1); // High priority = 1
+        executionOrder.push_back(1);  // High priority = 1
     };
 
     auto normalPriorityCallback = [&executionOrder, &orderMutex](int) {
         std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(2); // Normal priority = 2
+        executionOrder.push_back(2);  // Normal priority = 2
     };
 
     auto lowPriorityCallback = [&executionOrder, &orderMutex](int) {
         std::lock_guard<std::mutex> lock(orderMutex);
-        executionOrder.push_back(3); // Low priority = 3
+        executionOrder.push_back(3);  // Low priority = 3
     };
 
     // Register in reverse priority order to test sorting
-    [[maybe_unused]] auto id1 = trigger.registerCallback("priority_event", lowPriorityCallback, Trigger<int>::CallbackPriority::Low);
-    [[maybe_unused]] auto id2 = trigger.registerCallback("priority_event", normalPriorityCallback, Trigger<int>::CallbackPriority::Normal);
-    [[maybe_unused]] auto id3 = trigger.registerCallback("priority_event", highPriorityCallback, Trigger<int>::CallbackPriority::High);
+    [[maybe_unused]] auto id1 =
+        trigger.registerCallback("priority_event", lowPriorityCallback,
+                                 Trigger<int>::CallbackPriority::Low);
+    [[maybe_unused]] auto id2 =
+        trigger.registerCallback("priority_event", normalPriorityCallback,
+                                 Trigger<int>::CallbackPriority::Normal);
+    [[maybe_unused]] auto id3 =
+        trigger.registerCallback("priority_event", highPriorityCallback,
+                                 Trigger<int>::CallbackPriority::High);
 
     // Trigger the event
     auto triggeredCount = trigger.trigger("priority_event", 42);
@@ -160,9 +168,9 @@ TEST_F(TriggerTest, CallbackPriorities) {
 
     // Check execution order (High=0, Normal=1, Low=2 in enum)
     EXPECT_EQ(executionOrder.size(), 3);
-    EXPECT_EQ(executionOrder[0], 1); // High priority first
-    EXPECT_EQ(executionOrder[1], 2); // Normal priority second
-    EXPECT_EQ(executionOrder[2], 3); // Low priority last
+    EXPECT_EQ(executionOrder[0], 1);  // High priority first
+    EXPECT_EQ(executionOrder[1], 2);  // Normal priority second
+    EXPECT_EQ(executionOrder[2], 3);  // Low priority last
 }
 
 TEST_F(TriggerTest, EmptyEventName) {
@@ -174,7 +182,8 @@ TEST_F(TriggerTest, EmptyEventName) {
 
     // Test registering callback with empty event name
     auto callback = [](int) {};
-    EXPECT_THROW(trigger.registerCallback("", callback), atom::async::TriggerException);
+    EXPECT_THROW(trigger.registerCallback("", callback),
+                 atom::async::TriggerException);
 }
 
 TEST_F(TriggerTest, NonExistentEvent) {

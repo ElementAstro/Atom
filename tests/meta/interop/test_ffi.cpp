@@ -67,7 +67,8 @@ TEST_F(FFITest, LibraryHandleSymbol) {
     // Test getting an invalid symbol
     auto invalidResult = handle.getSymbol("this_function_does_not_exist");
     EXPECT_FALSE(invalidResult.has_value());
-    EXPECT_EQ(invalidResult.error().error(), atom::meta::FFIError::SymbolNotFound);
+    EXPECT_EQ(invalidResult.error().error(),
+              atom::meta::FFIError::SymbolNotFound);
 }
 
 // Test DynamicLibrary loading strategies
@@ -124,7 +125,8 @@ TEST_F(FFITest, DynamicLibraryFunctions) {
     // Test getting an invalid function
     auto invalidResult = lib.getFunction<CosFunc>("nonexistent_function");
     EXPECT_FALSE(invalidResult.has_value());
-    EXPECT_EQ(invalidResult.error().error(), atom::meta::FFIError::SymbolNotFound);
+    EXPECT_EQ(invalidResult.error().error(),
+              atom::meta::FFIError::SymbolNotFound);
 }
 
 // Test callFunctionWithTimeout
@@ -210,7 +212,8 @@ TEST_F(FFITest, CallbackRegistryTypeSafety) {
     // Try to get a nonexistent callback
     auto missingResult = registry.getCallback<int(int)>("nonexistent");
     EXPECT_FALSE(missingResult.has_value());
-    EXPECT_EQ(missingResult.error().error(), atom::meta::FFIError::CallbackNotFound);
+    EXPECT_EQ(missingResult.error().error(),
+              atom::meta::FFIError::CallbackNotFound);
 }
 
 // Test async callbacks

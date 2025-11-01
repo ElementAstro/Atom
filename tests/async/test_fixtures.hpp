@@ -9,7 +9,8 @@
 Date: 2024-12-22
 
 Description: Common test fixtures for Atom Async tests
-Provides base test fixtures and specialized fixtures for different component types.
+Provides base test fixtures and specialized fixtures for different component
+types.
 
 **************************************************/
 
@@ -17,11 +18,11 @@ Provides base test fixtures and specialized fixtures for different component typ
 #define ATOM_ASYNC_TEST_FIXTURES_HPP
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <thread>
+#include <vector>
 
 #include "test_utils.hpp"
 
@@ -53,36 +54,32 @@ protected:
 
         // Log test duration
         auto duration = std::chrono::steady_clock::now() - setupStartTime_;
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(duration);
-        if (ms.count() > 1000) { // Log if test takes more than 1 second
-            std::cout << "[SLOW TEST] " << ::testing::UnitTest::GetInstance()
-                         ->current_test_info()->name()
+        auto ms =
+            std::chrono::duration_cast<std::chrono::milliseconds>(duration);
+        if (ms.count() > 1000) {  // Log if test takes more than 1 second
+            std::cout << "[SLOW TEST] "
+                      << ::testing::UnitTest::GetInstance()
+                             ->current_test_info()
+                             ->name()
                       << " took " << ms.count() << "ms" << std::endl;
         }
     }
 
     // Helper methods available to all test fixtures
-    template<typename Func>
+    template <typename Func>
     void addTestThread(Func&& func) {
         threadManager_.addThread(std::forward<Func>(func));
     }
 
-    void joinAllThreads() {
-        threadManager_.joinAll();
-    }
+    void joinAllThreads() { threadManager_.joinAll(); }
 
-    ResourceTracker& getResourceTracker() {
-        return *resourceTracker_;
-    }
+    ResourceTracker& getResourceTracker() { return *resourceTracker_; }
 
-    TimingHelper createTimer() {
-        return TimingHelper{};
-    }
+    TimingHelper createTimer() { return TimingHelper{}; }
 
-    template<typename Duration>
-    void expectTimingRange(const Duration& actual,
-                          const Duration& min_duration,
-                          const Duration& max_duration) {
+    template <typename Duration>
+    void expectTimingRange(const Duration& actual, const Duration& min_duration,
+                           const Duration& max_duration) {
         EXPECT_GE(actual, min_duration)
             << "Duration " << actual.count() << " is less than minimum "
             << min_duration.count();
@@ -111,7 +108,8 @@ protected:
 
         // Threading-specific setup
         maxThreads_ = std::thread::hardware_concurrency();
-        if (maxThreads_ == 0) maxThreads_ = 4; // Fallback
+        if (maxThreads_ == 0)
+            maxThreads_ = 4;  // Fallback
     }
 
     void TearDown() override {
@@ -119,18 +117,19 @@ protected:
         AsyncTestBase::TearDown();
     }
 
-    size_t getMaxThreads() const {
-        return maxThreads_;
-    }
+    size_t getMaxThreads() const { return maxThreads_; }
 
-    template<typename Func>
+    template <typename Func>
     void runConcurrentTest(size_t numThreads, Func&& func) {
-        atom::async::test::runConcurrentTest(numThreads, std::forward<Func>(func));
+        atom::async::test::runConcurrentTest(numThreads,
+                                             std::forward<Func>(func));
     }
 
-    template<typename Func>
-    void runStressTest(size_t numThreads, size_t operationsPerThread, Func&& func) {
-        atom::async::test::runStressTest(numThreads, operationsPerThread, std::forward<Func>(func));
+    template <typename Func>
+    void runStressTest(size_t numThreads, size_t operationsPerThread,
+                       Func&& func) {
+        atom::async::test::runStressTest(numThreads, operationsPerThread,
+                                         std::forward<Func>(func));
     }
 
 private:
@@ -157,7 +156,7 @@ protected:
         return defaultTimeout_;
     }
 
-    template<typename SyncPrimitive, typename Func>
+    template <typename SyncPrimitive, typename Func>
     void testBasicSynchronization(SyncPrimitive& sync, Func&& func) {
         std::atomic<int> counter{0};
         std::atomic<bool> ready{false};
@@ -166,7 +165,8 @@ protected:
         const size_t incrementsPerThread = 100;
 
         for (size_t i = 0; i < numThreads; ++i) {
-            addTestThread([&sync, &counter, &ready, incrementsPerThread, func = std::forward<Func>(func)]() {
+            addTestThread([&sync, &counter, &ready, incrementsPerThread,
+                           func = std::forward<Func>(func)]() {
                 while (!ready.load()) {
                     std::this_thread::yield();
                 }
@@ -208,11 +208,9 @@ protected:
         return defaultTimerDelay_;
     }
 
-    std::chrono::milliseconds getTolerance() const {
-        return timerTolerance_;
-    }
+    std::chrono::milliseconds getTolerance() const { return timerTolerance_; }
 
-    template<typename Duration>
+    template <typename Duration>
     void expectTimerAccuracy(const Duration& actual, const Duration& expected) {
         auto tolerance = std::chrono::duration_cast<Duration>(timerTolerance_);
         expectTimingRange(actual, expected - tolerance, expected + tolerance);
@@ -243,7 +241,7 @@ protected:
         return defaultExecutionTimeout_;
     }
 
-    template<typename Future>
+    template <typename Future>
     auto waitForFuture(Future& future) -> decltype(future.get()) {
         auto status = future.wait_for(defaultExecutionTimeout_);
         EXPECT_EQ(status, std::future_status::ready)
@@ -251,8 +249,9 @@ protected:
         return future.get();
     }
 
-    template<typename Future>
-    bool waitForFutureWithTimeout(Future& future, std::chrono::milliseconds timeout) {
+    template <typename Future>
+    bool waitForFutureWithTimeout(Future& future,
+                                  std::chrono::milliseconds timeout) {
         auto status = future.wait_for(timeout);
         return status == std::future_status::ready;
     }
@@ -281,23 +280,24 @@ protected:
         return messageTimeout_;
     }
 
-    template<typename MessageQueue, typename Message>
+    template <typename MessageQueue, typename Message>
     void testProducerConsumerPattern(MessageQueue& queue,
-                                   const std::vector<Message>& messages) {
+                                     const std::vector<Message>& messages) {
         std::vector<Message> receivedMessages;
         std::mutex receivedMutex;
         std::atomic<bool> producerDone{false};
 
         // Consumer thread
-        addTestThread([&queue, &receivedMessages, &receivedMutex, &producerDone, this]() {
-            while (!producerDone.load() || !queue.empty()) {
-                Message msg;
-                if (queue.tryReceive(msg, messageTimeout_)) {
-                    std::lock_guard<std::mutex> lock(receivedMutex);
-                    receivedMessages.push_back(std::move(msg));
+        addTestThread(
+            [&queue, &receivedMessages, &receivedMutex, &producerDone, this]() {
+                while (!producerDone.load() || !queue.empty()) {
+                    Message msg;
+                    if (queue.tryReceive(msg, messageTimeout_)) {
+                        std::lock_guard<std::mutex> lock(receivedMutex);
+                        receivedMessages.push_back(std::move(msg));
+                    }
                 }
-            }
-        });
+            });
 
         // Producer thread
         addTestThread([&queue, &messages, &producerDone]() {
@@ -339,15 +339,13 @@ protected:
         performanceTimer_ = std::make_unique<TimingHelper>();
     }
 
-    void startPerformanceTimer() {
-        performanceTimer_->reset();
-    }
+    void startPerformanceTimer() { performanceTimer_->reset(); }
 
     TimingHelper::Duration getPerformanceTime() const {
         return performanceTimer_->elapsed();
     }
 
-    template<typename Func>
+    template <typename Func>
     TimingHelper::Duration measurePerformance(Func&& func) {
         TimingHelper timer;
         func();

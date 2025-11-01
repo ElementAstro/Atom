@@ -9,20 +9,21 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Generator
-Tests coroutine generators, two-way generators, edge cases, exception handling, and iterator patterns.
+Tests coroutine generators, two-way generators, edge cases, exception handling,
+and iterator patterns.
 
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <vector>
-#include <string>
-#include <stdexcept>
 #include <algorithm>
 #include <numeric>
+#include <stdexcept>
+#include <string>
+#include <vector>
 
-#include "atom/async/utils/generator.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/utils/generator.hpp"
 
 using namespace atom::async;
 
@@ -34,13 +35,9 @@ namespace atom::async::utils::test {
 
 class GeneratorTest : public atom::async::test::AsyncTestBase {
 protected:
-    void SetUp() override {
-        AsyncTestBase::SetUp();
-    }
+    void SetUp() override { AsyncTestBase::SetUp(); }
 
-    void TearDown() override {
-        AsyncTestBase::TearDown();
-    }
+    void TearDown() override { AsyncTestBase::TearDown(); }
 
     // Helper generator functions for testing
     Generator<int> simpleIntGenerator(int start, int end) {
@@ -104,7 +101,7 @@ TEST_F(GeneratorTest, GeneratorIteratorInterface) {
 
 // Test empty generator
 TEST_F(GeneratorTest, EmptyGenerator) {
-    auto gen = simpleIntGenerator(1, 0); // Empty range
+    auto gen = simpleIntGenerator(1, 0);  // Empty range
 
     auto it = gen.begin();
     EXPECT_EQ(it, gen.end());
@@ -141,7 +138,7 @@ TEST_F(GeneratorTest, GeneratorWithSTLAlgorithms) {
     EXPECT_EQ(values.back(), 10);
 
     int sum = std::accumulate(values.begin(), values.end(), 0);
-    EXPECT_EQ(sum, 55); // Sum of 1 to 10
+    EXPECT_EQ(sum, 55);  // Sum of 1 to 10
 }
 
 // Test range utility function
@@ -194,15 +191,15 @@ TEST_F(GeneratorTest, TwoWayGeneratorBasicFunctionality) {
 
     // First call should return 0 (initial value * 2)
     int result1 = gen.next(5);
-    EXPECT_EQ(result1, 0); // 0 * 2
+    EXPECT_EQ(result1, 0);  // 0 * 2
 
     // Second call should return 10 (5 * 2)
     int result2 = gen.next(7);
-    EXPECT_EQ(result2, 10); // 5 * 2
+    EXPECT_EQ(result2, 10);  // 5 * 2
 
     // Third call should return 14 (7 * 2)
     int result3 = gen.next(3);
-    EXPECT_EQ(result3, 14); // 7 * 2
+    EXPECT_EQ(result3, 14);  // 7 * 2
 }
 
 // Test TwoWayGenerator with void receive type
@@ -243,7 +240,7 @@ TEST_F(GeneratorTest, GeneratorExceptionHandling) {
         co_yield 1;
         co_yield 2;
         throw std::runtime_error("Generator exception");
-        co_yield 3; // Should not be reached
+        co_yield 3;  // Should not be reached
     };
 
     auto gen = throwingGenerator();
@@ -262,7 +259,7 @@ TEST_F(GeneratorTest, TwoWayGeneratorExceptionHandling) {
     auto throwingTwoWayGenerator = []() -> TwoWayGenerator<int, void> {
         co_yield 1;
         throw std::runtime_error("TwoWay generator exception");
-        co_yield 2; // Should not be reached
+        co_yield 2;  // Should not be reached
     };
 
     auto gen = throwingTwoWayGenerator();
@@ -323,7 +320,7 @@ TEST_F(GeneratorTest, GeneratorPerformance) {
     int count = 0;
     for (const auto& value : gen) {
         count++;
-        (void)value; // Suppress unused variable warning
+        (void)value;  // Suppress unused variable warning
     }
 
     auto elapsed = timer.elapsed();
@@ -331,7 +328,7 @@ TEST_F(GeneratorTest, GeneratorPerformance) {
     EXPECT_EQ(count, numValues);
 
     // Performance should be reasonable (this is a rough check)
-    EXPECT_LT(elapsed.count(), 1000000); // Less than 1 second
+    EXPECT_LT(elapsed.count(), 1000000);  // Less than 1 second
 
     std::cout << "Generator performance: " << numValues << " values in "
               << elapsed.count() << " microseconds" << std::endl;
@@ -485,7 +482,7 @@ TEST_F(GeneratorTest, GeneratorStatePreservation) {
     auto statefulGenerator = []() -> Generator<int> {
         int state = 0;
         while (state < 5) {
-            co_yield state * state;
+            co_yield state* state;
             state++;
         }
     };
@@ -496,7 +493,7 @@ TEST_F(GeneratorTest, GeneratorStatePreservation) {
         values.push_back(value);
     }
 
-    std::vector<int> expected = {0, 1, 4, 9, 16}; // Squares of 0, 1, 2, 3, 4
+    std::vector<int> expected = {0, 1, 4, 9, 16};  // Squares of 0, 1, 2, 3, 4
     EXPECT_EQ(values, expected);
 }
 

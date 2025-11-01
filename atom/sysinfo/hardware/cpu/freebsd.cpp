@@ -14,8 +14,8 @@ Description: System Information Module - CPU FreeBSD Implementation
 
 #ifdef __FreeBSD__
 
-#include "common.hpp"
 #include <spdlog/spdlog.h>
+#include "common.hpp"
 
 namespace atom::system {
 
@@ -28,7 +28,7 @@ auto getCPUModel_FreeBSD() -> std::string;
 // 这里应该添加所有函数的前向声明
 
 auto getCurrentCpuUsage_FreeBSD() -> float {
-    spdlog::info( "Starting getCurrentCpuUsage function on FreeBSD");
+    spdlog::info("Starting getCurrentCpuUsage function on FreeBSD");
 
     static std::mutex mutex;
     static long lastTotal = 0, lastIdle = 0;
@@ -41,7 +41,8 @@ auto getCurrentCpuUsage_FreeBSD() -> float {
     size_t len = sizeof(cp_time);
 
     if (sysctlbyname("kern.cp_time", &cp_time, &len, NULL, 0) != -1) {
-        long total = cp_time[CP_USER] + cp_time[CP_NICE] + cp_time[CP_SYS] + cp_time[CP_IDLE] + cp_time[CP_INTR];
+        long total = cp_time[CP_USER] + cp_time[CP_NICE] + cp_time[CP_SYS] +
+                     cp_time[CP_IDLE] + cp_time[CP_INTR];
         long idle = cp_time[CP_IDLE];
 
         if (lastTotal > 0 && lastIdle > 0) {
@@ -49,7 +50,8 @@ auto getCurrentCpuUsage_FreeBSD() -> float {
             long idleDiff = idle - lastIdle;
 
             if (totalDiff > 0) {
-                cpuUsage = 100.0f * (1.0f - (static_cast<float>(idleDiff) / totalDiff));
+                cpuUsage = 100.0f *
+                           (1.0f - (static_cast<float>(idleDiff) / totalDiff));
             }
         }
 
@@ -60,12 +62,12 @@ auto getCurrentCpuUsage_FreeBSD() -> float {
     // Clamp to 0-100 range
     cpuUsage = std::max(0.0f, std::min(100.0f, cpuUsage));
 
-    spdlog::info( "FreeBSD CPU Usage: {}%", cpuUsage);
+    spdlog::info("FreeBSD CPU Usage: {}%", cpuUsage);
     return cpuUsage;
 }
 
 auto getPerCoreCpuUsage() -> std::vector<float> {
-    spdlog::info( "Starting getPerCoreCpuUsage function on FreeBSD");
+    spdlog::info("Starting getPerCoreCpuUsage function on FreeBSD");
 
     static std::mutex mutex;
     static std::vector<long> lastTotals;
@@ -90,11 +92,13 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
         std::string sysctlName = "kern.cp_times";
         if (sysctlbyname(sysctlName.c_str(), NULL, &len, NULL, 0) != -1) {
             std::vector<long> times(len / sizeof(long));
-            if (sysctlbyname(sysctlName.c_str(), times.data(), &len, NULL, 0) != -1) {
+            if (sysctlbyname(sysctlName.c_str(), times.data(), &len, NULL, 0) !=
+                -1) {
                 // Each CPU has CPUSTATES values
                 int j = i * CPUSTATES;
-                long total = times[j + CP_USER] + times[j + CP_NICE] + times[j + CP_SYS] +
-                            times[j + CP_IDLE] + times[j + CP_INTR];
+                long total = times[j + CP_USER] + times[j + CP_NICE] +
+                             times[j + CP_SYS] + times[j + CP_IDLE] +
+                             times[j + CP_INTR];
                 long idle = times[j + CP_IDLE];
 
                 if (lastTotals[i] > 0 && lastIdles[i] > 0) {
@@ -102,8 +106,11 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
                     long idleDiff = idle - lastIdles[i];
 
                     if (totalDiff > 0) {
-                        coreUsages[i] = 100.0f * (1.0f - (static_cast<float>(idleDiff) / totalDiff));
-                        coreUsages[i] = std::max(0.0f, std::min(100.0f, coreUsages[i]));
+                        coreUsages[i] =
+                            100.0f *
+                            (1.0f - (static_cast<float>(idleDiff) / totalDiff));
+                        coreUsages[i] =
+                            std::max(0.0f, std::min(100.0f, coreUsages[i]));
                     }
                 }
 
@@ -113,7 +120,7 @@ auto getPerCoreCpuUsage() -> std::vector<float> {
         }
     }
 
-    spdlog::info( "FreeBSD Per-Core CPU Usage collected for {} cores", numCpus);
+    spdlog::info("FreeBSD Per-Core CPU Usage collected for {} cores", numCpus);
     return coreUsages;
 }
 
@@ -128,37 +135,45 @@ auto getCurrentCpuTemperature() -> float {
     size_t len = sizeof(temp_value);
 
     // Try hw.acpi.thermal.tz0.temperature first
-    if (sysctlbyname("hw.acpi.thermal.tz0.temperature", &temp_value, &len, nullptr, 0) == 0) {
+    if (sysctlbyname("hw.acpi.thermal.tz0.temperature", &temp_value, &len,
+                     nullptr, 0) == 0) {
         // Temperature is in tenths of Kelvin, convert to Celsius
         temperature = (temp_value / 10.0f) - 273.15f;
         found = true;
-        spdlog::debug("FreeBSD CPU Temperature from ACPI thermal zone: {}°C", temperature);
+        spdlog::debug("FreeBSD CPU Temperature from ACPI thermal zone: {}°C",
+                      temperature);
     }
 
     // Try dev.cpu.0.temperature (requires coretemp module)
     if (!found) {
         len = sizeof(temp_value);
-        if (sysctlbyname("dev.cpu.0.temperature", &temp_value, &len, nullptr, 0) == 0) {
+        if (sysctlbyname("dev.cpu.0.temperature", &temp_value, &len, nullptr,
+                         0) == 0) {
             // Temperature is in tenths of Kelvin, convert to Celsius
             temperature = (temp_value / 10.0f) - 273.15f;
             found = true;
-            spdlog::debug("FreeBSD CPU Temperature from dev.cpu.0: {}°C", temperature);
+            spdlog::debug("FreeBSD CPU Temperature from dev.cpu.0: {}°C",
+                          temperature);
         }
     }
 
     // Try dev.pchtherm.0.temperature as fallback
     if (!found) {
         len = sizeof(temp_value);
-        if (sysctlbyname("dev.pchtherm.0.temperature", &temp_value, &len, nullptr, 0) == 0) {
+        if (sysctlbyname("dev.pchtherm.0.temperature", &temp_value, &len,
+                         nullptr, 0) == 0) {
             // Temperature is in tenths of Kelvin, convert to Celsius
             temperature = (temp_value / 10.0f) - 273.15f;
             found = true;
-            spdlog::debug("FreeBSD CPU Temperature from PCH thermal: {}°C", temperature);
+            spdlog::debug("FreeBSD CPU Temperature from PCH thermal: {}°C",
+                          temperature);
         }
     }
 
     if (!found) {
-        spdlog::warn("FreeBSD: No CPU temperature sensor found. Ensure coretemp module is loaded or ACPI thermal zones are available.");
+        spdlog::warn(
+            "FreeBSD: No CPU temperature sensor found. Ensure coretemp module "
+            "is loaded or ACPI thermal zones are available.");
     } else {
         spdlog::info("FreeBSD CPU Temperature: {}°C", temperature);
     }
@@ -175,34 +190,42 @@ auto getPerCoreCpuTemperature() -> std::vector<float> {
 
     // Try to read per-core temperatures from dev.cpu.X.temperature
     for (int i = 0; i < numCores; ++i) {
-        std::string sysctl_name = "dev.cpu." + std::to_string(i) + ".temperature";
+        std::string sysctl_name =
+            "dev.cpu." + std::to_string(i) + ".temperature";
         int temp_value = 0;
         size_t len = sizeof(temp_value);
 
-        if (sysctlbyname(sysctl_name.c_str(), &temp_value, &len, nullptr, 0) == 0) {
+        if (sysctlbyname(sysctl_name.c_str(), &temp_value, &len, nullptr, 0) ==
+            0) {
             // Temperature is in tenths of Kelvin, convert to Celsius
             temperatures[i] = (temp_value / 10.0f) - 273.15f;
             foundCount++;
-            spdlog::debug("FreeBSD Core {} Temperature: {}°C", i, temperatures[i]);
+            spdlog::debug("FreeBSD Core {} Temperature: {}°C", i,
+                          temperatures[i]);
         } else {
             spdlog::debug("FreeBSD: Could not read temperature for core {}", i);
         }
     }
 
     if (foundCount == 0) {
-        spdlog::warn("FreeBSD: No per-core temperature sensors found. Ensure coretemp module is loaded.");
+        spdlog::warn(
+            "FreeBSD: No per-core temperature sensors found. Ensure coretemp "
+            "module is loaded.");
         // Fallback: use overall CPU temperature for all cores
         float overallTemp = getCurrentCpuTemperature();
         std::fill(temperatures.begin(), temperatures.end(), overallTemp);
     } else {
-        spdlog::info("FreeBSD Per-Core CPU Temperature: Retrieved {} of {} core temperatures", foundCount, numCores);
+        spdlog::info(
+            "FreeBSD Per-Core CPU Temperature: Retrieved {} of {} core "
+            "temperatures",
+            foundCount, numCores);
     }
 
     return temperatures;
 }
 
 auto getCPUModel() -> std::string {
-    spdlog::info( "Starting getCPUModel function on FreeBSD");
+    spdlog::info("Starting getCPUModel function on FreeBSD");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.model.empty()) {
         return g_cpuInfoCache.model;
@@ -218,12 +241,12 @@ auto getCPUModel() -> std::string {
         cpuModel = buffer;
     }
 
-    spdlog::info( "FreeBSD CPU Model: {}", cpuModel);
+    spdlog::info("FreeBSD CPU Model: {}", cpuModel);
     return cpuModel;
 }
 
 auto getProcessorIdentifier() -> std::string {
-    spdlog::info( "Starting getProcessorIdentifier function on FreeBSD");
+    spdlog::info("Starting getProcessorIdentifier function on FreeBSD");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.identifier.empty()) {
         return g_cpuInfoCache.identifier;
@@ -265,12 +288,12 @@ auto getProcessorIdentifier() -> std::string {
         identifier = "FreeBSD CPU";
     }
 
-    spdlog::info( "FreeBSD CPU Identifier: {}", identifier);
+    spdlog::info("FreeBSD CPU Identifier: {}", identifier);
     return identifier;
 }
 
 auto getProcessorFrequency() -> double {
-    spdlog::info( "Starting getProcessorFrequency function on FreeBSD");
+    spdlog::info("Starting getProcessorFrequency function on FreeBSD");
 
     double frequency = 0.0;
 
@@ -280,20 +303,21 @@ auto getProcessorFrequency() -> double {
 
     if (sysctlbyname("dev.cpu.0.freq", &freq, &len, NULL, 0) != -1) {
         // dev.cpu.0.freq returns frequency in MHz
-        frequency = static_cast<double>(freq) / 1000.0; // Convert MHz to GHz
+        frequency = static_cast<double>(freq) / 1000.0;  // Convert MHz to GHz
     } else {
         // Alternative: try hw.clockrate
         if (sysctlbyname("hw.clockrate", &freq, &len, NULL, 0) != -1) {
-            frequency = static_cast<double>(freq) / 1000.0; // Convert MHz to GHz
+            frequency =
+                static_cast<double>(freq) / 1000.0;  // Convert MHz to GHz
         }
     }
 
-    spdlog::info( "FreeBSD CPU Frequency: {} GHz", frequency);
+    spdlog::info("FreeBSD CPU Frequency: {} GHz", frequency);
     return frequency;
 }
 
 auto getMinProcessorFrequency() -> double {
-    spdlog::info( "Starting getMinProcessorFrequency function on FreeBSD");
+    spdlog::info("Starting getMinProcessorFrequency function on FreeBSD");
 
     double minFreq = 0.0;
 
@@ -304,7 +328,8 @@ auto getMinProcessorFrequency() -> double {
     // Some FreeBSD systems expose this information
     if (sysctlbyname("dev.cpu.0.freq_levels", NULL, &len, NULL, 0) != -1) {
         std::vector<char> freqLevels(len);
-        if (sysctlbyname("dev.cpu.0.freq_levels", freqLevels.data(), &len, NULL, 0) != -1) {
+        if (sysctlbyname("dev.cpu.0.freq_levels", freqLevels.data(), &len, NULL,
+                         0) != -1) {
             std::string levels(freqLevels.begin(), freqLevels.end());
 
             // Format is typically "frequency/power frequency/power ..."
@@ -315,9 +340,11 @@ auto getMinProcessorFrequency() -> double {
                 pos = lastLevel.find('/');
                 if (pos != std::string::npos) {
                     try {
-                        minFreq = std::stod(lastLevel.substr(0, pos)) / 1000.0; // Convert MHz to GHz
+                        minFreq = std::stod(lastLevel.substr(0, pos)) /
+                                  1000.0;  // Convert MHz to GHz
                     } catch (const std::exception& e) {
-                        spdlog::warn( "Error parsing min frequency: {}", e.what());
+                        spdlog::warn("Error parsing min frequency: {}",
+                                     e.what());
                     }
                 }
             }
@@ -329,19 +356,20 @@ auto getMinProcessorFrequency() -> double {
         // As a fallback, estimate min as a fraction of current
         double currentFreq = getProcessorFrequency();
         if (currentFreq > 0.0) {
-            minFreq = currentFreq * 0.5; // Estimate as half the current frequency
-            spdlog::info( "Estimating min CPU frequency as {} GHz", minFreq);
+            minFreq =
+                currentFreq * 0.5;  // Estimate as half the current frequency
+            spdlog::info("Estimating min CPU frequency as {} GHz", minFreq);
         } else {
-            minFreq = 1.0; // Default fallback
+            minFreq = 1.0;  // Default fallback
         }
     }
 
-    spdlog::info( "FreeBSD CPU Min Frequency: {} GHz", minFreq);
+    spdlog::info("FreeBSD CPU Min Frequency: {} GHz", minFreq);
     return minFreq;
 }
 
 auto getMaxProcessorFrequency() -> double {
-    spdlog::info( "Starting getMaxProcessorFrequency function on FreeBSD");
+    spdlog::info("Starting getMaxProcessorFrequency function on FreeBSD");
 
     double maxFreq = 0.0;
 
@@ -352,7 +380,8 @@ auto getMaxProcessorFrequency() -> double {
     // Some FreeBSD systems expose this information
     if (sysctlbyname("dev.cpu.0.freq_levels", NULL, &len, NULL, 0) != -1) {
         std::vector<char> freqLevels(len);
-        if (sysctlbyname("dev.cpu.0.freq_levels", freqLevels.data(), &len, NULL, 0) != -1) {
+        if (sysctlbyname("dev.cpu.0.freq_levels", freqLevels.data(), &len, NULL,
+                         0) != -1) {
             std::string levels(freqLevels.begin(), freqLevels.end());
 
             // Format is typically "frequency/power frequency/power ..."
@@ -360,9 +389,10 @@ auto getMaxProcessorFrequency() -> double {
             size_t pos = levels.find('/');
             if (pos != std::string::npos) {
                 try {
-                    maxFreq = std::stod(levels.substr(0, pos)) / 1000.0; // Convert MHz to GHz
+                    maxFreq = std::stod(levels.substr(0, pos)) /
+                              1000.0;  // Convert MHz to GHz
                 } catch (const std::exception& e) {
-                    spdlog::warn( "Error parsing max frequency: {}", e.what());
+                    spdlog::warn("Error parsing max frequency: {}", e.what());
                 }
             }
         }
@@ -371,15 +401,15 @@ auto getMaxProcessorFrequency() -> double {
     // If we couldn't find a max frequency, use current as fallback
     if (maxFreq <= 0.0) {
         maxFreq = getProcessorFrequency();
-        spdlog::info( "Using current CPU frequency as max: {} GHz", maxFreq);
+        spdlog::info("Using current CPU frequency as max: {} GHz", maxFreq);
     }
 
-    spdlog::info( "FreeBSD CPU Max Frequency: {} GHz", maxFreq);
+    spdlog::info("FreeBSD CPU Max Frequency: {} GHz", maxFreq);
     return maxFreq;
 }
 
 auto getPerCoreFrequencies() -> std::vector<double> {
-    spdlog::info( "Starting getPerCoreFrequencies function on FreeBSD");
+    spdlog::info("Starting getPerCoreFrequencies function on FreeBSD");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<double> frequencies(numCores, 0.0);
@@ -393,7 +423,8 @@ auto getPerCoreFrequencies() -> std::vector<double> {
 
         if (sysctlbyname(sysctlName.c_str(), &freq, &len, NULL, 0) != -1) {
             // dev.cpu.N.freq returns frequency in MHz
-            frequencies[i] = static_cast<double>(freq) / 1000.0; // Convert MHz to GHz
+            frequencies[i] =
+                static_cast<double>(freq) / 1000.0;  // Convert MHz to GHz
         } else {
             // Fall back to overall CPU frequency
             if (i == 0) {
@@ -404,12 +435,13 @@ auto getPerCoreFrequencies() -> std::vector<double> {
         }
     }
 
-    spdlog::info( "FreeBSD Per-Core CPU Frequencies collected for {} cores", numCores);
+    spdlog::info("FreeBSD Per-Core CPU Frequencies collected for {} cores",
+                 numCores);
     return frequencies;
 }
 
 auto getNumberOfPhysicalPackages() -> int {
-    spdlog::info( "Starting getNumberOfPhysicalPackages function on FreeBSD");
+    spdlog::info("Starting getNumberOfPhysicalPackages function on FreeBSD");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalPackages > 0) {
         return g_cpuInfoCache.numPhysicalPackages;
@@ -423,16 +455,17 @@ auto getNumberOfPhysicalPackages() -> int {
     int packages = 0;
     size_t len = sizeof(packages);
 
-    if (sysctlbyname("hw.packages", &packages, &len, NULL, 0) != -1 && packages > 0) {
+    if (sysctlbyname("hw.packages", &packages, &len, NULL, 0) != -1 &&
+        packages > 0) {
         numberOfPackages = packages;
     }
 
-    spdlog::info( "FreeBSD Physical CPU Packages: {}", numberOfPackages);
+    spdlog::info("FreeBSD Physical CPU Packages: {}", numberOfPackages);
     return numberOfPackages;
 }
 
 auto getNumberOfPhysicalCores() -> int {
-    spdlog::info( "Starting getNumberOfPhysicalCores function on FreeBSD");
+    spdlog::info("Starting getNumberOfPhysicalCores function on FreeBSD");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numPhysicalCores > 0) {
         return g_cpuInfoCache.numPhysicalCores;
@@ -452,8 +485,11 @@ auto getNumberOfPhysicalCores() -> int {
         int hyperThreading = 0;
         len = sizeof(hyperThreading);
 
-        if (sysctlbyname("hw.cpu_hyperthreading", &hyperThreading, &len, NULL, 0) != -1 && hyperThreading) {
-            numberOfCores /= 2; // If hyperthreading is enabled, logical cores = 2 * physical cores
+        if (sysctlbyname("hw.cpu_hyperthreading", &hyperThreading, &len, NULL,
+                         0) != -1 &&
+            hyperThreading) {
+            numberOfCores /= 2;  // If hyperthreading is enabled, logical cores
+                                 // = 2 * physical cores
         }
     }
 
@@ -462,12 +498,12 @@ auto getNumberOfPhysicalCores() -> int {
         numberOfCores = 1;
     }
 
-    spdlog::info( "FreeBSD Physical CPU Cores: {}", numberOfCores);
+    spdlog::info("FreeBSD Physical CPU Cores: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getNumberOfLogicalCores() -> int {
-    spdlog::info( "Starting getNumberOfLogicalCores function on FreeBSD");
+    spdlog::info("Starting getNumberOfLogicalCores function on FreeBSD");
 
     if (!needsCacheRefresh() && g_cpuInfoCache.numLogicalCores > 0) {
         return g_cpuInfoCache.numLogicalCores;
@@ -491,12 +527,12 @@ auto getNumberOfLogicalCores() -> int {
         numberOfCores = 1;
     }
 
-    spdlog::info( "FreeBSD Logical CPU Cores: {}", numberOfCores);
+    spdlog::info("FreeBSD Logical CPU Cores: {}", numberOfCores);
     return numberOfCores;
 }
 
 auto getCacheSizes() -> CacheSizes {
-    spdlog::info( "Starting getCacheSizes function on FreeBSD");
+    spdlog::info("Starting getCacheSizes function on FreeBSD");
 
     if (!needsCacheRefresh() &&
         (g_cpuInfoCache.caches.l1d > 0 || g_cpuInfoCache.caches.l2 > 0 ||
@@ -540,14 +576,15 @@ auto getCacheSizes() -> CacheSizes {
         cacheSizes.l3_line_size = lineSize;
     }
 
-    spdlog::info( "FreeBSD Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
-          cacheSizes.l1d / 1024, cacheSizes.l1i / 1024, cacheSizes.l2 / 1024, cacheSizes.l3 / 1024);
+    spdlog::info("FreeBSD Cache Sizes: L1d={}KB, L1i={}KB, L2={}KB, L3={}KB",
+                 cacheSizes.l1d / 1024, cacheSizes.l1i / 1024,
+                 cacheSizes.l2 / 1024, cacheSizes.l3 / 1024);
 
     return cacheSizes;
 }
 
 auto getCpuLoadAverage() -> LoadAverage {
-    spdlog::info( "Starting getCpuLoadAverage function on FreeBSD");
+    spdlog::info("Starting getCpuLoadAverage function on FreeBSD");
 
     LoadAverage loadAvg{0.0, 0.0, 0.0};
 
@@ -558,25 +595,25 @@ auto getCpuLoadAverage() -> LoadAverage {
         loadAvg.fifteenMinutes = avg[2];
     }
 
-    spdlog::info( "FreeBSD Load Average: {}, {}, {}",
-          loadAvg.oneMinute, loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
+    spdlog::info("FreeBSD Load Average: {}, {}, {}", loadAvg.oneMinute,
+                 loadAvg.fiveMinutes, loadAvg.fifteenMinutes);
 
     return loadAvg;
 }
 
 auto getCpuPowerInfo() -> CpuPowerInfo {
-    spdlog::info( "Starting getCpuPowerInfo function on FreeBSD");
+    spdlog::info("Starting getCpuPowerInfo function on FreeBSD");
 
     CpuPowerInfo powerInfo{0.0, 0.0, 0.0};
 
     // FreeBSD doesn't provide CPU power information through a simple API
 
-    spdlog::info( "FreeBSD CPU Power Info: Not implemented");
+    spdlog::info("FreeBSD CPU Power Info: Not implemented");
     return powerInfo;
 }
 
 auto getCpuFeatureFlags() -> std::vector<std::string> {
-    spdlog::info( "Starting getCpuFeatureFlags function on FreeBSD");
+    spdlog::info("Starting getCpuFeatureFlags function on FreeBSD");
 
     if (!needsCacheRefresh() && !g_cpuInfoCache.flags.empty()) {
         return g_cpuInfoCache.flags;
@@ -624,16 +661,17 @@ auto getCpuFeatureFlags() -> std::vector<std::string> {
     std::sort(flags.begin(), flags.end());
     flags.erase(std::unique(flags.begin(), flags.end()), flags.end());
 
-    spdlog::info( "FreeBSD CPU Flags: {} features collected", flags.size());
+    spdlog::info("FreeBSD CPU Flags: {} features collected", flags.size());
     return flags;
 }
 
 auto getCpuArchitecture() -> CpuArchitecture {
-    spdlog::info( "Starting getCpuArchitecture function on FreeBSD");
+    spdlog::info("Starting getCpuArchitecture function on FreeBSD");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
-        if (g_cacheInitialized && g_cpuInfoCache.architecture != CpuArchitecture::UNKNOWN) {
+        if (g_cacheInitialized &&
+            g_cpuInfoCache.architecture != CpuArchitecture::UNKNOWN) {
             return g_cpuInfoCache.architecture;
         }
     }
@@ -662,12 +700,12 @@ auto getCpuArchitecture() -> CpuArchitecture {
         }
     }
 
-    spdlog::info( "FreeBSD CPU Architecture: {}", cpuArchitectureToString(arch));
+    spdlog::info("FreeBSD CPU Architecture: {}", cpuArchitectureToString(arch));
     return arch;
 }
 
 auto getCpuVendor() -> CpuVendor {
-    spdlog::info( "Starting getCpuVendor function on FreeBSD");
+    spdlog::info("Starting getCpuVendor function on FreeBSD");
 
     if (!needsCacheRefresh()) {
         std::lock_guard<std::mutex> lock(g_cacheMutex);
@@ -688,7 +726,8 @@ auto getCpuVendor() -> CpuVendor {
 
     vendor = getVendorFromString(vendorString);
 
-    spdlog::info( "FreeBSD CPU Vendor: {} ({})", vendorString, cpuVendorToString(vendor));
+    spdlog::info("FreeBSD CPU Vendor: {} ({})", vendorString,
+                 cpuVendorToString(vendor));
     return vendor;
 }
 
@@ -707,15 +746,20 @@ auto getCpuSocketType() -> std::string {
 
     // Common socket type patterns based on CPU model
     if (model.find("Intel") != std::string::npos) {
-        if (model.find("Core i9") != std::string::npos || model.find("Core i7") != std::string::npos ||
-            model.find("Core i5") != std::string::npos || model.find("Core i3") != std::string::npos) {
+        if (model.find("Core i9") != std::string::npos ||
+            model.find("Core i7") != std::string::npos ||
+            model.find("Core i5") != std::string::npos ||
+            model.find("Core i3") != std::string::npos) {
             // Modern Intel desktop/laptop CPUs
-            if (model.find("12th Gen") != std::string::npos || model.find("13th Gen") != std::string::npos ||
+            if (model.find("12th Gen") != std::string::npos ||
+                model.find("13th Gen") != std::string::npos ||
                 model.find("14th Gen") != std::string::npos) {
                 socketType = "LGA1700";
-            } else if (model.find("10th Gen") != std::string::npos || model.find("11th Gen") != std::string::npos) {
+            } else if (model.find("10th Gen") != std::string::npos ||
+                       model.find("11th Gen") != std::string::npos) {
                 socketType = "LGA1200";
-            } else if (model.find("8th Gen") != std::string::npos || model.find("9th Gen") != std::string::npos) {
+            } else if (model.find("8th Gen") != std::string::npos ||
+                       model.find("9th Gen") != std::string::npos) {
                 socketType = "LGA1151";
             } else {
                 socketType = "Intel Socket (Unknown Generation)";
@@ -727,7 +771,8 @@ auto getCpuSocketType() -> std::string {
         if (model.find("Ryzen") != std::string::npos) {
             if (model.find("7000") != std::string::npos) {
                 socketType = "AM5";
-            } else if (model.find("5000") != std::string::npos || model.find("3000") != std::string::npos) {
+            } else if (model.find("5000") != std::string::npos ||
+                       model.find("3000") != std::string::npos) {
                 socketType = "AM4";
             } else {
                 socketType = "AMD Socket (Unknown Generation)";
@@ -739,7 +784,8 @@ auto getCpuSocketType() -> std::string {
         }
     }
 
-    spdlog::info("FreeBSD CPU Socket Type: {} (inferred from model)", socketType);
+    spdlog::info("FreeBSD CPU Socket Type: {} (inferred from model)",
+                 socketType);
 
     std::lock_guard<std::mutex> lock(g_cacheMutex);
     g_cpuInfoCache.socketType = socketType;
@@ -748,7 +794,7 @@ auto getCpuSocketType() -> std::string {
 }
 
 auto getCpuScalingGovernor() -> std::string {
-    spdlog::info( "Starting getCpuScalingGovernor function on FreeBSD");
+    spdlog::info("Starting getCpuScalingGovernor function on FreeBSD");
 
     std::string governor = "Unknown";
 
@@ -769,7 +815,8 @@ auto getCpuScalingGovernor() -> std::string {
         int economy = 0, performance = 0;
         size_t len = sizeof(economy);
 
-        if (sysctlbyname("hw.acpi.cpu.px_dom0.select", &economy, &len, NULL, 0) != -1) {
+        if (sysctlbyname("hw.acpi.cpu.px_dom0.select", &economy, &len, NULL,
+                         0) != -1) {
             if (economy == 0) {
                 governor = "performance";
             } else {
@@ -778,12 +825,12 @@ auto getCpuScalingGovernor() -> std::string {
         }
     }
 
-    spdlog::info( "FreeBSD CPU Scaling Governor: {}", governor);
+    spdlog::info("FreeBSD CPU Scaling Governor: {}", governor);
     return governor;
 }
 
 auto getPerCoreScalingGovernors() -> std::vector<std::string> {
-    spdlog::info( "Starting getPerCoreScalingGovernors function on FreeBSD");
+    spdlog::info("Starting getPerCoreScalingGovernors function on FreeBSD");
 
     int numCores = getNumberOfLogicalCores();
     std::vector<std::string> governors(numCores);
@@ -795,10 +842,11 @@ auto getPerCoreScalingGovernors() -> std::vector<std::string> {
         governors[i] = governor;
     }
 
-    spdlog::info( "FreeBSD Per-Core Scaling Governors: {} (same for all cores)", governor);
+    spdlog::info("FreeBSD Per-Core Scaling Governors: {} (same for all cores)",
+                 governor);
     return governors;
 }
 
-} // namespace atom::system
+}  // namespace atom::system
 
 #endif /* __FreeBSD__ */

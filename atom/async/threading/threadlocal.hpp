@@ -210,8 +210,8 @@ public:
     EnhancedThreadLocal(EnhancedThreadLocal&&) noexcept = default;
 
     // Move assignment operator
-    auto operator=(EnhancedThreadLocal&&) noexcept
-        -> EnhancedThreadLocal& = default;
+    auto operator=(EnhancedThreadLocal&&) noexcept -> EnhancedThreadLocal& =
+                                                          default;
 
     /**
      * @brief Destructor, responsible for cleaning up all thread values
@@ -300,7 +300,8 @@ public:
      * @brief Get the thread-local value for the current thread (const version)
      *
      * @return Const reference to the thread-local value
-     * @throws ThreadLocalException If the value has not been set for this thread
+     * @throws ThreadLocalException If the value has not been set for this
+     * thread
      */
     auto get() const -> const T& {
         auto tid = std::this_thread::get_id();
@@ -308,8 +309,9 @@ public:
 
         auto it = values_.find(tid);
         if (it == values_.end() || !it->second.has_value()) {
-            throw ThreadLocalException(ThreadLocalError::ValueNotFound,
-                                       "Thread-local value not set for this thread");
+            throw ThreadLocalException(
+                ThreadLocalError::ValueNotFound,
+                "Thread-local value not set for this thread");
         }
 
         return it->second.value();
@@ -350,7 +352,7 @@ public:
      */
     template <typename Factory>
         requires std::invocable<Factory> &&
-                 std::convertible_to<std::invoke_result_t<Factory>, T>
+                     std::convertible_to<std::invoke_result_t<Factory>, T>
     auto getOrCreate(Factory&& factory) -> T& {
         auto tid = std::this_thread::get_id();
         std::unique_lock lock(mutex_);

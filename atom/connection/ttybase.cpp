@@ -15,6 +15,7 @@
 
 #ifdef _WIN32
 // clang-format off
+#include <winsock2.h>
 #include <windows.h>
 #include <io.h>
 // clang-format on

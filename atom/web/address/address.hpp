@@ -63,8 +63,8 @@ public:
      * @return True if the address is within the range, false otherwise.
      * @throws AddressRangeError if the range is invalid.
      */
-    virtual auto isInRange(std::string_view start, std::string_view end)
-        -> bool = 0;
+    virtual auto isInRange(std::string_view start,
+                           std::string_view end) -> bool = 0;
 
     /**
      * @brief Converts the address to its binary representation.
@@ -118,9 +118,8 @@ public:
      * @return True if the addresses are in the same subnet, false otherwise.
      * @throws InvalidAddressFormat if the mask format is invalid.
      */
-    [[nodiscard]] virtual auto isSameSubnet(const Address& other,
-                                            std::string_view mask) const
-        -> bool = 0;
+    [[nodiscard]] virtual auto isSameSubnet(
+        const Address& other, std::string_view mask) const -> bool = 0;
 
     /**
      * @brief Converts the address to its hexadecimal representation.

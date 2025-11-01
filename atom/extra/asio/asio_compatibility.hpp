@@ -69,7 +69,8 @@ using result_tuple = std::tuple<error_code, T>;
  */
 template <typename AsyncOperation>
 auto as_tuple_awaitable(AsyncOperation&& op) {
-#if defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) || defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)
+#if defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) || \
+    defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)
     return std::forward<AsyncOperation>(op)(
         net::experimental::as_tuple(use_awaitable));
 #else

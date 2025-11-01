@@ -124,12 +124,10 @@ TEST_F(CompatTest, ErrorExpected) {
 }
 
 TEST_F(CompatTest, ErrorExpectedWithCustomErrorType) {
-    enum class ErrorCode {
-        NOT_FOUND = 404,
-        INTERNAL_ERROR = 500
-    };
+    enum class ErrorCode { NOT_FOUND = 404, INTERNAL_ERROR = 500 };
 
-    expected<std::string, ErrorCode> result = unexpected<ErrorCode>(ErrorCode::NOT_FOUND);
+    expected<std::string, ErrorCode> result =
+        unexpected<ErrorCode>(ErrorCode::NOT_FOUND);
 
     EXPECT_FALSE(result.has_value());
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
@@ -146,7 +144,8 @@ TEST_F(CompatTest, ValueAccess) {
 
     // Test value() method
     EXPECT_EQ(success_result.value(), 42);
-    EXPECT_THROW([[maybe_unused]] auto _ = error_result.value(), std::exception);  // Should throw on error
+    EXPECT_THROW([[maybe_unused]] auto _ = error_result.value(),
+                 std::exception);  // Should throw on error
 
     // Test dereference operator
     EXPECT_EQ(*success_result, 42);
@@ -186,17 +185,15 @@ TEST_F(CompatTest, MonadicOperations) {
     expected<int> error_result = unexpected<std::string>("error");
 
     // Test and_then (if available)
-    auto doubled = success_result.and_then([](int value) -> expected<int> {
-        return value * 2;
-    });
+    auto doubled = success_result.and_then(
+        [](int value) -> expected<int> { return value * 2; });
 
     EXPECT_TRUE(doubled.has_value());
     EXPECT_EQ(doubled.value(), 84);
 
     // Test and_then with error
-    auto error_doubled = error_result.and_then([](int value) -> expected<int> {
-        return value * 2;
-    });
+    auto error_doubled = error_result.and_then(
+        [](int value) -> expected<int> { return value * 2; });
 
     EXPECT_FALSE(error_doubled.has_value());
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
@@ -240,15 +237,20 @@ TEST_F(CompatTest, TypeTraits) {
     // Test that expected and unexpected are the correct types
     static_assert(std::is_same_v<expected<int>, expected<int, std::string>>);
 
-    // Test that we can detect if we're using std::expected or custom implementation
+    // Test that we can detect if we're using std::expected or custom
+    // implementation
 #if defined(__cpp_lib_expected) && __cpp_lib_expected >= 202202L
     // Using std::expected
-    static_assert(std::is_same_v<expected<int>, std::expected<int, std::string>>);
-    static_assert(std::is_same_v<unexpected<std::string>, std::unexpected<std::string>>);
+    static_assert(
+        std::is_same_v<expected<int>, std::expected<int, std::string>>);
+    static_assert(
+        std::is_same_v<unexpected<std::string>, std::unexpected<std::string>>);
 #else
     // Using custom implementation
-    static_assert(std::is_same_v<expected<int>, ::atom::type::expected<int, std::string>>);
-    static_assert(std::is_same_v<unexpected<std::string>, ::atom::type::unexpected<std::string>>);
+    static_assert(std::is_same_v<expected<int>,
+                                 ::atom::type::expected<int, std::string>>);
+    static_assert(std::is_same_v<unexpected<std::string>,
+                                 ::atom::type::unexpected<std::string>>);
 #endif
 }
 

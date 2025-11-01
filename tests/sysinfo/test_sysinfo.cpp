@@ -15,10 +15,10 @@ and system utilities.
 **************************************************/
 
 #include <gtest/gtest.h>
+#include <chrono>
 #include <memory>
 #include <string>
 #include <vector>
-#include <chrono>
 
 #include "atom/sysinfo/battery.hpp"
 #include "atom/sysinfo/bios.hpp"
@@ -55,17 +55,17 @@ protected:
 
 TEST_F(CPUInfoTest, CPUBasicInfo) {
     // Test basic CPU information retrieval
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(CPUInfoTest, CPUPerformanceMetrics) {
     // Test CPU performance metrics
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(CPUInfoTest, CPUCoreCount) {
     // Test CPU core count detection
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -85,17 +85,17 @@ protected:
 
 TEST_F(MemoryInfoTest, MemoryBasicInfo) {
     // Test basic memory information retrieval
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(MemoryInfoTest, MemoryUsage) {
     // Test memory usage monitoring
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(MemoryInfoTest, MemoryAvailability) {
     // Test available memory detection
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -115,17 +115,17 @@ protected:
 
 TEST_F(DiskInfoTest, DiskBasicInfo) {
     // Test basic disk information retrieval
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(DiskInfoTest, DiskSpace) {
     // Test disk space monitoring
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(DiskInfoTest, DiskPerformance) {
     // Test disk performance metrics
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -145,17 +145,17 @@ protected:
 
 TEST_F(GPUInfoTest, GPUBasicInfo) {
     // Test basic GPU information retrieval
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(GPUInfoTest, GPUMemory) {
     // Test GPU memory information
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(GPUInfoTest, GPUPerformance) {
     // Test GPU performance metrics
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -175,17 +175,17 @@ protected:
 
 TEST_F(BatteryInfoTest, BatteryStatus) {
     // Test battery status detection
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(BatteryInfoTest, BatteryLevel) {
     // Test battery level monitoring
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(BatteryInfoTest, PowerManagement) {
     // Test power management features
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -205,17 +205,17 @@ protected:
 
 TEST_F(OSInfoTest, OSBasicInfo) {
     // Test basic OS information retrieval
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(OSInfoTest, OSVersion) {
     // Test OS version detection
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(OSInfoTest, SystemUptime) {
     // Test system uptime monitoring
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -235,17 +235,17 @@ protected:
 
 TEST_F(NetworkInfoTest, NetworkInterfaces) {
     // Test network interface detection
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(NetworkInfoTest, WiFiInfo) {
     // Test WiFi information retrieval
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(NetworkInfoTest, NetworkPerformance) {
     // Test network performance metrics
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -265,12 +265,12 @@ protected:
 
 TEST_F(SysInfoPrinterTest, PrintSystemInfo) {
     // Test system information printing
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 TEST_F(SysInfoPrinterTest, FormatOutput) {
     // Test output formatting
-    EXPECT_TRUE(true); // Placeholder - implement actual tests
+    EXPECT_TRUE(true);  // Placeholder - implement actual tests
 }
 
 // ============================================================================
@@ -410,10 +410,11 @@ TEST_F(SysInfoIntegrationTest, CrossComponentConsistency) {
 
     // CPU core count should be reasonable relative to memory
     EXPECT_GT(cpuInfo.numLogicalCores, 0);
-    EXPECT_LE(cpuInfo.numLogicalCores, 1024); // Reasonable upper bound
+    EXPECT_LE(cpuInfo.numLogicalCores, 1024);  // Reasonable upper bound
 
     // Memory should be reasonable relative to system
-    EXPECT_GT(memInfo.totalPhysicalMemory, 512ULL * 1024 * 1024); // At least 512MB
+    EXPECT_GT(memInfo.totalPhysicalMemory,
+              512ULL * 1024 * 1024);  // At least 512MB
 
     // Disk and OS consistency
     std::vector<DiskInfo> disks = getDiskInfo();
@@ -422,7 +423,8 @@ TEST_F(SysInfoIntegrationTest, CrossComponentConsistency) {
     // At least one disk should contain the OS
     bool hasSystemDisk = false;
     for (const auto& disk : disks) {
-        if (disk.path == "/" || disk.path == "C:\\" || disk.path.find("System") != std::string::npos) {
+        if (disk.path == "/" || disk.path == "C:\\" ||
+            disk.path.find("System") != std::string::npos) {
             hasSystemDisk = true;
             break;
         }
@@ -437,15 +439,15 @@ TEST_F(SysInfoIntegrationTest, SystemInfoPrinterIntegration) {
     // Generate full report
     std::string fullReport = SystemInfoPrinter::generateFullReport();
     EXPECT_FALSE(fullReport.empty());
-    EXPECT_GT(fullReport.length(), 100); // Should be substantial
+    EXPECT_GT(fullReport.length(), 100);  // Should be substantial
 
     // Report should contain information from multiple components
     EXPECT_TRUE(fullReport.find("CPU") != std::string::npos ||
-               fullReport.find("Processor") != std::string::npos);
+                fullReport.find("Processor") != std::string::npos);
     EXPECT_TRUE(fullReport.find("Memory") != std::string::npos ||
-               fullReport.find("RAM") != std::string::npos);
+                fullReport.find("RAM") != std::string::npos);
     EXPECT_TRUE(fullReport.find("Operating System") != std::string::npos ||
-               fullReport.find("OS") != std::string::npos);
+                fullReport.find("OS") != std::string::npos);
 
     // Generate simple report
     std::string simpleReport = SystemInfoPrinter::generateSimpleReport();
@@ -489,7 +491,8 @@ TEST_F(SysInfoIntegrationTest, BatteryAndPowerIntegration) {
         EXPECT_LE(battery.batteryLifePercent, 100.0f);
 
         // Test battery formatting
-        std::string batteryFormatted = SystemInfoPrinter::formatBatteryInfo(battery);
+        std::string batteryFormatted =
+            SystemInfoPrinter::formatBatteryInfo(battery);
         EXPECT_FALSE(batteryFormatted.empty());
 
         // CPU power info should be related to battery if available
@@ -497,7 +500,7 @@ TEST_F(SysInfoIntegrationTest, BatteryAndPowerIntegration) {
         if (cpuPower.currentWatts > 0 && battery.voltageNow > 0) {
             // Both should report reasonable power values
             EXPECT_GT(cpuPower.currentWatts, 0.0);
-            EXPECT_LT(cpuPower.currentWatts, 1000.0); // Less than 1000W
+            EXPECT_LT(cpuPower.currentWatts, 1000.0);  // Less than 1000W
         }
     }
 }
@@ -625,8 +628,9 @@ TEST_F(PerformanceMonitoringTest, MemoryPerformanceMonitoring) {
 
     // Memory usage should be consistent over short periods
     for (size_t i = 1; i < memoryUsageHistory.size(); ++i) {
-        float diff = std::abs(memoryUsageHistory[i] - memoryUsageHistory[i-1]);
-        EXPECT_LT(diff, 50.0f); // Should not change by more than 50% quickly
+        float diff =
+            std::abs(memoryUsageHistory[i] - memoryUsageHistory[i - 1]);
+        EXPECT_LT(diff, 50.0f);  // Should not change by more than 50% quickly
     }
 }
 
@@ -644,7 +648,8 @@ TEST_F(PerformanceMonitoringTest, NetworkPerformanceMonitoring) {
         EXPECT_GE(stats.latency, 0.0);
         EXPECT_GE(stats.packetLoss, 0.0);
         EXPECT_LE(stats.packetLoss, 100.0);
-        EXPECT_GE(stats.signalStrength, -150.0); // Reasonable lower bound for signal
+        EXPECT_GE(stats.signalStrength,
+                  -150.0);  // Reasonable lower bound for signal
 
         std::this_thread::sleep_for(std::chrono::milliseconds(300));
     }
@@ -654,7 +659,8 @@ TEST_F(PerformanceMonitoringTest, NetworkPerformanceMonitoring) {
         EXPECT_GE(networkStatsHistory[i].downloadSpeed, 0.0);
         EXPECT_GE(networkStatsHistory[i].uploadSpeed, 0.0);
         EXPECT_GE(networkStatsHistory[i].latency, 0.0);
-        EXPECT_LT(networkStatsHistory[i].latency, 10000.0); // Less than 10 seconds
+        EXPECT_LT(networkStatsHistory[i].latency,
+                  10000.0);  // Less than 10 seconds
     }
 }
 
@@ -672,14 +678,16 @@ TEST_F(PerformanceMonitoringTest, SystemUptimeMonitoring) {
 
     // Uptime should be monotonically increasing
     for (size_t i = 1; i < uptimeHistory.size(); ++i) {
-        EXPECT_GE(uptimeHistory[i].count(), uptimeHistory[i-1].count());
+        EXPECT_GE(uptimeHistory[i].count(), uptimeHistory[i - 1].count());
     }
 
     // Uptime should increase by approximately the sleep duration
     if (uptimeHistory.size() >= 2) {
-        auto uptimeDiff = uptimeHistory.back().count() - uptimeHistory.front().count();
-        EXPECT_GE(uptimeDiff, 0); // At least some time should have passed
-        EXPECT_LT(uptimeDiff, 10); // Should be less than 10 seconds for this test
+        auto uptimeDiff =
+            uptimeHistory.back().count() - uptimeHistory.front().count();
+        EXPECT_GE(uptimeDiff, 0);  // At least some time should have passed
+        EXPECT_LT(uptimeDiff,
+                  10);  // Should be less than 10 seconds for this test
     }
 }
 
@@ -716,7 +724,7 @@ TEST_F(PerformanceMonitoringTest, PerCoreCpuMonitoring) {
     EXPECT_GT(perCoreFreq.size(), 0);
     for (double freq : perCoreFreq) {
         EXPECT_GT(freq, 0.0);
-        EXPECT_LT(freq, 10000.0); // Less than 10 GHz
+        EXPECT_LT(freq, 10000.0);  // Less than 10 GHz
     }
 }
 
@@ -749,7 +757,8 @@ TEST_F(PerformanceMonitoringTest, BatteryPerformanceMonitoring) {
         for (int i = 0; i < 3; ++i) {
             auto currentBattery = getBatteryInfo();
             if (currentBattery.has_value()) {
-                batteryLevelHistory.push_back(currentBattery->batteryLifePercent);
+                batteryLevelHistory.push_back(
+                    currentBattery->batteryLifePercent);
 
                 // Validate battery metrics
                 EXPECT_GE(currentBattery->batteryLifePercent, 0.0f);
@@ -771,8 +780,10 @@ TEST_F(PerformanceMonitoringTest, BatteryPerformanceMonitoring) {
         // Battery level should be relatively stable over short periods
         if (batteryLevelHistory.size() >= 2) {
             for (size_t i = 1; i < batteryLevelHistory.size(); ++i) {
-                float diff = std::abs(batteryLevelHistory[i] - batteryLevelHistory[i-1]);
-                EXPECT_LT(diff, 10.0f); // Should not change by more than 10% quickly
+                float diff = std::abs(batteryLevelHistory[i] -
+                                      batteryLevelHistory[i - 1]);
+                EXPECT_LT(diff,
+                          10.0f);  // Should not change by more than 10% quickly
             }
         }
     }
@@ -811,14 +822,14 @@ TEST_F(BoundaryConditionTest, CpuBoundaryConditions) {
     // Test temperature boundaries
     float cpuTemp = getCurrentCpuTemperature();
     if (cpuTemp > 0) {
-        EXPECT_GT(cpuTemp, -50.0f); // Reasonable lower bound
-        EXPECT_LT(cpuTemp, 200.0f); // Reasonable upper bound
+        EXPECT_GT(cpuTemp, -50.0f);  // Reasonable lower bound
+        EXPECT_LT(cpuTemp, 200.0f);  // Reasonable upper bound
     }
 
     // Test frequency boundaries
     double cpuFreq = getProcessorFrequency();
     EXPECT_GT(cpuFreq, 0.0);
-    EXPECT_LT(cpuFreq, 20000.0); // 20 GHz upper bound
+    EXPECT_LT(cpuFreq, 20000.0);  // 20 GHz upper bound
 
     double minFreq = getMinProcessorFrequency();
     double maxFreq = getMaxProcessorFrequency();
@@ -832,8 +843,8 @@ TEST_F(BoundaryConditionTest, CpuBoundaryConditions) {
     EXPECT_GT(physicalCores, 0);
     EXPECT_GT(logicalCores, 0);
     EXPECT_LE(physicalCores, logicalCores);
-    EXPECT_LE(physicalCores, 1024); // Reasonable upper bound
-    EXPECT_LE(logicalCores, 2048); // Reasonable upper bound
+    EXPECT_LE(physicalCores, 1024);  // Reasonable upper bound
+    EXPECT_LE(logicalCores, 2048);   // Reasonable upper bound
 }
 
 TEST_F(BoundaryConditionTest, MemoryBoundaryConditions) {
@@ -859,7 +870,7 @@ TEST_F(BoundaryConditionTest, MemoryBoundaryConditions) {
     EXPECT_GT(virtualMax, 0);
     EXPECT_GE(virtualUsed, 0);
     EXPECT_LE(virtualUsed, virtualMax);
-    EXPECT_GE(virtualMax, totalMemory); // Virtual should be >= physical
+    EXPECT_GE(virtualMax, totalMemory);  // Virtual should be >= physical
 
     // Test swap memory boundaries
     unsigned long long swapTotal = getSwapMemoryTotal();
@@ -872,7 +883,7 @@ TEST_F(BoundaryConditionTest, MemoryBoundaryConditions) {
     // Test committed memory
     unsigned long long committed = getCommittedMemory();
     EXPECT_GT(committed, 0);
-    EXPECT_LT(committed, totalMemory * 10); // Allow for overcommit
+    EXPECT_LT(committed, totalMemory * 10);  // Allow for overcommit
 }
 
 TEST_F(BoundaryConditionTest, DiskBoundaryConditions) {
@@ -893,15 +904,16 @@ TEST_F(BoundaryConditionTest, DiskBoundaryConditions) {
 
         // Test path length boundaries
         EXPECT_GT(disk.path.length(), 0);
-        EXPECT_LT(disk.path.length(), 1000); // Reasonable path length
+        EXPECT_LT(disk.path.length(), 1000);  // Reasonable path length
 
         // Test file system type boundaries
         EXPECT_GT(disk.fsType.length(), 0);
-        EXPECT_LT(disk.fsType.length(), 100); // Reasonable FS name length
+        EXPECT_LT(disk.fsType.length(), 100);  // Reasonable FS name length
 
         // Test model length if present
         if (!disk.model.empty()) {
-            EXPECT_LT(disk.model.length(), 500); // Reasonable model name length
+            EXPECT_LT(disk.model.length(),
+                      500);  // Reasonable model name length
         }
     }
 
@@ -932,14 +944,14 @@ TEST_F(BoundaryConditionTest, NetworkBoundaryConditions) {
     std::vector<std::string> interfaceNames = getInterfaceNames();
     for (const auto& name : interfaceNames) {
         EXPECT_FALSE(name.empty());
-        EXPECT_LT(name.length(), 100); // Reasonable interface name length
+        EXPECT_LT(name.length(), 100);  // Reasonable interface name length
     }
 
     // Test WiFi networks (available API)
     std::vector<std::string> networks = scanAvailableNetworks();
     for (const auto& network : networks) {
         if (!network.empty()) {
-            EXPECT_LT(network.length(), 100); // Reasonable SSID length
+            EXPECT_LT(network.length(), 100);  // Reasonable SSID length
         }
     }
 }
@@ -965,18 +977,21 @@ TEST_F(BoundaryConditionTest, BatteryBoundaryConditions) {
         EXPECT_GE(battery.energyDesign, 0.0f);
 
         if (battery.energyFull > 0) {
-            EXPECT_LE(battery.energyNow, battery.energyFull * 1.1f); // Allow some tolerance
+            EXPECT_LE(battery.energyNow,
+                      battery.energyFull * 1.1f);  // Allow some tolerance
         }
 
         // Test voltage boundaries
         if (battery.voltageNow > 0) {
             EXPECT_GT(battery.voltageNow, 0.0f);
-            EXPECT_LT(battery.voltageNow, 100.0f); // Reasonable voltage upper bound
+            EXPECT_LT(battery.voltageNow,
+                      100.0f);  // Reasonable voltage upper bound
         }
 
         // Test current boundaries
         if (battery.currentNow != 0) {
-            EXPECT_LT(std::abs(battery.currentNow), 1000.0f); // Reasonable current bound
+            EXPECT_LT(std::abs(battery.currentNow),
+                      1000.0f);  // Reasonable current bound
         }
     }
 }
@@ -999,7 +1014,7 @@ TEST_F(BoundaryConditionTest, SystemInfoBoundaryConditions) {
     // Test uptime boundaries
     std::chrono::seconds uptime = getSystemUptime();
     EXPECT_GT(uptime.count(), 0);
-    EXPECT_LT(uptime.count(), 365 * 24 * 3600 * 10); // Less than 10 years
+    EXPECT_LT(uptime.count(), 365 * 24 * 3600 * 10);  // Less than 10 years
 
     // Test locale info boundaries
     LocaleInfo localeInfo = getSystemLanguageInfo();
@@ -1128,16 +1143,14 @@ TEST_F(ErrorScenarioTest, InvalidPathScenarios) {
     // Test scenarios with invalid paths
 
     // Test drive model with invalid paths
-    std::vector<std::string> invalidPaths = {
-        "",
-        "/nonexistent/path",
-        "C:\\nonexistent\\path",
-        "/dev/nonexistent",
-        "invalid_drive_123",
-        "\\\\invalid\\unc\\path",
-        "/proc/nonexistent",
-        "/sys/nonexistent"
-    };
+    std::vector<std::string> invalidPaths = {"",
+                                             "/nonexistent/path",
+                                             "C:\\nonexistent\\path",
+                                             "/dev/nonexistent",
+                                             "invalid_drive_123",
+                                             "\\\\invalid\\unc\\path",
+                                             "/proc/nonexistent",
+                                             "/sys/nonexistent"};
 
     for (const auto& path : invalidPaths) {
         EXPECT_NO_THROW({
@@ -1161,7 +1174,8 @@ TEST_F(ErrorScenarioTest, NetworkUnavailableScenarios) {
     // Network interface names might be minimal on some systems
     std::vector<std::string> interfaceNames = getInterfaceNames();
     if (interfaceNames.empty()) {
-        // This should not happen as loopback should always exist, but handle gracefully
+        // This should not happen as loopback should always exist, but handle
+        // gracefully
         EXPECT_TRUE(true);
     }
 
@@ -1235,11 +1249,13 @@ TEST_F(ErrorScenarioTest, MemoryConstraintScenarios) {
     if (memInfo.memoryLoadPercentage > 95.0f) {
         // System is under high memory pressure
         EXPECT_GT(memInfo.totalPhysicalMemory, 0);
-        EXPECT_LT(memInfo.availablePhysicalMemory, memInfo.totalPhysicalMemory * 0.1);
+        EXPECT_LT(memInfo.availablePhysicalMemory,
+                  memInfo.totalPhysicalMemory * 0.1);
     }
 
     // Swap usage scenarios
-    if (memInfo.swapMemoryTotal > 0 && memInfo.swapMemoryUsed > memInfo.swapMemoryTotal * 0.8) {
+    if (memInfo.swapMemoryTotal > 0 &&
+        memInfo.swapMemoryUsed > memInfo.swapMemoryTotal * 0.8) {
         // High swap usage scenario
         EXPECT_GT(memInfo.swapMemoryUsed, 0);
     }
@@ -1284,7 +1300,8 @@ TEST_F(ErrorScenarioTest, DiskErrorScenarios) {
 }
 
 TEST_F(ErrorScenarioTest, NoThrowGuaranteeUnderErrors) {
-    // Ensure all functions provide no-throw guarantee even under error conditions
+    // Ensure all functions provide no-throw guarantee even under error
+    // conditions
 
     // Test all major functions don't throw even when errors occur
     EXPECT_NO_THROW(getCpuInfo());
@@ -1346,20 +1363,15 @@ TEST_F(InputValidationTest, DriveModelInputValidation) {
     // Empty string
     EXPECT_NO_THROW({
         std::string model = getDriveModel("");
-        EXPECT_TRUE(model.empty() || !model.empty()); // Should handle gracefully
+        EXPECT_TRUE(model.empty() ||
+                    !model.empty());  // Should handle gracefully
     });
 
     // Null-like strings
-    std::vector<std::string> nullLikeInputs = {
-        "\0",
-        "\n",
-        "\r",
-        "\t",
-        "   ",  // Only spaces
-        "\0\0\0",
-        "\n\n\n",
-        "\r\n\r\n"
-    };
+    std::vector<std::string> nullLikeInputs = {"\0",     "\n",     "\r",
+                                               "\t",
+                                               "   ",  // Only spaces
+                                               "\0\0\0", "\n\n\n", "\r\n\r\n"};
 
     for (const auto& input : nullLikeInputs) {
         EXPECT_NO_THROW({
@@ -1369,27 +1381,29 @@ TEST_F(InputValidationTest, DriveModelInputValidation) {
     }
 
     // Very long paths
-    std::string longPath(10000, 'a'); // 10KB path
+    std::string longPath(10000, 'a');  // 10KB path
     EXPECT_NO_THROW({
         std::string model = getDriveModel(longPath);
         EXPECT_TRUE(model.empty() || !model.empty());
     });
 
     // Paths with special characters
-    std::vector<std::string> specialPaths = {
-        "C:\\Program Files\\",
-        "/usr/bin/",
-        "\\\\server\\share",
-        "file:///C:/path",
-        "http://example.com/path",
-        "ftp://ftp.example.com/",
-        "../../../etc/passwd",
-        "..\\..\\..\\windows\\system32",
-        "/dev/null",
-        "/proc/self/exe",
-        "CON", "PRN", "AUX", "NUL", // Windows reserved names
-        "LPT1", "COM1"
-    };
+    std::vector<std::string> specialPaths = {"C:\\Program Files\\",
+                                             "/usr/bin/",
+                                             "\\\\server\\share",
+                                             "file:///C:/path",
+                                             "http://example.com/path",
+                                             "ftp://ftp.example.com/",
+                                             "../../../etc/passwd",
+                                             "..\\..\\..\\windows\\system32",
+                                             "/dev/null",
+                                             "/proc/self/exe",
+                                             "CON",
+                                             "PRN",
+                                             "AUX",
+                                             "NUL",  // Windows reserved names
+                                             "LPT1",
+                                             "COM1"};
 
     for (const auto& path : specialPaths) {
         EXPECT_NO_THROW({
@@ -1400,11 +1414,8 @@ TEST_F(InputValidationTest, DriveModelInputValidation) {
 
     // Unicode paths
     std::vector<std::string> unicodePaths = {
-        "/home/用户/文档",
-        "C:\\Users\\Пользователь\\Документы",
-        "/Users/ユーザー/書類",
-        "C:\\مستخدمين\\مستندات"
-    };
+        "/home/用户/文档", "C:\\Users\\Пользователь\\Документы",
+        "/Users/ユーザー/書類", "C:\\مستخدمين\\مستندات"};
 
     for (const auto& path : unicodePaths) {
         EXPECT_NO_THROW({
@@ -1470,7 +1481,7 @@ TEST_F(InputValidationTest, BatteryInfoInputValidation) {
     // Should handle gracefully
     EXPECT_NO_THROW({
         float estimatedTime = info.getEstimatedTimeRemaining();
-        EXPECT_GE(estimatedTime, 0.0f); // Should return reasonable value
+        EXPECT_GE(estimatedTime, 0.0f);  // Should return reasonable value
     });
 
     // Test with very large values
@@ -1496,7 +1507,8 @@ TEST_F(InputValidationTest, BatteryInfoInputValidation) {
     EXPECT_NO_THROW({
         float estimatedTime = info.getEstimatedTimeRemaining();
         // Should handle NaN/infinity gracefully
-        EXPECT_TRUE(estimatedTime != estimatedTime || estimatedTime >= 0.0f); // NaN check
+        EXPECT_TRUE(estimatedTime != estimatedTime ||
+                    estimatedTime >= 0.0f);  // NaN check
     });
 }
 
@@ -1513,7 +1525,8 @@ TEST_F(InputValidationTest, SystemInfoPrinterInputValidation) {
     // Test with empty memory info
     MemoryInfo emptyMemory;
     EXPECT_NO_THROW({
-        std::string formatted = SystemInfoPrinter::formatMemoryInfo(emptyMemory);
+        std::string formatted =
+            SystemInfoPrinter::formatMemoryInfo(emptyMemory);
         EXPECT_TRUE(formatted.empty() || !formatted.empty());
     });
 
@@ -1527,7 +1540,8 @@ TEST_F(InputValidationTest, SystemInfoPrinterInputValidation) {
     // Test with empty battery info
     BatteryInfo emptyBattery;
     EXPECT_NO_THROW({
-        std::string formatted = SystemInfoPrinter::formatBatteryInfo(emptyBattery);
+        std::string formatted =
+            SystemInfoPrinter::formatBatteryInfo(emptyBattery);
         EXPECT_TRUE(formatted.empty() || !formatted.empty());
     });
 
@@ -1624,27 +1638,29 @@ TEST_F(InputValidationTest, BiosInfoInputValidation) {
         "\0",
         "/invalid/path/that/does/not/exist",
         "C:\\invalid\\path\\that\\does\\not\\exist",
-        std::string(10000, 'x'), // Very long path
-        "CON", "PRN", "AUX", // Windows reserved names
+        std::string(10000, 'x'),  // Very long path
+        "CON",
+        "PRN",
+        "AUX",  // Windows reserved names
         "../../../etc/passwd",
-        "\\\\invalid\\unc\\path"
-    };
+        "\\\\invalid\\unc\\path"};
 
     for (const auto& path : invalidPaths) {
         EXPECT_NO_THROW({
             bool result = biosInfo->backupBiosSettings(path);
-            EXPECT_TRUE(result || !result); // Should return boolean
+            EXPECT_TRUE(result || !result);  // Should return boolean
         });
 
         EXPECT_NO_THROW({
             bool result = biosInfo->restoreBiosSettings(path);
-            EXPECT_TRUE(result || !result); // Should return boolean
+            EXPECT_TRUE(result || !result);  // Should return boolean
         });
     }
 }
 
 TEST_F(InputValidationTest, StringFieldValidation) {
-    // Test that all string fields in system info structures handle special characters
+    // Test that all string fields in system info structures handle special
+    // characters
 
     // Test OS info with special characters
     OperatingSystemInfo osInfo = getOperatingSystemInfo();
@@ -1685,16 +1701,17 @@ TEST_F(InputValidationTest, NumericFieldValidation) {
     // CPU info numeric validation
     CpuInfo cpuInfo = getCpuInfo();
     EXPECT_GT(cpuInfo.numLogicalCores, 0);
-    EXPECT_LE(cpuInfo.numLogicalCores, 10000); // Reasonable upper bound
+    EXPECT_LE(cpuInfo.numLogicalCores, 10000);  // Reasonable upper bound
     EXPECT_GT(cpuInfo.numPhysicalCores, 0);
-    EXPECT_LE(cpuInfo.numPhysicalCores, 5000); // Reasonable upper bound
+    EXPECT_LE(cpuInfo.numPhysicalCores, 5000);  // Reasonable upper bound
     EXPECT_GT(cpuInfo.baseFrequency, 0.0);
-    EXPECT_LT(cpuInfo.baseFrequency, 50000.0); // 50 GHz upper bound
+    EXPECT_LT(cpuInfo.baseFrequency, 50000.0);  // 50 GHz upper bound
 
     // Memory info numeric validation
     MemoryInfo memInfo = getDetailedMemoryStats();
     EXPECT_GT(memInfo.totalPhysicalMemory, 0);
-    EXPECT_LT(memInfo.totalPhysicalMemory, 1000ULL * 1024 * 1024 * 1024 * 1024); // 1000TB
+    EXPECT_LT(memInfo.totalPhysicalMemory,
+              1000ULL * 1024 * 1024 * 1024 * 1024);  // 1000TB
     EXPECT_GE(memInfo.memoryLoadPercentage, 0.0f);
     EXPECT_LE(memInfo.memoryLoadPercentage, 100.0f);
 
@@ -1702,7 +1719,8 @@ TEST_F(InputValidationTest, NumericFieldValidation) {
     std::vector<DiskInfo> disks = getDiskInfo();
     for (const auto& disk : disks) {
         EXPECT_GT(disk.totalSpace, 0);
-        EXPECT_LT(disk.totalSpace, 1000ULL * 1024 * 1024 * 1024 * 1024); // 1000TB
+        EXPECT_LT(disk.totalSpace,
+                  1000ULL * 1024 * 1024 * 1024 * 1024);  // 1000TB
         EXPECT_GE(disk.freeSpace, 0);
         EXPECT_LE(disk.freeSpace, disk.totalSpace);
         EXPECT_GE(disk.usagePercent, 0.0f);
@@ -1712,10 +1730,10 @@ TEST_F(InputValidationTest, NumericFieldValidation) {
     // System uptime validation
     std::chrono::seconds uptime = getSystemUptime();
     EXPECT_GT(uptime.count(), 0);
-    EXPECT_LT(uptime.count(), 100LL * 365 * 24 * 3600); // Less than 100 years
+    EXPECT_LT(uptime.count(), 100LL * 365 * 24 * 3600);  // Less than 100 years
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

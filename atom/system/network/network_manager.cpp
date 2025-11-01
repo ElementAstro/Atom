@@ -20,10 +20,13 @@
 
 // Helper function to convert wide string to string
 inline std::string wstringToString(const std::wstring& wstr) {
-    if (wstr.empty()) return std::string();
-    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (wstr.empty())
+        return std::string();
+    int size = WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, nullptr, 0,
+                                   nullptr, nullptr);
     std::string str(size - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, wstr.c_str(), -1, &str[0], size, nullptr,
+                        nullptr);
     return str;
 }
 #ifdef _MSC_VER
@@ -246,7 +249,7 @@ auto NetworkManager::getMacAddress(const std::string& interfaceName)
             "Failed to create socket for MAC address retrieval");
     }
 
-    struct ifreq ifr{};
+    struct ifreq ifr {};
     std::strncpy(ifr.ifr_name, interfaceName.c_str(), IFNAMSIZ - 1);
 
     if (ioctl(socketFd, SIOCGIFHWADDR, &ifr) < 0) {
@@ -318,7 +321,7 @@ void NetworkManager::disableInterface(const std::string& interfaceName) {
 }
 
 auto NetworkManager::resolveDNS(const std::string& hostname) -> std::string {
-    struct addrinfo hints{};
+    struct addrinfo hints {};
     struct addrinfo* res = nullptr;
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
@@ -404,8 +407,7 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
                  ? L"none"
                  : std::wstring(dnsServers[0].begin(), dnsServers[0].end()));
 
-        if (executeCommandWithStatus(wstringToString(command))
-                .second != 0) {
+        if (executeCommandWithStatus(wstringToString(command)).second != 0) {
             THROW_RUNTIME_ERROR("Failed to set DNS servers for adapter: " +
                                 std::string(pCurrAddresses->AdapterName));
         }
@@ -416,8 +418,8 @@ void NetworkManager::setDNSServers(const std::vector<std::string>& dnsServers) {
                 std::wstring(pCurrAddresses->FriendlyName) + L"\" " +
                 std::wstring(dnsServers[i].begin(), dnsServers[i].end()) +
                 L" index=" + std::to_wstring(i + 1);
-            ATOM_UNUSED_RESULT(executeCommandWithStatus(
-                wstringToString(addCommand)));
+            ATOM_UNUSED_RESULT(
+                executeCommandWithStatus(wstringToString(addCommand)));
         }
     }
 #else

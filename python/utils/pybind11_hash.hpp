@@ -1,7 +1,7 @@
 #pragma once
 
-#include <functional>
 #include <pybind11/pybind11.h>
+#include <functional>
 
 // 为 pybind11::object 特化 std::hash
 namespace std {
@@ -17,7 +17,8 @@ struct hash<pybind11::object> {
             throw std::runtime_error("Python object is not hashable");
         }
         pybind11::gil_scoped_acquire gil;
-        pybind11::function hash_fn = pybind11::module::import("builtins").attr("hash");
+        pybind11::function hash_fn =
+            pybind11::module::import("builtins").attr("hash");
         try {
             return static_cast<size_t>(hash_fn(obj).cast<ssize_t>());
         } catch (const pybind11::error_already_set&) {

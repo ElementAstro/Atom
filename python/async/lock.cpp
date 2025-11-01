@@ -17,7 +17,7 @@ void init_lock(py::module_& m) {
 
     // ScopedLock template for different lock types
     py::class_<ScopedLock<Spinlock>>(m, "ScopedSpinlock",
-        R"pbdoc(
+                                     R"pbdoc(
         RAII scoped lock guard for Spinlock.
 
         Automatically acquires the lock on construction and releases it on destruction.
@@ -39,7 +39,7 @@ void init_lock(py::module_& m) {
              )pbdoc");
 
     py::class_<ScopedLock<TicketSpinlock>>(m, "ScopedTicketSpinlock",
-        R"pbdoc(
+                                           R"pbdoc(
         RAII scoped lock guard for TicketSpinlock.
 
         Automatically acquires the lock on construction and releases it on destruction.
@@ -58,7 +58,7 @@ void init_lock(py::module_& m) {
              )pbdoc");
 
     py::class_<ScopedLock<UnfairSpinlock>>(m, "ScopedUnfairSpinlock",
-        R"pbdoc(
+                                           R"pbdoc(
         RAII scoped lock guard for UnfairSpinlock.
 
         Automatically acquires the lock on construction and releases it on destruction.
@@ -77,7 +77,7 @@ void init_lock(py::module_& m) {
              )pbdoc");
 
     py::class_<ScopedLock<AdaptiveSpinlock>>(m, "ScopedAdaptiveSpinlock",
-        R"pbdoc(
+                                             R"pbdoc(
         RAII scoped lock guard for AdaptiveSpinlock.
 
         Automatically acquires the lock on construction and releases it on destruction.
@@ -97,9 +97,9 @@ void init_lock(py::module_& m) {
 
     // Spinlock class
     py::class_<Spinlock>(m, "Spinlock",
-        R"pbdoc(
+                         R"pbdoc(
         Simple spinlock implementation using atomic_flag with C++20 features.
-        
+
         A spinlock is a lock that causes a thread trying to acquire it to simply wait
         in a loop ("spin") while repeatedly checking if the lock is available.
         )pbdoc")
@@ -110,7 +110,7 @@ void init_lock(py::module_& m) {
         .def("lock", &Spinlock::lock,
              R"pbdoc(
              Acquire the lock.
-             
+
              This method will block until the lock is acquired.
              )pbdoc")
         .def("unlock", &Spinlock::unlock,
@@ -120,7 +120,7 @@ void init_lock(py::module_& m) {
         .def("try_lock", &Spinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc")
@@ -132,19 +132,19 @@ void init_lock(py::module_& m) {
             py::arg("timeout"),
             R"pbdoc(
             Try to acquire the lock with a timeout.
-            
+
             Args:
                 timeout: Maximum time to wait for the lock.
-                
+
             Returns:
                 bool: True if the lock was acquired within the timeout, False otherwise.
             )pbdoc");
 
     // TicketSpinlock class
     py::class_<TicketSpinlock>(m, "TicketSpinlock",
-        R"pbdoc(
+                               R"pbdoc(
         Fair spinlock implementation using ticket-based ordering.
-        
+
         Provides fair locking in first-come, first-served order.
         )pbdoc")
         .def(py::init<>(),
@@ -162,23 +162,22 @@ void init_lock(py::module_& m) {
         .def("try_lock", &TicketSpinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc");
 
     // TicketSpinlock::LockGuard class
     py::class_<TicketSpinlock::LockGuard>(m, "TicketSpinlockGuard",
-        R"pbdoc(
+                                          R"pbdoc(
         RAII lock guard for TicketSpinlock.
-        
+
         Automatically acquires the lock on construction and releases it on destruction.
         )pbdoc")
-        .def(py::init<TicketSpinlock&>(),
-             py::arg("spinlock"),
+        .def(py::init<TicketSpinlock&>(), py::arg("spinlock"),
              R"pbdoc(
              Construct the lock guard and acquire the lock.
-             
+
              Args:
                  spinlock: The TicketSpinlock to guard.
              )pbdoc")
@@ -189,16 +188,16 @@ void init_lock(py::module_& m) {
         .def("is_locked", &TicketSpinlock::LockGuard::isLocked,
              R"pbdoc(
              Check if the lock is currently held.
-             
+
              Returns:
                  bool: True if the lock is held, False otherwise.
              )pbdoc");
 
     // UnfairSpinlock class
     py::class_<UnfairSpinlock>(m, "UnfairSpinlock",
-        R"pbdoc(
+                               R"pbdoc(
         Unfair spinlock implementation for maximum performance.
-        
+
         May cause starvation but has lower overhead than fair locks.
         )pbdoc")
         .def(py::init<>(),
@@ -216,16 +215,16 @@ void init_lock(py::module_& m) {
         .def("try_lock", &UnfairSpinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc");
 
     // AdaptiveSpinlock class
     py::class_<AdaptiveSpinlock>(m, "AdaptiveSpinlock",
-        R"pbdoc(
+                                 R"pbdoc(
         Adaptive spinlock that switches between spinning and yielding.
-        
+
         Spins for a short time, then yields to reduce CPU usage.
         )pbdoc")
         .def(py::init<>(),
@@ -243,7 +242,7 @@ void init_lock(py::module_& m) {
         .def("try_lock", &AdaptiveSpinlock::tryLock,
              R"pbdoc(
              Try to acquire the lock without blocking.
-             
+
              Returns:
                  bool: True if the lock was acquired, False otherwise.
              )pbdoc");
@@ -252,7 +251,7 @@ void init_lock(py::module_& m) {
 #ifdef ATOM_PLATFORM_WINDOWS
     // WindowsSpinlock class
     py::class_<WindowsSpinlock>(m, "WindowsSpinlock",
-        R"pbdoc(
+                                R"pbdoc(
         Windows platform-specific spinlock implementation.
 
         Uses Windows critical sections with spin count optimization for
@@ -280,7 +279,7 @@ void init_lock(py::module_& m) {
 
     // ScopedLock for WindowsSpinlock
     py::class_<ScopedLock<WindowsSpinlock>>(m, "ScopedWindowsSpinlock",
-        R"pbdoc(
+                                            R"pbdoc(
         RAII scoped lock guard for WindowsSpinlock.
         )pbdoc")
         .def(py::init<WindowsSpinlock&>(), py::arg("mutex"),
@@ -299,7 +298,7 @@ void init_lock(py::module_& m) {
 #ifdef ATOM_PLATFORM_MACOS
     // DarwinSpinlock class
     py::class_<DarwinSpinlock>(m, "DarwinSpinlock",
-        R"pbdoc(
+                               R"pbdoc(
         macOS platform-specific spinlock implementation.
 
         Uses optimized OSSpinLock (before 10.12) or os_unfair_lock (10.12+)
@@ -327,7 +326,7 @@ void init_lock(py::module_& m) {
 
     // ScopedLock for DarwinSpinlock
     py::class_<ScopedLock<DarwinSpinlock>>(m, "ScopedDarwinSpinlock",
-        R"pbdoc(
+                                           R"pbdoc(
         RAII scoped lock guard for DarwinSpinlock.
         )pbdoc")
         .def(py::init<DarwinSpinlock&>(), py::arg("mutex"),
@@ -346,7 +345,7 @@ void init_lock(py::module_& m) {
 #ifdef ATOM_PLATFORM_LINUX
     // LinuxFutexLock class
     py::class_<LinuxFutexLock>(m, "LinuxFutexLock",
-        R"pbdoc(
+                               R"pbdoc(
         Linux platform-specific spinlock implementation.
 
         Uses futex system call for optimized long waits, providing
@@ -374,7 +373,7 @@ void init_lock(py::module_& m) {
 
     // ScopedLock for LinuxFutexLock
     py::class_<ScopedLock<LinuxFutexLock>>(m, "ScopedLinuxFutexLock",
-        R"pbdoc(
+                                           R"pbdoc(
         RAII scoped lock guard for LinuxFutexLock.
         )pbdoc")
         .def(py::init<LinuxFutexLock&>(), py::arg("mutex"),
@@ -393,7 +392,7 @@ void init_lock(py::module_& m) {
 #ifdef ATOM_HAS_ATOMIC_WAIT
     // AtomicWaitLock class
     py::class_<AtomicWaitLock>(m, "AtomicWaitLock",
-        R"pbdoc(
+                               R"pbdoc(
         C++20 atomic wait/notify spinlock implementation.
 
         More efficient than plain spinlocks if supported by hardware.
@@ -421,7 +420,7 @@ void init_lock(py::module_& m) {
 
     // ScopedLock for AtomicWaitLock
     py::class_<ScopedLock<AtomicWaitLock>>(m, "ScopedAtomicWaitLock",
-        R"pbdoc(
+                                           R"pbdoc(
         RAII scoped lock guard for AtomicWaitLock.
         )pbdoc")
         .def(py::init<AtomicWaitLock&>(), py::arg("mutex"),
@@ -443,7 +442,7 @@ void init_lock(py::module_& m) {
 #ifdef ATOM_USE_BOOST_LOCKS
     // BoostSpinlock class
     py::class_<BoostSpinlock>(m, "BoostSpinlock",
-        R"pbdoc(
+                              R"pbdoc(
         Boost-based spinlock implementation.
 
         Alternative spinlock implementation using Boost.Atomic for specialized scenarios.
@@ -470,7 +469,7 @@ void init_lock(py::module_& m) {
 
     // BoostSharedMutex class
     py::class_<BoostSharedMutex>(m, "BoostSharedMutex",
-        R"pbdoc(
+                                 R"pbdoc(
         Boost-based shared mutex implementation.
 
         Alternative to std::shared_mutex using Boost.Thread implementation.
@@ -512,13 +511,12 @@ void init_lock(py::module_& m) {
 
     // BoostSharedMutex::SharedLock class
     py::class_<BoostSharedMutex::SharedLock>(m, "BoostSharedLock",
-        R"pbdoc(
+                                             R"pbdoc(
         RAII shared lock guard for BoostSharedMutex.
 
         Automatically acquires a shared lock on construction and releases it on destruction.
         )pbdoc")
-        .def(py::init<BoostSharedMutex&>(),
-             py::arg("mutex"),
+        .def(py::init<BoostSharedMutex&>(), py::arg("mutex"),
              R"pbdoc(
              Construct the shared lock guard and acquire the shared lock.
 
@@ -539,7 +537,7 @@ void init_lock(py::module_& m) {
 
     // BoostRecursiveMutex class
     py::class_<BoostRecursiveMutex>(m, "BoostRecursiveMutex",
-        R"pbdoc(
+                                    R"pbdoc(
         Boost-based recursive mutex implementation.
 
         A mutex that can be locked multiple times by the same thread without deadlocking.
@@ -567,7 +565,7 @@ void init_lock(py::module_& m) {
 
     // LockFactory enum and factory methods
     py::enum_<LockFactory::LockType>(m, "LockType",
-        R"pbdoc(
+                                     R"pbdoc(
         Enumeration of available lock types.
 
         Different lock types provide different performance characteristics
@@ -599,7 +597,8 @@ void init_lock(py::module_& m) {
 #endif
         .value("STD_MUTEX", LockFactory::LockType::STD_MUTEX,
                "Standard library mutex")
-        .value("STD_RECURSIVE_MUTEX", LockFactory::LockType::STD_RECURSIVE_MUTEX,
+        .value("STD_RECURSIVE_MUTEX",
+               LockFactory::LockType::STD_RECURSIVE_MUTEX,
                "Standard library recursive mutex")
         .value("STD_SHARED_MUTEX", LockFactory::LockType::STD_SHARED_MUTEX,
                "Standard library shared mutex")
@@ -608,8 +607,7 @@ void init_lock(py::module_& m) {
         .export_values();
 
     // LockFactory static methods
-    m.def("create_lock", &LockFactory::createLock,
-          py::arg("lock_type"),
+    m.def("create_lock", &LockFactory::createLock, py::arg("lock_type"),
           R"pbdoc(
           Create a lock of the specified type.
 
@@ -632,9 +630,7 @@ void init_lock(py::module_& m) {
           )pbdoc");
 
     // Utility functions for lock performance optimization
-    m.def("cpu_relax", []() {
-        cpu_relax();
-    }, R"pbdoc(
+    m.def("cpu_relax", []() { cpu_relax(); }, R"pbdoc(
     Execute a CPU relax instruction to improve spinlock performance.
 
     This is a platform-specific instruction that hints to the CPU that
@@ -653,9 +649,9 @@ void init_lock(py::module_& m) {
 
     // Lock performance and debugging utilities
 
-    m.def("get_hardware_concurrency", []() {
-        return std::thread::hardware_concurrency();
-    }, R"pbdoc(
+    m.def(
+        "get_hardware_concurrency",
+        []() { return std::thread::hardware_concurrency(); }, R"pbdoc(
     Get the number of concurrent threads supported by the implementation.
 
     Returns:
@@ -670,5 +666,6 @@ void init_lock(py::module_& m) {
         >>> print(f"System has {cores} hardware threads")
     )pbdoc");
 
-    // Module provides comprehensive lock implementations for high-performance scenarios
+    // Module provides comprehensive lock implementations for high-performance
+    // scenarios
 }

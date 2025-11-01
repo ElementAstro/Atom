@@ -5,20 +5,20 @@
  * @file transforms.hpp
  * @brief Advanced image transformation operations
  *
- * This module provides comprehensive image transformation capabilities including
- * geometric transformations, perspective corrections, image registration,
- * and advanced warping operations.
+ * This module provides comprehensive image transformation capabilities
+ * including geometric transformations, perspective corrections, image
+ * registration, and advanced warping operations.
  *
  * @author Atom Framework Team
  * @date 2025
  * @version 1.0.0
  */
 
-#include "../core/image_blob.hpp"
-#include <vector>
 #include <array>
-#include <memory>
 #include <functional>
+#include <memory>
+#include <vector>
+#include "../core/image_blob.hpp"
 
 namespace atom::image {
 
@@ -38,11 +38,11 @@ enum class InterpolationMethod {
  * @brief Border handling modes for transformations
  */
 enum class BorderMode {
-    CONSTANT,       // Fill with constant value
-    REPLICATE,      // Replicate edge pixels
-    REFLECT,        // Reflect across edge
-    WRAP,           // Wrap around
-    TRANSPARENT     // Transparent (for alpha channel)
+    CONSTANT,    // Fill with constant value
+    REPLICATE,   // Replicate edge pixels
+    REFLECT,     // Reflect across edge
+    WRAP,        // Wrap around
+    TRANSPARENT  // Transparent (for alpha channel)
 };
 
 /**
@@ -84,9 +84,10 @@ public:
      * @param preserveAspect Whether to preserve aspect ratio
      * @return Resized image blob
      */
-    virtual blob resize(const blob& input, int newWidth, int newHeight,
-                       InterpolationMethod method = InterpolationMethod::LINEAR,
-                       bool preserveAspect = false) const;
+    virtual blob resize(
+        const blob& input, int newWidth, int newHeight,
+        InterpolationMethod method = InterpolationMethod::LINEAR,
+        bool preserveAspect = false) const;
 
     /**
      * @brief Rotate image by arbitrary angle
@@ -99,12 +100,12 @@ public:
      * @param fillValue Fill value for constant border mode
      * @return Rotated image blob
      */
-    virtual blob rotate(const blob& input, double angle,
-                       const Point2D& center = {},
-                       bool expandCanvas = true,
-                       InterpolationMethod method = InterpolationMethod::LINEAR,
-                       BorderMode borderMode = BorderMode::CONSTANT,
-                       uint8_t fillValue = 0) const;
+    virtual blob rotate(
+        const blob& input, double angle, const Point2D& center = {},
+        bool expandCanvas = true,
+        InterpolationMethod method = InterpolationMethod::LINEAR,
+        BorderMode borderMode = BorderMode::CONSTANT,
+        uint8_t fillValue = 0) const;
 
     /**
      * @brief Apply affine transformation
@@ -115,11 +116,11 @@ public:
      * @param borderMode Border handling mode
      * @return Transformed image blob
      */
-    virtual blob affineTransform(const blob& input,
-                                const std::array<std::array<double, 3>, 2>& matrix,
-                                const Point2D& outputSize = {},
-                                InterpolationMethod method = InterpolationMethod::LINEAR,
-                                BorderMode borderMode = BorderMode::CONSTANT) const;
+    virtual blob affineTransform(
+        const blob& input, const std::array<std::array<double, 3>, 2>& matrix,
+        const Point2D& outputSize = {},
+        InterpolationMethod method = InterpolationMethod::LINEAR,
+        BorderMode borderMode = BorderMode::CONSTANT) const;
 
     /**
      * @brief Apply perspective transformation
@@ -129,10 +130,10 @@ public:
      * @param method Interpolation method
      * @return Transformed image blob
      */
-    virtual blob perspectiveTransform(const blob& input,
-                                     const TransformMatrix& matrix,
-                                     const Point2D& outputSize,
-                                     InterpolationMethod method = InterpolationMethod::LINEAR) const;
+    virtual blob perspectiveTransform(
+        const blob& input, const TransformMatrix& matrix,
+        const Point2D& outputSize,
+        InterpolationMethod method = InterpolationMethod::LINEAR) const;
 
     /**
      * @brief Correct perspective distortion using four corner points
@@ -143,9 +144,9 @@ public:
      * @return Perspective-corrected image blob
      */
     virtual blob correctPerspective(const blob& input,
-                                   const std::array<Point2D, 4>& srcPoints,
-                                   const std::array<Point2D, 4>& dstPoints,
-                                   const Point2D& outputSize) const;
+                                    const std::array<Point2D, 4>& srcPoints,
+                                    const std::array<Point2D, 4>& dstPoints,
+                                    const Point2D& outputSize) const;
 
     /**
      * @brief Apply barrel/pincushion distortion correction
@@ -158,10 +159,9 @@ public:
      * @param center Distortion center (if empty, use image center)
      * @return Distortion-corrected image blob
      */
-    virtual blob correctDistortion(const blob& input,
-                                  double k1, double k2 = 0, double k3 = 0,
-                                  double p1 = 0, double p2 = 0,
-                                  const Point2D& center = {}) const;
+    virtual blob correctDistortion(const blob& input, double k1, double k2 = 0,
+                                   double k3 = 0, double p1 = 0, double p2 = 0,
+                                   const Point2D& center = {}) const;
 
     /**
      * @brief Apply elastic deformation (rubber sheet transformation)
@@ -171,10 +171,11 @@ public:
      * @param method Interpolation method
      * @return Deformed image blob
      */
-    virtual blob elasticDeform(const blob& input,
-                              const std::vector<std::vector<double>>& displacementX,
-                              const std::vector<std::vector<double>>& displacementY,
-                              InterpolationMethod method = InterpolationMethod::LINEAR) const;
+    virtual blob elasticDeform(
+        const blob& input,
+        const std::vector<std::vector<double>>& displacementX,
+        const std::vector<std::vector<double>>& displacementY,
+        InterpolationMethod method = InterpolationMethod::LINEAR) const;
 
     /**
      * @brief Apply polar transformation (Cartesian to polar coordinates)
@@ -184,10 +185,8 @@ public:
      * @param angleRange Angle range in degrees (default: full circle)
      * @return Polar-transformed image blob
      */
-    virtual blob toPolar(const blob& input,
-                        const Point2D& center = {},
-                        double maxRadius = 0,
-                        double angleRange = 360.0) const;
+    virtual blob toPolar(const blob& input, const Point2D& center = {},
+                         double maxRadius = 0, double angleRange = 360.0) const;
 
     /**
      * @brief Apply inverse polar transformation (polar to Cartesian)
@@ -196,9 +195,8 @@ public:
      * @param center Center point for transformation
      * @return Cartesian-transformed image blob
      */
-    virtual blob fromPolar(const blob& input,
-                          const Point2D& outputSize,
-                          const Point2D& center = {}) const;
+    virtual blob fromPolar(const blob& input, const Point2D& outputSize,
+                           const Point2D& center = {}) const;
 
     /**
      * @brief Register two images using feature matching
@@ -207,9 +205,9 @@ public:
      * @param method Registration method
      * @return Transformation matrix to align target with reference
      */
-    virtual TransformMatrix registerImages(const blob& reference,
-                                          const blob& target,
-                                          const std::string& method = "orb") const;
+    virtual TransformMatrix registerImages(
+        const blob& reference, const blob& target,
+        const std::string& method = "orb") const;
 
     /**
      * @brief Apply image warping using control points
@@ -219,10 +217,10 @@ public:
      * @param method Warping method ("thin_plate_spline", "rbf", "polynomial")
      * @return Warped image blob
      */
-    virtual blob warpControlPoints(const blob& input,
-                                  const std::vector<Point2D>& srcPoints,
-                                  const std::vector<Point2D>& dstPoints,
-                                  const std::string& method = "thin_plate_spline") const;
+    virtual blob warpControlPoints(
+        const blob& input, const std::vector<Point2D>& srcPoints,
+        const std::vector<Point2D>& dstPoints,
+        const std::string& method = "thin_plate_spline") const;
 
     /**
      * @brief Create seamless panorama from multiple images
@@ -231,9 +229,10 @@ public:
      * @param blendMode Blending mode ("linear", "multiband", "feather")
      * @return Stitched panorama image
      */
-    virtual blob stitchPanorama(const std::vector<blob>& images,
-                               const std::string& method = "cylindrical",
-                               const std::string& blendMode = "multiband") const;
+    virtual blob stitchPanorama(
+        const std::vector<blob>& images,
+        const std::string& method = "cylindrical",
+        const std::string& blendMode = "multiband") const;
 
     // Static utility functions
 
@@ -257,7 +256,8 @@ public:
      * @param center Rotation center
      * @return Rotation matrix
      */
-    static TransformMatrix createRotationMatrix(double angle, const Point2D& center = {});
+    static TransformMatrix createRotationMatrix(double angle,
+                                                const Point2D& center = {});
 
     /**
      * @brief Create scaling matrix
@@ -266,7 +266,8 @@ public:
      * @param center Scaling center
      * @return Scaling matrix
      */
-    static TransformMatrix createScalingMatrix(double sx, double sy, const Point2D& center = {});
+    static TransformMatrix createScalingMatrix(double sx, double sy,
+                                               const Point2D& center = {});
 
     /**
      * @brief Create shear matrix
@@ -282,7 +283,8 @@ public:
      * @param b Second matrix
      * @return Product matrix (a * b)
      */
-    static TransformMatrix multiplyMatrices(const TransformMatrix& a, const TransformMatrix& b);
+    static TransformMatrix multiplyMatrices(const TransformMatrix& a,
+                                            const TransformMatrix& b);
 
     /**
      * @brief Invert transformation matrix
@@ -297,23 +299,25 @@ public:
      * @param matrix Transformation matrix
      * @return Transformed point
      */
-    static Point2D transformPoint(const Point2D& point, const TransformMatrix& matrix);
+    static Point2D transformPoint(const Point2D& point,
+                                  const TransformMatrix& matrix);
 
 protected:
     /**
      * @brief Apply generic transformation with custom mapping function
      * @param input Input image blob
      * @param outputSize Output image size
-     * @param mapFunction Function that maps output coordinates to input coordinates
+     * @param mapFunction Function that maps output coordinates to input
+     * coordinates
      * @param method Interpolation method
      * @param borderMode Border handling mode
      * @return Transformed image blob
      */
-    virtual blob applyTransformation(const blob& input,
-                                   const Point2D& outputSize,
-                                   std::function<Point2D(const Point2D&)> mapFunction,
-                                   InterpolationMethod method = InterpolationMethod::LINEAR,
-                                   BorderMode borderMode = BorderMode::CONSTANT) const;
+    virtual blob applyTransformation(
+        const blob& input, const Point2D& outputSize,
+        std::function<Point2D(const Point2D&)> mapFunction,
+        InterpolationMethod method = InterpolationMethod::LINEAR,
+        BorderMode borderMode = BorderMode::CONSTANT) const;
 
     /**
      * @brief Interpolate pixel value at fractional coordinates
@@ -327,11 +331,10 @@ protected:
      * @param borderMode Border handling mode
      * @return Interpolated pixel values
      */
-    virtual std::vector<uint8_t> interpolatePixel(const std::vector<std::byte>& input,
-                                                 double x, double y,
-                                                 int width, int height, int channels,
-                                                 InterpolationMethod method,
-                                                 BorderMode borderMode) const;
+    virtual std::vector<uint8_t> interpolatePixel(
+        const std::vector<std::byte>& input, double x, double y, int width,
+        int height, int channels, InterpolationMethod method,
+        BorderMode borderMode) const;
 };
 
 /**
@@ -341,6 +344,6 @@ protected:
  */
 std::unique_ptr<ImageTransform> createOptimalTransform(bool useGPU = false);
 
-} // namespace atom::image
+}  // namespace atom::image
 
-#endif // ATOM_IMAGE_TRANSFORMS_HPP
+#endif  // ATOM_IMAGE_TRANSFORMS_HPP

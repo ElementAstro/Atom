@@ -5,7 +5,6 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 
-
 namespace py = pybind11;
 
 /**
@@ -43,24 +42,30 @@ void registerExceptionTranslations(py::module_& m) {
  * @param doc_string The documentation string for this cache type
  * @param type_name Human-readable name for the type (e.g., "string", "integer")
  */
-template<typename T>
+template <typename T>
 void bindResourceCache(py::module_& m, const char* class_name,
                        const char* doc_string, const char* type_name) {
     py::class_<atom::search::ResourceCache<T>>(m, class_name, doc_string)
         .def(py::init<int>(), py::arg("max_size"),
-             ("Constructs a " + std::string(class_name) + " with the specified maximum size.").c_str())
+             ("Constructs a " + std::string(class_name) +
+              " with the specified maximum size.")
+                 .c_str())
 
         // Core cache operations
-        .def("insert", &atom::search::ResourceCache<T>::insert,
-             py::arg("key"), py::arg("value"), py::arg("expiration_time"),
-             ("Inserts a " + std::string(type_name) + " resource into the cache with an expiration time.").c_str())
+        .def("insert", &atom::search::ResourceCache<T>::insert, py::arg("key"),
+             py::arg("value"), py::arg("expiration_time"),
+             ("Inserts a " + std::string(type_name) +
+              " resource into the cache with an expiration time.")
+                 .c_str())
         .def("contains", &atom::search::ResourceCache<T>::contains,
              py::arg("key"),
              "Checks if the cache contains a resource with the specified key.")
         .def("get", &atom::search::ResourceCache<T>::get, py::arg("key"),
-             ("Retrieves a " + std::string(type_name) + " resource from the cache.").c_str())
-        .def("remove", &atom::search::ResourceCache<T>::remove,
-             py::arg("key"), "Removes a resource from the cache.")
+             ("Retrieves a " + std::string(type_name) +
+              " resource from the cache.")
+                 .c_str())
+        .def("remove", &atom::search::ResourceCache<T>::remove, py::arg("key"),
+             "Removes a resource from the cache.")
         .def("clear", &atom::search::ResourceCache<T>::clear,
              "Clears all resources from the cache.")
 
@@ -76,8 +81,9 @@ void bindResourceCache(py::module_& m, const char* class_name,
              "Checks if a resource with the specified key is expired.")
         .def("set_max_size", &atom::search::ResourceCache<T>::setMaxSize,
              py::arg("max_size"), "Sets the maximum size of the cache.")
-        .def("set_expiration_time", &atom::search::ResourceCache<T>::setExpirationTime,
-             py::arg("key"), py::arg("expiration_time"),
+        .def("set_expiration_time",
+             &atom::search::ResourceCache<T>::setExpirationTime, py::arg("key"),
+             py::arg("expiration_time"),
              "Sets the expiration time for a resource in the cache.")
         .def("remove_expired", &atom::search::ResourceCache<T>::removeExpired,
              "Removes expired resources from the cache.")
@@ -85,7 +91,9 @@ void bindResourceCache(py::module_& m, const char* class_name,
         // Batch operations
         .def("insert_batch", &atom::search::ResourceCache<T>::insertBatch,
              py::arg("items"), py::arg("expiration_time"),
-             ("Inserts multiple " + std::string(type_name) + " resources into the cache with an expiration time.").c_str())
+             ("Inserts multiple " + std::string(type_name) +
+              " resources into the cache with an expiration time.")
+                 .c_str())
         .def("remove_batch", &atom::search::ResourceCache<T>::removeBatch,
              py::arg("keys"), "Removes multiple resources from the cache.")
 
@@ -103,8 +111,8 @@ void bindResourceCache(py::module_& m, const char* class_name,
 /**
  * @brief Binds the StringCache class to Python.
  *
- * This function creates Python bindings for the ResourceCache<std::string> class
- * with comprehensive documentation and examples.
+ * This function creates Python bindings for the ResourceCache<std::string>
+ * class with comprehensive documentation and examples.
  *
  * @param m The pybind11 module to bind to
  */

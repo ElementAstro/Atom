@@ -262,8 +262,8 @@ auto getChinaTimestampString() -> std::string {
     }
 }
 
-auto timeStampToString(time_t timestamp, std::string_view format)
-    -> std::string {
+auto timeStampToString(time_t timestamp,
+                       std::string_view format) -> std::string {
     // Input validation
     if (!isValidTimestamp(timestamp)) {
         THROW_TIME_CONVERT_ERROR("Invalid timestamp value: " +
@@ -387,9 +387,10 @@ auto getUtcTime() -> std::string {
         // C++20 format approach if available
 #if __cpp_lib_format >= 202106L
         // 使用 strftime 替代 std::format
-        if (std::strftime(tls_buffer.data(), tls_buffer.size(), "%Y-%m-%dT%H:%M:%SZ",
-                          &utcTime) == 0) {
-            THROW_TIME_CONVERT_ERROR("strftime failed with format %Y-%m-%dT%H:%M:%SZ");
+        if (std::strftime(tls_buffer.data(), tls_buffer.size(),
+                          "%Y-%m-%dT%H:%M:%SZ", &utcTime) == 0) {
+            THROW_TIME_CONVERT_ERROR(
+                "strftime failed with format %Y-%m-%dT%H:%M:%SZ");
         }
         return std::string(tls_buffer.data());
 #else

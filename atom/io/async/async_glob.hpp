@@ -190,10 +190,9 @@ private:
      * @param innerIndex End index of the character class
      * @return The processed character class string
      */
-    [[nodiscard]] auto processCharacterClass(std::string_view pattern,
-                                             std::size_t& index,
-                                             std::size_t innerIndex) const
-        -> std::string;
+    [[nodiscard]] auto processCharacterClass(
+        std::string_view pattern, std::size_t& index,
+        std::size_t innerIndex) const -> std::string;
 
     /**
      * @brief Processes character ranges within character classes.
@@ -202,18 +201,17 @@ private:
      * @param innerIndex End index of the character class
      * @return The processed character range string
      */
-    [[nodiscard]] auto processCharacterRanges(std::string_view pattern,
-                                              std::size_t& index,
-                                              std::size_t innerIndex) const
-        -> std::string;
+    [[nodiscard]] auto processCharacterRanges(
+        std::string_view pattern, std::size_t& index,
+        std::size_t innerIndex) const -> std::string;
 
     /**
      * @brief Checks if a character needs to be escaped in regex and escapes it.
      * @param currentChar The character to check and potentially escape
      * @param resultString The result string to append to
      */
-    auto escapeRegexChar(char currentChar, std::string& resultString) const
-        -> void;
+    auto escapeRegexChar(char currentChar,
+                         std::string& resultString) const -> void;
 
     /**
      * @brief Processes a bracket expression in a glob pattern.
@@ -222,10 +220,9 @@ private:
      * @param patternSize Size of the pattern
      * @return The processed bracket expression string
      */
-    [[nodiscard]] auto processBracketExpression(std::string_view pattern,
-                                                std::size_t& index,
-                                                std::size_t patternSize) const
-        -> std::string;
+    [[nodiscard]] auto processBracketExpression(
+        std::string_view pattern, std::size_t& index,
+        std::size_t patternSize) const -> std::string;
 
     /**
      * @brief Compiles a glob pattern into a regular expression.
@@ -568,6 +565,4 @@ inline AsyncGlob::Task<std::vector<fs::path>> AsyncGlob::glob_async(
 }
 
 }  // namespace atom::io
-#endif // ATOM_USE_ASIO
-
-
+#endif  // ATOM_USE_ASIO

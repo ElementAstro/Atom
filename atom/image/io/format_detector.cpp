@@ -366,10 +366,12 @@ bool FormatDetector::checkSignature(const uint8_t* data, size_t size,
 }
 
 std::unordered_map<std::string, std::string> FormatDetector::analyzeHeader(
-    const uint8_t* data, size_t size, ImageFormat format) const {
+    [[maybe_unused]] const uint8_t* data, [[maybe_unused]] size_t size,
+    ImageFormat format) const {
     std::unordered_map<std::string, std::string> metadata;
 
     // Basic format-specific header analysis
+    // TODO: Implement actual header parsing using data and size parameters
     switch (format) {
         case ImageFormat::JPEG:
             // Could extract EXIF data here

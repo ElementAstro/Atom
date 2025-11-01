@@ -104,7 +104,7 @@ foreach(type ${MODULE_TYPES})
     )
     if(TARGET atom-${type})
       target_link_libraries(atom_${type} PRIVATE atom-${type})
-    endif()    # 对web模块特殊处理，确保链接到address组件和utils库
+    endif() # 对web模块特殊处理，确保链接到address组件和utils库
     if("${type}" STREQUAL "web")
       if(TARGET atom-web-address)
         target_link_libraries(atom_${type} PRIVATE atom-web-address)

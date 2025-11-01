@@ -11,7 +11,6 @@
 #include "protocol.hpp"
 #include "types.hpp"
 
-
 using namespace mqtt;
 using ::testing::_;
 using ::testing::Invoke;

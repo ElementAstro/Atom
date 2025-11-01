@@ -60,7 +60,8 @@ TEST_F(RegistryTest, CreateKey) {
     EXPECT_TRUE(registry.keyExists("NewKey"));
 
     // 测试创建嵌套键
-    EXPECT_EQ(registry.createKey("Parent/Child/GrandChild"), RegistryResult::SUCCESS);
+    EXPECT_EQ(registry.createKey("Parent/Child/GrandChild"),
+              RegistryResult::SUCCESS);
     EXPECT_TRUE(registry.keyExists("Parent/Child/GrandChild"));
 
     // 测试创建已存在的键
@@ -77,7 +78,8 @@ TEST_F(RegistryTest, DeleteKey) {
     EXPECT_FALSE(registry.keyExists("KeyToDelete"));
 
     // 测试删除不存在的键
-    EXPECT_EQ(registry.deleteKey("NonExistentKey"), RegistryResult::KEY_NOT_FOUND);
+    EXPECT_EQ(registry.deleteKey("NonExistentKey"),
+              RegistryResult::KEY_NOT_FOUND);
 
     // 测试删除有子键的键
     ASSERT_EQ(registry.createKey("Parent/Child"), RegistryResult::SUCCESS);
@@ -144,7 +146,8 @@ TEST_F(RegistryTest, SetAndGetValue) {
 
 TEST_F(RegistryTest, SetAndGetTypedValue) {
     // 设置一个带类型的值
-    EXPECT_EQ(registry.setTypedValue(testKeyPath, testValueName, testValueData, "string"),
+    EXPECT_EQ(registry.setTypedValue(testKeyPath, testValueName, testValueData,
+                                     "string"),
               RegistryResult::SUCCESS);
 
     // 获取该值及其类型
@@ -227,7 +230,8 @@ TEST_F(RegistryTest, GetValueNames) {
 TEST_F(RegistryTest, GetValueInfo) {
     // 设置一个带类型的值
     std::string testType = "string";
-    ASSERT_EQ(registry.setTypedValue(testKeyPath, testValueName, testValueData, testType),
+    ASSERT_EQ(registry.setTypedValue(testKeyPath, testValueName, testValueData,
+                                     testType),
               RegistryResult::SUCCESS);
 
     // 获取值信息
@@ -238,7 +242,8 @@ TEST_F(RegistryTest, GetValueInfo) {
     EXPECT_EQ(valueInfo->size, testValueData.size());
     // 我们不能严格测试lastModified的具体值，但可以确保它是近期时间
     auto now = std::time(nullptr);
-    EXPECT_LE(std::abs(std::difftime(valueInfo->lastModified, now)), 60); // 60秒内
+    EXPECT_LE(std::abs(std::difftime(valueInfo->lastModified, now)),
+              60);  // 60秒内
 
     // 获取不存在值的信息
     valueInfo = registry.getValueInfo(testKeyPath, "NonExistentValue");
@@ -315,7 +320,8 @@ TEST_F(RegistryTest, ExportAndImportRegistry) {
               RegistryResult::SUCCESS);
 
     // 导出为不同格式
-    for (auto format : {RegistryFormat::TEXT, RegistryFormat::JSON, RegistryFormat::XML}) {
+    for (auto format :
+         {RegistryFormat::TEXT, RegistryFormat::JSON, RegistryFormat::XML}) {
         // 导出注册表
         EXPECT_EQ(registry.exportRegistry(testExportPath, format),
                   RegistryResult::SUCCESS);
@@ -353,13 +359,13 @@ TEST_F(RegistryTest, ExportAndImportRegistry) {
     Registry mergeRegistry;
     ASSERT_EQ(mergeRegistry.initialize(testExportPath + ".merge"),
               RegistryResult::SUCCESS);
-    ASSERT_EQ(mergeRegistry.createKey("UniqueKey"),
-              RegistryResult::SUCCESS);
+    ASSERT_EQ(mergeRegistry.createKey("UniqueKey"), RegistryResult::SUCCESS);
     ASSERT_EQ(mergeRegistry.setValue("UniqueKey", "UniqueValue", "UniqueData"),
               RegistryResult::SUCCESS);
 
     // 导入并合并
-    EXPECT_EQ(mergeRegistry.importRegistry(testExportPath, RegistryFormat::JSON, true),
+    EXPECT_EQ(mergeRegistry.importRegistry(testExportPath, RegistryFormat::JSON,
+                                           true),
               RegistryResult::SUCCESS);
 
     // 验证原数据和导入的数据都存在
@@ -421,9 +427,11 @@ TEST_F(RegistryTest, SearchValues) {
     for (const auto& [key, value] : results) {
         if (key == "SearchTest/Key1" && value == "SearchableContent") {
             foundKey1 = true;
-        } else if (key == "SearchTest/Key3" && value == "SearchableContentWithMore") {
+        } else if (key == "SearchTest/Key3" &&
+                   value == "SearchableContentWithMore") {
             foundKey3 = true;
-        } else if (key == "DifferentPath/Key4" && value == "SearchableContent") {
+        } else if (key == "DifferentPath/Key4" &&
+                   value == "SearchableContent") {
             foundKey4 = true;
         }
     }
@@ -447,7 +455,8 @@ TEST_F(RegistryTest, EventCallbacks) {
 
     // 注册回调
     size_t callbackId = registry.registerEventCallback(
-        [&callbackFired, &callbackKey, &callbackValue](const std::string& key, const std::string& value) {
+        [&callbackFired, &callbackKey, &callbackValue](
+            const std::string& key, const std::string& value) {
             callbackFired = true;
             callbackKey = key;
             callbackValue = value;
@@ -568,7 +577,8 @@ TEST_F(RegistryTest, ErrorHandling) {
     EXPECT_EQ(registry.setValue(testKeyPath, testValueName, testValueData),
               RegistryResult::SUCCESS);
     errorMsg = registry.getLastError();
-    EXPECT_TRUE(errorMsg.empty() || errorMsg.find("SUCCESS") != std::string::npos);
+    EXPECT_TRUE(errorMsg.empty() ||
+                errorMsg.find("SUCCESS") != std::string::npos);
 }
 
 // 多线程测试
@@ -586,7 +596,8 @@ TEST_F(RegistryTest, ThreadSafety) {
 
             for (int i = 0; i < operationsPerThread; ++i) {
                 std::string valueName = "Value" + std::to_string(i);
-                std::string valueData = "Data" + std::to_string(i) + "_" + std::to_string(t);
+                std::string valueData =
+                    "Data" + std::to_string(i) + "_" + std::to_string(t);
 
                 registry.setValue(threadKeyPath, valueName, valueData);
 
@@ -596,7 +607,8 @@ TEST_F(RegistryTest, ThreadSafety) {
                 }
 
                 if (i % 10 == 0) {
-                    registry.deleteValue(threadKeyPath, "Value" + std::to_string(i / 10));
+                    registry.deleteValue(threadKeyPath,
+                                         "Value" + std::to_string(i / 10));
                 }
             }
         });
@@ -618,11 +630,12 @@ TEST_F(RegistryTest, ThreadSafety) {
         // 验证一些随机值
         for (int i = operationsPerThread - 5; i < operationsPerThread; ++i) {
             std::string valueName = "Value" + std::to_string(i);
-            if (i % 10 != 0) { // 非删除的值
+            if (i % 10 != 0) {  // 非删除的值
                 EXPECT_TRUE(registry.valueExists(threadKeyPath, valueName));
                 auto value = registry.getValue(threadKeyPath, valueName);
                 EXPECT_TRUE(value.has_value());
-                EXPECT_EQ(value.value(), "Data" + std::to_string(i) + "_" + std::to_string(t));
+                EXPECT_EQ(value.value(),
+                          "Data" + std::to_string(i) + "_" + std::to_string(t));
             }
         }
     }
@@ -642,14 +655,16 @@ TEST_F(RegistryTest, DISABLED_PerformanceTest) {
 
         for (int j = 0; j < valuesPerKey; ++j) {
             std::string valueName = "Value" + std::to_string(j);
-            std::string valueData = "Data" + std::to_string(i) + "_" + std::to_string(j);
+            std::string valueData =
+                "Data" + std::to_string(i) + "_" + std::to_string(j);
             registry.setValue(keyPath, valueName, valueData);
         }
     }
 
     auto createEnd = std::chrono::high_resolution_clock::now();
-    auto createDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        createEnd - start).count();
+    auto createDuration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(createEnd - start)
+            .count();
 
     std::cout << "Created " << numKeys << " keys with " << valuesPerKey
               << " values each in " << createDuration << "ms" << std::endl;
@@ -671,20 +686,26 @@ TEST_F(RegistryTest, DISABLED_PerformanceTest) {
     }
 
     auto readEnd = std::chrono::high_resolution_clock::now();
-    auto readDuration = std::chrono::duration_cast<std::chrono::milliseconds>(
-        readEnd - start).count();
+    auto readDuration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(readEnd - start)
+            .count();
 
-    std::cout << "Read " << readCount << " values in " << readDuration << "ms" << std::endl;
+    std::cout << "Read " << readCount << " values in " << readDuration << "ms"
+              << std::endl;
 
     // 验证读取的数量正确
     EXPECT_EQ(readCount, numKeys * valuesPerKey);
 
     // 输出每秒操作数
-    double createOpsPerSecond = (double)(numKeys * valuesPerKey) / ((double)createDuration / 1000.0);
-    double readOpsPerSecond = (double)readCount / ((double)readDuration / 1000.0);
+    double createOpsPerSecond =
+        (double)(numKeys * valuesPerKey) / ((double)createDuration / 1000.0);
+    double readOpsPerSecond =
+        (double)readCount / ((double)readDuration / 1000.0);
 
-    std::cout << "Create operations per second: " << createOpsPerSecond << std::endl;
-    std::cout << "Read operations per second: " << readOpsPerSecond << std::endl;
+    std::cout << "Create operations per second: " << createOpsPerSecond
+              << std::endl;
+    std::cout << "Read operations per second: " << readOpsPerSecond
+              << std::endl;
 }
 
 // 边缘情况测试
@@ -732,15 +753,18 @@ TEST_F(RegistryTest, Encryption) {
     Registry encryptedRegistry;
 
     auto tempDir = std::filesystem::temp_directory_path();
-    std::string encryptedFilePath = (tempDir / "encrypted_registry.dat").string();
+    std::string encryptedFilePath =
+        (tempDir / "encrypted_registry.dat").string();
 
     EXPECT_EQ(encryptedRegistry.initialize(encryptedFilePath, true),
               RegistryResult::SUCCESS);
 
     // 设置一些数据
-    EXPECT_EQ(encryptedRegistry.createKey("EncryptedKey"), RegistryResult::SUCCESS);
-    EXPECT_EQ(encryptedRegistry.setValue("EncryptedKey", "SecretValue", "SecretData"),
+    EXPECT_EQ(encryptedRegistry.createKey("EncryptedKey"),
               RegistryResult::SUCCESS);
+    EXPECT_EQ(
+        encryptedRegistry.setValue("EncryptedKey", "SecretValue", "SecretData"),
+        RegistryResult::SUCCESS);
 
     // 确保数据已正确存储
     auto value = encryptedRegistry.getValue("EncryptedKey", "SecretValue");
@@ -757,7 +781,8 @@ TEST_F(RegistryTest, Encryption) {
 
     // 尝试读取数据，这可能成功或失败，取决于实现
     // 但即使成功，也不应该匹配原始数据
-    auto attemptedValue = nonEncryptedRegistry.getValue("EncryptedKey", "SecretValue");
+    auto attemptedValue =
+        nonEncryptedRegistry.getValue("EncryptedKey", "SecretValue");
     if (attemptedValue.has_value()) {
         EXPECT_NE(attemptedValue.value(), "SecretData");
     }

@@ -7,7 +7,6 @@
 #include "../logger/logger.h"
 #include "timer.h"
 
-
 // Minimal mock Logger for capturing log_internal calls
 class MockLogger : public modern_log::Logger {
 public:

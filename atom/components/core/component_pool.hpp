@@ -330,8 +330,7 @@ private:
     ComponentPool<T>& getPool();
 
     mutable std::shared_mutex poolsMutex_;
-    std::unordered_map<std::type_index, std::shared_ptr<void>>
-        pools_;
+    std::unordered_map<std::type_index, std::shared_ptr<void>> pools_;
 };
 
 /**
@@ -738,10 +737,9 @@ void SIMDComponentContainer<T>::optimize() {
     std::unique_lock lock(mutex_);
 
     // Remove null components
-    components_.erase(
-        std::remove_if(components_.begin(), components_.end(),
-                      [](const auto& comp) { return !comp; }),
-        components_.end());
+    components_.erase(std::remove_if(components_.begin(), components_.end(),
+                                     [](const auto& comp) { return !comp; }),
+                      components_.end());
 
     // Shrink to fit to reduce memory overhead
     components_.shrink_to_fit();
@@ -749,10 +747,12 @@ void SIMDComponentContainer<T>::optimize() {
 
 template <typename T>
 template <typename Func>
-void SIMDComponentContainer<T>::processBatch(size_t startIdx, size_t endIdx, Func&& func) {
+void SIMDComponentContainer<T>::processBatch(size_t startIdx, size_t endIdx,
+                                             Func&& func) {
     // Prefetch if enabled
     if (config_.enablePrefetch && config_.prefetchDistance > 0) {
-        const size_t prefetchIdx = std::min(endIdx + config_.prefetchDistance, components_.size());
+        const size_t prefetchIdx =
+            std::min(endIdx + config_.prefetchDistance, components_.size());
         if (prefetchIdx < components_.size()) {
             __builtin_prefetch(components_[prefetchIdx].get(), 0, 3);
         }

@@ -603,7 +603,8 @@ TEST_F(ParserTest, IsProcessingFlag) {
             // Generate a very large vector that will take time to parse
             std::string largeVector;
             for (int i = 0; i < 100000; ++i) {
-                if (i > 0) largeVector += ",";
+                if (i > 0)
+                    largeVector += ",";
                 largeVector += std::to_string(i);
             }
             parsingStarted = true;

@@ -16,14 +16,16 @@ Description: Environment variable management
 #define ATOM_UTILS_ENV_HPP
 
 #include <algorithm>
-#include <cstdlib>
 #include <filesystem>
-#include <functional>
-#include <memory>
+#include <mutex>
 #include <optional>
 #include <sstream>
+#include <string>
+#include <string_view>
 #include <tuple>
 #include <type_traits>
+#include <utility>
+#include <vector>
 
 #include "atom/containers/high_performance.hpp"
 #include "atom/macro.hpp"
@@ -142,8 +144,8 @@ public:
      * exist.
      * @return The value associated with the key, or the default value.
      */
-    ATOM_NODISCARD auto get(const String& key, const String& default_value = "")
-        -> String;
+    ATOM_NODISCARD auto get(const String& key,
+                            const String& default_value = "") -> String;
 
     /**
      * @brief Gets the value associated with a key and converts it to the
@@ -155,8 +157,8 @@ public:
      * @return The value converted to type T, or the default value.
      */
     template <typename T>
-    ATOM_NODISCARD auto getAs(const String& key, const T& default_value = T())
-        -> T;
+    ATOM_NODISCARD auto getAs(const String& key,
+                              const T& default_value = T()) -> T;
 
     /**
      * @brief Gets the value associated with a key as an optional type.
@@ -193,9 +195,8 @@ public:
      * exist.
      * @return The value of the environment variable, or the default value.
      */
-    ATOM_NODISCARD static auto getEnv(const String& key,
-                                      const String& default_value = "")
-        -> String;
+    ATOM_NODISCARD static auto getEnv(
+        const String& key, const String& default_value = "") -> String;
 
     /**
      * @brief Gets the value of an environment variable and converts it to the
@@ -322,8 +323,8 @@ public:
      * @return Expanded string.
      */
     ATOM_NODISCARD static auto expandVariables(
-        const String& str, VariableFormat format = VariableFormat::AUTO)
-        -> String;
+        const String& str,
+        VariableFormat format = VariableFormat::AUTO) -> String;
 
     /**
      * @brief Sets a persistent environment variable.
@@ -342,9 +343,8 @@ public:
      * @param level Persistence level.
      * @return True if successfully deleted, otherwise false.
      */
-    static auto deletePersistentEnv(const String& key,
-                                    PersistLevel level = PersistLevel::USER)
-        -> bool;
+    static auto deletePersistentEnv(
+        const String& key, PersistLevel level = PersistLevel::USER) -> bool;
 
     /**
      * @brief Adds a path to the PATH environment variable.
@@ -398,8 +398,8 @@ public:
      */
     ATOM_NODISCARD static auto mergeEnvironments(
         const HashMap<String, String>& baseEnv,
-        const HashMap<String, String>& overlayEnv, bool override = true)
-        -> HashMap<String, String>;
+        const HashMap<String, String>& overlayEnv,
+        bool override = true) -> HashMap<String, String>;
 
     /**
      * @brief Gets the system name.

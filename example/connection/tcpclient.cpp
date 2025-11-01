@@ -48,7 +48,7 @@ public:
     enum class Level { Info, Success, Warning, Error, Debug };
 
     static void write(Level level, const std::string& component,
-                    const std::string& message) {
+                      const std::string& message) {
         static std::mutex log_mutex;
         std::lock_guard<std::mutex> lock(log_mutex);
 
@@ -103,34 +103,42 @@ public:
         auto seconds =
             std::chrono::duration_cast<std::chrono::seconds>(duration).count();
 
-        ExampleLogger::write(ExampleLogger::Level::Info, "Stats", "=== Connection Statistics ===");
         ExampleLogger::write(ExampleLogger::Level::Info, "Stats",
-                    "Runtime: " + std::to_string(seconds) + " seconds");
+                             "=== Connection Statistics ===");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Stats",
+            "Runtime: " + std::to_string(seconds) + " seconds");
         ExampleLogger::write(
             ExampleLogger::Level::Info, "Stats",
             "Total connections: " + std::to_string(total_connections.load()));
         ExampleLogger::write(
             ExampleLogger::Level::Info, "Stats",
             "Successful: " + std::to_string(successful_connections.load()));
-        ExampleLogger::write(ExampleLogger::Level::Info, "Stats",
-                    "Failed: " + std::to_string(failed_connections.load()));
-        ExampleLogger::write(ExampleLogger::Level::Info, "Stats",
-                    "Bytes sent: " + std::to_string(bytes_sent.load()));
-        ExampleLogger::write(ExampleLogger::Level::Info, "Stats",
-                    "Bytes received: " + std::to_string(bytes_received.load()));
-        ExampleLogger::write(ExampleLogger::Level::Info, "Stats",
-                    "Messages sent: " + std::to_string(messages_sent.load()));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Stats",
+            "Failed: " + std::to_string(failed_connections.load()));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Stats",
+            "Bytes sent: " + std::to_string(bytes_sent.load()));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Stats",
+            "Bytes received: " + std::to_string(bytes_received.load()));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Stats",
+            "Messages sent: " + std::to_string(messages_sent.load()));
         ExampleLogger::write(
             ExampleLogger::Level::Info, "Stats",
             "Messages received: " + std::to_string(messages_received.load()));
 
         if (seconds > 0) {
-            ExampleLogger::write(ExampleLogger::Level::Info, "Stats",
-                        "Avg bytes/sec sent: " +
-                            std::to_string(bytes_sent.load() / seconds));
-            ExampleLogger::write(ExampleLogger::Level::Info, "Stats",
-                        "Avg bytes/sec received: " +
-                            std::to_string(bytes_received.load() / seconds));
+            ExampleLogger::write(
+                ExampleLogger::Level::Info, "Stats",
+                "Avg bytes/sec sent: " +
+                    std::to_string(bytes_sent.load() / seconds));
+            ExampleLogger::write(
+                ExampleLogger::Level::Info, "Stats",
+                "Avg bytes/sec received: " +
+                    std::to_string(bytes_received.load() / seconds));
         }
     }
 };
@@ -166,14 +174,14 @@ public:
 
         if (result.has_value()) {
             connections_.push_back(std::move(client));
-            ExampleLogger::write(ExampleLogger::Level::Success, "Pool",
-                        "Added connection " +
-                            std::to_string(connections_.size()) + " to " +
-                            host + ":" + std::to_string(port));
+            ExampleLogger::write(
+                ExampleLogger::Level::Success, "Pool",
+                "Added connection " + std::to_string(connections_.size()) +
+                    " to " + host + ":" + std::to_string(port));
             return true;
         } else {
             ExampleLogger::write(ExampleLogger::Level::Error, "Pool",
-                        "Failed to add connection to pool");
+                                 "Failed to add connection to pool");
             return false;
         }
     }
@@ -216,19 +224,21 @@ ConnectionStats globalStats;
 // Enhanced callback functions with statistics tracking
 void onConnected() {
     ExampleLogger::write(ExampleLogger::Level::Success, "TcpClient",
-                "Successfully connected to the server");
+                         "Successfully connected to the server");
     connectionEvents.push_back("connected");
     globalStats.successful_connections++;
 }
 
 void onDisconnected() {
-    ExampleLogger::write(ExampleLogger::Level::Info, "TcpClient", "Disconnected from the server");
+    ExampleLogger::write(ExampleLogger::Level::Info, "TcpClient",
+                         "Disconnected from the server");
     connectionEvents.push_back("disconnected");
 }
 
 void onDataReceived(std::span<const char> data) {
     std::string received(data.begin(), data.end());
-    ExampleLogger::write(ExampleLogger::Level::Info, "TcpClient", "Received data: " + received);
+    ExampleLogger::write(ExampleLogger::Level::Info, "TcpClient",
+                         "Received data: " + received);
     receivedMessages.push_back(received);
     globalStats.bytes_received += data.size();
     globalStats.messages_received++;
@@ -236,7 +246,8 @@ void onDataReceived(std::span<const char> data) {
 
 void onError(const std::system_error& error) {
     std::string errorMsg = std::string(error.what());
-    ExampleLogger::write(ExampleLogger::Level::Error, "TcpClient", "Error: " + errorMsg);
+    ExampleLogger::write(ExampleLogger::Level::Error, "TcpClient",
+                         "Error: " + errorMsg);
     errorMessages.push_back(errorMsg);
     globalStats.failed_connections++;
 }
@@ -269,7 +280,7 @@ auto measureLatency(Func&& func) {
 // Example 1: Enhanced basic TCP client connection with comprehensive features
 void basicTcpClientExample(const std::string& host, int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                "Starting enhanced basic TCP client example");
+                         "Starting enhanced basic TCP client example");
 
     try {
         // Configure client options with enhanced settings
@@ -291,8 +302,9 @@ void basicTcpClientExample(const std::string& host, int port) {
         // now tcpClient.setOnErrorCallback(onError);
 
         // Measure connection latency
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                    "Connecting to " + host + ":" + std::to_string(port));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Example1",
+            "Connecting to " + host + ":" + std::to_string(port));
         auto [connectResult, connectLatency] = measureLatency([&]() {
             return tcpClient.connect(host, static_cast<uint16_t>(port),
                                      std::chrono::milliseconds(5000));
@@ -300,18 +312,20 @@ void basicTcpClientExample(const std::string& host, int port) {
 
         if (!connectResult.has_value()) {
             ExampleLogger::write(ExampleLogger::Level::Error, "Example1",
-                        "Failed to connect to the server");
+                                 "Failed to connect to the server");
             globalStats.failed_connections++;
             return;
         }
 
         ExampleLogger::write(ExampleLogger::Level::Success, "Example1",
-                    "Connected successfully (latency: " +
-                        std::to_string(connectLatency.count()) + " μs)");
+                             "Connected successfully (latency: " +
+                                 std::to_string(connectLatency.count()) +
+                                 " μs)");
 
         // Start receiving data in a separate thread
         tcpClient.startReceiving(1024);
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example1", "Started receiving data");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
+                             "Started receiving data");
 
         // Send multiple test messages with different sizes
         std::vector<std::string> testMessages = {
@@ -327,16 +341,18 @@ void basicTcpClientExample(const std::string& host, int port) {
                 measureLatency([&]() { return tcpClient.send(data_span); });
 
             if (sendResult.has_value()) {
-                ExampleLogger::write(ExampleLogger::Level::Success, "Example1",
-                            "Sent message " + std::to_string(i + 1) + ": " +
-                                std::to_string(sendResult.value()) + " bytes " +
-                                "(latency: " +
-                                std::to_string(sendLatency.count()) + " μs)");
+                ExampleLogger::write(
+                    ExampleLogger::Level::Success, "Example1",
+                    "Sent message " + std::to_string(i + 1) + ": " +
+                        std::to_string(sendResult.value()) + " bytes " +
+                        "(latency: " + std::to_string(sendLatency.count()) +
+                        " μs)");
                 globalStats.bytes_sent += sendResult.value();
                 globalStats.messages_sent++;
             } else {
-                ExampleLogger::write(ExampleLogger::Level::Error, "Example1",
-                            "Failed to send message " + std::to_string(i + 1));
+                ExampleLogger::write(
+                    ExampleLogger::Level::Error, "Example1",
+                    "Failed to send message " + std::to_string(i + 1));
             }
 
             // Small delay between messages
@@ -345,39 +361,40 @@ void basicTcpClientExample(const std::string& host, int port) {
 
         // Wait for responses
         ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                    "Waiting for server responses...");
+                             "Waiting for server responses...");
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
         // Test connection status
         if (tcpClient.isConnected()) {
             ExampleLogger::write(ExampleLogger::Level::Success, "Example1",
-                        "Connection is still active");
+                                 "Connection is still active");
         } else {
             ExampleLogger::write(ExampleLogger::Level::Warning, "Example1",
-                        "Connection appears to be lost");
+                                 "Connection appears to be lost");
         }
 
         // Stop receiving before disconnecting
         tcpClient.stopReceiving();
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example1", "Stopped receiving data");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
+                             "Stopped receiving data");
 
         // Disconnect from the server
         tcpClient.disconnect();
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example1",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
         globalStats.failed_connections++;
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example1",
-                "Enhanced basic TCP client example completed");
+                         "Enhanced basic TCP client example completed");
 }
 
 // Example 2: Synchronous receive with timeout
 void synchronousReceiveExample(const std::string& host, int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                "Starting synchronous receive example");
+                         "Starting synchronous receive example");
 
     try {
         atom::connection::TcpClient::Options options{};
@@ -387,18 +404,20 @@ void synchronousReceiveExample(const std::string& host, int port) {
         auto connectResult = tcpClient.connect(
             host, static_cast<uint16_t>(port), std::chrono::milliseconds(5000));
         if (!connectResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Error, "Example2", "Failed to connect");
+            ExampleLogger::write(ExampleLogger::Level::Error, "Example2",
+                                 "Failed to connect");
             return;
         }
         ExampleLogger::write(ExampleLogger::Level::Success, "Example2",
-                    "Connected for synchronous receive test");
+                             "Connected for synchronous receive test");
 
         // Send a request message
         std::string request = "GET_DATA";
         std::span<const char> request_span(request.data(), request.size());
         auto sendResult = tcpClient.send(request_span);
         if (sendResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Info, "Example2", "Sent request: " + request);
+            ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
+                                 "Sent request: " + request);
         }
 
         // Receive response with timeout
@@ -408,34 +427,35 @@ void synchronousReceiveExample(const std::string& host, int port) {
             std::string response(receiveResult.value().begin(),
                                  receiveResult.value().end());
             ExampleLogger::write(ExampleLogger::Level::Success, "Example2",
-                        "Received response: " + response);
+                                 "Received response: " + response);
         } else {
             ExampleLogger::write(ExampleLogger::Level::Warning, "Example2",
-                        "No response received within timeout");
+                                 "No response received within timeout");
         }
 
         tcpClient.disconnect();
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example2",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example2",
-                "Synchronous receive example completed");
+                         "Synchronous receive example completed");
 }
 
 // Example 3: Asynchronous operations
 void asyncOperationsExample(const std::string& host, int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
-                "Starting asynchronous operations example");
+                         "Starting asynchronous operations example");
 
     try {
         atom::connection::TcpClient::Options options{};
         atom::connection::TcpClient tcpClient(options);
 
         // Connect asynchronously
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example3", "Connecting asynchronously...");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
+                             "Connecting asynchronously...");
         auto connectTask = tcpClient.connect_async(
             host, static_cast<uint16_t>(port), std::chrono::milliseconds(5000));
 
@@ -445,10 +465,12 @@ void asyncOperationsExample(const std::string& host, int port) {
         }
         auto connectResult = connectTask.result();
         if (!connectResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Error, "Example3", "Async connection failed");
+            ExampleLogger::write(ExampleLogger::Level::Error, "Example3",
+                                 "Async connection failed");
             return;
         }
-        ExampleLogger::write(ExampleLogger::Level::Success, "Example3", "Async connection successful");
+        ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
+                             "Async connection successful");
 
         // Send data asynchronously
         std::string message = "Async message";
@@ -459,9 +481,10 @@ void asyncOperationsExample(const std::string& host, int port) {
         }
         auto sendResult = sendTask.result();
         if (sendResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
-                        "Async send successful: " +
-                            std::to_string(sendResult.value()) + " bytes");
+            ExampleLogger::write(
+                ExampleLogger::Level::Success, "Example3",
+                "Async send successful: " + std::to_string(sendResult.value()) +
+                    " bytes");
         }
 
         // Receive data asynchronously
@@ -475,24 +498,24 @@ void asyncOperationsExample(const std::string& host, int port) {
             std::string response(receiveResult.value().begin(),
                                  receiveResult.value().end());
             ExampleLogger::write(ExampleLogger::Level::Success, "Example3",
-                        "Async receive successful: " + response);
+                                 "Async receive successful: " + response);
         }
 
         tcpClient.disconnect();
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example3",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example3",
-                "Asynchronous operations example completed");
+                         "Asynchronous operations example completed");
 }
 
 // Example 4: Multiple message exchange with performance monitoring
 void multipleMessageExample(const std::string& host, int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                "Starting enhanced multiple message example");
+                         "Starting enhanced multiple message example");
 
     try {
         atom::connection::TcpClient::Options options{};
@@ -504,12 +527,13 @@ void multipleMessageExample(const std::string& host, int port) {
         auto connectResult = tcpClient.connect(
             host, static_cast<uint16_t>(port), std::chrono::milliseconds(5000));
         if (!connectResult.has_value()) {
-            ExampleLogger::write(ExampleLogger::Level::Error, "Example4", "Failed to connect");
+            ExampleLogger::write(ExampleLogger::Level::Error, "Example4",
+                                 "Failed to connect");
             globalStats.failed_connections++;
             return;
         }
         ExampleLogger::write(ExampleLogger::Level::Success, "Example4",
-                    "Connected for multiple message exchange");
+                             "Connected for multiple message exchange");
         globalStats.successful_connections++;
 
         // Send multiple messages with different patterns
@@ -526,8 +550,9 @@ void multipleMessageExample(const std::string& host, int port) {
             {"Large", generateTestData(2048, "LargeMessage")}};
 
         ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                    "Sending " + std::to_string(messagePatterns.size()) +
-                        " different message types");
+                             "Sending " +
+                                 std::to_string(messagePatterns.size()) +
+                                 " different message types");
 
         for (size_t i = 0; i < messagePatterns.size(); ++i) {
             const auto& [type, message] = messagePatterns[i];
@@ -537,17 +562,17 @@ void multipleMessageExample(const std::string& host, int port) {
                 measureLatency([&]() { return tcpClient.send(data_span); });
 
             if (sendResult.has_value()) {
-                ExampleLogger::write(ExampleLogger::Level::Success, "Example4",
-                            "Sent " + type + " message " +
-                                std::to_string(i + 1) + ": " +
-                                std::to_string(sendResult.value()) + " bytes " +
-                                "(latency: " + std::to_string(latency.count()) +
-                                " μs)");
+                ExampleLogger::write(
+                    ExampleLogger::Level::Success, "Example4",
+                    "Sent " + type + " message " + std::to_string(i + 1) +
+                        ": " + std::to_string(sendResult.value()) + " bytes " +
+                        "(latency: " + std::to_string(latency.count()) +
+                        " μs)");
                 globalStats.bytes_sent += sendResult.value();
                 globalStats.messages_sent++;
             } else {
                 ExampleLogger::write(ExampleLogger::Level::Error, "Example4",
-                            "Failed to send " + type + " message");
+                                     "Failed to send " + type + " message");
             }
 
             // Variable delay based on message type
@@ -560,7 +585,7 @@ void multipleMessageExample(const std::string& host, int port) {
 
         // Test rapid-fire messaging
         ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                    "Testing rapid-fire messaging (10 messages)");
+                             "Testing rapid-fire messaging (10 messages)");
         auto rapidStart = std::chrono::high_resolution_clock::now();
 
         for (int i = 0; i < 10; ++i) {
@@ -578,8 +603,8 @@ void multipleMessageExample(const std::string& host, int port) {
             std::chrono::duration_cast<std::chrono::microseconds>(rapidEnd -
                                                                   rapidStart);
         ExampleLogger::write(ExampleLogger::Level::Success, "Example4",
-                    "Rapid-fire completed in " +
-                        std::to_string(rapidDuration.count()) + " μs");
+                             "Rapid-fire completed in " +
+                                 std::to_string(rapidDuration.count()) + " μs");
 
         // Wait for any responses
         std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -588,17 +613,18 @@ void multipleMessageExample(const std::string& host, int port) {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example4",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
         globalStats.failed_connections++;
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example4",
-                "Enhanced multiple message example completed");
+                         "Enhanced multiple message example completed");
 }
 
 // Example 5: Connection pooling demonstration
 void connectionPoolExample(const std::string& host, int port) {
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example5", "Starting connection pool example");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example5",
+                         "Starting connection pool example");
 
     try {
         TcpConnectionPool pool(3);  // Create pool with 3 connections
@@ -618,8 +644,8 @@ void connectionPoolExample(const std::string& host, int port) {
         }
 
         ExampleLogger::write(ExampleLogger::Level::Success, "Example5",
-                    "Created connection pool with " +
-                        std::to_string(pool.size()) + " connections");
+                             "Created connection pool with " +
+                                 std::to_string(pool.size()) + " connections");
 
         // Use connections from the pool
         for (int round = 0; round < 3; ++round) {
@@ -638,16 +664,17 @@ void connectionPoolExample(const std::string& host, int port) {
 
                     auto sendResult = client->send(data_span);
                     if (sendResult.has_value()) {
-                        ExampleLogger::write(ExampleLogger::Level::Success, "Example5",
-                                    "Sent via pool: " + message + " (" +
-                                        std::to_string(sendResult.value()) +
-                                        " bytes)");
+                        ExampleLogger::write(
+                            ExampleLogger::Level::Success, "Example5",
+                            "Sent via pool: " + message + " (" +
+                                std::to_string(sendResult.value()) + " bytes)");
                         globalStats.bytes_sent += sendResult.value();
                         globalStats.messages_sent++;
                     }
                 } else {
-                    ExampleLogger::write(ExampleLogger::Level::Error, "Example5",
-                                "No available connection in pool");
+                    ExampleLogger::write(ExampleLogger::Level::Error,
+                                         "Example5",
+                                         "No available connection in pool");
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -656,20 +683,22 @@ void connectionPoolExample(const std::string& host, int port) {
 
         // Clean up pool
         pool.clear();
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example5", "Connection pool cleared");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example5",
+                             "Connection pool cleared");
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example5",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
-    ExampleLogger::write(ExampleLogger::Level::Info, "Example5", "Connection pool example completed");
+    ExampleLogger::write(ExampleLogger::Level::Info, "Example5",
+                         "Connection pool example completed");
 }
 
 // Example 6: Error handling and recovery patterns
 void errorHandlingExample(const std::string& host, int port) {
     ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
-                "Starting error handling and recovery example");
+                         "Starting error handling and recovery example");
 
     try {
         atom::connection::TcpClient::Options options{};
@@ -677,7 +706,7 @@ void errorHandlingExample(const std::string& host, int port) {
 
         // Test 1: Connection to invalid host
         ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
-                    "Test 1: Connecting to invalid host");
+                             "Test 1: Connecting to invalid host");
         auto invalidResult = tcpClient.connect("invalid.host.example", 12345,
                                                std::chrono::milliseconds(2000));
         if (!invalidResult.has_value()) {
@@ -688,7 +717,7 @@ void errorHandlingExample(const std::string& host, int port) {
 
         // Test 2: Connection to valid host but invalid port
         ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
-                    "Test 2: Connecting to invalid port");
+                             "Test 2: Connecting to invalid port");
         auto invalidPortResult =
             tcpClient.connect(host, static_cast<uint16_t>(65534),
                               std::chrono::milliseconds(2000));
@@ -699,13 +728,14 @@ void errorHandlingExample(const std::string& host, int port) {
         }
 
         // Test 3: Successful connection followed by network simulation
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
-                    "Test 3: Successful connection with error simulation");
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Example6",
+            "Test 3: Successful connection with error simulation");
         auto connectResult = tcpClient.connect(
             host, static_cast<uint16_t>(port), std::chrono::milliseconds(5000));
         if (connectResult.has_value()) {
             ExampleLogger::write(ExampleLogger::Level::Success, "Example6",
-                        "Connected successfully for error testing");
+                                 "Connected successfully for error testing");
 
             // Send a message
             std::string message = "Error test message";
@@ -713,32 +743,36 @@ void errorHandlingExample(const std::string& host, int port) {
             auto sendResult = tcpClient.send(data_span);
             if (sendResult.has_value()) {
                 ExampleLogger::write(ExampleLogger::Level::Success, "Example6",
-                            "Message sent successfully");
+                                     "Message sent successfully");
             }
 
             // Test sending after disconnect (should fail gracefully)
             tcpClient.disconnect();
-            ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
-                        "Disconnected, now testing send on closed connection");
+            ExampleLogger::write(
+                ExampleLogger::Level::Info, "Example6",
+                "Disconnected, now testing send on closed connection");
 
             auto failedSendResult = tcpClient.send(data_span);
             if (!failedSendResult.has_value()) {
-                ExampleLogger::write(ExampleLogger::Level::Success, "Example6",
-                            "Expected failure: Send on closed connection "
-                            "failed as expected");
+                ExampleLogger::write(
+                    ExampleLogger::Level::Success, "Example6",
+                    "Expected failure: Send on closed connection "
+                    "failed as expected");
             }
         }
 
         // Test 4: Reconnection pattern
-        ExampleLogger::write(ExampleLogger::Level::Info, "Example6", "Test 4: Reconnection pattern");
+        ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
+                             "Test 4: Reconnection pattern");
         int maxRetries = 3;
         int retryCount = 0;
         bool connected = false;
 
         while (retryCount < maxRetries && !connected) {
             retryCount++;
-            ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
-                        "Reconnection attempt " + std::to_string(retryCount));
+            ExampleLogger::write(
+                ExampleLogger::Level::Info, "Example6",
+                "Reconnection attempt " + std::to_string(retryCount));
 
             auto retryResult =
                 tcpClient.connect(host, static_cast<uint16_t>(port),
@@ -746,13 +780,14 @@ void errorHandlingExample(const std::string& host, int port) {
             if (retryResult.has_value()) {
                 connected = true;
                 ExampleLogger::write(ExampleLogger::Level::Success, "Example6",
-                            "Reconnected successfully on attempt " +
-                                std::to_string(retryCount));
+                                     "Reconnected successfully on attempt " +
+                                         std::to_string(retryCount));
                 tcpClient.disconnect();
             } else {
                 ExampleLogger::write(ExampleLogger::Level::Warning, "Example6",
-                            "Reconnection attempt " +
-                                std::to_string(retryCount) + " failed");
+                                     "Reconnection attempt " +
+                                         std::to_string(retryCount) +
+                                         " failed");
                 std::this_thread::sleep_for(std::chrono::milliseconds(
                     1000 * retryCount));  // Exponential backoff
             }
@@ -760,17 +795,17 @@ void errorHandlingExample(const std::string& host, int port) {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Example6",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
     }
 
     ExampleLogger::write(ExampleLogger::Level::Info, "Example6",
-                "Error handling and recovery example completed");
+                         "Error handling and recovery example completed");
 }
 
 // Function to print comprehensive summary
 void printEventSummary() {
     ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
-                "=== Comprehensive Example Summary ===");
+                         "=== Comprehensive Example Summary ===");
 
     // Print statistics
     globalStats.print_summary();
@@ -780,7 +815,8 @@ void printEventSummary() {
         ExampleLogger::Level::Info, "Summary",
         "Connection events: " + std::to_string(connectionEvents.size()));
     for (const auto& event : connectionEvents) {
-        ExampleLogger::write(ExampleLogger::Level::Info, "Summary", "Event: " + event);
+        ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
+                             "Event: " + event);
     }
 
     ExampleLogger::write(
@@ -793,15 +829,18 @@ void printEventSummary() {
     }
     if (receivedMessages.size() > 5) {
         ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
-                    "... and " + std::to_string(receivedMessages.size() - 5) +
-                        " more messages");
+                             "... and " +
+                                 std::to_string(receivedMessages.size() - 5) +
+                                 " more messages");
     }
 
     if (!errorMessages.empty()) {
-        ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
-                    "Error messages: " + std::to_string(errorMessages.size()));
+        ExampleLogger::write(
+            ExampleLogger::Level::Info, "Summary",
+            "Error messages: " + std::to_string(errorMessages.size()));
         for (const auto& error : errorMessages) {
-            ExampleLogger::write(ExampleLogger::Level::Info, "Summary", "Error: " + error);
+            ExampleLogger::write(ExampleLogger::Level::Info, "Summary",
+                                 "Error: " + error);
         }
     }
 }
@@ -812,31 +851,34 @@ int main() {
     const int port = 8080;  // Replace with the server's port
 
     ExampleLogger::write(ExampleLogger::Level::Warning, "Main",
-                "This example requires a TCP server running on " + host + ":" +
-                    std::to_string(port));
+                         "This example requires a TCP server running on " +
+                             host + ":" + std::to_string(port));
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "You can use the sockethub example as a server");
+                         "You can use the sockethub example as a server");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main", "");
-    ExampleLogger::write(ExampleLogger::Level::Info, "Main", "Features demonstrated:");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Enhanced basic TCP connection with performance monitoring");
+                         "Features demonstrated:");
+    ExampleLogger::write(
+        ExampleLogger::Level::Info, "Main",
+        "- Enhanced basic TCP connection with performance monitoring");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Synchronous receive operations with timeouts");
+                         "- Synchronous receive operations with timeouts");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Asynchronous operations and coroutines");
+                         "- Asynchronous operations and coroutines");
+    ExampleLogger::write(
+        ExampleLogger::Level::Info, "Main",
+        "- Multiple message patterns and rapid-fire messaging");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Multiple message patterns and rapid-fire messaging");
+                         "- Connection pooling and load balancing");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Connection pooling and load balancing");
+                         "- Comprehensive error handling and recovery");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Comprehensive error handling and recovery");
-    ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                "- Statistics tracking and performance monitoring");
+                         "- Statistics tracking and performance monitoring");
     ExampleLogger::write(ExampleLogger::Level::Info, "Main", "");
 
     try {
         ExampleLogger::write(ExampleLogger::Level::Info, "Main",
-                    "Starting comprehensive TCP client examples");
+                             "Starting comprehensive TCP client examples");
 
         // Run all examples with proper spacing
         basicTcpClientExample(host, port);
@@ -861,7 +903,7 @@ int main() {
         printEventSummary();
 
         ExampleLogger::write(ExampleLogger::Level::Success, "Main",
-                    "All TCP client examples completed successfully");
+                             "All TCP client examples completed successfully");
         ExampleLogger::write(ExampleLogger::Level::Info, "Main", "");
         ExampleLogger::write(
             ExampleLogger::Level::Info, "Main",
@@ -870,7 +912,7 @@ int main() {
 
     } catch (const std::exception& e) {
         ExampleLogger::write(ExampleLogger::Level::Error, "Main",
-                    "Exception: " + std::string(e.what()));
+                             "Exception: " + std::string(e.what()));
         globalStats.print_summary();
         return 1;
     }

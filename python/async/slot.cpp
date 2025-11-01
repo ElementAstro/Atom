@@ -5,7 +5,6 @@
 #include <pybind11/stl.h>
 #include <memory>
 
-
 namespace py = pybind11;
 
 PYBIND11_MODULE(slot, m) {
@@ -728,52 +727,55 @@ Examples:
 
     // Utility functions for signal management and testing
     m.def(
-        "benchmark_signal_performance",
-        [](size_t num_slots, size_t num_emissions) -> py::dict {
-            using namespace std::chrono;
+         "benchmark_signal_performance",
+         [](size_t num_slots, size_t num_emissions) -> py::dict {
+             using namespace std::chrono;
 
-            py::dict results;
-            atom::async::Signal<py::object> signal;
+             py::dict results;
+             atom::async::Signal<py::object> signal;
 
-            // Connect slots
-            for (size_t i = 0; i < num_slots; ++i) {
-                signal.connect([i](const py::object& /*data*/) {
-                    // Simulate some work
-                    volatile int dummy = 0;
-                    for (int j = 0; j < 100; ++j) {
-                        dummy += j;
-                    }
-                });
-            }
+             // Connect slots
+             for (size_t i = 0; i < num_slots; ++i) {
+                 signal.connect([i](const py::object& /*data*/) {
+                     // Simulate some work
+                     volatile int dummy = 0;
+                     for (int j = 0; j < 100; ++j) {
+                         dummy += j;
+                     }
+                 });
+             }
 
-            // Benchmark signal emission
-            auto start = high_resolution_clock::now();
+             // Benchmark signal emission
+             auto start = high_resolution_clock::now();
 
-            for (size_t i = 0; i < num_emissions; ++i) {
-                signal.emit(py::cast(i));
-            }
+             for (size_t i = 0; i < num_emissions; ++i) {
+                 signal.emit(py::cast(i));
+             }
 
-            auto end = high_resolution_clock::now();
-            auto duration = duration_cast<microseconds>(end - start);
+             auto end = high_resolution_clock::now();
+             auto duration = duration_cast<microseconds>(end - start);
 
-            // Calculate statistics
-            double total_time_us = duration.count();
-            double emissions_per_second = (num_emissions * 1000000.0) / total_time_us;
-            double total_slot_calls = num_emissions * num_slots;
-            double slot_calls_per_second = (total_slot_calls * 1000000.0) / total_time_us;
+             // Calculate statistics
+             double total_time_us = duration.count();
+             double emissions_per_second =
+                 (num_emissions * 1000000.0) / total_time_us;
+             double total_slot_calls = num_emissions * num_slots;
+             double slot_calls_per_second =
+                 (total_slot_calls * 1000000.0) / total_time_us;
 
-            results[py::str("num_slots")] = num_slots;
-            results[py::str("num_emissions")] = num_emissions;
-            results[py::str("total_time_us")] = total_time_us;
-            results[py::str("emissions_per_second")] = emissions_per_second;
-            results[py::str("total_slot_calls")] = total_slot_calls;
-            results[py::str("slot_calls_per_second")] = slot_calls_per_second;
-            results[py::str("avg_time_per_emission_us")] = total_time_us / num_emissions;
+             results[py::str("num_slots")] = num_slots;
+             results[py::str("num_emissions")] = num_emissions;
+             results[py::str("total_time_us")] = total_time_us;
+             results[py::str("emissions_per_second")] = emissions_per_second;
+             results[py::str("total_slot_calls")] = total_slot_calls;
+             results[py::str("slot_calls_per_second")] = slot_calls_per_second;
+             results[py::str("avg_time_per_emission_us")] =
+                 total_time_us / num_emissions;
 
-            return results;
-        },
-        py::arg("num_slots") = 10, py::arg("num_emissions") = 1000,
-        R"pbdoc(
+             return results;
+         },
+         py::arg("num_slots") = 10, py::arg("num_emissions") = 1000,
+         R"pbdoc(
         Benchmark signal performance with multiple slots and emissions.
 
         Args:
@@ -789,50 +791,55 @@ Examples:
             >>> print(f"Slot calls per second: {results['slot_calls_per_second']:.2f}")
         )pbdoc")
 
-    .def(
-        "benchmark_async_signal_performance",
-        [](size_t num_slots, size_t num_emissions) -> py::dict {
-            using namespace std::chrono;
+        .def(
+            "benchmark_async_signal_performance",
+            [](size_t num_slots, size_t num_emissions) -> py::dict {
+                using namespace std::chrono;
 
-            py::dict results;
-            atom::async::AsyncSignal<py::object> signal;
+                py::dict results;
+                atom::async::AsyncSignal<py::object> signal;
 
-            // Connect slots
-            for (size_t i = 0; i < num_slots; ++i) {
-                signal.connect([i](const py::object& /*data*/) {
-                    // Simulate some work
-                    std::this_thread::sleep_for(std::chrono::microseconds(10));
-                });
-            }
+                // Connect slots
+                for (size_t i = 0; i < num_slots; ++i) {
+                    signal.connect([i](const py::object& /*data*/) {
+                        // Simulate some work
+                        std::this_thread::sleep_for(
+                            std::chrono::microseconds(10));
+                    });
+                }
 
-            // Benchmark async signal emission
-            auto start = high_resolution_clock::now();
+                // Benchmark async signal emission
+                auto start = high_resolution_clock::now();
 
-            for (size_t i = 0; i < num_emissions; ++i) {
-                signal.emit(py::cast(i));
-            }
+                for (size_t i = 0; i < num_emissions; ++i) {
+                    signal.emit(py::cast(i));
+                }
 
-            auto end = high_resolution_clock::now();
-            auto duration = duration_cast<microseconds>(end - start);
+                auto end = high_resolution_clock::now();
+                auto duration = duration_cast<microseconds>(end - start);
 
-            // Calculate statistics
-            double total_time_us = duration.count();
-            double emissions_per_second = (num_emissions * 1000000.0) / total_time_us;
-            double total_slot_calls = num_emissions * num_slots;
-            double slot_calls_per_second = (total_slot_calls * 1000000.0) / total_time_us;
+                // Calculate statistics
+                double total_time_us = duration.count();
+                double emissions_per_second =
+                    (num_emissions * 1000000.0) / total_time_us;
+                double total_slot_calls = num_emissions * num_slots;
+                double slot_calls_per_second =
+                    (total_slot_calls * 1000000.0) / total_time_us;
 
-            results[py::str("num_slots")] = num_slots;
-            results[py::str("num_emissions")] = num_emissions;
-            results[py::str("total_time_us")] = total_time_us;
-            results[py::str("emissions_per_second")] = emissions_per_second;
-            results[py::str("total_slot_calls")] = total_slot_calls;
-            results[py::str("slot_calls_per_second")] = slot_calls_per_second;
-            results[py::str("avg_time_per_emission_us")] = total_time_us / num_emissions;
+                results[py::str("num_slots")] = num_slots;
+                results[py::str("num_emissions")] = num_emissions;
+                results[py::str("total_time_us")] = total_time_us;
+                results[py::str("emissions_per_second")] = emissions_per_second;
+                results[py::str("total_slot_calls")] = total_slot_calls;
+                results[py::str("slot_calls_per_second")] =
+                    slot_calls_per_second;
+                results[py::str("avg_time_per_emission_us")] =
+                    total_time_us / num_emissions;
 
-            return results;
-        },
-        py::arg("num_slots") = 5, py::arg("num_emissions") = 100,
-        R"pbdoc(
+                return results;
+            },
+            py::arg("num_slots") = 5, py::arg("num_emissions") = 100,
+            R"pbdoc(
         Benchmark async signal performance with multiple slots and emissions.
 
         Args:
@@ -847,29 +854,32 @@ Examples:
             >>> print(f"Async emissions per second: {results['emissions_per_second']:.2f}")
         )pbdoc")
 
-    .def(
-        "create_signal_chain",
-        [](py::list signal_names) -> py::dict {
-            py::dict chain;
-            std::vector<std::shared_ptr<atom::async::ChainedSignal<py::object>>> signals;
+        .def(
+            "create_signal_chain",
+            [](py::list signal_names) -> py::dict {
+                py::dict chain;
+                std::vector<
+                    std::shared_ptr<atom::async::ChainedSignal<py::object>>>
+                    signals;
 
-            // Create signals
-            for (auto name : signal_names) {
-                std::string signal_name = name.cast<std::string>();
-                auto signal = std::make_shared<atom::async::ChainedSignal<py::object>>();
-                signals.push_back(signal);
-                chain[py::str(signal_name)] = signal;
-            }
+                // Create signals
+                for (auto name : signal_names) {
+                    std::string signal_name = name.cast<std::string>();
+                    auto signal = std::make_shared<
+                        atom::async::ChainedSignal<py::object>>();
+                    signals.push_back(signal);
+                    chain[py::str(signal_name)] = signal;
+                }
 
-            // Chain signals together
-            for (size_t i = 0; i < signals.size() - 1; ++i) {
-                signals[i]->addChain(signals[i + 1]);
-            }
+                // Chain signals together
+                for (size_t i = 0; i < signals.size() - 1; ++i) {
+                    signals[i]->addChain(signals[i + 1]);
+                }
 
-            return chain;
-        },
-        py::arg("signal_names"),
-        R"pbdoc(
+                return chain;
+            },
+            py::arg("signal_names"),
+            R"pbdoc(
         Create a chain of connected signals.
 
         Args:
@@ -886,33 +896,38 @@ Examples:
             >>> chain["start"].emit("data")  # Triggers all three signals
         )pbdoc")
 
-    .def(
-        "create_signal_hub",
-        [](py::dict signal_configs) -> py::dict {
-            py::dict hub;
+        .def(
+            "create_signal_hub",
+            [](py::dict signal_configs) -> py::dict {
+                py::dict hub;
 
-            for (auto item : signal_configs) {
-                std::string signal_name = item.first.cast<std::string>();
-                std::string signal_type = item.second.cast<std::string>();
+                for (auto item : signal_configs) {
+                    std::string signal_name = item.first.cast<std::string>();
+                    std::string signal_type = item.second.cast<std::string>();
 
-                if (signal_type == "basic") {
-                    hub[py::str(signal_name)] = std::make_unique<atom::async::Signal<py::object>>();
-                } else if (signal_type == "async") {
-                    hub[py::str(signal_name)] = std::make_unique<atom::async::AsyncSignal<py::object>>();
-                } else if (signal_type == "thread_safe") {
-                    hub[py::str(signal_name)] = std::make_unique<atom::async::ThreadSafeSignal<py::object>>();
-                } else if (signal_type == "auto_disconnect") {
-                    hub[py::str(signal_name)] = std::make_unique<atom::async::AutoDisconnectSignal<py::object>>();
-                } else {
-                    // Default to basic signal
-                    hub[py::str(signal_name)] = std::make_unique<atom::async::Signal<py::object>>();
+                    if (signal_type == "basic") {
+                        hub[py::str(signal_name)] =
+                            std::make_unique<atom::async::Signal<py::object>>();
+                    } else if (signal_type == "async") {
+                        hub[py::str(signal_name)] = std::make_unique<
+                            atom::async::AsyncSignal<py::object>>();
+                    } else if (signal_type == "thread_safe") {
+                        hub[py::str(signal_name)] = std::make_unique<
+                            atom::async::ThreadSafeSignal<py::object>>();
+                    } else if (signal_type == "auto_disconnect") {
+                        hub[py::str(signal_name)] = std::make_unique<
+                            atom::async::AutoDisconnectSignal<py::object>>();
+                    } else {
+                        // Default to basic signal
+                        hub[py::str(signal_name)] =
+                            std::make_unique<atom::async::Signal<py::object>>();
+                    }
                 }
-            }
 
-            return hub;
-        },
-        py::arg("signal_configs"),
-        R"pbdoc(
+                return hub;
+            },
+            py::arg("signal_configs"),
+            R"pbdoc(
         Create a hub of different signal types.
 
         Args:

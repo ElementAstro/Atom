@@ -9,20 +9,21 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Slot-based Synchronization
-Tests slot-based synchronization patterns, edge cases, and concurrent access scenarios.
+Tests slot-based synchronization patterns, edge cases, and concurrent access
+scenarios.
 
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <future>
+#include <thread>
+#include <vector>
 
-#include "atom/async/sync/slot.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/sync/slot.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -104,13 +105,13 @@ TEST_F(SlotTest, BlockingGet) {
     });
 
     auto start = std::chrono::steady_clock::now();
-    int value = slot.get(); // Should block until value is available
+    int value = slot.get();  // Should block until value is available
     auto elapsed = std::chrono::steady_clock::now() - start;
 
     EXPECT_EQ(value, 123);
     EXPECT_TRUE(valueSet);
-    EXPECT_GE(elapsed, 90ms); // Should have waited
-    EXPECT_LT(elapsed, 200ms); // But not too long
+    EXPECT_GE(elapsed, 90ms);   // Should have waited
+    EXPECT_LT(elapsed, 200ms);  // But not too long
 
     producer.join();
 }
@@ -154,13 +155,14 @@ TEST_F(SlotTest, MultipleProducersOneConsumer) {
     }
 
     // Consumer thread
-    std::thread consumer([&slot, &consumedValues, &consumedMutex, numProducers]() {
-        for (int i = 0; i < numProducers; ++i) {
-            int value = slot.get();
-            std::lock_guard<std::mutex> lock(consumedMutex);
-            consumedValues.push_back(value);
-        }
-    });
+    std::thread consumer(
+        [&slot, &consumedValues, &consumedMutex, numProducers]() {
+            for (int i = 0; i < numProducers; ++i) {
+                int value = slot.get();
+                std::lock_guard<std::mutex> lock(consumedMutex);
+                consumedValues.push_back(value);
+            }
+        });
 
     for (auto& producer : producers) {
         producer.join();
@@ -252,7 +254,7 @@ TEST_F(SlotTest, SlotClear) {
 }
 
 TEST_F(SlotTest, SlotCapacity) {
-    Slot<int> slot(3); // Capacity of 3
+    Slot<int> slot(3);  // Capacity of 3
 
     // Should be able to put up to capacity
     EXPECT_TRUE(slot.tryPut(1));
@@ -386,15 +388,16 @@ TEST_F(SlotTest, HighConcurrencyStressTest) {
 
     // Start consumers
     for (int i = 0; i < numConsumers; ++i) {
-        consumers.emplace_back([&slot, &totalConsumed, numProducers, itemsPerProducer]() {
-            int expectedTotal = numProducers * itemsPerProducer;
-            while (totalConsumed.load() < expectedTotal) {
-                auto value = slot.getWithTimeout(100ms);
-                if (value.has_value()) {
-                    totalConsumed.fetch_add(1);
+        consumers.emplace_back(
+            [&slot, &totalConsumed, numProducers, itemsPerProducer]() {
+                int expectedTotal = numProducers * itemsPerProducer;
+                while (totalConsumed.load() < expectedTotal) {
+                    auto value = slot.getWithTimeout(100ms);
+                    if (value.has_value()) {
+                        totalConsumed.fetch_add(1);
+                    }
                 }
-            }
-        });
+            });
     }
 
     for (auto& producer : producers) {
@@ -415,7 +418,8 @@ TEST_F(SlotTest, RAIITypes) {
     Slot<std::unique_ptr<atom::async::test::ScopedResourceTracker>> slot;
 
     // Put resource
-    slot.put(std::make_unique<atom::async::test::ScopedResourceTracker>(tracker));
+    slot.put(
+        std::make_unique<atom::async::test::ScopedResourceTracker>(tracker));
 
     // Get resource
     auto resource = slot.get();
@@ -446,10 +450,11 @@ TEST_F(SlotTest, PerformanceCharacteristics) {
     auto elapsed = timer.elapsed();
 
     // Performance should be reasonable
-    EXPECT_LT(elapsed.count(), 1000000); // Less than 1 second for 1000 operations
+    EXPECT_LT(elapsed.count(),
+              1000000);  // Less than 1 second for 1000 operations
 
-    std::cout << "Slot performance: "
-              << elapsed.count() / numOperations << " microseconds per operation" << std::endl;
+    std::cout << "Slot performance: " << elapsed.count() / numOperations
+              << " microseconds per operation" << std::endl;
 }
 
 // Test slot with priority queue behavior
@@ -461,7 +466,7 @@ TEST_F(SlotTest, PriorityQueueBehavior) {
         PriorityItem(int p, int v) : priority(p), value(v) {}
 
         bool operator<(const PriorityItem& other) const {
-            return priority < other.priority; // Higher priority first
+            return priority < other.priority;  // Higher priority first
         }
     };
 
@@ -473,8 +478,8 @@ TEST_F(SlotTest, PriorityQueueBehavior) {
     slot.put(PriorityItem(3, 300));
     slot.put(PriorityItem(2, 200));
 
-    // If slot supports priority ordering, higher priority items should come first
-    // Note: This test assumes the slot implementation supports ordering
+    // If slot supports priority ordering, higher priority items should come
+    // first Note: This test assumes the slot implementation supports ordering
     auto item1 = slot.tryGet();
     EXPECT_TRUE(item1.has_value());
 
@@ -555,20 +560,20 @@ TEST_F(SlotTest, ProducerConsumerWithConditionVariable) {
 
 // Test slot with circular buffer behavior
 TEST_F(SlotTest, CircularBufferBehavior) {
-    Slot<int> slot(3); // Small capacity
+    Slot<int> slot(3);  // Small capacity
 
     // Fill to capacity
     EXPECT_TRUE(slot.tryPut(1));
     EXPECT_TRUE(slot.tryPut(2));
     EXPECT_TRUE(slot.tryPut(3));
-    EXPECT_FALSE(slot.tryPut(4)); // Should fail
+    EXPECT_FALSE(slot.tryPut(4));  // Should fail
 
     // Remove one and add another
     auto item = slot.tryGet();
     EXPECT_TRUE(item.has_value());
     EXPECT_EQ(item.value(), 1);
 
-    EXPECT_TRUE(slot.tryPut(4)); // Should succeed now
+    EXPECT_TRUE(slot.tryPut(4));  // Should succeed now
 
     // Verify remaining items
     EXPECT_EQ(slot.get(), 2);
@@ -587,7 +592,8 @@ TEST_F(SlotTest, TimeoutVariations) {
     auto elapsed = start.elapsed();
 
     EXPECT_FALSE(result.has_value());
-    expectTimingRange(elapsed, std::chrono::microseconds(500), std::chrono::microseconds(5000));
+    expectTimingRange(elapsed, std::chrono::microseconds(500),
+                      std::chrono::microseconds(5000));
 
     // Test longer timeout
     start = createTimer();
@@ -595,7 +601,8 @@ TEST_F(SlotTest, TimeoutVariations) {
     elapsed = start.elapsed();
 
     EXPECT_FALSE(result.has_value());
-    expectTimingRange(elapsed, std::chrono::microseconds(45000), std::chrono::microseconds(60000));
+    expectTimingRange(elapsed, std::chrono::microseconds(45000),
+                      std::chrono::microseconds(60000));
 }
 
 // Test slot with move-only types
@@ -605,7 +612,7 @@ TEST_F(SlotTest, MoveOnlyTypes) {
     auto ptr = std::make_unique<int>(42);
     slot.put(std::move(ptr));
 
-    EXPECT_EQ(ptr, nullptr); // Should be moved
+    EXPECT_EQ(ptr, nullptr);  // Should be moved
 
     auto retrieved = slot.get();
     EXPECT_NE(retrieved, nullptr);
@@ -624,27 +631,29 @@ TEST_F(SlotTest, MixedOperationsThreadSafety) {
     runConcurrentTest(numThreads, [&](size_t threadId) {
         for (int i = 0; i < 50; ++i) {
             switch (threadId % 4) {
-                case 0: // Put operations
+                case 0:  // Put operations
                     if (slot.tryPut(static_cast<int>(threadId * 1000 + i))) {
                         putOperations.fetch_add(1);
                     }
                     break;
 
-                case 1: // Get operations
+                case 1:  // Get operations
                     if (slot.tryGet().has_value()) {
                         getOperations.fetch_add(1);
                     }
                     break;
 
-                case 2: { // Size checks
+                case 2: {  // Size checks
                     volatile size_t size = slot.size();
                     volatile bool empty = slot.empty();
                     volatile bool hasValue = slot.hasValue();
-                    (void)size; (void)empty; (void)hasValue;
+                    (void)size;
+                    (void)empty;
+                    (void)hasValue;
                     break;
                 }
 
-                case 3: // Occasional clear
+                case 3:  // Occasional clear
                     if (i % 20 == 0) {
                         slot.clear();
                         clearOperations.fetch_add(1);

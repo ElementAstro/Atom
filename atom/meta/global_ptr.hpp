@@ -138,8 +138,8 @@ public:
      * @return Created or retrieved shared pointer
      */
     template <typename T, typename CreatorFunc>
-    auto getOrCreateSharedPtr(std::string_view key, CreatorFunc creator)
-        -> std::shared_ptr<T>;
+    auto getOrCreateSharedPtr(std::string_view key,
+                              CreatorFunc creator) -> std::shared_ptr<T>;
 
     /**
      * @brief Get weak pointer by key
@@ -271,9 +271,8 @@ auto GlobalSharedPtrManager::getSharedPtr(std::string_view key)
 }
 
 template <typename T, typename CreatorFunc>
-auto GlobalSharedPtrManager::getOrCreateSharedPtr(std::string_view key,
-                                                  CreatorFunc creator)
-    -> std::shared_ptr<T> {
+auto GlobalSharedPtrManager::getOrCreateSharedPtr(
+    std::string_view key, CreatorFunc creator) -> std::shared_ptr<T> {
     const std::string str_key{key};
     std::unique_lock lock(mutex_);
 

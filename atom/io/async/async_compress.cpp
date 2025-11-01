@@ -62,10 +62,8 @@ void BaseCompressor::notifyCompletion(const std::error_code& ec,
     if (completion_handler_ &&
         completion_notified_.compare_exchange_strong(expected, true)) {
         auto handler = completion_handler_;
-        asio::post(io_context_,
-                   [handler = std::move(handler), ec, bytes]() mutable {
-                       handler(ec, bytes);
-                   });
+        asio::post(io_context_, [handler = std::move(handler), ec,
+                                 bytes]() mutable { handler(ec, bytes); });
     }
 }
 
@@ -364,10 +362,8 @@ void BaseDecompressor::notifyCompletion(const std::error_code& ec,
     if (completion_handler_ &&
         completion_notified_.compare_exchange_strong(expected, true)) {
         auto handler = completion_handler_;
-        asio::post(io_context_,
-                   [handler = std::move(handler), ec, bytes]() mutable {
-                       handler(ec, bytes);
-                   });
+        asio::post(io_context_, [handler = std::move(handler), ec,
+                                 bytes]() mutable { handler(ec, bytes); });
     }
 }
 
@@ -434,7 +430,8 @@ void SingleFileDecompressor::start() {
     completion_notified_.store(false);
     if (!fs::exists(input_file_)) {
         spdlog::error("Input file does not exist: {}", input_file_.string());
-        notifyCompletion(std::make_error_code(std::errc::no_such_file_or_directory));
+        notifyCompletion(
+            std::make_error_code(std::errc::no_such_file_or_directory));
         return;
     }
 

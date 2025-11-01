@@ -2,7 +2,6 @@
 #define ATOM_UTILS_STOPWATCHER_HPP
 
 #include <concepts>
-#include <expected>
 #include <functional>
 #include <memory>
 #include <span>
@@ -10,6 +9,7 @@
 #include <string_view>
 
 #include "atom/error/exception.hpp"
+#include "atom/type/compat.hpp"
 
 namespace atom::utils {
 class StopWatcherException : public atom::error::Exception {
@@ -113,31 +113,39 @@ public:
 
     /**
      * @brief Starts the stopwatch
-     * @return std::expected<void, StopWatcherError> Success or error code
+     * @return atom::type::compat::expected<void, StopWatcherError> Success or
+     * error code
      * @note Thread-safe
      */
-    [[nodiscard]] auto start() -> std::expected<void, StopWatcherError>;
+    [[nodiscard]] auto start()
+        -> ::atom::type::compat::expected<void, StopWatcherError>;
 
     /**
      * @brief Stops the stopwatch
      * @note Thread-safe
-     * @return std::expected<void, StopWatcherError> Success or error code
+     * @return atom::type::compat::expected<void, StopWatcherError> Success or
+     * error code
      */
-    [[nodiscard]] auto stop() -> std::expected<void, StopWatcherError>;
+    [[nodiscard]] auto stop()
+        -> ::atom::type::compat::expected<void, StopWatcherError>;
 
     /**
      * @brief Pauses the stopwatch without resetting
      * @note Thread-safe
-     * @return std::expected<void, StopWatcherError> Success or error code
+     * @return atom::type::compat::expected<void, StopWatcherError> Success or
+     * error code
      */
-    [[nodiscard]] auto pause() -> std::expected<void, StopWatcherError>;
+    [[nodiscard]] auto pause()
+        -> ::atom::type::compat::expected<void, StopWatcherError>;
 
     /**
      * @brief Resumes the stopwatch from paused state
      * @note Thread-safe
-     * @return std::expected<void, StopWatcherError> Success or error code
+     * @return atom::type::compat::expected<void, StopWatcherError> Success or
+     * error code
      */
-    [[nodiscard]] auto resume() -> std::expected<void, StopWatcherError>;
+    [[nodiscard]] auto resume()
+        -> ::atom::type::compat::expected<void, StopWatcherError>;
 
     /**
      * @brief Resets the stopwatch to initial state
@@ -207,32 +215,35 @@ public:
      * @param callback Function to be called
      * @param milliseconds Time in milliseconds after which callback should
      * trigger
-     * @return std::expected<void, StopWatcherError> Success or error code
+     * @return atom::type::compat::expected<void, StopWatcherError> Success or
+     * error code
      * @note Thread-safe
      */
     template <ValidCallback CallbackType>
     auto registerCallback(CallbackType&& callback, int milliseconds)
-        -> std::expected<void, StopWatcherError> {
+        -> ::atom::type::compat::expected<void, StopWatcherError> {
         return registerCallbackImpl(std::forward<CallbackType>(callback),
                                     milliseconds);
     }
 
     /**
      * @brief Records current time as a lap time
-     * @return std::expected<double, StopWatcherError> The recorded lap time in
-     * milliseconds or error
+     * @return atom::type::compat::expected<double, StopWatcherError> The
+     * recorded lap time in milliseconds or error
      * @note Thread-safe
      */
-    [[nodiscard]] auto lap() -> std::expected<double, StopWatcherError>;
+    [[nodiscard]] auto lap()
+        -> ::atom::type::compat::expected<double, StopWatcherError>;
 
     /**
      * @brief Enables automatic lap recording at specified intervals
      * @param intervalMs Interval in milliseconds between automatic laps
-     * @return std::expected<void, StopWatcherError> Success or error code
+     * @return atom::type::compat::expected<void, StopWatcherError> Success or
+     * error code
      * @note Creates a background thread that records laps at regular intervals
      */
     [[nodiscard]] auto enableAutoLap(int intervalMs)
-        -> std::expected<void, StopWatcherError>;
+        -> ::atom::type::compat::expected<void, StopWatcherError>;
 
     /**
      * @brief Disables automatic lap recording
@@ -284,7 +295,7 @@ private:
 
     void addLapTimeForDeserialization(double lapTime);
     auto registerCallbackImpl(std::function<void()> callback, int milliseconds)
-        -> std::expected<void, StopWatcherError>;
+        -> ::atom::type::compat::expected<void, StopWatcherError>;
 };
 
 /**

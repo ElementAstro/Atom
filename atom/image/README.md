@@ -224,6 +224,7 @@ xmake test
 ### Core Classes
 
 #### `atom::image::blob`
+
 Universal image container with multiple backend support.
 
 ```cpp
@@ -250,6 +251,7 @@ blob restored = blob::deserialize(serialized);
 ```
 
 #### `atom::image::ImageProcessor`
+
 High-performance image processing pipeline.
 
 ```cpp
@@ -277,6 +279,7 @@ auto results = processor->processBatch(inputs, [&](const blob& img) {
 ```
 
 #### `atom::image::FITSFile`
+
 Astronomical image format support.
 
 ```cpp
@@ -299,6 +302,7 @@ fits.writeFITS("processed_data.fits");
 ```
 
 #### `atom::image::EnhancedOCRProcessor`
+
 Optical character recognition with preprocessing.
 
 ```cpp
@@ -320,6 +324,7 @@ auto results = ocr.processBatch(images);
 ```
 
 #### `atom::image::SERReader` / `atom::image::SERWriter`
+
 Astronomical video sequence format.
 
 ```cpp
@@ -366,6 +371,7 @@ try {
 ### Performance Optimization
 
 #### Memory Management
+
 ```cpp
 // Use fast blobs for view-only operations
 fast_blob view(data_ptr, size);
@@ -383,6 +389,7 @@ processor->setOptions(options);
 ```
 
 #### Batch Processing
+
 ```cpp
 // Process multiple images efficiently
 std::vector<blob> images = loadImages();
@@ -429,6 +436,7 @@ make coverage
 ### Common Issues
 
 #### OpenCV Not Found
+
 ```bash
 # Install OpenCV development packages
 sudo apt-get install libopencv-dev  # Ubuntu/Debian
@@ -436,6 +444,7 @@ brew install opencv                  # macOS
 ```
 
 #### CFITSIO Not Found
+
 ```bash
 # Install CFITSIO development packages
 sudo apt-get install libcfitsio-dev  # Ubuntu/Debian
@@ -443,6 +452,7 @@ brew install cfitsio                  # macOS
 ```
 
 #### Tesseract Not Found
+
 ```bash
 # Install Tesseract and Leptonica
 sudo apt-get install tesseract-ocr-dev libleptonica-dev  # Ubuntu/Debian
@@ -450,11 +460,13 @@ brew install tesseract leptonica                         # macOS
 ```
 
 #### Memory Issues
+
 - Reduce `maxMemoryUsage` in ProcessingOptions
 - Use `fast_blob` for large datasets
 - Enable memory pooling for frequent operations
 
 #### Performance Issues
+
 - Enable SIMD optimizations
 - Use multithreading for batch operations
 - Consider GPU acceleration for large images

@@ -89,9 +89,8 @@ public:
      * @return Reduced value
      */
     template <typename U, typename BinaryOperation>
-    [[nodiscard]] auto reduce(U initial_value,
-                              BinaryOperation binary_operation) const noexcept
-        -> U {
+    [[nodiscard]] auto reduce(
+        U initial_value, BinaryOperation binary_operation) const noexcept -> U {
         return std::accumulate(data_.begin(), data_.end(),
                                std::move(initial_value), binary_operation);
     }

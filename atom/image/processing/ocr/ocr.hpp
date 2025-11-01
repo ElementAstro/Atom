@@ -381,7 +381,7 @@ private:
      * @param api Tesseract API instance
      * @return Confidence score (0-100)
      */
-    float calculateConfidence(const tesseract::TessBaseAPI& api);
+    float calculateConfidence(tesseract::TessBaseAPI& api);
 
     /**
      * @brief Extract structured data from OCR text

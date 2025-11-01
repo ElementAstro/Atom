@@ -151,8 +151,8 @@ auto getRegistryValues(HKEY hRootKey, std::string_view subKey,
 }
 
 auto modifyRegistryValue(HKEY hRootKey, std::string_view subKey,
-                         std::string_view valueName, std::string_view newValue)
-    -> bool {
+                         std::string_view valueName,
+                         std::string_view newValue) -> bool {
     spdlog::info(
         "Modifying registry value: hRootKey: {}, subKey: {}, valueName: {}, "
         "newValue: {}",

@@ -559,7 +559,8 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByTags(
             auto it = tagIndex_.find(tag);
             if (it == tagIndex_.end()) {
                 // If any tag is not found, no documents can match all tags
-                spdlog::debug("Tag '{}' not found in index, returning empty result", tag);
+                spdlog::debug(
+                    "Tag '{}' not found in index, returning empty result", tag);
                 return {};
             }
 
@@ -569,11 +570,13 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByTags(
                 candidateDocIds = tagDocIds;
                 firstTag = false;
             } else {
-                // Intersection: keep only documents that have this tag AND previous tags
+                // Intersection: keep only documents that have this tag AND
+                // previous tags
                 std::set<String> intersection;
-                std::set_intersection(candidateDocIds.begin(), candidateDocIds.end(),
-                                    tagDocIds.begin(), tagDocIds.end(),
-                                    std::inserter(intersection, intersection.begin()));
+                std::set_intersection(
+                    candidateDocIds.begin(), candidateDocIds.end(),
+                    tagDocIds.begin(), tagDocIds.end(),
+                    std::inserter(intersection, intersection.begin()));
                 candidateDocIds = intersection;
             }
 
@@ -590,7 +593,8 @@ std::vector<std::shared_ptr<Document>> SearchEngine::searchByTags(
             auto docIt = documents_.find(docId);
             if (docIt != documents_.end()) {
                 results.push_back(docIt->second);
-                spdlog::trace("Document id: {} matches all tags", std::string(docId));
+                spdlog::trace("Document id: {} matches all tags",
+                              std::string(docId));
             }
         }
 
@@ -777,9 +781,10 @@ std::vector<std::shared_ptr<Document>> SearchEngine::booleanSearch(
                     allDocIds.insert(doc.first);
                 }
                 std::set<String> notTermDocIds;
-                std::set_difference(allDocIds.begin(), allDocIds.end(),
-                                  termDocIds.begin(), termDocIds.end(),
-                                  std::inserter(notTermDocIds, notTermDocIds.begin()));
+                std::set_difference(
+                    allDocIds.begin(), allDocIds.end(), termDocIds.begin(),
+                    termDocIds.end(),
+                    std::inserter(notTermDocIds, notTermDocIds.begin()));
                 termDocIds = notTermDocIds;
             }
 
@@ -787,26 +792,30 @@ std::vector<std::shared_ptr<Document>> SearchEngine::booleanSearch(
                 candidateDocIds = termDocIds;
                 firstTerm = false;
             } else {
-                // Default to AND operation if no explicit operator or if AND is specified
-                std::string op = (i-1 < operators.size()) ? operators[i-1] : "AND";
+                // Default to AND operation if no explicit operator or if AND is
+                // specified
+                std::string op =
+                    (i - 1 < operators.size()) ? operators[i - 1] : "AND";
 
                 if (op == "AND") {
                     std::set<String> intersection;
-                    std::set_intersection(candidateDocIds.begin(), candidateDocIds.end(),
-                                        termDocIds.begin(), termDocIds.end(),
-                                        std::inserter(intersection, intersection.begin()));
+                    std::set_intersection(
+                        candidateDocIds.begin(), candidateDocIds.end(),
+                        termDocIds.begin(), termDocIds.end(),
+                        std::inserter(intersection, intersection.begin()));
                     candidateDocIds = intersection;
                 } else if (op == "OR") {
                     std::set<String> unionSet;
-                    std::set_union(candidateDocIds.begin(), candidateDocIds.end(),
-                                 termDocIds.begin(), termDocIds.end(),
-                                 std::inserter(unionSet, unionSet.begin()));
+                    std::set_union(candidateDocIds.begin(),
+                                   candidateDocIds.end(), termDocIds.begin(),
+                                   termDocIds.end(),
+                                   std::inserter(unionSet, unionSet.begin()));
                     candidateDocIds = unionSet;
                 }
             }
 
             spdlog::trace("After processing term '{}': {} candidate documents",
-                         actualTerm, candidateDocIds.size());
+                          actualTerm, candidateDocIds.size());
         }
 
         // Build results from candidate documents
@@ -815,11 +824,13 @@ std::vector<std::shared_ptr<Document>> SearchEngine::booleanSearch(
             auto docIt = documents_.find(docId);
             if (docIt != documents_.end()) {
                 results.push_back(docIt->second);
-                spdlog::trace("Document id: {} matches boolean query", std::string(docId));
+                spdlog::trace("Document id: {} matches boolean query",
+                              std::string(docId));
             }
         }
 
-        spdlog::debug("Found {} documents matching boolean query", results.size());
+        spdlog::debug("Found {} documents matching boolean query",
+                      results.size());
         return results;
 
     } catch (const std::exception& e) {

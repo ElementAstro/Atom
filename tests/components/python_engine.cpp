@@ -13,7 +13,7 @@ protected:
     void SetUp() override {
         ScriptEngineConfig config;
         config.language = ScriptLanguage::Python;
-        config.memoryLimit = 1024 * 1024; // 1MB
+        config.memoryLimit = 1024 * 1024;  // 1MB
         config.executionTimeout = std::chrono::seconds(10);
         config.enableDebug = true;
 
@@ -128,7 +128,7 @@ result = math.sqrt(16) + math.pi
 
     auto mathValue = engine_->getGlobal("result");
     if (mathValue.has_value()) {
-        double expected = 4.0 + 3.14159265359; // Approximate pi
+        double expected = 4.0 + 3.14159265359;  // Approximate pi
         EXPECT_NEAR(mathValue->get<double>(), expected, 0.001);
     }
 }
@@ -274,7 +274,7 @@ result = factorial(10)
 
     auto factorialValue = engine_->getGlobal("result");
     if (factorialValue.has_value()) {
-        EXPECT_EQ(factorialValue->get<int64_t>(), 3628800); // 10!
+        EXPECT_EQ(factorialValue->get<int64_t>(), 3628800);  // 10!
     }
 }
 
@@ -297,7 +297,7 @@ result = counter() + counter() + counter()
 
     auto closureValue = engine_->getGlobal("result");
     if (closureValue.has_value()) {
-        EXPECT_EQ(closureValue->get<int64_t>(), 6); // 1 + 2 + 3
+        EXPECT_EQ(closureValue->get<int64_t>(), 6);  // 1 + 2 + 3
     }
 }
 
@@ -382,4 +382,4 @@ TEST(PythonEngineTest, PythonNotEnabled) {
     GTEST_SKIP() << "Python engine is not enabled in this build";
 }
 
-#endif // ATOM_ENABLE_PYTHON
+#endif  // ATOM_ENABLE_PYTHON

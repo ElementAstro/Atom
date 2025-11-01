@@ -9,20 +9,21 @@
 Date: 2024-12-22
 
 Description: Comprehensive Unit Tests for Atom Async Safe Type Wrappers
-Tests thread-safe type wrappers, concurrent operations, and synchronization guarantees.
+Tests thread-safe type wrappers, concurrent operations, and synchronization
+guarantees.
 
 **************************************************/
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
 #include <memory>
+#include <thread>
+#include <vector>
 
-#include "atom/async/sync/safetype.hpp"
-#include "../test_utils.hpp"
 #include "../test_fixtures.hpp"
+#include "../test_utils.hpp"
+#include "atom/async/sync/safetype.hpp"
 
 using namespace std::chrono_literals;
 using namespace atom::async;
@@ -69,33 +70,35 @@ TEST_F(SafeTypeTest, ConcurrentReadWrite) {
 
     // Reader threads
     for (int i = 0; i < numReaders; ++i) {
-        threads.emplace_back([&safeInt, &ready, &readCount, operationsPerThread]() {
-            while (!ready.load()) {
-                std::this_thread::yield();
-            }
+        threads.emplace_back(
+            [&safeInt, &ready, &readCount, operationsPerThread]() {
+                while (!ready.load()) {
+                    std::this_thread::yield();
+                }
 
-            for (int j = 0; j < operationsPerThread; ++j) {
-                int value = safeInt.get();
-                EXPECT_GE(value, 0); // Should always be non-negative
-                readCount.fetch_add(1);
-                std::this_thread::yield();
-            }
-        });
+                for (int j = 0; j < operationsPerThread; ++j) {
+                    int value = safeInt.get();
+                    EXPECT_GE(value, 0);  // Should always be non-negative
+                    readCount.fetch_add(1);
+                    std::this_thread::yield();
+                }
+            });
     }
 
     // Writer threads
     for (int i = 0; i < numWriters; ++i) {
-        threads.emplace_back([&safeInt, &ready, &writeCount, operationsPerThread, i]() {
-            while (!ready.load()) {
-                std::this_thread::yield();
-            }
+        threads.emplace_back(
+            [&safeInt, &ready, &writeCount, operationsPerThread, i]() {
+                while (!ready.load()) {
+                    std::this_thread::yield();
+                }
 
-            for (int j = 0; j < operationsPerThread; ++j) {
-                safeInt.set((i + 1) * 1000 + j);
-                writeCount.fetch_add(1);
-                std::this_thread::yield();
-            }
-        });
+                for (int j = 0; j < operationsPerThread; ++j) {
+                    safeInt.set((i + 1) * 1000 + j);
+                    writeCount.fetch_add(1);
+                    std::this_thread::yield();
+                }
+            });
     }
 
     ready.store(true);
@@ -135,9 +138,7 @@ TEST_F(SafeTypeTest, SafeTypeWithComplexType) {
 TEST_F(SafeTypeTest, SafeTypeModify) {
     SafeType<int> safeInt(10);
 
-    safeInt.modify([](int& value) {
-        value *= 2;
-    });
+    safeInt.modify([](int& value) { value *= 2; });
 
     EXPECT_EQ(safeInt.get(), 20);
 
@@ -160,14 +161,13 @@ TEST_F(SafeTypeTest, ConcurrentModify) {
     const int incrementsPerThread = 100;
 
     for (int i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&safeInt, &completedOperations, incrementsPerThread]() {
-            for (int j = 0; j < incrementsPerThread; ++j) {
-                safeInt.modify([](int& value) {
-                    value++;
-                });
-                completedOperations.fetch_add(1);
-            }
-        });
+        threads.emplace_back(
+            [&safeInt, &completedOperations, incrementsPerThread]() {
+                for (int j = 0; j < incrementsPerThread; ++j) {
+                    safeInt.modify([](int& value) { value++; });
+                    completedOperations.fetch_add(1);
+                }
+            });
     }
 
     for (auto& thread : threads) {
@@ -199,7 +199,7 @@ TEST_F(SafeTypeTest, SafeTypeCompareAndSwap) {
     // Failed compare and swap
     success = safeInt.compareAndSwap(10, 30);
     EXPECT_FALSE(success);
-    EXPECT_EQ(safeInt.get(), 20); // Should remain unchanged
+    EXPECT_EQ(safeInt.get(), 20);  // Should remain unchanged
 }
 
 TEST_F(SafeTypeTest, SafeTypeWithSharedPtr) {
@@ -239,11 +239,11 @@ TEST_F(SafeTypeTest, SafeTypeExceptionSafety) {
 
     // Test exception in copy constructor
     EXPECT_THROW(safeType.set(ThrowingType(999)), std::runtime_error);
-    EXPECT_EQ(safeType.get().value, 10); // Should remain unchanged
+    EXPECT_EQ(safeType.get().value, 10);  // Should remain unchanged
 
     // Test exception in assignment
     EXPECT_THROW(safeType.set(ThrowingType(888)), std::runtime_error);
-    EXPECT_EQ(safeType.get().value, 10); // Should remain unchanged
+    EXPECT_EQ(safeType.get().value, 10);  // Should remain unchanged
 }
 
 TEST_F(SafeTypeTest, SafeTypePerformance) {
@@ -259,10 +259,11 @@ TEST_F(SafeTypeTest, SafeTypePerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::microseconds>(end - start);
 
     // Performance should be reasonable (this is just a sanity check)
-    EXPECT_LT(duration.count(), 100000); // Less than 100ms for 10k operations
+    EXPECT_LT(duration.count(), 100000);  // Less than 100ms for 10k operations
 }
 
 TEST_F(SafeTypeTest, SafeTypeWithVector) {
@@ -299,7 +300,7 @@ TEST_F(SafeTypeTest, SafeTypeWithVector) {
     }
 
     vec = safeVector.get();
-    EXPECT_EQ(vec.size(), 3 + numThreads * 10); // Original 3 + added elements
+    EXPECT_EQ(vec.size(), 3 + numThreads * 10);  // Original 3 + added elements
 }
 
 TEST_F(SafeTypeTest, SafeTypeReadOnlyAccess) {
@@ -336,21 +337,24 @@ TEST_F(SafeTypeTest, RAIITypes) {
     auto& tracker = getResourceTracker();
 
     {
-        SafeType<std::unique_ptr<atom::async::test::ScopedResourceTracker>> safePtr;
+        SafeType<std::unique_ptr<atom::async::test::ScopedResourceTracker>>
+            safePtr;
 
-        safePtr.set(std::make_unique<atom::async::test::ScopedResourceTracker>(tracker));
+        safePtr.set(std::make_unique<atom::async::test::ScopedResourceTracker>(
+            tracker));
 
         // Use the resource
-        safePtr.read([](const std::unique_ptr<atom::async::test::ScopedResourceTracker>& ptr) {
-            EXPECT_NE(ptr, nullptr);
-        });
+        safePtr.read(
+            [](const std::unique_ptr<atom::async::test::ScopedResourceTracker>&
+                   ptr) { EXPECT_NE(ptr, nullptr); });
 
         // Modify the resource
-        safePtr.modify([](std::unique_ptr<atom::async::test::ScopedResourceTracker>& ptr) {
-            // Resource is being used
-            EXPECT_NE(ptr, nullptr);
-        });
-    } // SafeType destructor should clean up properly
+        safePtr.modify(
+            [](std::unique_ptr<atom::async::test::ScopedResourceTracker>& ptr) {
+                // Resource is being used
+                EXPECT_NE(ptr, nullptr);
+            });
+    }  // SafeType destructor should clean up properly
 
     // Give some time for cleanup
     std::this_thread::sleep_for(10ms);
@@ -373,10 +377,11 @@ TEST_F(SafeTypeTest, PerformanceCharacteristics) {
     auto elapsed = timer.elapsed();
 
     // Performance should be reasonable
-    EXPECT_LT(elapsed.count(), 1000000); // Less than 1 second for 10k operations
+    EXPECT_LT(elapsed.count(),
+              1000000);  // Less than 1 second for 10k operations
 
-    std::cout << "SafeType performance: "
-              << elapsed.count() / numOperations << " microseconds per operation" << std::endl;
+    std::cout << "SafeType performance: " << elapsed.count() / numOperations
+              << " microseconds per operation" << std::endl;
 }
 
 // Test SafeType with move semantics
@@ -386,7 +391,7 @@ TEST_F(SafeTypeTest, MoveSemantics) {
     auto ptr = std::make_unique<int>(42);
     safePtr.set(std::move(ptr));
 
-    EXPECT_EQ(ptr, nullptr); // Should be moved
+    EXPECT_EQ(ptr, nullptr);  // Should be moved
 
     // Use read() for move-only types instead of get()
     safePtr.read([](const std::unique_ptr<int>& retrieved) {
@@ -415,9 +420,7 @@ TEST_F(SafeTypeTest, CustomTypeSpecialHandling) {
             return *this;
         }
 
-        void use() const {
-            accessCount.fetch_add(1);
-        }
+        void use() const { accessCount.fetch_add(1); }
     };
 
     SafeType<CustomType> safeCustom(CustomType(100));
@@ -461,10 +464,11 @@ TEST_F(SafeTypeTest, ConcurrentReadersWriters) {
     for (size_t i = 0; i < numReaders; ++i) {
         threads.emplace_back([&safeMap, &readOperations]() {
             for (int j = 0; j < 100; ++j) {
-                safeMap.read([&readOperations](const std::map<int, std::string>& map) {
-                    EXPECT_GE(map.size(), 0);
-                    readOperations.fetch_add(1);
-                });
+                safeMap.read(
+                    [&readOperations](const std::map<int, std::string>& map) {
+                        EXPECT_GE(map.size(), 0);
+                        readOperations.fetch_add(1);
+                    });
                 std::this_thread::yield();
             }
         });
@@ -474,8 +478,10 @@ TEST_F(SafeTypeTest, ConcurrentReadersWriters) {
     for (size_t i = 0; i < numWriters; ++i) {
         threads.emplace_back([&safeMap, &writeOperations, i]() {
             for (int j = 0; j < 50; ++j) {
-                safeMap.modify([&writeOperations, i, j](std::map<int, std::string>& map) {
-                    map[1000 + i * 100 + j] = "writer_" + std::to_string(i) + "_" + std::to_string(j);
+                safeMap.modify([&writeOperations, i,
+                                j](std::map<int, std::string>& map) {
+                    map[1000 + i * 100 + j] =
+                        "writer_" + std::to_string(i) + "_" + std::to_string(j);
                     writeOperations.fetch_add(1);
                 });
                 std::this_thread::yield();
@@ -492,7 +498,7 @@ TEST_F(SafeTypeTest, ConcurrentReadersWriters) {
 
     // Verify final state
     auto finalMap = safeMap.get();
-    EXPECT_GE(finalMap.size(), 10); // At least initial data
+    EXPECT_GE(finalMap.size(), 10);  // At least initial data
 }
 
 // Test SafeType with timeout operations (if supported)
@@ -503,15 +509,13 @@ TEST_F(SafeTypeTest, TimeoutOperations) {
     auto timer = createTimer();
 
     for (int i = 0; i < 100; ++i) {
-        safeInt.modify([i](int& value) {
-            value = i;
-        });
+        safeInt.modify([i](int& value) { value = i; });
     }
 
     auto elapsed = timer.elapsed();
 
     // Should complete quickly
-    EXPECT_LT(elapsed.count(), 100000); // Less than 100ms
+    EXPECT_LT(elapsed.count(), 100000);  // Less than 100ms
 }
 
 // Test SafeType with exception handling in callbacks
@@ -519,23 +523,19 @@ TEST_F(SafeTypeTest, ExceptionHandlingInCallbacks) {
     SafeType<int> safeInt(42);
 
     // Exception in read callback
-    EXPECT_THROW(
-        safeInt.read([](const int& /*value*/) {
-            throw std::runtime_error("Read exception");
-        }),
-        std::runtime_error
-    );
+    EXPECT_THROW(safeInt.read([](const int& /*value*/) {
+        throw std::runtime_error("Read exception");
+    }),
+                 std::runtime_error);
 
     // Value should remain unchanged after exception
     EXPECT_EQ(safeInt.get(), 42);
 
     // Exception in modify callback
-    EXPECT_THROW(
-        safeInt.modify([](int& /*value*/) {
-            throw std::runtime_error("Modify exception");
-        }),
-        std::runtime_error
-    );
+    EXPECT_THROW(safeInt.modify([](int& /*value*/) {
+        throw std::runtime_error("Modify exception");
+    }),
+                 std::runtime_error);
 
     // Value should remain unchanged after exception
     EXPECT_EQ(safeInt.get(), 42);
@@ -570,26 +570,30 @@ TEST_F(SafeTypeTest, HighContentionStressTest) {
     SafeType<std::unordered_map<int, int>> safeMap;
     std::atomic<int> totalOperations{0};
 
-    const size_t numThreads = getMaxThreads() * 2; // High contention
+    const size_t numThreads = getMaxThreads() * 2;  // High contention
     const size_t operationsPerThread = 100;
 
-    runStressTest(numThreads, operationsPerThread,
-                  [&safeMap, &totalOperations](size_t threadId, size_t operationId) {
-        if (operationId % 3 == 0) {
-            // Read operation
-            safeMap.read([&totalOperations](const std::unordered_map<int, int>& map) {
-                volatile size_t size = map.size(); // Prevent optimization
-                (void)size;
-                totalOperations.fetch_add(1);
-            });
-        } else {
-            // Write operation
-            safeMap.modify([&totalOperations, threadId, operationId](std::unordered_map<int, int>& map) {
-                map[static_cast<int>(threadId * 1000 + operationId)] = static_cast<int>(operationId);
-                totalOperations.fetch_add(1);
-            });
-        }
-    });
+    runStressTest(
+        numThreads, operationsPerThread,
+        [&safeMap, &totalOperations](size_t threadId, size_t operationId) {
+            if (operationId % 3 == 0) {
+                // Read operation
+                safeMap.read([&totalOperations](
+                                 const std::unordered_map<int, int>& map) {
+                    volatile size_t size = map.size();  // Prevent optimization
+                    (void)size;
+                    totalOperations.fetch_add(1);
+                });
+            } else {
+                // Write operation
+                safeMap.modify([&totalOperations, threadId, operationId](
+                                   std::unordered_map<int, int>& map) {
+                    map[static_cast<int>(threadId * 1000 + operationId)] =
+                        static_cast<int>(operationId);
+                    totalOperations.fetch_add(1);
+                });
+            }
+        });
 
     EXPECT_EQ(totalOperations.load(), numThreads * operationsPerThread);
 

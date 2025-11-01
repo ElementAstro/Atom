@@ -151,7 +151,8 @@ void runPerformanceTest(PoolType& pool, const std::string& test_name,
 }
 
 // Thread safety test function
-void threadSafetyTest(MemoryPool<Widget, 16384>& pool, int thread_id, int iterations) {
+void threadSafetyTest(MemoryPool<Widget, 16384>& pool, int thread_id,
+                      int iterations) {
     std::vector<Widget*> local_widgets;
     local_widgets.reserve(iterations);
 

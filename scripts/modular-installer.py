@@ -6,21 +6,22 @@ Provides intelligent modular installation with dependency resolution and conflic
 
 import argparse
 import json
+import logging
 import os
-import sys
-import subprocess
 import platform
 import shutil
+import sys
 import tempfile
 import urllib.request
-import hashlib
 from pathlib import Path
-from typing import Dict, List, Set, Optional, Tuple
-import logging
+from typing import List
 
 # Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
+
 
 class AtomModularInstaller:
     """Advanced modular installer for Atom library components."""
@@ -35,34 +36,34 @@ class AtomModularInstaller:
 
         # Component dependency mapping
         self.dependencies = {
-            'algorithm': ['error'],
-            'async': ['error', 'log'],
-            'components': ['error', 'log', 'type'],
-            'connection': ['error', 'log', 'async'],
-            'containers': ['error', 'type'],
-            'error': [],
-            'image': ['error', 'log', 'io'],
-            'io': ['error', 'log'],
-            'log': ['error'],
-            'memory': ['error'],
-            'meta': ['error', 'type'],
-            'search': ['error', 'algorithm'],
-            'secret': ['error', 'log'],
-            'serial': ['error', 'log', 'io'],
-            'sysinfo': ['error', 'log'],
-            'system': ['error', 'log', 'sysinfo'],
-            'type': ['error'],
-            'utils': ['error', 'log', 'type'],
-            'web': ['error', 'log', 'async', 'connection']
+            "algorithm": ["error"],
+            "async": ["error", "log"],
+            "components": ["error", "log", "type"],
+            "connection": ["error", "log", "async"],
+            "containers": ["error", "type"],
+            "error": [],
+            "image": ["error", "log", "io"],
+            "io": ["error", "log"],
+            "log": ["error"],
+            "memory": ["error"],
+            "meta": ["error", "type"],
+            "search": ["error", "algorithm"],
+            "secret": ["error", "log"],
+            "serial": ["error", "log", "io"],
+            "sysinfo": ["error", "log"],
+            "system": ["error", "log", "sysinfo"],
+            "type": ["error"],
+            "utils": ["error", "log", "type"],
+            "web": ["error", "log", "async", "connection"],
         }
 
         # Meta-packages for common use cases
         self.meta_packages = {
-            'core': ['error', 'log', 'type', 'utils'],
-            'networking': ['connection', 'web', 'async'],
-            'imaging': ['image', 'io', 'algorithm'],
-            'system': ['sysinfo', 'system', 'serial'],
-            'full': list(self.dependencies.keys())
+            "core": ["error", "log", "type", "utils"],
+            "networking": ["connection", "web", "async"],
+            "imaging": ["image", "io", "algorithm"],
+            "system": ["sysinfo", "system", "serial"],
+            "full": list(self.dependencies.keys()),
         }
 
         self._load_installed_components()
@@ -70,61 +71,63 @@ class AtomModularInstaller:
     def _detect_platform(self) -> str:
         """Detect the current platform."""
         system = platform.system().lower()
-        if system == 'windows':
-            return 'windows'
-        elif system == 'darwin':
-            return 'macos'
-        elif system == 'linux':
-            return 'linux'
+        if system == "windows":
+            return "windows"
+        elif system == "darwin":
+            return "macos"
+        elif system == "linux":
+            return "linux"
         else:
             raise RuntimeError(f"Unsupported platform: {system}")
 
     def _detect_architecture(self) -> str:
         """Detect the current architecture."""
         machine = platform.machine().lower()
-        if machine in ['x86_64', 'amd64']:
-            return 'x64'
-        elif machine in ['i386', 'i686']:
-            return 'x86'
-        elif machine in ['aarch64', 'arm64']:
-            return 'arm64'
+        if machine in ["x86_64", "amd64"]:
+            return "x64"
+        elif machine in ["i386", "i686"]:
+            return "x86"
+        elif machine in ["aarch64", "arm64"]:
+            return "arm64"
         else:
-            return 'x64'  # Default fallback
+            return "x64"  # Default fallback
 
     def _get_default_install_prefix(self) -> Path:
         """Get the default installation prefix for the platform."""
-        if self.platform == 'windows':
-            return Path(os.environ.get('PROGRAMFILES', 'C:\\Program Files')) / 'Atom'
+        if self.platform == "windows":
+            return Path(os.environ.get("PROGRAMFILES", "C:\\Program Files")) / "Atom"
         else:
-            return Path('/usr/local')
+            return Path("/usr/local")
 
     def _load_installed_components(self):
         """Load information about currently installed components."""
-        registry_file = self.install_prefix / 'share' / 'atom' / 'installed_components.json'
+        registry_file = (
+            self.install_prefix / "share" / "atom" / "installed_components.json"
+        )
         if registry_file.exists():
             try:
-                with open(registry_file, 'r') as f:
+                with open(registry_file) as f:
                     data = json.load(f)
-                    self.component_registry = data.get('components', {})
-                    self.installed_components = set(data.get('installed', []))
+                    self.component_registry = data.get("components", {})
+                    self.installed_components = set(data.get("installed", []))
             except Exception as e:
                 logger.warning(f"Failed to load component registry: {e}")
 
     def _save_installed_components(self):
         """Save information about installed components."""
-        registry_dir = self.install_prefix / 'share' / 'atom'
+        registry_dir = self.install_prefix / "share" / "atom"
         registry_dir.mkdir(parents=True, exist_ok=True)
 
-        registry_file = registry_dir / 'installed_components.json'
+        registry_file = registry_dir / "installed_components.json"
         data = {
-            'components': self.component_registry,
-            'installed': list(self.installed_components),
-            'platform': self.platform,
-            'architecture': self.arch,
-            'install_prefix': str(self.install_prefix)
+            "components": self.component_registry,
+            "installed": list(self.installed_components),
+            "platform": self.platform,
+            "architecture": self.arch,
+            "install_prefix": str(self.install_prefix),
         }
 
-        with open(registry_file, 'w') as f:
+        with open(registry_file, "w") as f:
             json.dump(data, f, indent=2)
 
     def resolve_dependencies(self, components: List[str]) -> List[str]:
@@ -161,20 +164,22 @@ class AtomModularInstaller:
         conflicts = []
         for component in components:
             if component in self.installed_components:
-                installed_version = self.component_registry.get(component, {}).get('version', 'unknown')
+                installed_version = self.component_registry.get(component, {}).get(
+                    "version", "unknown"
+                )
                 conflicts.append(f"{component} (installed: {installed_version})")
         return conflicts
 
     def download_component(self, component: str, version: str = "latest") -> Path:
         """Download a component package."""
         package_name = f"atom-{component}-{version}-{self.platform}-{self.arch}.tar.gz"
-        if self.platform == 'windows':
-            package_name = package_name.replace('.tar.gz', '.zip')
+        if self.platform == "windows":
+            package_name = package_name.replace(".tar.gz", ".zip")
 
         url = f"{self.base_url}/{package_name}"
 
         # Create temporary download directory
-        download_dir = Path(tempfile.mkdtemp(prefix='atom-download-'))
+        download_dir = Path(tempfile.mkdtemp(prefix="atom-download-"))
         package_path = download_dir / package_name
 
         logger.info(f"Downloading {component} from {url}")
@@ -190,12 +195,14 @@ class AtomModularInstaller:
         """Extract a component package."""
         logger.info(f"Extracting {package_path} to {extract_dir}")
 
-        if package_path.suffix == '.zip':
-            shutil.unpack_archive(package_path, extract_dir, 'zip')
+        if package_path.suffix == ".zip":
+            shutil.unpack_archive(package_path, extract_dir, "zip")
         else:
-            shutil.unpack_archive(package_path, extract_dir, 'gztar')
+            shutil.unpack_archive(package_path, extract_dir, "gztar")
 
-    def install_component(self, component: str, version: str = "latest", force: bool = False):
+    def install_component(
+        self, component: str, version: str = "latest", force: bool = False
+    ):
         """Install a single component."""
         if component in self.installed_components and not force:
             logger.info(f"Component {component} is already installed")
@@ -208,7 +215,7 @@ class AtomModularInstaller:
 
         try:
             # Extract to temporary directory
-            with tempfile.TemporaryDirectory(prefix='atom-extract-') as extract_dir:
+            with tempfile.TemporaryDirectory(prefix="atom-extract-") as extract_dir:
                 self.extract_package(package_path, Path(extract_dir))
 
                 # Find extracted content
@@ -223,9 +230,9 @@ class AtomModularInstaller:
 
                 # Update registry
                 self.component_registry[component] = {
-                    'version': version,
-                    'install_date': str(Path().stat().st_mtime),
-                    'files': self._get_component_files(component)
+                    "version": version,
+                    "install_date": str(Path().stat().st_mtime),
+                    "files": self._get_component_files(component),
                 }
                 self.installed_components.add(component)
 
@@ -241,23 +248,23 @@ class AtomModularInstaller:
     def _copy_component_files(self, source_dir: Path, component: str):
         """Copy component files to installation directory."""
         # Copy headers
-        include_src = source_dir / 'include' / 'atom' / component
-        include_dst = self.install_prefix / 'include' / 'atom' / component
+        include_src = source_dir / "include" / "atom" / component
+        include_dst = self.install_prefix / "include" / "atom" / component
         if include_src.exists():
             include_dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(include_src, include_dst, dirs_exist_ok=True)
 
         # Copy libraries
-        lib_src = source_dir / 'lib'
-        lib_dst = self.install_prefix / 'lib'
+        lib_src = source_dir / "lib"
+        lib_dst = self.install_prefix / "lib"
         if lib_src.exists():
             lib_dst.mkdir(parents=True, exist_ok=True)
-            for lib_file in lib_src.glob(f'*atom*{component}*'):
+            for lib_file in lib_src.glob(f"*atom*{component}*"):
                 shutil.copy2(lib_file, lib_dst)
 
         # Copy CMake config files
-        cmake_src = source_dir / 'lib' / 'cmake' / f'atom-{component}'
-        cmake_dst = self.install_prefix / 'lib' / 'cmake' / f'atom-{component}'
+        cmake_src = source_dir / "lib" / "cmake" / f"atom-{component}"
+        cmake_dst = self.install_prefix / "lib" / "cmake" / f"atom-{component}"
         if cmake_src.exists():
             cmake_dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copytree(cmake_src, cmake_dst, dirs_exist_ok=True)
@@ -267,16 +274,16 @@ class AtomModularInstaller:
         files = []
 
         # Headers
-        include_dir = self.install_prefix / 'include' / 'atom' / component
+        include_dir = self.install_prefix / "include" / "atom" / component
         if include_dir.exists():
-            for file_path in include_dir.rglob('*'):
+            for file_path in include_dir.rglob("*"):
                 if file_path.is_file():
                     files.append(str(file_path.relative_to(self.install_prefix)))
 
         # Libraries
-        lib_dir = self.install_prefix / 'lib'
+        lib_dir = self.install_prefix / "lib"
         if lib_dir.exists():
-            for lib_file in lib_dir.glob(f'*atom*{component}*'):
+            for lib_file in lib_dir.glob(f"*atom*{component}*"):
                 files.append(str(lib_file.relative_to(self.install_prefix)))
 
         return files
@@ -294,7 +301,9 @@ class AtomModularInstaller:
                 dependents.append(installed_comp)
 
         if dependents and not force:
-            logger.error(f"Cannot uninstall {component}: required by {', '.join(dependents)}")
+            logger.error(
+                f"Cannot uninstall {component}: required by {', '.join(dependents)}"
+            )
             logger.info("Use --force to override dependency checks")
             return
 
@@ -302,7 +311,7 @@ class AtomModularInstaller:
 
         # Remove files
         if component in self.component_registry:
-            for file_path in self.component_registry[component].get('files', []):
+            for file_path in self.component_registry[component].get("files", []):
                 full_path = self.install_prefix / file_path
                 if full_path.exists():
                     full_path.unlink()
@@ -318,7 +327,9 @@ class AtomModularInstaller:
         if available:
             print("Available components:")
             for component, deps in self.dependencies.items():
-                print(f"  {component}: {', '.join(deps) if deps else 'no dependencies'}")
+                print(
+                    f"  {component}: {', '.join(deps) if deps else 'no dependencies'}"
+                )
 
             print("\nMeta-packages:")
             for meta, components in self.meta_packages.items():
@@ -326,7 +337,9 @@ class AtomModularInstaller:
         else:
             print("Installed components:")
             for component in sorted(self.installed_components):
-                version = self.component_registry.get(component, {}).get('version', 'unknown')
+                version = self.component_registry.get(component, {}).get(
+                    "version", "unknown"
+                )
                 print(f"  {component} ({version})")
 
     def install_components(self, components: List[str], force: bool = False):
@@ -357,24 +370,32 @@ class AtomModularInstaller:
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Atom Library Modular Installer')
-    parser.add_argument('--prefix', type=Path, help='Installation prefix')
-    parser.add_argument('--force', action='store_true', help='Force installation/uninstallation')
+    parser = argparse.ArgumentParser(description="Atom Library Modular Installer")
+    parser.add_argument("--prefix", type=Path, help="Installation prefix")
+    parser.add_argument(
+        "--force", action="store_true", help="Force installation/uninstallation"
+    )
 
-    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+    subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
     # Install command
-    install_parser = subparsers.add_parser('install', help='Install components')
-    install_parser.add_argument('components', nargs='+', help='Components to install')
-    install_parser.add_argument('--version', default='latest', help='Version to install')
+    install_parser = subparsers.add_parser("install", help="Install components")
+    install_parser.add_argument("components", nargs="+", help="Components to install")
+    install_parser.add_argument(
+        "--version", default="latest", help="Version to install"
+    )
 
     # Uninstall command
-    uninstall_parser = subparsers.add_parser('uninstall', help='Uninstall components')
-    uninstall_parser.add_argument('components', nargs='+', help='Components to uninstall')
+    uninstall_parser = subparsers.add_parser("uninstall", help="Uninstall components")
+    uninstall_parser.add_argument(
+        "components", nargs="+", help="Components to uninstall"
+    )
 
     # List command
-    list_parser = subparsers.add_parser('list', help='List components')
-    list_parser.add_argument('--available', action='store_true', help='List available components')
+    list_parser = subparsers.add_parser("list", help="List components")
+    list_parser.add_argument(
+        "--available", action="store_true", help="List available components"
+    )
 
     args = parser.parse_args()
 
@@ -388,13 +409,13 @@ def main():
         installer.install_prefix = args.prefix
 
     try:
-        if args.command == 'install':
+        if args.command == "install":
             installer.install_components(args.components, force=args.force)
-        elif args.command == 'uninstall':
+        elif args.command == "uninstall":
             for component in args.components:
                 installer.uninstall_component(component, force=args.force)
             installer._save_installed_components()
-        elif args.command == 'list':
+        elif args.command == "list":
             installer.list_components(available=args.available)
 
     except Exception as e:
@@ -402,5 +423,5 @@ def main():
         sys.exit(1)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

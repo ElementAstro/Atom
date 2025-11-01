@@ -3,8 +3,10 @@
 #include "command.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <chrono>
+#include <csignal>
 #include <fstream>
 #include <future>
 #include <map>
@@ -12,9 +14,14 @@
 #include <optional>
 #include <thread>
 #include <unordered_map>
-
 #if defined(_WIN32)
 // clang-format off
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <winsock2.h>
 #include <windows.h>
 #include <tlhelp32.h>
@@ -579,9 +586,11 @@ auto getProcessInfoByName(const std::string &processName)
 
     do {
         // Convert wide char array to string
-        int size = WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, nullptr, 0, nullptr, nullptr);
+        int size = WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, nullptr,
+                                       0, nullptr, nullptr);
         std::string currentProcess(size - 1, 0);
-        WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, &currentProcess[0], size, nullptr, nullptr);
+        WideCharToMultiByte(CP_UTF8, 0, entry.szExeFile, -1, &currentProcess[0],
+                            size, nullptr, nullptr);
         if (currentProcess == processName) {
             processes.push_back(getProcessInfo(entry.th32ProcessID));
         }
@@ -741,9 +750,7 @@ auto createProcessAsUser(const std::string &command, const std::string &user,
         }
     } cleanup{tokenHandle, newTokenHandle, processInfo};
 
-    if (LogonUserA(user.c_str(),
-                   domain.c_str(),
-                   password.c_str(),
+    if (LogonUserA(user.c_str(), domain.c_str(), password.c_str(),
                    LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_DEFAULT,
                    &tokenHandle) == 0) {
         spdlog::error("LogonUser failed with error: {}", GetLastError());
@@ -762,8 +769,7 @@ auto createProcessAsUser(const std::string &command, const std::string &user,
     std::wstring commandW(size, 0);
     MultiByteToWideChar(CP_UTF8, 0, command.c_str(), -1, &commandW[0], size);
 
-    if (CreateProcessAsUserW(newTokenHandle, nullptr,
-                             &commandW[0], nullptr,
+    if (CreateProcessAsUserW(newTokenHandle, nullptr, &commandW[0], nullptr,
                              nullptr, FALSE, 0, nullptr, nullptr, &startupInfo,
                              &processInfo) == 0) {
         spdlog::error("CreateProcessAsUser failed with error: {}",
@@ -1289,11 +1295,13 @@ auto getProcessResources(int pid) -> ProcessResource {
     resources.memUsage = getProcessMemoryUsage(pid);
 
 #ifdef _WIN32
-    HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
+    HANDLE hProcess =
+        OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, FALSE, pid);
     if (hProcess != NULL) {
         // Get virtual memory usage
         PROCESS_MEMORY_COUNTERS_EX pmc;
-        if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS *)&pmc, sizeof(pmc))) {
+        if (GetProcessMemoryInfo(hProcess, (PROCESS_MEMORY_COUNTERS *)&pmc,
+                                 sizeof(pmc))) {
             resources.vmUsage = pmc.PagefileUsage;
         }
 
@@ -1336,11 +1344,13 @@ auto getProcessResources(int pid) -> ProcessResource {
     if (task_for_pid(mach_task_self(), pid, &task) == KERN_SUCCESS) {
         struct task_basic_info info;
         mach_msg_type_number_t count = TASK_BASIC_INFO_COUNT;
-        if (task_info(task, TASK_BASIC_INFO, (task_info_t)&info, &count) == KERN_SUCCESS) {
+        if (task_info(task, TASK_BASIC_INFO, (task_info_t)&info, &count) ==
+            KERN_SUCCESS) {
             resources.vmUsage = info.virtual_size;
         }
     }
-    // I/O statistics are not easily available on macOS without additional frameworks
+    // I/O statistics are not easily available on macOS without additional
+    // frameworks
 #endif
 
     return resources;
@@ -1707,9 +1717,11 @@ auto getProcessCommandLine(int pid) -> std::vector<std::string> {
     wchar_t exePath[MAX_PATH];
     if (GetModuleFileNameExW(hProcess, nullptr, exePath, MAX_PATH) != 0) {
         // Convert wide char array to string
-        int size = WideCharToMultiByte(CP_UTF8, 0, exePath, -1, nullptr, 0, nullptr, nullptr);
+        int size = WideCharToMultiByte(CP_UTF8, 0, exePath, -1, nullptr, 0,
+                                       nullptr, nullptr);
         std::string pathStr(size - 1, 0);
-        WideCharToMultiByte(CP_UTF8, 0, exePath, -1, &pathStr[0], size, nullptr, nullptr);
+        WideCharToMultiByte(CP_UTF8, 0, exePath, -1, &pathStr[0], size, nullptr,
+                            nullptr);
         cmdline.push_back(pathStr);
     }
 
@@ -1828,7 +1840,8 @@ auto suspendProcess(int pid) -> bool {
     FARPROC procAddr =
         GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtSuspendProcess");
 
-    // Suppress function pointer casting warning - this cast is necessary for Windows NT API
+    // Suppress function pointer casting warning - this cast is necessary for
+    // Windows NT API
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-function-type"
     auto pfnNtSuspendProcess = reinterpret_cast<NtSuspendProcess>(procAddr);
@@ -1883,7 +1896,8 @@ auto resumeProcess(int pid) -> bool {
     FARPROC procAddr =
         GetProcAddress(GetModuleHandleA("ntdll.dll"), "NtResumeProcess");
 
-    // Suppress function pointer casting warning - this cast is necessary for Windows NT API
+    // Suppress function pointer casting warning - this cast is necessary for
+    // Windows NT API
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wcast-function-type"
     auto pfnNtResumeProcess = reinterpret_cast<NtResumeProcess>(procAddr);
@@ -2109,9 +2123,11 @@ auto getProcessPath(int pid) -> std::string {
     }
 
     // Convert wide char array to string
-    int size = WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
+    int size =
+        WideCharToMultiByte(CP_UTF8, 0, path, -1, nullptr, 0, nullptr, nullptr);
     std::string result(size - 1, 0);
-    WideCharToMultiByte(CP_UTF8, 0, path, -1, &result[0], size, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0, path, -1, &result[0], size, nullptr,
+                        nullptr);
     return result;
 #elif defined(__linux__)
     std::string procPath = "/proc/" + std::to_string(pid) + "/exe";
@@ -2467,31 +2483,37 @@ auto getProcessFileDescriptors([[maybe_unused]] int pid)
 
 #ifdef _WIN32
     // Windows: Enumerate handles using NtQuerySystemInformation
-    // Note: This requires elevated privileges and is limited by Windows security
+    // Note: This requires elevated privileges and is limited by Windows
+    // security
     HANDLE hProcess = OpenProcess(PROCESS_QUERY_INFORMATION, FALSE, pid);
     if (hProcess == nullptr) {
-        spdlog::error("Failed to open process {} for handle enumeration: {}", pid, GetLastError());
+        spdlog::error("Failed to open process {} for handle enumeration: {}",
+                      pid, GetLastError());
         return fds;
     }
 
     // Get handle count first
     DWORD handleCount = 0;
     if (GetProcessHandleCount(hProcess, &handleCount)) {
-        spdlog::debug("Process {} has approximately {} handles", pid, handleCount);
+        spdlog::debug("Process {} has approximately {} handles", pid,
+                      handleCount);
 
         // Note: Full handle enumeration on Windows requires undocumented APIs
         // and elevated privileges. We provide basic information instead.
         FileDescriptor fdInfo;
-        fdInfo.fd = -1; // Windows doesn't use Unix-style file descriptors
+        fdInfo.fd = -1;  // Windows doesn't use Unix-style file descriptors
         fdInfo.path = "Windows handle enumeration requires elevated privileges";
         fdInfo.type = "info";
         fdInfo.mode = "n/a";
         fds.push_back(fdInfo);
 
-        spdlog::info("Process {} handle count: {}. Full enumeration requires elevated privileges.",
-                    pid, handleCount);
+        spdlog::info(
+            "Process {} handle count: {}. Full enumeration requires elevated "
+            "privileges.",
+            pid, handleCount);
     } else {
-        spdlog::error("Failed to get handle count for process {}: {}", pid, GetLastError());
+        spdlog::error("Failed to get handle count for process {}: {}", pid,
+                      GetLastError());
     }
 
     CloseHandle(hProcess);

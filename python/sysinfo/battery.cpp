@@ -181,20 +181,28 @@ Examples:
                        "Battery health percentage");
 
     // BatteryError enum binding
-    py::enum_<BatteryError>(m, "BatteryError", "Enumeration of battery operation error codes")
+    py::enum_<BatteryError>(m, "BatteryError",
+                            "Enumeration of battery operation error codes")
         .value("NOT_PRESENT", BatteryError::NOT_PRESENT, "Battery not detected")
-        .value("ACCESS_DENIED", BatteryError::ACCESS_DENIED, "Access to battery information denied")
-        .value("NOT_SUPPORTED", BatteryError::NOT_SUPPORTED, "Operation not supported")
-        .value("INVALID_DATA", BatteryError::INVALID_DATA, "Invalid battery data")
-        .value("READ_ERROR", BatteryError::READ_ERROR, "Error reading battery information")
+        .value("ACCESS_DENIED", BatteryError::ACCESS_DENIED,
+               "Access to battery information denied")
+        .value("NOT_SUPPORTED", BatteryError::NOT_SUPPORTED,
+               "Operation not supported")
+        .value("INVALID_DATA", BatteryError::INVALID_DATA,
+               "Invalid battery data")
+        .value("READ_ERROR", BatteryError::READ_ERROR,
+               "Error reading battery information")
         .export_values();
 
     // AlertType enum binding
     py::enum_<AlertType>(m, "AlertType", "Enumeration of battery alert types")
         .value("LOW_BATTERY", AlertType::LOW_BATTERY, "Low battery level alert")
-        .value("CRITICAL_BATTERY", AlertType::CRITICAL_BATTERY, "Critical battery level alert")
-        .value("HIGH_TEMPERATURE", AlertType::HIGH_TEMPERATURE, "High battery temperature alert")
-        .value("LOW_BATTERY_HEALTH", AlertType::LOW_BATTERY_HEALTH, "Low battery health alert")
+        .value("CRITICAL_BATTERY", AlertType::CRITICAL_BATTERY,
+               "Critical battery level alert")
+        .value("HIGH_TEMPERATURE", AlertType::HIGH_TEMPERATURE,
+               "High battery temperature alert")
+        .value("LOW_BATTERY_HEALTH", AlertType::LOW_BATTERY_HEALTH,
+               "Low battery health alert")
         .export_values();
 
     // PowerPlan enum binding

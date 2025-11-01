@@ -5,6 +5,7 @@ This document provides a comprehensive checklist for verifying that the Python b
 ## Pre-Compilation Verification
 
 ### ✅ Header File Dependencies
+
 - [x] `atom/sysinfo/hardware/gpu.hpp` - exists and accessible
 - [x] `atom/sysinfo/info/locale.hpp` - exists and accessible  
 - [x] `atom/sysinfo/info/sn.hpp` - exists and accessible
@@ -13,12 +14,14 @@ This document provides a comprehensive checklist for verifying that the Python b
 - [x] `atom/sysinfo/hardware/battery.hpp` - exists and accessible (enhanced)
 
 ### ✅ Binding File Structure
+
 - [x] All binding files follow consistent structure
 - [x] All files include proper exception handling
 - [x] All files use correct pybind11 includes
 - [x] All files use proper namespace declarations
 
 ### ✅ Naming Conventions
+
 - [x] Python functions use snake_case
 - [x] Python classes use PascalCase
 - [x] Python properties use snake_case
@@ -26,6 +29,7 @@ This document provides a comprehensive checklist for verifying that the Python b
 - [x] C++ function mapping is correct
 
 ### ✅ Code Quality
+
 - [x] No syntax errors detected by IDE
 - [x] Consistent documentation style
 - [x] Proper parameter and return type handling
@@ -34,22 +38,26 @@ This document provides a comprehensive checklist for verifying that the Python b
 ## Compilation Steps
 
 ### 1. CMake Configuration
+
 ```bash
 # Configure the build with Python bindings enabled
 cmake --preset release -DBUILD_PYTHON_BINDINGS=ON
 ```
 
 ### 2. Build Process
+
 ```bash
 # Build the project including Python bindings
 cmake --build --preset release -j
 ```
 
 ### 3. Expected Build Outputs
+
 The following Python extension modules should be generated:
+
 - `battery.so` (or `.pyd` on Windows)
 - `bios.so`
-- `cpu.so` 
+- `cpu.so`
 - `disk.so`
 - `gpu.so` ⭐ (new)
 - `locale.so` ⭐ (new)
@@ -64,12 +72,14 @@ The following Python extension modules should be generated:
 ## Post-Compilation Testing
 
 ### 1. Import Testing
+
 ```python
 # Test that all modules can be imported
 python python/sysinfo/test_bindings.py
 ```
 
 ### 2. Basic Functionality Testing
+
 ```python
 # Test new GPU module
 from atom.sysinfo import gpu
@@ -104,6 +114,7 @@ alert_type = battery.AlertType.LOW_BATTERY
 ```
 
 ### 3. Integration Testing
+
 ```python
 # Test main package functionality
 from atom import sysinfo
@@ -114,45 +125,54 @@ available_modules = sysinfo.get_available_modules()
 ## Common Compilation Issues and Solutions
 
 ### Issue 1: Missing Header Files
+
 **Symptoms**: `fatal error: 'atom/sysinfo/xxx.hpp' file not found`
 **Solution**: Verify that all C++ header files exist and are in the correct locations
 
 ### Issue 2: Undefined Symbols
+
 **Symptoms**: `undefined symbol: _ZN4atom6system...`
 **Solution**: Ensure that the corresponding C++ implementation files are compiled and linked
 
 ### Issue 3: Python.h Not Found
+
 **Symptoms**: `fatal error: 'Python.h' file not found`
 **Solution**: Install Python development headers or ensure correct Python environment
 
 ### Issue 4: Pybind11 Issues
+
 **Symptoms**: `pybind11/pybind11.h: No such file or directory`
 **Solution**: Ensure pybind11 is properly installed and configured in CMake
 
 ## Verification Checklist
 
 ### ✅ Compilation Success
+
 - [ ] All binding modules compile without errors
 - [ ] No undefined symbol errors during linking
 - [ ] All expected .so/.pyd files are generated
 
 ### ✅ Import Success  
+
 - [ ] All modules can be imported in Python
 - [ ] No ImportError exceptions
 - [ ] Module attributes are accessible
 
 ### ✅ Functionality Success
+
 - [ ] Classes can be instantiated
 - [ ] Functions can be called
 - [ ] Properties can be accessed
 - [ ] Enums are available and usable
 
 ### ✅ Documentation Success
+
 - [ ] All classes have docstrings
 - [ ] All functions have docstrings
 - [ ] Help() function works for all modules
 
 ### ✅ Exception Handling Success
+
 - [ ] C++ exceptions are properly translated
 - [ ] Python exceptions have meaningful messages
 - [ ] No crashes when errors occur
@@ -160,11 +180,13 @@ available_modules = sysinfo.get_available_modules()
 ## Performance Verification
 
 ### Memory Usage
+
 - [ ] No memory leaks detected
 - [ ] Proper object lifecycle management
 - [ ] Reference counting works correctly
 
 ### Function Call Overhead
+
 - [ ] Reasonable performance for function calls
 - [ ] No excessive overhead from Python/C++ boundary
 
@@ -182,13 +204,15 @@ When all items in this checklist are verified:
 ## Build System Verification
 
 ### ✅ CMake Configuration
+
 - [x] CMakeLists.txt automatically detects sysinfo directory
 - [x] All .cpp files will be included in compilation
 - [x] Proper linking to atom-sysinfo library configured
 - [x] Python module output configured correctly
-- [x] __init__.py installation configured
+- [x] **init**.py installation configured
 
 ### ✅ Expected Build Command
+
 ```bash
 # The build system will automatically:
 # 1. Detect python/sysinfo/ directory
@@ -202,6 +226,7 @@ cmake --build --preset release -j
 ```
 
 ### ✅ Module Files That Will Be Compiled
+
 - [x] battery.cpp (enhanced with new enums)
 - [x] bios.cpp (existing)
 - [x] cpu.cpp (existing)
@@ -219,6 +244,7 @@ cmake --build --preset release -j
 **Compilation Status**: ✅ READY FOR PRODUCTION
 
 **Pre-Compilation Verification**: ✅ COMPLETE
+
 - All header dependencies verified
 - All binding files follow correct structure
 - Naming conventions consistent

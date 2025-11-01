@@ -4,9 +4,8 @@ Validation script for Atom I/O examples
 This script validates the structure and content of the I/O examples
 """
 
-import os
-import sys
 import re
+import sys
 from pathlib import Path
 
 
@@ -16,29 +15,29 @@ def validate_file_structure():
 
     base_dir = Path(__file__).parent
     expected_structure = {
-        'core': [
-            'basic_file_operations.cpp',
-            'file_splitting.cpp',
-            'directory_traversal.cpp',
-            'glob_patterns.cpp',
-            'advanced_glob_patterns.cpp'
+        "core": [
+            "basic_file_operations.cpp",
+            "file_splitting.cpp",
+            "directory_traversal.cpp",
+            "glob_patterns.cpp",
+            "advanced_glob_patterns.cpp",
         ],
-        'async': [
-            'basic_async_io.cpp',
-            'advanced_async_operations.cpp',
-            'coroutine_operations.cpp',
-            'async_glob_operations.cpp'
+        "async": [
+            "basic_async_io.cpp",
+            "advanced_async_operations.cpp",
+            "coroutine_operations.cpp",
+            "async_glob_operations.cpp",
         ],
-        'compression': [
-            'basic_compression.cpp',
-            'advanced_compression.cpp',
-            'async_compression.cpp'
+        "compression": [
+            "basic_compression.cpp",
+            "advanced_compression.cpp",
+            "async_compression.cpp",
         ],
-        'filesystem': [
-            'directory_stack.cpp',
-            'file_permissions.cpp',
-            'file_information.cpp'
-        ]
+        "filesystem": [
+            "directory_stack.cpp",
+            "file_permissions.cpp",
+            "file_information.cpp",
+        ],
     }
 
     issues = []
@@ -57,16 +56,16 @@ def validate_file_structure():
                 issues.append(f"Missing file: {category}/{filename}")
 
     # Check integration examples
-    integration_file = base_dir / 'integration_examples.cpp'
+    integration_file = base_dir / "integration_examples.cpp"
     if not integration_file.exists():
         issues.append("Missing file: integration_examples.cpp")
 
     # Check build files
-    cmake_file = base_dir / 'CMakeLists.txt'
+    cmake_file = base_dir / "CMakeLists.txt"
     if not cmake_file.exists():
         issues.append("Missing file: CMakeLists.txt")
 
-    readme_file = base_dir / 'README.md'
+    readme_file = base_dir / "README.md"
     if not readme_file.exists():
         issues.append("Missing file: README.md")
 
@@ -91,14 +90,14 @@ def validate_cpp_files():
 
     for cpp_file in cpp_files:
         try:
-            with open(cpp_file, 'r', encoding='utf-8') as f:
+            with open(cpp_file, encoding="utf-8") as f:
                 content = f.read()
 
             # Check for basic C++ structure
-            if not re.search(r'#include\s*<iostream>', content):
+            if not re.search(r"#include\s*<iostream>", content):
                 issues.append(f"{cpp_file.name}: Missing iostream include")
 
-            if not re.search(r'int\s+main\s*\(', content):
+            if not re.search(r"int\s+main\s*\(", content):
                 issues.append(f"{cpp_file.name}: Missing main function")
 
             # Check for atom/io includes
@@ -106,13 +105,12 @@ def validate_cpp_files():
                 issues.append(f"{cpp_file.name}: Missing atom/io includes")
 
             # Check for documentation
-            if not re.search(r'/\*\*.*@file.*\*/', content, re.DOTALL):
+            if not re.search(r"/\*\*.*@file.*\*/", content, re.DOTALL):
                 issues.append(f"{cpp_file.name}: Missing file documentation")
 
             # Check for cleanup function (most examples should have this)
-            if 'cleanup' not in content.lower() and 'clean' not in content.lower():
-                issues.append(
-                    f"{cpp_file.name}: Missing cleanup functionality")
+            if "cleanup" not in content.lower() and "clean" not in content.lower():
+                issues.append(f"{cpp_file.name}: Missing cleanup functionality")
 
         except Exception as e:
             issues.append(f"{cpp_file.name}: Error reading file - {e}")
@@ -132,25 +130,25 @@ def validate_cmake():
     print("\n🔍 Validating CMakeLists.txt...")
 
     base_dir = Path(__file__).parent
-    cmake_file = base_dir / 'CMakeLists.txt'
+    cmake_file = base_dir / "CMakeLists.txt"
 
     if not cmake_file.exists():
         print("❌ CMakeLists.txt not found")
         return False
 
     try:
-        with open(cmake_file, 'r', encoding='utf-8') as f:
+        with open(cmake_file, encoding="utf-8") as f:
             content = f.read()
 
         issues = []
 
         # Check for required CMake elements
         required_elements = [
-            r'cmake_minimum_required',
-            r'set\(CMAKE_CXX_STANDARD\s+20\)',
-            r'create_subdir_examples',
-            r'target_link_libraries.*atom',
-            r'add_custom_target.*io_examples'
+            r"cmake_minimum_required",
+            r"set\(CMAKE_CXX_STANDARD\s+20\)",
+            r"create_subdir_examples",
+            r"target_link_libraries.*atom",
+            r"add_custom_target.*io_examples",
         ]
 
         for element in required_elements:
@@ -158,7 +156,7 @@ def validate_cmake():
                 issues.append(f"Missing or incorrect: {element}")
 
         # Check for category handling
-        categories = ['core', 'async', 'compression', 'filesystem']
+        categories = ["core", "async", "compression", "filesystem"]
         for category in categories:
             if category not in content:
                 issues.append(f"Missing category handling: {category}")
@@ -182,25 +180,25 @@ def validate_documentation():
     print("\n🔍 Validating documentation...")
 
     base_dir = Path(__file__).parent
-    readme_file = base_dir / 'README.md'
+    readme_file = base_dir / "README.md"
 
     if not readme_file.exists():
         print("❌ README.md not found")
         return False
 
     try:
-        with open(readme_file, 'r', encoding='utf-8') as f:
+        with open(readme_file, encoding="utf-8") as f:
             content = f.read()
 
         issues = []
 
         # Check for required sections
         required_sections = [
-            r'# Atom I/O Examples',
-            r'## Directory Structure',
-            r'## Example Categories',
-            r'## Building the Examples',
-            r'## Running the Examples'
+            r"# Atom I/O Examples",
+            r"## Directory Structure",
+            r"## Example Categories",
+            r"## Building the Examples",
+            r"## Running the Examples",
         ]
 
         for section in required_sections:
@@ -240,7 +238,7 @@ def main():
         validate_file_structure,
         validate_cpp_files,
         validate_cmake,
-        validate_documentation
+        validate_documentation,
     ]
 
     for validation in validations:

@@ -110,7 +110,8 @@ public:
     // Rule of five for proper resource management
     ~Promise() noexcept {
         // Ensure cancellation thread is properly cleaned up
-        if (cancellationThread_.has_value() && cancellationThread_->joinable()) {
+        if (cancellationThread_.has_value() &&
+            cancellationThread_->joinable()) {
             cancellationThread_->request_stop();
             try {
                 cancellationThread_->join();
@@ -265,7 +266,8 @@ public:
     // Rule of five for proper resource management
     ~Promise() noexcept {
         // Ensure cancellation thread is properly cleaned up
-        if (cancellationThread_.has_value() && cancellationThread_->joinable()) {
+        if (cancellationThread_.has_value() &&
+            cancellationThread_->joinable()) {
             cancellationThread_->request_stop();
             try {
                 cancellationThread_->join();
@@ -1272,7 +1274,8 @@ auto whenAll(std::vector<Promise<T>>& promises) {
         }
     };
 
-    auto state = std::make_shared<SharedState>(promises.size(), std::move(resultPromise));
+    auto state = std::make_shared<SharedState>(promises.size(),
+                                               std::move(resultPromise));
 
     // Set callback for each promise
     for (size_t i = 0; i < promises.size(); ++i) {

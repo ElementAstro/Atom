@@ -351,12 +351,13 @@ Examples:
 #endif
 
     // Add convenience functions for common operations
-    m.def("count_set_bits",
-          [](uint64_t value) -> uint32_t {
-              return atom::utils::countBytes(value);
-          },
-          py::arg("value"),
-          R"(Convenience function to count set bits in a 64-bit value.
+    m.def(
+        "count_set_bits",
+        [](uint64_t value) -> uint32_t {
+            return atom::utils::countBytes(value);
+        },
+        py::arg("value"),
+        R"(Convenience function to count set bits in a 64-bit value.
 
           Args:
               value: The value whose set bits are to be counted.
@@ -370,12 +371,13 @@ Examples:
               >>> bit.count_set_bits(0xFF)  # Returns 8
           )");
 
-    m.def("create_bitmask",
-          [](int bits) -> uint64_t {
-              return atom::utils::createMask<uint64_t>(bits);
-          },
-          py::arg("bits"),
-          R"(Convenience function to create a 64-bit bitmask.
+    m.def(
+        "create_bitmask",
+        [](int bits) -> uint64_t {
+            return atom::utils::createMask<uint64_t>(bits);
+        },
+        py::arg("bits"),
+        R"(Convenience function to create a 64-bit bitmask.
 
           Args:
               bits: The number of bits to set to 1.
@@ -389,12 +391,13 @@ Examples:
               >>> hex(bit.create_bitmask(16))  # Returns '0xffff'
           )");
 
-    m.def("reverse_byte",
-          [](uint8_t value) -> uint8_t {
-              return atom::utils::reverseBits(value);
-          },
-          py::arg("value"),
-          R"(Convenience function to reverse bits in a byte.
+    m.def(
+        "reverse_byte",
+        [](uint8_t value) -> uint8_t {
+            return atom::utils::reverseBits(value);
+        },
+        py::arg("value"),
+        R"(Convenience function to reverse bits in a byte.
 
           Args:
               value: The byte value whose bits are to be reversed.
@@ -408,12 +411,13 @@ Examples:
               >>> hex(bit.reverse_byte(0x0F))  # Returns '0xf0'
           )");
 
-    m.def("hamming_distance",
-          [](uint64_t a, uint64_t b) -> uint32_t {
-              return atom::utils::countBytes(a ^ b);
-          },
-          py::arg("a"), py::arg("b"),
-          R"(Calculate the Hamming distance between two values.
+    m.def(
+        "hamming_distance",
+        [](uint64_t a, uint64_t b) -> uint32_t {
+            return atom::utils::countBytes(a ^ b);
+        },
+        py::arg("a"), py::arg("b"),
+        R"(Calculate the Hamming distance between two values.
 
           The Hamming distance is the number of positions at which
           the corresponding bits are different.
@@ -431,12 +435,13 @@ Examples:
               >>> bit.hamming_distance(0xFF, 0x00)  # Returns 8
           )");
 
-    m.def("is_power_of_two",
-          [](uint64_t value) -> bool {
-              return value != 0 && (value & (value - 1)) == 0;
-          },
-          py::arg("value"),
-          R"(Check if a value is a power of two.
+    m.def(
+        "is_power_of_two",
+        [](uint64_t value) -> bool {
+            return value != 0 && (value & (value - 1)) == 0;
+        },
+        py::arg("value"),
+        R"(Check if a value is a power of two.
 
           Args:
               value: The value to check.
@@ -451,22 +456,25 @@ Examples:
               >>> bit.is_power_of_two(0)   # Returns False
           )");
 
-    m.def("next_power_of_two",
-          [](uint64_t value) -> uint64_t {
-              if (value == 0) return 1;
-              if ((value & (value - 1)) == 0) return value;  // Already power of 2
+    m.def(
+        "next_power_of_two",
+        [](uint64_t value) -> uint64_t {
+            if (value == 0)
+                return 1;
+            if ((value & (value - 1)) == 0)
+                return value;  // Already power of 2
 
-              value--;
-              value |= value >> 1;
-              value |= value >> 2;
-              value |= value >> 4;
-              value |= value >> 8;
-              value |= value >> 16;
-              value |= value >> 32;
-              return value + 1;
-          },
-          py::arg("value"),
-          R"(Find the next power of two greater than or equal to the given value.
+            value--;
+            value |= value >> 1;
+            value |= value >> 2;
+            value |= value >> 4;
+            value |= value >> 8;
+            value |= value >> 16;
+            value |= value >> 32;
+            return value + 1;
+        },
+        py::arg("value"),
+        R"(Find the next power of two greater than or equal to the given value.
 
           Args:
               value: The input value.
@@ -496,7 +504,8 @@ Examples:
 
             if (operation == "count") {
                 auto counts = atom::utils::parallelBitOp(
-                    span, [](uint8_t x) -> uint8_t { return std::popcount(x); });
+                    span,
+                    [](uint8_t x) -> uint8_t { return std::popcount(x); });
                 for (auto count : counts) {
                     result.append(count);
                 }
@@ -509,7 +518,8 @@ Examples:
                 }
             } else {
                 throw std::invalid_argument(
-                    "Unknown operation. Supported operations: 'count', 'reverse'");
+                    "Unknown operation. Supported operations: 'count', "
+                    "'reverse'");
             }
 
             return result;

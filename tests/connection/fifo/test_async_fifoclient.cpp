@@ -1,9 +1,9 @@
-#include "atom/connection/async_fifoclient.hpp"
 #include <gtest/gtest.h>
 #include <chrono>
 #include <filesystem>
 #include <future>
 #include <thread>
+#include "atom/connection/async_fifoclient.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -20,7 +20,8 @@ class AsyncFifoClientTest : public ::testing::Test {
 protected:
     void SetUp() override {
 #ifdef _WIN32
-        fifo_path_ = "\\\\.\\pipe\\test_async_fifoclient_" + std::to_string(GetCurrentProcessId());
+        fifo_path_ = "\\\\.\\pipe\\test_async_fifoclient_" +
+                     std::to_string(GetCurrentProcessId());
 #else
         fifo_path_ = "/tmp/test_async_fifoclient_" + std::to_string(getpid());
         // Create FIFO for testing
@@ -213,7 +214,8 @@ TEST_F(AsyncFifoClientTest, MultipleWrites) {
     reader.join();
 
     EXPECT_EQ(receivedMessages.size(), testMessages.size());
-    for (size_t i = 0; i < testMessages.size() && i < receivedMessages.size(); ++i) {
+    for (size_t i = 0; i < testMessages.size() && i < receivedMessages.size();
+         ++i) {
         EXPECT_EQ(receivedMessages[i], testMessages[i]);
     }
 }

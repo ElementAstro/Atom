@@ -1,8 +1,8 @@
 #include "atom/extra/inicpp/inicpp.hpp"
 
+#include <pybind11/functional.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
-#include <pybind11/functional.h>
 
 namespace py = pybind11;
 
@@ -21,21 +21,21 @@ Features:
 
 Examples:
     >>> from atom.extra.inicpp import inicpp
-    >>> 
+    >>>
     >>> # Load INI file
     >>> ini_file = inicpp.IniFile()
     >>> ini_file.load("config.ini")
-    >>> 
+    >>>
     >>> # Access sections and fields
     >>> section = ini_file["database"]
     >>> host = section["host"].as_string()
     >>> port = section["port"].as_int()
-    >>> 
+    >>>
     >>> # Create new section and fields
     >>> new_section = ini_file["new_section"]
     >>> new_section["key"] = "value"
     >>> new_section["number"] = 42
-    >>> 
+    >>>
     >>> # Save changes
     >>> ini_file.save("config.ini")
 )";
@@ -106,7 +106,8 @@ Returns:
 Raises:
     ValueError: If the value cannot be converted to a boolean.
 )")
-        .def("set", py::overload_cast<const std::string&>(&inicpp::IniField::set),
+        .def("set",
+             py::overload_cast<const std::string&>(&inicpp::IniField::set),
              py::arg("value"),
              R"(Set the field value from a string.
 
@@ -140,8 +141,7 @@ Args:
 Returns:
     True if the field has no value.
 )")
-        .def("clear", &inicpp::IniField::clear,
-             R"(Clear the field value.)");
+        .def("clear", &inicpp::IniField::clear, R"(Clear the field value.)");
 
     // IniSection class binding
     py::class_<inicpp::IniSection>(m, "IniSection",
@@ -158,10 +158,12 @@ Examples:
     >>> port = section["port"].as_int()
 )")
         .def(py::init<>(), "Create an empty section")
-        .def("__getitem__", [](inicpp::IniSection& self, const std::string& key) -> inicpp::IniField& {
-            return self[key];
-        }, py::return_value_policy::reference_internal,
-             R"(Get a field by key.
+        .def(
+            "__getitem__",
+            [](inicpp::IniSection& self, const std::string& key)
+                -> inicpp::IniField& { return self[key]; },
+            py::return_value_policy::reference_internal,
+            R"(Get a field by key.
 
 Args:
     key: The field key.
@@ -169,17 +171,22 @@ Args:
 Returns:
     Reference to the field.
 )")
-        .def("__setitem__", [](inicpp::IniSection& self, const std::string& key, const std::string& value) {
-            self[key] = value;
-        }, R"(Set a field value.
+        .def(
+            "__setitem__",
+            [](inicpp::IniSection& self, const std::string& key,
+               const std::string& value) { self[key] = value; },
+            R"(Set a field value.
 
 Args:
     key: The field key.
     value: The field value.
 )")
-        .def("__contains__", [](const inicpp::IniSection& self, const std::string& key) {
-            return self.count(key) > 0;
-        }, R"(Check if a field exists.
+        .def(
+            "__contains__",
+            [](const inicpp::IniSection& self, const std::string& key) {
+                return self.count(key) > 0;
+            },
+            R"(Check if a field exists.
 
 Args:
     key: The field key.
@@ -201,10 +208,13 @@ Returns:
 )")
         .def("clear", &inicpp::IniSection::clear,
              R"(Remove all fields from the section.)")
-        .def("erase", [](inicpp::IniSection& self, const std::string& key) {
-            return self.erase(key);
-        }, py::arg("key"),
-             R"(Remove a field from the section.
+        .def(
+            "erase",
+            [](inicpp::IniSection& self, const std::string& key) {
+                return self.erase(key);
+            },
+            py::arg("key"),
+            R"(Remove a field from the section.
 
 Args:
     key: The field key to remove.
@@ -212,21 +222,25 @@ Args:
 Returns:
     Number of fields removed (0 or 1).
 )")
-        .def("keys", [](const inicpp::IniSection& self) {
-            std::vector<std::string> keys;
-            for (const auto& pair : self) {
-                keys.push_back(pair.first);
-            }
-            return keys;
-        }, R"(Get all field keys in the section.
+        .def(
+            "keys",
+            [](const inicpp::IniSection& self) {
+                std::vector<std::string> keys;
+                for (const auto& pair : self) {
+                    keys.push_back(pair.first);
+                }
+                return keys;
+            },
+            R"(Get all field keys in the section.
 
 Returns:
     List of field keys.
 )");
 
     // IniFile class binding
-    py::class_<inicpp::IniFile>(m, "IniFile",
-                                R"(Main class for loading, parsing, and saving INI files.
+    py::class_<inicpp::IniFile>(
+        m, "IniFile",
+        R"(Main class for loading, parsing, and saving INI files.
 
 This class provides a high-level interface for working with INI configuration files,
 supporting various features like nested sections, comments, and type-safe value access.
@@ -235,19 +249,20 @@ Examples:
     >>> # Load existing file
     >>> ini = inicpp.IniFile()
     >>> ini.load("config.ini")
-    >>> 
+    >>>
     >>> # Access data
     >>> db_section = ini["database"]
     >>> host = db_section["host"].as_string()
-    >>> 
+    >>>
     >>> # Modify data
     >>> ini["new_section"]["key"] = "value"
-    >>> 
+    >>>
     >>> # Save changes
     >>> ini.save("config.ini")
 )")
         .def(py::init<>(), "Create an empty INI file")
-        .def("load", py::overload_cast<const std::string&>(&inicpp::IniFile::load),
+        .def("load",
+             py::overload_cast<const std::string&>(&inicpp::IniFile::load),
              py::arg("filename"),
              R"(Load INI data from a file.
 
@@ -257,7 +272,8 @@ Args:
 Raises:
     RuntimeError: If the file cannot be loaded or parsed.
 )")
-        .def("save", py::overload_cast<const std::string&>(&inicpp::IniFile::save),
+        .def("save",
+             py::overload_cast<const std::string&>(&inicpp::IniFile::save),
              py::arg("filename"),
              R"(Save INI data to a file.
 
@@ -267,8 +283,7 @@ Args:
 Raises:
     RuntimeError: If the file cannot be saved.
 )")
-        .def("parse", &inicpp::IniFile::parse,
-             py::arg("content"),
+        .def("parse", &inicpp::IniFile::parse, py::arg("content"),
              R"(Parse INI data from a string.
 
 Args:
@@ -277,10 +292,12 @@ Args:
 Raises:
     RuntimeError: If the content cannot be parsed.
 )")
-        .def("__getitem__", [](inicpp::IniFile& self, const std::string& section_name) -> inicpp::IniSection& {
-            return self[section_name];
-        }, py::return_value_policy::reference_internal,
-             R"(Get a section by name.
+        .def(
+            "__getitem__",
+            [](inicpp::IniFile& self, const std::string& section_name)
+                -> inicpp::IniSection& { return self[section_name]; },
+            py::return_value_policy::reference_internal,
+            R"(Get a section by name.
 
 Args:
     section_name: The section name.
@@ -288,9 +305,12 @@ Args:
 Returns:
     Reference to the section.
 )")
-        .def("__contains__", [](const inicpp::IniFile& self, const std::string& section_name) {
-            return self.count(section_name) > 0;
-        }, R"(Check if a section exists.
+        .def(
+            "__contains__",
+            [](const inicpp::IniFile& self, const std::string& section_name) {
+                return self.count(section_name) > 0;
+            },
+            R"(Check if a section exists.
 
 Args:
     section_name: The section name.
@@ -312,10 +332,13 @@ Returns:
 )")
         .def("clear", &inicpp::IniFile::clear,
              R"(Remove all sections from the file.)")
-        .def("erase", [](inicpp::IniFile& self, const std::string& section_name) {
-            return self.erase(section_name);
-        }, py::arg("section_name"),
-             R"(Remove a section from the file.
+        .def(
+            "erase",
+            [](inicpp::IniFile& self, const std::string& section_name) {
+                return self.erase(section_name);
+            },
+            py::arg("section_name"),
+            R"(Remove a section from the file.
 
 Args:
     section_name: The section name to remove.
@@ -323,13 +346,16 @@ Args:
 Returns:
     Number of sections removed (0 or 1).
 )")
-        .def("sections", [](const inicpp::IniFile& self) {
-            std::vector<std::string> sections;
-            for (const auto& pair : self) {
-                sections.push_back(pair.first);
-            }
-            return sections;
-        }, R"(Get all section names in the file.
+        .def(
+            "sections",
+            [](const inicpp::IniFile& self) {
+                std::vector<std::string> sections;
+                for (const auto& pair : self) {
+                    sections.push_back(pair.first);
+                }
+                return sections;
+            },
+            R"(Get all section names in the file.
 
 Returns:
     List of section names.

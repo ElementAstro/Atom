@@ -13,7 +13,8 @@ namespace atom::web {
 
 /**
  * @class DownloadManager
- * @brief A class that manages download tasks using the Pimpl idiom to hide implementation details.
+ * @brief A class that manages download tasks using the Pimpl idiom to hide
+ * implementation details.
  */
 class DownloadManager {
 public:
@@ -39,10 +40,12 @@ public:
      * @brief Adds a download task.
      * @param url The download URL.
      * @param filepath The path to save the downloaded file.
-     * @param priority The priority of the download task, higher values indicate higher priority.
+     * @param priority The priority of the download task, higher values indicate
+     * higher priority.
      * @throws std::invalid_argument if URL or filepath is empty.
      */
-    void addTask(const std::string& url, const std::string& filepath, int priority = 0);
+    void addTask(const std::string& url, const std::string& filepath,
+                 int priority = 0);
 
     /**
      * @brief Removes a download task.
@@ -53,11 +56,14 @@ public:
 
     /**
      * @brief Starts the download tasks.
-     * @param thread_count The number of download threads, default is the number of CPU cores.
-     * @param download_speed The download speed limit (bytes per second), 0 means no limit.
+     * @param thread_count The number of download threads, default is the number
+     * of CPU cores.
+     * @param download_speed The download speed limit (bytes per second), 0
+     * means no limit.
      * @throws std::runtime_error if starting fails.
      */
-    void start(size_t thread_count = std::thread::hardware_concurrency(), size_t download_speed = 0);
+    void start(size_t thread_count = std::thread::hardware_concurrency(),
+               size_t download_speed = 0);
 
     /**
      * @brief Stops all download tasks gracefully.
@@ -116,22 +122,28 @@ public:
     void setMaxRetries(size_t retries);
 
     /**
-     * @brief Registers a callback function to be called when a download is complete.
-     * @param callback The callback function, with the task index and success status as parameters.
+     * @brief Registers a callback function to be called when a download is
+     * complete.
+     * @param callback The callback function, with the task index and success
+     * status as parameters.
      */
     void onDownloadComplete(const std::function<void(size_t, bool)>& callback);
 
     /**
-     * @brief Registers a callback function to be called when the download progress is updated.
-     * @param callback The callback function, with the task index and download percentage as parameters.
+     * @brief Registers a callback function to be called when the download
+     * progress is updated.
+     * @param callback The callback function, with the task index and download
+     * percentage as parameters.
      */
     void onProgressUpdate(const std::function<void(size_t, double)>& callback);
 
     /**
      * @brief Registers a callback function to be called when an error occurs.
-     * @param callback The callback function, with the task index and error message as parameters.
+     * @param callback The callback function, with the task index and error
+     * message as parameters.
      */
-    void onError(const std::function<void(size_t, const std::string&)>& callback);
+    void onError(
+        const std::function<void(size_t, const std::string&)>& callback);
 
     /**
      * @brief Gets the number of active download tasks.

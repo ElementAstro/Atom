@@ -2,10 +2,10 @@
 #define ATOM_SEARCH_TEST_DOCUMENT_HPP
 
 #include <gtest/gtest.h>
-#include <thread>
-#include <vector>
 #include <atomic>
 #include <chrono>
+#include <thread>
+#include <vector>
 
 // Note: These tests are designed for when the full implementation is available
 // Currently using mock implementation due to linking issues
@@ -26,13 +26,15 @@ private:
 public:
     // Constructors
     explicit MockDocument(const std::string& id, const std::string& content,
-                         std::initializer_list<std::string> tags = {})
+                          std::initializer_list<std::string> tags = {})
         : id_(id), content_(content), tags_(tags) {
         validate();
     }
 
     MockDocument(const MockDocument& other)
-        : id_(other.id_), content_(other.content_), tags_(other.tags_),
+        : id_(other.id_),
+          content_(other.content_),
+          tags_(other.tags_),
           clickCount_(other.clickCount_.load()) {}
 
     MockDocument& operator=(const MockDocument& other) {
@@ -46,8 +48,10 @@ public:
     }
 
     MockDocument(MockDocument&& other) noexcept
-        : id_(std::move(other.id_)), content_(std::move(other.content_)),
-          tags_(std::move(other.tags_)), clickCount_(other.clickCount_.load()) {
+        : id_(std::move(other.id_)),
+          content_(std::move(other.content_)),
+          tags_(std::move(other.tags_)),
+          clickCount_(other.clickCount_.load()) {
         other.clickCount_.store(0);
     }
 
@@ -65,14 +69,17 @@ public:
     // Validation
     void validate() const {
         if (id_.empty()) {
-            throw std::invalid_argument("Document validation error: ID cannot be empty");
+            throw std::invalid_argument(
+                "Document validation error: ID cannot be empty");
         }
         if (content_.empty()) {
-            throw std::invalid_argument("Document validation error: Content cannot be empty");
+            throw std::invalid_argument(
+                "Document validation error: Content cannot be empty");
         }
         for (const auto& tag : tags_) {
             if (tag.empty()) {
-                throw std::invalid_argument("Document validation error: Tag cannot be empty");
+                throw std::invalid_argument(
+                    "Document validation error: Tag cannot be empty");
             }
         }
     }
@@ -86,34 +93,28 @@ public:
     // Setters
     void setContent(const std::string& content) {
         if (content.empty()) {
-            throw std::invalid_argument("Document validation error: Content cannot be empty");
+            throw std::invalid_argument(
+                "Document validation error: Content cannot be empty");
         }
         content_ = content;
     }
 
     void addTag(const std::string& tag) {
         if (tag.empty()) {
-            throw std::invalid_argument("Document validation error: Tag cannot be empty");
+            throw std::invalid_argument(
+                "Document validation error: Tag cannot be empty");
         }
         tags_.insert(tag);
     }
 
-    void removeTag(const std::string& tag) {
-        tags_.erase(tag);
-    }
+    void removeTag(const std::string& tag) { tags_.erase(tag); }
 
     // Click count operations
-    void incrementClickCount() noexcept {
-        clickCount_.fetch_add(1);
-    }
+    void incrementClickCount() noexcept { clickCount_.fetch_add(1); }
 
-    void setClickCount(int count) noexcept {
-        clickCount_.store(count);
-    }
+    void setClickCount(int count) noexcept { clickCount_.store(count); }
 
-    void resetClickCount() noexcept {
-        clickCount_.store(0);
-    }
+    void resetClickCount() noexcept { clickCount_.store(0); }
 };
 
 class DocumentTest : public ::testing::Test {
@@ -167,7 +168,8 @@ TEST_F(DocumentTest, ValidationEmptyContent) {
 }
 
 TEST_F(DocumentTest, ValidationEmptyTag) {
-    EXPECT_THROW(MockDocument("test_id", "Test content", {"valid_tag", ""}), std::invalid_argument);
+    EXPECT_THROW(MockDocument("test_id", "Test content", {"valid_tag", ""}),
+                 std::invalid_argument);
 }
 
 TEST_F(DocumentTest, ValidationValidDocument) {
@@ -208,7 +210,7 @@ TEST_F(DocumentTest, SelfAssignment) {
     MockDocument doc("test_id", "Test content", {"tag1", "tag2"});
     doc.setClickCount(7);
 
-    doc = doc; // Self-assignment
+    doc = doc;  // Self-assignment
 
     EXPECT_EQ(doc.getId(), "test_id");
     EXPECT_EQ(doc.getContent(), "Test content");
@@ -234,7 +236,7 @@ TEST_F(DocumentTest, MoveConstructor) {
     EXPECT_EQ(moved.getClickCount(), originalClickCount);
 
     // Original should be in valid but unspecified state
-    EXPECT_EQ(original.getClickCount(), 0); // Reset after move
+    EXPECT_EQ(original.getClickCount(), 0);  // Reset after move
 }
 
 TEST_F(DocumentTest, MoveAssignment) {
@@ -267,7 +269,7 @@ TEST_F(DocumentTest, SetEmptyContent) {
     MockDocument doc("test_id", "Initial content");
 
     EXPECT_THROW(doc.setContent(""), std::invalid_argument);
-    EXPECT_EQ(doc.getContent(), "Initial content"); // Should remain unchanged
+    EXPECT_EQ(doc.getContent(), "Initial content");  // Should remain unchanged
 }
 
 TEST_F(DocumentTest, SetLargeContent) {
@@ -292,7 +294,7 @@ TEST_F(DocumentTest, AddDuplicateTag) {
     MockDocument doc("test_id", "Test content", {"existing_tag"});
 
     doc.addTag("existing_tag");
-    EXPECT_EQ(doc.getTags().size(), 1); // Should not duplicate
+    EXPECT_EQ(doc.getTags().size(), 1);  // Should not duplicate
     EXPECT_TRUE(doc.getTags().count("existing_tag"));
 }
 
@@ -317,7 +319,7 @@ TEST_F(DocumentTest, RemoveNonexistentTag) {
     MockDocument doc("test_id", "Test content", {"tag1", "tag2"});
 
     doc.removeTag("nonexistent");
-    EXPECT_EQ(doc.getTags().size(), 2); // Should remain unchanged
+    EXPECT_EQ(doc.getTags().size(), 2);  // Should remain unchanged
     EXPECT_TRUE(doc.getTags().count("tag1"));
     EXPECT_TRUE(doc.getTags().count("tag2"));
 }
@@ -426,7 +428,7 @@ TEST_F(DocumentTest, ConcurrentClickCountOperations) {
 
     // Just verify no crashes occurred and final state is valid
     int finalCount = doc.getClickCount();
-    EXPECT_GE(finalCount, 0); // Click count should never be negative
+    EXPECT_GE(finalCount, 0);  // Click count should never be negative
 }
 
 TEST_F(DocumentTest, ConcurrentTagOperations) {
@@ -440,7 +442,8 @@ TEST_F(DocumentTest, ConcurrentTagOperations) {
         threads.emplace_back([&doc, i, &successCount]() {
             try {
                 for (int j = 0; j < 10; ++j) {
-                    std::string tag = "thread" + std::to_string(i) + "_tag" + std::to_string(j);
+                    std::string tag = "thread" + std::to_string(i) + "_tag" +
+                                      std::to_string(j);
                     doc.addTag(tag);
 
                     // Sometimes remove tags
@@ -461,7 +464,7 @@ TEST_F(DocumentTest, ConcurrentTagOperations) {
 
     // Verify operations completed successfully
     EXPECT_GT(successCount, 0);
-    EXPECT_GE(doc.getTags().size(), 1); // Should have at least initial_tag
+    EXPECT_GE(doc.getTags().size(), 1);  // Should have at least initial_tag
 }
 
 // Edge Cases and Boundary Tests
@@ -505,7 +508,8 @@ TEST_F(DocumentTest, SpecialCharactersInId) {
 }
 
 TEST_F(DocumentTest, SpecialCharactersInContent) {
-    std::string specialContent = "Content with 特殊字符, émojis 🚀, and symbols: !@#$%^&*()";
+    std::string specialContent =
+        "Content with 特殊字符, émojis 🚀, and symbols: !@#$%^&*()";
     EXPECT_NO_THROW(MockDocument("test_id", specialContent));
 
     MockDocument doc("test_id", specialContent);
@@ -533,10 +537,11 @@ TEST_F(DocumentTest, PerformanceTagOperations) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(doc.getTags().size(), 10000);
-    EXPECT_LT(duration.count(), 1000); // Should complete within 1 second
+    EXPECT_LT(duration.count(), 1000);  // Should complete within 1 second
 }
 
 TEST_F(DocumentTest, PerformanceClickCountOperations) {
@@ -550,10 +555,11 @@ TEST_F(DocumentTest, PerformanceClickCountOperations) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
     EXPECT_EQ(doc.getClickCount(), 1000000);
-    EXPECT_LT(duration.count(), 1000); // Should complete within 1 second
+    EXPECT_LT(duration.count(), 1000);  // Should complete within 1 second
 }
 
 // Memory and Resource Tests
@@ -593,9 +599,10 @@ TEST_F(DocumentTest, CopyPerformance) {
     }
 
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    EXPECT_LT(duration.count(), 1000); // Should complete within 1 second
+    EXPECT_LT(duration.count(), 1000);  // Should complete within 1 second
 }
 
 // Error Recovery Tests

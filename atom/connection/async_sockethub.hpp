@@ -17,7 +17,13 @@ namespace atom::async::connection {
 class Client;
 struct Message;
 
-enum class LogLevel { DEBUG_LEVEL, INFO_LEVEL, WARNING_LEVEL, ERROR_LEVEL, FATAL_LEVEL };
+enum class LogLevel {
+    DEBUG_LEVEL,
+    INFO_LEVEL,
+    WARNING_LEVEL,
+    ERROR_LEVEL,
+    FATAL_LEVEL
+};
 
 // Configuration structure for the SocketHub
 struct SocketHubConfig {

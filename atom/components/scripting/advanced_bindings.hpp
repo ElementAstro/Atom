@@ -25,8 +25,8 @@ for both Lua and Python scripting engines.
 #include <unordered_map>
 #include <vector>
 
-#include "scripting_api.hpp"
 #include "../data/type_conversion.hpp"
+#include "scripting_api.hpp"
 
 namespace atom::components::scripting {
 

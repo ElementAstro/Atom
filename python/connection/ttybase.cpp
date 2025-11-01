@@ -17,9 +17,8 @@ namespace py = pybind11;
  * @param m The pybind11 module to bind to
  */
 void bindTTYResponse(py::module_& m) {
-    py::enum_<TTYBase::TTYResponse>(
-        m, "TTYResponse",
-        R"(Response codes for TTY operations.
+    py::enum_<TTYBase::TTYResponse>(m, "TTYResponse",
+                                    R"(Response codes for TTY operations.
 
 This enumeration defines different response codes that can be returned
 from TTY (terminal/serial) operations.
@@ -30,15 +29,23 @@ Examples:
     >>> if result == TTYResponse.OK:
     ...     print("Operation successful")
 )")
-        .value("OK", TTYBase::TTYResponse::OK, "Operation completed successfully")
-        .value("ReadError", TTYBase::TTYResponse::ReadError, "Error occurred while reading from TTY")
-        .value("WriteError", TTYBase::TTYResponse::WriteError, "Error occurred while writing to TTY")
-        .value("SelectError", TTYBase::TTYResponse::SelectError, "Error occurred while selecting TTY device")
+        .value("OK", TTYBase::TTYResponse::OK,
+               "Operation completed successfully")
+        .value("ReadError", TTYBase::TTYResponse::ReadError,
+               "Error occurred while reading from TTY")
+        .value("WriteError", TTYBase::TTYResponse::WriteError,
+               "Error occurred while writing to TTY")
+        .value("SelectError", TTYBase::TTYResponse::SelectError,
+               "Error occurred while selecting TTY device")
         .value("Timeout", TTYBase::TTYResponse::Timeout, "Operation timed out")
-        .value("PortFailure", TTYBase::TTYResponse::PortFailure, "Failed to connect to TTY port")
-        .value("ParamError", TTYBase::TTYResponse::ParamError, "Invalid parameter provided")
-        .value("Errno", TTYBase::TTYResponse::Errno, "System error occurred (check errno)")
-        .value("Overflow", TTYBase::TTYResponse::Overflow, "Buffer overflow occurred")
+        .value("PortFailure", TTYBase::TTYResponse::PortFailure,
+               "Failed to connect to TTY port")
+        .value("ParamError", TTYBase::TTYResponse::ParamError,
+               "Invalid parameter provided")
+        .value("Errno", TTYBase::TTYResponse::Errno,
+               "System error occurred (check errno)")
+        .value("Overflow", TTYBase::TTYResponse::Overflow,
+               "Buffer overflow occurred")
         .export_values();
 }
 
@@ -63,27 +70,27 @@ Classes:
 
 Quick Start Example:
     >>> from atom.connection.ttybase import TTYBase, TTYResponse
-    >>> 
+    >>>
     >>> # Create TTY instance
     >>> tty = TTYBase("MyDevice")
-    >>> 
+    >>>
     >>> # Connect to serial device
     >>> result = tty.connect("/dev/ttyUSB0", 9600, 8, 0, 1)
     >>> if result == TTYResponse.OK:
     ...     print("Connected successfully")
-    ...     
+    ...
     ...     # Write data
     ...     data = b"Hello, device!"
     ...     bytes_written = tty.write_string("Hello, device!")
     ...     if bytes_written[0] == TTYResponse.OK:
     ...         print(f"Wrote {bytes_written[1]} bytes")
-    ...         
+    ...
     ...         # Read response
     ...         buffer = bytearray(256)
     ...         read_result = tty.read(buffer, timeout=5)
     ...         if read_result[0] == TTYResponse.OK:
     ...             print(f"Read {read_result[1]} bytes: {buffer[:read_result[1]]}")
-    >>> 
+    >>>
     >>> tty.disconnect()
 
 Advanced Features:
@@ -99,33 +106,31 @@ Advanced Features:
     bindTTYResponse(m);
 
     // Bind the main TTYBase class
-    py::class_<TTYBase>(
-        m, "TTYBase",
-        R"(Base class for TTY (terminal/serial) communication.
+    py::class_<TTYBase>(m, "TTYBase",
+                        R"(Base class for TTY (terminal/serial) communication.
 
 This class provides methods for connecting to and communicating with
 TTY devices such as serial ports, terminals, and other character devices.
 
 Examples:
     >>> from atom.connection.ttybase import TTYBase, TTYResponse
-    >>> 
+    >>>
     >>> # Create TTY instance
     >>> tty = TTYBase("SerialDevice")
-    >>> 
+    >>>
     >>> # Connect to device
     >>> result = tty.connect("/dev/ttyUSB0", 9600, 8, 0, 1)
     >>> if result == TTYResponse.OK:
     ...     print("Connected to serial device")
-    ...     
+    ...
     ...     # Send command
     ...     response = tty.write_string("AT\r\n")
     ...     if response[0] == TTYResponse.OK:
     ...         print(f"Sent {response[1]} bytes")
-    >>> 
+    >>>
     >>> tty.disconnect()
 )")
-        .def(py::init<std::string_view>(),
-             py::arg("driver_name"),
+        .def(py::init<std::string_view>(), py::arg("driver_name"),
              R"(Constructs a TTYBase instance with the specified driver name.
 
 Args:
@@ -134,20 +139,24 @@ Args:
 Examples:
     >>> tty = TTYBase("MySerialDriver")
 )")
-        .def("read",
-             [](TTYBase& self, py::buffer buffer, uint8_t timeout) {
-                 py::buffer_info buf_info = buffer.request();
-                 if (buf_info.format != py::format_descriptor<uint8_t>::format()) {
-                     throw std::runtime_error("Buffer must be of type uint8_t");
-                 }
-                 
-                 std::span<uint8_t> span(static_cast<uint8_t*>(buf_info.ptr), buf_info.size);
-                 uint32_t bytes_read = 0;
-                 TTYBase::TTYResponse result = self.read(span, timeout, bytes_read);
-                 return std::make_pair(result, bytes_read);
-             },
-             py::arg("buffer"), py::arg("timeout"),
-             R"(Safely reads data from the TTY device.
+        .def(
+            "read",
+            [](TTYBase& self, py::buffer buffer, uint8_t timeout) {
+                py::buffer_info buf_info = buffer.request();
+                if (buf_info.format !=
+                    py::format_descriptor<uint8_t>::format()) {
+                    throw std::runtime_error("Buffer must be of type uint8_t");
+                }
+
+                std::span<uint8_t> span(static_cast<uint8_t*>(buf_info.ptr),
+                                        buf_info.size);
+                uint32_t bytes_read = 0;
+                TTYBase::TTYResponse result =
+                    self.read(span, timeout, bytes_read);
+                return std::make_pair(result, bytes_read);
+            },
+            py::arg("buffer"), py::arg("timeout"),
+            R"(Safely reads data from the TTY device.
 
 Args:
     buffer: Buffer to store the read data (must be writable bytes-like object)
@@ -166,20 +175,25 @@ Examples:
     >>> if result == TTYResponse.OK:
     ...     print(f"Read {bytes_read} bytes: {buffer[:bytes_read]}")
 )")
-        .def("read_section",
-             [](TTYBase& self, py::buffer buffer, uint8_t stop_byte, uint8_t timeout) {
-                 py::buffer_info buf_info = buffer.request();
-                 if (buf_info.format != py::format_descriptor<uint8_t>::format()) {
-                     throw std::runtime_error("Buffer must be of type uint8_t");
-                 }
-                 
-                 std::span<uint8_t> span(static_cast<uint8_t*>(buf_info.ptr), buf_info.size);
-                 uint32_t bytes_read = 0;
-                 TTYBase::TTYResponse result = self.readSection(span, stop_byte, timeout, bytes_read);
-                 return std::make_pair(result, bytes_read);
-             },
-             py::arg("buffer"), py::arg("stop_byte"), py::arg("timeout"),
-             R"(Reads data from the TTY until a stop byte is encountered.
+        .def(
+            "read_section",
+            [](TTYBase& self, py::buffer buffer, uint8_t stop_byte,
+               uint8_t timeout) {
+                py::buffer_info buf_info = buffer.request();
+                if (buf_info.format !=
+                    py::format_descriptor<uint8_t>::format()) {
+                    throw std::runtime_error("Buffer must be of type uint8_t");
+                }
+
+                std::span<uint8_t> span(static_cast<uint8_t*>(buf_info.ptr),
+                                        buf_info.size);
+                uint32_t bytes_read = 0;
+                TTYBase::TTYResponse result =
+                    self.readSection(span, stop_byte, timeout, bytes_read);
+                return std::make_pair(result, bytes_read);
+            },
+            py::arg("buffer"), py::arg("stop_byte"), py::arg("timeout"),
+            R"(Reads data from the TTY until a stop byte is encountered.
 
 Args:
     buffer: Buffer to store the read data (must be writable bytes-like object)
@@ -200,20 +214,23 @@ Examples:
     ...     line = buffer[:bytes_read].decode('utf-8')
     ...     print(f"Read line: {line}")
 )")
-        .def("write",
-             [](TTYBase& self, py::buffer buffer) {
-                 py::buffer_info buf_info = buffer.request();
-                 if (buf_info.format != py::format_descriptor<uint8_t>::format()) {
-                     throw std::runtime_error("Buffer must be of type uint8_t");
-                 }
-                 
-                 std::span<const uint8_t> span(static_cast<const uint8_t*>(buf_info.ptr), buf_info.size);
-                 uint32_t bytes_written = 0;
-                 TTYBase::TTYResponse result = self.write(span, bytes_written);
-                 return std::make_pair(result, bytes_written);
-             },
-             py::arg("buffer"),
-             R"(Safely writes data to the TTY device.
+        .def(
+            "write",
+            [](TTYBase& self, py::buffer buffer) {
+                py::buffer_info buf_info = buffer.request();
+                if (buf_info.format !=
+                    py::format_descriptor<uint8_t>::format()) {
+                    throw std::runtime_error("Buffer must be of type uint8_t");
+                }
+
+                std::span<const uint8_t> span(
+                    static_cast<const uint8_t*>(buf_info.ptr), buf_info.size);
+                uint32_t bytes_written = 0;
+                TTYBase::TTYResponse result = self.write(span, bytes_written);
+                return std::make_pair(result, bytes_written);
+            },
+            py::arg("buffer"),
+            R"(Safely writes data to the TTY device.
 
 Args:
     buffer: The data to write (bytes-like object)
@@ -231,14 +248,16 @@ Examples:
     >>> if result == TTYResponse.OK:
     ...     print(f"Wrote {bytes_written} bytes")
 )")
-        .def("write_string",
-             [](TTYBase& self, std::string_view string) {
-                 uint32_t bytes_written = 0;
-                 TTYBase::TTYResponse result = self.writeString(string, bytes_written);
-                 return std::make_pair(result, bytes_written);
-             },
-             py::arg("string"),
-             R"(Writes a string to the TTY device.
+        .def(
+            "write_string",
+            [](TTYBase& self, std::string_view string) {
+                uint32_t bytes_written = 0;
+                TTYBase::TTYResponse result =
+                    self.writeString(string, bytes_written);
+                return std::make_pair(result, bytes_written);
+            },
+            py::arg("string"),
+            R"(Writes a string to the TTY device.
 
 Args:
     string: The string to write to the TTY
@@ -251,9 +270,9 @@ Examples:
     >>> if result == TTYResponse.OK:
     ...     print(f"Sent command, wrote {bytes_written} bytes")
 )")
-        .def("connect", &TTYBase::connect,
-             py::arg("device"), py::arg("bit_rate"), py::arg("word_size"),
-             py::arg("parity"), py::arg("stop_bits"),
+        .def("connect", &TTYBase::connect, py::arg("device"),
+             py::arg("bit_rate"), py::arg("word_size"), py::arg("parity"),
+             py::arg("stop_bits"),
              R"(Connects to the specified TTY device.
 
 Args:
@@ -290,8 +309,7 @@ Examples:
     >>> if result == TTYResponse.OK:
     ...     print("Disconnected successfully")
 )")
-        .def("set_debug", &TTYBase::setDebug,
-             py::arg("enabled"),
+        .def("set_debug", &TTYBase::setDebug, py::arg("enabled"),
              R"(Enables or disables debugging information.
 
 Args:
@@ -301,8 +319,7 @@ Examples:
     >>> tty.set_debug(True)  # Enable debug output
     >>> tty.set_debug(False)  # Disable debug output
 )")
-        .def("get_error_message", &TTYBase::getErrorMessage,
-             py::arg("code"),
+        .def("get_error_message", &TTYBase::getErrorMessage, py::arg("code"),
              R"(Gets the error message corresponding to a TTYResponse code.
 
 Args:
@@ -338,10 +355,7 @@ Examples:
     ...     print("TTY is not connected")
 )")
         .def(
-            "__enter__",
-            [](TTYBase& self) -> TTYBase& {
-                return self;
-            },
+            "__enter__", [](TTYBase& self) -> TTYBase& { return self; },
             "Support for context manager protocol")
         .def(
             "__exit__",
@@ -353,21 +367,31 @@ Examples:
             "Ensure TTY is disconnected when exiting context");
 
     // Add utility functions
-    m.def("response_to_string",
-          [](TTYBase::TTYResponse response) {
-              switch (response) {
-                  case TTYBase::TTYResponse::OK: return std::string("OK");
-                  case TTYBase::TTYResponse::ReadError: return std::string("ReadError");
-                  case TTYBase::TTYResponse::WriteError: return std::string("WriteError");
-                  case TTYBase::TTYResponse::SelectError: return std::string("SelectError");
-                  case TTYBase::TTYResponse::Timeout: return std::string("Timeout");
-                  case TTYBase::TTYResponse::PortFailure: return std::string("PortFailure");
-                  case TTYBase::TTYResponse::ParamError: return std::string("ParamError");
-                  case TTYBase::TTYResponse::Errno: return std::string("Errno");
-                  case TTYBase::TTYResponse::Overflow: return std::string("Overflow");
-                  default: return std::string("Unknown");
-              }
-          },
-          py::arg("response"),
-          "Converts a TTYResponse enum value to a string");
+    m.def(
+        "response_to_string",
+        [](TTYBase::TTYResponse response) {
+            switch (response) {
+                case TTYBase::TTYResponse::OK:
+                    return std::string("OK");
+                case TTYBase::TTYResponse::ReadError:
+                    return std::string("ReadError");
+                case TTYBase::TTYResponse::WriteError:
+                    return std::string("WriteError");
+                case TTYBase::TTYResponse::SelectError:
+                    return std::string("SelectError");
+                case TTYBase::TTYResponse::Timeout:
+                    return std::string("Timeout");
+                case TTYBase::TTYResponse::PortFailure:
+                    return std::string("PortFailure");
+                case TTYBase::TTYResponse::ParamError:
+                    return std::string("ParamError");
+                case TTYBase::TTYResponse::Errno:
+                    return std::string("Errno");
+                case TTYBase::TTYResponse::Overflow:
+                    return std::string("Overflow");
+                default:
+                    return std::string("Unknown");
+            }
+        },
+        py::arg("response"), "Converts a TTYResponse enum value to a string");
 }

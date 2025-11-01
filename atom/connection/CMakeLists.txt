@@ -25,7 +25,7 @@ set(SOURCES
 
 # Check for ASIO support and add async sources if available
 find_package(asio QUIET)
-if(Asio_FOUND)
+if(asio_FOUND)
   list(
     APPEND
     SOURCES

@@ -14,6 +14,10 @@
 #include <immintrin.h>
 #endif
 
+#ifdef _MSC_VER
+#include <intrin.h>  // For _mm_prefetch
+#endif
+
 #ifdef ATOM_USE_BOOST
 #include <boost/algorithm/string.hpp>
 #endif
@@ -621,7 +625,13 @@ auto BoyerMoore::searchOptimized(std::string_view text) const
 
                 // Pre-fetch next text character to improve cache hits
                 if (i + pattern_len < n) {
+#ifdef _MSC_VER
+                    _mm_prefetch(
+                        reinterpret_cast<const char*>(&text[i + pattern_len]),
+                        _MM_HINT_T0);
+#else
                     __builtin_prefetch(&text[i + pattern_len], 0, 0);
+#endif
                 }
 
                 i += std::max(good_suffix_shift_[j + 1], j - bc_shift + 1);

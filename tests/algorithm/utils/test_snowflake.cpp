@@ -1,5 +1,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
 #include <bitset>
 #include <chrono>
 #include <future>
@@ -7,7 +8,6 @@
 #include <thread>
 #include <unordered_set>
 #include <vector>
-#include <spdlog/spdlog.h>
 #include "atom/algorithm/snowflake.hpp"
 
 using namespace atom::algorithm;
@@ -64,8 +64,10 @@ TEST_F(SnowflakeTest, IdStructure) {
     EXPECT_EQ(worker_id, 0);
     EXPECT_GE(timestamp, TEST_EPOCH);
     // Check that timestamp is close to current time (within 10 seconds)
-    uint64_t current_time = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+    uint64_t current_time =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch())
+            .count();
     EXPECT_NEAR(timestamp, current_time, 10000);
     EXPECT_LT(sequence, (1ULL << Snowflake<TEST_EPOCH>::SEQUENCE_BITS));
 }
@@ -122,12 +124,18 @@ TEST_F(SnowflakeTest, WorkerAndDatacenterIds) {
 }
 
 TEST_F(SnowflakeTest, InvalidInitialization) {
-    EXPECT_THROW({
-        Snowflake<TEST_EPOCH> invalid(Snowflake<TEST_EPOCH>::MAX_WORKER_ID + 1, 0);
-    }, InvalidWorkerIdException);
-    EXPECT_THROW({
-        Snowflake<TEST_EPOCH> invalid(0, Snowflake<TEST_EPOCH>::MAX_DATACENTER_ID + 1);
-    }, InvalidDatacenterIdException);
+    EXPECT_THROW(
+        {
+            Snowflake<TEST_EPOCH> invalid(
+                Snowflake<TEST_EPOCH>::MAX_WORKER_ID + 1, 0);
+        },
+        InvalidWorkerIdException);
+    EXPECT_THROW(
+        {
+            Snowflake<TEST_EPOCH> invalid(
+                0, Snowflake<TEST_EPOCH>::MAX_DATACENTER_ID + 1);
+        },
+        InvalidDatacenterIdException);
 }
 
 TEST_F(SnowflakeTest, InitMethod) {
@@ -135,8 +143,12 @@ TEST_F(SnowflakeTest, InitMethod) {
     EXPECT_NO_THROW(snowflake.init(15, 20));
     EXPECT_EQ(snowflake.getWorkerId(), 15);
     EXPECT_EQ(snowflake.getDatacenterId(), 20);
-    EXPECT_THROW({ snowflake.init(Snowflake<TEST_EPOCH>::MAX_WORKER_ID + 1, 0); }, InvalidWorkerIdException);
-    EXPECT_THROW({ snowflake.init(0, Snowflake<TEST_EPOCH>::MAX_DATACENTER_ID + 1); }, InvalidDatacenterIdException);
+    EXPECT_THROW(
+        { snowflake.init(Snowflake<TEST_EPOCH>::MAX_WORKER_ID + 1, 0); },
+        InvalidWorkerIdException);
+    EXPECT_THROW(
+        { snowflake.init(0, Snowflake<TEST_EPOCH>::MAX_DATACENTER_ID + 1); },
+        InvalidDatacenterIdException);
 }
 
 TEST_F(SnowflakeTest, IdValidation) {
@@ -197,7 +209,8 @@ TEST_F(SnowflakeTest, Statistics) {
         (void)ids;
     }
     auto stats_after = snowflake.getStatistics();
-    EXPECT_GE(stats_after.timestamp_wait_count, stats_before.timestamp_wait_count);
+    EXPECT_GE(stats_after.timestamp_wait_count,
+              stats_before.timestamp_wait_count);
 }
 
 TEST_F(SnowflakeTest, Serialization) {
@@ -225,8 +238,11 @@ TEST_F(SnowflakeTest, Serialization) {
 
 TEST_F(SnowflakeTest, InvalidDeserialization) {
     Snowflake<TEST_EPOCH> snowflake;
-    EXPECT_THROW({ snowflake.deserialize("not:enough:parts"); }, SnowflakeException);
-    EXPECT_THROW({ snowflake.deserialize("invalid:data:not:a:number"); }, std::exception);
+    EXPECT_THROW(
+        { snowflake.deserialize("not:enough:parts"); }, SnowflakeException);
+    EXPECT_THROW(
+        { snowflake.deserialize("invalid:data:not:a:number"); },
+        std::exception);
 }
 
 TEST_F(SnowflakeTest, ThreadSafety) {
@@ -267,16 +283,23 @@ TEST_F(SnowflakeTest, BatchEfficiency) {
     }
     auto end_individual = std::chrono::high_resolution_clock::now();
     auto individual_duration =
-        std::chrono::duration_cast<std::chrono::microseconds>(end_individual - start_individual).count();
+        std::chrono::duration_cast<std::chrono::microseconds>(end_individual -
+                                                              start_individual)
+            .count();
     auto start_batch = std::chrono::high_resolution_clock::now();
     auto batch_ids = snowflake_.nextid<BATCH_SIZE>();
     auto end_batch = std::chrono::high_resolution_clock::now();
-    auto batch_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_batch - start_batch).count();
+    auto batch_duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                              end_batch - start_batch)
+                              .count();
     std::set<uint64_t> unique_ids(batch_ids.begin(), batch_ids.end());
     EXPECT_EQ(unique_ids.size(), BATCH_SIZE);
-    spdlog::info("Individual generation of {} IDs took {} microseconds", BATCH_SIZE, individual_duration);
-    spdlog::info("Batch generation of {} IDs took {} microseconds", BATCH_SIZE, batch_duration);
-    spdlog::info("Batch generation is {}x faster", static_cast<double>(individual_duration) / batch_duration);
+    spdlog::info("Individual generation of {} IDs took {} microseconds",
+                 BATCH_SIZE, individual_duration);
+    spdlog::info("Batch generation of {} IDs took {} microseconds", BATCH_SIZE,
+                 batch_duration);
+    spdlog::info("Batch generation is {}x faster",
+                 static_cast<double>(individual_duration) / batch_duration);
 }
 
 TEST_F(SnowflakeTest, LockTypes) {
@@ -300,11 +323,13 @@ TEST_F(SnowflakeTest, IdBitStructure) {
     std::bitset<64> bits(id);
     std::string bit_string = bits.to_string();
     std::string datacenter_bits = bit_string.substr(
-        64 - snowflake.DATACENTER_ID_SHIFT - snowflake.DATACENTER_ID_BITS, snowflake.DATACENTER_ID_BITS);
+        64 - snowflake.DATACENTER_ID_SHIFT - snowflake.DATACENTER_ID_BITS,
+        snowflake.DATACENTER_ID_BITS);
     std::string worker_bits = bit_string.substr(
-        64 - snowflake.WORKER_ID_SHIFT - snowflake.WORKER_ID_BITS, snowflake.WORKER_ID_BITS);
-    std::string sequence_bits = bit_string.substr(
-        64 - snowflake.SEQUENCE_BITS, snowflake.SEQUENCE_BITS);
+        64 - snowflake.WORKER_ID_SHIFT - snowflake.WORKER_ID_BITS,
+        snowflake.WORKER_ID_BITS);
+    std::string sequence_bits = bit_string.substr(64 - snowflake.SEQUENCE_BITS,
+                                                  snowflake.SEQUENCE_BITS);
     std::bitset<5> datacenter_bitset(datacenter_bits);
     std::bitset<5> worker_bitset(worker_bits);
     std::bitset<12> sequence_bitset(sequence_bits);

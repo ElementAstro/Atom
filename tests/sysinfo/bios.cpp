@@ -218,4 +218,4 @@ TEST_F(BiosTest, SingletonPattern) {
     EXPECT_EQ(instance1, instance2);
 }
 
-} // namespace atom::sysinfo::test
+}  // namespace atom::sysinfo::test
