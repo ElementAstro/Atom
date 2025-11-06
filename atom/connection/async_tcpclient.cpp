@@ -165,7 +165,7 @@ public:
             auto handle_connect =
                 [this, timer, promise_ptr = connect_promise_ptr](
                     const asio::error_code& ec,
-                    const asio::ip::tcp::endpoint& _endpoint) {
+                    const asio::ip::tcp::endpoint& _endpoint [[maybe_unused]]) {
                     timer->cancel();
 
                     if (ec) {

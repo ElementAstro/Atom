@@ -25,8 +25,8 @@ set(ADDRESS_HEADERS
 add_library(atom-web-address OBJECT ${ADDRESS_SOURCES} ${ADDRESS_HEADERS})
 set_property(TARGET atom-web-address PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-# 依赖项
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+# 依赖项（避免直接依赖 loguru，优先使用已配置的日志依赖）
+set(LIBS ${CMAKE_THREAD_LIBS_INIT})
 
 # Add spdlog library
 find_package(spdlog CONFIG QUIET)

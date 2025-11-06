@@ -42,7 +42,11 @@ endif()
 # Find spdlog
 find_package(spdlog QUIET)
 if(spdlog_FOUND)
-  list(APPEND LIBS spdlog::spdlog)
+  if(TARGET spdlog::spdlog_header_only)
+    list(APPEND LIBS spdlog::spdlog_header_only)
+  else()
+    list(APPEND LIBS spdlog::spdlog)
+  endif()
 endif()
 
 # Create library target

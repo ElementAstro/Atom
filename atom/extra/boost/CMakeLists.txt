@@ -1,6 +1,12 @@
 # CMakeLists.txt for Boost utility headers Integrated with main Atom build
 # system Header-only library
 
+# Policy: allow legacy FindBoost module without dev warnings in this optional
+# component
+if(POLICY CMP0167)
+  cmake_policy(SET CMP0167 OLD)
+endif()
+
 # Check for Boost dependencies
 find_package(Boost QUIET)
 

@@ -500,6 +500,22 @@ auto LCG::nextDiscrete(std::span<const double> weights) -> int {
 
 auto LCG::nextMultinomial(int trials, std::span<const double> probabilities)
     -> std::vector<int> {
+    if (trials < 0) {
+        spdlog::error("Invalid trials: {}", trials);
+        THROW_INVALID_ARGUMENT("Trials must be non-negative");
+    }
+    if (probabilities.empty()) {
+        spdlog::error("Empty probabilities for multinomial");
+        THROW_INVALID_ARGUMENT("Probabilities cannot be empty");
+    }
+    double sum =
+        std::accumulate(probabilities.begin(), probabilities.end(), 0.0);
+    if (std::any_of(probabilities.begin(), probabilities.end(),
+                    [](double p) { return p < 0.0; }) ||
+        sum <= 0.0 || sum > 1.0 + 1e-9) {
+        spdlog::error("Invalid probabilities; sum={}", sum);
+        THROW_INVALID_ARGUMENT("Invalid probabilities for multinomial");
+    }
     std::vector<int> counts(probabilities.size(), 0);
     for (int i = 0; i < trials; ++i) {
         int idx = nextDiscrete(probabilities);

@@ -62,8 +62,14 @@ std::vector<std::string> LifecycleManager::resolveDependencies(
 
     buildGraph(componentName);
 
-    // Perform topological sort
-    return topologicalSort(graph);
+    // Perform topological sort and ensure dependencies come before dependents
+    auto order = topologicalSort(graph);
+    // Exclude the root component itself from the dependency list
+    order.erase(std::remove(order.begin(), order.end(), componentName),
+                order.end());
+    // Reverse to ensure deepest dependencies load first
+    std::reverse(order.begin(), order.end());
+    return order;
 }
 
 bool LifecycleManager::executePhase(Component& component,
@@ -168,6 +174,11 @@ std::vector<LifecycleEvent> LifecycleManager::getLifecycleHistory(
 void LifecycleManager::clearHistory() {
     std::unique_lock lock(mutex_);
     history_.clear();
+    // Also clear hooks and dependencies to avoid cross-test stale
+    // captures/state
+    hooks_.clear();
+    globalHooks_.clear();
+    dependencies_.clear();
 }
 
 bool LifecycleManager::validateDependencies(

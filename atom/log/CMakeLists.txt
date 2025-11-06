@@ -394,11 +394,12 @@ if(NOT PROJECT_IS_TOP_LEVEL)
   # Link module-specific dependencies
   target_link_libraries(
     atom-log
-    PUBLIC loguru atom-error atom-utils atom-web
+    PUBLIC loguru atom-error atom-utils
            $<$<TARGET_EXISTS:ZLIB::ZLIB>:ZLIB::ZLIB>
            $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 
-  target_compile_definitions(atom-log PUBLIC SPDLOG_USE_STD_FORMAT=1)
+  target_compile_definitions(atom-log PUBLIC SPDLOG_USE_STD_FORMAT=1
+                                             SPDLOG_HEADER_ONLY)
 
   # Install headers
   install(FILES ${ATOM_LOG_HEADERS}

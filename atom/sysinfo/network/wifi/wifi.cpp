@@ -204,7 +204,7 @@ std::mutex historyMutex;
 std::deque<NetworkHistoryEntry> networkHistory;
 constexpr size_t MAX_HISTORY_SIZE = 10000;  // Keep up to 10000 entries
 
-void recordNetworkStats() {
+[[maybe_unused]] void recordNetworkStats() {
     try {
         auto stats = getNetworkStats();
         auto now = std::chrono::system_clock::now();

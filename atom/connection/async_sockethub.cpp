@@ -270,7 +270,8 @@ public:
                 [&minute_ago](const auto& time) { return time < minute_ago; }),
             message_times.end());
 
-        if (message_times.size() >= max_messages_per_minute_) {
+        if (message_times.size() >=
+            static_cast<std::size_t>(max_messages_per_minute_)) {
             return false;
         }
 

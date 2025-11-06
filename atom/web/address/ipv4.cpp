@@ -1,4 +1,5 @@
 #include "ipv4.hpp"
+#include "atom/web/utils/ip.hpp"
 
 #ifdef _WIN32
 #include <WS2tcpip.h>
@@ -86,7 +87,8 @@ auto fastIsValidIPv4(std::string_view address) -> bool {
 }  // namespace
 
 auto IPv4::isValidIPv4(std::string_view address) -> bool {
-    return fastIsValidIPv4(address);
+    // Reuse shared util to avoid duplication and ensure consistency
+    return atom::web::isValidIPv4(std::string(address));
 }
 
 IPv4::IPv4(std::string_view address) {

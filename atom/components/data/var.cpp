@@ -15,6 +15,8 @@ void VariableManager::setValue(const std::string& name, const char* newValue) {
 auto VariableManager::has(const std::string& name) const -> bool {
     spdlog::debug("Checking if variable exists: {}", name);
 
+    std::shared_lock lock(mutex_);
+
     if (variables_.contains(name)) {
         return true;
     }
@@ -27,6 +29,8 @@ auto VariableManager::has(const std::string& name) const -> bool {
 auto VariableManager::getDescription(const std::string& name) const
     -> std::string {
     spdlog::debug("Getting description for variable: {}", name);
+
+    std::shared_lock lock(mutex_);
 
     if (auto it = variables_.find(name); it != variables_.end()) {
         return it->second.description;
@@ -45,8 +49,12 @@ auto VariableManager::getDescription(const std::string& name) const
 auto VariableManager::getAlias(const std::string& name) const -> std::string {
     spdlog::debug("Getting alias for variable: {}", name);
 
+    std::shared_lock lock(mutex_);
+
     if (auto it = variables_.find(name); it != variables_.end()) {
-        return it->second.alias;
+        if (!it->second.alias.empty()) {
+            return it->second.alias;
+        }
     }
 
     for (const auto& [key, value] : variables_) {
@@ -61,6 +69,8 @@ auto VariableManager::getAlias(const std::string& name) const -> std::string {
 
 auto VariableManager::getGroup(const std::string& name) const -> std::string {
     spdlog::debug("Getting group for variable: {}", name);
+
+    std::shared_lock lock(mutex_);
 
     if (auto it = variables_.find(name); it != variables_.end()) {
         return it->second.group;
@@ -79,62 +89,77 @@ auto VariableManager::getGroup(const std::string& name) const -> std::string {
 void VariableManager::removeVariable(const std::string& name) {
     spdlog::info("Removing variable: {}", name);
 
-    auto it = variables_.find(name);
-    if (it != variables_.end()) {
-        const auto& info = it->second;
+    std::string primaryToRemove;
 
-        // Check if this is an alias entry (empty alias field)
-        // If so, find and remove the primary entry instead
-        if (info.alias.empty()) {
-            // This might be an alias entry, find the primary
-            std::string primaryName;
-            for (const auto& [key, value] : variables_) {
-                if (key != name && !value.alias.empty() &&
-                    value.alias == name) {
-                    primaryName = key;
-                    break;
+    {
+        std::unique_lock lock(mutex_);
+
+        auto it = variables_.find(name);
+        if (it != variables_.end()) {
+            const auto info = it->second;  // copy needed fields
+
+            // Check if this is an alias entry (empty alias field)
+            // If so, find and remove the primary entry instead
+            if (info.alias.empty()) {
+                // This might be an alias entry, find the primary
+                std::string primaryName;
+                for (const auto& [key, value] : variables_) {
+                    if (key != name && !value.alias.empty() &&
+                        value.alias == name) {
+                        primaryName = key;
+                        break;
+                    }
+                }
+
+                if (!primaryName.empty()) {
+                    // Defer recursive removal without holding the lock
+                    primaryToRemove = primaryName;
+                } else {
+                    // Otherwise, treat as primary without alias and fall
+                    // through to remove this entry normally below
                 }
             }
 
-            if (!primaryName.empty()) {
-                // This is an alias, remove the primary instead
-                removeVariable(primaryName);
-                return;
-            }
-            // Otherwise, this is a primary entry without an alias, fall through
-        }
+            if (primaryToRemove.empty()) {
+                // This is a primary entry, remove it and its alias
+                if (!info.group.empty()) {
+                    auto groupIt = groups_.find(info.group);
+                    if (groupIt != groups_.end()) {
+                        groupIt->second.erase(name);
+                        if (!info.alias.empty()) {
+                            groupIt->second.erase(info.alias);
+                        }
+                        if (groupIt->second.empty()) {
+                            groups_.erase(groupIt);
+                        }
+                    }
+                }
 
-        // This is a primary entry, remove it and its alias
-        if (!info.group.empty()) {
-            auto groupIt = groups_.find(info.group);
-            if (groupIt != groups_.end()) {
-                groupIt->second.erase(name);
+                ranges_.erase(name);
+                stringOptions_.erase(name);
+
                 if (!info.alias.empty()) {
-                    groupIt->second.erase(info.alias);
+                    variables_.erase(info.alias);
+                    ranges_.erase(info.alias);
+                    stringOptions_.erase(info.alias);
                 }
-                if (groupIt->second.empty()) {
-                    groups_.erase(groupIt);
-                }
+
+                variables_.erase(it);
             }
+        } else {
+            spdlog::warn("Variable not found: {}", name);
         }
+    }
 
-        ranges_.erase(name);
-        stringOptions_.erase(name);
-
-        if (!info.alias.empty()) {
-            variables_.erase(info.alias);
-            ranges_.erase(info.alias);
-            stringOptions_.erase(info.alias);
-        }
-
-        variables_.erase(it);
-    } else {
-        spdlog::warn("Variable not found: {}", name);
+    if (!primaryToRemove.empty()) {
+        removeVariable(primaryToRemove);
     }
 }
 
 auto VariableManager::getAllVariables() const -> std::vector<std::string> {
     spdlog::debug("Getting all primary variables");
+
+    std::shared_lock lock(mutex_);
 
     std::vector<std::string> variableNames;
     variableNames.reserve(variables_.size());
@@ -154,6 +179,8 @@ auto VariableManager::getAllVariables() const -> std::vector<std::string> {
 auto VariableManager::getVariablesByGroup(const std::string& group) const
     -> std::vector<std::string> {
     spdlog::debug("Getting variables for group: {}", group);
+
+    std::shared_lock lock(mutex_);
 
     std::vector<std::string> result;
 
@@ -184,6 +211,8 @@ auto VariableManager::getVariablesByGroup(const std::string& group) const
 
 void VariableManager::exportVariablesToJson(const std::string& filePath) const {
     spdlog::info("Exporting variables to JSON file: {}", filePath);
+
+    std::shared_lock lock(mutex_);
 
     nlohmann::json jsonData;
 
@@ -479,6 +508,8 @@ void VariableManager::setStringOptions(const std::string& name,
                                        std::span<const std::string> options) {
     spdlog::info("Setting string options for variable: {}", name);
 
+    std::unique_lock lock(mutex_);
+
     std::string primaryName = name;
     std::shared_ptr<Trackable<std::string>> trackableVar = nullptr;
     auto it = variables_.find(name);
@@ -525,16 +556,20 @@ void VariableManager::setStringOptions(const std::string& name,
 
     const std::string& currentValue = trackableVar->get();
     const auto& opts = stringOptions_[primaryName];
-    if (std::find(opts.begin(), opts.end(), currentValue) == opts.end()) {
-        spdlog::error(
-            "Current value '{}' is not valid with the new options for variable "
-            "'{}'.",
-            currentValue, primaryName);
-        stringOptions_.erase(primaryName);
-        THROW_INVALID_ARGUMENT(
-            "Current value '{}' is not valid with the new options for variable "
-            "'{}'",
-            currentValue, primaryName);
+    if (!opts.empty()) {
+        if (std::find(opts.begin(), opts.end(), currentValue) == opts.end()) {
+            spdlog::error(
+                "Current value '{}' is not valid with the new options for "
+                "variable "
+                "'{}'.",
+                currentValue, primaryName);
+            stringOptions_.erase(primaryName);
+            THROW_INVALID_ARGUMENT(
+                "Current value '{}' is not valid with the new options for "
+                "variable "
+                "'{}'",
+                currentValue, primaryName);
+        }
     }
 
     trackableVar->subscribe(

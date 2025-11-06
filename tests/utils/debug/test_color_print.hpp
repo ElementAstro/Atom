@@ -49,10 +49,37 @@ protected:
     }
 
     // Helper function to check if string contains ANSI color codes
-    bool containsColorCode(const std::string& str, ColorCode color) {
-        std::string colorCode =
-            "\033[0;" + std::to_string(static_cast<int>(color)) + "m";
-        return str.find(colorCode) != std::string::npos;
+    bool containsColorCode(const std::string& s, ColorCode color) {
+        const int col = static_cast<int>(color);
+        const char ESC = '\033';
+        for (size_t i = 0; i + 3 < s.size(); ++i) {
+            if (s[i] == ESC && i + 2 < s.size() && s[i + 1] == '[') {
+                size_t j = i + 2;
+                // parse first number (style)
+                int first = 0;
+                bool any1 = false;
+                while (j < s.size() && s[j] >= '0' && s[j] <= '9') {
+                    any1 = true;
+                    first = first * 10 + (s[j] - '0');
+                    ++j;
+                }
+                if (any1 && j < s.size() && s[j] == ';') {
+                    ++j;
+                    // parse second number (color)
+                    int second = 0;
+                    bool any2 = false;
+                    while (j < s.size() && s[j] >= '0' && s[j] <= '9') {
+                        any2 = true;
+                        second = second * 10 + (s[j] - '0');
+                        ++j;
+                    }
+                    if (any2 && j < s.size() && s[j] == 'm' && second == col) {
+                        return true;
+                    }
+                }
+            }
+        }
+        return false;
     }
 
     // Helper function to check if string contains ANSI style codes

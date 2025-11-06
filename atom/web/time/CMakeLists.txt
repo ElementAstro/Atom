@@ -32,8 +32,8 @@ add_library(atom-web-time OBJECT ${ATOM_WEB_TIME_SOURCES}
                                  ${ATOM_WEB_TIME_HEADERS})
 set_property(TARGET atom-web-time PROPERTY POSITION_INDEPENDENT_CODE 1)
 
-# Dependencies
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+# Dependencies (avoid hard-coding loguru; rely on higher-level logging config)
+set(LIBS ${CMAKE_THREAD_LIBS_INIT})
 
 # Add spdlog library
 find_package(spdlog CONFIG QUIET)

@@ -131,6 +131,14 @@ else()
         "Inferred and set VCPKG_ROOT from CMAKE_TOOLCHAIN_FILE: ${POTENTIAL_VCPKG_PATH}"
     )
   endif()
+
+  # Enable tests-related manifest features so gtest is installed when building
+  # tests
+  if(ATOM_BUILD_TESTS)
+    set(ENV{VCPKG_MANIFEST_FEATURES} "tests")
+    message(STATUS "VCPKG_MANIFEST_FEATURES set to 'tests' for gtest support")
+  endif()
+
 endif()
 
 # Ensure POTENTIAL_VCPKG_PATH is set for subsequent scripts if vcpkg is used

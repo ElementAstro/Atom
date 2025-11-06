@@ -297,9 +297,9 @@ bool AsyncFile::simdBufferCompare(std::span<const char> buffer1,
         return true;
     }
 
-    const char* data1 = buffer1.data();
-    const char* data2 = buffer2.data();
-    size_t size = buffer1.size();
+    const char* data1 [[maybe_unused]] = buffer1.data();
+    const char* data2 [[maybe_unused]] = buffer2.data();
+    size_t size [[maybe_unused]] = buffer1.size();
 
 #ifdef ATOM_HAS_AVX2
     // Process 32 bytes at a time with AVX2
@@ -367,8 +367,8 @@ size_t AsyncFile::simdFindByte(std::span<const char> buffer,
         return std::string::npos;
     }
 
-    const char* data = buffer.data();
-    size_t size = buffer.size();
+    const char* data [[maybe_unused]] = buffer.data();
+    size_t size [[maybe_unused]] = buffer.size();
 
 #ifdef ATOM_HAS_AVX2
     const __m256i target_vec = _mm256_set1_epi8(target);
@@ -438,8 +438,8 @@ void AsyncFile::simdMemorySet(std::span<char> buffer, char value) noexcept {
         return;
     }
 
-    char* data = buffer.data();
-    size_t size = buffer.size();
+    char* data [[maybe_unused]] = buffer.data();
+    size_t size [[maybe_unused]] = buffer.size();
 
 #ifdef ATOM_HAS_AVX2
     const __m256i value_vec = _mm256_set1_epi8(value);

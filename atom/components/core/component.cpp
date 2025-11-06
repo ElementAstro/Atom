@@ -21,11 +21,14 @@ Description: Basic Component Definition
 #include <cassert>
 #include <chrono>
 
+#include <stdexcept>
+
 Component::Component(std::string name) : m_name_(std::move(name)) {
     if (m_name_.empty()) {
         throw std::invalid_argument("Component name cannot be empty");
+    } else {
+        spdlog::info("Component created: {}", m_name_);
     }
-    spdlog::info("Component created: {}", m_name_);
     setState(ComponentState::Created);
 }
 
@@ -38,21 +41,24 @@ auto Component::initialize() -> bool {
 
     setState(ComponentState::Initializing);
 
-    if (initFunc) {
-        try {
-            initFunc(*this);
-            spdlog::info("Successfully ran initialization function for: {}",
-                         m_name_);
-        } catch (const std::exception& e) {
-            spdlog::error("Error during initialization of {}: {}", m_name_,
-                          e.what());
-            setState(ComponentState::Error);
-            return false;
-        } catch (...) {
-            spdlog::error("Unknown error during initialization of {}", m_name_);
-            setState(ComponentState::Error);
-            return false;
-        }
+    if (!initFunc) {
+        spdlog::warn("No initialization function set for: {}", m_name_);
+        return false;
+    }
+
+    try {
+        initFunc(*this);
+        spdlog::info("Successfully ran initialization function for: {}",
+                     m_name_);
+    } catch (const std::exception& e) {
+        spdlog::error("Error during initialization of {}: {}", m_name_,
+                      e.what());
+        setState(ComponentState::Error);
+        return false;
+    } catch (...) {
+        spdlog::error("Unknown error during initialization of {}", m_name_);
+        setState(ComponentState::Error);
+        return false;
     }
 
     setState(ComponentState::Active);
@@ -68,6 +74,11 @@ auto Component::destroy() -> bool {
     spdlog::info("Destroying component: {}", m_name_);
 
     setState(ComponentState::Destroying);
+
+    if (!cleanupFunc) {
+        spdlog::warn("No cleanup function set for: {}", m_name_);
+        return false;
+    }
 
     if (cleanupFunc) {
         try {
@@ -363,9 +374,7 @@ void Component::addOtherComponent(std::string_view name,
     }
 
     if (component.expired()) {
-        spdlog::error("Cannot add expired component: {}", name);
-        throw std::invalid_argument(
-            std::string("Cannot add expired component: ") + std::string(name));
+        spdlog::warn("Adding expired component '{}'", name);
     }
 
     std::string nameStr(name);
@@ -437,19 +446,7 @@ auto Component::getOtherComponent(std::string_view name)
     if (it != m_OtherComponents_.end()) {
         if (it->second.expired()) {
             spdlog::warn("Component '{}' has expired", name);
-
-            // Release shared lock and acquire unique lock to modify container
-            lock.unlock();
-            std::unique_lock<std::shared_mutex> uniqueLock(m_ComponentsMutex_);
-
-            // Check if the entry still exists and is expired while we acquired
-            // the unique lock
-            it = m_OtherComponents_.find(nameStr);
-            if (it != m_OtherComponents_.end() && it->second.expired()) {
-                m_OtherComponents_.erase(it);
-            }
-
-            THROW_OBJECT_EXPIRED("Component '{}' has expired", nameStr);
+            return it->second;
         }
         return it->second;
     }

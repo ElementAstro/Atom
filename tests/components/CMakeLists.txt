@@ -196,3 +196,15 @@ set_property(TARGET atom_components_tests PROPERTY FOLDER "Tests/Components")
 set_property(TARGET test_components PROPERTY FOLDER "Tests/Components")
 set_property(TARGET test_components_performance PROPERTY FOLDER
                                                          "Tests/Components")
+
+# Copy all dependent runtime DLLs next to the test executable on Windows
+if(WIN32)
+  add_custom_command(
+    TARGET atom_components_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_components_tests>
+      $<TARGET_FILE_DIR:atom_components_tests>
+    COMMAND_EXPAND_LISTS)
+endif()

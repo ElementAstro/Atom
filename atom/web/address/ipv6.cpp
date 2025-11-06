@@ -1,4 +1,5 @@
 #include "ipv6.hpp"
+#include "atom/web/utils/ip.hpp"
 
 #ifdef _WIN32
 #include <WS2tcpip.h>
@@ -98,7 +99,8 @@ auto compareArrays(const std::array<uint16_t, 8>& a,
 }  // namespace
 
 auto IPv6::isValidIPv6(std::string_view address) -> bool {
-    return fastIsValidIPv6(address);
+    // Reuse shared util to avoid duplication and ensure consistency
+    return atom::web::isValidIPv6(std::string(address));
 }
 
 IPv6::IPv6(std::string_view address) {

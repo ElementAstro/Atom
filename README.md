@@ -81,6 +81,10 @@ cmake --build --preset release -j
 ctest --preset default --output-on-failure
 ```
 
+#### Windows (MSYS2 MinGW64)
+
+For a native GCC/MinGW64 build on Windows using MSYS2, see BUILD_MINGW64.md for step-by-step setup and the dedicated presets (`*-msys2`).
+
 #### Using CMake Directly
 
 ```bash

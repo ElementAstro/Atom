@@ -20,7 +20,7 @@ Description: Implementation of error context system
 #include <sstream>
 
 #ifdef _WIN32
-// Include windows.h first to ensure all Windows types are defined
+// Ensure Windows types are defined before including dependent headers
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif

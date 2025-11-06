@@ -83,8 +83,12 @@
             "name": "base-msys2",
             "hidden": true,
             "inherits": "base-mingw",
+            "binaryDir": "${sourceDir}/build-mingw64",
             "cacheVariables": {
-                "USE_VCPKG": "OFF"
+                "USE_VCPKG": "OFF",
+                "OPENSSL_ROOT_DIR": "D:/msys64/mingw64",
+                "ZLIB_ROOT": "D:/msys64/mingw64",
+                "CMAKE_PREFIX_PATH": "D:/msys64/mingw64"
             },
             "condition": {
                 "type": "matches",
@@ -96,6 +100,7 @@
             "name": "base-msys2-vcpkg",
             "hidden": true,
             "inherits": "base-mingw",
+            "binaryDir": "${sourceDir}/build-mingw64",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
                 "USE_VCPKG": "ON",

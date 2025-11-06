@@ -32,7 +32,9 @@ using C++20/23 Coroutines with optimized performance
 
 #ifdef _WIN32
 #include <sdkddkver.h>
+#ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
+#endif
 #include <windows.h>
 
 #undef ERROR

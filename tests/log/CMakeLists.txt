@@ -14,6 +14,14 @@ project(
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
+# Backward-compatible aliases for legacy GTest target names
+if(TARGET GTest::gtest AND NOT TARGET GTest::GTest)
+  add_library(GTest::GTest ALIAS GTest::gtest)
+endif()
+if(TARGET GTest::gtest_main AND NOT TARGET GTest::Main)
+  add_library(GTest::Main ALIAS GTest::gtest_main)
+endif()
+
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../tests)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../..)

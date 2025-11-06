@@ -583,11 +583,94 @@ auto CommandDispatcher::dispatchHelper(const std::string& name,
     // Lock for thread safety during command lookup
     std::shared_lock lock(mutex_);
 
-    // Find the command
+    // Find the command (exact signature)
     auto it = findCommand(name, signature);
     if (it == (commands_.empty() ? decltype(it)()
                                  : commands_.begin()->second.end())) {
-        THROW_INVALID_ARGUMENT("Unknown command: " + name);
+        // Fallback: try to find a candidate that can be satisfied via default
+        // arguments
+        auto nameIt = commands_.find(name);
+        if (nameIt != commands_.end()) {
+            auto parseTypes = [](const std::string& sig) {
+                std::vector<std::string> types;
+                if (sig.size() >= 2) {
+                    std::string inner = sig.substr(1, sig.size() - 2);
+                    size_t start = 0;
+                    while (start < inner.size()) {
+                        size_t pos = inner.find(',', start);
+                        std::string t =
+                            inner.substr(start, pos == std::string::npos
+                                                    ? inner.size() - start
+                                                    : pos - start);
+                        if (!t.empty())
+                            types.push_back(t);
+                        if (pos == std::string::npos)
+                            break;
+                        start = pos + 1;
+                    }
+                }
+                return types;
+            };
+
+            std::vector<std::string> providedTypes;
+            providedTypes.reserve(args.size());
+            for (const auto& a : args) {
+                providedTypes.emplace_back(a.type().name());
+            }
+
+            auto best = nameIt->second.end();
+            size_t bestArity = static_cast<size_t>(-1);
+
+            for (auto it2 = nameIt->second.begin(); it2 != nameIt->second.end();
+                 ++it2) {
+                const auto& candSig = it2->first;
+                const Command& candCmd = it2->second;
+                auto candTypes = parseTypes(candSig);
+
+                if (providedTypes.size() > candTypes.size()) {
+                    continue;  // cannot match, more args than candidate expects
+                }
+
+                bool prefixMatches = true;
+                for (size_t i = 0; i < providedTypes.size(); ++i) {
+                    if (providedTypes[i] != candTypes[i]) {
+                        prefixMatches = false;
+                        break;
+                    }
+                }
+                if (!prefixMatches)
+                    continue;
+
+                // Remaining args must have defaults declared
+                bool defaultsOK = candCmd.argTypes.size() >= candTypes.size();
+                if (defaultsOK) {
+                    for (size_t i = providedTypes.size(); i < candTypes.size();
+                         ++i) {
+                        if (!candCmd.argTypes[i]
+                                 .getDefaultValue()
+                                 .has_value()) {
+                            defaultsOK = false;
+                            break;
+                        }
+                    }
+                }
+                if (!defaultsOK)
+                    continue;
+
+                if (candTypes.size() < bestArity) {
+                    best = it2;
+                    bestArity = candTypes.size();
+                }
+            }
+
+            if (best != nameIt->second.end()) {
+                it = best;  // use the best default-arg-matching candidate
+            } else {
+                THROW_INVALID_ARGUMENT("Unknown command: " + name);
+            }
+        } else {
+            THROW_INVALID_ARGUMENT("Unknown command: " + name);
+        }
     }
 
     // Make a local copy of the command to avoid holding lock during execution

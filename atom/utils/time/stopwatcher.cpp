@@ -22,12 +22,25 @@ namespace atom::utils {
 
 using namespace std::literals::chrono_literals;
 
+namespace {
+// Helper to convert expected error type to int across different expected
+// implementations
+template <typename E>
+constexpr int error_code_to_int(const E& e) {
+    if constexpr (requires { e.error(); }) {
+        return static_cast<int>(e.error());
+    } else {
+        return static_cast<int>(e);
+    }
+}
+}  // namespace
+
 // Implementation of ScopedStopWatch
 ScopedStopWatch::ScopedStopWatch(std::string_view name) : stopwatch_(name) {
     auto result = stopwatch_.start();
     if (!result) {
         spdlog::warn("Failed to start ScopedStopWatch: error code {}",
-                     static_cast<int>(result.error()));
+                     error_code_to_int(result.error()));
     }
 }
 
@@ -38,7 +51,7 @@ ScopedStopWatch::~ScopedStopWatch() {
                      stopwatch_.getName(), stopwatch_.elapsedMilliseconds());
     } else {
         spdlog::warn("Failed to stop ScopedStopWatch: error code {}",
-                     static_cast<int>(result.error()));
+                     error_code_to_int(result.error()));
     }
 }
 

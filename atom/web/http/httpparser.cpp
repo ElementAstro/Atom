@@ -264,7 +264,7 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
     int statusCode;
     try {
         statusCode = std::stoi(std::string(statusCodePart));
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         spdlog::error("Invalid status code: {}", statusCodePart);
         return false;
     }

@@ -25,9 +25,7 @@ add_subdirectory(time)
 
 # Sources
 set(SOURCES
-    # HTTP functionality
-    http/curl.cpp
-    http/downloader.cpp
+    # HTTP functionality (always-available parser)
     http/httpparser.cpp
     # MIME type functionality
     mime/minetype.cpp
@@ -38,6 +36,11 @@ set(SOURCES
     utils/network.cpp
     utils/port.cpp
     utils/socket.cpp)
+
+# Optionally include libcurl-backed sources
+if(CURL_FOUND)
+  list(APPEND SOURCES http/curl.cpp http/downloader.cpp)
+endif()
 
 # Add time module sources
 list(APPEND SOURCES ${TIME_SOURCES})
@@ -68,8 +71,8 @@ set(HEADERS
 # Add time module headers
 list(APPEND HEADERS ${TIME_HEADERS})
 
-# Dependencies
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+# Dependencies Avoid hard-coding loguru; rely on configured logging deps
+set(LIBS ${CMAKE_THREAD_LIBS_INIT})
 
 # Add fmt library for spdlog support
 find_package(fmt QUIET)
@@ -96,14 +99,27 @@ add_library(
   atom-web STATIC ${SOURCES} ${HEADERS} $<TARGET_OBJECTS:atom-web-time>
                   $<TARGET_OBJECTS:atom-web-address>)
 
-# Configure module using standardized function
-atom_configure_module(atom-web)
+# Configure module using standardized function and declare inter-module deps
+# atom-web consumes atom-utils (net/socket helpers), atom-io (potential reuse),
+# atom-system (process/user utilities), atom-log (logging helpers), atom-error
+# (added by helper)
+atom_configure_module(
+  atom-web
+  DEPENDENCIES
+  atom-utils
+  atom-io
+  atom-system
+  atom-log
+  atom-type)
 
 # Link module-specific dependencies
 target_link_libraries(atom-web PRIVATE ${LIBS} atom-web-time)
 
 if(CURL_FOUND)
   target_include_directories(atom-web PRIVATE ${CURL_INCLUDE_DIRS})
+  target_compile_definitions(atom-web PUBLIC ATOM_WEB_HAVE_CURL=1)
+else()
+  target_compile_definitions(atom-web PUBLIC ATOM_WEB_HAVE_CURL=0)
 endif()
 
 # Install headers

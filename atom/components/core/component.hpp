@@ -431,7 +431,11 @@ public:
     template <typename T>
     [[nodiscard]] auto getVariable(std::string_view name)
         -> std::shared_ptr<Trackable<T>> {
-        return m_VariableManager_->getVariable<T>(std::string(name));
+        try {
+            return m_VariableManager_->getVariable<T>(std::string(name));
+        } catch (const atom::error::ObjectNotExist&) {
+            return nullptr;
+        }
     }
 
     /**

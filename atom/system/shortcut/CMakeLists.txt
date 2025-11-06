@@ -38,7 +38,11 @@ target_include_directories(
 # Link against required libraries
 set(SHORTCUT_LIBS psapi)
 if(spdlog_FOUND)
-  list(APPEND SHORTCUT_LIBS spdlog::spdlog)
+  if(TARGET spdlog::spdlog_header_only)
+    list(APPEND SHORTCUT_LIBS spdlog::spdlog_header_only)
+  else()
+    list(APPEND SHORTCUT_LIBS spdlog::spdlog)
+  endif()
 endif()
 
 target_link_libraries(shortcut_detector PRIVATE ${SHORTCUT_LIBS})
@@ -62,7 +66,11 @@ add_executable(test_shortcut_detector test_shortcut_detector.cpp)
 # Link the test against the static library
 set(TEST_SHORTCUT_LIBS shortcut_detector_static psapi user32)
 if(spdlog_FOUND)
-  list(APPEND TEST_SHORTCUT_LIBS spdlog::spdlog)
+  if(TARGET spdlog::spdlog_header_only)
+    list(APPEND TEST_SHORTCUT_LIBS spdlog::spdlog_header_only)
+  else()
+    list(APPEND TEST_SHORTCUT_LIBS spdlog::spdlog)
+  endif()
 endif()
 
 target_link_libraries(test_shortcut_detector PRIVATE ${TEST_SHORTCUT_LIBS})

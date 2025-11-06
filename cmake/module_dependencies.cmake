@@ -46,8 +46,11 @@ set(ATOM_SYSTEM_DEPENDS atom-error atom-log)
 # Utils module dependencies
 set(ATOM_UTILS_DEPENDS atom-error atom-log)
 
-# Web module dependencies
-set(ATOM_WEB_DEPENDS atom-error atom-log atom-utils atom-io)
+# Web module dependencies Note: atom-web uses system utilities (process/user)
+# and JSON types, so ensure transitive linkage to atom-system and atom-type as
+# well.
+set(ATOM_WEB_DEPENDS atom-error atom-log atom-utils atom-io atom-system
+                     atom-type)
 
 # Set module priority order (build sequence)
 set(ATOM_MODULE_BUILD_ORDER

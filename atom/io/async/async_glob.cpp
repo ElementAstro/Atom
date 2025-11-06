@@ -30,7 +30,8 @@ namespace atom::io {
  * @param needle The character to search for
  * @return Position of first occurrence or string::npos if not found
  */
-static auto simdStringSearch(std::string_view haystack, char needle) -> size_t {
+[[maybe_unused]] static auto simdStringSearch(std::string_view haystack,
+                                              char needle) -> size_t {
 #ifdef __AVX2__
     if (haystack.size() >= 32) {
         const __m256i needle_vec = _mm256_set1_epi8(needle);

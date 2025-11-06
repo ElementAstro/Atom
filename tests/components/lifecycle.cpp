@@ -489,10 +489,10 @@ TEST_F(LifecycleManagerTest, InvalidComponentName) {
 }
 
 TEST_F(LifecycleManagerTest, NullComponentHandling) {
-    // Test behavior with component that might have null state
-    // This tests the robustness of the lifecycle system
-    auto nullNameComponent = std::make_shared<TestLifecycleComponent>("");
-    bool result = manager_->executePhase(*nullNameComponent,
-                                         LifecyclePhase::PreInitialization);
-    EXPECT_TRUE(result);  // Should handle gracefully
+    EXPECT_THROW(
+        {
+            auto nullNameComponent =
+                std::make_shared<TestLifecycleComponent>("");
+        },
+        std::invalid_argument);
 }

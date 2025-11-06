@@ -17,6 +17,7 @@ Description: Registry Pattern Implementation
 #include <algorithm>
 #include <chrono>
 
+#include "atom/error/exception.hpp"
 #include "atom/utils/to_string.hpp"
 #include "fmt/format.h"
 #include "spdlog/spdlog.h"
@@ -56,7 +57,9 @@ void Registry::addInitializer(const std::string& name,
     spdlog::info("Adding initializer for component: {}", name);
 
     initializers_[name] = std::make_shared<Component>(name);
-    initializers_[name]->initFunc = std::move(init_func);
+    // Store initializer for deferred execution via
+    // initializeAll()/initializeComponent
+    module_initializers_[name] = std::move(init_func);
     initializers_[name]->cleanupFunc = std::move(cleanup_func);
 
     if (metadata.has_value()) {
@@ -69,9 +72,8 @@ void Registry::addInitializer(const std::string& name,
         componentInfos_[name] = std::move(info);
     }
 
-    // Initialize the component immediately
-    bool initialized = initializers_[name]->initialize();
-    componentInfos_[name].isInitialized = initialized;
+    // Do not initialize here; defer to initializeAll()/initializeComponent
+    componentInfos_[name].isInitialized = false;
 }
 
 void Registry::addDependency(const std::string& name,
@@ -80,15 +82,14 @@ void Registry::addDependency(const std::string& name,
 
     if (name == dependency) {
         spdlog::error("Component '{}' cannot depend on itself", name);
-        THROW_REGISTRY_EXCEPTION("Component '{}' cannot depend on itself",
-                                 name);
+        THROW_RUNTIME_ERROR("Component '{}' cannot depend on itself", name);
     }
 
     if (hasCircularDependency(name, dependency)) {
         spdlog::error("Circular dependency detected: {} -> {}", name,
                       dependency);
-        THROW_REGISTRY_EXCEPTION("Circular dependency detected: {} -> {}", name,
-                                 dependency);
+        THROW_RUNTIME_ERROR("Circular dependency detected: {} -> {}", name,
+                            dependency);
     }
 
     spdlog::info("Adding {} dependency: {} -> {}",
@@ -150,21 +151,33 @@ void Registry::cleanupAll(bool force) {
     std::unique_lock lock(mutex_);
     spdlog::info("Cleaning up all components");
 
-    for (const auto& name : std::ranges::reverse_view(initializationOrder_)) {
-        if (!componentInfos_.contains(name) ||
-            !componentInfos_[name].isInitialized) {
-            continue;
+    // Track which components we actually cleaned in this pass
+    std::unordered_set<std::string> cleaned;
+
+    auto cleanOne = [&](const std::string& name) {
+        if (!initializers_.contains(name)) {
+            return;
+        }
+        auto& component = initializers_[name];
+        if (!component || !component->cleanupFunc) {
+            return;
         }
 
-        auto component = initializers_[name];
-        if (!component || !component->cleanupFunc) {
-            continue;
+        bool shouldCleanup = force;
+        if (!shouldCleanup && componentInfos_.contains(name)) {
+            shouldCleanup = componentInfos_[name].isInitialized;
+        }
+
+        if (!shouldCleanup) {
+            return;
         }
 
         try {
             spdlog::info("Cleaning up component: {}", name);
             component->cleanupFunc();
-            componentInfos_[name].isInitialized = false;
+            if (componentInfos_.contains(name)) {
+                componentInfos_[name].isInitialized = false;
+            }
 
 #if ENABLE_EVENT_SYSTEM
             atom::components::Event event;
@@ -176,14 +189,38 @@ void Registry::cleanupAll(bool force) {
 
         } catch (const std::exception& e) {
             spdlog::error("Error cleaning up component {}: {}", name, e.what());
-
             if (force) {
                 spdlog::warn("Forcing cleanup to continue despite error");
             } else {
                 throw;
             }
         }
+
+        cleaned.insert(name);
+    };
+
+    // Prefer to clean in reverse initialization order (deepest dependencies
+    // first)
+    for (const auto& name : std::ranges::reverse_view(initializationOrder_)) {
+        cleanOne(name);
     }
+
+    // When forcing, ensure any components that weren't part of the last
+    // initialization order are also cleaned.
+    if (force) {
+        for (const auto& [name, _] : initializers_) {
+            if (!cleaned.contains(name)) {
+                cleanOne(name);
+            }
+        }
+    }
+
+    // Always reset dependency graph and module initializers to avoid cross-test
+    // state
+    dependencies_.clear();
+    optionalDependencies_.clear();
+    module_initializers_.clear();
+    initializationOrder_.clear();
 
     if (force) {
         spdlog::info("Force clearing all component resources");
@@ -752,17 +789,10 @@ void Registry::initializeComponent(
                         endTime - startTime);
             }
 
-            if (initializers_[name]->initialize()) {
-                spdlog::info("Component initialized successfully: {}", name);
-                componentInfos_[name].isInitialized = true;
-                componentInfos_[name].lastUsed =
-                    std::chrono::system_clock::now();
-            } else {
-                spdlog::error("Component initialization returned false: {}",
-                              name);
-                THROW_REGISTRY_EXCEPTION("Component initialization failed: {}",
-                                         name);
-            }
+            // Mark as initialized after successful module initializer execution
+            spdlog::info("Component initialized successfully: {}", name);
+            componentInfos_[name].isInitialized = true;
+            componentInfos_[name].lastUsed = std::chrono::system_clock::now();
         } catch (const std::exception& e) {
             spdlog::error("Error initializing component {}: {}", name,
                           e.what());

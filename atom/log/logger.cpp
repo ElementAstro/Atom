@@ -32,7 +32,12 @@ Description: Enhanced Custom Logger Manager Implementation with spdlog support
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 #include "atom/containers/high_performance.hpp"
+
+// Optional upload support via atom-web (disabled by default to avoid module
+// cycles)
+#if defined(ATOM_LOG_ENABLE_WEB_UPLOAD)
 #include "atom/web/curl.hpp"
+#endif
 
 // Use type aliases from high_performance.hpp
 using atom::containers::String;
@@ -577,6 +582,7 @@ String LoggerManager::Impl::extractErrorType(const String &message) {
 }
 
 void LoggerManager::Impl::uploadFile(const String &filePath) {
+#if defined(ATOM_LOG_ENABLE_WEB_UPLOAD)
     try {
         std::ifstream file(filePath.c_str(), std::ios::binary);
         if (!file.is_open()) {
@@ -612,6 +618,12 @@ void LoggerManager::Impl::uploadFile(const String &filePath) {
     } catch (const std::exception &e) {
         SPDLOG_ERROR("Exception during file upload: {}", e.what());
     }
+#else
+    (void)filePath;  // unused when upload is disabled
+    SPDLOG_WARN(
+        "Upload disabled: rebuild atom-log with ATOM_LOG_ENABLE_WEB_UPLOAD to "
+        "enable network uploads");
+#endif
 }
 
 Vector<LogEntry> LoggerManager::Impl::filterLogsByTimeRange(

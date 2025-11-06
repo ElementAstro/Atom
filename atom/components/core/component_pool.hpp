@@ -167,7 +167,9 @@ public:
      * @brief Deallocates a component (returns to pool)
      * @param component Component to deallocate
      */
-    void deallocate(std::shared_ptr<T> component);
+    void deallocate(std::shared_ptr<T>& component);
+
+    void deallocate(std::nullptr_t) {}
 
     /**
      * @brief Gets current pool statistics
@@ -467,7 +469,7 @@ std::shared_ptr<T> ComponentPool<T>::allocate(Args&&... args) {
     targetChunk->lastAccess = std::chrono::steady_clock::now();
 
     // Get memory location
-    void* memory = &targetChunk->storage[slotIndex];
+    void* memory = static_cast<void*>(targetChunk->getSlotPtr(slotIndex));
 
     lock.unlock();
 
@@ -599,7 +601,7 @@ ComponentPool<T>::~ComponentPool() {
 }
 
 template <typename T>
-void ComponentPool<T>::deallocate(std::shared_ptr<T> component) {
+void ComponentPool<T>::deallocate(std::shared_ptr<T>& component) {
     // The actual deallocation is handled by the custom deleter in allocate()
     component.reset();
 }

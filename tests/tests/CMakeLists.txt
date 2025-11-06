@@ -14,6 +14,14 @@ project(
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
+# Backward-compatible aliases for legacy GTest target names
+if(TARGET GTest::gtest AND NOT TARGET GTest::GTest)
+  add_library(GTest::GTest ALIAS GTest::gtest)
+endif()
+if(TARGET GTest::gtest_main AND NOT TARGET GTest::Main)
+  add_library(GTest::Main ALIAS GTest::gtest_main)
+endif()
+
 # Create interface library for test infrastructure (with guard)
 if(NOT TARGET atom-test-common)
   add_library(atom-test-common INTERFACE)
@@ -37,6 +45,8 @@ if(MSVC)
 else()
   target_compile_options(atom-test-common INTERFACE -Wall -Wextra -Wpedantic)
 endif()
+target_compile_definitions(atom-test-common INTERFACE SPDLOG_HEADER_ONLY
+                                                      SPDLOG_USE_STD_FORMAT=1)
 
 # Test runner executable for infrastructure validation (with guard)
 if(NOT TARGET test-infrastructure-validation)

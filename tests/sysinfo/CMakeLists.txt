@@ -16,6 +16,14 @@ project(
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
+# Backward-compatible aliases for legacy GTest target names
+if(TARGET GTest::gtest AND NOT TARGET GTest::GTest)
+  add_library(GTest::GTest ALIAS GTest::gtest)
+endif()
+if(TARGET GTest::gtest_main AND NOT TARGET GTest::Main)
+  add_library(GTest::Main ALIAS GTest::gtest_main)
+endif()
+
 # =============================================================================
 # Include Test Infrastructure
 # =============================================================================
@@ -280,3 +288,15 @@ set_property(TARGET run_hardware_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
 set_property(TARGET run_system_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
 set_property(TARGET run_network_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
 set_property(TARGET run_utility_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
+
+# Copy all dependent runtime DLLs next to the test executable on Windows
+if(WIN32)
+  add_custom_command(
+    TARGET atom_sysinfo_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_sysinfo_tests>
+      $<TARGET_FILE_DIR:atom_sysinfo_tests>
+    COMMAND_EXPAND_LISTS)
+endif()

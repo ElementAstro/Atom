@@ -3,7 +3,16 @@
 #include <string>
 
 #if defined(_WIN32) || defined(_WIN64)
+// Minimize Windows header bloat and avoid min/max macro collisions
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
 #include <windows.h>
+static_assert(sizeof(wchar_t) == 2,
+              "This implementation assumes 16-bit wchar_t on Windows");
 #endif
 
 #include "atom/error/exception.hpp"
@@ -17,12 +26,13 @@ auto utf16toUtF8(std::u16string_view str) -> std::string {
         return {};
     }
     int sizeNeeded = WideCharToMultiByte(
-        CP_UTF8, 0, reinterpret_cast<const wchar_t *>(str.data()), str.size(),
-        nullptr, 0, nullptr, nullptr);
+        CP_UTF8, 0, reinterpret_cast<const wchar_t *>(str.data()),
+        static_cast<int>(str.size()), nullptr, 0, nullptr, nullptr);
     std::string result(sizeNeeded, 0);
-    WideCharToMultiByte(
-        CP_UTF8, 0, reinterpret_cast<const wchar_t *>(str.data()), str.size(),
-        result.data(), sizeNeeded, nullptr, nullptr);
+    WideCharToMultiByte(CP_UTF8, 0,
+                        reinterpret_cast<const wchar_t *>(str.data()),
+                        static_cast<int>(str.size()), result.data(), sizeNeeded,
+                        nullptr, nullptr);
     return result;
 #else
     std::string result;
@@ -50,10 +60,10 @@ auto utf8toUtF16(std::string_view str) -> std::u16string {
     if (str.empty()) {
         return {};
     }
-    int sizeNeeded =
-        MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(), nullptr, 0);
+    int sizeNeeded = MultiByteToWideChar(
+        CP_UTF8, 0, str.data(), static_cast<int>(str.size()), nullptr, 0);
     std::u16string result(sizeNeeded, 0);
-    MultiByteToWideChar(CP_UTF8, 0, str.data(), str.size(),
+    MultiByteToWideChar(CP_UTF8, 0, str.data(), static_cast<int>(str.size()),
                         reinterpret_cast<wchar_t *>(result.data()), sizeNeeded);
     return result;
 #else

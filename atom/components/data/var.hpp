@@ -17,6 +17,9 @@ Description: Variable Manager
 
 #include <any>
 #include <span>
+#include <utility>
+
+#include <shared_mutex>
 
 #if ENABLE_FASTHASH
 #include "emhash/hash_table8.hpp"
@@ -199,6 +202,7 @@ private:
         std::string alias;
         std::string group;
     } ATOM_ALIGNAS(128);
+    mutable std::shared_mutex mutex_;
 
 #if USE_BOOST_CONTAINERS
     atom::components::containers::flat_map<std::string, VariableInfo>
@@ -230,6 +234,8 @@ void VariableManager::addVariable(const std::string& name, T initialValue,
                                   const std::string& alias,
                                   const std::string& group) {
     spdlog::info("Adding variable: {}", name);
+
+    std::unique_lock lock(mutex_);
 
     if (variables_.contains(name)) {
         spdlog::warn("Variable already exists: {}", name);
@@ -270,6 +276,8 @@ void VariableManager::addVariable(const std::string& name, T C::*memberPointer,
                                   const std::string& group) {
     spdlog::info("Adding member variable: {}", name);
 
+    std::unique_lock lock(mutex_);
+
     if (variables_.contains(name)) {
         spdlog::warn("Variable already exists: {}", name);
         THROW_OBJ_ALREADY_EXIST(name);
@@ -305,17 +313,14 @@ template <Arithmetic T>
 void VariableManager::setRange(const std::string& name, T min, T max) {
     spdlog::info("Setting range for variable: {} [{}, {}]", name, min, max);
 
+    std::unique_lock lock(mutex_);
+
     if (!variables_.contains(name)) {
         spdlog::warn("Variable not found: {}", name);
         THROW_OBJ_NOT_EXIST(name);
     }
 
-    struct Range {
-        T min;
-        T max;
-    };
-
-    ranges_[name] = Range{min, max};
+    ranges_[name] = std::pair<T, T>{min, max};
 
     auto trackableVar =
         std::any_cast<std::shared_ptr<Trackable<T>>>(variables_[name].variable);
@@ -323,7 +328,7 @@ void VariableManager::setRange(const std::string& name, T min, T max) {
     trackableVar->subscribe([min, max, name]([[maybe_unused]] const T& oldValue,
                                              const T& newValue) {
         if (newValue < min || newValue > max) {
-            THROW_INVALID_ARGUMENT(
+            THROW_OUT_OF_RANGE(
                 "Value {} out of range [{}, {}] for variable '{}'", newValue,
                 min, max, name);
         }
@@ -334,6 +339,8 @@ template <typename T>
 auto VariableManager::getVariable(const std::string& name)
     -> std::shared_ptr<Trackable<T>> {
     spdlog::debug("Getting variable: {}", name);
+
+    std::shared_lock lock(mutex_);
 
     if (auto it = variables_.find(name); it != variables_.end()) {
         try {
@@ -371,37 +378,39 @@ void VariableManager::setValue(const std::string& name, T newValue) {
 
     auto var = getVariable<T>(name);
 
-    auto rangeIt = ranges_.find(name);
-    if (rangeIt != ranges_.end()) {
-        try {
-            struct Range {
-                T min;
-                T max;
-            };
+    {
+        std::shared_lock lock(mutex_);
 
-            if (auto* rangePtr = std::any_cast<Range>(&rangeIt->second)) {
-                if (newValue < rangePtr->min || newValue > rangePtr->max) {
-                    // Note: Removed spdlog::error call to avoid std::vector
-                    // formatting issues
-                    THROW_INVALID_ARGUMENT(
-                        "Value out of range for variable '{}'", name);
+        auto rangeIt = ranges_.find(name);
+        if (rangeIt != ranges_.end()) {
+            try {
+                if (auto* rangePtr =
+                        std::any_cast<std::pair<T, T>>(&rangeIt->second)) {
+                    if (newValue < rangePtr->first ||
+                        newValue > rangePtr->second) {
+                        // Note: Removed spdlog::error call to avoid std::vector
+                        // formatting issues
+                        THROW_OUT_OF_RANGE(
+                            "Value out of range for variable '{}'", name);
+                    }
                 }
+            } catch (const std::bad_any_cast&) {
+                spdlog::warn("Failed to cast range for variable '{}'", name);
             }
-        } catch (const std::bad_any_cast&) {
-            spdlog::warn("Failed to cast range for variable '{}'", name);
         }
-    }
 
-    if constexpr (std::is_same_v<T, std::string>) {
-        auto optionsIt = stringOptions_.find(name);
-        if (optionsIt != stringOptions_.end()) {
-            const auto& options = optionsIt->second;
-            if (std::find(options.begin(), options.end(), newValue) ==
-                options.end()) {
-                spdlog::error("Invalid option '{}' for variable '{}'", newValue,
-                              name);
-                THROW_INVALID_ARGUMENT("Invalid option '{}' for variable '{}'",
-                                       newValue, name);
+        if constexpr (std::is_same_v<T, std::string>) {
+            auto optionsIt = stringOptions_.find(name);
+            if (optionsIt != stringOptions_.end()) {
+                const auto& options = optionsIt->second;
+                if (std::find(options.begin(), options.end(), newValue) ==
+                    options.end()) {
+                    spdlog::error("Invalid option '{}' for variable '{}'",
+                                  newValue, name);
+                    THROW_INVALID_ARGUMENT(
+                        "Invalid option '{}' for variable '{}'", newValue,
+                        name);
+                }
             }
         }
     }
@@ -411,6 +420,7 @@ void VariableManager::setValue(const std::string& name, T newValue) {
 
 template <typename Func>
 void VariableManager::forEachVariable(Func&& func) const {
+    std::shared_lock lock(mutex_);
     for (const auto& [name, info] : variables_) {
         func(name, info);
     }

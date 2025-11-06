@@ -24,6 +24,7 @@
 #include <tchar.h>
 #include <tlhelp32.h>
 #include <windows.h>
+#include <winsock2.h>
 #elif defined(__linux__) || defined(__ANDROID__)
 #include <dirent.h>
 #include <grp.h>

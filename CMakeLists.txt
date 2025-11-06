@@ -2,6 +2,11 @@
 
 cmake_minimum_required(VERSION 3.21)
 
+# Allow configuring older third-party projects (e.g., googletest) with modern
+# CMake See error: "Compatibility with CMake < 3.5 has been removed from CMake"
+# Setting this minimum policy version enables compatibility for subprojects.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.5)
+
 # Set a global policy to handle malformed package configurations
 if(POLICY CMP0000)
   cmake_policy(SET CMP0000 NEW)
@@ -68,6 +73,7 @@ option(ATOM_BUILD_TESTS_SELECTIVE "Enable selective building of test modules"
        OFF)
 option(ATOM_BUILD_PYTHON_BINDINGS "Build Python bindings" OFF)
 option(ATOM_BUILD_DOCS "Build documentation" OFF)
+option(ATOM_ENABLE_PACKAGING "Enable CPack packaging configuration" OFF)
 option(ATOM_USE_BOOST "Enable Boost high-performance data structures" OFF)
 option(ATOM_USE_BOOST_LOCKFREE "Enable Boost lock-free data structures" OFF)
 option(ATOM_USE_BOOST_CONTAINER "Enable Boost container library" OFF)
@@ -357,8 +363,8 @@ endif()
 # Packaging Configuration
 # -----------------------------------------------------------------------------
 
-# Setup CPack for package generation (if function exists)
-if(COMMAND atom_setup_cpack)
+# Setup CPack for package generation when explicitly enabled
+if(ATOM_ENABLE_PACKAGING AND COMMAND atom_setup_cpack)
   atom_setup_cpack()
 endif()
 

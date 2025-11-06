@@ -4,7 +4,7 @@ type: "manual"
 
 # MinGW64 Build Configuration
 
-Build the entire Atom project using the MSYS2 (MinGW64) toolchain and resolve
+Build the entire Atom project using the MSYS2 (MinGW64) preset and resolve
 all compilation/linking issues that arise during the build process.
 
 ## Specific Requirements

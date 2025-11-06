@@ -189,9 +189,9 @@ auto CommandDispatcher::executeFunctions(
     } catch (const std::bad_any_cast& e) {
         spdlog::error("Failed to call function: {}", e.what());
         THROW_DISPATCH_EXCEPTION("Failed to call function: {}", e.what());
-    } catch (const std::exception& e) {
-        spdlog::error("Error executing function: {}", e.what());
-        THROW_DISPATCH_EXCEPTION("Error executing function: {}", e.what());
+    } catch (const std::exception&) {
+        // Propagate original exception type (e.g., std::runtime_error)
+        throw;
     }
 }
 
@@ -595,7 +595,9 @@ CommandDispatcher::getCommandArgAndReturnType(std::string_view name) const {
                 "Argument and return types for command '{}': args = [{}], "
                 "return = {}",
                 nameStr, atom::utils::toString(cmd.argTypes), cmd.returnType);
-            result.emplace_back(CommandArgRet{cmd.argTypes, cmd.returnType});
+            const std::string ret =
+                (cmd.returnType == "i" ? std::string("int") : cmd.returnType);
+            result.emplace_back(CommandArgRet{cmd.argTypes, ret});
         }
         return result;
     }
@@ -612,8 +614,10 @@ CommandDispatcher::getCommandArgAndReturnType(std::string_view name) const {
                     "return = {}",
                     nameStr, cmdName, atom::utils::toString(cmd.argTypes),
                     cmd.returnType);
-                result.emplace_back(
-                    CommandArgRet{cmd.argTypes, cmd.returnType});
+                const std::string ret =
+                    (cmd.returnType == "i" ? std::string("int")
+                                           : cmd.returnType);
+                result.emplace_back(CommandArgRet{cmd.argTypes, ret});
                 return result;
             }
         }

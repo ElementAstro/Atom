@@ -25,10 +25,13 @@ if(MINGW OR LOCAL_MSYS2_ENV)
 
   if(USE_VCPKG)
     if(NOT DEFINED ATOM_VCPKG_ROOT)
+      # Defer vcpkg-specific setup until VcpkgSetup.cmake runs (included later
+      # in CMakeLists)
       message(
-        FATAL_ERROR
-          "ATOM_VCPKG_ROOT is not defined for MinGW/MSYS2 vcpkg setup. VcpkgSetup.cmake might not have run correctly."
+        STATUS
+          "ATOM_VCPKG_ROOT is not defined yet; deferring vcpkg-specific setup to VcpkgSetup.cmake"
       )
+      return()
     endif()
     set(CURRENT_VCPKG_ROOT ${ATOM_VCPKG_ROOT})
 

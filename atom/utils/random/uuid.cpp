@@ -31,7 +31,16 @@ Description: UUID Generator
 #include <thread>
 
 #if defined(_WIN32)
+// Ensure correct Windows include order and avoid macro conflicts
 // clang-format off
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#include <winsock2.h>   // Must be included before windows.h when using iphlpapi
+#include <ws2tcpip.h>
 #include <windows.h>
 #include <intrin.h>
 #include <iphlpapi.h>
@@ -52,7 +61,9 @@ Description: UUID Generator
 #define BIGENDIAN
 #endif
 #elif defined(_WIN32)
+#ifndef LITTLEENDIAN
 #define LITTLEENDIAN
+#endif
 #elif defined(__APPLE__)
 #include <machine/endian.h>
 #if defined(BYTE_ORDER) && BYTE_ORDER == BIG_ENDIAN
@@ -725,7 +736,7 @@ auto getCPUSerial() -> std::string {
             cpuSerial = result;
         }
 #endif
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         // Log error but return empty string to avoid breaking UUID generation
         // std::cerr << "Failed to get CPU serial: " << e.what() << std::endl;
     }
@@ -844,7 +855,7 @@ auto generateUniqueUUID() -> std::string {
         uuid_str[16] = (variant < 10) ? ('0' + variant) : ('a' + variant - 10);
 
         return formatUUID(uuid_str);
-    } catch (const std::exception& e) {
+    } catch (const std::exception&) {
         // If the complex method fails, fall back to a simple method
         static std::mutex mutex;
         std::lock_guard<std::mutex> lock(mutex);

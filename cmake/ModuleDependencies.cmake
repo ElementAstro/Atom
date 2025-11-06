@@ -334,13 +334,28 @@ endfunction()
 
 # Function to setup crypto dependencies
 function(atom_setup_crypto_deps module_name)
-  if(OpenSSL_FOUND)
-    target_link_libraries(${module_name} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+  # Be resilient: try both modern and legacy variables, and attempt a quiet find
+  # if unknown
+  if(NOT OpenSSL_FOUND
+     AND NOT OPENSSL_FOUND
+     AND NOT TARGET OpenSSL::Crypto)
+    find_package(OpenSSL QUIET)
+  endif()
+
+  if(OpenSSL_FOUND
+     OR OPENSSL_FOUND
+     OR TARGET OpenSSL::Crypto)
+    # Prefer modern imported targets when available
+    if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
+      target_link_libraries(${module_name} PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+    elseif(TARGET OpenSSL::Crypto)
+      target_link_libraries(${module_name} PUBLIC OpenSSL::Crypto)
+    endif()
     message(STATUS "OpenSSL crypto linked to ${module_name}")
   else()
     message(
-      WARNING
-        "OpenSSL not available for ${module_name} - crypto features will be limited"
+      STATUS
+        "OpenSSL not found at this stage for ${module_name} (will continue without crypto)"
     )
   endif()
 endfunction()
