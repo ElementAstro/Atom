@@ -281,6 +281,135 @@ int main() {
 
         print_stats(config_cache);
 
+        //------------------------------------------------------------------
+        // 7. Emplace Construction
+        //------------------------------------------------------------------
+        printSection("7. Emplace Construction");
+        {
+            TTLCache<std::string, LargeObject> large_cache(2000ms, 3);
+            large_cache.emplace("big", std::nullopt, 256);
+            std::cout << "Emplaced LargeObject of size 256. size="
+                      << large_cache.size() << std::endl;
+        }
+
+        //------------------------------------------------------------------
+        // 8. Compute Pattern (get_or_compute)
+        //------------------------------------------------------------------
+        printSection("8. Compute Pattern (get_or_compute)");
+        {
+            TTLCache<std::string, int> compute_cache(500ms, 10);
+            auto v1 = compute_cache.get_or_compute("answer", [] { return 42; });
+            std::cout << "Computed 'answer' -> " << v1 << std::endl;
+            auto v2 = compute_cache.get_or_compute("answer", [] { return 7; });
+            std::cout << "Cached 'answer' -> " << v2 << std::endl;
+        }
+
+        //------------------------------------------------------------------
+        // 9. TTL Management (update_ttl, get_remaining_ttl)
+        //------------------------------------------------------------------
+        printSection("9. TTL Management");
+        {
+            quick_cache.put(2, "will live longer");
+            quick_cache.update_ttl(2, 1500ms);
+            std::this_thread::sleep_for(1100ms);
+            auto r = quick_cache.get_remaining_ttl(2);
+            std::cout << "Remaining TTL for key 2: "
+                      << (r ? std::to_string(r->count())
+                            : std::string("expired"))
+                      << "ms" << std::endl;
+        }
+
+        //------------------------------------------------------------------
+        // 10. Force Cleanup
+        //------------------------------------------------------------------
+        printSection("10. Force Cleanup");
+        {
+            TTLCache<int, std::string> temp(200ms, 10);
+            temp.put(1, "x");
+            std::this_thread::sleep_for(250ms);
+            temp.force_cleanup();
+            std::cout << "After force_cleanup size=" << temp.size()
+                      << std::endl;
+        }
+
+        //------------------------------------------------------------------
+        // 11. Eviction Callbacks
+        //------------------------------------------------------------------
+        printSection("11. Eviction Callbacks");
+        {
+            TTLCache<int, std::string> evic(5000ms, 2);
+            evic.set_eviction_callback([](const int& k, const std::string& v,
+                                          bool due_to_expiry) {
+                std::cout << "Evicted key=" << k << ", value=" << v
+                          << ", due_to_expiry="
+                          << (due_to_expiry ? "true" : "false") << std::endl;
+            });
+            evic.put(1, "one");
+            evic.put(2, "two");
+            evic.put(3, "three");  // triggers LRU eviction
+        }
+
+        //------------------------------------------------------------------
+        // 12. Configuration Management (update_config, get_config)
+        //------------------------------------------------------------------
+        printSection("12. Configuration Management");
+        {
+            auto cfg = config_cache.get_config();
+            cfg.enable_statistics = true;
+            cfg.enable_automatic_cleanup = true;
+            config_cache.update_config(cfg);
+            auto cfg2 = config_cache.get_config();
+            std::cout << "Config: stats="
+                      << (cfg2.enable_statistics ? "on" : "off")
+                      << ", auto_cleanup="
+                      << (cfg2.enable_automatic_cleanup ? "on" : "off")
+                      << std::endl;
+        }
+
+        //------------------------------------------------------------------
+        // 13. Reserve Capacity
+        //------------------------------------------------------------------
+        printSection("13. Reserve Capacity");
+        {
+            config_cache.reserve(100);
+            std::cout << "Reserved capacity; capacity now ~ "
+                      << config_cache.capacity() << std::endl;
+        }
+
+        //------------------------------------------------------------------
+        // 14. Move Semantics and Shared Access (get_shared)
+        //------------------------------------------------------------------
+        printSection("14. Move Semantics and Shared Access");
+        {
+            TTLCache<int, LargeObject> move_cache(5000ms, 5);
+            move_cache.put(7, LargeObject(32));  // move
+            auto sp = move_cache.get_shared(7);
+            std::cout << "Shared ptr valid: " << (sp ? "yes" : "no")
+                      << std::endl;
+        }
+
+        //------------------------------------------------------------------
+        // 15. Statistics Reset and Thread Safety (brief)
+        //------------------------------------------------------------------
+        printSection("15. Statistics Reset and Thread Safety");
+        {
+            TTLCache<int, int> ts_cache(2000ms, 64);
+            auto worker = [&ts_cache](int base) {
+                for (int i = 0; i < 50; ++i) {
+                    ts_cache.put(base + i, i);
+                    (void)ts_cache.get(base + i - 1);
+                }
+            };
+            std::thread a(worker, 0), b(worker, 100);
+            a.join();
+            b.join();
+            print_stats(ts_cache);
+            ts_cache.reset_statistics();
+            auto st = ts_cache.get_statistics();
+            std::cout << "After reset, hits=" << st.hits
+                      << ", misses=" << st.misses << std::endl;
+        }
+
         std::cout << "\n=== All TTLCache examples completed successfully ==="
                   << std::endl;
 

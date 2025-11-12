@@ -12,8 +12,8 @@ Description: Some ranges functions for C++20
 
 **************************************************/
 
-#ifndef ATOM_UTILS_RANGES_HPP
-#define ATOM_UTILS_RANGES_HPP
+#ifndef ATOM_UTILS_CONTAINER_RANGES_HPP
+#define ATOM_UTILS_CONTAINER_RANGES_HPP
 
 #include <algorithm>
 #include <array>
@@ -562,4 +562,4 @@ template <std::ranges::input_range R>
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_RANGES_HPP
+#endif  // ATOM_UTILS_CONTAINER_RANGES_HPP

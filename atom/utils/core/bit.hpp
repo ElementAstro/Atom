@@ -12,8 +12,8 @@ Description: Validate aligned storage with optional Boost support
 
 **************************************************/
 
-#ifndef ATOM_UTILS_BIT_HPP
-#define ATOM_UTILS_BIT_HPP
+#ifndef ATOM_UTILS_CORE_BIT_HPP
+#define ATOM_UTILS_CORE_BIT_HPP
 
 #include <algorithm>
 #include <bit>
@@ -498,4 +498,4 @@ auto parallelBitOp(std::span<const T> input, Op op) -> std::vector<T> {
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_BIT_HPP
+#endif  // ATOM_UTILS_CORE_BIT_HPP

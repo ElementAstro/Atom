@@ -83,8 +83,8 @@ class Task {
 public:
     // Promise type that satisfies C++20 coroutine promise concept
     struct promise_type {
-        atom::type::expected<T, LogErrorCode> result{T{},
-                                                     LogErrorCode::Success};
+        atom::type::compat::expected<T, LogErrorCode> result{
+            T{}, LogErrorCode::Success};
 
         Task get_return_object() {
             return Task(
@@ -96,7 +96,7 @@ public:
 
         void return_value(T value) { result = std::move(value); }
 
-        void return_value(atom::type::expected<T, LogErrorCode> value) {
+        void return_value(atom::type::compat::expected<T, LogErrorCode> value) {
             result = std::move(value);
         }
 
@@ -104,11 +104,14 @@ public:
             try {
                 std::rethrow_exception(std::current_exception());
             } catch (const QueueFullException&) {
-                result = atom::type::unexpected(LogErrorCode::QueueFull);
+                result =
+                    atom::type::compat::unexpected(LogErrorCode::QueueFull);
             } catch (const ShutdownException&) {
-                result = atom::type::unexpected(LogErrorCode::ShuttingDown);
+                result =
+                    atom::type::compat::unexpected(LogErrorCode::ShuttingDown);
             } catch (...) {
-                result = atom::type::unexpected(LogErrorCode::InternalError);
+                result =
+                    atom::type::compat::unexpected(LogErrorCode::InternalError);
             }
         }
     };
@@ -145,7 +148,8 @@ public:
         handle_.resume();
     }
 
-    atom::type::expected<T, LogErrorCode> await_resume() const noexcept {
+    atom::type::compat::expected<T, LogErrorCode> await_resume()
+        const noexcept {
         return handle_.promise().result;
     }
 
@@ -156,7 +160,7 @@ private:
 // Specialization for promise_type<void>
 template <>
 struct Task<void>::promise_type {
-    atom::type::expected<void, LogErrorCode> result{};
+    atom::type::compat::expected<void, LogErrorCode> result{};
 
     Task<void> get_return_object() {
         return Task<void>(
@@ -166,25 +170,28 @@ struct Task<void>::promise_type {
     std::suspend_never initial_suspend() noexcept { return {}; }
     std::suspend_never final_suspend() noexcept { return {}; }
 
-    void return_void() { result = atom::type::expected<void, LogErrorCode>{}; }
+    void return_void() {
+        result = atom::type::compat::expected<void, LogErrorCode>{};
+    }
 
     void unhandled_exception() {
         try {
             std::rethrow_exception(std::current_exception());
         } catch (const QueueFullException&) {
-            result = atom::type::unexpected(LogErrorCode::QueueFull);
+            result = atom::type::compat::unexpected(LogErrorCode::QueueFull);
         } catch (const ShutdownException&) {
-            result = atom::type::unexpected(LogErrorCode::ShuttingDown);
+            result = atom::type::compat::unexpected(LogErrorCode::ShuttingDown);
         } catch (...) {
-            result = atom::type::unexpected(LogErrorCode::InternalError);
+            result =
+                atom::type::compat::unexpected(LogErrorCode::InternalError);
         }
     }
 };
 
 // Specialization for Task<void>::await_resume
 template <>
-inline atom::type::expected<void, LogErrorCode> Task<void>::await_resume()
-    const noexcept {
+inline atom::type::compat::expected<void, LogErrorCode>
+Task<void>::await_resume() const noexcept {
     return handle_.promise().result;
 }
 

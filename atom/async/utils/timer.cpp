@@ -68,12 +68,16 @@ void TimerTask::run() noexcept(false) {
         THROW_RUNTIME_ERROR("Failed to run timer task: Unknown error");
     }
 
+    const auto nextExecution =
+        std::chrono::steady_clock::now() + std::chrono::milliseconds(m_delay);
+
     if (m_repeatCount > 0) {
         --m_repeatCount;
         if (m_repeatCount > 0) {
-            m_nextExecutionTime = std::chrono::steady_clock::now() +
-                                  std::chrono::milliseconds(m_delay);
+            m_nextExecutionTime = nextExecution;
         }
+    } else if (m_repeatCount == -1) {
+        m_nextExecutionTime = nextExecution;
     }
 }
 
@@ -247,7 +251,8 @@ void Timer::run() noexcept {
                     try {
                         m_currentTask.run();
 
-                        if (m_currentTask.m_repeatCount > 0) {
+                        if (m_currentTask.m_repeatCount > 0 ||
+                            m_currentTask.m_repeatCount == -1) {
                             m_taskContainer.push(m_currentTask);
                         }
 
@@ -338,7 +343,7 @@ void Timer::run() noexcept {
                 try {
                     task.run();
 
-                    if (task.m_repeatCount > 0) {
+                    if (task.m_repeatCount > 0 || task.m_repeatCount == -1) {
                         std::scoped_lock innerLock(m_mutex);
                         m_taskQueue.emplace(task.m_func, task.m_delay,
                                             task.m_repeatCount,

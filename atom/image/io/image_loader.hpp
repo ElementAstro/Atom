@@ -234,14 +234,14 @@ private:
  * @brief Create optimized image loader
  * @return Unique pointer to image loader
  */
-std::unique_ptr<ImageLoader> createImageLoader();
+[[nodiscard]] std::unique_ptr<ImageLoader> createImageLoader();
 
 /**
  * @brief Quick image loading function
  * @param filePath Path to image file
  * @return Loaded image blob (empty if failed)
  */
-blob quickLoadImage(const std::filesystem::path& filePath);
+[[nodiscard]] blob quickLoadImage(const std::filesystem::path& filePath);
 
 /**
  * @brief Quick batch image loading
@@ -249,7 +249,7 @@ blob quickLoadImage(const std::filesystem::path& filePath);
  * @param maxConcurrency Maximum concurrent operations
  * @return Vector of loaded image blobs
  */
-std::vector<blob> quickLoadBatch(
+[[nodiscard]] std::vector<blob> quickLoadBatch(
     const std::vector<std::filesystem::path>& filePaths,
     size_t maxConcurrency = 4);
 

@@ -1,4 +1,4 @@
-#include "../atom/async/queue.hpp"
+#include "atom/async/messaging/queue.hpp"
 #include <cassert>
 #include <chrono>
 #include <functional>

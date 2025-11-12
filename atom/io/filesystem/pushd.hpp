@@ -88,10 +88,23 @@ public:
                 }
 
                 void await_suspend(std::coroutine_handle<> h) const {
-                    // Execute the coroutine synchronously for now
-                    // In a full implementation, this would schedule the
-                    // coroutine on an executor (thread pool, event loop, etc.)
-                    // and resume the awaiting coroutine when complete
+                    // KNOWN LIMITATION: Current implementation executes
+                    // synchronously
+                    //
+                    // This implementation resumes coroutines immediately on the
+                    // same thread, which means operations are effectively
+                    // synchronous despite using coroutine syntax. For truly
+                    // asynchronous execution, this should:
+                    // 1. Schedule the task coroutine on an executor (thread
+                    // pool, ASIO, etc.)
+                    // 2. Resume the awaiting coroutine only after the task
+                    // completes
+                    // 3. Use proper synchronization primitives for cross-thread
+                    // resumption
+                    //
+                    // Current behavior is safe but doesn't provide concurrency
+                    // benefits. Use asyncPushd() with callback for true async
+                    // execution with ASIO.
 
                     // Resume the task coroutine
                     if (!coro.done()) {
@@ -99,8 +112,6 @@ public:
                     }
 
                     // Resume the awaiting coroutine
-                    // Note: In an async executor, this would be scheduled
-                    // rather than immediate
                     if (!h.done()) {
                         h.resume();
                     }
@@ -325,10 +336,23 @@ public:
             }
 
             void await_suspend(std::coroutine_handle<> h) const {
-                // Execute the coroutine synchronously for now
-                // In a full implementation, this would schedule the coroutine
-                // on an executor (thread pool, event loop, etc.)
-                // and resume the awaiting coroutine when complete
+                // KNOWN LIMITATION: Current implementation executes
+                // synchronously
+                //
+                // This implementation resumes coroutines immediately on the
+                // same thread, which means operations are effectively
+                // synchronous despite using coroutine syntax. For truly
+                // asynchronous execution, this should:
+                // 1. Schedule the task coroutine on an executor (thread pool,
+                // ASIO, etc.)
+                // 2. Resume the awaiting coroutine only after the task
+                // completes
+                // 3. Use proper synchronization primitives for cross-thread
+                // resumption
+                //
+                // Current behavior is safe but doesn't provide concurrency
+                // benefits. Use asyncPopd() with callback for true async
+                // execution with ASIO.
 
                 // Resume the task coroutine
                 if (!coro.done()) {
@@ -336,8 +360,6 @@ public:
                 }
 
                 // Resume the awaiting coroutine
-                // Note: In an async executor, this would be scheduled rather
-                // than immediate
                 if (!h.done()) {
                     h.resume();
                 }

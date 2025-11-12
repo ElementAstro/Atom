@@ -4,8 +4,8 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#ifndef ATOM_UTILS_XML_HPP
-#define ATOM_UTILS_XML_HPP
+#ifndef ATOM_UTILS_FORMAT_XML_HPP
+#define ATOM_UTILS_FORMAT_XML_HPP
 
 #if __has_include(<tinyxml2.h>)
 #include <tinyxml2.h>
@@ -148,4 +148,4 @@ private:
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_FORMAT_XML_HPP

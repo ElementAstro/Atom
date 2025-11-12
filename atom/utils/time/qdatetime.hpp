@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_QDATETIME_HPP
-#define ATOM_UTILS_QDATETIME_HPP
+#ifndef ATOM_UTILS_TIME_QDATETIME_HPP
+#define ATOM_UTILS_TIME_QDATETIME_HPP
 
 #include <chrono>
 #include <concepts>

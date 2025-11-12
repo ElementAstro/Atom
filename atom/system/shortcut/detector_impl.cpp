@@ -2,9 +2,19 @@
 #include "detector_impl.h"
 #include "win32_utils.h"
 
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include <psapi.h>
-#include <spdlog/spdlog.h>
 #include <tlhelp32.h>
+#include <windows.h>
+#endif
+
+#include <spdlog/spdlog.h>
 
 namespace shortcut_detector {
 

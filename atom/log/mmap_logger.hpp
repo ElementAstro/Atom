@@ -305,7 +305,8 @@ public:
      * @brief Forces log buffer flush to disk.
      * @return std::expected with void or error code
      */
-    [[nodiscard]] atom::type::expected<void, LoggerErrorCode> flush() noexcept;
+    [[nodiscard]] atom::type::compat::expected<void, LoggerErrorCode>
+    flush() noexcept;
 
     /**
      * @brief Sets category filter to only log specific categories

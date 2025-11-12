@@ -12,8 +12,8 @@ Description: Validate aligned storage with optional Boost support
 
 **************************************************/
 
-#ifndef ATOM_UTILS_ALIGNED_HPP
-#define ATOM_UTILS_ALIGNED_HPP
+#ifndef ATOM_UTILS_MEMORY_ALIGNED_HPP
+#define ATOM_UTILS_MEMORY_ALIGNED_HPP
 
 #include <cstddef>
 
@@ -61,4 +61,4 @@ class ValidateAlignedStorage {
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_ALIGNED_HPP
+#endif  // ATOM_UTILS_MEMORY_ALIGNED_HPP

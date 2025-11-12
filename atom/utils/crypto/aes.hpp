@@ -4,8 +4,8 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#ifndef ATOM_UTILS_AES_HPP
-#define ATOM_UTILS_AES_HPP
+#ifndef ATOM_UTILS_CRYPTO_AES_HPP
+#define ATOM_UTILS_CRYPTO_AES_HPP
 
 #include <concepts>
 #include <span>
@@ -129,4 +129,4 @@ constexpr size_t MIN_KEY_SIZE = 16;
 // Include implementation details
 #include "aes_impl.hpp"
 
-#endif
+#endif  // ATOM_UTILS_CRYPTO_AES_HPP

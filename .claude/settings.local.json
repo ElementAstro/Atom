@@ -97,7 +97,10 @@
       "Bash(then cp -v build/atom/error/libatom-error.dll build/atom/log/libatom-log.dll build/atom/log/libloguru.dll build/atom/components/libatom-component.dll \"$dir\")",
       "Bash(./test_abi.exe:*)",
       "Bash(pkill:*)",
-      "Bash(test:*)"
+      "Bash(test:*)",
+      "Bash(dir /s /b atomsystem*.hpp atomsystem*.h atomsystem*.cpp 2)",
+      "Bash(nul)",
+      "Bash(powershell:*)"
     ],
     "deny": [],
     "ask": []

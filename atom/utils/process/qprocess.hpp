@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_QPROCESS_HPP
-#define ATOM_UTILS_QPROCESS_HPP
+#ifndef ATOM_UTILS_PROCESS_QPROCESS_HPP
+#define ATOM_UTILS_PROCESS_QPROCESS_HPP
 
 #include <chrono>
 #include <concepts>
@@ -439,4 +439,4 @@ private:
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_QPROCESS_HPP
+#endif  // ATOM_UTILS_PROCESS_QPROCESS_HPP

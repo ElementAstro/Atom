@@ -21,6 +21,8 @@ endif()
 
 # Define source files
 set(ATOM_IMAGE_SOURCES
+    # Core sources
+    core/image_metadata.cpp
     # Metadata sources
     metadata/exif.cpp
     # Format sources
@@ -50,6 +52,9 @@ set(ATOM_IMAGE_HEADERS
     image.hpp
     # Core headers
     core/image_blob.hpp
+    core/image_metadata.hpp
+    core/exceptions.hpp
+    core/cache_manager.hpp
     # Metadata headers
     metadata/exif.hpp
     # Format headers
@@ -89,6 +94,8 @@ if(OpenCV_FOUND)
     formats/ser/ser_writer.cpp
     formats/ser/frame_processor.cpp
     formats/ser/quality.cpp
+    formats/ser/registration.cpp
+    formats/ser/stacking.cpp
     formats/ser/utils.cpp)
 
   list(

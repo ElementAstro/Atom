@@ -384,6 +384,65 @@ int main() {
     std::cout << "Cleaned up the index file" << std::endl;
 
     //--------------------------------------------------------------------------
+
+    //--------------------------------------------------------------------------
+    // 6. Utility Methods
+    //--------------------------------------------------------------------------
+    printSection("6. Utility Methods");
+    {
+        std::cout << "Document count: " << searchEngine.getDocumentCount()
+                  << std::endl;
+        std::cout << "Has 'doc1'? "
+                  << (searchEngine.hasDocument("doc1") ? "yes" : "no")
+                  << std::endl;
+        auto ids = searchEngine.getAllDocumentIds();
+        std::cout << "All document IDs (" << ids.size() << ")" << std::endl;
+    }
+
+    //--------------------------------------------------------------------------
+    // 7. Click Tracking and Ranking Influence
+    //--------------------------------------------------------------------------
+    printSection("7. Click Tracking and Ranking Influence");
+    {
+        auto before = searchEngine.searchByContent("machine learning");
+        if (!before.empty()) {
+            std::cout << "Top before clicks: " << before.front()->getId()
+                      << std::endl;
+            // Simulate user clicks on the top result
+            for (int i = 0; i < 10; ++i)
+                before.front()->incrementClickCount();
+            auto after = searchEngine.searchByContent("machine learning");
+            std::cout << "Top after clicks:  "
+                      << (after.empty() ? std::string("<none>")
+                                        : after.front()->getId())
+                      << std::endl;
+            std::cout << "Click count now:   "
+                      << before.front()->getClickCount() << std::endl;
+        }
+    }
+
+    //--------------------------------------------------------------------------
+    // 8. Multithreaded Search
+    //--------------------------------------------------------------------------
+    printSection("8. Multithreaded Search");
+    {
+        auto fut1 = std::async(std::launch::async, [&searchEngine]() {
+            return searchEngine.searchByContent("learning");
+        });
+        auto fut2 = std::async(std::launch::async, [&searchEngine]() {
+            return searchEngine.booleanSearch("technology AND learning");
+        });
+        auto r1 = fut1.get();
+        auto r2 = fut2.get();
+        std::cout << "Concurrent search results: content='learning' -> "
+                  << r1.size() << ", boolean='technology AND learning' -> "
+                  << r2.size() << std::endl;
+    }
+
+    //--------------------------------------------------------------------------
+    // Summary (updated)
+    //--------------------------------------------------------------------------
+
     // Summary
     //--------------------------------------------------------------------------
     printSection("Summary");

@@ -12,8 +12,8 @@ Description: Simple random number generator
 
 **************************************************/
 
-#ifndef ATOM_UTILS_RANDOM_HPP
-#define ATOM_UTILS_RANDOM_HPP
+#ifndef ATOM_UTILS_RANDOM_RANDOM_HPP
+#define ATOM_UTILS_RANDOM_RANDOM_HPP
 
 #include <algorithm>
 #include <concepts>
@@ -275,4 +275,4 @@ void secureShuffleRange(Container&& container) noexcept {
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_RANDOM_RANDOM_HPP

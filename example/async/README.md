@@ -20,7 +20,7 @@ Build upon fundamental concepts with more advanced usage patterns.
 
 | Example | Description | Key Concepts |
 |---------|-------------|--------------|
-| [`async_worker_features.cpp`](async_worker_features.cpp) | Advanced AsyncWorker patterns | WorkerContainer, error recovery, performance optimization |
+| [`async_worker_features.cpp`](async_worker_features.cpp) | AsyncWorkerManager usage | Manager orchestration, batch coordination, error recovery, pruning |
 | [`async_executor.cpp`](async_executor.cpp) | AsyncExecutor configuration and usage | Thread management, priority execution, resource optimization |
 | [`pool.cpp`](pool.cpp) | Thread pool implementations | Pool configurations, load balancing, performance tuning |
 | [`parallel.cpp`](parallel.cpp) | Parallel execution patterns | Parallel algorithms, execution policies, performance optimization |
@@ -64,7 +64,9 @@ Specialized utilities and helper components.
 | Example | Description | Key Concepts |
 |---------|-------------|--------------|
 | [`timer.cpp`](timer.cpp) | Timer and scheduling | Interval management, task prioritization, timer coordination |
+| [`lodash.cpp`](lodash.cpp) | Debounce/Throttle utilities | Debounce (leading/trailing/maxWait), Throttle (leading/trailing/both), factories |
 | [`daemon.cpp`](daemon.cpp) | Daemon process management | Process lifecycle, signal handling, monitoring |
+
 | [`generator.cpp`](generator.cpp) | Generator and coroutine patterns | Coroutine usage, two-way communication, concurrent generation |
 | [`packaged_task.cpp`](packaged_task.cpp) | Enhanced packaged tasks | Task management, error handling, component integration |
 

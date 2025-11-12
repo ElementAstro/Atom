@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_LINQ_HPP
-#define ATOM_UTILS_LINQ_HPP
+#ifndef ATOM_UTILS_CONTAINER_LINQ_HPP
+#define ATOM_UTILS_CONTAINER_LINQ_HPP
 
 #include <algorithm>
 #include <list>
@@ -716,4 +716,4 @@ auto range(T start, T end, T step = 1) {
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_CONTAINER_LINQ_HPP

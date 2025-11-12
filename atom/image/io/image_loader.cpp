@@ -3,12 +3,16 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <iomanip>
+#include <sstream>
 #include <stdexcept>
 #include <thread>
 
 // Define error macros to avoid atom error system namespace pollution
 #define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
 #include <execution>
+
+#include "../core/image_metadata.hpp"
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
 #include <opencv2/imgcodecs.hpp>
@@ -420,12 +424,37 @@ blob ImageLoader::applyPostProcessing(const blob& imageData,
 }
 
 std::unordered_map<std::string, std::string> ImageLoader::extractMetadata(
-    [[maybe_unused]] const void* data, size_t size, ImageFormat format) const {
+    const void* data, size_t size, ImageFormat format) const {
     std::unordered_map<std::string, std::string> metadata;
     metadata["format"] = formatDetector_->getFormatName(format);
     metadata["size_bytes"] = std::to_string(size);
 
-    // TODO: Format-specific metadata extraction using data parameter
+    // Format-specific metadata extraction
+    if (data && size > 0) {
+        const auto* byteData = static_cast<const uint8_t*>(data);
+
+        // Extract EXIF metadata for JPEG images
+        if (format == ImageFormat::JPEG) {
+            auto exifData = core::ExifMetadata::extract(byteData, size);
+            if (exifData.has("has_exif") && exifData.getBool("has_exif")) {
+                metadata["has_exif"] = "true";
+                metadata["exif_offset"] =
+                    std::to_string(exifData.getInt("exif_offset"));
+                metadata["exif_length"] =
+                    std::to_string(exifData.getInt("exif_length"));
+            }
+        }
+
+        // Add basic image signature information
+        if (size >= 4) {
+            std::ostringstream oss;
+            oss << std::hex << std::setfill('0');
+            for (size_t i = 0; i < std::min(size_t(4), size); ++i) {
+                oss << std::setw(2) << static_cast<int>(byteData[i]);
+            }
+            metadata["signature"] = oss.str();
+        }
+    }
 
     return metadata;
 }

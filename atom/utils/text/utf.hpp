@@ -12,8 +12,8 @@ Description: Some useful functions about utf string
 
 **************************************************/
 
-#ifndef ATOM_UTILS_UTF_HPP
-#define ATOM_UTILS_UTF_HPP
+#ifndef ATOM_UTILS_TEXT_UTF_HPP
+#define ATOM_UTILS_TEXT_UTF_HPP
 
 #include <string>
 
@@ -129,4 +129,4 @@ auto isValidUTF8(std::string_view str) -> bool;
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_UTF_HPP
+#endif  // ATOM_UTILS_TEXT_UTF_HPP

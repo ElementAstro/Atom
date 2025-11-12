@@ -12,8 +12,8 @@ Description: Some useful functions about time
 
 **************************************************/
 
-#ifndef ATOM_UTILS_TIME_HPP
-#define ATOM_UTILS_TIME_HPP
+#ifndef ATOM_UTILS_TIME_TIME_HPP
+#define ATOM_UTILS_TIME_TIME_HPP
 
 #include <chrono>
 #include <concepts>
@@ -177,4 +177,4 @@ template <typename Clock = std::chrono::steady_clock>
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_TIME_TIME_HPP

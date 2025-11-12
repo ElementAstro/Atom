@@ -84,7 +84,7 @@ public:
      * @param preserveAspect Whether to preserve aspect ratio
      * @return Resized image blob
      */
-    virtual blob resize(
+    [[nodiscard]] virtual blob resize(
         const blob& input, int newWidth, int newHeight,
         InterpolationMethod method = InterpolationMethod::LINEAR,
         bool preserveAspect = false) const;
@@ -100,7 +100,7 @@ public:
      * @param fillValue Fill value for constant border mode
      * @return Rotated image blob
      */
-    virtual blob rotate(
+    [[nodiscard]] virtual blob rotate(
         const blob& input, double angle, const Point2D& center = {},
         bool expandCanvas = true,
         InterpolationMethod method = InterpolationMethod::LINEAR,
@@ -116,7 +116,7 @@ public:
      * @param borderMode Border handling mode
      * @return Transformed image blob
      */
-    virtual blob affineTransform(
+    [[nodiscard]] virtual blob affineTransform(
         const blob& input, const std::array<std::array<double, 3>, 2>& matrix,
         const Point2D& outputSize = {},
         InterpolationMethod method = InterpolationMethod::LINEAR,

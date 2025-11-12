@@ -17,6 +17,8 @@ Description: Environment variable management
 
 #include <algorithm>
 #include <filesystem>
+#include <functional>
+#include <memory>
 #include <mutex>
 #include <optional>
 #include <sstream>

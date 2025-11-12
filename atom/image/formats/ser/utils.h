@@ -42,9 +42,12 @@ bool writeSerHeader(const std::filesystem::path& serFile,
                     const SERHeader& header);
 
 // Mathematical utilities
-std::vector<double> calculateHistogram(const cv::Mat& image, int bins = 256);
-double calculatePSNR(const cv::Mat& reference, const cv::Mat& target);
-double calculateSSIM(const cv::Mat& reference, const cv::Mat& target);
+[[nodiscard]] std::vector<double> calculateHistogram(const cv::Mat& image,
+                                                     int bins = 256);
+[[nodiscard]] double calculatePSNR(const cv::Mat& reference,
+                                   const cv::Mat& target);
+[[nodiscard]] double calculateSSIM(const cv::Mat& reference,
+                                   const cv::Mat& target);
 
 // Image statistics
 struct ImageStatistics {
@@ -57,13 +60,13 @@ struct ImageStatistics {
     double percentile95;
 };
 
-ImageStatistics calculateImageStatistics(const cv::Mat& image);
+[[nodiscard]] ImageStatistics calculateImageStatistics(const cv::Mat& image);
 
 // Hot/cold pixel detection
-std::vector<cv::Point> detectHotPixels(const cv::Mat& image,
-                                       double threshold = 0.95);
-std::vector<cv::Point> detectColdPixels(const cv::Mat& image,
-                                        double threshold = 0.05);
+[[nodiscard]] std::vector<cv::Point> detectHotPixels(const cv::Mat& image,
+                                                     double threshold = 0.95);
+[[nodiscard]] std::vector<cv::Point> detectColdPixels(const cv::Mat& image,
+                                                      double threshold = 0.05);
 
 // Create bad pixel map
 cv::Mat createBadPixelMask(const cv::Mat& image, double hotThreshold = 0.95,

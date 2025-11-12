@@ -4,7 +4,7 @@ This directory contains comprehensive examples demonstrating all features and ca
 
 ## Directory Structure
 
-```
+```text
 example/search/
 ├── README.md                           # This file
 ├── CMakeLists.txt                      # Build configuration
@@ -34,7 +34,7 @@ example/search/
 
 ### 1. Core Search Engine (`core/`)
 
-**search_engine_comprehensive.cpp**
+#### search_engine_comprehensive.cpp
 
 - Document creation and validation
 - Basic search operations (by tag, content, multiple tags, boolean)
@@ -45,37 +45,41 @@ example/search/
 
 ### 2. Caching Systems (`cache/`)
 
-**resource_cache_comprehensive.cpp**
+#### resource_cache_comprehensive.cpp
 
 - Basic cache operations (insert, get, remove)
 - Resource expiration handling
 - LRU eviction policy
 - Asynchronous operations
 - Batch operations
-- Serialization and persistence
+- Serialization and persistence (text and JSON)
 - Event callbacks and statistics
+- Configuration and cleanup
 
-**lru_cache_comprehensive.cpp**
+#### lru_cache_comprehensive.cpp
 
 - Thread-safe LRU cache operations
-- TTL and expiration handling
-- Concurrent access from multiple threads
-- Callbacks for monitoring cache events
-- Dynamic resizing and performance optimization
-- Prefetching and error handling
+- TTL and expiration handling with default TTL
+- Batch put/get and prefetch
+- Async get/put and persistence
+- Callbacks (insert/erase/clear) and statistics
+- Keys/values iteration and dynamic resizing
+- Thread-safety demo and edge cases
 
-**ttl_cache_comprehensive.cpp**
+#### ttl_cache_comprehensive.cpp
 
-- TTL-based cache expiration
-- Automatic cleanup mechanisms
-- Complex data type storage
-- Batch operations for efficiency
-- Performance monitoring and statistics
+- TTL-based cache expiration and automatic cleanup
+- Complex data types and move semantics
+- Batch operations and compute pattern (get_or_compute)
+- Emplace construction and shared access
+- TTL management (update_ttl, get_remaining_ttl) and force_cleanup
+- Eviction callbacks and configuration management
+- Capacity reservation and statistics reset
 - Thread safety demonstrations
 
 ### 3. Database Integration (`database/`)
 
-**sqlite_comprehensive.cpp**
+#### sqlite_comprehensive.cpp
 
 - Database creation and connection
 - CRUD operations with error handling
@@ -85,7 +89,7 @@ example/search/
 - Data validation and integrity checks
 - Performance optimization techniques
 
-**mysql_comprehensive.cpp**
+#### mysql_comprehensive.cpp
 
 - MySQL connection and configuration
 - Prepared statements for secure queries
@@ -96,7 +100,7 @@ example/search/
 
 ### 4. Integration Examples (`integration/`)
 
-**search_cache_database_integration.cpp**
+#### search_cache_database_integration.cpp
 
 - Real-world document management system
 - Combines search engine, cache, and database
@@ -107,7 +111,7 @@ example/search/
 
 ### 5. Advanced Features (`advanced/`)
 
-**async_batch_statistics.cpp**
+#### async_batch_statistics.cpp
 
 - Asynchronous search operations with futures
 - Batch processing for high-throughput scenarios
@@ -116,7 +120,7 @@ example/search/
 - Concurrent cache operations
 - Load balancing and resource management
 
-**error_handling_edge_cases.cpp**
+#### error_handling_edge_cases.cpp
 
 - Comprehensive error handling patterns
 - Edge case scenarios and recovery mechanisms

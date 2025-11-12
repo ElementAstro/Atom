@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_STOPWATCHER_HPP
-#define ATOM_UTILS_STOPWATCHER_HPP
+#ifndef ATOM_UTILS_TIME_STOPWATCHER_HPP
+#define ATOM_UTILS_TIME_STOPWATCHER_HPP
 
 #include <concepts>
 #include <functional>

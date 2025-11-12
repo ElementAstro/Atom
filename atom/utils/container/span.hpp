@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_SPAN_HPP
-#define ATOM_UTILS_SPAN_HPP
+#ifndef ATOM_UTILS_CONTAINER_SPAN_HPP
+#define ATOM_UTILS_CONTAINER_SPAN_HPP
 
 #include <algorithm>
 #include <cmath>
@@ -567,4 +567,4 @@ template <typename T, typename Predicate>
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_SPAN_HPP
+#endif  // ATOM_UTILS_CONTAINER_SPAN_HPP

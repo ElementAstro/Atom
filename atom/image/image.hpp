@@ -104,13 +104,13 @@ void cleanup();
  * @brief Get module version information
  * @return Version structure with version details
  */
-constexpr Version getVersion() { return Version{}; }
+[[nodiscard]] constexpr Version getVersion() { return Version{}; }
 
 /**
  * @brief Get available features
  * @return Features structure with capability flags
  */
-constexpr Features getFeatures() { return Features{}; }
+[[nodiscard]] constexpr Features getFeatures() { return Features{}; }
 
 }  // namespace atom::image
 

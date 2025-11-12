@@ -262,77 +262,14 @@ int main() {
     std::cout << std::endl;
 
     //==============================================================
-    // 6. Debounce 基本用法
+    // 6-11. Debounce/Throttle 示例位置变更
     //==============================================================
-    LOG("6. Debounce 基本用法");
-    {
-        int call_count = 0;
-        auto debounced_function = [&call_count]() {
-            call_count++;
-            LOG("Debounced 函数被调用! 当前计数: " +
-                std::to_string(call_count));
-        };
-
-        LOG("演示占位：此仓库当前未提供 Debounce "
-            "适配器类型。这里直接调用函数模拟效果。");
-        for (int i = 0; i < 5; ++i) {
-            debounced_function();
-        }
-        LOG("最终调用计数(直接调用): " + std::to_string(call_count));
-    }
-
-    std::cout << std::endl;
-
-    //==============================================================
-    // 7. Debounce 不同参数组合
-    //==============================================================
-    LOG("7. Debounce 不同参数组合 (占位示例)");
-    {
-        LOG("7.1 前缘触发(leading=true)的去抖动: 本仓库未提供 "
-            "Debounce，跳过。");
-        LOG("7.2 带有最大等待时间的去抖动: 本仓库未提供 Debounce，跳过。");
-    }
-
-    std::cout << std::endl;
-
-    //==============================================================
-    // 8. Debounce 其它方法
-    //==============================================================
-    LOG("8. Debounce 其它方法 (占位示例)");
-    { LOG("本仓库未提供 Debounce 类型，跳过 flush/cancel/reset 方法演示。"); }
-
-    std::cout << std::endl;
-
-    //==============================================================
-    // 9. Throttle 基本用法 (占位示例)
-    //==============================================================
-    LOG("9. Throttle 基本用法 (占位)");
-    {
-        LOG("本仓库未提供 Throttle 类型，使用直接调用函数代替。");
-        int call_count = 0;
-        auto fn = [&call_count]() {
-            call_count++;
-            LOG("直接调用函数计数: " + std::to_string(call_count));
-        };
-        for (int i = 0; i < 10; ++i)
-            fn();
-    }
-
-    std::cout << std::endl;
-
-    //==============================================================
-    // 10. Throttle 不同参数组合 (占位示例)
-    //==============================================================
-    LOG("10. Throttle 不同参数组合 (占位)");
-    { LOG("10.1/10.2: 本仓库未提供 Throttle 类型，跳过。"); }
-
-    std::cout << std::endl;
-
-    //==============================================================
-    // 11. 工厂类使用示例
-    //==============================================================
-    LOG("11. 工厂类使用示例 (占位)");
-    { LOG("仓库未提供 ThrottleFactory/DebounceFactory，跳过。"); }
+    LOG("Debounce/Throttle 示例已迁移至独立文件: example/async/lodash.cpp");
+    LOG("该文件包含: "
+        "Debounce(leading/trailing/maxWait/cancel/flush/reset/callCount)、");
+    LOG("Throttle(leading/trailing/both/cancel/reset/"
+        "callCount)、以及工厂类用法。");
+    LOG("此 limiter.cpp 保留 RateLimiter 相关演示，避免篇幅过长。");
 
     std::cout << std::endl;
 

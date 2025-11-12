@@ -4,8 +4,8 @@
  * Copyright (C) 2023-2024 Max Qian
  */
 
-#ifndef ATOM_UTILS_TO_STRING_HPP
-#define ATOM_UTILS_TO_STRING_HPP
+#ifndef ATOM_UTILS_TEXT_TO_STRING_HPP
+#define ATOM_UTILS_TEXT_TO_STRING_HPP
 
 #include <array>
 #include <concepts>
@@ -568,4 +568,4 @@ auto toString(const std::pair<T1, T2>& pair) -> std::string {
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_TO_STRING_HPP
+#endif  // ATOM_UTILS_TEXT_TO_STRING_HPP

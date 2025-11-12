@@ -336,10 +336,14 @@ public:
     auto begin() const { return storage_.begin(); }
     auto end() const { return storage_.end(); }
 
-    [[nodiscard]] auto size() const -> size_t { return storage_.size(); }
+    [[nodiscard]] auto size() const noexcept -> size_t {
+        return storage_.size();
+    }
 
-    [[nodiscard]] auto data() -> T* { return storage_.data(); }
-    [[nodiscard]] auto data() const -> const T* { return storage_.data(); }
+    [[nodiscard]] auto data() noexcept -> T* { return storage_.data(); }
+    [[nodiscard]] auto data() const noexcept -> const T* {
+        return storage_.data();
+    }
 
     auto slice(size_t offset, size_t length) const -> Blob {
         if (offset + length > size()) {
@@ -587,15 +591,25 @@ public:
     }
 #endif
 
-    [[nodiscard]] auto getRows() const -> int { return rows_; }
-    [[nodiscard]] auto getCols() const -> int { return cols_; }
-    [[nodiscard]] auto getChannels() const -> int { return channels_; }
-    [[nodiscard]] auto getDepth() const -> int { return depth_; }
+    [[nodiscard]] constexpr auto getRows() const noexcept -> int {
+        return rows_;
+    }
+    [[nodiscard]] constexpr auto getCols() const noexcept -> int {
+        return cols_;
+    }
+    [[nodiscard]] constexpr auto getChannels() const noexcept -> int {
+        return channels_;
+    }
+    [[nodiscard]] constexpr auto getDepth() const noexcept -> int {
+        return depth_;
+    }
 
     // Compatibility accessors for legacy examples
-    [[nodiscard]] auto rows() const -> int { return rows_; }
-    [[nodiscard]] auto cols() const -> int { return cols_; }
-    [[nodiscard]] auto channels() const -> int { return channels_; }
+    [[nodiscard]] constexpr auto rows() const noexcept -> int { return rows_; }
+    [[nodiscard]] constexpr auto cols() const noexcept -> int { return cols_; }
+    [[nodiscard]] constexpr auto channels() const noexcept -> int {
+        return channels_;
+    }
 
     // Convenience pixel accessor for 8-bit data (for examples)
     auto at(int y, int x, int channel = 0) -> uint8_t& {
@@ -622,13 +636,19 @@ public:
     }
 
     // Additional utility methods
-    [[nodiscard]] auto getWidth() const -> int { return cols_; }
-    [[nodiscard]] auto getHeight() const -> int { return rows_; }
-    [[nodiscard]] auto isEmpty() const -> bool { return storage_.empty(); }
-    [[nodiscard]] auto getPixelSize() const -> size_t {
+    [[nodiscard]] constexpr auto getWidth() const noexcept -> int {
+        return cols_;
+    }
+    [[nodiscard]] constexpr auto getHeight() const noexcept -> int {
+        return rows_;
+    }
+    [[nodiscard]] auto isEmpty() const noexcept -> bool {
+        return storage_.empty();
+    }
+    [[nodiscard]] constexpr auto getPixelSize() const noexcept -> size_t {
         return channels_ * (depth_ == 8 ? 1 : depth_ == 16 ? 2 : 4);
     }
-    [[nodiscard]] auto getImageSize() const -> size_t {
+    [[nodiscard]] constexpr auto getImageSize() const noexcept -> size_t {
         return static_cast<size_t>(rows_) * static_cast<size_t>(cols_) *
                getPixelSize();
     }

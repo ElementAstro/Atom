@@ -271,5 +271,114 @@ int main() {
     std::cout << "Cache size after eviction: " << smallCache.size()
               << std::endl;
 
+    //------------------------------------------------------------------------------
+    // 4. Asynchronous Operations (asyncInsert, asyncGet, asyncLoad)
+    //------------------------------------------------------------------------------
+    printSection("4. Asynchronous Operations");
+    {
+        auto fIns = cache.asyncInsert("async-1", createSampleResource(100),
+                                      std::chrono::seconds(30));
+        fIns.get();
+        auto fGet = cache.asyncGet("async-1");
+        auto got = fGet.get();
+        if (got) {
+            std::cout << "asyncGet('async-1'): " << got->toString()
+                      << std::endl;
+        }
+        auto fLoad =
+            cache.asyncLoad("async-2", [] { return loadResourceSlowly(101); });
+        fLoad.get();
+        auto got2 = cache.get("async-2");
+        if (got2) {
+            std::cout << "asyncLoad('async-2'): " << got2->toString()
+                      << std::endl;
+        }
+    }
+
+    //------------------------------------------------------------------------------
+    // 5. Batch Operations (insertBatch, removeBatch)
+    //------------------------------------------------------------------------------
+    printSection("5. Batch Operations");
+    {
+        Vector<std::pair<String, Resource>> batchItems = {
+            {"b1", createSampleResource(201)},
+            {"b2", createSampleResource(202)},
+            {"b3", createSampleResource(203)}};
+        cache.insertBatch(batchItems, std::chrono::seconds(120));
+        std::cout << "Inserted batch of " << batchItems.size() << " items"
+                  << std::endl;
+
+        Vector<String> toRemove = {"b2"};
+        cache.removeBatch(toRemove);
+        std::cout << "Removed keys: b2" << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 6. Persistence to Text (writeToFile / readFromFile)
+    //------------------------------------------------------------------------------
+    printSection("6. Persistence to Text");
+    {
+        const String txtFile = "resource_cache.txt";
+        cache.writeToFile(txtFile, resourceToString);
+        cache.clear();
+        cache.readFromFile(txtFile, resourceFromString);
+        std::cout << "Reloaded from text file. Cache size: " << cache.size()
+                  << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 7. Persistence to JSON (writeToJsonFile / readFromJsonFile)
+    //------------------------------------------------------------------------------
+    printSection("7. Persistence to JSON");
+    {
+        const String jsonFile = "resource_cache.json";
+        cache.writeToJsonFile(jsonFile, resourceToJson);
+        cache.clear();
+        cache.readFromJsonFile(jsonFile, resourceFromJson);
+        std::cout << "Reloaded from JSON file. Cache size: " << cache.size()
+                  << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 8. Callbacks (onInsert, onRemove)
+    //------------------------------------------------------------------------------
+    printSection("8. Callbacks");
+    {
+        cache.onInsert([](const String& key, const Resource& r) {
+            std::cout << "onInsert: " << std::string(key) << " -> "
+                      << r.toString() << std::endl;
+        });
+        cache.onRemove([](const String& key, const Resource&) {
+            std::cout << "onRemove: " << std::string(key) << std::endl;
+        });
+        cache.insert("cb-1", createSampleResource(301),
+                     std::chrono::seconds(60));
+        cache.remove("cb-1");
+    }
+
+    //------------------------------------------------------------------------------
+    // 9. Statistics and Monitoring
+    //------------------------------------------------------------------------------
+    printSection("9. Statistics");
+    {
+        auto s = cache.getStatistics();
+        std::cout << "Hits: " << s.first << ", Misses: " << s.second
+                  << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 10. Configuration and Cleanup (setMaxSize, setExpirationTime,
+    // removeExpired)
+    //------------------------------------------------------------------------------
+    printSection("10. Configuration and Cleanup");
+    {
+        cache.setMaxSize(20);
+        cache.setExpirationTime("async-1", std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(1200));
+        cache.removeExpired();
+        std::cout << "After removeExpired, contains 'async-1': "
+                  << (cache.contains("async-1") ? "Yes" : "No") << std::endl;
+    }
+
     return 0;
 }

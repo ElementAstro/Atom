@@ -342,10 +342,9 @@ CompressionResult compressFile(std::string_view file_path_sv,
     return result;
 }
 
-CompressionResult decompressFile(
-    std::string_view file_path_sv, std::string_view output_folder_sv,
-    [[maybe_unused]] const DecompressionOptions&
-        options) {  // Mark options as potentially unused if diagnostic persists
+CompressionResult decompressFile(std::string_view file_path_sv,
+                                 std::string_view output_folder_sv,
+                                 const DecompressionOptions& options) {
     CompressionResult result;
     try {
         if (file_path_sv.empty() || output_folder_sv.empty()) {

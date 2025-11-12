@@ -1,46 +1,106 @@
-#include <signal.h>
+/**
+ * @file daemon_advanced.cpp
+ * @brief Advanced daemon utilities demonstration (foreground-safe)
+ *
+ * Demonstrates:
+ *  - DaemonGuard in foreground mode (isDaemon=false)
+ *  - PID file management (setPidFilePath, checkPidFile, cleanup)
+ *  - Signal registration (platform-guarded)
+ *  - isProcessBackground()
+ *  - Restart interval configuration (set/get)
+ *  - DaemonGuard::toString(), getRestartCount()
+ */
+
+#include <atom/async/utils/daemon.hpp>
+
+#include <array>
 #include <chrono>
-#include <cstdlib>
-#include <functional>
+#include <csignal>
+#include <filesystem>
 #include <iostream>
-#include <stdexcept>
+#include <optional>
+#include <string>
 #include <thread>
 #include <vector>
 
-#include "atom/async/daemon.hpp"
+using namespace std::chrono_literals;
+namespace fs = std::filesystem;
 
-// 为示例代码定义一个命名空间
-namespace examples {
+static std::string pidPath() {
+#if defined(_WIN32)
+    return "./lithium-daemon.pid";  // Windows: avoid temp perms issues
+#else
+    return "./lithium-daemon.pid";  // keep near cwd for CI simplicity
+#endif
+}
 
-// 简单的任务回调函数 - 传统方式
-int simpleTask(int argc, char** argv) {
-    std::cout << "简单任务开始执行" << std::endl;
-    std::cout << "参数数量: " << argc << std::endl;
+void log(const std::string& tag, const std::string& msg) {
+    std::cout << "[" << tag << "] " << msg << std::endl;
+}
 
-    for (int i = 0; i < argc; ++i) {
-        std::cout << "参数[" << i << "]: " << (argv[i] ? argv[i] : "nullptr")
-                  << std::endl;
-    }
-
-    // 模拟工作
-    std::cout << "任务正在执行..." << std::endl;
-    std::this_thread::sleep_for(std::chrono::seconds(2));
-    std::cout << "简单任务执行完成" << std::endl;
-
+// The worker callback used by DaemonGuard::startDaemon
+static int worker_main(int /*argc*/, char** /*argv*/) {
+    log("worker", "running main task in foreground mode");
+    // Simulate short work
+    std::this_thread::sleep_for(50ms);
+    log("worker", "work complete");
     return 0;
 }
 
-}  // namespace examples
+int main(int argc, char** argv) {
+    log("daemon", "advanced demo starting (foreground-safe)");
 
-int main() {
-    std::cout << "Daemon example - simple task execution" << std::endl;
+    // Configure restart interval
+    atom::async::setDaemonRestartInterval(5);
+    int ri = atom::async::getDaemonRestartInterval();
+    log("daemon", std::string("restartInterval=") + std::to_string(ri) + "s");
 
-    // Simulate command line arguments
-    const char* args[] = {"daemon_example", "--test", "value"};
-    char* argv[] = {const_cast<char*>(args[0]), const_cast<char*>(args[1]),
-                    const_cast<char*>(args[2])};
-    int argc = 3;
+    // Register signal handlers (best-effort, platform-guarded)
+#if defined(SIGINT)
+    try {
+        std::array<int, 2> sigs{SIGINT, SIGTERM};
+        bool ok = atom::async::registerSignalHandlers(sigs);
+        log("daemon", ok ? "signal handlers registered for SIGINT/SIGTERM"
+                         : "signal registration returned false");
+    } catch (...) {
+        log("daemon", "signal registration not supported on this platform");
+    }
+#endif
 
-    // Execute the simple task
-    return examples::simpleTask(argc, argv);
+    // Prepare guard and PID file path
+    atom::async::DaemonGuard guard;
+    const auto path = pidPath();
+    guard.setPidFilePath(path);
+
+    log("daemon", std::string("isProcessBackground=") +
+                      (atom::async::isProcessBackground() ? "true" : "false"));
+    log("daemon", std::string("guard(before).toString= ") + guard.toString());
+
+    // Run in foreground (isDaemon=false); this will also write the PID file
+    int rc = guard.startDaemon(argc, argv, worker_main, /*isDaemon=*/false);
+    log("daemon", std::string("startDaemon rc=") + std::to_string(rc));
+
+    // Inspect guard state
+    log("daemon", std::string("guard(after).toString= ") + guard.toString());
+    log("daemon",
+        std::string("restartCount=") + std::to_string(guard.getRestartCount()));
+
+    // Verify PID file exists
+    try {
+        bool exists = atom::async::checkPidFile(path);
+        log("daemon", exists ? "pid file OK" : "pid file not found or invalid");
+    } catch (const std::exception& e) {
+        log("daemon", std::string("pid file check error: ") + e.what());
+    }
+
+    // Cleanup PID file (foreground demo should tidy up)
+    if (fs::exists(path)) {
+        std::error_code ec;
+        fs::remove(path, ec);
+        log("daemon",
+            std::string("pid file removed: ") + (ec ? ec.message() : "ok"));
+    }
+
+    log("daemon", "advanced demo done");
+    return rc;
 }

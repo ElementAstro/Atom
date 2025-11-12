@@ -12,8 +12,8 @@ Description: UUID Generator
 
 **************************************************/
 
-#ifndef ATOM_UTILS_UUID_HPP
-#define ATOM_UTILS_UUID_HPP
+#ifndef ATOM_UTILS_RANDOM_UUID_HPP
+#define ATOM_UTILS_RANDOM_UUID_HPP
 
 #include <algorithm>
 #include <array>

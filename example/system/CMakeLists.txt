@@ -7,7 +7,20 @@ get_filename_component(SUBDIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
 # 可选: 添加特定于system示例的选项
 option(ATOM_EXAMPLE_SYSTEM_BUILD_ALL "Build all system examples" ON)
 
-# 获取所有CPP文件
+# Add subdirectories for organized examples
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/clipboard)
+  add_subdirectory(clipboard)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/signals)
+  add_subdirectory(signals)
+endif()
+
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/shortcut)
+  add_subdirectory(shortcut)
+endif()
+
+# 获取所有CPP文件（仅根目录）
 file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 # 为每个CPP文件创建可执行文件

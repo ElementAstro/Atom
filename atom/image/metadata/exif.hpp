@@ -1,11 +1,13 @@
 #ifndef ATOM_IMAGE_EXIF_HPP
 #define ATOM_IMAGE_EXIF_HPP
 
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <optional>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 
 namespace atom::image {
 
@@ -57,23 +59,37 @@ struct GpsCoordinate {
 /**
  * @struct ExifData
  * @brief Structure to hold EXIF data for an image.
+ * @note Uses std::optional for optional fields and std::chrono for timestamps
  */
 struct alignas(128) ExifData {
-    std::string cameraMake;
-    std::string cameraModel;
-    std::string dateTime;
-    std::string exposureTime;
-    std::string fNumber;
-    std::string isoSpeed;
-    std::string focalLength;
+    std::optional<std::string> cameraMake;
+    std::optional<std::string> cameraModel;
+    std::optional<std::chrono::system_clock::time_point> dateTime;
+    std::optional<double> exposureTime;  ///< Exposure time in seconds
+    std::optional<double> fNumber;       ///< F-number (aperture)
+    std::optional<int> isoSpeed;         ///< ISO speed rating
+    std::optional<double> focalLength;   ///< Focal length in mm
     std::optional<GpsCoordinate> gpsLatitude;
     std::optional<GpsCoordinate> gpsLongitude;
-    std::string orientation;
-    std::string compression;
-    std::string imageWidth;
-    std::string imageHeight;
-    std::string colorSpace;
-    std::string software;
+    std::optional<int> orientation;  ///< Image orientation (1-8)
+    std::optional<std::string> compression;
+    std::optional<int> imageWidth;   ///< Image width in pixels
+    std::optional<int> imageHeight;  ///< Image height in pixels
+    std::optional<std::string> colorSpace;
+    std::optional<std::string> software;
+
+    /**
+     * @brief Get date/time as string in ISO 8601 format
+     * @return ISO 8601 formatted string or empty optional
+     */
+    [[nodiscard]] std::optional<std::string> getDateTimeString() const;
+
+    /**
+     * @brief Set date/time from string
+     * @param dateTimeStr Date/time string (EXIF format or ISO 8601)
+     * @return True if parsing succeeded
+     */
+    bool setDateTimeFromString(std::string_view dateTimeStr);
 };
 
 /**
@@ -86,7 +102,7 @@ public:
      * @brief Constructs an ExifParser with the specified filename.
      * @param filename The name of the file to parse.
      */
-    explicit ExifParser(const std::string& filename);
+    explicit ExifParser(std::string_view filename);
 
     /**
      * @brief Parses the EXIF data from the file.
@@ -213,6 +229,8 @@ private:
                          bool isLittleEndian) -> std::string;
     auto parseOrientation(const std::byte* data,
                           bool isLittleEndian) -> std::string;
+    auto parseOrientationValue(const std::byte* data,
+                               bool isLittleEndian) -> int;
 };
 
 }  // namespace atom::image

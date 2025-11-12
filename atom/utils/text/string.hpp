@@ -12,8 +12,8 @@ Description: Some useful string functions
 
 **************************************************/
 
-#ifndef ATOM_UTILS_STRING_HPP
-#define ATOM_UTILS_STRING_HPP
+#ifndef ATOM_UTILS_TEXT_STRING_HPP
+#define ATOM_UTILS_TEXT_STRING_HPP
 
 #include <array>
 #include <list>
@@ -490,4 +490,4 @@ template <DelimiterPredicate Func>
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_TEXT_STRING_HPP

@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_SWITCH_HPP
-#define ATOM_UTILS_SWITCH_HPP
+#ifndef ATOM_UTILS_CORE_SWITCH_HPP
+#define ATOM_UTILS_CORE_SWITCH_HPP
 
 #include <array>
 #include <atomic>
@@ -651,4 +651,4 @@ StringSwitch(
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_SWITCH_HPP
+#endif  // ATOM_UTILS_CORE_SWITCH_HPP

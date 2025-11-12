@@ -15,10 +15,14 @@
  */
 
 #include <array>
+#include <concepts>
 #include <functional>
 #include <memory>
 #include <string>
+#include <string_view>
+#include <type_traits>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 #include "../core/image_blob.hpp"
 
@@ -85,7 +89,18 @@ enum class FilterType {
 enum class StructuringElement { RECTANGLE, ELLIPSE, CROSS, DIAMOND, CUSTOM };
 
 /**
- * @brief Filter parameters container
+ * @brief Modern variant-based parameter value
+ */
+using FilterParamValue =
+    std::variant<int, double, std::string, bool, std::vector<double>>;
+
+/**
+ * @brief Modern parameter map using variant
+ */
+using FilterParamMap = std::unordered_map<std::string, FilterParamValue>;
+
+/**
+ * @brief Filter parameters container (legacy struct-based)
  */
 struct FilterParams {
     // Common parameters
@@ -118,6 +133,20 @@ struct FilterParams {
 
     // Custom parameters
     std::unordered_map<std::string, double> custom;
+
+    /**
+     * @brief Convert to modern variant-based parameter map
+     * @return FilterParamMap with all parameters
+     */
+    [[nodiscard]] FilterParamMap toParamMap() const;
+
+    /**
+     * @brief Create from modern variant-based parameter map
+     * @param params Parameter map
+     * @return FilterParams instance
+     */
+    [[nodiscard]] static FilterParams fromParamMap(
+        const FilterParamMap& params);
 };
 
 /**
@@ -135,8 +164,35 @@ public:
      * @param params Filter parameters
      * @return Filtered image blob
      */
-    virtual blob applyFilter(const blob& input, FilterType filterType,
-                             const FilterParams& params = {}) const;
+    [[nodiscard]] virtual blob applyFilter(
+        const blob& input, FilterType filterType,
+        const FilterParams& params = {}) const;
+
+    /**
+     * @brief Apply a filter using modern variant-based parameters
+     * @param input Input image blob
+     * @param filterType Type of filter to apply
+     * @param params Modern parameter map
+     * @return Filtered image blob
+     */
+    [[nodiscard]] virtual blob applyFilterV2(
+        const blob& input, FilterType filterType,
+        const FilterParamMap& params) const;
+
+    /**
+     * @brief Compile-time filter selection (C++20)
+     * @tparam Filter FilterType enum value
+     * @param input Input image blob
+     * @param params Filter parameters
+     * @return Filtered image blob
+     * @note Uses compile-time constant for potential optimization
+     */
+    template <FilterType Filter>
+    [[nodiscard]] blob applyFilterCompileTime(
+        const blob& input, const FilterParams& params = {}) const {
+        // Compile-time constant allows compiler to optimize the call
+        return applyFilter(input, Filter, params);
+    }
 
     /**
      * @brief Apply a custom convolution kernel

@@ -74,7 +74,11 @@ public:
         processingTimer_.start();
 
         // Split content into lines using string utilities
-        auto lines = split(content, '\n');
+        // Convert SplitString range to vector for easier iteration
+        std::vector<std::string> lines;
+        for (const auto& line : split(content, '\n')) {
+            lines.push_back(std::string(line));
+        }
 
         ColorPrinter::info("Processing {} log lines", lines.size());
 
@@ -152,13 +156,11 @@ public:
         // Use LINQ-style operations for analysis
         auto logQuery = from(logs_);
 
-        // Count by log level
-        auto levelCounts =
-            logQuery.groupBy([](const LogEntry& entry) { return entry.level; })
-                .map([](const auto& group) {
-                    return std::make_pair(group.first, group.second.size());
-                })
-                .toVector();
+        // Count by log level - simplified approach without groupBy
+        std::map<std::string, size_t> levelCounts;
+        for (const auto& entry : logs_) {
+            levelCounts[entry.level]++;
+        }
 
         std::cout << "Log Level Distribution:" << std::endl;
         for (const auto& [level, count] : levelCounts) {
@@ -171,25 +173,28 @@ public:
             std::cout << count << " entries" << std::endl;
         }
 
-        // Average response time by module
-        auto moduleStats =
-            logQuery
-                .filter([](const LogEntry& entry) {
-                    return entry.responseTime > 0;
-                })
-                .groupBy([](const LogEntry& entry) { return entry.module; })
-                .map([](const auto& group) {
-                    auto moduleEntries = from(group.second);
-                    double avgResponse =
-                        moduleEntries
-                            .map([](const LogEntry& entry) {
-                                return static_cast<double>(entry.responseTime);
-                            })
-                            .average();
-                    return std::make_pair(group.first, avgResponse);
-                })
-                .orderByDescending([](const auto& pair) { return pair.second; })
-                .toVector();
+        // Average response time by module - simplified approach
+        std::map<std::string, std::vector<int>> moduleResponses;
+        for (const auto& entry : logs_) {
+            if (entry.responseTime > 0) {
+                moduleResponses[entry.module].push_back(entry.responseTime);
+            }
+        }
+
+        std::vector<std::pair<std::string, double>> moduleStats;
+        for (const auto& [module, responses] : moduleResponses) {
+            double sum = 0.0;
+            for (int resp : responses) {
+                sum += resp;
+            }
+            double avg = sum / responses.size();
+            moduleStats.push_back({module, avg});
+        }
+
+        // Sort by average response time descending
+        std::sort(
+            moduleStats.begin(), moduleStats.end(),
+            [](const auto& a, const auto& b) { return a.second > b.second; });
 
         std::cout << "\nAverage Response Time by Module:" << std::endl;
         for (const auto& [module, avgTime] : moduleStats) {
@@ -203,7 +208,7 @@ public:
         }
 
         // Show errors if any
-        if (errorStack_->getErrorCount() > 0) {
+        if (errorStack_->size() > 0) {
             ColorPrinter::error("Processing errors encountered:");
             errorStack_->printFilteredErrorStack();
         }
@@ -219,7 +224,7 @@ public:
 class DataProcessor {
 private:
     StopWatcher timer_;
-    RandomGenerator<int> randomGen_;
+    Random<std::mt19937, std::uniform_int_distribution<int>> randomGen_;
 
 public:
     DataProcessor() : randomGen_(1, 1000) {}
@@ -251,9 +256,8 @@ public:
 
         // Statistical analysis
         auto stats =
-            dataQuery.where([](int x) { return x > 0; }).select([](int x) {
-                return static_cast<double>(x);
-            });
+            dataQuery.where([](int x) { return x > 0; })
+                .select<double>([](int x) { return static_cast<double>(x); });
 
         double mean = stats.average();
         double sum = stats.sum();
@@ -273,7 +277,7 @@ public:
 
         // Filter and transform data
         auto processedData = dataQuery.where([mean](int x) { return x > mean; })
-                                 .select([](int x) { return x * 2; })
+                                 .select<int>([](int x) { return x * 2; })
                                  .orderByDescending([](int x) { return x; })
                                  .take(10)
                                  .toVector();

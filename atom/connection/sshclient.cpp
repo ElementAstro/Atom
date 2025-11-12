@@ -14,7 +14,11 @@ Description: SSH Client
 
 #include "sshclient.hpp"
 
+#include <fcntl.h>
+#include <cstdio>
 #include <filesystem>
+#include <iomanip>
+#include <sstream>
 
 #include "atom/error/exception.hpp"
 
@@ -24,49 +28,89 @@ namespace atom::connection {
 SSHClient::SSHClient(const std::string &host, int port)
     : host_(host), port_(port), ssh_session_(nullptr), sftp_session_(nullptr) {}
 
-SSHClient::~SSHClient() {
-    if (sftp_session_) {
-        sftp_free(sftp_session_);
+SSHClient::SSHClient(SSHClient &&other) noexcept
+    : host_(std::move(other.host_)),
+      port_(other.port_),
+      ssh_session_(other.ssh_session_),
+      sftp_session_(other.sftp_session_) {
+    other.ssh_session_ = nullptr;
+    other.sftp_session_ = nullptr;
+}
+
+auto SSHClient::operator=(SSHClient &&other) noexcept -> SSHClient & {
+    if (this == &other) {
+        return *this;
     }
-    if (ssh_session_) {
+
+    cleanup();
+
+    host_ = std::move(other.host_);
+    port_ = other.port_;
+    ssh_session_ = other.ssh_session_;
+    sftp_session_ = other.sftp_session_;
+
+    other.ssh_session_ = nullptr;
+    other.sftp_session_ = nullptr;
+
+    return *this;
+}
+
+SSHClient::~SSHClient() { cleanup(); }
+
+void SSHClient::cleanup() noexcept {
+    if (sftp_session_ != nullptr) {
+        sftp_free(sftp_session_);
+        sftp_session_ = nullptr;
+    }
+    if (ssh_session_ != nullptr) {
         ssh_disconnect(ssh_session_);
         ssh_free(ssh_session_);
+        ssh_session_ = nullptr;
     }
 }
 
 void SSHClient::connect(const std::string &username,
                         const std::string &password, int timeout) {
+    cleanup();
+
     ssh_session_ = ssh_new();
-    if (!ssh_session_) {
+    if (ssh_session_ == nullptr) {
         THROW_RUNTIME_ERROR("Failed to create SSH session.");
     }
 
-    ssh_options_set(ssh_session_, SSH_OPTIONS_HOST, host_.c_str());
-    ssh_options_set(ssh_session_, SSH_OPTIONS_PORT, &port_);
-    ssh_options_set(ssh_session_, SSH_OPTIONS_USER, username.c_str());
-    ssh_options_set(ssh_session_, SSH_OPTIONS_TIMEOUT, &timeout);
+    try {
+        ssh_options_set(ssh_session_, SSH_OPTIONS_HOST, host_.c_str());
+        ssh_options_set(ssh_session_, SSH_OPTIONS_PORT, &port_);
+        ssh_options_set(ssh_session_, SSH_OPTIONS_USER, username.c_str());
+        ssh_options_set(ssh_session_, SSH_OPTIONS_TIMEOUT, &timeout);
 
-    int rc = ssh_connect(ssh_session_);
-    if (rc != SSH_OK) {
-        THROW_RUNTIME_ERROR("Failed to connect to SSH server: " +
-                            std::string(ssh_get_error(ssh_session_)));
-    }
+        int rc = ssh_connect(ssh_session_);
+        if (rc != SSH_OK) {
+            THROW_RUNTIME_ERROR("Failed to connect to SSH server: " +
+                                std::string(ssh_get_error(ssh_session_)));
+        }
 
-    rc = ssh_userauth_password(ssh_session_, nullptr, password.c_str());
-    if (rc != SSH_AUTH_SUCCESS) {
-        THROW_RUNTIME_ERROR("Failed to authenticate with SSH server: " +
-                            std::string(ssh_get_error(ssh_session_)));
-    }
+        verifyServerIdentity();
 
-    sftp_session_ = sftp_new(ssh_session_);
-    if (!sftp_session_) {
-        THROW_RUNTIME_ERROR("Failed to create SFTP session.");
-    }
+        rc = ssh_userauth_password(ssh_session_, nullptr, password.c_str());
+        if (rc != SSH_AUTH_SUCCESS) {
+            THROW_RUNTIME_ERROR("Failed to authenticate with SSH server: " +
+                                std::string(ssh_get_error(ssh_session_)));
+        }
 
-    rc = sftp_init(sftp_session_);
-    if (rc != SSH_OK) {
-        THROW_RUNTIME_ERROR("Failed to initialize SFTP session: " +
-                            std::string(ssh_get_error(ssh_session_)));
+        sftp_session_ = sftp_new(ssh_session_);
+        if (sftp_session_ == nullptr) {
+            THROW_RUNTIME_ERROR("Failed to create SFTP session.");
+        }
+
+        rc = sftp_init(sftp_session_);
+        if (rc != SSH_OK) {
+            THROW_RUNTIME_ERROR("Failed to initialize SFTP session: " +
+                                std::string(ssh_get_error(ssh_session_)));
+        }
+    } catch (...) {
+        cleanup();
+        throw;
     }
 }
 
@@ -74,36 +118,36 @@ bool SSHClient::isConnected() const {
     return (ssh_session_ != nullptr && sftp_session_ != nullptr);
 }
 
-void SSHClient::disconnect() {
-    if (sftp_session_) {
-        sftp_free(sftp_session_);
-        sftp_session_ = nullptr;
-    }
-    if (ssh_session_) {
-        ssh_disconnect(ssh_session_);
-        ssh_free(ssh_session_);
-        ssh_session_ = nullptr;
-    }
-}
+void SSHClient::disconnect() { cleanup(); }
 
 void SSHClient::executeCommand(const std::string &command,
                                std::vector<std::string> &output) {
+    ensureConnected();
+
     ssh_channel channel = ssh_channel_new(ssh_session_);
-    if (!channel) {
+    if (channel == nullptr) {
         THROW_RUNTIME_ERROR("Failed to create SSH channel.");
     }
 
+    struct ChannelGuard {
+        ssh_channel channel;
+        ~ChannelGuard() {
+            if (channel != nullptr) {
+                ssh_channel_send_eof(channel);
+                ssh_channel_close(channel);
+                ssh_channel_free(channel);
+            }
+        }
+    } guard{channel};
+
     int rc = ssh_channel_open_session(channel);
     if (rc != SSH_OK) {
-        ssh_channel_free(channel);
         THROW_RUNTIME_ERROR("Failed to open SSH channel: " +
                             std::string(ssh_get_error(ssh_session_)));
     }
 
     rc = ssh_channel_request_exec(channel, command.c_str());
     if (rc != SSH_OK) {
-        ssh_channel_close(channel);
-        ssh_channel_free(channel);
         THROW_RUNTIME_ERROR("Failed to execute command: " +
                             std::string(ssh_get_error(ssh_session_)));
     }
@@ -116,187 +160,230 @@ void SSHClient::executeCommand(const std::string &command,
     }
 
     if (nbytes < 0) {
-        ssh_channel_close(channel);
-        ssh_channel_free(channel);
         THROW_RUNTIME_ERROR("Failed to read command output: " +
                             std::string(ssh_get_error(ssh_session_)));
     }
-
-    ssh_channel_send_eof(channel);
-    ssh_channel_close(channel);
-    ssh_channel_free(channel);
 }
 
 void SSHClient::executeCommands(const std::vector<std::string> &commands,
                                 std::vector<std::vector<std::string>> &output) {
-    ssh_channel channel = ssh_channel_new(ssh_session_);
-    if (!channel) {
-        THROW_RUNTIME_ERROR("Failed to create SSH channel.");
-    }
+    ensureConnected();
 
-    int rc = ssh_channel_open_session(channel);
-    if (rc != SSH_OK) {
-        ssh_channel_free(channel);
-        THROW_RUNTIME_ERROR("Failed to open SSH channel: " +
-                            std::string(ssh_get_error(ssh_session_)));
-    }
+    output.clear();
+    output.reserve(commands.size());
 
     for (const auto &cmd : commands) {
-        rc = ssh_channel_request_exec(channel, cmd.c_str());
-        if (rc != SSH_OK) {
-            ssh_channel_close(channel);
-            ssh_channel_free(channel);
-            THROW_RUNTIME_ERROR("Failed to execute command: " +
-                                std::string(ssh_get_error(ssh_session_)));
-        }
-
         std::vector<std::string> cmd_output;
-        char buffer[256];
-        int nbytes = 0;
-        while ((nbytes = ssh_channel_read(channel, buffer, sizeof(buffer), 0)) >
-               0) {
-            cmd_output.emplace_back(buffer, nbytes);
-        }
-
-        if (nbytes < 0) {
-            ssh_channel_close(channel);
-            ssh_channel_free(channel);
-            THROW_RUNTIME_ERROR("Failed to read command output: " +
-                                std::string(ssh_get_error(ssh_session_)));
-        }
-
-        ssh_channel_send_eof(channel);
+        executeCommand(cmd, cmd_output);
         output.push_back(std::move(cmd_output));
     }
-
-    ssh_channel_close(channel);
-    ssh_channel_free(channel);
 }
 
 bool SSHClient::fileExists(const std::string &remote_path) const {
+    ensureConnected();
+
     sftp_attributes attrs = sftp_stat(sftp_session_, remote_path.c_str());
-    if (attrs) {
+    if (attrs != nullptr) {
         sftp_attributes_free(attrs);
         return true;
-    } else {
+    }
+
+    const int err = sftp_get_error(sftp_session_);
+    if (err == SSH_FX_NO_SUCH_FILE || err == SSH_FX_NO_SUCH_PATH) {
         return false;
     }
+
+    THROW_RUNTIME_ERROR("Failed to stat remote path '" + remote_path +
+                        "': error code " + std::to_string(err));
 }
 
 void SSHClient::createDirectory(const std::string &remote_path, int mode) {
-    int rc = sftp_mkdir(sftp_session_, remote_path.c_str(), mode);
-    if (rc != SSH_OK) {
-        THROW_RUNTIME_ERROR("Failed to create remote directory: " +
-                            remote_path);
+    ensureConnected();
+
+    const int rc = sftp_mkdir(sftp_session_, remote_path.c_str(), mode);
+    if (rc == SSH_OK) {
+        return;
     }
+
+    const int err = sftp_get_error(sftp_session_);
+    if (err == SSH_FX_FILE_ALREADY_EXISTS) {
+        return;
+    }
+
+    THROW_RUNTIME_ERROR("Failed to create remote directory '" + remote_path +
+                        "': error code " + std::to_string(err));
 }
 
 void SSHClient::removeFile(const std::string &remote_path) {
-    int rc = sftp_unlink(sftp_session_, remote_path.c_str());
+    ensureConnected();
+
+    const int rc = sftp_unlink(sftp_session_, remote_path.c_str());
     if (rc != SSH_OK) {
-        THROW_RUNTIME_ERROR("Failed to remove remote file: " + remote_path);
+        THROW_RUNTIME_ERROR("Failed to remove remote file '" + remote_path +
+                            "': error code " +
+                            std::to_string(sftp_get_error(sftp_session_)));
     }
 }
 
 void SSHClient::removeDirectory(const std::string &remote_path) {
-    int rc = sftp_rmdir(sftp_session_, remote_path.c_str());
+    ensureConnected();
+
+    const int rc = sftp_rmdir(sftp_session_, remote_path.c_str());
     if (rc != SSH_OK) {
-        THROW_RUNTIME_ERROR("Failed to remove remote directory: " +
-                            remote_path);
+        THROW_RUNTIME_ERROR("Failed to remove remote directory '" +
+                            remote_path + "': error code " +
+                            std::to_string(sftp_get_error(sftp_session_)));
     }
 }
 
 std::vector<std::string> SSHClient::listDirectory(
     const std::string &remote_path) const {
     std::vector<std::string> file_list;
+    ensureConnected();
+
     sftp_dir dir = sftp_opendir(sftp_session_, remote_path.c_str());
-    if (dir) {
-        sftp_attributes attributes;
-        while ((attributes = sftp_readdir(sftp_session_, dir)) != NULL) {
-            file_list.push_back(attributes->name);
-            sftp_attributes_free(attributes);
-        }
-        sftp_closedir(dir);
+    if (dir == nullptr) {
+        THROW_RUNTIME_ERROR("Failed to open remote directory '" + remote_path +
+                            "': error code " +
+                            std::to_string(sftp_get_error(sftp_session_)));
     }
+
+    sftp_attributes attributes = nullptr;
+    while ((attributes = sftp_readdir(sftp_session_, dir)) != nullptr) {
+        file_list.emplace_back(attributes->name);
+        sftp_attributes_free(attributes);
+    }
+
+    sftp_closedir(dir);
     return file_list;
 }
 
 void SSHClient::rename(const std::string &old_path,
                        const std::string &new_path) {
-    int rc = sftp_rename(sftp_session_, old_path.c_str(), new_path.c_str());
+    ensureConnected();
+
+    const int rc =
+        sftp_rename(sftp_session_, old_path.c_str(), new_path.c_str());
     if (rc != SSH_OK) {
-        THROW_RUNTIME_ERROR("Failed to rename remote file or directory: " +
-                            old_path + " to " + new_path);
+        THROW_RUNTIME_ERROR("Failed to rename '" + old_path + "' to '" +
+                            new_path + "': error code " +
+                            std::to_string(sftp_get_error(sftp_session_)));
     }
 }
 
 void SSHClient::getFileInfo(const std::string &remote_path,
                             sftp_attributes &attrs) {
+    ensureConnected();
+
+    if (attrs != nullptr) {
+        sftp_attributes_free(attrs);
+        attrs = nullptr;
+    }
+
     attrs = sftp_stat(sftp_session_, remote_path.c_str());
-    if (!attrs) {
-        THROW_RUNTIME_ERROR("Failed to get file info for remote path: " +
-                            remote_path);
+    if (attrs == nullptr) {
+        THROW_RUNTIME_ERROR("Failed to get file info for remote path '" +
+                            remote_path + "': error code " +
+                            std::to_string(sftp_get_error(sftp_session_)));
     }
 }
 
 void SSHClient::downloadFile(const std::string &remote_path,
                              const std::string &local_path) {
-    sftp_file file =
-        sftp_open(sftp_session_, remote_path.c_str(), OFN_READONLY, 0);
-    if (!file) {
+    ensureConnected();
+
+    sftp_file file = sftp_open(sftp_session_, remote_path.c_str(), O_RDONLY, 0);
+    if (file == nullptr) {
         THROW_RUNTIME_ERROR("Failed to open remote file for download: " +
                             remote_path);
     }
 
-    FILE *fp = fopen(local_path.c_str(), "wb");
-    if (!fp) {
+    FILE *fp = std::fopen(local_path.c_str(), "wb");
+    if (fp == nullptr) {
         sftp_close(file);
         THROW_RUNTIME_ERROR("Failed to open local file for download: " +
                             local_path);
     }
 
-    char buffer[256];
+    char buffer[4096];
     int nbytes = 0;
     while ((nbytes = sftp_read(file, buffer, sizeof(buffer))) > 0) {
-        fwrite(buffer, 1, nbytes, fp);
+        const size_t written = std::fwrite(buffer, 1, nbytes, fp);
+        if (written != static_cast<size_t>(nbytes)) {
+            std::fclose(fp);
+            sftp_close(file);
+            THROW_RUNTIME_ERROR("Failed to write to local file: " + local_path);
+        }
     }
 
-    fclose(fp);
+    if (nbytes < 0) {
+        const int err = sftp_get_error(sftp_session_);
+        std::fclose(fp);
+        sftp_close(file);
+        THROW_RUNTIME_ERROR("Failed to download file '" + remote_path +
+                            "': error code " + std::to_string(err));
+    }
+
+    std::fclose(fp);
     sftp_close(file);
 }
 
 void SSHClient::uploadFile(const std::string &local_path,
                            const std::string &remote_path) {
-    sftp_file file =
-        sftp_open(sftp_session_, remote_path.c_str(), OF_CREATE, OF_WRITE);
-    if (!file) {
+    ensureConnected();
+
+    constexpr int permissions = 0644;
+
+    sftp_file file = sftp_open(sftp_session_, remote_path.c_str(),
+                               O_WRONLY | O_CREAT | O_TRUNC, permissions);
+    if (file == nullptr) {
         THROW_RUNTIME_ERROR("Failed to open remote file for upload: " +
                             remote_path);
     }
 
-    FILE *fp = fopen(local_path.c_str(), "rb");
-    if (!fp) {
+    FILE *fp = std::fopen(local_path.c_str(), "rb");
+    if (fp == nullptr) {
         sftp_close(file);
         THROW_RUNTIME_ERROR("Failed to open local file for upload: " +
                             local_path);
     }
 
-    char buffer[256];
-    int nbytes = 0;
-    while ((nbytes = fread(buffer, 1, sizeof(buffer), fp)) > 0) {
-        sftp_write(file, buffer, nbytes);
+    char buffer[4096];
+    size_t nbytes = 0;
+    while ((nbytes = std::fread(buffer, 1, sizeof(buffer), fp)) > 0) {
+        size_t written_total = 0;
+        while (written_total < nbytes) {
+            const int written = sftp_write(file, buffer + written_total,
+                                           nbytes - written_total);
+            if (written < 0) {
+                const int err = sftp_get_error(sftp_session_);
+                std::fclose(fp);
+                sftp_close(file);
+                THROW_RUNTIME_ERROR("Failed to upload file '" + remote_path +
+                                    "': error code " + std::to_string(err));
+            }
+            written_total += static_cast<size_t>(written);
+        }
     }
 
-    fclose(fp);
+    if (std::ferror(fp) != 0) {
+        std::fclose(fp);
+        sftp_close(file);
+        THROW_RUNTIME_ERROR("Failed to read from local file: " + local_path);
+    }
+
+    std::fclose(fp);
     sftp_close(file);
 }
 
 void SSHClient::uploadDirectory(const std::string &local_path,
                                 const std::string &remote_path) {
+    ensureConnected();
+
     for (const auto &entry : fs::recursive_directory_iterator(local_path)) {
         const auto &path = entry.path();
-        auto relativePath = fs::relative(path, local_path);
-        auto remoteFilePath = remote_path + "/" + relativePath.string();
+        const auto relativePath = fs::relative(path, local_path);
+        const auto remoteFilePath = remote_path + "/" + relativePath.string();
 
         if (entry.is_directory()) {
             createDirectory(remoteFilePath);
@@ -305,4 +392,69 @@ void SSHClient::uploadDirectory(const std::string &local_path,
         }
     }
 }
+
+void SSHClient::verifyServerIdentity() {
+    ssh_key server_key = nullptr;
+    unsigned char *hash = nullptr;
+    size_t hash_len = 0;
+
+    int rc = ssh_get_publickey(ssh_session_, &server_key);
+    if (rc != SSH_OK) {
+        THROW_RUNTIME_ERROR("Failed to obtain server public key: " +
+                            std::string(ssh_get_error(ssh_session_)));
+    }
+
+    rc = ssh_get_publickey_hash(server_key, SSH_PUBLICKEY_HASH_SHA256, &hash,
+                                &hash_len);
+    ssh_key_free(server_key);
+    if (rc != SSH_OK) {
+        THROW_RUNTIME_ERROR("Failed to compute server key fingerprint: " +
+                            std::string(ssh_get_error(ssh_session_)));
+    }
+
+    std::ostringstream fingerprint_stream;
+    if (hash != nullptr && hash_len > 0U) {
+        fingerprint_stream << std::hex << std::setfill('0');
+        for (size_t i = 0; i < hash_len; ++i) {
+            fingerprint_stream << std::setw(2) << static_cast<int>(hash[i]);
+            if (i + 1 < hash_len) {
+                fingerprint_stream << ':';
+            }
+        }
+    }
+    const std::string fingerprint = fingerprint_stream.str();
+
+    const int state = ssh_is_server_known(ssh_session_);
+    ssh_clean_pubkey_hash(&hash);
+
+    switch (state) {
+        case SSH_SERVER_KNOWN_OK:
+            return;
+        case SSH_SERVER_FILE_NOT_FOUND:
+        case SSH_SERVER_NOT_KNOWN:
+            THROW_RUNTIME_ERROR(
+                "Server identity is unknown. Fingerprint: " + fingerprint +
+                ". Verify the host key and add it to known_hosts.");
+        case SSH_SERVER_KNOWN_CHANGED:
+            THROW_RUNTIME_ERROR(
+                "Server host key has changed. Possible MITM attack. "
+                "Fingerprint: " +
+                fingerprint);
+        case SSH_SERVER_FOUND_OTHER:
+            THROW_RUNTIME_ERROR(
+                "A different host key type was found. Fingerprint: " +
+                fingerprint);
+        case SSH_SERVER_ERROR:
+        default:
+            THROW_RUNTIME_ERROR("Failed to verify server identity: " +
+                                std::string(ssh_get_error(ssh_session_)));
+    }
+}
+
+void SSHClient::ensureConnected() const {
+    if (ssh_session_ == nullptr || sftp_session_ == nullptr) {
+        THROW_RUNTIME_ERROR("SSH client is not connected.");
+    }
+}
+
 }  // namespace atom::connection

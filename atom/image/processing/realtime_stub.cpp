@@ -1,3 +1,26 @@
+/**
+ * @file realtime_stub.cpp
+ * @brief Stub implementation of RealtimeProcessor for minimal builds
+ *
+ * This file provides a minimal, non-functional stub implementation of the
+ * RealtimeProcessor class. It is intended for builds where real-time video
+ * processing capabilities are not required or where dependencies (OpenCV video
+ * capture, etc.) are not available.
+ *
+ * **IMPORTANT**: This is an intentional stub implementation. The following
+ * methods are no-ops or return minimal/synthetic data:
+ * - initializeCapture() - Only accepts SYNTHETIC source
+ * - cleanupCapture() - No-op
+ * - resizeFrame() - Returns input unchanged
+ * - convertFormat() - Returns input unchanged
+ * - processingThread() - No-op (no actual thread processing)
+ * - captureThread() - No-op (no actual frame capture)
+ * - applyProcessingPipeline() - Returns input unchanged
+ *
+ * For full real-time processing functionality, use the complete implementation
+ * with OpenCV support enabled.
+ */
+
 #include "realtime.hpp"
 
 #include <algorithm>
@@ -276,14 +299,33 @@ bool RealtimeProcessor::setCaptureFPS(double fps) {
     return true;
 }
 
-void RealtimeProcessor::processingThread() {}
+/**
+ * @brief Stub processing thread (no-op)
+ * @note This is a stub implementation. No actual frame processing occurs.
+ */
+void RealtimeProcessor::processingThread() {
+    // STUB: No actual processing thread in minimal build
+}
 
-void RealtimeProcessor::captureThread() {}
+/**
+ * @brief Stub capture thread (no-op)
+ * @note This is a stub implementation. No actual frame capture occurs.
+ */
+void RealtimeProcessor::captureThread() {
+    // STUB: No actual capture thread in minimal build
+}
 
+/**
+ * @brief Stub processing pipeline (returns input unchanged)
+ * @param input Input frame
+ * @param frameInfo Frame information (unused in stub)
+ * @return Input frame unchanged
+ * @note This is a stub implementation. No actual processing is applied.
+ */
 blob RealtimeProcessor::applyProcessingPipeline(
     const blob& input, const FrameInfo& /*frameInfo*/) {
-    blob output = input;
-    return output;
+    // STUB: Return input unchanged - no processing in minimal build
+    return input;
 }
 
 void RealtimeProcessor::updateStatistics(double processingTime) {
@@ -310,28 +352,55 @@ void RealtimeProcessor::updateStatistics(double processingTime) {
                                             : stats_.status;
 }
 
+/**
+ * @brief Stub capture initialization (only accepts SYNTHETIC source)
+ * @param source Capture source type
+ * @param sourcePath Source path (unused in stub)
+ * @return True only if source is SYNTHETIC
+ * @note This is a stub implementation. Only SYNTHETIC source is supported.
+ */
 bool RealtimeProcessor::initializeCapture(CaptureSource source,
                                           const std::string& /*sourcePath*/) {
+    // STUB: Only accept synthetic source in minimal build
     return source == CaptureSource::SYNTHETIC;
 }
 
-void RealtimeProcessor::cleanupCapture() {}
+/**
+ * @brief Stub capture cleanup (no-op)
+ * @note This is a stub implementation. No cleanup is performed.
+ */
+void RealtimeProcessor::cleanupCapture() {
+    // STUB: No cleanup needed in minimal build
+}
 
+/**
+ * @brief Stub frame resize (returns input unchanged)
+ * @param input Input frame
+ * @return Input frame unchanged
+ * @note This is a stub implementation. No resizing is performed.
+ */
 blob RealtimeProcessor::resizeFrame(const blob& input) {
     if (input.isEmpty()) {
         return {};
     }
-    blob output = input;
-    return output;
+    // STUB: Return input unchanged - no resizing in minimal build
+    return input;
 }
 
+/**
+ * @brief Stub format conversion (returns input unchanged)
+ * @param input Input frame
+ * @param targetFormat Target format (unused in stub)
+ * @return Input frame unchanged
+ * @note This is a stub implementation. No format conversion is performed.
+ */
 blob RealtimeProcessor::convertFormat(const blob& input,
                                       const std::string& /*targetFormat*/) {
     if (input.isEmpty()) {
         return {};
     }
-    blob output = input;
-    return output;
+    // STUB: Return input unchanged - no format conversion in minimal build
+    return input;
 }
 
 std::unique_ptr<RealtimeProcessor> createOptimalRealtimeProcessor(

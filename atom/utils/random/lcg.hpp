@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_LCG_HPP
-#define ATOM_UTILS_LCG_HPP
+#ifndef ATOM_UTILS_RANDOM_LCG_HPP
+#define ATOM_UTILS_RANDOM_LCG_HPP
 
 #include <chrono>
 #include <limits>
@@ -256,4 +256,4 @@ auto LCG::sample(const std::vector<T>& data, int sampleSize) -> std::vector<T> {
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_LCG_HPP
+#endif  // ATOM_UTILS_RANDOM_LCG_HPP

@@ -50,17 +50,10 @@ public:
      */
     ~SSHClient();
 
-    // Copy constructor
-    SSHClient(const SSHClient &other) = default;
-
-    // Copy assignment operator
-    auto operator=(const SSHClient &other) -> SSHClient & = default;
-
-    // Move constructor
-    SSHClient(SSHClient &&other) noexcept = default;
-
-    // Move assignment operator
-    auto operator=(SSHClient &&other) noexcept -> SSHClient & = default;
+    SSHClient(const SSHClient &other) = delete;
+    auto operator=(const SSHClient &other) -> SSHClient & = delete;
+    SSHClient(SSHClient &&other) noexcept;
+    auto operator=(SSHClient &&other) noexcept -> SSHClient &;
 
     /**
      * @brief Connects to the SSH server.
@@ -184,6 +177,10 @@ public:
                          const std::string &remote_path);
 
 private:
+    void cleanup() noexcept;
+    void verifyServerIdentity();
+    void ensureConnected() const;
+
     std::string host_;
     int port_;
     ssh_session ssh_session_;

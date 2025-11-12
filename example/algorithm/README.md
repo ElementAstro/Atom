@@ -4,7 +4,7 @@ This directory contains comprehensive examples demonstrating the capabilities of
 
 ## Directory Structure
 
-```
+```text
 example/algorithm/
 ├── core/                    # Core algorithm concepts and utilities
 ├── crypto/                  # Cryptographic algorithms
@@ -27,6 +27,9 @@ Fundamental algorithm concepts and modern C++ features:
 
 - **algorithm.cpp**: Modern C++20 concepts, RAII patterns, performance measurement
 - **rust_numeric.cpp**: Rust-inspired numeric operations and safety
+
+- **simd_utils.cpp**: SIMD capabilities, vector ops, and memory ops
+- **opencl_utils.cpp**: OpenCL initialization and device info (graceful stub when unavailable)
 
 ### 🔐 Crypto (`crypto/`)
 
@@ -52,6 +55,9 @@ Mathematical algorithms and utilities:
 - **matrix.cpp**: Matrix operations (comprehensive existing example)
 - **fraction.cpp**: Fraction arithmetic (comprehensive existing example)
 - **bignumber.cpp**: Big number operations (comprehensive existing example)
+- **statistics.cpp**: Descriptive stats, correlation, outlier detection
+- **numerical.cpp**: Root finding, integration, differentiation, linear solve, optimization
+- **gpu_math_example.cpp**: GPU vector ops and reduction (CPU fallback when OpenCL unavailable)
 
 ### 🗜️ Compression (`compression/`)
 
@@ -85,6 +91,8 @@ Graphics and image processing:
 
 - **flood.cpp**: Flood fill algorithms with parallel processing
 - **perlin.cpp**: Perlin noise generation for procedural content
+- **simplex.cpp**: Simplex noise generation (2D/3D and fractal)
+- **image_ops.cpp**: Convolution, Gaussian blur, edge detection, histogram equalization
 
 ### 🛠️ Utils (`utils/`)
 
@@ -94,6 +102,7 @@ Utility algorithms and helpers:
 - **snowflake.cpp**: Distributed unique ID generation
 - **weight.cpp**: Weighted algorithms (existing example)
 - **error_calibration.cpp**: Error calibration utilities (existing example)
+- **uuid.cpp**: UUID v1/v4 generation, parsing, hashing, ordering
 
 ## Building Examples
 

@@ -113,7 +113,9 @@ public:
      * @return std::pair<iterator, bool>
      * 包含指向插入元素的迭代器和是否成功插入的标志
      */
-    std::pair<iterator, bool> insert(T& value) { return set_.insert(value); }
+    [[nodiscard]] std::pair<iterator, bool> insert(T& value) {
+        return set_.insert(value);
+    }
 
     /**
      * @brief 从无序集合中移除元素
@@ -121,7 +123,7 @@ public:
      * @param value 要移除的元素
      * @return bool 如果元素被移除则返回true
      */
-    bool remove(T& value) { return set_.erase(value) > 0; }
+    bool remove(T& value) noexcept { return set_.erase(value) > 0; }
 
     /**
      * @brief 查找元素
@@ -129,32 +131,32 @@ public:
      * @param value 要查找的元素
      * @return iterator 指向找到的元素，如果未找到则返回end()
      */
-    iterator find(const T& value) { return set_.find(value); }
+    [[nodiscard]] iterator find(const T& value) { return set_.find(value); }
 
     /**
      * @brief 返回起始迭代器
      */
-    iterator begin() { return set_.begin(); }
+    [[nodiscard]] iterator begin() noexcept { return set_.begin(); }
 
     /**
      * @brief 返回终止迭代器
      */
-    iterator end() { return set_.end(); }
+    [[nodiscard]] iterator end() noexcept { return set_.end(); }
 
     /**
      * @brief 检查容器是否为空
      */
-    bool empty() const { return set_.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return set_.empty(); }
 
     /**
      * @brief 返回容器中元素的数量
      */
-    std::size_t size() const { return set_.size(); }
+    [[nodiscard]] std::size_t size() const noexcept { return set_.size(); }
 
     /**
      * @brief 清空容器
      */
-    void clear() { set_.clear(); }
+    void clear() noexcept { set_.clear(); }
 };
 
 /**

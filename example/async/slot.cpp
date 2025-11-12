@@ -1,4 +1,4 @@
-#include "../atom/async/slot.hpp"
+#include "atom/async/sync/slot.hpp"
 #include <chrono>
 #include <iostream>
 #include <memory>

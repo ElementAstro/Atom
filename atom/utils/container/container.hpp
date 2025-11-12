@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_CONTAINER_HPP
-#define ATOM_UTILS_CONTAINER_HPP
+#ifndef ATOM_UTILS_CONTAINER_CONTAINER_HPP
+#define ATOM_UTILS_CONTAINER_CONTAINER_HPP
 
 #include <algorithm>
 #include <functional>
@@ -105,19 +105,6 @@ constexpr auto isSubsetWithHashSet(const Container1& subset,
 }
 
 /**
- * @brief Alias for toHashSet for compatibility.
- * @example
- *   Vector<int> v = {1, 2, 2, 3};
- *   auto set = toUnorderedSet(v); // returns HashSet with {1, 2, 3}
- */
-template <typename Container>
-    requires std::ranges::input_range<Container> &&
-             std::regular<typename Container::value_type>
-auto toUnorderedSet(const Container& container) {
-    return toHashSet(container);
-}
-
-/**
  * @brief Converts a container to a HashSet for fast lookup.
  * @example
  *   Vector<int> v = {1, 2, 2, 3};
@@ -129,6 +116,19 @@ template <typename Container>
 auto toHashSet(const Container& container) {
     return HashSet<typename Container::value_type>(container.begin(),
                                                    container.end());
+}
+
+/**
+ * @brief Alias for toHashSet for compatibility.
+ * @example
+ *   Vector<int> v = {1, 2, 2, 3};
+ *   auto set = toUnorderedSet(v); // returns HashSet with {1, 2, 3}
+ */
+template <typename Container>
+    requires std::ranges::input_range<Container> &&
+             std::regular<typename Container::value_type>
+auto toUnorderedSet(const Container& container) {
+    return toHashSet(container);
 }
 
 /**
@@ -479,4 +479,4 @@ inline auto operator""_vec(const char* str, size_t)
     return vec;
 }
 
-#endif  // ATOM_UTILS_CONTAINER_HPP
+#endif  // ATOM_UTILS_CONTAINER_CONTAINER_HPP

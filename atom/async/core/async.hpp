@@ -1246,6 +1246,20 @@ void AsyncWorker<void>::startAsync(Func&& func, Args&&... args) {
     }
 }
 
+inline void AsyncWorker<void>::getResult(std::chrono::milliseconds timeout) {
+    if (!task_.valid()) {
+        throw std::invalid_argument("Task is not valid");
+    }
+
+    if (timeout.count() > 0) {
+        if (task_.wait_for(timeout) != std::future_status::ready) {
+            THROW_TIMEOUT_EXCEPTION("Task result retrieval timed out");
+        }
+    }
+
+    task_.get();
+}
+
 inline void AsyncWorker<void>::cancel() noexcept {
     try {
         if (task_.valid()) {
@@ -1290,6 +1304,41 @@ inline auto AsyncWorker<void>::isDone() const noexcept -> bool {
 
 inline auto AsyncWorker<void>::isActive() const noexcept -> bool {
     return state_.load(std::memory_order_acquire) == State::RUNNING;
+}
+
+inline auto AsyncWorker<void>::validate(
+    std::function<bool()> validator) noexcept -> bool {
+    try {
+        if (!validator) {
+            return false;
+        }
+
+        if (!isDone()) {
+            return false;
+        }
+
+        if (task_.valid()) {
+            task_.get();
+        }
+
+        return validator();
+    } catch (...) {
+        return false;
+    }
+}
+
+inline void AsyncWorker<void>::setCallback(std::function<void()> callback) {
+    if (!callback) {
+        throw std::invalid_argument("Callback function cannot be null");
+    }
+    callback_ = std::move(callback);
+}
+
+inline void AsyncWorker<void>::setTimeout(std::chrono::seconds timeout) {
+    if (timeout < std::chrono::seconds(0)) {
+        throw std::invalid_argument("Timeout cannot be negative");
+    }
+    timeout_ = timeout;
 }
 
 // Implementation of AsyncWorker methods

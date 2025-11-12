@@ -3,8 +3,12 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <ranges>
 #include <string>
+#include <string_view>
 #include <unordered_map>
+#include <vector>
 
 namespace atom::image::core {
 
@@ -71,16 +75,23 @@ public:
     /**
      * @brief Get data from cache
      * @param key Cache key
+     * @return Optional containing shared pointer to cached data
+     */
+    [[nodiscard]] std::optional<std::shared_ptr<T>> get(std::string_view key);
+
+    /**
+     * @brief Get data from cache (legacy interface)
+     * @param key Cache key
      * @return Shared pointer to cached data, or nullptr if not found
      */
-    std::shared_ptr<T> get(const std::string& key);
+    [[nodiscard]] std::shared_ptr<T> getLegacy(const std::string& key);
 
     /**
      * @brief Remove data from cache
      * @param key Cache key
      * @return True if data was removed
      */
-    bool remove(const std::string& key);
+    bool remove(std::string_view key);
 
     /**
      * @brief Clear all cache entries
@@ -122,7 +133,27 @@ public:
      * @brief Get number of cached items
      * @return Number of cached items
      */
-    size_t getItemCount() const;
+    [[nodiscard]] size_t getItemCount() const;
+
+    /**
+     * @brief Get all cache keys
+     * @return Vector of all cache keys
+     */
+    [[nodiscard]] std::vector<std::string> getKeys() const;
+
+    /**
+     * @brief Get view of all cache keys (C++20 ranges)
+     * @return Range view of cache keys
+     */
+    [[nodiscard]] auto keys() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(cache_.size());
+        for (const auto& [key, _] : cache_) {
+            result.push_back(key);
+        }
+        return result | std::views::all;
+    }
 
 private:
     struct CacheEntry {
@@ -174,12 +205,12 @@ void CacheManager<T>::put(const std::string& key, std::shared_ptr<T> data,
 }
 
 template <typename T>
-std::shared_ptr<T> CacheManager<T>::get(const std::string& key) {
+std::optional<std::shared_ptr<T>> CacheManager<T>::get(std::string_view key) {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    auto it = cache_.find(key);
+    auto it = cache_.find(std::string(key));
     if (it != cache_.end()) {
-        updateAccessOrder(key);
+        updateAccessOrder(std::string(key));
         it->second.accessCount++;
         it->second.lastAccess = std::chrono::steady_clock::now();
         stats_.hitCount++;
@@ -187,14 +218,20 @@ std::shared_ptr<T> CacheManager<T>::get(const std::string& key) {
     }
 
     stats_.missCount++;
-    return nullptr;
+    return std::nullopt;
 }
 
 template <typename T>
-bool CacheManager<T>::remove(const std::string& key) {
+std::shared_ptr<T> CacheManager<T>::getLegacy(const std::string& key) {
+    auto result = get(key);
+    return result.value_or(nullptr);
+}
+
+template <typename T>
+bool CacheManager<T>::remove(std::string_view key) {
     std::lock_guard<std::mutex> lock(mutex_);
 
-    auto it = cache_.find(key);
+    auto it = cache_.find(std::string(key));
     if (it != cache_.end()) {
         currentSize_ -= it->second.size;
         cache_.erase(it);
@@ -252,6 +289,17 @@ size_t CacheManager<T>::getItemCount() const {
 }
 
 template <typename T>
+std::vector<std::string> CacheManager<T>::getKeys() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    std::vector<std::string> result;
+    result.reserve(cache_.size());
+    for (const auto& [key, _] : cache_) {
+        result.push_back(key);
+    }
+    return result;
+}
+
+template <typename T>
 void CacheManager<T>::evictIfNeeded() {
     while (currentSize_ > maxSize_ && !cache_.empty()) {
         std::string key = selectEvictionCandidate();
@@ -298,9 +346,11 @@ std::string CacheManager<T>::selectEvictionCandidate() {
 }
 
 template <typename T>
-void CacheManager<T>::updateAccessOrder(const std::string& key) {
+void CacheManager<T>::updateAccessOrder(
+    [[maybe_unused]] const std::string& key) {
     // Implementation depends on the specific cache policy
     // This is a placeholder for LRU-based access tracking
+    // For LRU, the lastAccess time is already updated in get()
 }
 
 }  // namespace atom::image::core

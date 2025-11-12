@@ -50,25 +50,27 @@ public:
      *
      * @param item 要入队的元素
      * @return bool 如果成功返回true，如果队列已满则返回false
+     * @note Thread-safe: Can be called concurrently from multiple threads
      */
-    bool push(const T& item) { return impl_.push(item); }
+    [[nodiscard]] bool push(const T& item) noexcept { return impl_.push(item); }
 
     /**
      * @brief 从队列弹出元素
      *
      * @param item 接收弹出元素的引用
      * @return bool 如果成功返回true，如果队列为空则返回false
+     * @note Thread-safe: Can be called concurrently from multiple threads
      */
-    bool pop(T& item) { return impl_.pop(item); }
+    [[nodiscard]] bool pop(T& item) noexcept { return impl_.pop(item); }
 
     /**
      * @brief 检查队列是否为空
      *
-     * 注意：在多线程环境中，此操作结果可能立即过期
-     *
+     * @warning 在多线程环境中，此操作结果可能立即过期
      * @return bool 如果队列为空返回true
+     * @note Thread-safe but result may be stale immediately
      */
-    bool empty() const { return impl_.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return impl_.empty(); }
 };
 
 /**
@@ -93,23 +95,26 @@ public:
      *
      * @param item 要入队的元素
      * @return bool 如果成功返回true，如果队列已满则返回false
+     * @note Thread-safe: Single producer only
      */
-    bool push(const T& item) { return impl_.push(item); }
+    [[nodiscard]] bool push(const T& item) noexcept { return impl_.push(item); }
 
     /**
      * @brief 从队列弹出元素
      *
      * @param item 接收弹出元素的引用
      * @return bool 如果成功返回true，如果队列为空则返回false
+     * @note Thread-safe: Single consumer only
      */
-    bool pop(T& item) { return impl_.pop(item); }
+    [[nodiscard]] bool pop(T& item) noexcept { return impl_.pop(item); }
 
     /**
      * @brief 检查队列是否为空
      *
      * @return bool 如果队列为空返回true
+     * @note Thread-safe but result may be stale immediately
      */
-    bool empty() const { return impl_.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return impl_.empty(); }
 };
 
 /**
@@ -133,25 +138,27 @@ public:
      *
      * @param item 要压入的元素
      * @return bool 如果成功返回true，如果栈已满则返回false
+     * @note Thread-safe: Can be called concurrently from multiple threads
      */
-    bool push(const T& item) { return impl_.push(item); }
+    [[nodiscard]] bool push(const T& item) noexcept { return impl_.push(item); }
 
     /**
      * @brief 从栈弹出元素
      *
      * @param item 接收弹出元素的引用
      * @return bool 如果成功返回true，如果栈为空则返回false
+     * @note Thread-safe: Can be called concurrently from multiple threads
      */
-    bool pop(T& item) { return impl_.pop(item); }
+    [[nodiscard]] bool pop(T& item) noexcept { return impl_.pop(item); }
 
     /**
      * @brief 检查栈是否为空
      *
-     * 注意：在多线程环境中，此操作结果可能立即过期
-     *
+     * @warning 在多线程环境中，此操作结果可能立即过期
      * @return bool 如果栈为空返回true
+     * @note Thread-safe but result may be stale immediately
      */
-    bool empty() const { return impl_.empty(); }
+    [[nodiscard]] bool empty() const noexcept { return impl_.empty(); }
 };
 
 }  // namespace lockfree

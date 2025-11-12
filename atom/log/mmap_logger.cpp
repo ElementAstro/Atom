@@ -320,13 +320,14 @@ public:
                 : 0);
     }
 
-    atom::type::expected<void, LoggerErrorCode> flush() noexcept {
+    atom::type::compat::expected<void, LoggerErrorCode> flush() noexcept {
         std::lock_guard<std::mutex> lock(file_mutex_);
         LogStats::ScopedTimer timer(flush_time_);
 
         if (map_ptr_ == nullptr) {
             stats_->error_count++;
-            return atom::type::unexpected(LoggerErrorCode::MappingError);
+            return atom::type::compat::unexpected(
+                LoggerErrorCode::MappingError);
         }
 
         try {
@@ -334,20 +335,22 @@ public:
             if (!FlushViewOfFile(
                     map_ptr_, current_pos_.load(std::memory_order_acquire))) {
                 stats_->error_count++;
-                return atom::type::unexpected(LoggerErrorCode::UnmapError);
+                return atom::type::compat::unexpected(
+                    LoggerErrorCode::UnmapError);
             }
 #else
             if (msync(map_ptr_, current_pos_.load(std::memory_order_acquire),
                       MS_SYNC) != 0) {
                 stats_->error_count++;
-                return atom::type::unexpected(LoggerErrorCode::UnmapError);
+                return atom::type::compat::unexpected(
+                    LoggerErrorCode::UnmapError);
             }
 #endif
             stats_->flush_count++;
             return {};
         } catch (...) {
             stats_->error_count++;
-            return atom::type::unexpected(LoggerErrorCode::UnmapError);
+            return atom::type::compat::unexpected(LoggerErrorCode::UnmapError);
         }
     }
 
@@ -658,7 +661,7 @@ private:
                         log(LogLevel::ERROR_LEVEL, Category::General,
                             "Auto-flush failed with error code: " +
                                 std::to_string(
-                                    static_cast<int>(result.error().error())),
+                                    static_cast<int>(result.error())),
                             std::source_location::current());
                     }
                 }
@@ -1144,7 +1147,8 @@ void MmapLogger::enableSystemLogging(bool enable) {
     impl_->enableSystemLogging(enable);
 }
 
-atom::type::expected<void, LoggerErrorCode> MmapLogger::flush() noexcept {
+atom::type::compat::expected<void, LoggerErrorCode>
+MmapLogger::flush() noexcept {
     return impl_->flush();
 }
 

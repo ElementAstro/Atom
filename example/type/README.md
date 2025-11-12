@@ -71,8 +71,8 @@ This directory contains comprehensive examples demonstrating the usage of Atom's
 
 | Example | Description | Key Features |
 |---------|-------------|--------------|
-| `integration_examples.cpp` | Real-world usage patterns | Multiple utilities working together |
-| `advanced_patterns.cpp` | Complex programming patterns | Monadic programming, functional composition |
+| `multi_type_usage_example.cpp` | Combining multiple type utilities in practical scenarios | Configuration management, smart caching, data processing pipelines |
+| `monadic_error_handling_example.cpp` | Functional programming patterns and error handling | Monadic error chains, resource management, optional chaining, concurrent processing |
 
 ## 🚀 Getting Started
 
@@ -189,7 +189,7 @@ Many containers support different threading policies:
 
 1. **Start with basics**: `args.cpp`, `expected.cpp`, `optional.cpp`
 2. **Explore containers**: `concurrent_map.cpp`, `small_vector.cpp`
-3. **Advanced patterns**: `integration_examples.cpp`, `advanced_patterns.cpp`
+3. **Advanced patterns**: `multi_type_usage_example.cpp`, `monadic_error_handling_example.cpp`
 4. **Specialized use cases**: Choose based on your needs
 
 ## 🤝 Contributing

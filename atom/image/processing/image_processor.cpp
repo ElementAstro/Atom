@@ -23,8 +23,8 @@ namespace atom::image {
 ImageProcessor::ImageProcessor(const ProcessingOptions& options)
     : m_options(options) {}
 
-blob ImageProcessor::convertFormat(
-    const blob& input, [[maybe_unused]] ImageFormat targetFormat) const {
+blob ImageProcessor::convertFormat(const blob& input,
+                                   ImageFormat targetFormat) const {
     if (input.size() == 0) {
         THROW_RUNTIME_ERROR("Cannot convert empty image");
     }
@@ -54,15 +54,13 @@ blob ImageProcessor::convertFormat(
             THROW_RUNTIME_ERROR("Unsupported target format");
     }
 #else
+    (void)targetFormat;  // Suppress unused parameter warning
     THROW_RUNTIME_ERROR("Format conversion requires OpenCV support");
 #endif
 }
 
-blob ImageProcessor::resize(const blob& input [[maybe_unused]],
-                            int newWidth [[maybe_unused]],
-                            int newHeight [[maybe_unused]],
-                            const std::string& algorithm
-                            [[maybe_unused]]) const {
+blob ImageProcessor::resize(const blob& input, int newWidth, int newHeight,
+                            const std::string& algorithm) const {
     validateImageDimensions(newWidth, newHeight);
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
@@ -82,18 +80,21 @@ blob ImageProcessor::resize(const blob& input [[maybe_unused]],
                interpolation);
     return blob(outputMat);
 #else
+    (void)input;
+    (void)algorithm;
     THROW_RUNTIME_ERROR("Resize operation requires OpenCV support");
 #endif
 }
 
-blob ImageProcessor::rotate(const blob& input [[maybe_unused]],
-                            double angle [[maybe_unused]],
-                            bool expandCanvas [[maybe_unused]]) const {
+blob ImageProcessor::rotate(const blob& input, double angle,
+                            bool expandCanvas) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     cv::Mat inputMat = input.to_mat();
     cv::Mat outputMat;
 
-    cv::Point2f center(inputMat.cols / 2.0f, inputMat.rows / 2.0f);
+    auto [centerX, centerY] =
+        std::make_pair(inputMat.cols / 2.0f, inputMat.rows / 2.0f);
+    cv::Point2f center(centerX, centerY);
     cv::Mat rotationMatrix = cv::getRotationMatrix2D(center, angle, 1.0);
 
     if (expandCanvas) {
@@ -112,6 +113,9 @@ blob ImageProcessor::rotate(const blob& input [[maybe_unused]],
 
     return blob(outputMat);
 #else
+    (void)input;
+    (void)angle;
+    (void)expandCanvas;
     THROW_RUNTIME_ERROR("Rotate operation requires OpenCV support");
 #endif
 }
@@ -126,14 +130,14 @@ blob ImageProcessor::crop(const blob& input, int x, int y, int width,
     cv::Mat croppedMat = inputMat(cropRect);
     return blob(croppedMat);
 #else
+    (void)input;
     THROW_RUNTIME_ERROR("Crop operation requires OpenCV support");
 #endif
 }
 
 blob ImageProcessor::applyFilter(
-    const blob& input [[maybe_unused]], FilterType filterType [[maybe_unused]],
-    const std::unordered_map<std::string, double>& parameters
-    [[maybe_unused]]) const {
+    const blob& input, FilterType filterType,
+    const std::unordered_map<std::string, double>& parameters) const {
 #ifdef ATOM_IMAGE_HAS_OPENCV
     switch (filterType) {
         case FilterType::GAUSSIAN_BLUR: {

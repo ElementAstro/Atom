@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_VALID_STRING_HPP
-#define ATOM_UTILS_VALID_STRING_HPP
+#ifndef ATOM_UTILS_TEXT_VALID_STRING_HPP
+#define ATOM_UTILS_TEXT_VALID_STRING_HPP
 
 #include <algorithm>
 #include <array>
@@ -539,4 +539,4 @@ extern template auto isValidBracket<const std::u8string_view&>(
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_TEXT_VALID_STRING_HPP

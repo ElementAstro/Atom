@@ -284,5 +284,156 @@ int main() {
     // Check cache size after popping
     std::cout << "Cache size after popping: " << smallCache.size() << std::endl;
 
+    //------------------------------------------------------------------------------
+    // 4. Batch Operations (putBatch, getBatch)
+    //------------------------------------------------------------------------------
+    printSection("4. Batch Operations");
+    {
+        std::vector<std::pair<int, UserProfile>> items = {
+            {10, createSampleUser(10)},
+            {11, createSampleUser(11)},
+            {12, createSampleUser(12)}};
+        cache.putBatch(items);
+        std::vector<int> keys = {10, 11, 99};
+        auto vals = cache.getBatch(keys);
+        std::cout << "getBatch results: ";
+        for (auto& v : vals)
+            std::cout << (v ? "1" : "0");
+        std::cout << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 5. Shared Access (getShared)
+    //------------------------------------------------------------------------------
+    printSection("5. Shared Access");
+    {
+        auto uptr = cache.getShared(10);
+        if (uptr)
+            std::cout << "Shared user 10: " << uptr->toString() << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 6. Callbacks (insert/erase/clear)
+    //------------------------------------------------------------------------------
+    printSection("6. Callbacks");
+    {
+        cache.setInsertCallback([](const int& k, const UserProfile& v) {
+            std::cout << "onInsert: " << k << " -> " << v.username << std::endl;
+        });
+        cache.setEraseCallback(
+            [](const int& k) { std::cout << "onErase: " << k << std::endl; });
+        cache.setClearCallback([]() { std::cout << "onClear" << std::endl; });
+        cache.put(20, createSampleUser(20));
+        cache.erase(20);
+    }
+
+    //------------------------------------------------------------------------------
+    // 7. Persistence (saveToFile/loadFromFile)
+    //------------------------------------------------------------------------------
+    printSection("7. Persistence");
+    {
+        const std::string file = "lru_cache.bin";
+        cache.saveToFile(file);
+        size_t before = cache.size();
+        cache.clear();
+        cache.loadFromFile(file);
+        std::cout << "Restored from file. Size: " << cache.size() << " (was "
+                  << before << ")" << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 8. Async Operations (asyncGet, asyncPut)
+    //------------------------------------------------------------------------------
+    printSection("8. Async Operations");
+    {
+        auto fput = cache.asyncPut(30, createSampleUser(30));
+        fput.get();
+        auto fget = cache.asyncGet(30);
+        auto v = fget.get();
+        std::cout << "asyncGet(30) found: " << (v.has_value() ? "yes" : "no")
+                  << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 9. Prefetch
+    //------------------------------------------------------------------------------
+    printSection("9. Prefetch");
+    {
+        std::vector<int> toLoad = {40, 41, 42};
+        size_t n = cache.prefetch(toLoad, simulateDatabaseLookup,
+                                  std::chrono::seconds(5));
+        std::cout << "Prefetched " << n << " items" << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 10. Statistics (hitRate, getStatistics, resetStatistics)
+    //------------------------------------------------------------------------------
+    printSection("10. Statistics");
+    {
+        // Cause some hits/misses
+        (void)cache.get(40);
+        (void)cache.get(9999);
+        std::cout << "hitRate: " << cache.hitRate() << std::endl;
+        auto st = cache.getStatistics();
+        std::cout << "hits=" << st.hitCount << ", misses=" << st.missCount
+                  << ", size=" << st.size << "/" << st.maxSize
+                  << ", loadFactor=" << st.loadFactor << std::endl;
+        cache.resetStatistics();
+    }
+
+    //------------------------------------------------------------------------------
+    // 11. Collections and Housekeeping (keys, values, clear)
+    //------------------------------------------------------------------------------
+    printSection("11. Collections and Housekeeping");
+    {
+        auto ks = cache.keys();
+        auto vs = cache.values();
+        std::cout << "keys=" << ks.size() << ", values=" << vs.size()
+                  << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 12. Resizing
+    //------------------------------------------------------------------------------
+    printSection("12. Resizing");
+    {
+        cache.resize(64);
+        std::cout << "Resized cache to 64. size=" << cache.size() << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 13. Default TTL
+    //------------------------------------------------------------------------------
+    printSection("13. Default TTL");
+    {
+        cache.setDefaultTTL(std::chrono::seconds(2));
+        auto dttl = cache.getDefaultTTL();
+        std::cout << "Default TTL set? " << (dttl.has_value() ? "yes" : "no")
+                  << std::endl;
+    }
+
+    //------------------------------------------------------------------------------
+    // 14. Thread Safety (minimal demo)
+    //------------------------------------------------------------------------------
+    printSection("14. Thread Safety");
+    {
+        std::thread t1(threadFunction, std::ref(cache), 1, 10);
+        std::thread t2(threadFunction, std::ref(cache), 2, 10);
+        t1.join();
+        t2.join();
+    }
+
+    //------------------------------------------------------------------------------
+    // 15. Edge Cases
+    //------------------------------------------------------------------------------
+    printSection("15. Edge Cases");
+    {
+        try {
+            cache.loadFromFile("nonexistent.bin");
+        } catch (const std::exception& e) {
+            std::cout << "Expected load error: " << e.what() << std::endl;
+        }
+    }
+
     return 0;
 }

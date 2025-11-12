@@ -1,11 +1,519 @@
-'wmic' 不是内部或外部命令，也不是可运行的程序
-或批处理文件。
-===============================================
-Atom Project Enhanced Build Script
-===============================================
-Build script started at 2025/10/25 周六 15:50:48.28
-Project root: D:\Project\Atom\scripts\..
-Build log: D:\Project\Atom\scripts\..\logs\build_~0,8scripts/build.batdt:~8,6.log
-  --clean        Clean build directory before building
-  --help         Show this help message
-
+[  0%] Built target atom-web-time
+[  1%] Built target loguru
+[  9%] Built target atom-algorithm
+[ 12%] Built target atom-error
+[ 12%] Built target atom-type
+[ 20%] Built target atom-utils_object
+[ 21%] Built target atom-utils
+[ 25%] Built target atom-async
+[ 30%] Built target atom-component
+[ 36%] Built target atom-connection
+[ 40%] Built target atom-io
+[ 52%] Built target atom-image
+[ 56%] Built target atom-log
+[ 56%] Built target atom-meta_object
+[ 56%] Built target atom-meta
+[ 58%] Built target atom-memory
+[ 60%] Built target atom-search
+[ 63%] Built target atom-secret
+[ 65%] Built target atom-serial
+[ 78%] Built target atom-sysinfo
+[ 90%] Built target atom-system
+[ 92%] Built target atom-web-address
+[100%] Built target atom-web
+[100%] Building CXX object example/utils/CMakeFiles/utils_container_linq_example.dir/container/linq_example.cpp.obj
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:138:37: error: 'atom' has not been declared; did you mean 'tm'?
+  138 |                              return atom::utils::Enumerable(numbers).where(
+      |                                     ^~~~
+      |                                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:145:37: error: 'atom' has not been declared; did you mean 'tm'?
+  145 |                              return atom::utils::Enumerable(words).whereI(
+      |                                     ^~~~
+      |                                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:152:16: error: 'atom' has not been declared; did you mean 'tm'?
+  152 |         return atom::utils::Enumerable(numbers).take(5);
+      |                ^~~~
+      |                tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:159:37: error: 'atom' has not been declared; did you mean 'tm'?
+  159 |                              return atom::utils::Enumerable(numbers).takeWhile(
+      |                                     ^~~~
+      |                                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:167:20: error: 'atom' has not been declared; did you mean 'tm'?
+  167 |             return atom::utils::Enumerable(words).takeWhileI(
+      |                    ^~~~
+      |                    tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:175:16: error: 'atom' has not been declared; did you mean 'tm'?
+  175 |         return atom::utils::Enumerable(numbers).skip(5);
+      |                ^~~~
+      |                tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:182:37: error: 'atom' has not been declared; did you mean 'tm'?
+  182 |                              return atom::utils::Enumerable(numbers).skipWhile(
+      |                                     ^~~~
+      |                                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:191:20: error: 'atom' has not been declared; did you mean 'tm'?
+  191 |             return atom::utils::Enumerable(words).skipWhileI(
+      |                    ^~~~
+      |                    tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:204:24: error: 'atom' has not been declared; did you mean 'tm'?
+  204 |         [&]() { return atom::utils::Enumerable(numbers).orderBy(); });
+      |                        ^~~~
+      |                        tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:210:37: error: 'atom' has not been declared; did you mean 'tm'?
+  210 |                              return atom::utils::Enumerable(people).orderBy(
+      |                                     ^~~~
+      |                                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:221:24: error: 'atom' has not been declared; did you mean 'tm'?
+  221 |         [&]() { return atom::utils::Enumerable(numbers).distinct(); });
+      |                        ^~~~
+      |                        tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:227:37: error: 'atom' has not been declared; did you mean 'tm'?
+  227 |                              return atom::utils::Enumerable(people).distinct(
+      |                                     ^~~~
+      |                                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:238:20: error: 'atom' has not been declared; did you mean 'tm'?
+  238 |             return atom::utils::Enumerable(numbers).append({100, 200, 300});
+      |                    ^~~~
+      |                    tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:244:20: error: 'atom' has not been declared; did you mean 'tm'?
+  244 |             return atom::utils::Enumerable(numbers).prepend({-3, -2, -1});
+      |                    ^~~~
+      |                    tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:251:20: error: 'atom' has not been declared; did you mean 'tm'?
+  251 |             return atom::utils::Enumerable(words).concat(
+      |                    ^~~~
+      |                    tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:252:17: error: 'atom' has not been declared; did you mean 'tm'?
+  252 |                 atom::utils::Enumerable(extraWords));
+      |                 ^~~~
+      |                 tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:258:24: error: 'atom' has not been declared; did you mean 'tm'?
+  258 |         [&]() { return atom::utils::Enumerable(numbers).reverse(); });
+      |                        ^~~~
+      |                        tm
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:266:16: error: 'atom' has not been declared; did you mean 'tm'?
+  266 |         return atom::utils::Enumerable(numbers).select<int>(
+      |                ^~~~
+      |                tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:266:56: error: expected primary-expression before 'int'
+  266 |         return atom::utils::Enumerable(numbers).select<int>(
+      |                                                        ^~~
+D:\Project\Atom\example\utils\container\linq_example.cpp:266:56: error: expected ';' before 'int'
+  266 |         return atom::utils::Enumerable(numbers).select<int>(
+      |                                                        ^~~
+      |                                                        ;
+D:\Project\Atom\example\utils\container\linq_example.cpp:266:59: error: expected unqualified-id before '>' token
+  266 |         return atom::utils::Enumerable(numbers).select<int>(
+      |                                                           ^
+D:\Project\Atom\example\utils\container\linq_example.cpp:267:40: error: expected primary-expression before ')' token
+  267 |             [](int n) { return n * n; });
+      |                                        ^
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:273:20: error: 'atom' has not been declared; did you mean 'tm'?
+  273 |             return atom::utils::Enumerable(words).selectI<std::string>(
+      |                    ^~~~
+      |                    tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:273:70: error: expected primary-expression before '>' token
+  273 |             return atom::utils::Enumerable(words).selectI<std::string>(
+      |                                                                      ^
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:281:16: error: 'atom' has not been declared; did you mean 'tm'?
+  281 |         return atom::utils::Enumerable(numbers).cast<double>();
+      |                ^~~~
+      |                tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:281:54: error: expected primary-expression before 'double'
+  281 |         return atom::utils::Enumerable(numbers).cast<double>();
+      |                                                      ^~~~~~
+D:\Project\Atom\example\utils\container\linq_example.cpp:281:54: error: expected ';' before 'double'
+  281 |         return atom::utils::Enumerable(numbers).cast<double>();
+      |                                                      ^~~~~~
+      |                                                      ;
+D:\Project\Atom\example\utils\container\linq_example.cpp:281:60: error: expected unqualified-id before '>' token
+  281 |         return atom::utils::Enumerable(numbers).cast<double>();
+      |                                                            ^
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:286:16: error: 'atom' has not been declared; did you mean 'tm'?
+  286 |         return atom::utils::Enumerable(people).groupBy<std::string>(
+      |                ^~~~
+      |                tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:286:67: error: expected primary-expression before '>' token
+  286 |         return atom::utils::Enumerable(people).groupBy<std::string>(
+      |                                                                   ^
+D:\Project\Atom\example\utils\container\linq_example.cpp: In lambda function:
+D:\Project\Atom\example\utils\container\linq_example.cpp:293:20: error: 'atom' has not been declared; did you mean 'tm'?
+  293 |             return atom::utils::Enumerable(nested).selectMany<int>(
+      |                    ^~~~
+      |                    tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:293:63: error: expected primary-expression before 'int'
+  293 |             return atom::utils::Enumerable(nested).selectMany<int>(
+      |                                                               ^~~
+D:\Project\Atom\example\utils\container\linq_example.cpp:293:63: error: expected ';' before 'int'
+  293 |             return atom::utils::Enumerable(nested).selectMany<int>(
+      |                                                               ^~~
+      |                                                               ;
+D:\Project\Atom\example\utils\container\linq_example.cpp:293:66: error: expected unqualified-id before '>' token
+  293 |             return atom::utils::Enumerable(nested).selectMany<int>(
+      |                                                                  ^
+D:\Project\Atom\example\utils\container\linq_example.cpp:294:72: error: expected primary-expression before ')' token
+  294 |                 [](const std::vector<int>& sublist) { return sublist; });
+      |                                                                        ^
+D:\Project\Atom\example\utils\container\linq_example.cpp: In function 'int main()':
+D:\Project\Atom\example\utils\container\linq_example.cpp:304:19: error: 'atom' has not been declared; did you mean 'tm'?
+  304 |               << (atom::utils::Enumerable(numbers).all(
+      |                   ^~~~
+      |                   tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:314:19: error: 'atom' has not been declared; did you mean 'tm'?
+  314 |               << (atom::utils::Enumerable(numbers).any(
+      |                   ^~~~
+      |                   tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:324:18: error: 'atom' has not been declared; did you mean 'tm'?
+  324 |               << atom::utils::Enumerable(numbers).sum() << std::endl
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:330:18: error: 'atom' has not been declared; did you mean 'tm'?
+  330 |               << atom::utils::Enumerable(people).sum<double>(
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:330:54: error: expected primary-expression before 'double'
+  330 |               << atom::utils::Enumerable(people).sum<double>(
+      |                                                      ^~~~~~
+D:\Project\Atom\example\utils\container\linq_example.cpp:331:62: error: expected primary-expression before ')' token
+  331 |                      [](const Person& p) { return p.salary; })
+      |                                                              ^
+D:\Project\Atom\example\utils\container\linq_example.cpp:338:18: error: 'atom' has not been declared; did you mean 'tm'?
+  338 |               << atom::utils::Enumerable(numbers).avg() << std::endl
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:344:18: error: 'atom' has not been declared; did you mean 'tm'?
+  344 |               << atom::utils::Enumerable(people).avg<double>(
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:344:54: error: expected primary-expression before 'double'
+  344 |               << atom::utils::Enumerable(people).avg<double>(
+      |                                                      ^~~~~~
+D:\Project\Atom\example\utils\container\linq_example.cpp:345:59: error: expected primary-expression before ')' token
+  345 |                      [](const Person& p) { return p.age; })
+      |                                                           ^
+D:\Project\Atom\example\utils\container\linq_example.cpp:351:40: error: 'atom' has not been declared; did you mean 'tm'?
+  351 |     std::cout << "Minimum number: " << atom::utils::Enumerable(numbers).min()
+      |                                        ^~~~
+      |                                        tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:358:18: error: 'atom' has not been declared; did you mean 'tm'?
+  358 |     std::cout << atom::utils::Enumerable(people).min([](const Person& p) {
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:365:40: error: 'atom' has not been declared; did you mean 'tm'?
+  365 |     std::cout << "Maximum number: " << atom::utils::Enumerable(numbers).max()
+      |                                        ^~~~
+      |                                        tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:372:18: error: 'atom' has not been declared; did you mean 'tm'?
+  372 |     std::cout << atom::utils::Enumerable(people).max([](const Person& p) {
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:380:18: error: 'atom' has not been declared; did you mean 'tm'?
+  380 |               << atom::utils::Enumerable(numbers).count() << std::endl
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:386:18: error: 'atom' has not been declared; did you mean 'tm'?
+  386 |               << atom::utils::Enumerable(people).count(
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:394:19: error: 'atom' has not been declared; did you mean 'tm'?
+  394 |               << (atom::utils::Enumerable(numbers).contains(7) ? "Yes" : "No")
+      |                   ^~~~
+      |                   tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:405:18: error: 'atom' has not been declared; did you mean 'tm'?
+  405 |               << atom::utils::Enumerable(numbers).elementAt(5) << std::endl
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:410:38: error: 'atom' has not been declared; did you mean 'tm'?
+  410 |     std::cout << "First number: " << atom::utils::Enumerable(numbers).first()
+      |                                      ^~~~
+      |                                      tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:417:18: error: 'atom' has not been declared; did you mean 'tm'?
+  417 |     std::cout << atom::utils::Enumerable(people).first([](const Person& p) {
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:424:25: error: 'atom' has not been declared; did you mean 'tm'?
+  424 |     auto firstElement = atom::utils::Enumerable(numbers).firstOrDefault();
+      |                         ^~~~
+      |                         tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:436:32: error: 'atom' has not been declared; did you mean 'tm'?
+  436 |     auto firstPersonOver100K = atom::utils::Enumerable(people).firstOrDefault(
+      |                                ^~~~
+      |                                tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:448:37: error: 'atom' has not been declared; did you mean 'tm'?
+  448 |     std::cout << "Last number: " << atom::utils::Enumerable(numbers).last()
+      |                                     ^~~~
+      |                                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:455:18: error: 'atom' has not been declared; did you mean 'tm'?
+  455 |     std::cout << atom::utils::Enumerable(people).last([](const Person& p) {
+      |                  ^~~~
+      |                  tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:462:24: error: 'atom' has not been declared; did you mean 'tm'?
+  462 |     auto lastElement = atom::utils::Enumerable(numbers).lastOrDefault();
+      |                        ^~~~
+      |                        tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:473:30: error: 'atom' has not been declared; did you mean 'tm'?
+  473 |     auto lastPersonUnder25 = atom::utils::Enumerable(people).lastOrDefault(
+      |                              ^~~~
+      |                              tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:489:22: error: 'atom' has not been declared; did you mean 'tm'?
+  489 |     auto numberSet = atom::utils::Enumerable(numbers).toStdSet();
+      |                      ^~~~
+      |                      tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:498:21: error: 'atom' has not been declared; did you mean 'tm'?
+  498 |     auto wordList = atom::utils::Enumerable(words).toStdList();
+      |                     ^~~~
+      |                     tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:507:24: error: 'atom' has not been declared; did you mean 'tm'?
+  507 |     auto numberDeque = atom::utils::Enumerable(numbers).toStdDeque();
+      |                        ^~~~
+      |                        tm
+D:\Project\Atom\example\utils\container\linq_example.cpp:517:25: error: 'atom' has not been declared; did you mean 'tm'?
+  517 |     auto peopleVector = atom::utils::Enumerable(people).toStdVector();
+      |                         ^~~~
+      |                         tm
+mingw32-make[3]: *** [example\utils\CMakeFiles\utils_container_linq_example.dir\build.make:79: example/utils/CMakeFiles/utils_container_linq_example.dir/container/linq_example.cpp.obj] Error 1
+mingw32-make[2]: *** [CMakeFiles\Makefile2:2347: example/utils/CMakeFiles/utils_container_linq_example.dir/all] Error 2
+mingw32-make[1]: *** [CMakeFiles\Makefile2:2354: example/utils/CMakeFiles/utils_container_linq_example.dir/rule] Error 2
+mingw32-make: *** [Makefile:623: utils_container_linq_example] Error 2
+[  0%] Built target atom-web-time
+[  1%] Built target loguru
+[  9%] Built target atom-algorithm
+[ 12%] Built target atom-error
+[ 12%] Built target atom-type
+[ 20%] Built target atom-utils_object
+[ 21%] Built target atom-utils
+[ 25%] Built target atom-async
+[ 30%] Built target atom-component
+[ 36%] Built target atom-connection
+[ 40%] Built target atom-io
+[ 52%] Built target atom-image
+[ 56%] Built target atom-log
+[ 56%] Built target atom-meta_object
+[ 56%] Built target atom-meta
+[ 58%] Built target atom-memory
+[ 60%] Built target atom-search
+[ 63%] Built target atom-secret
+[ 65%] Built target atom-serial
+[ 78%] Built target atom-sysinfo
+[ 90%] Built target atom-system
+[ 92%] Built target atom-web-address
+[100%] Built target atom-web
+[100%] Building CXX object example/utils/CMakeFiles/utils_conversion_convert_example.dir/conversion/convert_example.cpp.obj
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:6:17: error: 'atom' has not been declared; did you mean 'tm'?
+    6 | using namespace atom::utils;
+      |                 ^~~~
+      |                 tm
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:6:23: error: 'utils' is not a namespace-name
+    6 | using namespace atom::utils;
+      |                       ^~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp: In function 'int main()':
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:14:5: error: 'LPWSTR' was not declared in this scope
+   14 |     LPWSTR lpwstr1 = StringToLPWSTR(exampleStr);
+      |     ^~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:15:44: error: 'lpwstr1' was not declared in this scope
+   15 |     std::wcout << L"String to LPWSTR: " << lpwstr1 << std::endl;
+      |                                            ^~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:16:5: error: 'LocalFree' was not declared in this scope
+   16 |     LocalFree(lpwstr1);  // Free the allocated memory
+      |     ^~~~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:19:11: error: expected ';' before 'lpwstr2'
+   19 |     LPWSTR lpwstr2 = WStringToLPWSTR(exampleWStr);
+      |           ^~~~~~~~
+      |           ;
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:20:45: error: 'lpwstr2' was not declared in this scope
+   20 |     std::wcout << L"WString to LPWSTR: " << lpwstr2 << std::endl;
+      |                                             ^~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:24:11: error: expected ';' before 'lpwstr3'
+   24 |     LPWSTR lpwstr3 = StringToLPWSTR(exampleStr);
+      |           ^~~~~~~~
+      |           ;
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:25:48: error: 'lpwstr3' was not declared in this scope
+   25 |     std::string strFromLPWSTR = LPWSTRToString(lpwstr3);
+      |                                                ^~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:25:33: error: 'LPWSTRToString' was not declared in this scope
+   25 |     std::string strFromLPWSTR = LPWSTRToString(lpwstr3);
+      |                                 ^~~~~~~~~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:30:5: error: 'LPCWSTR' was not declared in this scope
+   30 |     LPCWSTR lpcwstr = exampleWStr.c_str();
+      |     ^~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:31:50: error: 'lpcwstr' was not declared in this scope
+   31 |     std::string strFromLPCWSTR = LPCWSTRToString(lpcwstr);
+      |                                                  ^~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:31:34: error: 'LPCWSTRToString' was not declared in this scope
+   31 |     std::string strFromLPCWSTR = LPCWSTRToString(lpcwstr);
+      |                                  ^~~~~~~~~~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:35:11: error: expected ';' before 'lpwstr4'
+   35 |     LPWSTR lpwstr4 = WStringToLPWSTR(exampleWStr);
+      |           ^~~~~~~~
+      |           ;
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:36:51: error: 'lpwstr4' was not declared in this scope
+   36 |     std::wstring wstrFromLPWSTR = LPWSTRToWString(lpwstr4);
+      |                                                   ^~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:36:35: error: 'LPWSTRToWString' was not declared in this scope
+   36 |     std::wstring wstrFromLPWSTR = LPWSTRToWString(lpwstr4);
+      |                                   ^~~~~~~~~~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:41:36: error: 'LPCWSTRToWString' was not declared in this scope
+   41 |     std::wstring wstrFromLPCWSTR = LPCWSTRToWString(lpcwstr);
+      |                                    ^~~~~~~~~~~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:45:5: error: 'LPSTR' was not declared in this scope
+   45 |     LPSTR lpstr1 = StringToLPSTR(exampleStr);
+      |     ^~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:46:41: error: 'lpstr1' was not declared in this scope
+   46 |     std::cout << "String to LPSTR: " << lpstr1 << std::endl;
+      |                                         ^~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:50:10: error: expected ';' before 'lpstr2'
+   50 |     LPSTR lpstr2 = WStringToLPSTR(exampleWStr);
+      |          ^~~~~~~
+      |          ;
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:51:42: error: 'lpstr2' was not declared in this scope
+   51 |     std::cout << "WString to LPSTR: " << lpstr2 << std::endl;
+      |                                          ^~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:55:5: error: 'WCHAR' was not declared in this scope
+   55 |     WCHAR wCharArray[] = L"Hello, World!";
+      |     ^~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:56:56: error: 'wCharArray' was not declared in this scope
+   56 |     std::string strFromWCharArray = WCharArrayToString(wCharArray);
+      |                                                        ^~~~~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:56:37: error: 'WCharArrayToString' was not declared in this scope
+   56 |     std::string strFromWCharArray = WCharArrayToString(wCharArray);
+      |                                     ^~~~~~~~~~~~~~~~~~
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:61:11: error: expected ';' before 'lpwstrFromStrView'
+   61 |     LPWSTR lpwstrFromStrView = CharToLPWSTR(strView);
+      |           ^~~~~~~~~~~~~~~~~~
+      |           ;
+D:\Project\Atom\example\utils\conversion\convert_example.cpp:62:49: error: 'lpwstrFromStrView' was not declared in this scope
+   62 |     std::wcout << L"String_view to LPWSTR: " << lpwstrFromStrView << std::endl;
+      |                                                 ^~~~~~~~~~~~~~~~~
+mingw32-make[3]: *** [example\utils\CMakeFiles\utils_conversion_convert_example.dir\build.make:79: example/utils/CMakeFiles/utils_conversion_convert_example.dir/conversion/convert_example.cpp.obj] Error 1
+mingw32-make[2]: *** [CMakeFiles\Makefile2:2500: example/utils/CMakeFiles/utils_conversion_convert_example.dir/all] Error 2
+mingw32-make[1]: *** [CMakeFiles\Makefile2:2507: example/utils/CMakeFiles/utils_conversion_convert_example.dir/rule] Error 2
+mingw32-make: *** [Makefile:662: utils_conversion_convert_example] Error 2
+[  0%] Built target atom-web-time
+[  1%] Built target loguru
+[  9%] Built target atom-algorithm
+[ 12%] Built target atom-error
+[ 12%] Built target atom-type
+[ 20%] Built target atom-utils_object
+[ 21%] Built target atom-utils
+[ 25%] Built target atom-async
+[ 30%] Built target atom-component
+[ 36%] Built target atom-connection
+[ 40%] Built target atom-io
+[ 52%] Built target atom-image
+[ 56%] Built target atom-log
+[ 56%] Built target atom-meta_object
+[ 56%] Built target atom-meta
+[ 58%] Built target atom-memory
+[ 60%] Built target atom-search
+[ 63%] Built target atom-secret
+[ 65%] Built target atom-serial
+[ 78%] Built target atom-sysinfo
+[ 90%] Built target atom-system
+[ 92%] Built target atom-web-address
+[100%] Built target atom-web
+[100%] Building CXX object example/utils/CMakeFiles/utils_crypto_aes_example.dir/crypto/aes_example.cpp.obj
+[100%] Linking CXX executable utils_crypto_aes_example.exe
+[100%] Built target utils_crypto_aes_example
+[  0%] Built target atom-web-time
+[  1%] Built target loguru
+[  9%] Built target atom-algorithm
+[ 12%] Built target atom-error
+[ 12%] Built target atom-type
+[ 20%] Built target atom-utils_object
+[ 21%] Built target atom-utils
+[ 25%] Built target atom-async
+[ 30%] Built target atom-component
+[ 36%] Built target atom-connection
+[ 40%] Built target atom-io
+[ 52%] Built target atom-image
+[ 56%] Built target atom-log
+[ 56%] Built target atom-meta_object
+[ 56%] Built target atom-meta
+[ 58%] Built target atom-memory
+[ 60%] Built target atom-search
+[ 63%] Built target atom-secret
+[ 65%] Built target atom-serial
+[ 78%] Built target atom-sysinfo
+[ 90%] Built target atom-system
+[ 92%] Built target atom-web-address
+[100%] Built target atom-web
+[100%] Building CXX object example/utils/CMakeFiles/utils_random_random_example.dir/random/random_example.cpp.obj
+D:\Project\Atom\example\utils\random\random_example.cpp: In function 'int main()':
+D:\Project\Atom\example\utils\random\random_example.cpp:148:48: error: 'generateSecureRandomString' is not a member of 'atom::utils'; did you mean 'generateRandomString'?
+  148 |     std::string secureRandomStr = atom::utils::generateSecureRandomString(20);
+      |                                                ^~~~~~~~~~~~~~~~~~~~~~~~~~
+      |                                                generateRandomString
+D:\Project\Atom\example\utils\random\random_example.cpp:189:54: error: no matching function for call to 'atom::utils::Random<std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>, std::discrete_distribution<int> >::Random(std::vector<double>::iterator, std::vector<double>::iterator)'
+  189 |         weightedRandom(weights.begin(), weights.end());
+      |                                                      ^
+D:\Project\Atom\example\utils\random\random_example.cpp:189:54: note: there are 4 candidates
+In file included from D:/Project/Atom/atom/utils/random.hpp:13,
+                 from D:\Project\Atom\example\utils\random\random_example.cpp:16:
+D:/Project/Atom/atom/utils/random/random.hpp:117:14: note: candidate 1: 'template<class ... Args>  requires !(is_same_v<std::tuple<typename Distribution::result_type, typename Distribution::result_type>, std::tuple<typename std::decay<_Args>::type ...> >) && (sizeof ... (Args ...) != 1 || !(is_convertible_v<typename std::tuple_element<0, std::tuple<typename std::decay<_Args>::type ...> >::type, typename Distribution::result_type>)) atom::utils::Random<Engine, Distribution>::Random(typename EngineType::result_type, Args&& ...) [with Args = {Args ...}; Engine = std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>; Distribution = std::discrete_distribution<int>]'
+  117 |     explicit Random(
+      |              ^~~~~~
+D:/Project/Atom/atom/utils/random/random.hpp:117:14: note: template argument deduction/substitution failed:
+D:\Project\Atom\example\utils\random\random_example.cpp:189:37: note:   cannot convert 'weights.std::vector<double>::begin()' (type 'std::vector<double>::iterator') to type 'std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>::result_type' {aka 'unsigned int'}
+  189 |         weightedRandom(weights.begin(), weights.end());
+      |                        ~~~~~~~~~~~~~^~
+D:/Project/Atom/atom/utils/random/random.hpp:89:5: note: candidate 2: 'atom::utils::Random<Engine, Distribution>::Random(ResultType, ResultType) [with Engine = std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>; Distribution = std::discrete_distribution<int>; ResultType = int]'
+   89 |     Random(ResultType min, ResultType max)
+      |     ^~~~~~
+D:/Project/Atom/atom/utils/random/random.hpp:89:23: note: no known conversion for argument 1 from 'std::vector<double>::iterator' to 'atom::utils::Random<std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>, std::discrete_distribution<int> >::ResultType' {aka 'int'}
+   89 |     Random(ResultType min, ResultType max)
+      |            ~~~~~~~~~~~^~~
+D:/Project/Atom/atom/utils/random/random.hpp:59:7: note: candidate 3: 'constexpr atom::utils::Random<std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>, std::discrete_distribution<int> >::Random(const atom::utils::Random<std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>, std::discrete_distribution<int> >&)'
+   59 | class Random {
+      |       ^~~~~~
+D:/Project/Atom/atom/utils/random/random.hpp:59:7: note: candidate expects 1 argument, 2 provided
+D:/Project/Atom/atom/utils/random/random.hpp:59:7: note: candidate 4: 'constexpr atom::utils::Random<std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>, std::discrete_distribution<int> >::Random(atom::utils::Random<std::mersenne_twister_engine<unsigned int, 32, 624, 397, 31, 2567483615, 11, 4294967295, 7, 2636928640, 15, 4022730752, 18, 1812433253>, std::discrete_distribution<int> >&&)'
+D:/Project/Atom/atom/utils/random/random.hpp:59:7: note: candidate expects 1 argument, 2 provided
+mingw32-make[3]: *** [example\utils\CMakeFiles\utils_random_random_example.dir\build.make:79: example/utils/CMakeFiles/utils_random_random_example.dir/random/random_example.cpp.obj] Error 1
+mingw32-make[2]: *** [CMakeFiles\Makefile2:3469: example/utils/CMakeFiles/utils_random_random_example.dir/all] Error 2
+mingw32-make[1]: *** [CMakeFiles\Makefile2:3476: example/utils/CMakeFiles/utils_random_random_example.dir/rule] Error 2
+mingw32-make: *** [Makefile:909: utils_random_random_example] Error 2
+[  0%] Built target atom-web-time
+[  1%] Built target loguru
+[  8%] Built target atom-algorithm
+[ 12%] Built target atom-error
+[ 12%] Built target atom-type
+[ 19%] Built target atom-utils_object
+[ 21%] Built target atom-utils
+[ 25%] Built target atom-async
+[ 30%] Built target atom-component
+[ 35%] Built target atom-connection
+[ 39%] Built target atom-io
+[ 51%] Built target atom-image
+[ 55%] Built target atom-log
+[ 55%] Built target atom-meta_object
+[ 55%] Built target atom-meta
+[ 57%] Built target atom-memory
+[ 58%] Built target atom-search
+[ 62%] Built target atom-secret
+[ 64%] Built target atom-serial
+[ 76%] Built target atom-sysinfo
+[ 89%] Built target atom-system
+[ 91%] Built target atom-web-address
+[ 98%] Built target atom-web
+[ 98%] Building CXX object example/utils/CMakeFiles/utils_time_time_example.dir/time/time_example.cpp.obj
+[100%] Linking CXX executable utils_time_time_example.exe
+[100%] Built target utils_time_time_example

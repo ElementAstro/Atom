@@ -139,10 +139,10 @@ int main() {
                                  [](int n) { return n > 5; });
                          });
 
-    // whereI - filter elements based on predicate with index
-    demonstrateOperation(words, "whereI", "Filter words at even indices",
+    // whereIndexed - filter elements based on predicate with index
+    demonstrateOperation(words, "whereIndexed", "Filter words at even indices",
                          [&]() {
-                             return atom::utils::Enumerable(words).whereI(
+                             return atom::utils::Enumerable(words).whereIndexed(
                                  [](const std::string& /* word */,
                                     size_t index) { return index % 2 == 0; });
                          });
@@ -160,11 +160,11 @@ int main() {
                                  [](int n) { return n <= 7; });
                          });
 
-    // takeWhileI - take elements while condition with index is true
+    // takeWhileIndexed - take elements while condition with index is true
     demonstrateOperation(
-        words, "takeWhileI",
+        words, "takeWhileIndexed",
         "Take words until index reaches 5 or word length exceeds 6", [&]() {
-            return atom::utils::Enumerable(words).takeWhileI(
+            return atom::utils::Enumerable(words).takeWhileIndexed(
                 [](const std::string& word, size_t index) {
                     return index < 5 || word.length() <= 6;
                 });
@@ -183,12 +183,12 @@ int main() {
                                  [](int n) { return n <= 5; });
                          });
 
-    // skipWhileI - skip elements while condition with index is true
+    // skipWhileIndexed - skip elements while condition with index is true
     demonstrateOperation(
-        words, "skipWhileI",
+        words, "skipWhileIndexed",
         "Skip words while index is less than 3 or word length is less than 5",
         [&]() {
-            return atom::utils::Enumerable(words).skipWhileI(
+            return atom::utils::Enumerable(words).skipWhileIndexed(
                 [](const std::string& word, size_t index) {
                     return index < 3 || word.length() < 5;
                 });
@@ -267,10 +267,10 @@ int main() {
             [](int n) { return n * n; });
     });
 
-    // selectI - transform each element using also its index
+    // selectIndexed - transform each element using also its index
     demonstrateOperation(
-        words, "selectI", "Transform each word to show its index", [&]() {
-            return atom::utils::Enumerable(words).selectI<std::string>(
+        words, "selectIndexed", "Transform each word to show its index", [&]() {
+            return atom::utils::Enumerable(words).selectIndexed<std::string>(
                 [](const std::string& word, size_t index) {
                     return std::to_string(index) + ": " + word;
                 });
@@ -332,16 +332,16 @@ int main() {
               << std::endl
               << std::endl;
 
-    // avg - calculate average of elements
-    std::cout << "=== Demonstrating: avg ===" << std::endl;
+    // average - calculate average of elements
+    std::cout << "=== Demonstrating: average ===" << std::endl;
     std::cout << "Average of all numbers: "
-              << atom::utils::Enumerable(numbers).avg() << std::endl
+              << atom::utils::Enumerable(numbers).average() << std::endl
               << std::endl;
 
-    // avg with transformer - calculate average of derived values
-    std::cout << "=== Demonstrating: avg with transformer ===" << std::endl;
+    // average with transformer - calculate average of derived values
+    std::cout << "=== Demonstrating: average with transformer ===" << std::endl;
     std::cout << "Average age: "
-              << atom::utils::Enumerable(people).avg<double>(
+              << atom::utils::Enumerable(people).average<double>(
                      [](const Person& p) { return p.age; })
               << std::endl
               << std::endl;

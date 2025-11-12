@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_DIFFLIB_HPP
-#define ATOM_UTILS_DIFFLIB_HPP
+#ifndef ATOM_UTILS_FORMAT_DIFFLIB_HPP
+#define ATOM_UTILS_FORMAT_DIFFLIB_HPP
 
 #include <chrono>
 #include <concepts>
@@ -575,4 +575,4 @@ private:
 };
 
 }  // namespace atom::utils
-#endif  // ATOM_UTILS_DIFFLIB_HPP
+#endif  // ATOM_UTILS_FORMAT_DIFFLIB_HPP

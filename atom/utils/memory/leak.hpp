@@ -12,8 +12,8 @@ Description: Memory Leak Detection
 
 **************************************************/
 
-#ifndef ATOM_UTILS_LEAK_HPP
-#define ATOM_UTILS_LEAK_HPP
+#ifndef ATOM_UTILS_MEMORY_LEAK_HPP
+#define ATOM_UTILS_MEMORY_LEAK_HPP
 
 #if defined(__clang__)
 #pragma clang system_header
@@ -30,4 +30,4 @@ Description: Memory Leak Detection
 #endif
 //! @endcond
 
-#endif  // ATOM_UTILS_LEAK_HPP
+#endif  // ATOM_UTILS_MEMORY_LEAK_HPP

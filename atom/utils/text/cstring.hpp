@@ -12,8 +12,8 @@ Description: String methods in compilation time
 
 **************************************************/
 
-#ifndef ATOM_UTILS_CSTRING_HPP
-#define ATOM_UTILS_CSTRING_HPP
+#ifndef ATOM_UTILS_TEXT_CSTRING_HPP
+#define ATOM_UTILS_TEXT_CSTRING_HPP
 
 #include <algorithm>
 #include <array>
@@ -440,4 +440,4 @@ auto convertBase(const std::array<char, N>& arr, int from_base,
 
 }  // namespace atom::utils
 
-#endif
+#endif  // ATOM_UTILS_TEXT_CSTRING_HPP

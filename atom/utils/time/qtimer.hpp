@@ -1,5 +1,5 @@
-#ifndef ATOM_UTILS_QTIMER_HPP
-#define ATOM_UTILS_QTIMER_HPP
+#ifndef ATOM_UTILS_TIME_QTIMER_HPP
+#define ATOM_UTILS_TIME_QTIMER_HPP
 
 #include <atomic>
 #include <chrono>
@@ -363,4 +363,4 @@ private:
 
 }  // namespace atom::utils
 
-#endif  // ATOM_UTILS_QTIMER_HPP
+#endif  // ATOM_UTILS_TIME_QTIMER_HPP

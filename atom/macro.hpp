@@ -34,7 +34,10 @@ Description: Useful Macros
 #include <source_location>
 #elif __has_include(<experimental/source_location>)
 #include <experimental/source_location>
-#define std experimental
+// Use experimental::source_location via namespace alias instead of macro
+namespace std {
+using experimental::source_location;
+}
 #else
 #error "No source_location support"
 #endif

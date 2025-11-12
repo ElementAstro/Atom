@@ -43,16 +43,66 @@ return()
 # =============================================================================
 # Test Source Configuration
 # =============================================================================
-# For modules with .cpp test files
-file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
+# Include subdirectories that contain organized tests
+add_subdirectory(clipboard)
+add_subdirectory(core)
+add_subdirectory(debug)
+add_subdirectory(hardware)
+add_subdirectory(info)
+add_subdirectory(network)
+add_subdirectory(power)
+add_subdirectory(process)
+add_subdirectory(registry)
+add_subdirectory(scheduling)
+add_subdirectory(shortcut)
+add_subdirectory(signals)
+add_subdirectory(storage)
 
-# Remove build directory files
-list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/build/.*")
+# Collect all test sources from subdirectories
+set(TEST_SOURCES
+    # Root level tests
+    ${CMAKE_CURRENT_SOURCE_DIR}/test_header_only.cpp
+    # Subdirectory tests
+    ${SYSTEM_CLIPBOARD_TEST_SOURCES}
+    ${SYSTEM_CORE_TEST_SOURCES}
+    ${SYSTEM_DEBUG_TEST_SOURCES}
+    ${SYSTEM_HARDWARE_TEST_SOURCES}
+    ${SYSTEM_INFO_TEST_SOURCES}
+    ${SYSTEM_NETWORK_TEST_SOURCES}
+    ${SYSTEM_POWER_TEST_SOURCES}
+    ${SYSTEM_PROCESS_TEST_SOURCES}
+    ${SYSTEM_REGISTRY_TEST_SOURCES}
+    ${SYSTEM_SCHEDULING_TEST_SOURCES}
+    ${SYSTEM_SHORTCUT_TEST_SOURCES}
+    ${SYSTEM_SIGNALS_TEST_SOURCES}
+    ${SYSTEM_STORAGE_TEST_SOURCES})
+
+# Remove any empty entries
+list(REMOVE_ITEM TEST_SOURCES "")
 
 # =============================================================================
 # Create Test Executable
 # =============================================================================
 add_executable(atom_system_tests ${TEST_SOURCES})
+
+# =============================================================================
+# Source Grouping for IDE Organization
+# =============================================================================
+source_group("Tests/System/Root"
+             FILES ${CMAKE_CURRENT_SOURCE_DIR}/test_header_only.cpp)
+source_group("Tests/System/Clipboard" FILES ${SYSTEM_CLIPBOARD_TEST_SOURCES})
+source_group("Tests/System/Core" FILES ${SYSTEM_CORE_TEST_SOURCES})
+source_group("Tests/System/Debug" FILES ${SYSTEM_DEBUG_TEST_SOURCES})
+source_group("Tests/System/Hardware" FILES ${SYSTEM_HARDWARE_TEST_SOURCES})
+source_group("Tests/System/Info" FILES ${SYSTEM_INFO_TEST_SOURCES})
+source_group("Tests/System/Network" FILES ${SYSTEM_NETWORK_TEST_SOURCES})
+source_group("Tests/System/Power" FILES ${SYSTEM_POWER_TEST_SOURCES})
+source_group("Tests/System/Process" FILES ${SYSTEM_PROCESS_TEST_SOURCES})
+source_group("Tests/System/Registry" FILES ${SYSTEM_REGISTRY_TEST_SOURCES})
+source_group("Tests/System/Scheduling" FILES ${SYSTEM_SCHEDULING_TEST_SOURCES})
+source_group("Tests/System/Shortcut" FILES ${SYSTEM_SHORTCUT_TEST_SOURCES})
+source_group("Tests/System/Signals" FILES ${SYSTEM_SIGNALS_TEST_SOURCES})
+source_group("Tests/System/Storage" FILES ${SYSTEM_STORAGE_TEST_SOURCES})
 
 # =============================================================================
 # Link Libraries
