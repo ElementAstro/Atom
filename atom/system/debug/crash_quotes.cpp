@@ -155,7 +155,8 @@ size_t QuoteManager::removeQuotesByAuthor(const std::string &author) {
 
 #ifdef DEBUG
 void QuoteManager::displayQuotes() const {
-    LOG_F(INFO, "Displaying all quotes ({})", quotes_.size());
+    LOG_F(INFO, "Displaying all quotes (%lu)",
+          static_cast<unsigned long>(quotes_.size()));
     for (const auto &quote : quotes_) {
         std::cout << quote.toString(true) << std::endl;
     }

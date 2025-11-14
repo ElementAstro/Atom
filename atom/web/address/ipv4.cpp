@@ -43,7 +43,7 @@ static WinsockInitializer winsockInit;
 /**
  * @brief Fast IPv4 validation without regex
  */
-auto fastIsValidIPv4(std::string_view address) -> bool {
+[[maybe_unused]] auto fastIsValidIPv4(std::string_view address) -> bool {
     if (address.empty() || address.length() > 15) {
         return false;
     }

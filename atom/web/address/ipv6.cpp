@@ -45,7 +45,7 @@ static WinsockInitializer winsockInit;
 /**
  * @brief Fast IPv6 validation without complex parsing
  */
-auto fastIsValidIPv6(std::string_view address) -> bool {
+[[maybe_unused]] auto fastIsValidIPv6(std::string_view address) -> bool {
     if (address.empty() || address.length() > IPV6_MAX_STRING_LENGTH) {
         return false;
     }
