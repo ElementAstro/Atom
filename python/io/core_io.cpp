@@ -582,4 +582,164 @@ Examples:
     >>> name = get_executable_name("/usr/bin/python3")
     >>> print(f"Executable name: {name}")  # Output: python3
 )");
+
+    // Path conversion utilities
+    m.def("convert_to_linux_path", &atom::io::convertToLinuxPath,
+          py::arg("windows_path"),
+          R"(Converts a Windows path to a Linux path.
+
+Replaces backslashes with forward slashes.
+
+Args:
+    windows_path: The Windows path to convert
+
+Returns:
+    The converted Linux path as a string
+
+Examples:
+    >>> linux_path = convert_to_linux_path("C:\\Users\\Name\\file.txt")
+    >>> print(linux_path)  # C:/Users/Name/file.txt
+)");
+
+    m.def("convert_to_windows_path", &atom::io::convertToWindowsPath,
+          py::arg("linux_path"),
+          R"(Converts a Linux path to a Windows path.
+
+Replaces forward slashes with backslashes.
+
+Args:
+    linux_path: The Linux path to convert
+
+Returns:
+    The converted Windows path as a string
+
+Examples:
+    >>> windows_path = convert_to_windows_path("/home/user/file.txt")
+    >>> print(windows_path)  # \home\user\file.txt
+)");
+
+    m.def("norm_path", &atom::io::normPath, py::arg("raw_path"),
+          R"(Normalizes a path according to platform conventions.
+
+Args:
+    raw_path: The path to normalize
+
+Returns:
+    Normalized path string
+
+Examples:
+    >>> normalized = norm_path("./some/../path/./to/file.txt")
+    >>> print(normalized)
+)");
+
+    m.def("is_folder_name_valid", &atom::io::isFolderNameValid,
+          py::arg("folder_name"),
+          R"(Checks if a folder name is valid.
+
+Validates folder name according to platform-specific rules.
+
+Args:
+    folder_name: The folder name to validate
+
+Returns:
+    True if valid, False otherwise
+
+Examples:
+    >>> is_folder_name_valid("my_folder")
+    True
+    >>> is_folder_name_valid("folder:name")  # Colon invalid on Windows
+    False (on Windows)
+)");
+
+    m.def("is_file_name_valid", &atom::io::isFileNameValid,
+          py::arg("file_name"),
+          R"(Checks if a file name is valid.
+
+Validates file name according to platform-specific rules.
+
+Args:
+    file_name: The file name to validate
+
+Returns:
+    True if valid, False otherwise
+
+Examples:
+    >>> is_file_name_valid("document.txt")
+    True
+    >>> is_file_name_valid("file<name>.txt")  # < invalid on Windows
+    False (on Windows)
+)");
+
+    m.def("classify_files", &atom::io::classifyFiles<std::string>,
+          py::arg("directory"),
+          R"(Classifies files in a directory by extension.
+
+Args:
+    directory: Directory to classify files in
+
+Returns:
+    Dictionary mapping extensions to lists of file paths
+
+Examples:
+    >>> files_by_ext = classify_files("/path/to/directory")
+    >>> for ext, files in files_by_ext.items():
+    ...     print(f"{ext}: {len(files)} files")
+)");
+
+    m.def(
+        "check_file_type_in_folder",
+        [](const std::string& folder_path,
+           const std::vector<std::string>& file_types,
+           atom::io::FileOption file_option) {
+            return atom::io::checkFileTypeInFolder(
+                folder_path,
+                std::span<const std::string>(file_types.data(),
+                                             file_types.size()),
+                file_option);
+        },
+        py::arg("folder_path"), py::arg("file_types"), py::arg("file_option"),
+        R"(Checks for files of specific types in a folder.
+
+Args:
+    folder_path: The folder to search in
+    file_types: List of file extensions to look for (e.g., ['.txt', '.py'])
+    file_option: FileOption.PATH or FileOption.NAME
+
+Returns:
+    List of file paths or names matching the specified types
+
+Examples:
+    >>> files = check_file_type_in_folder(
+    ...     "/path/to/folder",
+    ...     [".py", ".txt"],
+    ...     FileOption.PATH
+    ... )
+    >>> for f in files:
+    ...     print(f)
+)");
+
+    // FileOption enum
+    py::enum_<atom::io::FileOption>(m, "FileOption",
+                                    R"(Option for file type checking results.
+
+Values:
+    PATH: Return full file paths
+    NAME: Return only file names
+)")
+        .value("PATH", atom::io::FileOption::PATH, "Return full file paths")
+        .value("NAME", atom::io::FileOption::NAME, "Return only file names");
+
+    m.def("quick_merge", &atom::io::quickMerge<std::string, std::string>,
+          py::arg("output_file_path"), py::arg("part_pattern"),
+          py::arg("num_chunks"),
+          R"(Quickly merges file parts created by quick_split.
+
+Args:
+    output_file_path: The path for the merged output file
+    part_pattern: The pattern used for part file names
+    num_chunks: The number of chunks to merge
+
+Examples:
+    >>> quick_merge("merged_file.txt", "file.txt", 4)
+)");
 }

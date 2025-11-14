@@ -1,0 +1,11 @@
+{
+  "components": {
+  },
+  "build_info": {
+    "cmake_version": "4.2.0-rc1",
+    "build_type": "Debug",
+    "compiler": "GNU",
+    "platform": "Windows",
+    "architecture": "AMD64"
+  }
+}

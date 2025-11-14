@@ -4,35 +4,55 @@ This directory contains comprehensive examples demonstrating all features and ca
 
 ## Directory Structure
 
+The examples are organized to mirror the structure of `atom/search/`, with each subdirectory containing examples for the corresponding module. Each module typically has both basic and comprehensive examples.
+
 ```text
 example/search/
-├── README.md                           # This file
-├── CMakeLists.txt                      # Build configuration
-├── core/                               # Core search engine examples
-│   └── search_engine_comprehensive.cpp
-├── cache/                              # Caching system examples
-│   ├── resource_cache_comprehensive.cpp
-│   ├── lru_cache_comprehensive.cpp
-│   └── ttl_cache_comprehensive.cpp
-├── database/                           # Database integration examples
-│   ├── sqlite_comprehensive.cpp
-│   └── mysql_comprehensive.cpp
-├── integration/                        # Integration examples
-│   └── search_cache_database_integration.cpp
-├── advanced/                           # Advanced features
-│   ├── async_batch_statistics.cpp
-│   └── error_handling_edge_cases.cpp
-└── [legacy examples]                   # Backward compatibility
-    ├── search.cpp
-    ├── cache.cpp
-    ├── lru.cpp
-    ├── ttl.cpp
-    └── sqlite.cpp
+├── README.md                                    # This file
+├── CMakeLists.txt                               # Build configuration
+├── core/                                        # Core search engine examples
+│   ├── search_basic.cpp                        # Basic search engine usage
+│   └── search_engine_comprehensive.cpp         # Advanced search features
+├── cache/                                       # Caching system examples
+│   ├── cache_basic.cpp                         # Basic ResourceCache usage
+│   ├── resource_cache_comprehensive.cpp        # Advanced ResourceCache features
+│   ├── lru_basic.cpp                           # Basic LRU cache usage
+│   ├── lru_cache_comprehensive.cpp             # Advanced LRU cache features
+│   ├── ttl_basic.cpp                           # Basic TTL cache usage
+│   └── ttl_cache_comprehensive.cpp             # Advanced TTL cache features
+├── database/                                    # Database integration examples
+│   ├── sqlite_basic.cpp                        # Basic SQLite usage
+│   ├── sqlite_comprehensive.cpp                # Advanced SQLite features
+│   └── mysql_comprehensive.cpp                 # MySQL integration
+├── integration/                                 # Integration examples
+│   └── search_cache_database_integration.cpp   # Combined usage patterns
+└── advanced/                                    # Advanced features
+    ├── async_batch_statistics.cpp              # Async operations & statistics
+    └── error_handling_edge_cases.cpp           # Error handling patterns
 ```
+
+## Example Types
+
+### Basic Examples
+
+Simple, focused examples demonstrating core functionality of each component. These are great starting points for learning the API.
+
+### Comprehensive Examples
+
+In-depth examples covering advanced features, edge cases, and best practices. These demonstrate production-ready usage patterns.
 
 ## Example Categories
 
 ### 1. Core Search Engine (`core/`)
+
+Demonstrates the main search engine functionality from `atom/search/core/search.cpp`.
+
+#### search_basic.cpp
+
+- Basic document creation and indexing
+- Simple search operations (by tag, by content)
+- Document retrieval and display
+- Introduction to the search API
 
 #### search_engine_comprehensive.cpp
 
@@ -45,9 +65,18 @@ example/search/
 
 ### 2. Caching Systems (`cache/`)
 
+Demonstrates the caching implementations from `atom/search/cache/`.
+
+#### cache_basic.cpp
+
+- Basic ResourceCache operations (insert, get, remove)
+- Simple resource management
+- Cache statistics
+- Introduction to the ResourceCache API
+
 #### resource_cache_comprehensive.cpp
 
-- Basic cache operations (insert, get, remove)
+- Advanced cache operations (insert, get, remove)
 - Resource expiration handling
 - LRU eviction policy
 - Asynchronous operations
@@ -55,6 +84,13 @@ example/search/
 - Serialization and persistence (text and JSON)
 - Event callbacks and statistics
 - Configuration and cleanup
+
+#### lru_basic.cpp
+
+- Basic LRU cache operations
+- Simple eviction policy demonstration
+- Cache hit/miss tracking
+- Introduction to the LRU cache API
 
 #### lru_cache_comprehensive.cpp
 
@@ -65,6 +101,13 @@ example/search/
 - Callbacks (insert/erase/clear) and statistics
 - Keys/values iteration and dynamic resizing
 - Thread-safety demo and edge cases
+
+#### ttl_basic.cpp
+
+- Basic TTL cache operations
+- Time-based expiration
+- Simple cache cleanup
+- Introduction to the TTL cache API
 
 #### ttl_cache_comprehensive.cpp
 
@@ -78,6 +121,15 @@ example/search/
 - Thread safety demonstrations
 
 ### 3. Database Integration (`database/`)
+
+Demonstrates database backends from `atom/search/database/`.
+
+#### sqlite_basic.cpp
+
+- Basic SQLite database operations
+- Simple CRUD operations
+- Query execution
+- Introduction to the SQLite wrapper API
 
 #### sqlite_comprehensive.cpp
 
@@ -167,31 +219,75 @@ example/search/
 
 Examples are built with the naming convention: `search_[category]_[example_name]`
 
+**Core Examples:**
+
+- `search_core_search_basic`
 - `search_core_search_engine_comprehensive`
+
+**Cache Examples:**
+
+- `search_cache_cache_basic`
 - `search_cache_resource_cache_comprehensive`
+- `search_cache_lru_basic`
 - `search_cache_lru_cache_comprehensive`
+- `search_cache_ttl_basic`
 - `search_cache_ttl_cache_comprehensive`
+
+**Database Examples:**
+
+- `search_database_sqlite_basic`
 - `search_database_sqlite_comprehensive`
 - `search_database_mysql_comprehensive`
+
+**Integration Examples:**
+
 - `search_integration_search_cache_database_integration`
+
+**Advanced Examples:**
+
 - `search_advanced_async_batch_statistics`
+- `search_advanced_error_handling_edge_cases`
 
 ## Running the Examples
 
 ### Basic Usage
 
+Start with the basic examples to learn the fundamentals:
+
 ```bash
-# Run core search engine example
+# Run basic search engine example
+./search_core_search_basic
+
+# Run basic cache examples
+./search_cache_cache_basic
+./search_cache_lru_basic
+./search_cache_ttl_basic
+
+# Run basic database example
+./search_database_sqlite_basic
+```
+
+Then explore the comprehensive examples for advanced features:
+
+```bash
+# Run comprehensive search engine example
 ./search_core_search_engine_comprehensive
 
-# Run cache example
+# Run comprehensive cache examples
+./search_cache_resource_cache_comprehensive
 ./search_cache_lru_cache_comprehensive
+./search_cache_ttl_cache_comprehensive
 
-# Run database example
+# Run comprehensive database examples
 ./search_database_sqlite_comprehensive
+./search_database_mysql_comprehensive
 
 # Run integration example
 ./search_integration_search_cache_database_integration
+
+# Run advanced examples
+./search_advanced_async_batch_statistics
+./search_advanced_error_handling_edge_cases
 ```
 
 ### Example Output

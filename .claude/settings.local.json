@@ -100,7 +100,10 @@
       "Bash(test:*)",
       "Bash(dir /s /b atomsystem*.hpp atomsystem*.h atomsystem*.cpp 2)",
       "Bash(nul)",
-      "Bash(powershell:*)"
+      "Bash(powershell:*)",
+      "Bash(xargs:*)",
+      "Bash(dir /s \"d:\\Project\\Atom\\python\\web\")",
+      "Bash(bash scripts/build.sh:*)"
     ],
     "deny": [],
     "ask": []

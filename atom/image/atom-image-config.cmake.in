@@ -1,37 +1,53 @@
+# Config file for atom-image module
+# This file is used by CMake to find and configure the atom-image package
+
 @PACKAGE_INIT@
 
 include(CMakeFindDependencyMacro)
 
 # Find required dependencies
-find_dependency(loguru)
+# Note: atom-error is automatically linked via atom_configure_module
+find_dependency(Threads QUIET)
 
 # Find optional dependencies
 find_dependency(OpenCV QUIET)
-find_dependency(PkgConfig QUIET)
+find_dependency(loguru QUIET)
 
+# Find PkgConfig for CFITSIO and Tesseract
+find_dependency(PkgConfig QUIET)
 if(PkgConfig_FOUND)
     pkg_check_modules(CFITSIO cfitsio QUIET)
     pkg_check_modules(TESSERACT tesseract QUIET)
     pkg_check_modules(LEPTONICA lept QUIET)
 endif()
 
-# Include targets
-include("${CMAKE_CURRENT_LIST_DIR}/atom-image-targets.cmake")
+# Include the targets file
+if(NOT TARGET atom::atom-image)
+    include("${CMAKE_CURRENT_LIST_DIR}/atom-image-targets.cmake")
+endif()
 
-# Set component variables
+# Provide information about the package
+set(atom-image_VERSION "@PROJECT_VERSION@")
 set(atom-image_FOUND TRUE)
 
-# Check for optional components
+# Feature availability flags
 if(OpenCV_FOUND)
-    set(atom-image_OpenCV_FOUND TRUE)
+    set(atom-image_HAS_OPENCV TRUE)
+else()
+    set(atom-image_HAS_OPENCV FALSE)
 endif()
 
 if(CFITSIO_FOUND)
-    set(atom-image_CFITSIO_FOUND TRUE)
+    set(atom-image_HAS_CFITSIO TRUE)
+else()
+    set(atom-image_HAS_CFITSIO FALSE)
 endif()
 
 if(TESSERACT_FOUND AND LEPTONICA_FOUND)
-    set(atom-image_OCR_FOUND TRUE)
+    set(atom-image_HAS_OCR TRUE)
+else()
+    set(atom-image_HAS_OCR FALSE)
 endif()
 
+# Check for required components
 check_required_components(atom-image)

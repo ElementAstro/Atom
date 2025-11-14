@@ -84,6 +84,22 @@ option(ATOM_USE_PYBIND11 "Enable pybind11 support"
 option(ATOM_USE_SSH "Enable SSH support" OFF)
 option(ATOM_BUILD_ALL "Build all Atom modules" ON)
 
+# Option: Pretty/less noisy configure & build output
+option(ATOM_PRETTY_OUTPUT "Pretty, less noisy configure/build output" ON)
+if(ATOM_PRETTY_OUTPUT)
+  set(CMAKE_MESSAGE_LOG_LEVEL NOTICE)
+  set(CMAKE_RULE_MESSAGES
+      OFF
+      CACHE BOOL "" FORCE)
+  set_property(GLOBAL PROPERTY RULE_MESSAGES OFF)
+  set(CMAKE_COLOR_DIAGNOSTICS
+      ON
+      CACHE BOOL "" FORCE)
+  if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    add_compile_options(-fdiagnostics-color=always)
+  endif()
+endif()
+
 # Module build options
 foreach(
   MODULE

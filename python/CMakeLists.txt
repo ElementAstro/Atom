@@ -48,8 +48,8 @@ endforeach()
 
 # Function to collect source files for a module
 function(collect_sources_for_module module_type dir)
-  # Find all cpp files
-  file(GLOB cpp_files "${dir}/*.cpp")
+  # Find all cpp files recursively (to support subdirectory organization)
+  file(GLOB_RECURSE cpp_files "${dir}/*.cpp")
   if(NOT cpp_files)
     message(STATUS "No cpp files found in ${dir}, skipping.")
     return()
@@ -62,6 +62,8 @@ function(collect_sources_for_module module_type dir)
   set(${module_type}_FOUND
       TRUE
       CACHE INTERNAL "")
+
+  message(STATUS "Collected ${module_type} sources: ${cpp_files}")
 endfunction()
 
 # Recursively scan directories

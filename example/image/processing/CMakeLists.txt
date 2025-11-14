@@ -6,18 +6,16 @@ get_filename_component(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/.. NAME)
 
 # Processing image examples
 set(PROCESSING_EXAMPLES
+    image_processor_example
     # filters  # Disabled: API mismatches with FilterParams (needs struct field
-    # access instead of operator[])
-    # geometric_transforms  # Disabled: API mismatches (transpose,
-    # applyAffineTransform, crop, flip methods don't exist)
-    # image_enhancement  # Disabled: API mismatches (adjustSaturation,
-    # adjustVibrance methods don't exist)
-    # computer_vision           # Disabled: align later
-    # ml_processing             # Disabled: requires thread/random includes
-    # ocr_operations  # Disabled: requires API update to match current Blob
-    # interface
-    # realtime_processing  # Disabled: missing camera_capture.hpp header
-    # gpu_acceleration          # Disabled: demo only, optional
+    # access instead of operator[]) geometric_transforms  # Disabled: API
+    # mismatches (transpose, applyAffineTransform, crop, flip methods don't
+    # exist) image_enhancement  # Disabled: API mismatches (adjustSaturation,
+    # adjustVibrance methods don't exist) computer_vision           # Disabled:
+    # align later ml_processing             # Disabled: requires thread/random
+    # includes ocr_operations  # Disabled: requires API update to match current
+    # Blob interface realtime_processing  # Disabled: missing camera_capture.hpp
+    # header gpu_acceleration          # Disabled: demo only, optional
     # gpu_acceleration_demo     # Disabled: missing fields in GPUDeviceInfo
     # computer_vision_features  # Disabled: missing feature_detection.hpp header
     # batch_processing_demo  # Disabled: missing batch_processor.hpp header
@@ -112,5 +110,10 @@ endfunction()
 foreach(EXAMPLE ${PROCESSING_EXAMPLES})
   add_processing_example(${EXAMPLE})
 endforeach()
+
+# Add subdirectories
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/ocr)
+  add_subdirectory(ocr)
+endif()
 
 # Intentionally do not glob-add all .cpp; only curated examples are built

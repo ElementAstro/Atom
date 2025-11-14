@@ -13,6 +13,12 @@ set(FORMAT_EXAMPLES
     medical_formats
     scientific_formats
     ser_video
+    fits_file_example
+    fits_header_example
+    fits_data_example
+    fits_utils_example
+    hdu_example
+    advanced_formats_example
     # ser_operations         # Disabled: SERWriter API mismatch
     # ser_quality_assessment  # Disabled: uses non-existent QualityMetrics
     # struct and API methods ser_registration_stacking  # Disabled: API
@@ -102,5 +108,10 @@ endfunction()
 foreach(EXAMPLE ${FORMAT_EXAMPLES})
   add_format_example(${EXAMPLE})
 endforeach()
+
+# Add subdirectories
+if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/ser)
+  add_subdirectory(ser)
+endif()
 
 # Do not auto-add all .cpp files; only curated FORMAT_EXAMPLES are built

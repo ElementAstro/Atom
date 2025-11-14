@@ -6,7 +6,7 @@
 
 ## Features
 
-To be populated as features are documented
+[Python Bindings for Utils Module](feature/python-bindings-utils.md): Comprehensive documentation of the 31 Python binding files in `python/utils/`, covering 250+ functions, 50+ classes, and the mapping between flat Python module structure and hierarchical C++ organization across 11 subdirectories (core, crypto, text, conversion, container, time, random, process, memory, format, debug).
 
 ## Agents
 

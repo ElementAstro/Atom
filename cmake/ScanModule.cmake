@@ -78,6 +78,11 @@ function(scan_module_dependencies)
     message(STATUS "Module 'atom-containers' is enabled")
   endif()
 
+  if(ATOM_BUILD_IMAGE)
+    list(APPEND enabled_modules "atom-image")
+    message(STATUS "Module 'atom-image' is enabled")
+  endif()
+
   if(ATOM_BUILD_IO)
     list(APPEND enabled_modules "atom-io")
     message(STATUS "Module 'atom-io' is enabled")

@@ -14,6 +14,9 @@ set(CORE_EXAMPLES
     memory_management_features
     serialization_edge_cases
     caching_demo
+    cache_manager_example
+    image_metadata_example
+    exceptions_example
     # error_handling  # Disabled: DEBUG macro conflict (fixed but needs testing)
     # boundary_conditions_demo  # Disabled: undefined references to
     # applyMedianFilter and detectEdges

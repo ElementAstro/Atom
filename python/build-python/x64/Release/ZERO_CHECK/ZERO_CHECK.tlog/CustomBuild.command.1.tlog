@@ -1,0 +1,10 @@
+^D:\PROJECT\ATOM\PYTHON\BUILD-PYTHON\CMAKEFILES\6E1AE9F28809AD02E18081CCA9ADE4E1\GENERATE.STAMP.RULE
+setlocal
+"D:\Program Files\CMake\bin\cmake.exe" -SD:/Project/Atom/python -BD:/Project/Atom/python/build-python --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file D:/Project/Atom/python/build-python/atom_python_bindings.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

@@ -91,18 +91,31 @@ except ImportError as e:
     print(f"Warning: Could not import udpsockethub module: {e}")
 
 try:
-    # Socket Hub module
-    from .sockethub import (
-        AuthenticationMethod,
-        ClientInfo,
-        GroupInfo,
-        SocketHub,
-        SocketHubConfig,
-        SocketHubStats,
-        create_socket_hub,
-    )
+    from .async_udpclient import SocketOption as AsyncUdpSocketOption
+    from .async_udpclient import Statistics as AsyncUdpStatistics
+    from .async_udpclient import UdpClient as AsyncUdpClient
+    from .async_udpclient import create_udp_client as create_async_udp_client
+except ImportError as e:
+    print(f"Warning: Could not import async_udpclient module: {e}")
+
+try:
+    # Socket Hub module (async)
+    from .sockethub import LogLevel as AsyncLogLevel
+    from .sockethub import Message, MessageType
+    from .sockethub import SocketHub as AsyncSocketHub
+    from .sockethub import SocketHubConfig as AsyncSocketHubConfig
+    from .sockethub import SocketHubStats as AsyncSocketHubStats
+    from .sockethub import create_socket_hub as create_async_socket_hub
 except ImportError as e:
     print(f"Warning: Could not import sockethub module: {e}")
+
+try:
+    # Socket Hub module (sync)
+    from .sync_sockethub import ClientInfo as SyncClientInfo
+    from .sync_sockethub import SocketHub as SyncSocketHub
+    from .sync_sockethub import create_socket_hub as create_sync_socket_hub
+except ImportError as e:
+    print(f"Warning: Could not import sync_sockethub module: {e}")
 
 try:
     # FIFO modules
@@ -127,7 +140,17 @@ except ImportError as e:
     print(f"Warning: Could not import sync_fifoserver module: {e}")
 
 try:
-    # SSH module (conditional)
+    from .sync_fifoclient import (
+        ClientConfig,
+        ClientStats,
+        FifoClient,
+        create_fifo_client,
+    )
+except ImportError as e:
+    print(f"Warning: Could not import sync_fifoclient module: {e}")
+
+try:
+    # SSH Client module (conditional)
     from .sshclient import (
         SSHClient,
         get_default_mode,
@@ -140,6 +163,12 @@ except ImportError as e:
     print(f"Warning: Could not import sshclient module: {e}")
 
 try:
+    # SSH Server module
+    from .sshserver import SshConnection, SshServer
+except ImportError as e:
+    print(f"Warning: Could not import sshserver module: {e}")
+
+try:
     # TTY module
     from .ttybase import TTYBase, TTYResponse, response_to_string
 except ImportError as e:
@@ -147,7 +176,7 @@ except ImportError as e:
 
 # Define what gets exported when using "from atom.connection import *"
 __all__ = [
-    # TCP Client classes and functions
+    # TCP Client classes and functions (async)
     "TcpClient",
     "ConnectionConfig",
     "ProxyConfig",
@@ -163,36 +192,53 @@ __all__ = [
     "SyncConnectionStats",
     "create_sync_tcp_client",
     "test_sync_connection",
-    # UDP classes
+    # UDP classes (sync)
     "UdpClient",
     "UdpClientConfig",
     "UdpClientStats",
     "create_udp_client",
     "UdpSocketHub",
     "UdpError",
-    # Socket Hub
-    "SocketHub",
-    "SocketHubConfig",
-    "SocketHubStats",
-    "ClientInfo",
-    "GroupInfo",
-    "AuthenticationMethod",
-    "create_socket_hub",
-    # FIFO classes
+    # UDP classes (async)
+    "AsyncUdpClient",
+    "AsyncUdpSocketOption",
+    "AsyncUdpStatistics",
+    "create_async_udp_client",
+    # Socket Hub (async)
+    "AsyncSocketHub",
+    "AsyncSocketHubConfig",
+    "AsyncSocketHubStats",
+    "AsyncLogLevel",
+    "Message",
+    "MessageType",
+    "create_async_socket_hub",
+    # Socket Hub (sync)
+    "SyncSocketHub",
+    "SyncClientInfo",
+    "create_sync_socket_hub",
+    # FIFO classes (async)
     "AsyncFifoClient",
     "AsyncFifoServer",
+    # FIFO classes (sync)
     "FIFOServer",
+    "FifoClient",
+    "ClientConfig",
+    "ClientStats",
     "ServerConfig",
     "ServerStatistics",
     "LogLevel",
     "MessagePriority",
-    # SSH classes (conditional)
+    "create_fifo_client",
+    # SSH Client classes (conditional)
     "SSHClient",
     "is_libssh_available",
     "get_ssh_info",
     "get_default_ssh_port",
     "get_default_timeout",
     "get_default_mode",
+    # SSH Server classes
+    "SshServer",
+    "SshConnection",
     # TTY classes
     "TTYBase",
     "TTYResponse",

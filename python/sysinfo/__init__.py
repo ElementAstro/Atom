@@ -52,117 +52,140 @@ Examples:
 __version__ = "1.0.0"
 __author__ = "Atom Development Team"
 
-# Import all submodules to make them available
+# Import all submodules from the reorganized structure
+# Maintain backward compatibility by importing at the top level
+
+# Hardware modules
 try:
-    from . import battery
+    from .hardware import battery
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import battery module: {e}", ImportWarning)
+
+    warnings.warn(f"Failed to import battery module: {e}", ImportWarning, stacklevel=2)
     battery = None
 
 try:
-    from . import bios
+    from .hardware import bios
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import bios module: {e}", ImportWarning)
+
+    warnings.warn(f"Failed to import bios module: {e}", ImportWarning, stacklevel=2)
     bios = None
 
 try:
-    from . import cpu
+    from .hardware import cpu
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import cpu module: {e}", ImportWarning)
+
+    warnings.warn(f"Failed to import cpu module: {e}", ImportWarning, stacklevel=2)
     cpu = None
 
 try:
-    from . import disk
+    from .hardware import gpu
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import disk module: {e}", ImportWarning)
-    disk = None
 
-try:
-    from . import gpu
-except ImportError as e:
-    import warnings
-    warnings.warn(f"Failed to import gpu module: {e}", ImportWarning)
+    warnings.warn(f"Failed to import gpu module: {e}", ImportWarning, stacklevel=2)
     gpu = None
 
 try:
-    from . import locale
+    from .hardware import memory
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import locale module: {e}", ImportWarning)
+
+    warnings.warn(f"Failed to import memory module: {e}", ImportWarning, stacklevel=2)
+    memory = None
+
+# Info modules
+try:
+    from .info import locale
+except ImportError as e:
+    import warnings
+
+    warnings.warn(f"Failed to import locale module: {e}", ImportWarning, stacklevel=2)
     locale = None
 
 try:
-    from . import memory
+    from .info import os
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import memory module: {e}", ImportWarning)
-    memory = None
 
-try:
-    from . import os
-except ImportError as e:
-    import warnings
-    warnings.warn(f"Failed to import os module: {e}", ImportWarning)
+    warnings.warn(f"Failed to import os module: {e}", ImportWarning, stacklevel=2)
     os = None
 
 try:
-    from . import sn
+    from .info import sn
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import sn module: {e}", ImportWarning)
+
+    warnings.warn(f"Failed to import sn module: {e}", ImportWarning, stacklevel=2)
     sn = None
 
 try:
-    from . import sysinfo_printer
+    from .info import virtual
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import sysinfo_printer module: {e}", ImportWarning)
-    sysinfo_printer = None
 
-try:
-    from . import virtual
-except ImportError as e:
-    import warnings
-    warnings.warn(f"Failed to import virtual module: {e}", ImportWarning)
+    warnings.warn(f"Failed to import virtual module: {e}", ImportWarning, stacklevel=2)
     virtual = None
 
 try:
-    from . import wifi
+    from .info import wm
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import wifi module: {e}", ImportWarning)
+
+    warnings.warn(f"Failed to import wm module: {e}", ImportWarning, stacklevel=2)
+    wm = None
+
+# Network modules
+try:
+    from .network import wifi
+except ImportError as e:
+    import warnings
+
+    warnings.warn(f"Failed to import wifi module: {e}", ImportWarning, stacklevel=2)
     wifi = None
 
+# Storage modules
 try:
-    from . import wm
+    from .storage import disk
 except ImportError as e:
     import warnings
-    warnings.warn(f"Failed to import wm module: {e}", ImportWarning)
-    wm = None
+
+    warnings.warn(f"Failed to import disk module: {e}", ImportWarning, stacklevel=2)
+    disk = None
+
+# Utilities modules
+try:
+    from .utils import sysinfo_printer
+except ImportError as e:
+    import warnings
+
+    warnings.warn(
+        f"Failed to import sysinfo_printer module: {e}", ImportWarning, stacklevel=2
+    )
+    sysinfo_printer = None
 
 # List of all available modules
 __all__ = [
-    'battery',
-    'bios',
-    'cpu',
-    'disk',
-    'gpu',
-    'locale',
-    'memory',
-    'os',
-    'sn',
-    'sysinfo_printer',
-    'virtual',
-    'wifi',
-    'wm',
-    'get_system_summary',
-    'get_available_modules',
-    'check_module_availability'
+    "battery",
+    "bios",
+    "cpu",
+    "disk",
+    "gpu",
+    "locale",
+    "memory",
+    "os",
+    "sn",
+    "sysinfo_printer",
+    "virtual",
+    "wifi",
+    "wm",
+    "get_system_summary",
+    "get_available_modules",
+    "check_module_availability",
 ]
+
 
 def get_available_modules():
     """Get a list of successfully imported modules.
@@ -176,12 +199,25 @@ def get_available_modules():
         >>> print(f"Available modules: {', '.join(available)}")
     """
     modules = []
-    for module_name in ['battery', 'bios', 'cpu', 'disk', 'gpu', 'locale',
-                       'memory', 'os', 'sn', 'sysinfo_printer', 'virtual',
-                       'wifi', 'wm']:
+    for module_name in [
+        "battery",
+        "bios",
+        "cpu",
+        "disk",
+        "gpu",
+        "locale",
+        "memory",
+        "os",
+        "sn",
+        "sysinfo_printer",
+        "virtual",
+        "wifi",
+        "wm",
+    ]:
         if globals().get(module_name) is not None:
             modules.append(module_name)
     return modules
+
 
 def check_module_availability(module_name):
     """Check if a specific module is available.
@@ -198,6 +234,7 @@ def check_module_availability(module_name):
         ...     battery_info = sysinfo.battery.get_battery_info()
     """
     return globals().get(module_name) is not None
+
 
 def get_system_summary():
     """Get a comprehensive summary of system information.
@@ -221,9 +258,9 @@ def get_system_summary():
     if cpu is not None:
         try:
             cpu_info = cpu.get_cpu_info()
-            summary['cpu'] = f"{cpu_info.model} ({cpu_info.num_physical_cores} cores)"
+            summary["cpu"] = f"{cpu_info.model} ({cpu_info.num_physical_cores} cores)"
         except Exception:
-            summary['cpu'] = "CPU information unavailable"
+            summary["cpu"] = "CPU information unavailable"
 
     # Memory Information
     if memory is not None:
@@ -231,17 +268,17 @@ def get_system_summary():
             mem_info = memory.get_detailed_memory_stats()
             total_gb = mem_info.total_physical_memory / (1024**3)
             usage_pct = mem_info.memory_load_percentage
-            summary['memory'] = f"{total_gb:.1f} GB ({usage_pct:.1f}% used)"
+            summary["memory"] = f"{total_gb:.1f} GB ({usage_pct:.1f}% used)"
         except Exception:
-            summary['memory'] = "Memory information unavailable"
+            summary["memory"] = "Memory information unavailable"
 
     # Operating System Information
     if os is not None:
         try:
             os_info = os.get_operating_system_info()
-            summary['operating_system'] = f"{os_info.os_name} {os_info.os_version}"
+            summary["operating_system"] = f"{os_info.os_name} {os_info.os_version}"
         except Exception:
-            summary['operating_system'] = "OS information unavailable"
+            summary["operating_system"] = "OS information unavailable"
 
     # Battery Information
     if battery is not None:
@@ -249,19 +286,19 @@ def get_system_summary():
             battery_info = battery.get_battery_info()
             if battery_info and battery_info.is_battery_present:
                 status = "charging" if battery_info.is_charging else "discharging"
-                summary['battery'] = f"{battery_info.battery_life_percent}% ({status})"
+                summary["battery"] = f"{battery_info.battery_life_percent}% ({status})"
             else:
-                summary['battery'] = "No battery detected"
+                summary["battery"] = "No battery detected"
         except Exception:
-            summary['battery'] = "Battery information unavailable"
+            summary["battery"] = "Battery information unavailable"
 
     # GPU Information
     if gpu is not None:
         try:
             gpu_info = gpu.get_gpu_info()
-            summary['gpu'] = gpu_info[:100] + "..." if len(gpu_info) > 100 else gpu_info
+            summary["gpu"] = gpu_info[:100] + "..." if len(gpu_info) > 100 else gpu_info
         except Exception:
-            summary['gpu'] = "GPU information unavailable"
+            summary["gpu"] = "GPU information unavailable"
 
     # Virtualization Information
     if virtual is not None:
@@ -270,16 +307,16 @@ def get_system_summary():
             is_container = virtual.is_container()
             if is_vm:
                 vm_type = virtual.get_virtualization_type()
-                summary['virtualization'] = f"Virtual Machine ({vm_type})"
+                summary["virtualization"] = f"Virtual Machine ({vm_type})"
             elif is_container:
                 container_type = virtual.get_container_type()
-                summary['virtualization'] = f"Container ({container_type})"
+                summary["virtualization"] = f"Container ({container_type})"
             else:
-                summary['virtualization'] = "Physical Hardware"
+                summary["virtualization"] = "Physical Hardware"
         except Exception:
-            summary['virtualization'] = "Virtualization detection unavailable"
+            summary["virtualization"] = "Virtualization detection unavailable"
 
     # Available modules
-    summary['available_modules'] = get_available_modules()
+    summary["available_modules"] = get_available_modules()
 
     return summary

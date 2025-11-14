@@ -34,6 +34,11 @@ Security and Monitoring:
     - Registry operations (Windows)
     - Crash handling and debugging
 
+Debug and Protection:
+    - Crash log management
+    - Anti-debugging features
+    - Memory protection
+
 Examples:
     >>> from atom.system import gpio, power, clipboard
     >>>
@@ -82,6 +87,10 @@ Available Modules:
         - crash_quotes: Crash handling with quotes
         - crontab: Cron job management
 
+    Debug and Protection:
+        - crash: Crash log management and system info
+        - nodebugger: Anti-debugging and tamper protection
+
     Registry (Windows):
         - registry: Linux registry operations
         - wregistry: Windows registry operations
@@ -100,17 +109,21 @@ __author__ = "Atom Development Team"
 # Import all available modules with error handling
 __all__ = []
 
+
 def _import_module(module_name, display_name=None):
     """Helper function to safely import modules."""
     if display_name is None:
         display_name = module_name
     try:
-        globals()[display_name] = __import__(f'.{module_name}', package=__name__, level=1)
+        globals()[display_name] = __import__(
+            f".{module_name}", package=__name__, level=1
+        )
         __all__.append(display_name)
         return True
     except ImportError as e:
         print(f"Warning: Could not import {module_name} module: {e}")
         return False
+
 
 # Hardware modules
 _import_module("gpio")
@@ -145,12 +158,17 @@ _import_module("pidwatcher")
 _import_module("crash_quotes")
 _import_module("crontab")
 
+# Debug and protection modules
+_import_module("crash")
+_import_module("nodebugger")
+
 # Registry modules (platform-specific)
 _import_module("registry")
 _import_module("wregistry")
 
 # Scheduling modules
 _import_module("priority")
+
 
 def get_available_modules():
     """
@@ -166,6 +184,7 @@ def get_available_modules():
     """
     return __all__.copy()
 
+
 def module_info():
     """
     Get information about the system module.
@@ -180,18 +199,35 @@ def module_info():
         >>> print(f"Available modules: {len(info['available_modules'])}")
     """
     return {
-        'version': __version__,
-        'author': __author__,
-        'description': 'Comprehensive system-level functionality for the Atom package',
-        'available_modules': get_available_modules(),
-        'total_modules': len(__all__),
-        'categories': {
-            'hardware': ['gpio', 'device', 'voltage'],
-            'network': ['network_manager', 'virtual_network'],
-            'system_info': ['user', 'software', 'stat', 'env'],
-            'system_ops': ['power', 'clipboard', 'command', 'process', 'process_info', 'process_manager', 'storage'],
-            'security_monitoring': ['shortcut', 'signal', 'signal_monitor', 'signal_utils', 'pidwatcher', 'crash_quotes', 'crontab'],
-            'registry': ['registry', 'wregistry'],
-            'scheduling': ['priority']
-        }
+        "version": __version__,
+        "author": __author__,
+        "description": "Comprehensive system-level functionality for the Atom package",
+        "available_modules": get_available_modules(),
+        "total_modules": len(__all__),
+        "categories": {
+            "hardware": ["gpio", "device", "voltage"],
+            "network": ["network_manager", "virtual_network"],
+            "system_info": ["user", "software", "stat", "env"],
+            "system_ops": [
+                "power",
+                "clipboard",
+                "command",
+                "process",
+                "process_info",
+                "process_manager",
+                "storage",
+            ],
+            "security_monitoring": [
+                "shortcut",
+                "signal",
+                "signal_monitor",
+                "signal_utils",
+                "pidwatcher",
+                "crash_quotes",
+                "crontab",
+            ],
+            "debug_protection": ["crash", "nodebugger"],
+            "registry": ["registry", "wregistry"],
+            "scheduling": ["priority"],
+        },
     }

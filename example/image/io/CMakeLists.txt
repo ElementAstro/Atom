@@ -6,7 +6,13 @@ get_filename_component(PARENT_DIR ${CMAKE_CURRENT_SOURCE_DIR}/.. NAME)
 
 # I/O image examples
 set(IO_EXAMPLES
-    file_operations format_conversion io_features caching_prefetching
+    file_operations
+    format_conversion
+    io_features
+    caching_prefetching
+    format_detector_example
+    image_loader_example
+    image_saver_example
     # streaming_io_demo  # Disabled: missing streaming_reader.hpp header
     # memory_mapped_io  # Disabled: missing memory_mapped_file.hpp header
 )

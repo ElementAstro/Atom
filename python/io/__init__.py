@@ -44,6 +44,7 @@ Examples:
 # Import all available modules
 try:
     from . import core_io
+
     __all__ = ["core_io"]
 except ImportError as e:
     print(f"Warning: Could not import core_io: {e}")
@@ -51,18 +52,21 @@ except ImportError as e:
 
 try:
     from . import core_glob
+
     __all__.append("core_glob")
 except ImportError as e:
     print(f"Warning: Could not import core_glob: {e}")
 
 try:
     from . import file_info
+
     __all__.append("file_info")
 except ImportError as e:
     print(f"Warning: Could not import file_info: {e}")
 
 try:
     from . import file_permission
+
     __all__.append("file_permission")
 except ImportError as e:
     print(f"Warning: Could not import file_permission: {e}")
@@ -70,41 +74,70 @@ except ImportError as e:
 # Import existing modules
 try:
     from . import asyncio
+
     __all__.append("asyncio")
 except ImportError as e:
     print(f"Warning: Could not import asyncio: {e}")
 
 try:
     from . import compress
+
     __all__.append("compress")
 except ImportError as e:
     print(f"Warning: Could not import compress: {e}")
 
 try:
     from . import dirstack
+
     __all__.append("dirstack")
 except ImportError as e:
     print(f"Warning: Could not import dirstack: {e}")
 
 try:
     from . import glob
+
     __all__.append("glob")
 except ImportError as e:
     print(f"Warning: Could not import glob: {e}")
+
+# Import new modules
+try:
+    from . import path_utils
+
+    __all__.append("path_utils")
+except ImportError as e:
+    print(f"Warning: Could not import path_utils: {e}")
+
+try:
+    from . import async_glob
+
+    __all__.append("async_glob")
+except ImportError as e:
+    print(f"Warning: Could not import async_glob: {e}")
+
+try:
+    from . import async_compress
+
+    __all__.append("async_compress")
+except ImportError as e:
+    print(f"Warning: Could not import async_compress: {e}")
 
 # Module metadata
 __version__ = "1.0.0"
 __author__ = "Atom Project"
 __description__ = "Comprehensive I/O functionality for the Atom project"
 
+
 # Convenience imports for common operations
 def get_version():
     """Get the version of the atom.io module."""
     return __version__
 
+
 def list_available_modules():
     """List all available modules in the atom.io package."""
     return __all__
+
 
 def get_module_info():
     """Get information about the atom.io module."""
@@ -113,5 +146,5 @@ def get_module_info():
         "author": __author__,
         "description": __description__,
         "available_modules": __all__,
-        "total_modules": len(__all__)
+        "total_modules": len(__all__),
     }

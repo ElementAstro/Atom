@@ -25,6 +25,9 @@ set(ATOM_COMPONENTS_DEPENDS atom-error atom-log atom-utils)
 # Connection module dependencies
 set(ATOM_CONNECTION_DEPENDS atom-error atom-log atom-utils)
 
+# Image module dependencies
+set(ATOM_IMAGE_DEPENDS atom-error atom-utils)
+
 # IO module dependencies
 set(ATOM_IO_DEPENDS atom-error atom-log)
 
@@ -59,6 +62,7 @@ set(ATOM_MODULE_BUILD_ORDER
     atom-meta
     atom-utils
     atom-algorithm
+    atom-image
     atom-io
     atom-system
     atom-sysinfo

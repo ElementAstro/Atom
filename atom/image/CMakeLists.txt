@@ -113,55 +113,6 @@ if(OpenCV_FOUND)
     formats/ser/exception.h)
 endif()
 
-# Create object library
-add_library(atom-image-object OBJECT ${ATOM_IMAGE_SOURCES})
-
-# Set include directories
-target_include_directories(
-  atom-image-object
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
-         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
-         $<INSTALL_INTERFACE:include>)
-
-# Link required libraries
-set(ATOM_IMAGE_LINK_LIBRARIES)
-
-if(TARGET atom-error)
-  list(APPEND ATOM_IMAGE_LINK_LIBRARIES atom-error)
-endif()
-
-if(loguru_FOUND AND TARGET loguru::loguru)
-  list(APPEND ATOM_IMAGE_LINK_LIBRARIES loguru::loguru)
-endif()
-
-if(ATOM_IMAGE_LINK_LIBRARIES)
-  target_link_libraries(atom-image-object PUBLIC ${ATOM_IMAGE_LINK_LIBRARIES})
-endif()
-
-# Link optional libraries
-if(OpenCV_FOUND)
-  target_link_libraries(atom-image-object PUBLIC ${OpenCV_LIBS})
-  target_include_directories(atom-image-object PUBLIC ${OpenCV_INCLUDE_DIRS})
-  target_compile_definitions(atom-image-object PUBLIC ATOM_IMAGE_HAS_OPENCV)
-endif()
-
-if(CFITSIO_FOUND)
-  target_link_libraries(atom-image-object PUBLIC ${CFITSIO_LIBRARIES})
-  target_include_directories(atom-image-object PUBLIC ${CFITSIO_INCLUDE_DIRS})
-  target_compile_definitions(atom-image-object PUBLIC ATOM_IMAGE_HAS_CFITSIO)
-endif()
-
-if(ATOM_IMAGE_HAS_OCR)
-  target_link_libraries(atom-image-object PUBLIC ${TESSERACT_LIBRARIES}
-                                                 ${LEPTONICA_LIBRARIES})
-  target_include_directories(atom-image-object PUBLIC ${TESSERACT_INCLUDE_DIRS}
-                                                      ${LEPTONICA_INCLUDE_DIRS})
-  target_compile_definitions(atom-image-object PUBLIC ATOM_IMAGE_HAS_OCR)
-endif()
-
-# Set compiler flags
-target_compile_features(atom-image-object PUBLIC cxx_std_20)
-
 # Create library target
 add_library(atom-image STATIC ${ATOM_IMAGE_SOURCES})
 
@@ -171,11 +122,6 @@ atom_configure_module(atom-image)
 # Logging and compression dependencies
 atom_setup_logging_deps(atom-image)
 atom_setup_compression_deps(atom-image)
-
-# Link module-specific dependencies
-if(ATOM_IMAGE_LINK_LIBRARIES)
-  target_link_libraries(atom-image PUBLIC ${ATOM_IMAGE_LINK_LIBRARIES})
-endif()
 
 # Link optional dependencies
 if(OpenCV_FOUND)
@@ -198,29 +144,19 @@ if(ATOM_IMAGE_HAS_OCR)
   target_compile_definitions(atom-image PUBLIC ATOM_IMAGE_HAS_OCR)
 endif()
 
-# Set compiler flags
-target_compile_features(atom-image PUBLIC cxx_std_20)
+# Install library target
+install(
+  TARGETS atom-image
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+  INCLUDES
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 
 # Install headers
 install(FILES ${ATOM_IMAGE_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/image)
 
-# Note: Export disabled due to dependency issues install(EXPORT
-# atom-image-targets FILE atom-image-targets.cmake NAMESPACE atom:: DESTINATION
-# lib/cmake/atom-image )
-
-# Create config file
-include(CMakePackageConfigHelpers)
-write_basic_package_version_file(
-  atom-image-config-version.cmake
-  VERSION ${PROJECT_VERSION}
-  COMPATIBILITY SameMajorVersion)
-
-configure_package_config_file(
-  ${CMAKE_CURRENT_SOURCE_DIR}/atom-image-config.cmake.in
-  ${CMAKE_CURRENT_BINARY_DIR}/atom-image-config.cmake
-  INSTALL_DESTINATION lib/cmake/atom-image)
-
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/atom-image-config.cmake
-              ${CMAKE_CURRENT_BINARY_DIR}/atom-image-config-version.cmake
-        DESTINATION lib/cmake/atom-image)
+# Export targets Per-module export and config packaging is disabled here to
+# avoid cross-target export dependencies. Combined packaging is handled at
+# higher level.

@@ -29,8 +29,9 @@ Examples:
 """
 
 # Import all existing modules with error handling
+# Address module (from address subdirectory)
 try:
-    from .address import (
+    from .address.address import (
         Address,
         IPv4,
         IPv6,
@@ -41,13 +42,14 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import address module: {e}")
 
+# HTTP modules (from http subdirectory)
 try:
-    from .downloader import DownloadManager, download_file, download_files
+    from .http.downloader import DownloadManager, download_file, download_files
 except ImportError as e:
     print(f"Warning: Could not import downloader module: {e}")
 
 try:
-    from .httpparser import (
+    from .http.httpparser import (
         Cookie,
         HttpHeaderParser,
         HttpMethod,
@@ -64,7 +66,13 @@ except ImportError as e:
     print(f"Warning: Could not import httpparser module: {e}")
 
 try:
-    from .mimetype import (
+    from .http.curl import CurlWrapper, simple_get, simple_post
+except ImportError as e:
+    print(f"Warning: Could not import curl module: {e}")
+
+# MIME module (from mime subdirectory)
+try:
+    from .mime.mimetype import (
         MimeTypeConfig,
         MimeTypeException,
         MimeTypes,
@@ -75,32 +83,9 @@ try:
 except ImportError as e:
     print(f"Warning: Could not import mimetype module: {e}")
 
+# Time module (from time subdirectory)
 try:
-    from .utils import (  # System initialization; Port utilities; DNS utilities; IP validation; Network connectivity
-        check_and_kill_program_on_port,
-        check_internet_connectivity,
-        clear_dns_cache_expired_entries,
-        get_ip_addresses,
-        get_local_ip_addresses,
-        get_process_id_on_port,
-        initialize_windows_socket_api,
-        is_port_in_use,
-        is_port_in_use_async,
-        is_valid_ipv4,
-        is_valid_ipv6,
-        set_dns_cache_ttl,
-    )
-except ImportError as e:
-    print(f"Warning: Could not import utils module: {e}")
-
-# Import new modules
-try:
-    from .curl import CurlWrapper, simple_get, simple_post
-except ImportError as e:
-    print(f"Warning: Could not import curl module: {e}")
-
-try:
-    from .time import (
+    from .time.time import (
         TimeError,
         TimeManager,
         check_ntp_server,
@@ -109,6 +94,31 @@ try:
     )
 except ImportError as e:
     print(f"Warning: Could not import time module: {e}")
+
+# Utils module (from utils subdirectory)
+try:
+    from .utils.utils import (  # System initialization; Port utilities; DNS utilities; IP validation; Network connectivity; Socket utilities; Port scanning
+        bind_socket,
+        check_and_kill_program_on_port,
+        check_internet_connectivity,
+        clear_dns_cache_expired_entries,
+        create_socket,
+        get_ip_addresses,
+        get_local_ip_addresses,
+        get_process_id_on_port,
+        initialize_windows_socket_api,
+        is_port_in_use,
+        is_port_in_use_async,
+        is_valid_ipv4,
+        is_valid_ipv6,
+        scan_port,
+        scan_port_range,
+        scan_port_range_async,
+        set_dns_cache_ttl,
+        set_socket_non_blocking,
+    )
+except ImportError as e:
+    print(f"Warning: Could not import utils module: {e}")
 
 # Define comprehensive __all__ for proper module exposure
 __all__ = [
@@ -163,4 +173,12 @@ __all__ = [
     "is_valid_ipv4",
     "is_valid_ipv6",
     "check_internet_connectivity",
+    # Socket utility functions
+    "create_socket",
+    "bind_socket",
+    "set_socket_non_blocking",
+    # Port scanning functions
+    "scan_port",
+    "scan_port_range",
+    "scan_port_range_async",
 ]
