@@ -57,6 +57,7 @@ build-msvc/
 cmake-build-*/
 out/
 _build/
+python/build-python/
 
 # CMake cache and generated files
 CMakeCache.txt
