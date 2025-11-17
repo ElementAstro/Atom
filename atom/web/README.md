@@ -131,7 +131,7 @@ The module supports both CMake and XMake build systems. The build files have bee
 
 ### Dependencies
 
-- **Core**: C++20 compiler support, loguru (logging)
+- **Core**: C++20 compiler support, spdlog (logging)
 - **HTTP**: libcurl for HTTP client functionality
 - **Network**: Platform-specific networking libraries (Winsock on Windows)
 - **Optional**: Boost.Asio for enhanced networking features

@@ -103,7 +103,7 @@ The module supports both CMake and XMake build systems. The build files have bee
 
 ### Dependencies
 
-- **Core**: C++20 compiler support, loguru (logging)
+- **Core**: C++20 compiler support, spdlog (logging)
 - **Compression**: ZLib, MiniZip-ng for compression operations
 - **Async**: ASIO (optional) for enhanced asynchronous operations
 - **Threading**: TBB (Intel Threading Building Blocks)

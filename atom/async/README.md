@@ -135,7 +135,7 @@ The module supports both CMake and XMake build systems. The build files have bee
 ## Dependencies
 
 - C++20 compiler support
-- loguru (logging)
+- spdlog (logging)
 - Optional: Boost (for enhanced features)
 - Optional: ASIO (for network async operations)
 

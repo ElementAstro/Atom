@@ -133,7 +133,13 @@ foreach(type ${MODULE_TYPES})
       endif()
     endif()
 
-    target_link_libraries(atom_${type} PRIVATE loguru atom-error)
+    # Link spdlog if available
+    find_package(spdlog QUIET)
+    if(spdlog_FOUND)
+      target_link_libraries(atom_${type} PRIVATE spdlog::spdlog atom-error)
+    else()
+      target_link_libraries(atom_${type} PRIVATE atom-error)
+    endif()
 
     # Set output name
     set_target_properties(

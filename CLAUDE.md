@@ -70,7 +70,7 @@ Atom is organized into modular components under `atom/`:
 - **OpenCV**: Computer vision and image processing (image module)
 - **CFITSIO**: FITS file format support (image module, optional)
 - **Tesseract**: OCR capabilities (image module, optional)
-- **loguru**: Logging framework
+- **spdlog**: Logging framework
 - **GTest**: Unit testing framework
 
 ### Python Bindings

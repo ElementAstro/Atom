@@ -17,33 +17,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 find_package(Threads REQUIRED)
 find_package(CURL REQUIRED)
 
-# Find loguru - try multiple approaches
-find_path(LOGURU_INCLUDE_DIR loguru.hpp
-          PATHS /usr/include /usr/local/include /mingw64/include
-                ${CMAKE_PREFIX_PATH}/include)
-find_library(
-  LOGURU_LIBRARY
-  NAMES loguru
-  PATHS /usr/lib /usr/local/lib /mingw64/lib ${CMAKE_PREFIX_PATH}/lib)
+# Find spdlog for logging
+find_package(spdlog QUIET)
 
-# Try pkg-config as fallback
-if(NOT LOGURU_INCLUDE_DIR OR NOT LOGURU_LIBRARY)
-  find_package(PkgConfig QUIET)
-  if(PkgConfig_FOUND)
-    pkg_check_modules(LOGURU QUIET loguru)
-  endif()
-endif()
-
-if(NOT LOGURU_INCLUDE_DIR AND NOT LOGURU_FOUND)
-  message(STATUS "Loguru not found, web examples will be built without logging")
-  set(LOGURU_AVAILABLE FALSE)
+if(spdlog_FOUND)
+  message(STATUS "Found spdlog - logging enabled for web examples")
+  set(SPDLOG_AVAILABLE TRUE)
 else()
-  set(LOGURU_AVAILABLE TRUE)
-  if(LOGURU_INCLUDE_DIR)
-    message(STATUS "Found Loguru: ${LOGURU_INCLUDE_DIR}")
-  else()
-    message(STATUS "Found Loguru via pkg-config")
-  endif()
+  message(STATUS "spdlog not found, web examples will be built without logging")
+  set(SPDLOG_AVAILABLE FALSE)
 endif()
 
 # Options for building examples
@@ -85,16 +67,9 @@ function(create_web_example EXAMPLE_PATH CATEGORY)
 
     target_link_libraries(${TARGET_NAME} atom ${CMAKE_THREAD_LIBS_INIT})
 
-    # Add loguru if available
-    if(LOGURU_AVAILABLE)
-      if(LOGURU_LIBRARY)
-        target_link_libraries(${TARGET_NAME} ${LOGURU_LIBRARY})
-        target_include_directories(${TARGET_NAME} PRIVATE ${LOGURU_INCLUDE_DIR})
-      elseif(LOGURU_FOUND)
-        target_link_libraries(${TARGET_NAME} ${LOGURU_LIBRARIES})
-        target_include_directories(${TARGET_NAME}
-                                   PRIVATE ${LOGURU_INCLUDE_DIRS})
-      endif()
+    # Add spdlog if available
+    if(SPDLOG_AVAILABLE)
+      target_link_libraries(${TARGET_NAME} spdlog::spdlog)
     endif()
 
     # Platform-specific libraries

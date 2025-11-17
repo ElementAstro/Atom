@@ -54,7 +54,7 @@ A comprehensive, modular C++20/C++23 foundational library for astronomical softw
 - **C++ Compiler**: GCC 11+, Clang 12+, or MSVC 2022+
 - **CMake**: 3.21 or later
 - **Python**: 3.8+ (for Python bindings)
-- **Dependencies**: OpenSSL, loguru, optional: OpenCV, CFITSIO, Tesseract
+- **Dependencies**: OpenSSL, spdlog, optional: OpenCV, CFITSIO, Tesseract
 
 ### Building
 
@@ -301,7 +301,7 @@ pre-commit run -a
 
 ### Required
 
-- **loguru**: Logging framework
+- **spdlog**: Logging framework
 - **OpenSSL**: Cryptographic operations
 
 ### Optional

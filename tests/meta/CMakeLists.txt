@@ -74,7 +74,6 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
               atom-meta
               atom-error
               atom-utils
-              loguru
               # GoogleTest
               gtest
               gtest_main
@@ -94,7 +93,6 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
               atom-meta
               atom-error
               atom-utils
-              loguru
               # GoogleTest
               gtest
               gtest_main

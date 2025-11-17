@@ -32,7 +32,7 @@ target("atom-log-object")
     add_headerfiles(table.unpack(headers))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog")
 
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -41,15 +41,9 @@ target("atom-log-object")
     -- Set C++ standard
     set_languages("c++20")
 
-    -- Configure loguru options
-    if is_plat("windows") then
-        add_defines("LOGURU_STACKTRACES=1", {public = true})
-    else
-        add_defines("LOGURU_STACKTRACES=1", {public = true})
-    end
-
-    add_defines("LOGURU_WITH_STREAMS=1", {public = true})
-    add_defines("LOGURU_RTTI=1", {public = true})
+    -- Configure spdlog options
+    add_defines("SPDLOG_USE_STD_FORMAT=1", {public = true})
+    add_defines("SPDLOG_HEADER_ONLY", {public = true})
 target_end()
 
 -- Library target
@@ -59,11 +53,10 @@ target("atom-log")
 
     -- Add dependencies
     add_deps("atom-log-object")
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Platform-specific settings
     if is_plat("windows") then
-        add_packages("dlfcn-win32")
         add_syslinks("dbghelp")
     else
         add_syslinks("dl", "pthread")

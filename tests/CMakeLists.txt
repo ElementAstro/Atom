@@ -23,7 +23,7 @@ find_package(Threads REQUIRED)
 function(copy_test_dlls TARGET_NAME)
   if(WIN32)
     # List of all DLL targets that might be needed by tests
-    set(DLL_TARGETS atom-error atom-log loguru atom-component)
+    set(DLL_TARGETS atom-error atom-log atom-component)
 
     # Copy each DLL if it exists as a target
     foreach(DLL_TARGET ${DLL_TARGETS})
@@ -48,13 +48,6 @@ endmacro()
 
 # Add a global post-build step to copy DLLs to all test directories
 if(WIN32)
-  # Determine the correct loguru DLL name based on build type
-  if(CMAKE_BUILD_TYPE MATCHES "Debug")
-    set(LOGURU_DLL_NAME "liblogurud.dll")
-  else()
-    set(LOGURU_DLL_NAME "libloguru.dll")
-  endif()
-
   # This custom target will copy DLLs after all tests are built
   add_custom_target(
     copy_all_test_dlls ALL
@@ -67,11 +60,7 @@ if(WIN32)
       ${CMAKE_COMMAND} -E copy_if_different
       "${CMAKE_BINARY_DIR}/atom/log/libatom-log.dll"
       "${CMAKE_CURRENT_BINARY_DIR}/"
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_BINARY_DIR}/atom/log/${LOGURU_DLL_NAME}"
-      "${CMAKE_CURRENT_BINARY_DIR}/"
-    DEPENDS atom-error atom-log loguru
+    DEPENDS atom-error atom-log
     COMMENT "Copying DLLs to test root directory")
 endif()
 
@@ -347,10 +336,6 @@ if(WIN32)
         COMMAND
           ${CMAKE_COMMAND} -E copy_if_different
           "${CMAKE_BINARY_DIR}/atom/log/libatom-log.dll"
-          "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
-        COMMAND
-          ${CMAKE_COMMAND} -E copy_if_different
-          "${CMAKE_BINARY_DIR}/atom/log/${LOGURU_DLL_NAME}"
           "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
         COMMENT "Copying DLLs to ${SUBDIR} test directory"
         VERBATIM)

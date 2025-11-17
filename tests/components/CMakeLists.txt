@@ -45,18 +45,18 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../)
 
 # Bring in required Atom modules so targets resolve locally Only add
 # subdirectories if the targets do not already exist (to avoid duplicates when
-# included from the top-level) Build error first (no external loguru dependency)
+# included from the top-level) Build error first
 if(NOT TARGET atom-error)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/error
                    ${CMAKE_CURRENT_BINARY_DIR}/atom-error)
 endif()
-# Build log module which provides loguru target wrapper Ensure ZLIB is available
-# for atom-log and provide a stub for atom-web to satisfy link interface
+# Build log module - Ensure ZLIB is available for atom-log and provide a stub
+# for atom-web to satisfy link interface
 find_package(ZLIB REQUIRED)
 if(NOT TARGET atom-web)
   add_library(atom-web INTERFACE)
 endif()
-if(NOT TARGET loguru)
+if(NOT TARGET atom-log)
   add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../atom/log
                    ${CMAKE_CURRENT_BINARY_DIR}/atom-log)
 endif()
