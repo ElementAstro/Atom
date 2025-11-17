@@ -121,7 +121,11 @@ if(OpenSSL_FOUND)
   list(APPEND LIBS OpenSSL::SSL OpenSSL::Crypto)
 endif()
 
-list(APPEND LIBS loguru)
+# Add spdlog for logging
+find_package(spdlog QUIET)
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
 if(TBB_FOUND)
   list(APPEND LIBS TBB::tbb)

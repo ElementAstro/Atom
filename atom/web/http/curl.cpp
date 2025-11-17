@@ -26,6 +26,16 @@ namespace atom::web {
 
 constexpr long TIMEOUT_MS = 1000;
 
+namespace {
+void ensureCurlGlobalInit() {
+    static const auto initialized = [] {
+        curl_global_init(CURL_GLOBAL_DEFAULT);
+        return 0;
+    }();
+    (void)initialized;
+}
+}  // namespace
+
 class CurlWrapper::Impl {
 public:
     Impl();
@@ -61,6 +71,8 @@ private:
     std::string responseData_;
     std::string requestBody_;
     std::unique_ptr<std::ifstream> uploadFile_;
+    std::thread worker_;
+    bool asyncRunning_ = false;
 
     static auto writeCallback(void *contents, size_t size, size_t nmemb,
                               void *userp) -> size_t;
@@ -147,9 +159,18 @@ auto CurlWrapper::setMaxDownloadSpeed(size_t speed) -> CurlWrapper & {
 }
 
 CurlWrapper::Impl::Impl()
-    : multiHandle_(curl_multi_init()), headersList_(nullptr) {
+    : handle_(nullptr),
+      multiHandle_(curl_multi_init()),
+      headersList_(nullptr),
+      worker_(),
+      asyncRunning_(false) {
     spdlog::info("CurlWrapper::Impl constructor called");
-    curl_global_init(CURL_GLOBAL_ALL);
+    ensureCurlGlobalInit();
+    if (!multiHandle_) {
+        spdlog::error("Failed to initialize CURL multi handle");
+        THROW_CURL_INITIALIZATION_ERROR(
+            "Failed to initialize CURL multi handle.");
+    }
     handle_ = curl_easy_init();
     if (handle_ == nullptr) {
         spdlog::error("Failed to initialize CURL");
@@ -161,12 +182,19 @@ CurlWrapper::Impl::Impl()
 
 CurlWrapper::Impl::~Impl() {
     spdlog::info("CurlWrapper::Impl destructor called");
+    waitAll();
     if (headersList_) {
         curl_slist_free_all(headersList_);
+        headersList_ = nullptr;
     }
-    curl_easy_cleanup(handle_);
-    curl_multi_cleanup(multiHandle_);
-    curl_global_cleanup();
+    if (handle_) {
+        curl_easy_cleanup(handle_);
+        handle_ = nullptr;
+    }
+    if (multiHandle_) {
+        curl_multi_cleanup(multiHandle_);
+        multiHandle_ = nullptr;
+    }
     spdlog::info("CurlWrapper::Impl cleaned up successfully");
 }
 
@@ -315,21 +343,35 @@ auto CurlWrapper::Impl::perform() -> std::string {
 
 auto CurlWrapper::Impl::performAsync() -> CurlWrapper::Impl & {
     spdlog::info("Performing asynchronous request");
-    std::lock_guard lock(mutex_);
-    responseData_.clear();
-    responseData_.reserve(4096);
+    {
+        std::unique_lock lock(mutex_);
+        if (asyncRunning_) {
+            spdlog::info(
+                "Previous asynchronous request still running, waiting");
+            cv_.wait(lock, [this]() { return !asyncRunning_; });
+        }
 
-    curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, writeCallback);
-    curl_easy_setopt(handle_, CURLOPT_WRITEDATA, &responseData_);
+        responseData_.clear();
+        responseData_.reserve(4096);
 
-    CURLMcode multiCode = curl_multi_add_handle(multiHandle_, handle_);
-    if (multiCode != CURLM_OK) {
-        spdlog::error("curl_multi_add_handle failed: {}",
-                      curl_multi_strerror(multiCode));
-        THROW_CURL_RUNTIME_ERROR("Failed to add handle to multi handle.");
+        curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, writeCallback);
+        curl_easy_setopt(handle_, CURLOPT_WRITEDATA, &responseData_);
+
+        CURLMcode multiCode = curl_multi_add_handle(multiHandle_, handle_);
+        if (multiCode != CURLM_OK) {
+            spdlog::error("curl_multi_add_handle failed: {}",
+                          curl_multi_strerror(multiCode));
+            THROW_CURL_RUNTIME_ERROR("Failed to add handle to multi handle.");
+        }
+
+        asyncRunning_ = true;
     }
 
-    std::thread([this]() {
+    if (worker_.joinable()) {
+        worker_.join();
+    }
+
+    worker_ = std::thread([this]() {
         int stillRunning = 0;
         curl_multi_perform(multiHandle_, &stillRunning);
 
@@ -371,17 +413,26 @@ auto CurlWrapper::Impl::performAsync() -> CurlWrapper::Impl & {
             }
         }
 
+        {
+            std::lock_guard lock(mutex_);
+            asyncRunning_ = false;
+        }
         cv_.notify_one();
-    }).detach();
+    });
 
     return *this;
 }
 
 void CurlWrapper::Impl::waitAll() {
     spdlog::info("Waiting for all asynchronous requests to complete");
-    std::unique_lock lock(mutex_);
-    cv_.wait(lock);
+    {
+        std::unique_lock lock(mutex_);
+        cv_.wait(lock, [this]() { return !asyncRunning_; });
+    }
     spdlog::info("All asynchronous requests completed");
+    if (worker_.joinable()) {
+        worker_.join();
+    }
 }
 
 auto CurlWrapper::Impl::writeCallback(void *contents, size_t size, size_t nmemb,

@@ -1,5 +1,5 @@
 ---
-type: "always_apply"
+type: "manual"
 ---
 
 # Review and Clean Up CMake Build Configuration

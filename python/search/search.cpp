@@ -68,7 +68,11 @@ Examples:
              "Removes a tag from the document")
         .def("increment_click_count",
              &atom::search::Document::incrementClickCount,
-             "Increments the document's click count");
+             "Increments the document's click count")
+        .def("set_click_count", &atom::search::Document::setClickCount,
+             py::arg("count"), "Sets the document's click count")
+        .def("reset_click_count", &atom::search::Document::resetClickCount,
+             "Resets the document's click count to zero");
 
     // SearchEngine class binding
     py::class_<atom::search::SearchEngine>(
@@ -210,5 +214,15 @@ Args:
 
 Raises:
     IOError: If the file cannot be read
-)");
+)")
+        .def("get_document_count",
+             &atom::search::SearchEngine::getDocumentCount,
+             "Gets the total number of documents in the search engine")
+        .def("clear", &atom::search::SearchEngine::clear,
+             "Clears all documents and indexes")
+        .def("has_document", &atom::search::SearchEngine::hasDocument,
+             py::arg("doc_id"), "Checks if a document with the given ID exists")
+        .def("get_all_document_ids",
+             &atom::search::SearchEngine::getAllDocumentIds,
+             "Gets a list of all document IDs");
 }

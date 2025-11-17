@@ -129,8 +129,15 @@ if(NOT TARGET fmt::fmt)
   find_package(fmt QUIET)
 endif()
 
-set(LIBS atom-error loguru $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>
+# Find spdlog for logging
+find_package(spdlog QUIET)
+
+set(LIBS atom-error $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>
          ${CMAKE_THREAD_LIBS_INIT})
+
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
 # Create library target (shared library for components)
 add_library(atom-component SHARED ${SOURCES} ${HEADERS} ${OPTIONAL_SOURCES}

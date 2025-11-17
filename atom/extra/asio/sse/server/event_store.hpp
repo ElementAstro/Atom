@@ -22,7 +22,7 @@ namespace atom::extra::asio::sse {
  * of recent events and supports persistence to disk for durability.
  * Thread-safe access is ensured for concurrent operations.
  */
-class EventStore {
+class ServerEventStore {
 public:
     /**
      * @brief Construct an EventStore.
@@ -33,8 +33,8 @@ public:
      * Initializes the event store, loads existing events from disk if
      * available, and sets the maximum number of events to retain in memory.
      */
-    explicit EventStore(const std::string& store_path,
-                        size_t max_events = 1000);
+    explicit ServerEventStore(const std::string& store_path,
+                              size_t max_events = 1000);
 
     /**
      * @brief Store a new event in the event store.
@@ -57,6 +57,13 @@ public:
     std::vector<Event> get_events(
         size_t limit = std::numeric_limits<size_t>::max(),
         const std::string& event_type = "") const;
+
+    std::vector<Event> get_recent_events_for_channel(
+        size_t limit, const std::string& channel) const;
+
+    std::vector<Event> get_events_after_id(const std::string& last_event_id,
+                                           size_t limit,
+                                           const std::string& channel) const;
 
     /**
      * @brief Retrieve events that occurred since a given timestamp.

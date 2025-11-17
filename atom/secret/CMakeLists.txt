@@ -27,7 +27,7 @@ set(HEADERS
     serialization.hpp
     storage.hpp)
 
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+set(LIBS ${CMAKE_THREAD_LIBS_INIT})
 
 # Find required packages
 find_package(OpenSSL QUIET)

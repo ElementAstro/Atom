@@ -36,10 +36,35 @@ if(asio_FOUND
       mqtt/types.hpp)
 
   # SSE (Server-Sent Events) source files
-  set(SSE_SOURCES sse/event.cpp sse/event_store.cpp)
+  set(SSE_SOURCES
+      sse/event.cpp
+      sse/event_store.cpp
+      sse/client/client.cpp
+      sse/client/client_config.cpp
+      sse/server/auth_service.cpp
+      sse/server/connection.cpp
+      sse/server/event_queue.cpp
+      sse/server/event_store.cpp
+      sse/server/http_request.cpp
+      sse/server/metrics.cpp
+      sse/server/server.cpp
+      sse/server/server_config.cpp)
 
   # SSE header files
-  set(SSE_HEADERS sse/event.hpp sse/event_store.hpp sse/sse.hpp)
+  set(SSE_HEADERS
+      sse/event.hpp
+      sse/event_store.hpp
+      sse/sse.hpp
+      sse/client/client.hpp
+      sse/client/client_config.hpp
+      sse/server/auth_service.hpp
+      sse/server/connection.hpp
+      sse/server/event_queue.hpp
+      sse/server/event_store.hpp
+      sse/server/http_request.hpp
+      sse/server/metrics.hpp
+      sse/server/server.hpp
+      sse/server/server_config.hpp)
 
   # Main header files
   set(ASIO_HEADERS asio_compatibility.hpp)

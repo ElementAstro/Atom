@@ -79,7 +79,7 @@ void define_cache_class(py::module& m, const char* class_name,
              "Manually trigger cleanup of expired items")
         .def("force_cleanup", &CacheType::force_cleanup,
              "Force cleanup of all expired items immediately")
-        .def("hit_rate", &CacheType::hitRate,
+        .def("hit_rate", &CacheType::hit_rate,
              "Get the cache hit rate as a percentage")
         .def("size", &CacheType::size,
              "Get the current number of items in the cache")

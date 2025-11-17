@@ -175,6 +175,24 @@ public:
     explicit Task(std::coroutine_handle<promise_type> handle)
         : handle_(handle) {}
 
+    Task(const Task&) = delete;
+    Task& operator=(const Task&) = delete;
+
+    Task(Task&& other) noexcept : handle_(other.handle_) {
+        other.handle_ = nullptr;
+    }
+
+    Task& operator=(Task&& other) noexcept {
+        if (this != &other) {
+            if (handle_) {
+                handle_.destroy();
+            }
+            handle_ = other.handle_;
+            other.handle_ = nullptr;
+        }
+        return *this;
+    }
+
     /**
      * @brief Destroys the Task and releases the coroutine handle.
      */
@@ -200,7 +218,7 @@ public:
     }
 
 private:
-    std::coroutine_handle<promise_type> handle_;
+    std::coroutine_handle<promise_type> handle_{};
 };
 
 /**
@@ -213,6 +231,8 @@ struct Awaitable {
     Request request;
     Response response;
     Error* error = nullptr;
+
+    ~Awaitable() { delete error; }
 
     /**
      * @brief Constructs an Awaitable object with the given request.
@@ -264,6 +284,7 @@ struct Awaitable {
         if (error) {
             Error e = *error;
             delete error;
+            error = nullptr;
             throw e;
         }
         return response;
@@ -420,7 +441,30 @@ public:
      */
     Response get(std::string_view path,
                  const std::map<std::string, std::string>& params = {}) {
-        return session_.get(make_url(path), params);
+        std::string url = make_url(path);
+
+        if (!params.empty()) {
+            url += (url.find('?') == std::string::npos) ? '?' : '&';
+
+            bool first = true;
+            for (const auto& [key, value] : params) {
+                if (!first) {
+                    url += '&';
+                }
+                url +=
+                    Session::url_encode(key) + '=' + Session::url_encode(value);
+                first = false;
+            }
+        }
+
+        Request req;
+        req.method(Request::Method::GET).url(url);
+
+        if (!default_headers_.empty()) {
+            req.headers(default_headers_);
+        }
+
+        return session_.execute(req);
     }
 
     /**
@@ -431,7 +475,18 @@ public:
      * @return A Response object containing the server's response.
      */
     Response post(std::string_view path, std::string_view json) {
-        return session_.post(make_url(path), json);
+        std::string url = make_url(path);
+
+        Request req;
+        req.method(Request::Method::POST).url(url).body(json);
+
+        if (!default_headers_.empty()) {
+            req.headers(default_headers_);
+        }
+
+        req.header("Content-Type", "application/json");
+
+        return session_.execute(req);
     }
 
     /**
@@ -442,7 +497,18 @@ public:
      * @return A Response object containing the server's response.
      */
     Response put(std::string_view path, std::string_view json) {
-        return session_.put(make_url(path), json);
+        std::string url = make_url(path);
+
+        Request req;
+        req.method(Request::Method::PUT).url(url).body(json);
+
+        if (!default_headers_.empty()) {
+            req.headers(default_headers_);
+        }
+
+        req.header("Content-Type", "application/json");
+
+        return session_.execute(req);
     }
 
     /**
@@ -450,7 +516,18 @@ public:
      * @param path The path to append to the base URL.
      * @return A Response object containing the server's response.
      */
-    Response del(std::string_view path) { return session_.del(make_url(path)); }
+    Response del(std::string_view path) {
+        std::string url = make_url(path);
+
+        Request req;
+        req.method(Request::Method::DELETE).url(url);
+
+        if (!default_headers_.empty()) {
+            req.headers(default_headers_);
+        }
+
+        return session_.execute(req);
+    }
 
     /**
      * @brief Sets a default header to be included in all requests.

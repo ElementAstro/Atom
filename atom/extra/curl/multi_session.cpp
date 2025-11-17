@@ -1,9 +1,12 @@
 #include "multi_session.hpp"
+#include "session.hpp"
 
 #include <cstring>
 
 namespace atom::extra::curl {
-MultiSession::MultiSession() : multi_handle_(curl_multi_init()) {
+MultiSession::MultiSession() : multi_handle_(nullptr) {
+    ensure_curl_global_init();
+    multi_handle_ = curl_multi_init();
     if (!multi_handle_) {
         throw Error(CURLE_FAILED_INIT,
                     "Failed to initialize curl multi handle");
@@ -178,6 +181,73 @@ void MultiSession::setup_request(const Request& request,
                      request.verify_ssl() ? 2L : 0L);
 
     // 其他选项与Session类似
+    if (request.ca_path()) {
+        curl_easy_setopt(handle, CURLOPT_CAPATH, request.ca_path()->c_str());
+    }
+
+    if (request.ca_info()) {
+        curl_easy_setopt(handle, CURLOPT_CAINFO, request.ca_info()->c_str());
+    }
+
+    if (request.client_cert() && request.client_key()) {
+        curl_easy_setopt(handle, CURLOPT_SSLCERT,
+                         request.client_cert()->c_str());
+        curl_easy_setopt(handle, CURLOPT_SSLKEY, request.client_key()->c_str());
+    }
+
+    if (request.proxy()) {
+        curl_easy_setopt(handle, CURLOPT_PROXY, request.proxy()->c_str());
+
+        if (request.proxy_type()) {
+            curl_easy_setopt(handle, CURLOPT_PROXYTYPE, *request.proxy_type());
+        }
+
+        if (request.proxy_username() && request.proxy_password()) {
+            curl_easy_setopt(handle, CURLOPT_PROXYUSERNAME,
+                             request.proxy_username()->c_str());
+            curl_easy_setopt(handle, CURLOPT_PROXYPASSWORD,
+                             request.proxy_password()->c_str());
+        }
+    }
+
+    if (request.username() && request.password()) {
+        curl_easy_setopt(handle, CURLOPT_USERNAME, request.username()->c_str());
+        curl_easy_setopt(handle, CURLOPT_PASSWORD, request.password()->c_str());
+    }
+
+    if (request.form()) {
+        curl_easy_setopt(handle, CURLOPT_MIMEPOST, request.form());
+    }
+
+    for (const auto& cookie : request.cookies()) {
+        curl_easy_setopt(handle, CURLOPT_COOKIE, cookie.to_string().c_str());
+    }
+
+    if (request.user_agent()) {
+        curl_easy_setopt(handle, CURLOPT_USERAGENT,
+                         request.user_agent()->c_str());
+    }
+
+    if (request.accept_encoding()) {
+        curl_easy_setopt(handle, CURLOPT_ACCEPT_ENCODING,
+                         request.accept_encoding()->c_str());
+    }
+
+    if (request.low_speed_limit() && request.low_speed_time()) {
+        curl_easy_setopt(handle, CURLOPT_LOW_SPEED_LIMIT,
+                         *request.low_speed_limit());
+        curl_easy_setopt(handle, CURLOPT_LOW_SPEED_TIME,
+                         *request.low_speed_time());
+    }
+
+    if (request.resume_from()) {
+        curl_easy_setopt(handle, CURLOPT_RESUME_FROM_LARGE,
+                         *request.resume_from());
+    }
+
+    if (request.http_version()) {
+        curl_easy_setopt(handle, CURLOPT_HTTP_VERSION, *request.http_version());
+    }
 }
 
 void MultiSession::check_multi_info() {

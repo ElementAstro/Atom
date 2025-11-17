@@ -145,8 +145,12 @@ set(HEADERS
     debug/nodebugger.hpp
     scheduling/crontab.hpp)
 
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT} atom-sysinfo atom-meta atom-utils
+find_package(spdlog QUIET)
+set(LIBS ${CMAKE_THREAD_LIBS_INIT} atom-sysinfo atom-meta atom-utils
          ${LIBUSB_LIBRARIES})
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
 # Create library target
 add_library(atom-system STATIC ${SOURCES} ${HEADERS})

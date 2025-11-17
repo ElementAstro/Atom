@@ -8,6 +8,8 @@
 #include <boost/regex.hpp>
 #include <iomanip>
 #include <iostream>
+#include <locale>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>

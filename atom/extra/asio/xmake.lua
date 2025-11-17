@@ -34,14 +34,34 @@ local mqtt_headers = {
 -- SSE (Server-Sent Events) source files
 local sse_sources = {
     "sse/event.cpp",
-    "sse/event_store.cpp"
+    "sse/event_store.cpp",
+    "sse/client/client.cpp",
+    "sse/client/client_config.cpp",
+    "sse/server/auth_service.cpp",
+    "sse/server/connection.cpp",
+    "sse/server/event_queue.cpp",
+    "sse/server/event_store.cpp",
+    "sse/server/http_request.cpp",
+    "sse/server/metrics.cpp",
+    "sse/server/server.cpp",
+    "sse/server/server_config.cpp"
 }
 
 -- SSE header files
 local sse_headers = {
     "sse/event.hpp",
     "sse/event_store.hpp",
-    "sse/sse.hpp"
+    "sse/sse.hpp",
+    "sse/client/client.hpp",
+    "sse/client/client_config.hpp",
+    "sse/server/auth_service.hpp",
+    "sse/server/connection.hpp",
+    "sse/server/event_queue.hpp",
+    "sse/server/event_store.hpp",
+    "sse/server/http_request.hpp",
+    "sse/server/metrics.hpp",
+    "sse/server/server.hpp",
+    "sse/server/server_config.hpp"
 }
 
 -- Main header files

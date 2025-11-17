@@ -3,6 +3,7 @@
 #include <chrono>
 #include <random>
 #include <regex>
+#include "atom/algorithm/encoding/base.hpp"
 #include "event_store.hpp"
 
 using namespace std::chrono_literals;
@@ -248,8 +249,13 @@ private:
             std::string auth = config_.username + ":" + config_.password;
             // Note: Base64 encoding would be implemented here in a real
             // application
-            std::string encoded_auth = "TODO: Base64 encode here";
-            request += "Authorization: Basic " + encoded_auth + "\r\n";
+            auto encoded_result = atom::algorithm::base64Encode(auth);
+            if (encoded_result) {
+                const std::string& encoded_auth = encoded_result.value();
+                request += "Authorization: Basic " + encoded_auth + "\r\n";
+            } else {
+                spdlog::warn("Failed to Base64-encode basic auth credentials");
+            }
         }
 
         if (!config_.last_event_id.empty()) {

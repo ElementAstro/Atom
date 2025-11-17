@@ -4,10 +4,13 @@
 #if __has_include(<boost/charconv.hpp>)
 #include <array>
 #include <boost/charconv.hpp>
+#include <cctype>
 #include <charconv>
 #include <cmath>
+#include <cstdlib>
 #include <optional>
 #include <ranges>
+#include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -167,7 +170,16 @@ public:
     [[nodiscard]] static std::string toString(
         T value, const FormatOptions& options = {}) {
         if constexpr (std::is_integral_v<T>) {
-            return intToString(value, DEFAULT_BASE, options);
+            int base = DEFAULT_BASE;
+            switch (options.format) {
+                case NumberFormat::HEX:
+                    base = 16;
+                    break;
+                default:
+                    base = DEFAULT_BASE;
+                    break;
+            }
+            return intToString(value, base, options);
         } else if constexpr (std::is_floating_point_v<T>) {
             return floatToString(value, options);
         } else {
@@ -256,9 +268,11 @@ public:
             return false;
         }
 
+        std::string tmp(str);
         char* end = nullptr;
-        std::strtod(str.data(), &end);
-        return end == str.data() + str.size();
+        const char* begin = tmp.c_str();
+        std::strtod(begin, &end);
+        return end == begin + tmp.size();
     }
 
 private:
@@ -307,7 +321,7 @@ private:
                 result.push_back(separator);
             }
             result.push_back(ch);
-            if (std::isdigit(ch)) {
+            if (std::isdigit(static_cast<unsigned char>(ch))) {
                 count++;
             }
         }

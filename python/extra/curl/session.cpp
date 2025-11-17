@@ -553,5 +553,57 @@ Returns:
 
 Raises:
     RuntimeError: If the request fails.
+)")
+        .def("download", &atom::extra::curl::Session::download, py::arg("url"),
+             py::arg("filepath"), py::arg("resume_from") = std::nullopt,
+             R"(Download a file from a URL.
+
+Args:
+    url: The URL to download the file from.
+    filepath: The path to save the downloaded file to.
+    resume_from: Optional offset to resume the download from.
+
+Returns:
+    The HTTP response.
+
+Raises:
+    RuntimeError: If the request fails.
+)")
+        .def("upload", &atom::extra::curl::Session::upload, py::arg("url"),
+             py::arg("filepath"), py::arg("field_name") = "file",
+             py::arg("resume_from") = std::nullopt,
+             R"(Upload a file to a URL.
+
+Args:
+    url: The URL to upload the file to.
+    filepath: The path to the file to upload.
+    field_name: The name of the form field to use for the file (default: "file").
+    resume_from: Optional offset to resume the upload from.
+
+Returns:
+    The HTTP response.
+
+Raises:
+    RuntimeError: If the request fails.
+)")
+        .def("url_encode", &atom::extra::curl::Session::url_encode,
+             py::arg("str"),
+             R"(URL encode a string.
+
+Args:
+    str: The string to encode.
+
+Returns:
+    The encoded string.
+)")
+        .def("url_decode", &atom::extra::curl::Session::url_decode,
+             py::arg("str"),
+             R"(URL decode a string.
+
+Args:
+    str: The string to decode.
+
+Returns:
+    The decoded string.
 )");
 }

@@ -16,7 +16,7 @@
 
 namespace atom::extra::asio::sse {
 
-#ifdef USE_COMPRESSION
+#ifdef ATOM_USE_COMPRESSION
 /**
  * @brief Compresses data using zlib.
  * @param data The data to compress.

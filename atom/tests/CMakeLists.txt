@@ -32,7 +32,11 @@ if(NOT nlohmann_json_FOUND)
   endif()
 endif()
 
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+find_package(spdlog QUIET)
+set(LIBS ${CMAKE_THREAD_LIBS_INIT})
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
 # Add nlohmann/json if found
 if(nlohmann_json_FOUND)

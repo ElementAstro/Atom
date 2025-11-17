@@ -74,7 +74,12 @@ set(HEADERS
     utils/lodash.hpp
     utils/timer.hpp)
 
-set(LIBS loguru atom-utils ${CMAKE_THREAD_LIBS_INIT})
+# Add spdlog for logging
+find_package(spdlog QUIET)
+set(LIBS atom-utils ${CMAKE_THREAD_LIBS_INIT})
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
 # Create library target
 add_library(atom-async STATIC ${SOURCES} ${HEADERS})

@@ -104,6 +104,9 @@ public:
      * @return The mean of the dataset
      */
     [[nodiscard]] static T mean(const std::vector<T>& data) {
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
+        }
         return ::boost::math::statistics::mean(data);
     }
 
@@ -113,6 +116,9 @@ public:
      * @return The variance of the dataset
      */
     [[nodiscard]] static T variance(const std::vector<T>& data) {
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
+        }
         return ::boost::math::statistics::variance(data);
     }
 
@@ -122,6 +128,9 @@ public:
      * @return The skewness of the dataset
      */
     [[nodiscard]] static T skewness(const std::vector<T>& data) {
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
+        }
         return ::boost::math::statistics::skewness(data);
     }
 
@@ -131,6 +140,9 @@ public:
      * @return The kurtosis of the dataset
      */
     [[nodiscard]] static T kurtosis(const std::vector<T>& data) {
+        if (data.empty()) {
+            throw std::runtime_error("Dataset must not be empty");
+        }
         return ::boost::math::statistics::kurtosis(data);
     }
 };
@@ -464,13 +476,23 @@ public:
         Matrix matrixCopy = matrix;
         ::boost::numeric::ublas::permutation_matrix<std::size_t>
             permutationMatrix(matrix.size1());
-        ::boost::numeric::ublas::lu_factorize(matrixCopy, permutationMatrix);
+        auto singular = ::boost::numeric::ublas::lu_factorize(
+            matrixCopy, permutationMatrix);
+
+        if (singular != 0) {
+            return T{0};
+        }
         T determinantValue = T{1};
         for (std::size_t i = 0; i < matrix.size1(); ++i) {
             determinantValue *= matrixCopy(i, i);
         }
-        return determinantValue *
-               (permutationMatrix.size() % 2 == 1 ? T{-1} : T{1});
+        int sign = 1;
+        for (std::size_t i = 0; i < permutationMatrix.size(); ++i) {
+            if (i != permutationMatrix(i)) {
+                sign = -sign;
+            }
+        }
+        return determinantValue * static_cast<T>(sign);
     }
 
     /**

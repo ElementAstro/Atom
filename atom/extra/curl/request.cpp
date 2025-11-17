@@ -104,7 +104,8 @@ Request& Request::bearer_auth(std::string_view token) {
 }
 
 Request& Request::multipart_form(MultipartForm& form) {
-    form_ = form.handle();
+    multipart_form_holder_ = form.form_;
+    form_ = multipart_form_holder_ ? multipart_form_holder_->form : nullptr;
     return *this;
 }
 

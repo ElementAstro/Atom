@@ -69,7 +69,11 @@ if(ATOM_USE_SSH)
 endif()
 
 # Dependencies
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+find_package(spdlog QUIET)
+set(LIBS ${CMAKE_THREAD_LIBS_INIT})
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
 # Add OpenSSL if available (optional for MSVC)
 find_package(OpenSSL QUIET)

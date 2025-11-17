@@ -19,7 +19,7 @@ namespace atom::extra::asio::sse {
  */
 class EventQueue {
 public:
-    explicit EventQueue(EventStore& event_store, bool persist_events);
+    explicit EventQueue(ServerEventStore& event_store, bool persist_events);
 
     void push_event(Event event);
     bool has_events() const;
@@ -29,7 +29,7 @@ private:
     std::queue<Event> events_;
     std::mutex mutex_;
     std::atomic<bool> event_available_{false};
-    EventStore& event_store_;
+    ServerEventStore& event_store_;
     bool persist_events_;
 };
 

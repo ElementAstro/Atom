@@ -8,7 +8,7 @@ project(
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Find required packages
-find_package(loguru QUIET)
+find_package(spdlog QUIET)
 
 # Find optional packages
 find_package(OpenCV REQUIRED) # Change to REQUIRED for computer vision

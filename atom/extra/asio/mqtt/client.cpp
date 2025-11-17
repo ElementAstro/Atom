@@ -7,9 +7,9 @@
 namespace mqtt {
 
 Client::Client(bool auto_start_io) : gen_(rd_()) {
-    keep_alive_timer_ = std::make_unique<asio::steady_timer>(io_context_);
-    ping_timeout_timer_ = std::make_unique<asio::steady_timer>(io_context_);
-    reconnect_timer_ = std::make_unique<asio::steady_timer>(io_context_);
+    keep_alive_timer_ = std::make_unique<net::steady_timer>(io_context_);
+    ping_timeout_timer_ = std::make_unique<net::steady_timer>(io_context_);
+    reconnect_timer_ = std::make_unique<net::steady_timer>(io_context_);
 
     reset_stats();
 
@@ -28,8 +28,8 @@ void Client::async_connect(const std::string& host, uint16_t port,
                            ConnectionHandler callback) {
     if (state_.load() != ConnectionState::DISCONNECTED) {
         if (callback) {
-            asio::post(io_context_,
-                       [callback]() { callback(ErrorCode::PROTOCOL_ERROR); });
+            net::post(io_context_,
+                      [callback]() { callback(ErrorCode::PROTOCOL_ERROR); });
         }
         return;
     }
@@ -46,7 +46,7 @@ void Client::async_connect(const std::string& host, uint16_t port,
 
     state_.store(ConnectionState::CONNECTING);
 
-    asio::post(io_context_, [this]() { perform_connect(); });
+    net::post(io_context_, [this]() { perform_connect(); });
 }
 
 void Client::disconnect(ErrorCode reason) {
@@ -57,7 +57,7 @@ void Client::disconnect(ErrorCode reason) {
     state_.store(ConnectionState::DISCONNECTING);
     auto_reconnect_ = false;
 
-    asio::post(io_context_, [this, reason]() {
+    net::post(io_context_, [this, reason]() {
         // Send DISCONNECT packet
         auto disconnect_packet = PacketCodec::serialize_disconnect(
             connection_options_.version, reason);
@@ -88,14 +88,14 @@ void Client::async_publish(Message message,
                            std::function<void(ErrorCode)> callback) {
     if (!is_connected()) {
         if (callback) {
-            asio::post(io_context_,
-                       [callback]() { callback(ErrorCode::PROTOCOL_ERROR); });
+            net::post(io_context_,
+                      [callback]() { callback(ErrorCode::PROTOCOL_ERROR); });
         }
         return;
     }
 
-    asio::post(io_context_, [this, message = std::move(message),
-                             callback = std::move(callback)]() mutable {
+    net::post(io_context_, [this, message = std::move(message),
+                            callback = std::move(callback)]() mutable {
         uint16_t packet_id = 0;
         if (message.qos != QoS::AT_MOST_ONCE) {
             packet_id = generate_packet_id();
@@ -136,7 +136,7 @@ void Client::async_subscribe(
     std::function<void(std::vector<ErrorCode>)> callback) {
     if (!is_connected()) {
         if (callback) {
-            asio::post(io_context_, [callback, &subscriptions]() {
+            net::post(io_context_, [callback, &subscriptions]() {
                 std::vector<ErrorCode> errors(subscriptions.size(),
                                               ErrorCode::PROTOCOL_ERROR);
                 callback(errors);
@@ -145,7 +145,7 @@ void Client::async_subscribe(
         return;
     }
 
-    asio::post(
+    net::post(
         io_context_, [this, subscriptions, callback = std::move(callback)]() {
             uint16_t packet_id = generate_packet_id();
 
@@ -180,7 +180,7 @@ void Client::async_unsubscribe(
     std::function<void(std::vector<ErrorCode>)> callback) {
     if (!is_connected()) {
         if (callback) {
-            asio::post(io_context_, [callback, topic_filters]() {
+            net::post(io_context_, [callback, topic_filters]() {
                 std::vector<ErrorCode> errors(topic_filters.size(),
                                               ErrorCode::PROTOCOL_ERROR);
                 callback(errors);
@@ -189,8 +189,8 @@ void Client::async_unsubscribe(
         return;
     }
 
-    asio::post(io_context_, [this, topic_filters,
-                             callback = std::move(callback)]() {
+    net::post(io_context_, [this, topic_filters,
+                            callback = std::move(callback)]() {
         uint16_t packet_id = generate_packet_id();
 
         // Store pending operation
@@ -212,15 +212,14 @@ void Client::setup_ssl_context(const ConnectionOptions& options) {
     if (!options.use_tls)
         return;
 
-    ssl_context_ =
-        std::make_unique<asio::ssl::context>(asio::ssl::context::tlsv12_client);
+    ssl_context_ = std::make_unique<ssl_context>(ssl::context::tlsv12_client);
 
     if (options.verify_certificate) {
-        ssl_context_->set_verify_mode(asio::ssl::verify_peer |
-                                      asio::ssl::verify_fail_if_no_peer_cert);
+        ssl_context_->set_verify_mode(ssl::verify_peer |
+                                      ssl::verify_fail_if_no_peer_cert);
         ssl_context_->set_default_verify_paths();
     } else {
-        ssl_context_->set_verify_mode(asio::ssl::verify_none);
+        ssl_context_->set_verify_mode(ssl::verify_none);
     }
 
     if (!options.ca_cert_file.empty()) {
@@ -229,12 +228,12 @@ void Client::setup_ssl_context(const ConnectionOptions& options) {
 
     if (!options.cert_file.empty()) {
         ssl_context_->use_certificate_file(options.cert_file,
-                                           asio::ssl::context::pem);
+                                           ssl::context::pem);
     }
 
     if (!options.private_key_file.empty()) {
         ssl_context_->use_private_key_file(options.private_key_file,
-                                           asio::ssl::context::pem);
+                                           ssl::context::pem);
     }
 }
 
@@ -334,17 +333,14 @@ void Client::handle_read(ErrorCode error, size_t bytes_transferred) {
 }
 
 void Client::process_received_data() {
-    packet_buffer_.reset_position();
+    auto buffer_data = packet_buffer_.data();
+    size_t offset = 0;
 
-    while (packet_buffer_.position() < packet_buffer_.size()) {
-        size_t start_pos = packet_buffer_.position();
-
-        // Parse packet header
-        auto header_data = packet_buffer_.data().subspan(start_pos);
-        auto header_result = PacketCodec::parse_header(header_data);
+    while (offset < buffer_data.size()) {
+        auto header_span = buffer_data.subspan(offset);
+        auto header_result = PacketCodec::parse_header(header_span);
 
         if (!header_result) {
-            // Malformed packet, clear buffer
             packet_buffer_.clear();
             notify_error(ErrorCode::MALFORMED_PACKET);
             return;
@@ -352,35 +348,38 @@ void Client::process_received_data() {
 
         PacketHeader header = *header_result;
 
-        // Calculate header size
-        size_t header_size = 1;  // Fixed header byte
-        uint32_t remaining_length = header.remaining_length;
+        size_t header_size = 1;
+        uint32_t remaining_length_tmp = header.remaining_length;
         do {
-            header_size++;
-            remaining_length >>= 7;
-        } while (remaining_length > 0);
+            ++header_size;
+            remaining_length_tmp >>= 7;
+        } while (remaining_length_tmp > 0);
 
-        // Check if we have the complete packet
-        size_t total_packet_size = header_size + header.remaining_length;
-        if (start_pos + total_packet_size > packet_buffer_.size()) {
-            // Incomplete packet, wait for more data
+        const size_t total_packet_size = header_size + header.remaining_length;
+
+        if (offset + total_packet_size > buffer_data.size()) {
             break;
         }
 
-        // Extract payload
-        auto payload = packet_buffer_.data().subspan(start_pos + header_size,
-                                                     header.remaining_length);
+        auto payload =
+            buffer_data.subspan(offset + header_size, header.remaining_length);
 
-        // Handle the packet
         handle_packet(header, payload);
 
-        // Move to next packet
-        packet_buffer_ = BinaryBuffer();  // Reset position
-        auto remaining_data =
-            packet_buffer_.data().subspan(start_pos + total_packet_size);
-        packet_buffer_.write_bytes(remaining_data);
-        packet_buffer_.reset_position();
+        offset += total_packet_size;
     }
+
+    if (offset == 0) {
+        return;
+    }
+
+    BinaryBuffer remaining_buffer;
+    if (offset < buffer_data.size()) {
+        auto remaining = buffer_data.subspan(offset);
+        remaining_buffer.write_bytes(remaining);
+    }
+
+    packet_buffer_ = std::move(remaining_buffer);
 }
 
 void Client::handle_packet(const PacketHeader& header,

@@ -48,7 +48,11 @@ set(HEADERS
     core/io.hpp)
 
 # Dependencies
-set(LIBS loguru ${CMAKE_THREAD_LIBS_INIT})
+find_package(spdlog QUIET)
+set(LIBS ${CMAKE_THREAD_LIBS_INIT})
+if(spdlog_FOUND)
+  list(APPEND LIBS spdlog::spdlog)
+endif()
 
 # Add ZLIB if available (optional for MSVC)
 find_package(ZLIB QUIET)

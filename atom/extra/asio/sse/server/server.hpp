@@ -106,7 +106,7 @@ private:
     /**
      * @brief Persistent event storage.
      */
-    EventStore event_store_;
+    ServerEventStore event_store_;
 
     /**
      * @brief Authentication service for client validation.

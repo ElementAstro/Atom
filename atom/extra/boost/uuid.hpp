@@ -6,6 +6,14 @@
 #include <boost/uuid/uuid.hpp>
 #include <boost/uuid/uuid_generators.hpp>
 #include <boost/uuid/uuid_io.hpp>
+#if __has_include(<boost/uuid/uuid_clock.hpp>) && \
+    __has_include(<boost/uuid/time_generator_v1.hpp>)
+#include <boost/uuid/time_generator_v1.hpp>
+#include <boost/uuid/uuid_clock.hpp>
+#define ATOM_EXTRA_BOOST_UUID_HAS_V1 1
+#else
+#define ATOM_EXTRA_BOOST_UUID_HAS_V1 0
+#endif
 #include <chrono>
 #include <compare>
 #include <format>
@@ -14,12 +22,14 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 namespace atom::extra::boost {
 
 constexpr size_t UUID_SIZE = 16;
-constexpr size_t BASE64_ENCODED_SIZE = 22;
+constexpr size_t BASE64_RESERVE_SIZE = 22;
+constexpr size_t BASE64_ENCODED_SIZE = BASE64_RESERVE_SIZE;
 constexpr uint64_t TIMESTAMP_DIVISOR = 10000000;
 constexpr uint64_t UUID_EPOCH = 0x01B21DD213814000L;
 
@@ -193,9 +203,14 @@ public:
      * @return Generated UUID
      */
     [[nodiscard]] static UUID v1() {
-        static thread_local ::boost::uuids::basic_random_generator<std::mt19937>
-            gen;
+#if ATOM_EXTRA_BOOST_UUID_HAS_V1
+        static thread_local ::boost::uuids::time_generator_v1 gen;
         return UUID(gen());
+#else
+        // Fallback: generate a random (v4) UUID when time-based UUID v1
+        // generation is not available in the current Boost version.
+        return UUID{};
+#endif
     }
 
     /**
@@ -212,25 +227,48 @@ public:
         static constexpr char base64_chars[] =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-        std::string result;
-        result.reserve(BASE64_ENCODED_SIZE);
-
         auto bytes = toBytes();
-        for (size_t i = 0; i < bytes.size(); i += 3) {
-            uint32_t num =
-                (static_cast<uint32_t>(bytes[i]) << 16) |
-                (i + 1 < bytes.size() ? static_cast<uint32_t>(bytes[i + 1]) << 8
-                                      : 0) |
-                (i + 2 < bytes.size() ? static_cast<uint32_t>(bytes[i + 2])
-                                      : 0);
+        std::string result;
+        result.reserve(((bytes.size() + 2) / 3) * 4);
 
-            result += base64_chars[(num >> 18) & 63];
-            result += base64_chars[(num >> 12) & 63];
-            result += base64_chars[(num >> 6) & 63];
-            result += base64_chars[num & 63];
+        std::size_t i = 0;
+        const std::size_t n = bytes.size();
+
+        // Full 3-byte blocks
+        while (i + 3 <= n) {
+            const uint32_t num = (static_cast<uint32_t>(bytes[i]) << 16) |
+                                 (static_cast<uint32_t>(bytes[i + 1]) << 8) |
+                                 static_cast<uint32_t>(bytes[i + 2]);
+
+            result.push_back(base64_chars[(num >> 18) & 0x3F]);
+            result.push_back(base64_chars[(num >> 12) & 0x3F]);
+            result.push_back(base64_chars[(num >> 6) & 0x3F]);
+            result.push_back(base64_chars[num & 0x3F]);
+            i += 3;
         }
 
-        result.resize(BASE64_ENCODED_SIZE);
+        const std::size_t remain = n - i;
+        if (remain == 1) {
+            const uint32_t num = static_cast<uint32_t>(bytes[i]) << 16;
+            result.push_back(base64_chars[(num >> 18) & 0x3F]);
+            result.push_back(base64_chars[(num >> 12) & 0x3F]);
+            result.push_back('=');
+            result.push_back('=');
+        } else if (remain == 2) {
+            const uint32_t num = (static_cast<uint32_t>(bytes[i]) << 16) |
+                                 (static_cast<uint32_t>(bytes[i + 1]) << 8);
+            result.push_back(base64_chars[(num >> 18) & 0x3F]);
+            result.push_back(base64_chars[(num >> 12) & 0x3F]);
+            result.push_back(base64_chars[(num >> 6) & 0x3F]);
+            result.push_back('=');
+        }
+
+        // Strip padding to obtain compact 22-character representation for
+        // 16-byte UUIDs while keeping standard Base64 semantics.
+        while (!result.empty() && result.back() == '=') {
+            result.pop_back();
+        }
+
         return result;
     }
 
@@ -240,21 +278,21 @@ public:
      * @throws std::runtime_error if UUID is not version 1
      */
     [[nodiscard]] std::chrono::system_clock::time_point getTimestamp() const {
+#if ATOM_EXTRA_BOOST_UUID_HAS_V1
         if ((version() != 1)) [[unlikely]] {
             throw std::runtime_error(
                 "Timestamp is only available for version 1 UUIDs");
         }
 
-        uint64_t timestamp = (static_cast<uint64_t>(uuid_.data[6]) << 40) |
-                             (static_cast<uint64_t>(uuid_.data[7]) << 32) |
-                             (static_cast<uint64_t>(uuid_.data[4]) << 24) |
-                             (static_cast<uint64_t>(uuid_.data[5]) << 16) |
-                             (static_cast<uint64_t>(uuid_.data[0]) << 8) |
-                             static_cast<uint64_t>(uuid_.data[1]);
-
-        auto time_since_epoch = (timestamp - UUID_EPOCH) / TIMESTAMP_DIVISOR;
-        return std::chrono::system_clock::from_time_t(
-            static_cast<std::time_t>(time_since_epoch));
+        // Use Boost.Uuid's clock facilities to obtain a chrono-compatible
+        // time_point corresponding to the v1 UUID timestamp.
+        auto uuidTimePoint = uuid_.time_point_v1();
+        return ::boost::uuids::uuid_clock::to_sys(uuidTimePoint);
+#else
+        throw std::runtime_error(
+            "Timestamp is only available for version 1 UUIDs (time-based "
+            "UUID generation not supported by this Boost version)");
+#endif
     }
 
     /**

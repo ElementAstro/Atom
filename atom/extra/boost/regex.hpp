@@ -215,8 +215,7 @@ public:
     [[nodiscard]] bool isValid(const T& str) const noexcept {
         try {
             std::string_view sv(str);
-            ::boost::regex_match(sv.begin(), sv.end(), regex_);
-            return true;
+            return ::boost::regex_match(sv.begin(), sv.end(), regex_);
         } catch (const ::boost::regex_error&) {
             return false;
         }
@@ -305,6 +304,16 @@ public:
         } catch (const ::boost::regex_error&) {
             return false;
         }
+    }
+
+    /**
+     * @brief Validates the regex pattern and attempts to compile it
+     * @param pattern The regex pattern to validate and compile
+     * @return True if the pattern is valid and can be compiled
+     */
+    [[nodiscard]] static bool validateAndCompile(
+        std::string_view pattern) noexcept {
+        return isValidRegex(pattern);
     }
 
     /**
