@@ -1,4 +1,8 @@
 #include "server_config.hpp"
+
+// Server config file loading requires nlohmann/json
+#if __has_include(<nlohmann/json.hpp>)
+
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <nlohmann/json.hpp>
@@ -69,3 +73,5 @@ void ServerConfig::save_to_file(const std::string& filename) const {
 }
 
 }  // namespace atom::extra::asio::sse
+
+#endif  // __has_include(<nlohmann/json.hpp>)

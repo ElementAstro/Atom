@@ -49,7 +49,11 @@ static constexpr size_t CACHE_LINE_SIZE = 64;
  * @brief SIMD vector width for different data types
  */
 template <typename T>
+#ifdef __AVX2__
 static constexpr size_t SIMD_WIDTH = sizeof(__m256) / sizeof(T);
+#else
+static constexpr size_t SIMD_WIDTH = 4 / sizeof(T);  // Fallback for non-AVX2
+#endif
 
 /**
  * @brief Type trait for SIMD-compatible types

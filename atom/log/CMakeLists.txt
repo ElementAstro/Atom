@@ -27,16 +27,32 @@ endif()
 # Configure module using standardized function
 atom_configure_module(atom-log)
 
-# Link module-specific dependencies
+# Link module-specific dependencies Use header-only spdlog to avoid linking
+# issues with MinGW
 target_link_libraries(
   atom-log
-  PUBLIC spdlog::spdlog atom-error atom-utils
+  PUBLIC spdlog::spdlog_header_only atom-error atom-utils
          $<$<TARGET_EXISTS:ZLIB::ZLIB>:ZLIB::ZLIB>
          $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 
-# Configure spdlog options
-target_compile_definitions(atom-log PUBLIC SPDLOG_USE_STD_FORMAT=1
-                                           SPDLOG_HEADER_ONLY)
+# Configure spdlog options Using header-only spdlog for better compatibility
+target_compile_definitions(atom-log PUBLIC SPDLOG_FMT_EXTERNAL)
+
+# Install library target
+install(
+  TARGETS atom-log
+  EXPORT atom-log-targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
+
+# Install export targets
+install(
+  EXPORT atom-log-targets
+  FILE atom-logTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
 
 # Install headers
 install(FILES ${ATOM_LOG_HEADERS}

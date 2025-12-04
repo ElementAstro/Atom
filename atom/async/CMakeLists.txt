@@ -90,5 +90,21 @@ atom_configure_module(atom-async)
 # Link module-specific dependencies
 target_link_libraries(atom-async PRIVATE ${LIBS})
 
+# Install library target
+install(
+  TARGETS atom-async
+  EXPORT atom-async-targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
+
+# Install export targets
+install(
+  EXPORT atom-async-targets
+  FILE atom-asyncTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
+
 # Install headers
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/async)

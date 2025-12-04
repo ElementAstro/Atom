@@ -1,6 +1,7 @@
+---
 name: Release
 
-on:
+"on":
   push:
     tags:
       - "v*"
@@ -113,7 +114,7 @@ jobs:
             python3-dev doxygen graphviz
 
       - name: Install system dependencies (macOS)
-        if: matrix.os == 'macos-latest'
+        if: startsWith(matrix.os, 'macos')
         run: |
           brew install ninja openssl zlib sqlite3 fmt readline python3 doxygen graphviz
 
@@ -126,6 +127,7 @@ jobs:
         run: |
           cmake --preset ${{ matrix.preset }} \
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DUSE_VCPKG=ON \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
             -DATOM_BUILD_EXAMPLES=ON \
             -DATOM_BUILD_TESTS=ON \
@@ -172,7 +174,7 @@ jobs:
               echo "Creating MSI installer..."
               # WiX installer creation logic would go here
             fi
-          elif [ "${{ matrix.os }}" = "macos-latest" ]; then
+          elif [[ "${{ matrix.os }}" == macos-* ]]; then
             # Create macOS packages
             echo "Creating macOS packages..."
             # DMG and PKG creation logic would go here

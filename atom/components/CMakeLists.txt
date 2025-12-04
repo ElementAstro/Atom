@@ -152,14 +152,25 @@ target_link_libraries(atom-component PRIVATE ${LIBS})
 # Set C++20 for the target
 target_compile_features(atom-component PUBLIC cxx_std_20)
 
+# Install library target
+install(
+  TARGETS atom-component
+  EXPORT atom-component-targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
+
+# Install export targets
+install(
+  EXPORT atom-component-targets
+  FILE atom-componentTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
+
 # Install headers
 install(FILES ${HEADERS} ${OPTIONAL_HEADERS}
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/components)
-
-# Export targets (commented out for now due to dependency export issues)
-# install(EXPORT ${PROJECT_NAME}Targets FILE ${PROJECT_NAME}Targets.cmake
-# NAMESPACE ${PROJECT_NAME}:: DESTINATION
-# ${CMAKE_INSTALL_LIBDIR}/cmake/${PROJECT_NAME} )
 
 # Install headers Install backwards compatibility headers
 install(

@@ -147,5 +147,21 @@ else()
   target_compile_definitions(atom-algorithm PRIVATE ATOM_HAS_OPENSSL=0)
 endif()
 
+# Install library target
+install(
+  TARGETS atom-algorithm
+  EXPORT atom-algorithm-targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
+
+# Install export targets
+install(
+  EXPORT atom-algorithm-targets
+  FILE atom-algorithmTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
+
 # Install headers
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/algorithm)

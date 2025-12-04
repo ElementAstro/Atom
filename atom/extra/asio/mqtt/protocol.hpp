@@ -200,6 +200,7 @@ inline void TCPTransport::close() {
 
 inline bool TCPTransport::is_open() const { return socket_.is_open(); }
 
+#ifdef USE_SSL
 /**
  * @class TLSTransport
  * @brief Concrete implementation of ITransport using SSL/TLS over TCP.
@@ -314,5 +315,6 @@ inline void TLSTransport::close() {
 inline bool TLSTransport::is_open() const {
     return ssl_socket_.lowest_layer().is_open();
 }
+#endif  // USE_SSL
 
 }  // namespace mqtt

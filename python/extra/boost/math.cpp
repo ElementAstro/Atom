@@ -690,6 +690,28 @@ Examples:
     120
 )");
 
+    m.def(
+        "transform_range",
+        [](const std::vector<T>& data, const std::function<T(T)>& func) {
+            auto view = atom::extra::boost::transformRange(data, func);
+            std::vector<T> result;
+            result.reserve(data.size());
+            for (const auto& v : view) {
+                result.push_back(v);
+            }
+            return result;
+        },
+        py::arg("data"), py::arg("func"),
+        R"(Transforms a range of values using a unary function.
+
+Args:
+    data: Iterable of numeric values.
+    func: Callable that takes a value and returns a transformed value.
+
+Returns:
+    A list containing the transformed values.
+)");
+
     // Define aliases for easier access to common instantiations
     if (type_suffix == "Float") {
         // Add types to module scope

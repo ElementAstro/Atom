@@ -1,144 +1,67 @@
 /*
- * basic_usage.cpp - Dotenv Basic Usage Example (Minimal Stub Implementation)
+ * basic_usage.cpp - Dotenv Basic Usage Example
  */
 
 #include <iostream>
 #include <string>
 #include <unordered_map>
-
-// Minimal stub implementations since atom-extra-dotenv has API compatibility
-// issues
-
-namespace dotenv {
-
-// Stub LoadOptions struct
-struct LoadOptions {
-    bool ignore_missing_files = false;
-    bool override_existing = false;
-    std::string encoding = "utf-8";
-};
-
-// Stub LoadResult struct
-struct LoadResult {
-    bool success = true;
-    std::string error_message;
-    int variables_loaded = 0;
-};
-
-// Stub Dotenv class
-class Dotenv {
-public:
-    static LoadResult load(const std::string& filename = ".env") {
-        std::cout << "Loading .env file (stub): " << filename << std::endl;
-        LoadResult result;
-        result.success = true;
-        result.variables_loaded = 5;
-        return result;
-    }
-
-    static LoadResult loadWithOptions(const std::string& filename,
-                                      const LoadOptions& options) {
-        std::cout << "Loading .env file with options (stub): " << filename
-                  << std::endl;
-        std::cout << "  Ignore missing files: "
-                  << (options.ignore_missing_files ? "true" : "false")
-                  << std::endl;
-        std::cout << "  Override existing: "
-                  << (options.override_existing ? "true" : "false")
-                  << std::endl;
-        LoadResult result;
-        result.success = true;
-        result.variables_loaded = 3;
-        return result;
-    }
-
-    static void quickLoadAndApply(const std::string& filename = ".env") {
-        std::cout << "Quick load and apply (stub): " << filename << std::endl;
-        // Simulate setting environment variables
-        setenv("APP_NAME", "MyApp", 1);
-        setenv("APP_VERSION", "1.0.0", 1);
-        setenv("DEBUG", "true", 1);
-    }
-
-    static std::unordered_map<std::string, std::string> parse(
-        const std::string& content) {
-        std::cout << "Parsing .env content (stub): " << content.size()
-                  << " characters" << std::endl;
-        std::unordered_map<std::string, std::string> result;
-        result["APP_NAME"] = "ParsedApp";
-        result["APP_VERSION"] = "2.0.0";
-        result["DEBUG"] = "false";
-        return result;
-    }
-
-private:
-    static int setenv(const char* name, const char* value, int overwrite) {
-        std::cout << "Setting environment variable (stub): " << name << " = "
-                  << value << std::endl;
-        return 0;
-    }
-};
-
-}  // namespace dotenv
+#include "atom/extra/dotenv/dotenv.hpp"
 
 using namespace dotenv;
 
 int main() {
-    std::cout << "=== Dotenv Basic Usage Example (Stub Implementation) ==="
-              << std::endl;
-    std::cout << "Note: This is a stub implementation due to API compatibility "
-                 "issues."
-              << std::endl;
+    std::cout << "=== Dotenv Basic Usage Example ===" << std::endl;
 
     try {
         // 1. Basic .env file loading
         std::cout << "\n1. Basic .env File Loading:" << std::endl;
         {
-            auto result = Dotenv::load(".env");
+            auto result = Dotenv::quickLoad(".env");
             if (result.success) {
-                std::cout << "Successfully loaded " << result.variables_loaded
+                std::cout << "Successfully loaded " << result.variables.size()
                           << " variables" << std::endl;
+                for (const auto& [key, value] : result.variables) {
+                    std::cout << "  " << key << " = " << value << std::endl;
+                }
             } else {
-                std::cout << "Failed to load .env file: "
-                          << result.error_message << std::endl;
+                std::cout << "Failed to load .env file" << std::endl;
+                for (const auto& error : result.errors) {
+                    std::cout << "  Error: " << error << std::endl;
+                }
             }
         }
 
-        // 2. Loading with custom filename
-        std::cout << "\n2. Loading with Custom Filename:" << std::endl;
+        // 2. Loading with custom options
+        std::cout << "\n2. Loading with Custom Options:" << std::endl;
         {
-            auto result = Dotenv::load("config.env");
+            DotenvOptions options;
+            options.debug = true;
+            options.load_options.override_existing = true;
+            options.parse_options.expand_variables = true;
+
+            Dotenv loader(options);
+            auto result = loader.load("config.env");
             if (result.success) {
                 std::cout << "Successfully loaded config.env with "
-                          << result.variables_loaded << " variables"
+                          << result.variables.size() << " variables"
                           << std::endl;
             }
         }
 
-        // 3. Loading with options
-        std::cout << "\n3. Loading with Options:" << std::endl;
+        // 3. Quick load and apply
+        std::cout << "\n3. Quick Load and Apply:" << std::endl;
         {
-            LoadOptions options;
-            options.ignore_missing_files = true;
-            options.override_existing = false;
-
-            auto result = Dotenv::loadWithOptions("optional.env", options);
-            if (result.success) {
-                std::cout << "Successfully loaded with options: "
-                          << result.variables_loaded << " variables"
+            try {
+                Dotenv::config(".env", true);
+                std::cout << "Environment variables applied successfully"
                           << std::endl;
+            } catch (const DotenvException& e) {
+                std::cout << "Config failed: " << e.what() << std::endl;
             }
         }
 
-        // 4. Quick load and apply
-        std::cout << "\n4. Quick Load and Apply:" << std::endl;
-        {
-            Dotenv::quickLoadAndApply(".env");
-            std::cout << "Environment variables applied (stub)" << std::endl;
-        }
-
-        // 5. Parsing content directly
-        std::cout << "\n5. Parsing Content Directly:" << std::endl;
+        // 4. Parsing content directly
+        std::cout << "\n4. Parsing Content Directly:" << std::endl;
         {
             std::string env_content = R"(
 APP_NAME=DirectParsedApp
@@ -148,35 +71,65 @@ DATABASE_URL=postgresql://localhost:5432/mydb
 API_KEY=secret123
 )";
 
-            auto variables = Dotenv::parse(env_content);
-            std::cout << "Parsed " << variables.size()
+            Dotenv loader;
+            auto result = loader.loadFromString(env_content);
+            std::cout << "Parsed " << result.variables.size()
                       << " variables:" << std::endl;
-            for (const auto& [key, value] : variables) {
+            for (const auto& [key, value] : result.variables) {
                 std::cout << "  " << key << " = " << value << std::endl;
             }
         }
 
-        // 6. Environment variable access
-        std::cout << "\n6. Environment Variable Access:" << std::endl;
+        // 5. Variable expansion
+        std::cout << "\n5. Variable Expansion:" << std::endl;
         {
-            // Simulate accessing environment variables
-            std::cout << "APP_NAME: MyApp (stub)" << std::endl;
-            std::cout << "APP_VERSION: 1.0.0 (stub)" << std::endl;
-            std::cout << "DEBUG: true (stub)" << std::endl;
-        }
+            std::string env_content = R"(
+BASE_PATH=/usr/local
+BIN_PATH=${BASE_PATH}/bin
+LIB_PATH=${BASE_PATH}/lib
+)";
 
-        // 7. Error handling
-        std::cout << "\n7. Error Handling:" << std::endl;
-        {
-            auto result = Dotenv::load("nonexistent.env");
-            if (!result.success) {
-                std::cout << "Expected error for nonexistent file (stub)"
-                          << std::endl;
+            Dotenv loader;
+            auto result = loader.loadFromString(env_content);
+            std::cout << "Variables with expansion:" << std::endl;
+            for (const auto& [key, value] : result.variables) {
+                std::cout << "  " << key << " = " << value << std::endl;
             }
         }
 
-        std::cout << "\n=== Dotenv Basic Usage Example Complete (Stub "
-                     "Implementation) ==="
+        // 6. Quoted values and escape sequences
+        std::cout << "\n6. Quoted Values and Escape Sequences:" << std::endl;
+        {
+            std::string env_content = R"(
+SIMPLE="Hello World"
+WITH_NEWLINE="Line 1\nLine 2"
+WITH_TAB="Col1\tCol2"
+SINGLE_QUOTED='No expansion: ${VAR}'
+)";
+
+            Dotenv loader;
+            auto result = loader.loadFromString(env_content);
+            std::cout << "Quoted values:" << std::endl;
+            for (const auto& [key, value] : result.variables) {
+                std::cout << "  " << key << " = " << value << std::endl;
+            }
+        }
+
+        // 7. Saving environment variables
+        std::cout << "\n7. Saving Environment Variables:" << std::endl;
+        {
+            std::unordered_map<std::string, std::string> vars = {
+                {"APP_NAME", "MyApp"},
+                {"APP_VERSION", "1.0.0"},
+                {"DEBUG", "true"}};
+
+            Dotenv loader;
+            loader.save("output.env", vars);
+            std::cout << "Saved " << vars.size() << " variables to output.env"
+                      << std::endl;
+        }
+
+        std::cout << "\n=== Dotenv Basic Usage Example Complete ==="
                   << std::endl;
 
     } catch (const std::exception& e) {

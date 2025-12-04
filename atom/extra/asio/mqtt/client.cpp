@@ -208,7 +208,9 @@ void Client::async_unsubscribe(
     });
 }
 
-void Client::setup_ssl_context(const ConnectionOptions& options) {
+void Client::setup_ssl_context(
+    [[maybe_unused]] const ConnectionOptions& options) {
+#ifdef USE_SSL
     if (!options.use_tls)
         return;
 
@@ -235,6 +237,7 @@ void Client::setup_ssl_context(const ConnectionOptions& options) {
         ssl_context_->use_private_key_file(options.private_key_file,
                                            ssl::context::pem);
     }
+#endif  // USE_SSL
 }
 
 void Client::start_io_thread() {
@@ -263,11 +266,15 @@ void Client::stop_io_thread() {
 void Client::perform_connect() {
     setup_ssl_context(connection_options_);
 
+#ifdef USE_SSL
     if (connection_options_.use_tls) {
         transport_ = std::make_unique<TLSTransport>(io_context_, *ssl_context_);
     } else {
+#endif
         transport_ = std::make_unique<TCPTransport>(io_context_);
+#ifdef USE_SSL
     }
+#endif
 
     transport_->async_connect(
         broker_host_, broker_port_,

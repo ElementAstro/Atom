@@ -111,5 +111,21 @@ atom_configure_module(atom-error)
 # Link module-specific dependencies
 target_link_libraries(atom-error PRIVATE ${LIBS})
 
+# Install library target
+install(
+  TARGETS atom-error
+  EXPORT atom-error-targets
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
+  RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR} COMPONENT runtime)
+
+# Install export targets
+install(
+  EXPORT atom-error-targets
+  FILE atom-errorTargets.cmake
+  NAMESPACE atom::
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
+  COMPONENT development)
+
 # Install headers
 install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/error)

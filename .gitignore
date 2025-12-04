@@ -460,6 +460,7 @@ nlohmann/
 
 # Build output and logs
 build_output.txt
+build-log.txt
 test_results.txt
 preset_list.txt
 vcpkg_location.txt
@@ -469,6 +470,18 @@ dist/
 
 # LLM documentation (generated)
 llmdoc/
+
+# Temporary test/packaging directories
+test_downstream/
+test_package2/
+test_package/
+
+# xmake build artifacts
+.xmake/
+
+# Python Release builds (generated)
+python/Release/
+python/build-python/
 
 # -----------------------------------------------------------------------------
 # End of .gitignore

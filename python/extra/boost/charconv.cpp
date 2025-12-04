@@ -8,6 +8,10 @@ namespace py = pybind11;
 PYBIND11_MODULE(charconv, m) {
     m.doc() = "Boost CharConv binding module for the atom package";
 
+    m.attr("ALIGNMENT") = atom::extra::boost::ALIGNMENT;
+    m.attr("DEFAULT_BASE") = atom::extra::boost::DEFAULT_BASE;
+    m.attr("BUFFER_SIZE") = atom::extra::boost::BUFFER_SIZE;
+
     // Register exception translations
     py::register_exception_translator([](std::exception_ptr p) {
         try {
@@ -283,7 +287,43 @@ Returns:
         .def_static("special_value_to_string",
                     &atom::extra::boost::BoostCharConv::specialValueToString<
                         long double>,
-                    py::arg("value"));
+                    py::arg("value"))
+        .def_static("string_to_bool",
+                    &atom::extra::boost::BoostCharConv::stringToBool,
+                    py::arg("str"),
+                    R"(Converts a string to a boolean value.
+
+Args:
+    str: The string to convert (case-insensitive).
+
+Returns:
+    The corresponding boolean value.
+
+Raises:
+    ValueError: If the string cannot be converted to a boolean.
+)")
+        .def_static("bool_to_string",
+                    &atom::extra::boost::BoostCharConv::boolToString,
+                    py::arg("value"),
+                    R"(Converts a boolean value to a string.
+
+Args:
+    value: The boolean value to convert.
+
+Returns:
+    "true" if value is True, "false" otherwise.
+)")
+        .def_static("is_valid_number",
+                    &atom::extra::boost::BoostCharConv::isValidNumber,
+                    py::arg("str"),
+                    R"(Checks if a string represents a valid number.
+
+Args:
+    str: The string to check.
+
+Returns:
+    True if the string is a valid number, False otherwise.
+)");
 
     // Convenience functions directly at module level
     m.def("int_to_string", &atom::extra::boost::BoostCharConv::intToString<int>,
@@ -304,4 +344,13 @@ Returns:
     m.def("string_to_float",
           &atom::extra::boost::BoostCharConv::stringToFloat<double>,
           py::arg("str"), "Shorthand for BoostCharConv.string_to_float");
+
+    m.def("string_to_bool", &atom::extra::boost::BoostCharConv::stringToBool,
+          py::arg("str"), "Shorthand for BoostCharConv.string_to_bool");
+
+    m.def("bool_to_string", &atom::extra::boost::BoostCharConv::boolToString,
+          py::arg("value"), "Shorthand for BoostCharConv.bool_to_string");
+
+    m.def("is_valid_number", &atom::extra::boost::BoostCharConv::isValidNumber,
+          py::arg("str"), "Shorthand for BoostCharConv.is_valid_number");
 }

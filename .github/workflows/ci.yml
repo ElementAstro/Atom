@@ -1,6 +1,7 @@
+---
 name: Continuous Integration
 
-on:
+"on":
   push:
     branches: [main, develop]
   pull_request:
@@ -114,6 +115,12 @@ jobs:
             build_preset: release-vs
             triplet: x64-windows
             arch: x64
+          - name: "Windows x64 RelWithDebInfo"
+            os: windows-latest
+            preset: relwithdebinfo-vs
+            build_preset: relwithdebinfo-vs
+            triplet: x64-windows
+            arch: x64
 
           # macOS Intel builds
           - name: "macOS x64 Debug"
@@ -126,6 +133,12 @@ jobs:
             os: macos-13
             preset: release
             build_preset: release
+            triplet: x64-osx
+            arch: x64
+          - name: "macOS x64 RelWithDebInfo"
+            os: macos-13
+            preset: relwithdebinfo
+            build_preset: relwithdebinfo
             triplet: x64-osx
             arch: x64
 
@@ -175,7 +188,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: build
-          key: ${{ runner.os }}-${{ matrix.arch }}-cmake-${{ matrix.preset }}-${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
+          key: >-
+            ${{ runner.os }}-${{ matrix.arch }}-cmake-${{ matrix.preset }}-
+            ${{ hashFiles('CMakeLists.txt', 'cmake/**') }}
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-cmake-${{ matrix.preset }}-
 
@@ -211,6 +226,7 @@ jobs:
         run: |
           cmake --preset ${{ matrix.preset }} \
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DUSE_VCPKG=ON \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
             -DATOM_BUILD_EXAMPLES=ON \
             -DATOM_BUILD_TESTS=ON \
@@ -228,7 +244,8 @@ jobs:
           # Run unified test runner with comprehensive output
           if [ -f "./run_all_tests" ] || [ -f "./run_all_tests.exe" ]; then
             echo "=== Running Unified Test Suite ==="
-            ./run_all_tests --verbose --parallel --threads=4 --output-format=json --output=test_results.json || echo "Some tests failed"
+            ./run_all_tests --verbose --parallel --threads=4 \
+              --output-format=json --output=test_results.json || echo "Some tests failed"
           else
             echo "=== Unified test runner not found, falling back to CTest ==="
             ctest --output-on-failure --parallel --timeout 300
@@ -261,7 +278,7 @@ jobs:
         run: |
           cd build
           echo "=== CTest Validation ==="
-          ctest --output-on-failure --parallel --timeout 300 --test-dir build || echo "CTest validation completed"
+          ctest --output-on-failure --parallel --timeout 300 || echo "CTest validation completed"
 
       - name: Show ccache stats (Linux/macOS)
         if: runner.os != 'Windows'
@@ -341,7 +358,8 @@ jobs:
         run: |
           # Add Python bindings to path and test
           export PYTHONPATH=$PWD/build/python:$PYTHONPATH
-          python -c "import atom; print(f'Python bindings loaded successfully with Python {python.__version__}')" || echo "Python bindings not available"
+          python -c "import atom; print('Python bindings loaded successfully')" \
+            || echo "Python bindings not available"
 
   # Security scanning
   security:
@@ -440,14 +458,20 @@ jobs:
           if [ "${{ matrix.type }}" == "category" ]; then
             # Run tests by category
             echo "Running category: ${{ matrix.filter }}"
-            ./scripts/run_tests.sh --category "${{ matrix.filter }}" --verbose --parallel --threads=4 --output-format=json --output="${{ matrix.filter }}_results.json" --timeout ${{ matrix.timeout }} || echo "Tests in ${{ matrix.name }} completed with issues"
+            ./scripts/run_tests.sh --category "${{ matrix.filter }}" \
+              --verbose --parallel --threads=4 \
+              --output-format=json --output="${{ matrix.filter }}_results.json" \
+              || echo "Tests in ${{ matrix.name }} completed with issues"
           else
             # Run tests by modules
             echo "Running modules: ${{ matrix.modules }}"
             IFS=',' read -ra MODULE_ARRAY <<< "${{ matrix.modules }}"
             for module in "${MODULE_ARRAY[@]}"; do
               echo "=== Testing module: $module ==="
-              ./scripts/run_tests.sh --module "$module" --verbose --parallel --threads=2 --output-format=json --output="module_${module}_results.json" --timeout ${{ matrix.timeout }} || echo "Module $module tests completed with issues"
+              ./scripts/run_tests.sh --module "$module" \
+                --verbose --parallel --threads=2 \
+                --output-format=json --output="module_${module}_results.json" \
+                || echo "Module $module tests completed with issues"
             done
           fi
 
@@ -557,7 +581,9 @@ jobs:
           # Try unified test runner for performance tests first
           if [ -f "./run_all_tests" ]; then
             echo "Running performance tests via unified test runner"
-            ./run_all_tests --category=performance --verbose --output-format=json --output=performance_benchmarks.json || echo "Performance tests completed with issues"
+            ./run_all_tests --category=performance --verbose \
+              --output-format=json --output=performance_benchmarks.json \
+              || echo "Performance tests completed with issues"
           else
             echo "Unified test runner not found, trying traditional benchmarks"
           fi
@@ -576,7 +602,7 @@ jobs:
           elif [ -f "traditional_benchmarks.json" ]; then
             cp traditional_benchmarks.json benchmark_results.json
           else
-            echo '{"benchmarks": [], "context": {"date": "'$(date)'", "host_name": "'$(hostname)'"}}' > benchmark_results.json
+            echo '{"benchmarks": [], "context": {}}' > benchmark_results.json
           fi
 
       - name: Upload benchmark results
@@ -677,7 +703,9 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Performance Benchmarks" >> $GITHUB_STEP_SUMMARY
           if [ -f "all-test-results/benchmark-results/benchmark_results.json" ]; then
-            benchmark_count=$(jq '.benchmarks | length // 0' "all-test-results/benchmark-results/benchmark_results.json" 2>/dev/null || echo "0")
+            benchmark_count=$(jq '.benchmarks | length // 0' \
+              "all-test-results/benchmark-results/benchmark_results.json" \
+              2>/dev/null || echo "0")
             echo "- **Benchmarks Run**: $benchmark_count" >> $GITHUB_STEP_SUMMARY
             echo "- **Status**: ✅ Completed" >> $GITHUB_STEP_SUMMARY
           else
@@ -697,7 +725,9 @@ jobs:
           # Overall status
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Overall Status" >> $GITHUB_STEP_SUMMARY
-          if [ "${{ needs.comprehensive-tests.result }}" == "success" ] && [ "${{ needs.windows-tests.result }}" == "success" ]; then
+          comp_result="${{ needs.comprehensive-tests.result }}"
+          win_result="${{ needs.windows-tests.result }}"
+          if [ "$comp_result" == "success" ] && [ "$win_result" == "success" ]; then
             echo "🎉 **All tests completed successfully!**" >> $GITHUB_STEP_SUMMARY
           else
             echo "⚠️ **Some tests had issues** - Check individual job results for details" >> $GITHUB_STEP_SUMMARY

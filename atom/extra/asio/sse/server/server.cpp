@@ -1,4 +1,8 @@
 #include "server.hpp"
+
+// Check if nlohmann-json is available
+#if __has_include(<nlohmann/json.hpp>)
+
 #include <spdlog/spdlog.h>
 #include <atomic>
 
@@ -179,3 +183,5 @@ std::string generate_id() {
 }
 
 }  // namespace atom::extra::asio::sse
+
+#endif  // __has_include(<nlohmann/json.hpp>)

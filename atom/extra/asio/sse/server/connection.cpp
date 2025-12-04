@@ -1,5 +1,10 @@
 #include "connection.hpp"
 
+// SSE server connection requires ASIO experimental as_tuple support for
+// structured bindings Skip compilation if not available
+#if defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) || \
+    defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)
+
 #include <spdlog/spdlog.h>
 #include <chrono>
 #include <sstream>
@@ -472,3 +477,6 @@ net::awaitable<void> SSEConnection::send_event(const Event& event) {
 }
 
 }  // namespace atom::extra::asio::sse
+
+#endif  // defined(ASIO_HAS_EXPERIMENTAL_AS_TUPLE) ||
+        // defined(BOOST_ASIO_HAS_EXPERIMENTAL_AS_TUPLE)

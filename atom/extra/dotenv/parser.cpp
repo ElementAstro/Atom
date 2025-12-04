@@ -23,11 +23,31 @@ Parser::EnvMap Parser::parse(const std::string& content) {
     std::istringstream stream(content);
     std::string line;
     size_t line_number = 0;
+    std::string accumulated_line;
+    bool in_multiline = false;
 
     while (std::getline(stream, line)) {
         ++line_number;
 
         try {
+            // Handle multiline values (lines ending with backslash)
+            if (!line.empty() && line.back() == '\\' && !in_multiline) {
+                in_multiline = true;
+                accumulated_line = line.substr(0, line.length() - 1);
+                continue;
+            } else if (in_multiline) {
+                accumulated_line += line;
+                if (!line.empty() && line.back() == '\\') {
+                    accumulated_line = accumulated_line.substr(
+                        0, accumulated_line.length() - 1);
+                    continue;
+                } else {
+                    in_multiline = false;
+                    line = accumulated_line;
+                    accumulated_line.clear();
+                }
+            }
+
             std::string processed_line = processLine(line, line_number);
             if (processed_line.empty())
                 continue;

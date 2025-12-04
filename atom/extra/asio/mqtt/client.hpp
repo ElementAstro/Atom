@@ -45,8 +45,10 @@ private:
     // Core components
     net::io_context
         io_context_;  ///< ASIO I/O context for all async operations.
+#ifdef USE_SSL
     std::unique_ptr<ssl_context>
         ssl_context_;  ///< SSL context for TLS connections.
+#endif
     std::unique_ptr<ITransport>
         transport_;  ///< Network transport (TCP or TLS).
     std::unique_ptr<std::thread>

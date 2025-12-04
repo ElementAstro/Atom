@@ -67,8 +67,9 @@ add_requires("libzippp", {system = false})
 add_requires("cpp-httplib", {system = false})
 add_requires("tinyxml2", {system = false})
 
--- Add threading support (always required)
-add_requires("threads")
+-- Add threading support (optional for compatibility)
+-- Note: threads package may not be available on all platforms
+-- add_requires("threads")
 
 -- Optional packages
 add_requires("cfitsio", {optional = true})
@@ -76,17 +77,24 @@ add_requires("libssh", {optional = true})
 
 -- Windows-specific packages
 if is_plat("windows") then
-    add_requires("dlfcn-win32", {system = false})
+    add_requires("dlfcn-win32", {system = false, optional = true})
 end
 
 -- Conditionally add Python requirements
+-- Note: Python bindings use system-installed Python and pybind11 from MSYS2
+-- instead of xmake package manager for better mingw compatibility
 if has_config("build_python") then
-    add_requires("python 3.x", {system = false})
-    add_requires("pybind11", {system = false})
+    -- add_requires("python 3.x", {system = false})
+    -- add_requires("pybind11", {system = false})
 end
 
 -- Include atom subdirectory
 includes("atom")
+
+-- Include Python bindings if enabled
+if has_config("build_python") then
+    includes("python")
+end
 
 -- Include examples if enabled
 if has_config("build_examples") then
