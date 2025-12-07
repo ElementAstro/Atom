@@ -760,6 +760,362 @@ auto makeTimingDecorator(
     }(std::make_index_sequence<Traits::arity>{});
 }
 
+//==============================================================================
+// C++23 Enhanced Decorator Utilities
+//==============================================================================
+
+/**
+ * @brief Decorator that transforms function result
+ */
+template <typename Func, typename Transform>
+class TransformDecorator {
+    Func func_;
+    Transform transform_;
+
+public:
+    constexpr TransformDecorator(Func func, Transform transform)
+        : func_(std::move(func)), transform_(std::move(transform)) {}
+
+    template <typename... Args>
+    constexpr auto operator()(Args&&... args) const {
+        return transform_(func_(std::forward<Args>(args)...));
+    }
+};
+
+/**
+ * @brief Create a transform decorator
+ */
+template <typename Func, typename Transform>
+constexpr auto makeTransformDecorator(Func&& func, Transform&& transform) {
+    return TransformDecorator<std::decay_t<Func>, std::decay_t<Transform>>(
+        std::forward<Func>(func), std::forward<Transform>(transform));
+}
+
+/**
+ * @brief Decorator that executes cleanup after function call
+ */
+template <typename Func, typename Cleanup>
+class CleanupDecorator {
+    Func func_;
+    Cleanup cleanup_;
+
+public:
+    constexpr CleanupDecorator(Func func, Cleanup cleanup)
+        : func_(std::move(func)), cleanup_(std::move(cleanup)) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) const {
+        struct ScopeGuard {
+            const Cleanup& cleanup;
+            ~ScopeGuard() { cleanup(); }
+        } guard{cleanup_};
+
+        return func_(std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * @brief Create a cleanup decorator
+ */
+template <typename Func, typename Cleanup>
+constexpr auto makeCleanupDecorator(Func&& func, Cleanup&& cleanup) {
+    return CleanupDecorator<std::decay_t<Func>, std::decay_t<Cleanup>>(
+        std::forward<Func>(func), std::forward<Cleanup>(cleanup));
+}
+
+/**
+ * @brief Decorator that logs function entry and exit
+ */
+template <typename Func>
+class LoggingDecorator {
+    Func func_;
+    std::string name_;
+    std::function<void(std::string_view)> logger_;
+
+public:
+    LoggingDecorator(Func func, std::string name,
+                     std::function<void(std::string_view)> logger = nullptr)
+        : func_(std::move(func)),
+          name_(std::move(name)),
+          logger_(logger ? std::move(logger) : [](std::string_view msg) {
+              // Default: do nothing, or could use std::cout
+          }) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) const {
+        logger_(std::format("Entering: {}", name_));
+        auto start = std::chrono::high_resolution_clock::now();
+
+        try {
+            if constexpr (std::is_void_v<std::invoke_result_t<Func, Args...>>) {
+                func_(std::forward<Args>(args)...);
+                auto duration =
+                    std::chrono::high_resolution_clock::now() - start;
+                logger_(std::format(
+                    "Exiting: {} ({}us)", name_,
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        duration)
+                        .count()));
+            } else {
+                auto result = func_(std::forward<Args>(args)...);
+                auto duration =
+                    std::chrono::high_resolution_clock::now() - start;
+                logger_(std::format(
+                    "Exiting: {} ({}us)", name_,
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        duration)
+                        .count()));
+                return result;
+            }
+        } catch (const std::exception& e) {
+            logger_(std::format("Exception in {}: {}", name_, e.what()));
+            throw;
+        }
+    }
+};
+
+/**
+ * @brief Create a logging decorator
+ */
+template <typename Func>
+auto makeLoggingDecorator(
+    Func&& func, std::string name,
+    std::function<void(std::string_view)> logger = nullptr) {
+    return LoggingDecorator<std::decay_t<Func>>(
+        std::forward<Func>(func), std::move(name), std::move(logger));
+}
+
+/**
+ * @brief Compose multiple decorators
+ */
+template <typename Func, typename... Decorators>
+auto composeDecorators(Func&& func, Decorators&&... decorators) {
+    return (... |
+            std::forward<Decorators>(decorators))(std::forward<Func>(func));
+}
+
+/**
+ * @brief Concept for decorator types
+ */
+template <typename D, typename F>
+concept Decorator = requires(D d, F f) {
+    { d(f) } -> std::invocable;
+};
+
+//==============================================================================
+// Integration with func_traits.hpp and invoke.hpp
+//==============================================================================
+
+/**
+ * @brief Decorator that validates function signature using FunctionTraits
+ */
+template <typename Func>
+class SignatureValidatingDecorator {
+    Func func_;
+
+public:
+    using Traits = FunctionTraits<std::decay_t<Func>>;
+    using ReturnType = typename Traits::return_type;
+    using ArgTypes = typename Traits::argument_types;
+    static constexpr std::size_t Arity = Traits::arity;
+
+    constexpr explicit SignatureValidatingDecorator(Func func)
+        : func_(std::move(func)) {}
+
+    template <typename... Args>
+        requires(sizeof...(Args) == Arity)
+    auto operator()(Args&&... args) const {
+        return std::invoke(func_, std::forward<Args>(args)...);
+    }
+
+    /**
+     * @brief Get function signature info
+     */
+    static auto getSignatureInfo() { return getFunctionSignatureInfo<Func>(); }
+};
+
+/**
+ * @brief Create a signature validating decorator
+ */
+template <typename Func>
+auto makeSignatureValidatingDecorator(Func&& func) {
+    return SignatureValidatingDecorator<std::decay_t<Func>>(
+        std::forward<Func>(func));
+}
+
+/**
+ * @brief Decorator that uses invoke utilities for safe invocation
+ */
+template <typename Func>
+class SafeInvokeDecorator {
+    Func func_;
+
+public:
+    constexpr explicit SafeInvokeDecorator(Func func)
+        : func_(std::move(func)) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) const
+        -> Result<typename FunctionTraits<Func>::return_type> {
+        return safeCall(func_, std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * @brief Create a safe invoke decorator
+ */
+template <typename Func>
+auto makeSafeInvokeDecorator(Func&& func) {
+    return SafeInvokeDecorator<std::decay_t<Func>>(std::forward<Func>(func));
+}
+
+/**
+ * @brief Decorator that memoizes using invoke.hpp memoization
+ */
+template <typename Func>
+class MemoizingDecorator {
+    mutable decltype(memoize(std::declval<Func>())) memoized_;
+
+public:
+    explicit MemoizingDecorator(Func func)
+        : memoized_(memoize(std::move(func))) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) const {
+        return memoized_(std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * @brief Create a memoizing decorator
+ */
+template <typename Func>
+auto makeMemoizingDecorator(Func&& func) {
+    return MemoizingDecorator<std::decay_t<Func>>(std::forward<Func>(func));
+}
+
+/**
+ * @brief Decorator that uses function composition from func_traits.hpp
+ */
+template <typename Func1, typename Func2>
+class ComposingDecorator {
+    ComposedFunction<Func1, Func2> composed_;
+
+public:
+    ComposingDecorator(Func1 f1, Func2 f2)
+        : composed_(compose(std::move(f1), std::move(f2))) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) const {
+        return composed_(std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * @brief Create a composing decorator
+ */
+template <typename Func1, typename Func2>
+auto makeComposingDecorator(Func1&& f1, Func2&& f2) {
+    return ComposingDecorator<std::decay_t<Func1>, std::decay_t<Func2>>(
+        std::forward<Func1>(f1), std::forward<Func2>(f2));
+}
+
+/**
+ * @brief Decorator that uses partial application from func_traits.hpp
+ */
+template <typename Func, typename... BoundArgs>
+class PartialDecorator {
+    PartialApplication<Func, BoundArgs...> partial_;
+
+public:
+    PartialDecorator(Func func, BoundArgs... args)
+        : partial_(partial(std::move(func), std::move(args)...)) {}
+
+    template <typename... Args>
+    auto operator()(Args&&... args) const {
+        return partial_(std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * @brief Create a partial decorator
+ */
+template <typename Func, typename... BoundArgs>
+auto makePartialDecorator(Func&& func, BoundArgs&&... args) {
+    return PartialDecorator<std::decay_t<Func>, std::decay_t<BoundArgs>...>(
+        std::forward<Func>(func), std::forward<BoundArgs>(args)...);
+}
+
+/**
+ * @brief Decorator pipeline builder
+ */
+template <typename Func>
+class DecoratorPipeline {
+    Func func_;
+
+public:
+    constexpr explicit DecoratorPipeline(Func func) : func_(std::move(func)) {}
+
+    /**
+     * @brief Add timing decorator
+     */
+    auto withTiming(
+        std::string name,
+        std::function<void(std::string_view, std::chrono::microseconds)>
+            callback = nullptr) {
+        auto decorated =
+            makeTimingDecorator(func_, std::move(name), std::move(callback));
+        return DecoratorPipeline<decltype(decorated)>(std::move(decorated));
+    }
+
+    /**
+     * @brief Add retry decorator
+     */
+    auto withRetry(int retryCount) {
+        auto decorated = makeRetryDecorator(func_, retryCount);
+        return DecoratorPipeline<decltype(decorated)>(std::move(decorated));
+    }
+
+    /**
+     * @brief Add logging decorator
+     */
+    auto withLogging(std::string name,
+                     std::function<void(std::string_view)> logger = nullptr) {
+        auto decorated =
+            makeLoggingDecorator(func_, std::move(name), std::move(logger));
+        return DecoratorPipeline<decltype(decorated)>(std::move(decorated));
+    }
+
+    /**
+     * @brief Add transform decorator
+     */
+    template <typename Transform>
+    auto withTransform(Transform&& transform) {
+        auto decorated =
+            makeTransformDecorator(func_, std::forward<Transform>(transform));
+        return DecoratorPipeline<decltype(decorated)>(std::move(decorated));
+    }
+
+    /**
+     * @brief Get the decorated function
+     */
+    [[nodiscard]] Func& get() { return func_; }
+    [[nodiscard]] const Func& get() const { return func_; }
+
+    template <typename... Args>
+    auto operator()(Args&&... args) const {
+        return func_(std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * @brief Create a decorator pipeline
+ */
+template <typename Func>
+auto makePipeline(Func&& func) {
+    return DecoratorPipeline<std::decay_t<Func>>(std::forward<Func>(func));
+}
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_DECORATE_HPP

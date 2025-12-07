@@ -5,7 +5,6 @@ Setup script for Atom Python bindings
 
 import platform
 import subprocess
-import sys
 from pathlib import Path
 
 from pybind11.setup_helpers import Pybind11Extension, build_ext

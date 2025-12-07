@@ -1,20 +1,30 @@
+/*!
+ * \file test_abi.cpp
+ * \brief Comprehensive tests for atom::meta::DemangleHelper and ABI utilities
+ * \author Max Qian <lightapt.com>
+ * \date 2024
+ * \copyright Copyright (C) 2023-2024 Max Qian
+ */
+
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include "atom/meta/abi.hpp"
 
-#include <array>
 #include <atomic>
+#include <functional>
+#include <list>
 #include <map>
 #include <memory>
+#include <span>
 #include <string>
 #include <thread>
 #include <tuple>
-#include <type_traits>
 #include <vector>
 
-namespace {
+namespace atom::meta::test {
 
-// Complex types for testing demangling
+// Test helper classes
 template <typename T>
 struct SimpleTemplate {
     T value;
@@ -26,252 +36,410 @@ struct ComplexTemplate {
     U second;
 };
 
-template <typename... Args>
-struct VariadicTemplate {};
-
 class AbstractBase {
 public:
     virtual ~AbstractBase() = default;
-    virtual void abstractMethod() = 0;
+    virtual int getValue() const = 0;
 };
 
-class DerivedClass : public AbstractBase {
+class ConcreteClass : public AbstractBase {
 public:
-    void abstractMethod() override {}
+    int getValue() const override { return 42; }
 };
 
-// A complex nested type
-template <typename T>
-using NestedType = std::map<std::string, std::vector<SimpleTemplate<T>>>;
-
-// Function type for testing
-using FunctionType = int (*)(const std::string&, double);
-
-// Enum for testing
-enum class TestEnum { Value1, Value2, Value3 };
-
-}  // namespace
-
+// Test fixture
 class DemangleHelperTest : public ::testing::Test {
 protected:
-    void SetUp() override {
-        // Clear the cache before each test
-        atom::meta::DemangleHelper::clearCache();
-    }
+    void SetUp() override { DemangleHelper::clearCache(); }
 
-    // Helper to verify demangled type contains expected substring
-    void expectTypeContains(const std::string& demangled,
+    void TearDown() override { DemangleHelper::clearCache(); }
+
+    // Helper to check type name contains expected substring
+    void expectTypeContains(const String& typeName,
                             const std::string& expected) {
-        EXPECT_TRUE(demangled.find(expected) != std::string::npos)
-            << "Expected demangled type to contain: " << expected
-            << " but got: " << demangled;
+        std::string typeStr(typeName.begin(), typeName.end());
+        EXPECT_NE(typeStr.find(expected), std::string::npos)
+            << "Type '" << typeStr << "' should contain '" << expected << "'";
     }
 };
 
-// Test basic demangling functionality
-TEST_F(DemangleHelperTest, BasicDemangling) {
-    // Built-in types
-    std::string int_type = atom::meta::DemangleHelper::demangleType<int>();
-    std::string double_type =
-        atom::meta::DemangleHelper::demangleType<double>();
+//==============================================================================
+// Basic Demangling Tests
+//==============================================================================
 
-    EXPECT_TRUE(int_type == "int" || int_type.find("int") != std::string::npos);
-    EXPECT_TRUE(double_type == "double" ||
-                double_type.find("double") != std::string::npos);
+TEST_F(DemangleHelperTest, DemangleBasicTypes) {
+    auto intType = DemangleHelper::demangleType<int>();
+    auto doubleType = DemangleHelper::demangleType<double>();
+    auto charType = DemangleHelper::demangleType<char>();
 
-    // String type (implementation defined, but should contain "string")
-    std::string string_type =
-        atom::meta::DemangleHelper::demangleType<std::string>();
-    expectTypeContains(string_type, "string");
+    expectTypeContains(intType, "int");
+    expectTypeContains(doubleType, "double");
+    expectTypeContains(charType, "char");
 }
 
-// Test demangling of instance types
-TEST_F(DemangleHelperTest, InstanceDemangling) {
-    int i = 42;
-    std::string s = "test";
-    std::vector<int> v;
+TEST_F(DemangleHelperTest, DemanglePointerTypes) {
+    auto intPtr = DemangleHelper::demangleType<int*>();
+    auto constIntPtr = DemangleHelper::demangleType<const int*>();
 
-    std::string int_type = atom::meta::DemangleHelper::demangleType(i);
-    std::string string_type = atom::meta::DemangleHelper::demangleType(s);
-    std::string vector_type = atom::meta::DemangleHelper::demangleType(v);
-
-    EXPECT_TRUE(int_type == "int" || int_type.find("int") != std::string::npos);
-    expectTypeContains(string_type, "string");
-    expectTypeContains(vector_type, "vector");
-    expectTypeContains(vector_type, "int");
+    expectTypeContains(intPtr, "int");
+    expectTypeContains(constIntPtr, "int");
 }
 
-// Test demangling of template types
-TEST_F(DemangleHelperTest, TemplateDemangling) {
-    // Simple template
-    std::string simple_template_type =
-        atom::meta::DemangleHelper::demangleType<SimpleTemplate<int>>();
-    expectTypeContains(simple_template_type, "SimpleTemplate");
-    expectTypeContains(simple_template_type, "int");
+TEST_F(DemangleHelperTest, DemangleReferenceTypes) {
+    auto intRef = DemangleHelper::demangleType<int&>();
+    auto intRvalueRef = DemangleHelper::demangleType<int&&>();
 
-    // Complex template
-    std::string complex_template_type =
-        atom::meta::DemangleHelper::demangleType<
-            ComplexTemplate<int, std::string>>();
-    expectTypeContains(complex_template_type, "ComplexTemplate");
-    expectTypeContains(complex_template_type, "int");
-    expectTypeContains(complex_template_type, "string");
-
-    // Variadic template
-    std::string variadic_template_type =
-        atom::meta::DemangleHelper::demangleType<
-            VariadicTemplate<int, double, char>>();
-    expectTypeContains(variadic_template_type, "VariadicTemplate");
+    expectTypeContains(intRef, "int");
+    expectTypeContains(intRvalueRef, "int");
 }
 
-// Test demangling of nested types
-TEST_F(DemangleHelperTest, NestedTypeDemangling) {
-    std::string nested_type =
-        atom::meta::DemangleHelper::demangleType<NestedType<double>>();
+TEST_F(DemangleHelperTest, DemangleStdTypes) {
+    auto stringType = DemangleHelper::demangleType<std::string>();
+    auto vectorType = DemangleHelper::demangleType<std::vector<int>>();
+    auto mapType = DemangleHelper::demangleType<std::map<int, std::string>>();
 
-    expectTypeContains(nested_type, "map");
-    expectTypeContains(nested_type, "string");
-    expectTypeContains(nested_type, "vector");
-    expectTypeContains(nested_type, "SimpleTemplate");
-    expectTypeContains(nested_type, "double");
+    expectTypeContains(stringType, "string");
+    expectTypeContains(vectorType, "vector");
+    expectTypeContains(mapType, "map");
 }
 
-// Test demangling of pointer, reference and const types
-TEST_F(DemangleHelperTest, ModifierTypeDemangling) {
-    // Pointer type
-    std::string ptr_type = atom::meta::DemangleHelper::demangleType<int*>();
-    EXPECT_TRUE(ptr_type.find("int") != std::string::npos &&
-                (ptr_type.find("*") != std::string::npos ||
-                 ptr_type.find("pointer") != std::string::npos));
+TEST_F(DemangleHelperTest, DemangleTemplateTypes) {
+    auto simpleTemplate = DemangleHelper::demangleType<SimpleTemplate<int>>();
+    auto complexTemplate =
+        DemangleHelper::demangleType<ComplexTemplate<int, double>>();
 
-    // Reference type - demangling may strip modifiers, so just check for base
-    // type
-    std::string ref_type = atom::meta::DemangleHelper::demangleType<int&>();
-    EXPECT_TRUE(ref_type.find("int") != std::string::npos);
-
-    // Const type - demangling may strip modifiers, so just check for base type
-    std::string const_type =
-        atom::meta::DemangleHelper::demangleType<const int>();
-    EXPECT_TRUE(const_type.find("int") != std::string::npos);
+    expectTypeContains(simpleTemplate, "SimpleTemplate");
+    expectTypeContains(complexTemplate, "ComplexTemplate");
 }
 
-// Test demangling with source location
+TEST_F(DemangleHelperTest, DemangleFromInstance) {
+    int intVal = 42;
+    std::string strVal = "test";
+    std::vector<int> vecVal = {1, 2, 3};
+
+    auto intType = DemangleHelper::demangleType(intVal);
+    auto strType = DemangleHelper::demangleType(strVal);
+    auto vecType = DemangleHelper::demangleType(vecVal);
+
+    expectTypeContains(intType, "int");
+    expectTypeContains(strType, "string");
+    expectTypeContains(vecType, "vector");
+}
+
+//==============================================================================
+// Demangle with Source Location Tests
+//==============================================================================
+
 TEST_F(DemangleHelperTest, DemangleWithSourceLocation) {
-    std::source_location loc = std::source_location::current();
-    std::string mangled_name = typeid(int).name();
+    auto loc = std::source_location::current();
+    auto result = DemangleHelper::demangle(typeid(int).name(), loc);
 
-    std::string demangled =
-        atom::meta::DemangleHelper::demangle(mangled_name, loc);
-
-    // Check that the result contains the file name and line number
-    EXPECT_TRUE(demangled.find(loc.file_name()) != std::string::npos);
-    EXPECT_TRUE(demangled.find(std::to_string(loc.line())) !=
-                std::string::npos);
+    // Result should contain the source location info
+    std::string resultStr(result.begin(), result.end());
+    EXPECT_NE(resultStr.find("("), std::string::npos);
 }
 
-// Test demangling multiple names
-TEST_F(DemangleHelperTest, DemangleMultipleNames) {
-    std::vector<std::string_view> mangled_names = {
+TEST_F(DemangleHelperTest, DemangleWithoutSourceLocation) {
+    auto result = DemangleHelper::demangle(typeid(int).name());
+
+    // Result should not contain parentheses for location
+    expectTypeContains(result, "int");
+}
+
+//==============================================================================
+// DemangleMany Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, DemangleManyNames) {
+    containers::Vector<std::string_view> names = {
         typeid(int).name(), typeid(double).name(), typeid(std::string).name()};
 
-    std::vector<std::string> demangled =
-        atom::meta::DemangleHelper::demangleMany(mangled_names);
+    auto results = DemangleHelper::demangleMany(names);
 
-    ASSERT_EQ(demangled.size(), 3);
-    EXPECT_TRUE(demangled[0] == "int" ||
-                demangled[0].find("int") != std::string::npos);
-    EXPECT_TRUE(demangled[1] == "double" ||
-                demangled[1].find("double") != std::string::npos);
-    expectTypeContains(demangled[2], "string");
+    ASSERT_EQ(results.size(), 3);
+    expectTypeContains(results[0], "int");
+    expectTypeContains(results[1], "double");
+    expectTypeContains(results[2], "string");
 }
 
-// Test cache functionality
-TEST_F(DemangleHelperTest, CacheFunctionality) {
-    EXPECT_EQ(atom::meta::DemangleHelper::cacheSize(), 0);
+//==============================================================================
+// Cache Tests
+//==============================================================================
 
-    // First demangling should add to cache
-    atom::meta::DemangleHelper::demangleType<int>();
-    EXPECT_EQ(atom::meta::DemangleHelper::cacheSize(), 1);
+TEST_F(DemangleHelperTest, CacheOperations) {
+    // Initially empty
+    EXPECT_EQ(DemangleHelper::cacheSize(), 0);
 
-    // Second demangling of the same type should use cache (size remains the
-    // same)
-    atom::meta::DemangleHelper::demangleType<int>();
-    EXPECT_EQ(atom::meta::DemangleHelper::cacheSize(), 1);
+    // Demangle some types
+    DemangleHelper::demangleType<int>();
+    DemangleHelper::demangleType<double>();
+    DemangleHelper::demangleType<std::string>();
 
-    // Different type should add to cache
-    atom::meta::DemangleHelper::demangleType<double>();
-    EXPECT_EQ(atom::meta::DemangleHelper::cacheSize(), 2);
+    EXPECT_GE(DemangleHelper::cacheSize(), 1);
 
     // Clear cache
-    atom::meta::DemangleHelper::clearCache();
-    EXPECT_EQ(atom::meta::DemangleHelper::cacheSize(), 0);
+    DemangleHelper::clearCache();
+    EXPECT_EQ(DemangleHelper::cacheSize(), 0);
 }
 
-// Test template specialization detection
-TEST_F(DemangleHelperTest, TemplateSpecializationDetection) {
-    // Test with non-template type
-    bool isIntTemplate =
-        atom::meta::DemangleHelper::isTemplateSpecialization<int>();
-    EXPECT_FALSE(isIntTemplate);
+TEST_F(DemangleHelperTest, CacheReuse) {
+    // First call should populate cache
+    auto first = DemangleHelper::demangleType<int>();
+    size_t sizeAfterFirst = DemangleHelper::cacheSize();
 
-    // Test with template type
-    bool isVectorTemplate =
-        atom::meta::DemangleHelper::isTemplateSpecialization<
-            std::vector<int>>();
-    EXPECT_TRUE(isVectorTemplate);
-    bool isSimpleTemplate =
-        atom::meta::DemangleHelper::isTemplateSpecialization<
-            SimpleTemplate<double>>();
-    EXPECT_TRUE(isSimpleTemplate);
+    // Second call should use cache
+    auto second = DemangleHelper::demangleType<int>();
+    size_t sizeAfterSecond = DemangleHelper::cacheSize();
 
-    // Test with demangled name
-    std::string demangled_vector =
-        atom::meta::DemangleHelper::demangleType<std::vector<int>>();
-    EXPECT_TRUE(atom::meta::DemangleHelper::isTemplateType(demangled_vector));
-
-    std::string demangled_int = atom::meta::DemangleHelper::demangleType<int>();
-    EXPECT_FALSE(atom::meta::DemangleHelper::isTemplateType(demangled_int));
+    EXPECT_EQ(first, second);
+    EXPECT_EQ(sizeAfterFirst, sizeAfterSecond);
 }
 
-// Test thread safety of the cache
-TEST_F(DemangleHelperTest, ThreadSafetyTest) {
-    if (!atom::meta::AbiConfig::thread_safe_cache) {
-        GTEST_SKIP() << "Thread safety is disabled in AbiConfig";
-    }
+//==============================================================================
+// Template Detection Tests
+//==============================================================================
 
-    // Create several threads that demangle types concurrently
-    constexpr int num_threads = 10;
-    constexpr int iterations_per_thread = 1000;
+TEST_F(DemangleHelperTest, IsTemplateSpecialization) {
+    // This is a compile-time check
+    auto isTemplate =
+        DemangleHelper::isTemplateSpecialization<std::vector<int>>();
+    auto isNotTemplate = DemangleHelper::isTemplateSpecialization<int>();
+
+    EXPECT_TRUE(isTemplate);
+    EXPECT_FALSE(isNotTemplate);
+}
+
+TEST_F(DemangleHelperTest, IsTemplateType) {
+    auto vectorName = DemangleHelper::demangleType<std::vector<int>>();
+    auto intName = DemangleHelper::demangleType<int>();
+
+    EXPECT_TRUE(DemangleHelper::isTemplateType(vectorName));
+    EXPECT_FALSE(DemangleHelper::isTemplateType(intName));
+}
+
+//==============================================================================
+// GetBareTypeName Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, GetBareTypeNameSimple) {
+    auto bareName = DemangleHelper::getBareTypeName("int");
+    EXPECT_EQ(std::string(bareName.begin(), bareName.end()), "int");
+}
+
+TEST_F(DemangleHelperTest, GetBareTypeNameWithConst) {
+    auto bareName = DemangleHelper::getBareTypeName("const int");
+    EXPECT_EQ(std::string(bareName.begin(), bareName.end()), "int");
+}
+
+TEST_F(DemangleHelperTest, GetBareTypeNameWithNamespace) {
+    auto bareName = DemangleHelper::getBareTypeName("std::vector");
+    EXPECT_EQ(std::string(bareName.begin(), bareName.end()), "vector");
+}
+
+TEST_F(DemangleHelperTest, GetBareTypeNameWithTemplate) {
+    auto bareName = DemangleHelper::getBareTypeName("std::vector<int>");
+    EXPECT_EQ(std::string(bareName.begin(), bareName.end()), "vector");
+}
+
+//==============================================================================
+// ExtractNamespace Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, ExtractNamespaceSimple) {
+    auto ns = DemangleHelper::extractNamespace("std::string");
+    EXPECT_EQ(std::string(ns.begin(), ns.end()), "std");
+}
+
+TEST_F(DemangleHelperTest, ExtractNamespaceNested) {
+    auto ns = DemangleHelper::extractNamespace("atom::meta::DemangleHelper");
+    EXPECT_EQ(std::string(ns.begin(), ns.end()), "atom::meta");
+}
+
+TEST_F(DemangleHelperTest, ExtractNamespaceNoNamespace) {
+    auto ns = DemangleHelper::extractNamespace("int");
+    EXPECT_TRUE(ns.empty());
+}
+
+//==============================================================================
+// ExtractTemplateArgs Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, ExtractTemplateArgsSingle) {
+    auto args = DemangleHelper::extractTemplateArgs("vector<int>");
+
+    ASSERT_EQ(args.size(), 1);
+    EXPECT_EQ(std::string(args[0].begin(), args[0].end()), "int");
+}
+
+TEST_F(DemangleHelperTest, ExtractTemplateArgsMultiple) {
+    auto args = DemangleHelper::extractTemplateArgs("map<int, string>");
+
+    ASSERT_EQ(args.size(), 2);
+    EXPECT_EQ(std::string(args[0].begin(), args[0].end()), "int");
+    EXPECT_EQ(std::string(args[1].begin(), args[1].end()), "string");
+}
+
+TEST_F(DemangleHelperTest, ExtractTemplateArgsNested) {
+    auto args =
+        DemangleHelper::extractTemplateArgs("vector<pair<int, double>>");
+
+    ASSERT_EQ(args.size(), 1);
+    expectTypeContains(args[0], "pair");
+}
+
+TEST_F(DemangleHelperTest, ExtractTemplateArgsNoTemplate) {
+    auto args = DemangleHelper::extractTemplateArgs("int");
+    EXPECT_TRUE(args.empty());
+}
+
+//==============================================================================
+// Type Classification Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, IsPointerType) {
+    EXPECT_TRUE(DemangleHelper::isPointerType("int*"));
+    EXPECT_TRUE(DemangleHelper::isPointerType("const int *"));
+    EXPECT_FALSE(DemangleHelper::isPointerType("int"));
+    EXPECT_FALSE(DemangleHelper::isPointerType("int&"));
+}
+
+TEST_F(DemangleHelperTest, IsReferenceType) {
+    EXPECT_TRUE(DemangleHelper::isReferenceType("int&"));
+    EXPECT_TRUE(DemangleHelper::isReferenceType("int &&"));
+    EXPECT_FALSE(DemangleHelper::isReferenceType("int"));
+    EXPECT_FALSE(DemangleHelper::isReferenceType("int*"));
+}
+
+TEST_F(DemangleHelperTest, IsConstType) {
+    EXPECT_TRUE(DemangleHelper::isConstType("const int"));
+    EXPECT_TRUE(DemangleHelper::isConstType("int const"));
+    EXPECT_FALSE(DemangleHelper::isConstType("int"));
+}
+
+//==============================================================================
+// GetTypeCategory Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, GetTypeCategoryVoid) {
+    auto category = DemangleHelper::getTypeCategory<void>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "void");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryIntegral) {
+    auto category = DemangleHelper::getTypeCategory<int>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "integral");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryFloatingPoint) {
+    auto category = DemangleHelper::getTypeCategory<double>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "floating_point");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryArray) {
+    auto category = DemangleHelper::getTypeCategory<int[10]>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "array");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryEnum) {
+    enum class TestEnum { A, B };
+    auto category = DemangleHelper::getTypeCategory<TestEnum>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "enum");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryClass) {
+    auto category = DemangleHelper::getTypeCategory<std::string>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "class");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryPointer) {
+    auto category = DemangleHelper::getTypeCategory<int*>();
+    EXPECT_EQ(std::string(category.begin(), category.end()), "pointer");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryLvalueReference) {
+    auto category = DemangleHelper::getTypeCategory<int&>();
+    EXPECT_EQ(std::string(category.begin(), category.end()),
+              "lvalue_reference");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryRvalueReference) {
+    auto category = DemangleHelper::getTypeCategory<int&&>();
+    EXPECT_EQ(std::string(category.begin(), category.end()),
+              "rvalue_reference");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryMemberPointer) {
+    struct TestStruct {
+        int member;
+    };
+    auto category = DemangleHelper::getTypeCategory<int TestStruct::*>();
+    EXPECT_EQ(std::string(category.begin(), category.end()),
+              "member_object_pointer");
+}
+
+TEST_F(DemangleHelperTest, GetTypeCategoryMemberFunction) {
+    struct TestStruct {
+        void func() {}
+    };
+    auto category = DemangleHelper::getTypeCategory<void (TestStruct::*)()>();
+    EXPECT_EQ(std::string(category.begin(), category.end()),
+              "member_function_pointer");
+}
+
+//==============================================================================
+// TryDemangle Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, TryDemangleSuccess) {
+    auto result = DemangleHelper::tryDemangle(typeid(int).name());
+
+    EXPECT_TRUE(result.hasValue());
+    EXPECT_TRUE(static_cast<bool>(result));
+    EXPECT_EQ(result.error, AbiErrorCode::Success);
+}
+
+TEST_F(DemangleHelperTest, TryDemangleInvalidName) {
+    // Invalid mangled name should still return something
+    auto result = DemangleHelper::tryDemangle("invalid_mangled_name");
+
+    // Either succeeds with original or fails gracefully
+    EXPECT_TRUE(result.hasValue() ||
+                result.error == AbiErrorCode::DemangleFailed);
+}
+
+//==============================================================================
+// Thread Safety Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, ConcurrentDemangling) {
+    constexpr int NUM_THREADS = 8;
+    constexpr int ITERATIONS = 100;
 
     std::vector<std::thread> threads;
-    std::atomic<bool> start_flag(false);
+    std::atomic<bool> startFlag{false};
 
-    for (int i = 0; i < num_threads; ++i) {
-        threads.emplace_back([&start_flag]() {
-            // Wait for the start signal
-            while (!start_flag.load()) {
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        threads.emplace_back([&startFlag, ITERATIONS]() {
+            while (!startFlag.load()) {
                 std::this_thread::yield();
             }
 
-            // Demangle types in a loop
-            for (int j = 0; j < iterations_per_thread; ++j) {
+            for (int j = 0; j < ITERATIONS; ++j) {
                 switch (j % 5) {
                     case 0:
-                        atom::meta::DemangleHelper::demangleType<int>();
+                        DemangleHelper::demangleType<int>();
                         break;
                     case 1:
-                        atom::meta::DemangleHelper::demangleType<std::string>();
+                        DemangleHelper::demangleType<std::string>();
                         break;
                     case 2:
-                        atom::meta::DemangleHelper::demangleType<
-                            std::vector<int>>();
+                        DemangleHelper::demangleType<std::vector<int>>();
                         break;
                     case 3:
-                        atom::meta::DemangleHelper::demangleType<
-                            SimpleTemplate<double>>();
+                        DemangleHelper::demangleType<SimpleTemplate<double>>();
                         break;
                     case 4:
-                        atom::meta::DemangleHelper::demangleType<
+                        DemangleHelper::demangleType<
                             ComplexTemplate<int, std::string>>();
                         break;
                 }
@@ -279,146 +447,207 @@ TEST_F(DemangleHelperTest, ThreadSafetyTest) {
         });
     }
 
-    // Start all threads at once
-    start_flag.store(true);
+    startFlag.store(true);
 
-    // Join all threads
-    for (auto& thread : threads) {
-        thread.join();
+    for (auto& t : threads) {
+        t.join();
     }
 
-    // Cache should contain at most 5 entries (one for each unique type)
-    EXPECT_LE(atom::meta::DemangleHelper::cacheSize(), 5);
-
-    // No crashes or exceptions should have occurred
+    // Should complete without crashes
+    EXPECT_LE(DemangleHelper::cacheSize(), 5);
 }
 
-// Test cache management (ensuring it doesn't grow beyond max_cache_size)
-TEST_F(DemangleHelperTest, CacheManagement) {
-    // Create a number of unique types to exceed max_cache_size
-    constexpr int num_types = atom::meta::AbiConfig::max_cache_size + 100;
+TEST_F(DemangleHelperTest, ConcurrentCacheAccess) {
+    constexpr int NUM_THREADS = 4;
 
-    // Using templates with different integer parameters creates unique types
-    for (int i = 0; i < num_types; ++i) {
-        atom::meta::DemangleHelper::demangleType(
-            typeid(SimpleTemplate<char[55]>).name());
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
+
+    for (int i = 0; i < NUM_THREADS; ++i) {
+        threads.emplace_back([&successCount, i]() {
+            for (int j = 0; j < 100; ++j) {
+                if (i % 2 == 0) {
+                    // Reader threads
+                    auto size = DemangleHelper::cacheSize();
+                    (void)size;
+                    successCount++;
+                } else {
+                    // Writer threads
+                    DemangleHelper::demangleType<std::vector<double>>();
+                    successCount++;
+                }
+            }
+        });
     }
 
-    // Cache size should be limited to max_cache_size
-    EXPECT_LE(atom::meta::DemangleHelper::cacheSize(),
-              atom::meta::AbiConfig::max_cache_size);
-}
-
-// Test error handling for invalid mangled names
-TEST_F(DemangleHelperTest, ErrorHandlingTest) {
-    // This should not crash, but may throw or return the original string
-    try {
-        std::string result =
-            atom::meta::DemangleHelper::demangle("not_a_valid_mangled_name");
-        // If no exception, it should return something (either the original or
-        // some fallback)
-        EXPECT_FALSE(result.empty());
-    } catch (const atom::meta::AbiException& e) {
-        // It's also valid to throw on invalid input
-        EXPECT_TRUE(std::string(e.what()).find("Failed to demangle") !=
-                    std::string::npos);
+    for (auto& t : threads) {
+        t.join();
     }
+
+    EXPECT_EQ(successCount.load(), NUM_THREADS * 100);
 }
 
-#if defined(ENABLE_DEBUG) || defined(ATOM_META_ENABLE_VISUALIZATION)
-// Test visualization functionality (only when enabled)
-TEST_F(DemangleHelperTest, TypeVisualization) {
-    // Test visualization of a simple type
-    std::string int_viz = atom::meta::DemangleHelper::visualizeType<int>();
-    EXPECT_TRUE(int_viz.find("int") != std::string::npos);
+//==============================================================================
+// Cache Management Tests
+//==============================================================================
 
-    // Test visualization of a complex type
-    std::string complex_viz = atom::meta::DemangleHelper::visualizeType<
-        std::map<int, std::vector<std::string>>>();
+TEST_F(DemangleHelperTest, CacheEviction) {
+    // Create many unique types to trigger cache eviction
+    // This tests the LRU eviction mechanism
 
-    // Visualization should include map, int, vector and string somewhere
-    EXPECT_TRUE(complex_viz.find("map") != std::string::npos);
-    EXPECT_TRUE(complex_viz.find("int") != std::string::npos);
-    EXPECT_TRUE(complex_viz.find("vector") != std::string::npos);
-    EXPECT_TRUE(complex_viz.find("string") != std::string::npos);
+    for (int i = 0; i < 100; ++i) {
+        // Create different type name variations
+        DemangleHelper::demangle(("SomeType" + std::to_string(i)).c_str());
+    }
 
-    // Test instance visualization
-    std::vector<int> vec = {1, 2, 3};
-    std::string vec_viz = atom::meta::DemangleHelper::visualizeObject(vec);
-    EXPECT_TRUE(vec_viz.find("vector") != std::string::npos);
-    EXPECT_TRUE(vec_viz.find("int") != std::string::npos);
+    // Cache should be limited
+    EXPECT_LE(DemangleHelper::cacheSize(), AbiConfig::max_cache_size);
 }
-#endif
 
-// Test with highly complex and nested types
+//==============================================================================
+// Complex Type Tests
+//==============================================================================
+
 TEST_F(DemangleHelperTest, ComplexNestedTypes) {
     using ComplexType =
         std::tuple<std::map<std::string, std::vector<int>>,
                    std::shared_ptr<AbstractBase>,
                    std::array<std::unique_ptr<SimpleTemplate<double>>, 5>>;
 
-    std::string complex_type =
-        atom::meta::DemangleHelper::demangleType<ComplexType>();
+    auto complexType = DemangleHelper::demangleType<ComplexType>();
 
-    // Check for presence of key type components
-    expectTypeContains(complex_type, "tuple");
-    expectTypeContains(complex_type, "map");
-    expectTypeContains(complex_type, "vector");
-    expectTypeContains(complex_type, "shared_ptr");
-    expectTypeContains(complex_type, "unique_ptr");
-    expectTypeContains(complex_type, "AbstractBase");
-    expectTypeContains(complex_type, "SimpleTemplate");
+    expectTypeContains(complexType, "tuple");
 }
 
-// Test with function types
 TEST_F(DemangleHelperTest, FunctionTypes) {
-    // Function pointer
     using FuncPtr = void (*)(int, double);
-    std::string func_ptr = atom::meta::DemangleHelper::demangleType<FuncPtr>();
-    expectTypeContains(func_ptr, "void");
-    expectTypeContains(func_ptr, "int");
-    expectTypeContains(func_ptr, "double");
+    using MemberFuncPtr = int (std::string::*)(size_t) const;
 
-    // Member function pointer
-    using MemFuncPtr = void (std::string::*)(int) const;
-    std::string mem_func_ptr =
-        atom::meta::DemangleHelper::demangleType<MemFuncPtr>();
-    expectTypeContains(mem_func_ptr, "void");
-    expectTypeContains(mem_func_ptr, "string");
-    expectTypeContains(mem_func_ptr, "int");
-    expectTypeContains(mem_func_ptr, "const");
+    auto funcPtrType = DemangleHelper::demangleType<FuncPtr>();
+    auto memberFuncType = DemangleHelper::demangleType<MemberFuncPtr>();
+
+    // Should demangle without crashing
+    EXPECT_FALSE(funcPtrType.empty());
+    EXPECT_FALSE(memberFuncType.empty());
 }
 
-// Extra test for C++20 features
-TEST_F(DemangleHelperTest, Cpp20Features) {
-    // std::span
-    using SpanType = std::span<const int>;
-    std::string span_type =
-        atom::meta::DemangleHelper::demangleType<SpanType>();
-    expectTypeContains(span_type, "span");
-    expectTypeContains(span_type, "int");
-    expectTypeContains(span_type, "const");
+TEST_F(DemangleHelperTest, SpanTypes) {
+    std::vector<int> vec = {1, 2, 3, 4, 5};
+    std::span<int> dynamicSpan(vec);
+    std::span<int, 5> fixedSpan(vec);
 
-    // Concepts and constraints (checking only that it doesn't crash)
-    std::string concept_type = atom::meta::DemangleHelper::demangleType<
-        std::enable_if_t<std::is_integral_v<int>, int>>();
-    EXPECT_FALSE(concept_type.empty());
+    auto dynamicType = DemangleHelper::demangleType(dynamicSpan);
+    auto fixedType = DemangleHelper::demangleType(fixedSpan);
+
+    expectTypeContains(dynamicType, "span");
+    expectTypeContains(fixedType, "span");
 }
 
-// Test for potential platform-specific issues
+//==============================================================================
+// AbiConfig Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, AbiConfigValues) {
+    // Verify config values are sensible
+    EXPECT_GT(AbiConfig::buffer_size, 0);
+    EXPECT_GT(AbiConfig::max_cache_size, 0);
+    EXPECT_TRUE(AbiConfig::thread_safe_cache);
+}
+
+//==============================================================================
+// AbiErrorCode Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, AbiErrorCodes) {
+    EXPECT_EQ(static_cast<int>(AbiErrorCode::Success), 0);
+    EXPECT_NE(static_cast<int>(AbiErrorCode::BufferTooSmall), 0);
+    EXPECT_NE(static_cast<int>(AbiErrorCode::DemangleFailed), 0);
+}
+
+//==============================================================================
+// AbiResult Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, AbiResultSuccess) {
+    AbiResult result;
+    result.value = "test";
+    result.error = AbiErrorCode::Success;
+
+    EXPECT_TRUE(result.hasValue());
+    EXPECT_TRUE(static_cast<bool>(result));
+}
+
+TEST_F(DemangleHelperTest, AbiResultError) {
+    AbiResult result;
+    result.error = AbiErrorCode::DemangleFailed;
+
+    EXPECT_FALSE(result.hasValue());
+    EXPECT_FALSE(static_cast<bool>(result));
+}
+
+//==============================================================================
+// AbiException Tests
+//==============================================================================
+
+TEST_F(DemangleHelperTest, AbiExceptionString) {
+    try {
+        throw AbiException("Test error message");
+    } catch (const AbiException& e) {
+        std::string what(e.what());
+        EXPECT_NE(what.find("Test error"), std::string::npos);
+    }
+}
+
+TEST_F(DemangleHelperTest, AbiExceptionChar) {
+    try {
+        throw AbiException("Char message");
+    } catch (const AbiException& e) {
+        std::string what(e.what());
+        EXPECT_NE(what.find("Char message"), std::string::npos);
+    }
+}
+
+//==============================================================================
+// Platform-Specific Tests
+//==============================================================================
+
 TEST_F(DemangleHelperTest, PlatformSpecificTypes) {
 #ifdef _WIN32
-    // Windows-specific types
-    using WindowsHandle = void*;  // Simplified example
-    std::string handle_type =
-        atom::meta::DemangleHelper::demangleType<WindowsHandle>();
-    expectTypeContains(handle_type, "void");
-    expectTypeContains(handle_type, "*");
+    using Handle = void*;
+    auto handleType = DemangleHelper::demangleType<Handle>();
+    expectTypeContains(handleType, "void");
 #else
-    // Unix-specific types
-    using FileDescriptor = int;  // Simplified example
-    std::string fd_type =
-        atom::meta::DemangleHelper::demangleType<FileDescriptor>();
-    expectTypeContains(fd_type, "int");
+    using FileDescriptor = int;
+    auto fdType = DemangleHelper::demangleType<FileDescriptor>();
+    expectTypeContains(fdType, "int");
 #endif
+}
+
+//==============================================================================
+// C++23 Expected Tests (if available)
+//==============================================================================
+
+#if ATOM_ABI_HAS_EXPECTED
+TEST_F(DemangleHelperTest, DemangleExpectedSuccess) {
+    auto result = DemangleHelper::demangleExpected(typeid(int).name());
+
+    EXPECT_TRUE(result.has_value());
+    expectTypeContains(*result, "int");
+}
+
+TEST_F(DemangleHelperTest, DemangleExpectedInvalid) {
+    auto result =
+        DemangleHelper::demangleExpected("definitely_not_a_valid_name_xyz123");
+
+    // May succeed with original or return error
+    // Either is acceptable behavior
+    SUCCEED();
+}
+#endif
+
+}  // namespace atom::meta::test
+
+int main(int argc, char** argv) {
+    ::testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }

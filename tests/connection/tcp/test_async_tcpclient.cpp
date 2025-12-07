@@ -1,6 +1,6 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
-#include "atom/connection/async_tcpclient.hpp"
+#include "atom/connection/tcp/async_tcpclient.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>

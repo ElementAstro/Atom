@@ -4,7 +4,7 @@
 # Project Name: Atom-Web-Address Description: Address Management API Author: Max
 # Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
 # 获取当前目录下的所有源文件
 file(GLOB ADDRESS_SOURCES "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
@@ -28,10 +28,12 @@ set_property(TARGET atom-web-address PROPERTY POSITION_INDEPENDENT_CODE 1)
 # 依赖项（避免直接依赖 loguru，优先使用已配置的日志依赖）
 set(LIBS ${CMAKE_THREAD_LIBS_INIT})
 
-# Add spdlog library
+# Add spdlog library (use compiled version to avoid ODR violations)
 find_package(spdlog CONFIG QUIET)
 if(spdlog_FOUND)
-  list(APPEND LIBS spdlog::spdlog_header_only)
+  list(APPEND LIBS spdlog::spdlog)
+  target_compile_definitions(atom-web-address PRIVATE SPDLOG_COMPILED_LIB
+                                                      SPDLOG_FMT_EXTERNAL)
 endif()
 
 # 根据需要添加特定平台的链接库

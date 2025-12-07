@@ -1,4 +1,8 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
+project(
+  atom-log
+  VERSION 1.0.0
+  LANGUAGES C CXX)
 
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
@@ -31,7 +35,7 @@ atom_configure_module(atom-log)
 # issues with MinGW
 target_link_libraries(
   atom-log
-  PUBLIC spdlog::spdlog_header_only atom-error atom-utils
+  PUBLIC spdlog::spdlog atom-error atom-utils
          $<$<TARGET_EXISTS:ZLIB::ZLIB>:ZLIB::ZLIB>
          $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 

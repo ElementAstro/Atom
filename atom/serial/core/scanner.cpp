@@ -4,6 +4,7 @@
 #include <chrono>
 #include <iomanip>
 #include <regex>
+#include <sstream>
 
 #include "spdlog/spdlog.h"
 
@@ -548,8 +549,12 @@ SerialPortScanner::list_available_ports(bool highlight_ch340) {
                     &buffer_size)) {
                 port_info.hardware_id = std::string(buffer);
                 auto [vid, pid] = extract_vid_pid(port_info.hardware_id);
-                port_info.vendor_id = std::to_string(vid);
-                port_info.product_id = std::to_string(pid);
+                // Convert to hex string format as documented
+                std::ostringstream vid_ss, pid_ss;
+                vid_ss << std::hex << std::setw(4) << std::setfill('0') << vid;
+                pid_ss << std::hex << std::setw(4) << std::setfill('0') << pid;
+                port_info.vendor_id = vid_ss.str();
+                port_info.product_id = pid_ss.str();
 
                 if (highlight_ch340) {
                     auto [is_ch340_val, model] = is_ch340_device(
@@ -1100,8 +1105,14 @@ SerialPortScanner::get_port_details_win(std::string_view port_name) {
                             &buffer_size)) {
                         details.hardware_id = std::string(buffer);
                         auto [vid, pid] = extract_vid_pid(details.hardware_id);
-                        details.vid = vid;
-                        details.pid = pid;
+                        // Convert uint16_t to hex string for vid/pid fields
+                        std::ostringstream vid_ss, pid_ss;
+                        vid_ss << std::hex << std::setw(4) << std::setfill('0')
+                               << vid;
+                        pid_ss << std::hex << std::setw(4) << std::setfill('0')
+                               << pid;
+                        details.vid = vid_ss.str();
+                        details.pid = pid_ss.str();
                     }
 
                     buffer_size = sizeof(buffer);

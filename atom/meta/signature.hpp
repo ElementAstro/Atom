@@ -18,7 +18,7 @@
 
 #include "atom/type/expected.hpp"
 #include "atom/utils/cstring.hpp"
-#include "atom/utils/text/string.hpp"
+// Note: Do NOT include string.hpp here to avoid trim() ambiguity
 
 namespace atom::meta {
 
@@ -352,15 +352,15 @@ private:
             }
         }
 
-        std::string tagValue = atom::utils::trim(
-            comment.substr(valueStart, valueEnd - valueStart));
+        std::string tagValue{atom::utils::trim(
+            comment.substr(valueStart, valueEnd - valueStart))};
 
         // Clean up comment markers from tag value
         size_t cleanEnd = tagValue.find("\n *");
         if (cleanEnd != std::string::npos) {
             tagValue = tagValue.substr(0, cleanEnd);
         }
-        tagValue = atom::utils::trim(tagValue);
+        tagValue = std::string{atom::utils::trim(tagValue)};
 
         // For param tags, store only the first one found (for backward
         // compatibility)
@@ -453,8 +453,8 @@ private:
             MissingFunctionName, "Function name is missing", nameStart});
     }
 
-    std::string name =
-        atom::utils::trim(definition.substr(nameStart, nameEnd - nameStart));
+    std::string name{
+        atom::utils::trim(definition.substr(nameStart, nameEnd - nameStart))};
 
     size_t paramsStart = nameEnd + 1;
     size_t paramsEnd = definition.find(')', paramsStart);
@@ -547,8 +547,8 @@ private:
                              "Unbalanced brackets in parameters", paramsStart});
         }
 
-        std::string param = atom::utils::trim(
-            paramsStr.substr(paramStart, paramEnd - paramStart));
+        std::string param{atom::utils::trim(
+            paramsStr.substr(paramStart, paramEnd - paramStart))};
         if (param.empty()) {
             paramStart = paramEnd + 1;
             continue;
@@ -594,14 +594,16 @@ private:
         if (equalsPos != std::string::npos) {
             parameter.hasDefaultValue = true;
             parameter.defaultValue =
-                atom::utils::trim(param.substr(equalsPos + 1));
-            param = atom::utils::trim(param.substr(0, equalsPos));
+                std::string(atom::utils::trim(param.substr(equalsPos + 1)));
+            param = std::string(atom::utils::trim(param.substr(0, equalsPos)));
         }
 
         size_t colonPos = param.find(':');
         if (colonPos != std::string_view::npos) {
-            parameter.name = atom::utils::trim(param.substr(0, colonPos));
-            parameter.type = atom::utils::trim(param.substr(colonPos + 1));
+            parameter.name =
+                std::string(atom::utils::trim(param.substr(0, colonPos)));
+            parameter.type =
+                std::string(atom::utils::trim(param.substr(colonPos + 1)));
         } else {
             parameter.name = param;
             parameter.type = "any";

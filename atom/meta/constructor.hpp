@@ -596,6 +596,205 @@ auto makeBuilder() {
     return ObjectBuilder<Class>();
 }
 
+//==============================================================================
+// C++23 Enhanced Constructor Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for default constructible types
+ */
+template <typename T>
+concept DefaultConstructible = std::is_default_constructible_v<T>;
+
+/**
+ * @brief Concept for types constructible from specific args
+ */
+template <typename T, typename... Args>
+concept ConstructibleFrom = std::is_constructible_v<T, Args...>;
+
+/**
+ * @brief Concept for aggregate initializable types
+ */
+template <typename T>
+concept AggregateInitializable = std::is_aggregate_v<T>;
+
+/**
+ * @brief Safe object construction with error handling
+ */
+template <typename T, typename... Args>
+    requires ConstructibleFrom<T, Args...>
+auto safeConstruct(Args&&... args) noexcept
+    -> ConstructorResult<std::unique_ptr<T>> {
+    try {
+        return ConstructorResult<std::unique_ptr<T>>::success(
+            std::make_unique<T>(std::forward<Args>(args)...));
+    } catch (const std::exception& e) {
+        return ConstructorResult<std::unique_ptr<T>>::failure(e.what());
+    } catch (...) {
+        return ConstructorResult<std::unique_ptr<T>>::failure(
+            "Unknown construction error");
+    }
+}
+
+/**
+ * @brief In-place construction wrapper
+ */
+template <typename T>
+class InPlaceConstructor {
+public:
+    template <typename... Args>
+        requires ConstructibleFrom<T, Args...>
+    static T construct(Args&&... args) {
+        return T(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+        requires ConstructibleFrom<T, Args...>
+    static std::unique_ptr<T> constructUnique(Args&&... args) {
+        return std::make_unique<T>(std::forward<Args>(args)...);
+    }
+
+    template <typename... Args>
+        requires ConstructibleFrom<T, Args...>
+    static std::shared_ptr<T> constructShared(Args&&... args) {
+        return std::make_shared<T>(std::forward<Args>(args)...);
+    }
+};
+
+/**
+ * @brief Factory with type registration
+ */
+template <typename Base>
+class RegisteredFactory {
+    std::unordered_map<std::string, std::function<std::shared_ptr<Base>()>>
+        creators_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    template <typename Derived>
+        requires std::is_base_of_v<Base, Derived> &&
+                 DefaultConstructible<Derived>
+    void registerType(std::string_view name) {
+        std::unique_lock lock(mutex_);
+        creators_[std::string(name)] = []() {
+            return std::make_shared<Derived>();
+        };
+    }
+
+    template <typename Derived, typename... Args>
+        requires std::is_base_of_v<Base, Derived> &&
+                 ConstructibleFrom<Derived, Args...>
+    void registerType(std::string_view name, Args&&... args) {
+        std::unique_lock lock(mutex_);
+        auto tuple_args = std::make_tuple(std::forward<Args>(args)...);
+        creators_[std::string(name)] = [tuple_args]() {
+            return std::apply(
+                [](auto&&... a) {
+                    return std::make_shared<Derived>(
+                        std::forward<decltype(a)>(a)...);
+                },
+                tuple_args);
+        };
+    }
+
+    [[nodiscard]] std::shared_ptr<Base> create(std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        auto it = creators_.find(std::string(name));
+        if (it != creators_.end()) {
+            return it->second();
+        }
+        return nullptr;
+    }
+
+    [[nodiscard]] bool hasType(std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        return creators_.contains(std::string(name));
+    }
+
+    [[nodiscard]] std::vector<std::string> getRegisteredTypes() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(creators_.size());
+        for (const auto& [name, _] : creators_) {
+            result.push_back(name);
+        }
+        return result;
+    }
+};
+
+/**
+ * @brief Builder with validation
+ */
+template <typename Class>
+class ValidatingBuilder : public ObjectBuilder<Class> {
+    std::vector<std::function<bool(const Class&)>> validators_;
+    std::vector<std::string> error_messages_;
+
+public:
+    ValidatingBuilder& addValidator(
+        std::function<bool(const Class&)> validator,
+        std::string error_msg = "Validation failed") {
+        validators_.push_back(std::move(validator));
+        error_messages_.push_back(std::move(error_msg));
+        return *this;
+    }
+
+    std::optional<std::shared_ptr<Class>> buildValidated() {
+        auto obj = ObjectBuilder<Class>::build();
+
+        for (size_t i = 0; i < validators_.size(); ++i) {
+            if (!validators_[i](*obj)) {
+                return std::nullopt;
+            }
+        }
+
+        return obj;
+    }
+
+    ConstructorResult<std::shared_ptr<Class>> buildWithErrors() {
+        auto obj = ObjectBuilder<Class>::build();
+
+        for (size_t i = 0; i < validators_.size(); ++i) {
+            if (!validators_[i](*obj)) {
+                return ConstructorResult<std::shared_ptr<Class>>::failure(
+                    error_messages_[i]);
+            }
+        }
+
+        return ConstructorResult<std::shared_ptr<Class>>::success(
+            std::move(obj));
+    }
+};
+
+/**
+ * @brief Create a validating builder
+ */
+template <typename Class>
+auto makeValidatingBuilder() {
+    return ValidatingBuilder<Class>();
+}
+
+/**
+ * @brief Singleton factory
+ */
+template <typename T>
+class SingletonFactory {
+public:
+    template <typename... Args>
+        requires ConstructibleFrom<T, Args...>
+    static T& getInstance(Args&&... args) {
+        static T instance(std::forward<Args>(args)...);
+        return instance;
+    }
+
+    template <typename... Args>
+        requires ConstructibleFrom<T, Args...>
+    static std::shared_ptr<T> getSharedInstance(Args&&... args) {
+        static auto instance = std::make_shared<T>(std::forward<Args>(args)...);
+        return instance;
+    }
+};
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_CONSTRUCTOR_HPP

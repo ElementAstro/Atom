@@ -5,6 +5,8 @@
 #include <cmath>
 #include <concepts>
 #include <numeric>
+#include <span>
+#include <unordered_map>
 #include <vector>
 
 #include "../rust_numeric.hpp"

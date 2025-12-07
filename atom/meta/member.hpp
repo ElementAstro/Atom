@@ -328,6 +328,133 @@ private:
     }
 };
 
+//==============================================================================
+// C++23 Enhanced Member Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for member object pointers
+ */
+template <typename T>
+concept member_object_pointer = std::is_member_object_pointer_v<T>;
+
+/**
+ * @brief Concept for member function pointers
+ */
+template <typename T>
+concept member_function_pointer = std::is_member_function_pointer_v<T>;
+
+/**
+ * @brief Get member info at compile time
+ */
+template <auto MemberPtr>
+struct member_info {
+    using class_type = typename member_traits<decltype(MemberPtr)>::class_type;
+    using value_type = typename member_traits<decltype(MemberPtr)>::value_type;
+    static constexpr std::size_t offset = member_offset(MemberPtr);
+    static constexpr std::size_t size = member_size(MemberPtr);
+    static constexpr bool is_function =
+        std::is_member_function_pointer_v<decltype(MemberPtr)>;
+};
+
+/**
+ * @brief Safe member access with optional result
+ */
+template <typename T, typename M>
+auto safe_member_access(T* obj, M T::*member)
+    -> std::optional<std::reference_wrapper<M>> {
+    if (obj) {
+        return std::ref(obj->*member);
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Const-safe member access
+ */
+template <typename T, typename M>
+auto safe_member_access(const T* obj, M T::*member)
+    -> std::optional<std::reference_wrapper<const M>> {
+    if (obj) {
+        return std::cref(obj->*member);
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Apply function to member and return result
+ */
+template <typename T, typename M, typename F>
+auto apply_to_member(T& obj, M T::*member, F&& func) {
+    return std::forward<F>(func)(obj.*member);
+}
+
+/**
+ * @brief Transform member value
+ */
+template <typename T, typename M, typename F>
+void transform_member(T& obj, M T::*member, F&& func) {
+    obj.*member = std::forward<F>(func)(obj.*member);
+}
+
+/**
+ * @brief Member comparison helper
+ */
+template <auto Member>
+struct member_comparator {
+    template <typename T>
+    bool operator()(const T& a, const T& b) const {
+        return a.*Member < b.*Member;
+    }
+};
+
+/**
+ * @brief Member equality helper
+ */
+template <auto Member>
+struct member_equals {
+    template <typename T>
+    bool operator()(const T& a, const T& b) const {
+        return a.*Member == b.*Member;
+    }
+};
+
+/**
+ * @brief Member hash helper
+ */
+template <auto Member>
+struct member_hash {
+    template <typename T>
+    std::size_t operator()(const T& obj) const {
+        return std::hash<typename member_info<Member>::value_type>{}(obj.*
+                                                                     Member);
+    }
+};
+
+/**
+ * @brief Extract member from object
+ */
+template <auto Member>
+struct member_extractor {
+    template <typename T>
+    auto operator()(const T& obj) const -> const auto& {
+        return obj.*Member;
+    }
+
+    template <typename T>
+    auto operator()(T& obj) -> auto& {
+        return obj.*Member;
+    }
+};
+
+/**
+ * @brief Create member extractor
+ */
+template <auto Member>
+constexpr auto extract_member() {
+    return member_extractor<Member>{};
+}
+
 }  // namespace atom::meta
 
 #endif  // ATOM_FUNCTION_MEMBER_HPP

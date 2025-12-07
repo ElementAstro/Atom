@@ -23,6 +23,22 @@ project(
   HOMEPAGE_URL "https://github.com/ElementAstro/Atom")
 
 # -----------------------------------------------------------------------------
+# Use shared libraries for fmt to avoid ODR violations
+# -----------------------------------------------------------------------------
+set(fmt_SHARED_LIBS
+    ON
+    CACHE BOOL "Use fmt shared library")
+
+# -----------------------------------------------------------------------------
+# Use compiled spdlog library to avoid ODR violations This ensures all modules
+# use the same spdlog library (not header-only)
+# -----------------------------------------------------------------------------
+set(ATOM_SPDLOG_TARGET
+    "spdlog::spdlog"
+    CACHE STRING "spdlog target to use")
+add_compile_definitions(SPDLOG_COMPILED_LIB SPDLOG_FMT_EXTERNAL)
+
+# -----------------------------------------------------------------------------
 # Include CMake Modules
 # -----------------------------------------------------------------------------
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
@@ -268,7 +284,7 @@ endif()
 # Version Info Header
 # -----------------------------------------------------------------------------
 # Configure version information
-configure_atom_version(VERSION_VARIABLE PROJECT_VERSION)
+atom_configure_version(VERSION_VARIABLE PROJECT_VERSION)
 
 # Also configure the version info header
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_info.h.in

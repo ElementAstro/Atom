@@ -1,7 +1,26 @@
+# =============================================================================
+# ScanModule.cmake - Module scanning and dependency resolution
+# =============================================================================
+# This script helps scan and process module dependencies. When a module is
+# enabled, its dependencies will be automatically enabled.
+#
+# Author: Max Qian License: GPL3
+# =============================================================================
+
+# Avoid repeated inclusion
+if(DEFINED SCAN_MODULE_INCLUDED)
+  return()
+endif()
+set(SCAN_MODULE_INCLUDED TRUE)
+
+# =============================================================================
+# Module Scanning Functions
+# =============================================================================
+
 # Function to scan source files for module declarations and generate module list
 # Parameters: source_dir - Directory containing source files to scan return_var
 # - Variable name to store the result
-function(scan_and_generate_modules source_dir return_var)
+function(atom_scan_and_generate_modules source_dir return_var)
   set(modules_name_r "")
   file(GLOB_RECURSE CPP_FILES "${source_dir}/*.cpp")
 
@@ -31,11 +50,12 @@ function(scan_and_generate_modules source_dir return_var)
       PARENT_SCOPE)
 endfunction()
 
-# ScanModule.cmake This script helps scan and process module dependencies When a
-# module is enabled, its dependencies will be automatically enabled
+# =============================================================================
+# Module Dependency Scanning
+# =============================================================================
 
 # Function: Scan module dependencies and enable necessary modules
-function(scan_module_dependencies)
+function(atom_scan_module_dependencies)
   # Include module dependencies configuration
   include(${CMAKE_SOURCE_DIR}/cmake/module_dependencies.cmake)
 
@@ -145,7 +165,7 @@ endfunction()
 
 # Function to check if a module exists (has a valid directory with
 # CMakeLists.txt)
-function(module_exists module_name result_var)
+function(atom_module_exists module_name result_var)
   # Convert module name (e.g., "atom-error") to directory name (e.g., "error")
   string(REPLACE "atom-" "" dir_name "${module_name}")
 
@@ -164,7 +184,7 @@ endfunction()
 
 # Function: Process module dependencies to ensure all required modules are
 # enabled
-function(process_module_dependencies)
+function(atom_process_module_dependencies)
   # Get list of initially enabled modules
   get_property(enabled_modules GLOBAL PROPERTY ATOM_ENABLED_MODULES)
 
@@ -174,7 +194,7 @@ function(process_module_dependencies)
   # Validate initial modules - remove any that don't exist
   set(validated_modules "")
   foreach(module ${enabled_modules})
-    module_exists(${module} MODULE_EXISTS)
+    atom_module_exists(${module} MODULE_EXISTS)
     if(MODULE_EXISTS)
       list(APPEND validated_modules ${module})
     else()
@@ -214,7 +234,7 @@ function(process_module_dependencies)
       if(DEFINED ATOM_${module_var}_DEPENDS)
         foreach(dep ${ATOM_${module_var}_DEPENDS})
           # Check if dependency exists before adding it
-          module_exists(${dep} DEP_EXISTS)
+          atom_module_exists(${dep} DEP_EXISTS)
 
           # If the dependency is not already in the enabled list and it exists,
           # add it
@@ -325,5 +345,8 @@ function(atom_resolve_all_dependencies)
   endforeach()
 endfunction()
 
-# Call function to process dependencies
-scan_module_dependencies()
+# =============================================================================
+# Auto-initialization
+# =============================================================================
+# Call function to process dependencies on include
+atom_scan_module_dependencies()

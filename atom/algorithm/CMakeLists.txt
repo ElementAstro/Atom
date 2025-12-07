@@ -7,17 +7,11 @@ project(
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Find OpenSSL package (optional for MSVC builds)
-if(MSVC)
-  find_package(OpenSSL QUIET)
-  if(NOT OpenSSL_FOUND)
-    message(
-      WARNING
-        "OpenSSL not found for MSVC - some cryptographic features will be disabled"
-    )
-  endif()
-else()
-  find_package(OpenSSL REQUIRED)
+# Find OpenSSL package (optional for all builds)
+find_package(OpenSSL QUIET)
+if(NOT OpenSSL_FOUND)
+  message(
+    STATUS "OpenSSL not found - some cryptographic features will be disabled")
 endif()
 
 # Find TBB package (optional for now due to vcpkg network issues)

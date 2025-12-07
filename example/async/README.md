@@ -42,6 +42,7 @@ example/async/
 ```
 
 This structure provides:
+
 - **Complete Coverage**: Every component in `atom/async` has a corresponding example
 - **Easy Navigation**: Find examples by matching the component's location in `atom/async`
 - **Logical Organization**: Related examples are grouped together by functionality
@@ -121,7 +122,7 @@ Specialized utilities and helper components.
 | Example | Description | Key Concepts |
 |---------|-------------|--------------|
 | [`utils/timer_example.cpp`](utils/timer_example.cpp) | Timer and scheduling | Interval management, task prioritization, timer coordination |
-| [`utils/lodash_example.cpp`](utils/lodash_example.cpp) | Debounce/Throttle utilities | Debounce (leading/trailing/maxWait), Throttle (leading/trailing/both) |
+| [`utils/lodash_example.cpp`](utils/lodash_example.cpp) | Debounce/Throttle utilities | Debounce (leading/trailing/maxWait), Throttle (leading/trailing/both), DebounceFactory, ThrottleFactory |
 | [`utils/daemon_example.cpp`](utils/daemon_example.cpp) | Daemon process management | Process lifecycle, signal handling, monitoring |
 | [`utils/generator_example.cpp`](utils/generator_example.cpp) | Generator and coroutine patterns | Coroutine usage, two-way communication, concurrent generation |
 
@@ -215,6 +216,7 @@ The new structure uses a hierarchical naming pattern:
   - Examples: `async_component_integration`, `async_web_server_example`
 
 This naming convention makes it easy to:
+
 - Identify which category an example belongs to
 - Find the source file for a given executable
 - Organize examples in IDE project views

@@ -65,6 +65,7 @@ import warnings
 
 _modules = {}
 
+
 def _import_module(name, alias=None):
     """Helper function to import modules with error handling."""
     try:
@@ -78,11 +79,16 @@ def _import_module(name, alias=None):
         globals()[alias or name] = module
         return module
     except ImportError as e:
-        warnings.warn(f"Failed to import {name} module: {e}", ImportWarning)
+        warnings.warn(
+            f"Failed to import {name} module: {e}", ImportWarning, stacklevel=2
+        )
         return None
 
+
 # Import all modules
-_import_module("async", "async_core")  # Import async as async_core to avoid keyword conflict
+_import_module(
+    "async", "async_core"
+)  # Import async as async_core to avoid keyword conflict
 _import_module("future")
 _import_module("promise")
 _import_module("lock")
@@ -103,24 +109,39 @@ _import_module("slot")
 _import_module("timer")
 _import_module("generator")
 _import_module("daemon")
+_import_module("lodash")
 
 # Re-export commonly used classes and functions for convenience
 __all__ = [
     # Core modules
-    "async_core", "future", "promise", "lock", "thread_wrapper", "threadlocal",
-
+    "async_core",
+    "future",
+    "promise",
+    "lock",
+    "thread_wrapper",
+    "threadlocal",
     # Messaging modules
-    "message_bus", "message_queue", "queue", "eventstack",
-
+    "message_bus",
+    "message_queue",
+    "queue",
+    "eventstack",
     # Execution modules
-    "async_executor", "pool", "parallel", "packaged_task",
-
+    "async_executor",
+    "pool",
+    "parallel",
+    "packaged_task",
     # Synchronization modules
-    "trigger", "limiter", "safetype", "slot",
-
+    "trigger",
+    "limiter",
+    "safetype",
+    "slot",
     # Utility modules
-    "timer", "generator", "daemon",
+    "timer",
+    "generator",
+    "daemon",
+    "lodash",
 ]
+
 
 # Add convenience functions for module access
 def get_module(name):
@@ -140,6 +161,7 @@ def get_module(name):
         return _modules.get("async_core")
     return _modules.get(name)
 
+
 def list_modules():
     """List all available modules.
 
@@ -147,6 +169,7 @@ def list_modules():
         dict: Dictionary mapping module names to descriptions
     """
     return __modules__.copy()
+
 
 def get_module_info(name):
     """Get information about a specific module.
@@ -160,6 +183,7 @@ def get_module_info(name):
     if name == "async":
         return __modules__.get("async")
     return __modules__.get(name)
+
 
 # Module metadata
 __modules__ = {
@@ -184,4 +208,5 @@ __modules__ = {
     "timer": "High-precision timer and scheduling",
     "generator": "C++20 coroutine-based generators",
     "daemon": "Daemon process management",
+    "lodash": "Debounce and throttle utilities (Lodash-style)",
 }

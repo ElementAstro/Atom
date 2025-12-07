@@ -65,6 +65,9 @@ function(atom_find_dependency dep_name)
       PATHS /usr/include /usr/local/include /mingw64/include
             ${CMAKE_PREFIX_PATH}/include ${AFD_HINTS})
     if(${DEP_UPPER}_INCLUDE_DIR)
+      set(${DEP_UPPER}_INCLUDE_DIR
+          ${${DEP_UPPER}_INCLUDE_DIR}
+          PARENT_SCOPE)
       set(${found_var}
           TRUE
           PARENT_SCOPE)
@@ -132,11 +135,38 @@ endfunction()
 # Core Dependencies
 # =============================================================================
 
-# OpenSSL - Always required
-atom_find_dependency(OpenSSL REQUIRED)
+# OpenSSL - Required for non-MSVC, optional for MSVC
+if(MSVC)
+  atom_find_dependency(OpenSSL QUIET)
+  if(NOT OpenSSL_FOUND)
+    message(
+      STATUS
+        "OpenSSL not found for MSVC - some cryptographic features will be disabled"
+    )
+  endif()
+else()
+  atom_find_dependency(OpenSSL QUIET)
+  if(NOT OpenSSL_FOUND)
+    message(
+      STATUS "OpenSSL not found - some cryptographic features will be disabled")
+  endif()
+endif()
 
-# ZLIB - Always required
-atom_find_dependency(ZLIB REQUIRED)
+# ZLIB - Required for non-MSVC, optional for MSVC
+if(MSVC)
+  atom_find_dependency(ZLIB QUIET)
+  if(NOT ZLIB_FOUND)
+    message(
+      STATUS
+        "ZLIB not found for MSVC - some compression features will be disabled")
+  endif()
+else()
+  atom_find_dependency(ZLIB QUIET)
+  if(NOT ZLIB_FOUND)
+    message(
+      STATUS "ZLIB not found - some compression features will be disabled")
+  endif()
+endif()
 
 # SQLite3 - Core database functionality
 atom_find_dependency(SQLite3 QUIET)

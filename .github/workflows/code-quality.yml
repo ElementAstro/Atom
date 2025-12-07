@@ -6,7 +6,7 @@ on:
   pull_request:
     branches: [main, develop]
   schedule:
-    - cron: "0 2 * * 1" # Weekly on Monday at 2 AM
+    - cron: "0 2 * * 1"  # Weekly on Monday at 2 AM
   workflow_dispatch:
 
 env:
@@ -296,8 +296,9 @@ jobs:
           doxygen Doxyfile 2> doxygen-warnings.txt || true
 
           # Check for undocumented functions
-          find atom/ -name "*.hpp" -exec grep -l "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" {} \; | \
-            xargs -I {} sh -c 'echo "=== {} ==="; grep -n "^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*(" "{}" | head -5'
+          PATTERN="^[[:space:]]*[a-zA-Z_][a-zA-Z0-9_]*[[:space:]]*("
+          find atom/ -name "*.hpp" -exec grep -l "$PATTERN" {} \; | \
+            xargs -I {} sh -c 'echo "=== {} ==="; grep -n "$PATTERN" "{}" | head -5'
 
       - name: Check README and documentation files
         run: |
@@ -361,7 +362,10 @@ jobs:
           echo "Validating test module configurations..."
           cd tests
 
-          for module_dir in algorithm async components connection containers error extra image io log memory meta search secret serial sysinfo system type utils web; do
+          MODULES="algorithm async components connection containers error extra"
+          MODULES="$MODULES image io log memory meta search secret serial"
+          MODULES="$MODULES sysinfo system type utils web"
+          for module_dir in $MODULES; do
             if [ -d "$module_dir" ]; then
               if [ -f "$module_dir/CMakeLists.txt" ]; then
                 # Check if module uses standardized template
@@ -538,8 +542,9 @@ jobs:
           echo "- AddressSanitizer and Valgrind tests completed" >> quality-report.md
 
           echo "## Documentation Quality" >> quality-report.md
-          if [ -f reports/documentation-warnings/doxygen-warnings.txt ]; then
-            echo "- Doxygen warnings: $(wc -l < reports/documentation-warnings/doxygen-warnings.txt) lines" >> quality-report.md
+          DOXY_WARN="reports/documentation-warnings/doxygen-warnings.txt"
+          if [ -f "$DOXY_WARN" ]; then
+            echo "- Doxygen warnings: $(wc -l < $DOXY_WARN) lines" >> quality-report.md
           fi
 
           echo "## Test Infrastructure Quality" >> quality-report.md

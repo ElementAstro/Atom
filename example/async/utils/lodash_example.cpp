@@ -249,6 +249,99 @@ void practicalThrottleExample() {
 }
 
 // ============================================================================
+// FACTORY EXAMPLES
+// ============================================================================
+
+/**
+ * @brief Demonstrates DebounceFactory for creating multiple debounced functions
+ *
+ * DebounceFactory allows creating multiple debounced functions with the same
+ * configuration, useful for consistent behavior across related functions.
+ */
+void debounceFactoryExample() {
+    printSeparator("DebounceFactory Example");
+
+    int saveCount = 0;
+    int validateCount = 0;
+
+    // Create a factory with 200ms delay
+    DebounceFactory factory(200ms, false, std::nullopt);
+
+    auto debouncedSave = factory.create([&saveCount]() {
+        saveCount++;
+        std::cout << "Auto-save triggered (save #" << saveCount << ")"
+                  << std::endl;
+    });
+
+    auto debouncedValidate = factory.create([&validateCount]() {
+        validateCount++;
+        std::cout << "Validation triggered (validation #" << validateCount
+                  << ")" << std::endl;
+    });
+
+    std::cout << "Simulating form input with auto-save and validation..."
+              << std::endl;
+
+    // Simulate rapid form changes
+    for (int i = 0; i < 5; ++i) {
+        debouncedSave();
+        debouncedValidate();
+        std::cout << "Form changed (iteration " << (i + 1) << ")" << std::endl;
+        std::this_thread::sleep_for(50ms);
+    }
+
+    std::cout << "Waiting for debounce to trigger..." << std::endl;
+    std::this_thread::sleep_for(300ms);
+
+    std::cout << "Total saves: " << saveCount
+              << ", Total validations: " << validateCount << std::endl;
+}
+
+/**
+ * @brief Demonstrates ThrottleFactory for creating multiple throttled functions
+ *
+ * ThrottleFactory allows creating multiple throttled functions with the same
+ * configuration, useful for consistent rate limiting across related functions.
+ */
+void throttleFactoryExample() {
+    printSeparator("ThrottleFactory Example");
+
+    int logCount = 0;
+    int metricsCount = 0;
+
+    // Create a factory with 200ms interval
+    ThrottleFactory factory(200ms, true, false);
+
+    auto throttledLog = factory.create([&logCount]() {
+        logCount++;
+        std::cout << "Log entry written (log #" << logCount << ")" << std::endl;
+    });
+
+    auto throttledMetrics = factory.create([&metricsCount]() {
+        metricsCount++;
+        std::cout << "Metrics collected (metrics #" << metricsCount << ")"
+                  << std::endl;
+    });
+
+    std::cout << "Simulating high-frequency events with throttled logging..."
+              << std::endl;
+
+    // Simulate rapid events
+    for (int i = 0; i < 10; ++i) {
+        throttledLog();
+        throttledMetrics();
+        std::cout << "Event " << (i + 1) << " processed" << std::endl;
+        std::this_thread::sleep_for(50ms);
+    }
+
+    std::cout << "Waiting for completion..." << std::endl;
+    std::this_thread::sleep_for(300ms);
+
+    std::cout << "Total log entries: " << logCount
+              << ", Total metrics: " << metricsCount << std::endl;
+}
+
+// ============================================================================
 // MAIN FUNCTION
 // ============================================================================
 
@@ -270,6 +363,10 @@ int main() {
         basicThrottleExample();
         leadingThrottleExample();
         practicalThrottleExample();
+
+        // Factory examples
+        debounceFactoryExample();
+        throttleFactoryExample();
 
         std::cout << "\n=================================================="
                   << std::endl;

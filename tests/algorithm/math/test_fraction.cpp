@@ -4,7 +4,7 @@
 #include <limits>
 #include <sstream>
 #include "atom/algorithm/fraction.hpp"
-#include "atom/log/loguru.hpp"
+// Removed: atom/log/loguru.hpp not available
 
 using namespace atom::algorithm;
 
@@ -15,7 +15,7 @@ protected:
         // Initialize loguru for testing if needed
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            // loguru disabled
             initialized = true;
         }
     }

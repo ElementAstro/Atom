@@ -71,7 +71,7 @@ TEST_F(AnyMetaTest, TypeMetadataBasics) {
 
     // Test method retrieval
     auto methods = metadata.getMethods("testMethod");
-    ASSERT_NE(methods, nullptr);
+    ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods->size(), 1);
 
     // Test method execution
@@ -105,7 +105,7 @@ TEST_F(AnyMetaTest, MethodOverloads) {
         });
 
     auto methods = metadata.getMethods("overloadedMethod");
-    ASSERT_NE(methods, nullptr);
+    ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods->size(), 2);
 
     // Test first overload (no args)
@@ -304,7 +304,7 @@ TEST_F(AnyMetaTest, MethodRemoval) {
 
     // Verify method exists
     auto methods = metadata.getMethods("removableMethod");
-    ASSERT_NE(methods, nullptr);
+    ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods->size(), 1);
 
     // Remove method
@@ -350,10 +350,10 @@ TEST_F(AnyMetaTest, TypeRegistryBasics) {
 
     // Test metadata retrieval
     auto retrievedMetadata = registry.getMetadata("TestClass");
-    ASSERT_NE(retrievedMetadata, nullptr);
+    ASSERT_TRUE(retrievedMetadata.has_value());
 
     auto methods = retrievedMetadata->getMethods("getValue");
-    ASSERT_NE(methods, nullptr);
+    ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods->size(), 1);
 }
 
@@ -565,7 +565,7 @@ TEST_F(AnyMetaTest, TypeRegistrarTemplate) {
 
     // Check default method
     auto methods = metadata->getMethods("print");
-    ASSERT_NE(methods, nullptr);
+    ASSERT_TRUE(methods.has_value());
     EXPECT_EQ(methods->size(), 1);
 }
 

@@ -67,7 +67,8 @@ auto GPUMath::dotProduct(const std::vector<f32>& a,
         return std::inner_product(a.begin(), a.end(), b.begin(), 0.0f);
     }
 
-    // TODO: Implement GPU dot product with reduction
+    // GPU reduction for dot product - fall back to CPU for now
+    // Full OpenCL implementation would use getDotProductKernel()
     return std::inner_product(a.begin(), a.end(), b.begin(), 0.0f);
 }
 
@@ -83,7 +84,8 @@ auto GPUMath::calculateMean(const std::vector<f32>& data) -> f32 {
                static_cast<f32>(data.size());
     }
 
-    // TODO: Implement GPU reduction for mean calculation
+    // GPU reduction for mean - fall back to CPU for now
+    // Full OpenCL implementation would use getReductionKernel()
     return std::accumulate(data.begin(), data.end(), 0.0f) /
            static_cast<f32>(data.size());
 }
@@ -91,6 +93,124 @@ auto GPUMath::calculateMean(const std::vector<f32>& data) -> f32 {
 auto GPUMath::getInstance() -> GPUMath& {
     static GPUMath instance;
     return instance;
+}
+
+auto GPUMath::matrixMultiply(const std::vector<f32>& a,
+                             const std::vector<f32>& b, usize rows_a,
+                             usize cols_a, usize cols_b) -> std::vector<f32> {
+    if (!isAvailable()) {
+        THROW_RUNTIME_ERROR("GPU acceleration not available");
+    }
+
+    if (a.size() != rows_a * cols_a || b.size() != cols_a * cols_b) {
+        THROW_INVALID_ARGUMENT("Matrix dimensions do not match input sizes");
+    }
+
+    // For small matrices, use CPU implementation
+    if (rows_a * cols_b < 1024) {
+        std::vector<f32> result(rows_a * cols_b, 0.0f);
+        for (usize i = 0; i < rows_a; ++i) {
+            for (usize j = 0; j < cols_b; ++j) {
+                f32 sum = 0.0f;
+                for (usize k = 0; k < cols_a; ++k) {
+                    sum += a[i * cols_a + k] * b[k * cols_b + j];
+                }
+                result[i * cols_b + j] = sum;
+            }
+        }
+        return result;
+    }
+
+    // GPU implementation would go here - for now fall back to CPU
+    std::vector<f32> result(rows_a * cols_b, 0.0f);
+    for (usize i = 0; i < rows_a; ++i) {
+        for (usize j = 0; j < cols_b; ++j) {
+            f32 sum = 0.0f;
+            for (usize k = 0; k < cols_a; ++k) {
+                sum += a[i * cols_a + k] * b[k * cols_b + j];
+            }
+            result[i * cols_b + j] = sum;
+        }
+    }
+    return result;
+}
+
+auto GPUMath::matrixTranspose(const std::vector<f32>& matrix, usize rows,
+                              usize cols) -> std::vector<f32> {
+    if (!isAvailable()) {
+        THROW_RUNTIME_ERROR("GPU acceleration not available");
+    }
+
+    if (matrix.size() != rows * cols) {
+        THROW_INVALID_ARGUMENT("Matrix dimensions do not match input size");
+    }
+
+    // For small matrices, use CPU implementation
+    std::vector<f32> result(rows * cols);
+    for (usize i = 0; i < rows; ++i) {
+        for (usize j = 0; j < cols; ++j) {
+            result[j * rows + i] = matrix[i * cols + j];
+        }
+    }
+    return result;
+}
+
+auto GPUMath::generatePrimes(u32 limit) -> std::vector<u32> {
+    if (limit < 2) {
+        return {};
+    }
+
+    // Sieve of Eratosthenes - CPU implementation
+    // GPU acceleration for prime sieve is complex due to data dependencies
+    std::vector<bool> is_prime(limit + 1, true);
+    is_prime[0] = is_prime[1] = false;
+
+    for (u32 p = 2; p * p <= limit; ++p) {
+        if (is_prime[p]) {
+            for (u32 i = p * p; i <= limit; i += p) {
+                is_prime[i] = false;
+            }
+        }
+    }
+
+    std::vector<u32> primes;
+    primes.reserve(
+        static_cast<usize>(limit / std::log(static_cast<f64>(limit)) * 1.2));
+
+    for (u32 i = 2; i <= limit; ++i) {
+        if (is_prime[i]) {
+            primes.push_back(i);
+        }
+    }
+
+    return primes;
+}
+
+auto GPUMath::calculateVariance(const std::vector<f32>& data, f32 mean) -> f32 {
+    if (data.empty()) {
+        return 0.0f;
+    }
+
+    // Calculate mean if not provided
+    f32 actual_mean = (mean == 0.0f) ? calculateMean(data) : mean;
+
+    // For small datasets, use CPU implementation
+    if (data.size() < 1024 || !isAvailable()) {
+        f32 sum_sq_diff = 0.0f;
+        for (f32 value : data) {
+            f32 diff = value - actual_mean;
+            sum_sq_diff += diff * diff;
+        }
+        return sum_sq_diff / static_cast<f32>(data.size());
+    }
+
+    // GPU implementation would use reduction kernel - for now fall back to CPU
+    f32 sum_sq_diff = 0.0f;
+    for (f32 value : data) {
+        f32 diff = value - actual_mean;
+        sum_sq_diff += diff * diff;
+    }
+    return sum_sq_diff / static_cast<f32>(data.size());
 }
 
 auto GPUMath::executeVectorOperation(
@@ -113,6 +233,23 @@ auto GPUMath::executeVectorOperation(
     }
 
     return result;
+}
+
+auto GPUMath::executeReduction(const std::vector<f32>& data,
+                               const std::string& /*kernel_source*/,
+                               const std::string& /*kernel_name*/) -> f32 {
+    // CPU fallback implementation for reduction operations
+    // Full OpenCL implementation would:
+    // 1. Create buffer for input data
+    // 2. Create buffer for partial sums
+    // 3. Execute reduction kernel in multiple passes
+    // 4. Sum final partial results on CPU
+
+    if (data.empty()) {
+        return 0.0f;
+    }
+
+    return std::accumulate(data.begin(), data.end(), 0.0f);
 }
 
 // Kernel source implementations
@@ -339,8 +476,97 @@ auto GPUMath::dotProduct(const std::vector<f32>& a,
 }
 
 auto GPUMath::calculateMean(const std::vector<f32>& data) -> f32 {
+    if (data.empty()) {
+        return 0.0f;
+    }
     return std::accumulate(data.begin(), data.end(), 0.0f) /
            static_cast<f32>(data.size());
+}
+
+auto GPUMath::matrixMultiply(const std::vector<f32>& a,
+                             const std::vector<f32>& b, usize rows_a,
+                             usize cols_a, usize cols_b) -> std::vector<f32> {
+    if (a.size() != rows_a * cols_a || b.size() != cols_a * cols_b) {
+        THROW_INVALID_ARGUMENT("Matrix dimensions do not match input sizes");
+    }
+
+    std::vector<f32> result(rows_a * cols_b, 0.0f);
+
+    for (usize i = 0; i < rows_a; ++i) {
+        for (usize j = 0; j < cols_b; ++j) {
+            f32 sum = 0.0f;
+            for (usize k = 0; k < cols_a; ++k) {
+                sum += a[i * cols_a + k] * b[k * cols_b + j];
+            }
+            result[i * cols_b + j] = sum;
+        }
+    }
+
+    return result;
+}
+
+auto GPUMath::matrixTranspose(const std::vector<f32>& matrix, usize rows,
+                              usize cols) -> std::vector<f32> {
+    if (matrix.size() != rows * cols) {
+        THROW_INVALID_ARGUMENT("Matrix dimensions do not match input size");
+    }
+
+    std::vector<f32> result(rows * cols);
+
+    for (usize i = 0; i < rows; ++i) {
+        for (usize j = 0; j < cols; ++j) {
+            result[j * rows + i] = matrix[i * cols + j];
+        }
+    }
+
+    return result;
+}
+
+auto GPUMath::generatePrimes(u32 limit) -> std::vector<u32> {
+    if (limit < 2) {
+        return {};
+    }
+
+    // Sieve of Eratosthenes implementation
+    std::vector<bool> is_prime(limit + 1, true);
+    is_prime[0] = is_prime[1] = false;
+
+    for (u32 p = 2; p * p <= limit; ++p) {
+        if (is_prime[p]) {
+            for (u32 i = p * p; i <= limit; i += p) {
+                is_prime[i] = false;
+            }
+        }
+    }
+
+    std::vector<u32> primes;
+    primes.reserve(limit / std::log(limit) * 1.2);  // Approximate prime count
+
+    for (u32 i = 2; i <= limit; ++i) {
+        if (is_prime[i]) {
+            primes.push_back(i);
+        }
+    }
+
+    return primes;
+}
+
+auto GPUMath::calculateVariance(const std::vector<f32>& data, f32 mean) -> f32 {
+    if (data.empty()) {
+        return 0.0f;
+    }
+
+    // Calculate mean if not provided (mean == 0.0f is treated as "not
+    // provided")
+    f32 actual_mean = (mean == 0.0f) ? calculateMean(data) : mean;
+
+    f32 sum_sq_diff = 0.0f;
+    for (f32 value : data) {
+        f32 diff = value - actual_mean;
+        sum_sq_diff += diff * diff;
+    }
+
+    return sum_sq_diff / static_cast<f32>(data.size());
 }
 
 auto GPUMath::getInstance() -> GPUMath& {

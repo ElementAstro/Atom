@@ -108,6 +108,6 @@ if (result) {
 ## Dependencies
 
 - Core algorithm components
-- atom/type for expected<T> error handling
+- atom/type for `expected<T>` error handling
 - Standard C++ library (C++20)
 - Optional: SIMD intrinsics for vectorization

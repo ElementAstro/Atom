@@ -4,7 +4,7 @@
 # Project Name: Atom-Web-Time Description: Time Management API Author: Max Qian
 # License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 
 # Sources with full paths
 set(ATOM_WEB_TIME_SOURCES
@@ -35,10 +35,12 @@ set_property(TARGET atom-web-time PROPERTY POSITION_INDEPENDENT_CODE 1)
 # Dependencies (avoid hard-coding loguru; rely on higher-level logging config)
 set(LIBS ${CMAKE_THREAD_LIBS_INIT})
 
-# Add spdlog library
+# Add spdlog library (use compiled version to avoid ODR violations)
 find_package(spdlog CONFIG QUIET)
 if(spdlog_FOUND)
-  list(APPEND LIBS spdlog::spdlog_header_only)
+  list(APPEND LIBS spdlog::spdlog)
+  target_compile_definitions(atom-web-time PRIVATE SPDLOG_COMPILED_LIB
+                                                   SPDLOG_FMT_EXTERNAL)
 endif()
 
 if(WIN32)

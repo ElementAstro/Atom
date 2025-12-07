@@ -73,11 +73,11 @@ TEST_F(SignatureTest, SignatureWithDefaultValues) {
 
     EXPECT_TRUE(params[0].hasDefaultValue);
     ASSERT_TRUE(params[0].defaultValue.has_value());
-    EXPECT_EQ(*params[0].defaultValue, "\"World\"");
+    EXPECT_EQ(*params[0].defaultValue, "\"World\");
 
     EXPECT_TRUE(params[1].hasDefaultValue);
     ASSERT_TRUE(params[1].defaultValue.has_value());
-    EXPECT_EQ(*params[1].defaultValue, "\"Hello\"");
+    EXPECT_EQ(*params[1].defaultValue, "\"Hello\");
 }
 
 TEST_F(SignatureTest, SignatureWithComplexTypes) {

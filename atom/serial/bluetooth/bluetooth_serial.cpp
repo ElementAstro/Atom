@@ -5,9 +5,11 @@
 #elif defined(__linux__)
 #include "bluetooth_serial_unix.hpp"
 #elif defined(__APPLE__)
-// macOS实现在BluetoothSerialMac.cpp中
+// macOS implementation is in bluetooth_serial_mac.mm (Objective-C++)
+// This file should not be compiled on macOS - use the .mm file instead
+#include "bluetooth_serial_mac.hpp"
 #else
-#error "不支持的平台"
+#error "Unsupported platform"
 #endif
 
 namespace serial {

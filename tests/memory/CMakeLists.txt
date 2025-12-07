@@ -4,7 +4,7 @@
 # Project Name: Atom-Memory-Tests Description: Test Suite for Atom Memory Module
 # Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-memory-tests
   VERSION 1.0.0
@@ -72,8 +72,11 @@ target_link_libraries(
 # =============================================================================
 # spdlog Support
 # =============================================================================
-# spdlog is used in header-only mode - no linking needed, just compile
-# definitions
+# spdlog is used as compiled library - link it
+find_package(spdlog QUIET)
+if(spdlog_FOUND)
+  target_link_libraries(atom_memory_tests PRIVATE spdlog::spdlog)
+endif()
 
 # =============================================================================
 # Platform-Specific Libraries
@@ -103,8 +106,9 @@ target_include_directories(
 # Set C++ standard
 target_compile_features(atom_memory_tests PRIVATE cxx_std_20)
 
-target_compile_definitions(atom_memory_tests PRIVATE SPDLOG_USE_STD_FORMAT=1
-                                                     SPDLOG_HEADER_ONLY)
+# Note: Do NOT define SPDLOG_USE_STD_FORMAT - system spdlog uses fmt
+target_compile_definitions(atom_memory_tests PRIVATE SPDLOG_COMPILED_LIB
+                                                     SPDLOG_FMT_EXTERNAL)
 
 # Add compiler flags
 if(MSVC)

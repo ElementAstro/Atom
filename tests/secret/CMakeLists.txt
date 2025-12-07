@@ -4,7 +4,7 @@
 # Project Name: Atom-Secret-Tests Description: Test Suite for Atom Secret
 # Management Library Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-secret-tests
   VERSION 1.0.0

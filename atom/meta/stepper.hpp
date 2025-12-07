@@ -969,6 +969,217 @@ private:
     }
 };
 
+//==============================================================================
+// C++23 Enhanced Stepper Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for step functions
+ */
+template <typename F>
+concept StepFunction = std::invocable<F, std::vector<std::any>> &&
+                       requires(F f, std::vector<std::any> args) {
+                           { f(args) } -> std::convertible_to<std::any>;
+                       };
+
+/**
+ * @brief Concept for result types
+ */
+template <typename T>
+concept ResultType = requires(T t) {
+    { t.isSuccess() } -> std::convertible_to<bool>;
+    { t.isError() } -> std::convertible_to<bool>;
+};
+
+/**
+ * @brief Fluent stepper builder
+ */
+class StepperBuilder {
+    FunctionSequence stepper_;
+
+public:
+    StepperBuilder() = default;
+
+    template <typename F>
+    StepperBuilder& addStep(F&& func) {
+        stepper_.addFunction(
+            [f = std::forward<F>(func)](
+                std::vector<std::any> args) -> std::any { return f(args); });
+        return *this;
+    }
+
+    template <typename F>
+    StepperBuilder& addNamedStep(std::string name, F&& func) {
+        // Add with metadata
+        stepper_.addFunction(
+            [f = std::forward<F>(func), n = std::move(name)](
+                std::vector<std::any> args) -> std::any { return f(args); });
+        return *this;
+    }
+
+    StepperBuilder& withCacheSize(std::size_t size) {
+        stepper_.setMaxCacheSize(size);
+        return *this;
+    }
+
+    FunctionSequence build() { return std::move(stepper_); }
+
+    std::shared_ptr<FunctionSequence> buildShared() {
+        return std::make_shared<FunctionSequence>(std::move(stepper_));
+    }
+};
+
+/**
+ * @brief Create a stepper builder
+ */
+inline auto buildStepper() -> StepperBuilder { return StepperBuilder{}; }
+
+/**
+ * @brief Step with retry logic
+ */
+template <typename F>
+class RetryStep {
+    F func_;
+    std::size_t max_retries_;
+    std::chrono::milliseconds delay_;
+
+public:
+    RetryStep(F func, std::size_t retries, std::chrono::milliseconds delay)
+        : func_(std::move(func)), max_retries_(retries), delay_(delay) {}
+
+    auto operator()(std::vector<std::any> args) -> std::any {
+        for (std::size_t attempt = 0; attempt < max_retries_; ++attempt) {
+            try {
+                return func_(args);
+            } catch (...) {
+                if (attempt + 1 < max_retries_) {
+                    std::this_thread::sleep_for(delay_);
+                }
+            }
+        }
+        return std::any{};  // Return empty on all failures
+    }
+};
+
+/**
+ * @brief Create a retry step
+ */
+template <typename F>
+auto makeRetryStep(F&& func, std::size_t retries = 3,
+                   std::chrono::milliseconds delay = std::chrono::milliseconds{
+                       100}) {
+    return RetryStep<std::decay_t<F>>(std::forward<F>(func), retries, delay);
+}
+
+/**
+ * @brief Conditional step execution
+ */
+template <typename Condition, typename F>
+class ConditionalStep {
+    Condition condition_;
+    F func_;
+
+public:
+    ConditionalStep(Condition cond, F func)
+        : condition_(std::move(cond)), func_(std::move(func)) {}
+
+    auto operator()(std::vector<std::any> args) -> std::any {
+        if (condition_(args)) {
+            return func_(args);
+        }
+        return std::any{};  // Skip if condition not met
+    }
+};
+
+/**
+ * @brief Create a conditional step
+ */
+template <typename Condition, typename F>
+auto makeConditionalStep(Condition&& cond, F&& func) {
+    return ConditionalStep<std::decay_t<Condition>, std::decay_t<F>>(
+        std::forward<Condition>(cond), std::forward<F>(func));
+}
+
+/**
+ * @brief Parallel step execution
+ */
+class ParallelStepper {
+    std::vector<Stepper::FunctionType> steps_;
+
+public:
+    template <typename F>
+    void addStep(F&& func) {
+        steps_.emplace_back(
+            [f = std::forward<F>(func)](
+                std::vector<std::any> args) -> std::any { return f(args); });
+    }
+
+    auto executeAll(std::vector<std::any> args) -> std::vector<std::any> {
+        std::vector<std::future<std::any>> futures;
+        futures.reserve(steps_.size());
+
+        for (const auto& step : steps_) {
+            futures.push_back(std::async(std::launch::async, step, args));
+        }
+
+        std::vector<std::any> results;
+        results.reserve(futures.size());
+
+        for (auto& future : futures) {
+            results.push_back(future.get());
+        }
+
+        return results;
+    }
+
+    [[nodiscard]] std::size_t stepCount() const { return steps_.size(); }
+};
+
+/**
+ * @brief Step execution observer
+ */
+class StepObserver {
+public:
+    using BeforeCallback =
+        std::function<void(std::size_t, const std::vector<std::any>&)>;
+    using AfterCallback = std::function<void(std::size_t, const std::any&)>;
+    using ErrorCallback =
+        std::function<void(std::size_t, const std::exception&)>;
+
+private:
+    std::vector<BeforeCallback> before_callbacks_;
+    std::vector<AfterCallback> after_callbacks_;
+    std::vector<ErrorCallback> error_callbacks_;
+
+public:
+    void onBefore(BeforeCallback callback) {
+        before_callbacks_.push_back(std::move(callback));
+    }
+
+    void onAfter(AfterCallback callback) {
+        after_callbacks_.push_back(std::move(callback));
+    }
+
+    void onError(ErrorCallback callback) {
+        error_callbacks_.push_back(std::move(callback));
+    }
+
+    void notifyBefore(std::size_t step, const std::vector<std::any>& args) {
+        for (const auto& cb : before_callbacks_)
+            cb(step, args);
+    }
+
+    void notifyAfter(std::size_t step, const std::any& result) {
+        for (const auto& cb : after_callbacks_)
+            cb(step, result);
+    }
+
+    void notifyError(std::size_t step, const std::exception& e) {
+        for (const auto& cb : error_callbacks_)
+            cb(step, e);
+    }
+};
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_STEPPER_HPP

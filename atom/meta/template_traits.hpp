@@ -775,6 +775,132 @@ inline constexpr auto type_name = [] {
     return stored_name;
 }();
 
+//==============================================================================
+// C++23 Enhanced Template Traits
+//==============================================================================
+
+/**
+ * @brief Concept for template instances
+ */
+template <template <typename...> class Template, typename T>
+concept InstanceOf = requires {
+    []<typename... Args>(Template<Args...>*) {}(static_cast<T*>(nullptr));
+};
+
+/**
+ * @brief Extract template arguments from instantiation
+ */
+template <typename T>
+struct template_arguments;
+
+template <template <typename...> class Template, typename... Args>
+struct template_arguments<Template<Args...>> {
+    using types = std::tuple<Args...>;
+    static constexpr std::size_t count = sizeof...(Args);
+
+    template <std::size_t I>
+    using type_at = std::tuple_element_t<I, types>;
+};
+
+/**
+ * @brief Apply transformation to all template arguments
+ */
+template <typename T, template <typename> class Transform>
+struct transform_template_args;
+
+template <template <typename...> class Template, typename... Args,
+          template <typename> class Transform>
+struct transform_template_args<Template<Args...>, Transform> {
+    using type = Template<typename Transform<Args>::type...>;
+};
+
+/**
+ * @brief Flatten nested type lists
+ */
+template <typename... Lists>
+struct flatten_types;
+
+template <>
+struct flatten_types<> {
+    using type = std::tuple<>;
+};
+
+template <typename T, typename... Rest>
+struct flatten_types<T, Rest...> {
+    using type = decltype(std::tuple_cat(
+        std::tuple<T>{}, typename flatten_types<Rest...>::type{}));
+};
+
+template <typename... Ts, typename... Rest>
+struct flatten_types<std::tuple<Ts...>, Rest...> {
+    using type = decltype(std::tuple_cat(
+        std::tuple<Ts...>{}, typename flatten_types<Rest...>::type{}));
+};
+
+/**
+ * @brief Check if type appears in type list
+ */
+template <typename T, typename... List>
+inline constexpr bool type_in_list_v = (std::is_same_v<T, List> || ...);
+
+/**
+ * @brief Find index of type in list
+ */
+template <typename T, typename... List>
+struct type_index;
+
+template <typename T, typename First, typename... Rest>
+struct type_index<T, First, Rest...> {
+    static constexpr std::size_t value =
+        std::is_same_v<T, First> ? 0 : 1 + type_index<T, Rest...>::value;
+};
+
+template <typename T>
+struct type_index<T> {
+    static constexpr std::size_t value = 0;  // Not found
+};
+
+template <typename T, typename... List>
+inline constexpr std::size_t type_index_v = type_index<T, List...>::value;
+
+// Note: type_list is defined earlier in this file - removed duplicate
+
+/**
+ * @brief Compile-time type switch
+ */
+template <typename T, typename... Cases>
+struct type_switch;
+
+template <typename T, typename CaseType, typename Result, typename... Rest>
+struct type_switch<T, std::pair<CaseType, Result>, Rest...> {
+    using type = std::conditional_t<std::is_same_v<T, CaseType>, Result,
+                                    typename type_switch<T, Rest...>::type>;
+};
+
+template <typename T>
+struct type_switch<T> {
+    using type = void;  // Default case
+};
+
+/**
+ * @brief Type trait for checking if all types satisfy a predicate
+ */
+template <template <typename> class Pred, typename... Types>
+inline constexpr bool all_satisfy_v = (Pred<Types>::value && ...);
+
+/**
+ * @brief Type trait for checking if any type satisfies a predicate
+ */
+template <template <typename> class Pred, typename... Types>
+inline constexpr bool any_satisfy_v = (Pred<Types>::value || ...);
+
+/**
+ * @brief Count types satisfying a predicate
+ */
+template <template <typename> class Pred, typename... Types>
+inline constexpr std::size_t count_if_v =
+    (static_cast<std::size_t>(Pred<Types>::value) + ...);
+
 }  // namespace atom::meta
 
 namespace std {

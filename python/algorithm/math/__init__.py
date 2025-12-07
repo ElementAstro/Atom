@@ -36,3 +36,17 @@ try:
     __all__.append("matrix")
 except ImportError:
     pass
+
+try:
+    from .numerical import *  # noqa: F401, F403
+
+    __all__.append("numerical")
+except ImportError:
+    pass
+
+try:
+    from .statistics import *  # noqa: F401, F403
+
+    __all__.append("statistics")
+except ImportError:
+    pass

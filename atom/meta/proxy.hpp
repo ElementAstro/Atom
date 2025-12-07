@@ -892,6 +892,159 @@ auto composeProxy(Func1&& f1, Func2&& f2) {
         std::forward<Func1>(f1), std::forward<Func2>(f2));
 }
 
+//==============================================================================
+// C++23 Enhanced Proxy Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for proxy-like types
+ */
+template <typename T>
+concept ProxyLike = requires(T& t, const std::vector<std::any>& args) {
+    { t(args) } -> std::same_as<std::any>;
+    { t.getFunctionInfo() } -> std::same_as<const FunctionInfo&>;
+};
+
+/**
+ * @brief Proxy with automatic argument conversion
+ */
+template <typename Func>
+class AutoConvertingProxy : public ProxyFunction<Func> {
+    using Base = ProxyFunction<Func>;
+
+public:
+    using Base::Base;
+
+    /**
+     * @brief Invoke with automatic type conversion attempts
+     */
+    template <typename... Args>
+    auto invokeWithConversion(Args&&... args) -> std::any {
+        std::vector<std::any> anyArgs;
+        anyArgs.reserve(sizeof...(Args));
+        (anyArgs.push_back(std::forward<Args>(args)), ...);
+        return Base::operator()(anyArgs);
+    }
+};
+
+/**
+ * @brief Create auto-converting proxy
+ */
+template <typename Func>
+auto makeAutoConvertingProxy(Func&& func) {
+    return AutoConvertingProxy<std::decay_t<Func>>(std::forward<Func>(func));
+}
+
+/**
+ * @brief Proxy registry for managing named proxies
+ */
+class ProxyRegistry {
+    std::unordered_map<std::string,
+                       std::function<std::any(const std::vector<std::any>&)>>
+        proxies_;
+    std::unordered_map<std::string, FunctionInfo> infos_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    /**
+     * @brief Register a proxy function
+     */
+    template <typename Func>
+    void registerProxy(std::string_view name, Func&& func) {
+        auto proxy = makeProxy(std::forward<Func>(func));
+        std::unique_lock lock(mutex_);
+        proxies_[std::string(name)] =
+            [p = std::move(proxy)](const std::vector<std::any>& args) mutable {
+                return p(args);
+            };
+        infos_[std::string(name)] = proxy.getFunctionInfo();
+    }
+
+    /**
+     * @brief Call a registered proxy by name
+     */
+    std::optional<std::any> call(std::string_view name,
+                                 const std::vector<std::any>& args) {
+        std::shared_lock lock(mutex_);
+        auto it = proxies_.find(std::string(name));
+        if (it != proxies_.end()) {
+            return it->second(args);
+        }
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Get function info by name
+     */
+    std::optional<FunctionInfo> getInfo(std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        auto it = infos_.find(std::string(name));
+        if (it != infos_.end()) {
+            return it->second;
+        }
+        return std::nullopt;
+    }
+
+    /**
+     * @brief Check if a proxy is registered
+     */
+    bool hasProxy(std::string_view name) const {
+        std::shared_lock lock(mutex_);
+        return proxies_.contains(std::string(name));
+    }
+
+    /**
+     * @brief Get all registered proxy names
+     */
+    std::vector<std::string> getProxyNames() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> names;
+        names.reserve(proxies_.size());
+        for (const auto& [name, _] : proxies_) {
+            names.push_back(name);
+        }
+        return names;
+    }
+
+    /**
+     * @brief Unregister a proxy
+     */
+    void unregisterProxy(std::string_view name) {
+        std::unique_lock lock(mutex_);
+        proxies_.erase(std::string(name));
+        infos_.erase(std::string(name));
+    }
+
+    /**
+     * @brief Clear all registered proxies
+     */
+    void clear() {
+        std::unique_lock lock(mutex_);
+        proxies_.clear();
+        infos_.clear();
+    }
+
+    /**
+     * @brief Get singleton instance
+     */
+    static ProxyRegistry& getInstance() {
+        static ProxyRegistry instance;
+        return instance;
+    }
+};
+
+/**
+ * @brief Macro to register a function as a proxy
+ */
+#define ATOM_REGISTER_PROXY(func) \
+    atom::meta::ProxyRegistry::getInstance().registerProxy(#func, func)
+
+/**
+ * @brief Macro to register a function with custom name
+ */
+#define ATOM_REGISTER_PROXY_AS(func, name) \
+    atom::meta::ProxyRegistry::getInstance().registerProxy(name, func)
+
 }  // namespace atom::meta
 
 #endif

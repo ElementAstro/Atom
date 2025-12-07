@@ -1,5 +1,24 @@
-# GitVersion.cmake
-function(configure_version_from_git)
+# =============================================================================
+# GitVersion.cmake - Git-based version configuration
+# =============================================================================
+# This module provides functions to extract version information from Git tags
+# and commits, generating version headers for the project.
+#
+# Author: Max Qian License: GPL3
+# =============================================================================
+
+# Avoid repeated inclusion
+if(DEFINED GIT_VERSION_INCLUDED)
+  return()
+endif()
+set(GIT_VERSION_INCLUDED TRUE)
+
+# =============================================================================
+# Version Configuration Functions
+# =============================================================================
+
+# Function to configure version from Git repository
+function(atom_configure_version_from_git)
   # Parse arguments
   set(options "")
   set(oneValueArgs OUTPUT_HEADER VERSION_VARIABLE PREFIX)
@@ -181,7 +200,7 @@ function(configure_version_from_git)
 endfunction()
 
 # Function to configure both version files
-function(configure_atom_version)
+function(atom_configure_version)
   # Parse arguments
   set(options "")
   set(oneValueArgs VERSION_VARIABLE)
@@ -194,7 +213,7 @@ function(configure_atom_version)
   endif()
 
   # First generate the basic version header with Git info
-  configure_version_from_git(
+  atom_configure_version_from_git(
     OUTPUT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/atom_version.h" VERSION_VARIABLE
     ${ARG_VERSION_VARIABLE} PREFIX "ATOM")
 

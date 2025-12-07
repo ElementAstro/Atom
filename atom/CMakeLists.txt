@@ -4,7 +4,7 @@
 # Project Name: Atom Description: Atom Library for all of the Element Astro
 # Project Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom
   VERSION 1.0.0
@@ -39,10 +39,15 @@ endif()
 # =============================================================================
 
 if(UNIX AND NOT APPLE)
-  # Linux-specific dependencies
-  pkg_check_modules(SYSTEMD REQUIRED libsystemd)
-  if(SYSTEMD_FOUND)
-    message(STATUS "Found libsystemd: ${SYSTEMD_VERSION}")
+  # Linux-specific dependencies (optional)
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(SYSTEMD QUIET libsystemd)
+    if(SYSTEMD_FOUND)
+      message(STATUS "Found libsystemd: ${SYSTEMD_VERSION}")
+    else()
+      message(STATUS "libsystemd not found - some features may be limited")
+    endif()
   endif()
 endif()
 
@@ -311,17 +316,8 @@ endforeach()
 # Add Extra Components
 # =============================================================================
 
-# Add extra components directory if it exists
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extra"
-   AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extra/CMakeLists.txt")
-  message(STATUS "Adding extra components directory")
-  add_subdirectory(extra)
-else()
-  message(
-    STATUS
-      "Skipping extra components directory as it does not exist or does not contain CMakeLists.txt"
-  )
-endif()
+# Note: Extra components are added at the top-level CMakeLists.txt Do not add
+# them here to avoid duplicate target definitions
 
 # =============================================================================
 # Create Combined Library

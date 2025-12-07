@@ -1,7 +1,14 @@
-# cmake/VersionConfig.cmake
+# =============================================================================
+# VersionConfig.cmake - Project version configuration
+# =============================================================================
+# This module configures the project version from Git and generates version
+# headers for use in the build.
+#
+# Author: Max Qian License: GPL3
+# =============================================================================
 
 # Configure version from Git
-configure_version_from_git(
+atom_configure_version_from_git(
   OUTPUT_HEADER "${CMAKE_CURRENT_BINARY_DIR}/atom_version.h" VERSION_VARIABLE
   ATOM_VERSION PREFIX "ATOM")
 

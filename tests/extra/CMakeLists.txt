@@ -4,7 +4,7 @@
 # Project Name: Atom Extra Tests Description: Comprehensive test suite for Atom
 # extra components Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-extra-tests
   VERSION 1.0.0
@@ -17,7 +17,9 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 # Find required packages
 find_package(GTest REQUIRED)
-find_package(GMock REQUIRED)
+# GMock is included with GTest in most modern installations Try to find GMock
+# separately, but don't fail if not found
+find_package(GMock QUIET)
 find_package(Threads REQUIRED)
 
 # Backward-compatible aliases for legacy GTest target names

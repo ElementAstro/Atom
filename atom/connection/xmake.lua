@@ -41,48 +41,58 @@ option("enable-ssh")
     set_showmenu(true)
 option_end()
 
--- Define base sources and headers
+-- Define base sources and headers (organized by connection type)
 local base_sources = {
-    "async_fifoclient.cpp",
-    "async_fifoserver.cpp",
-    "async_sockethub.cpp",
-    "async_tcpclient.cpp",
-    "async_udpclient.cpp",
-    "async_udpserver.cpp",
-    "fifoclient.cpp",
-    "fifoserver.cpp",
-    "sockethub.cpp",
-    "tcpclient.cpp",
-    "ttybase.cpp",
-    "udpclient.cpp",
-    "udpserver.cpp"
+    -- FIFO/Named Pipe connections
+    "fifo/fifoclient.cpp",
+    "fifo/fifoserver.cpp",
+    "fifo/async_fifoclient.cpp",
+    "fifo/async_fifoserver.cpp",
+    -- TCP connections
+    "tcp/tcpclient.cpp",
+    "tcp/async_tcpclient.cpp",
+    -- UDP connections
+    "udp/udpclient.cpp",
+    "udp/udpserver.cpp",
+    "udp/async_udpclient.cpp",
+    "udp/async_udpserver.cpp",
+    -- Serial/TTY connections
+    "serial/ttybase.cpp",
+    -- Shared utilities
+    "shared/sockethub.cpp",
+    "shared/async_sockethub.cpp"
 }
 
 local base_headers = {
-    "async_fifoclient.hpp",
-    "async_fifoserver.hpp",
-    "async_sockethub.hpp",
-    "async_tcpclient.hpp",
-    "async_udpclient.hpp",
-    "async_udpserver.hpp",
-    "fifoclient.hpp",
-    "fifoserver.hpp",
-    "sockethub.hpp",
-    "tcpclient.hpp",
-    "ttybase.hpp",
-    "udpclient.hpp",
-    "udpserver.hpp"
+    -- FIFO/Named Pipe connections
+    "fifo/fifoclient.hpp",
+    "fifo/fifoserver.hpp",
+    "fifo/async_fifoclient.hpp",
+    "fifo/async_fifoserver.hpp",
+    -- TCP connections
+    "tcp/tcpclient.hpp",
+    "tcp/async_tcpclient.hpp",
+    -- UDP connections
+    "udp/udpclient.hpp",
+    "udp/udpserver.hpp",
+    "udp/async_udpclient.hpp",
+    "udp/async_udpserver.hpp",
+    -- Serial/TTY connections
+    "serial/ttybase.hpp",
+    -- Shared utilities
+    "shared/sockethub.hpp",
+    "shared/async_sockethub.hpp"
 }
 
 -- SSH-related files (conditional)
 local ssh_sources = {
-    "sshclient.cpp",
-    "sshserver.cpp"
+    "ssh/sshclient.cpp",
+    "ssh/sshserver.cpp"
 }
 
 local ssh_headers = {
-    "sshclient.hpp",
-    "sshserver.hpp"
+    "ssh/sshclient.hpp",
+    "ssh/sshserver.hpp"
 }
 
 -- Main static library target

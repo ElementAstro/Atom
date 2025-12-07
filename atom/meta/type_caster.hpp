@@ -56,6 +56,32 @@ public:
      */
     TypeCaster() { registerBuiltinTypes(); }
 
+    TypeCaster(const TypeCaster&) = delete;
+    auto operator=(const TypeCaster&) -> TypeCaster& = delete;
+
+    TypeCaster(TypeCaster&& other) noexcept
+        : conversions_(std::move(other.conversions_)),
+          conversion_paths_cache_(std::move(other.conversion_paths_cache_)),
+          type_name_map_(std::move(other.type_name_map_)),
+          type_alias_map_(std::move(other.type_alias_map_)),
+          type_group_map_(std::move(other.type_group_map_)),
+          m_enumMaps_(std::move(other.m_enumMaps_)),
+          type_mutex_(),
+          conversion_mutex_(),
+          enum_mutex_() {}
+
+    auto operator=(TypeCaster&& other) noexcept -> TypeCaster& {
+        if (this != &other) {
+            conversions_ = std::move(other.conversions_);
+            conversion_paths_cache_ = std::move(other.conversion_paths_cache_);
+            type_name_map_ = std::move(other.type_name_map_);
+            type_alias_map_ = std::move(other.type_alias_map_);
+            type_group_map_ = std::move(other.type_group_map_);
+            m_enumMaps_ = std::move(other.m_enumMaps_);
+        }
+        return *this;
+    }
+
     /*!
      * \brief Creates a shared pointer to a new TypeCaster instance.
      * \return A shared pointer to a TypeCaster instance.
@@ -434,6 +460,160 @@ private:
             m_enumMaps_.at(enum_name));
     }
 };
+
+//==============================================================================
+// C++23 Enhanced Type Caster Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for types that can be cast
+ */
+template <typename From, typename To>
+concept Castable =
+    std::is_convertible_v<From, To> || requires(From f) { static_cast<To>(f); };
+
+/**
+ * @brief Concept for types with explicit conversion
+ */
+template <typename From, typename To>
+concept ExplicitlyCastable = requires(From f) { static_cast<To>(f); } &&
+                             !std::is_convertible_v<From, To>;
+
+/**
+ * @brief Safe cast with optional result
+ */
+template <typename To, typename From>
+auto safeCast(const From& value) -> std::optional<To> {
+    if constexpr (std::is_convertible_v<From, To>) {
+        return static_cast<To>(value);
+    } else {
+        return std::nullopt;
+    }
+}
+
+/**
+ * @brief Cast with default value on failure
+ */
+template <typename To, typename From>
+auto castOrDefault(const From& value, To default_value) -> To {
+    if constexpr (std::is_convertible_v<From, To>) {
+        return static_cast<To>(value);
+    } else {
+        return default_value;
+    }
+}
+
+/**
+ * @brief Fluent type caster builder
+ */
+class TypeCasterBuilder {
+    TypeCaster caster_;
+
+public:
+    TypeCasterBuilder() = default;
+
+    template <typename From, typename To>
+    TypeCasterBuilder& addConversion(std::function<To(const From&)> converter) {
+        caster_.template registerConversion<From, To>(
+            [converter](const std::any& input) -> std::any {
+                return converter(std::any_cast<From>(input));
+            });
+        return *this;
+    }
+
+    template <typename T>
+    TypeCasterBuilder& registerType(std::string_view alias = "") {
+        caster_.registerType<T>(std::string(alias));
+        return *this;
+    }
+
+    template <typename From, typename To>
+    TypeCasterBuilder& addBidirectional(
+        std::function<To(const From&)> forward,
+        std::function<From(const To&)> backward) {
+        addConversion<From, To>(std::move(forward));
+        addConversion<To, From>(std::move(backward));
+        return *this;
+    }
+
+    TypeCaster build() { return std::move(caster_); }
+
+    std::shared_ptr<TypeCaster> buildShared() {
+        return std::make_shared<TypeCaster>(std::move(caster_));
+    }
+};
+
+/**
+ * @brief Create a type caster builder
+ */
+inline auto buildTypeCaster() -> TypeCasterBuilder {
+    return TypeCasterBuilder{};
+}
+
+/**
+ * @brief Type cast chain for multi-step conversions
+ */
+template <typename... Steps>
+class CastChain;
+
+template <typename First, typename Second, typename... Rest>
+class CastChain<First, Second, Rest...> {
+public:
+    static auto cast(const First& value)
+        -> std::optional<typename CastChain<Rest...>::result_type> {
+        if (auto mid = safeCast<Second>(value)) {
+            return CastChain<Second, Rest...>::cast(*mid);
+        }
+        return std::nullopt;
+    }
+
+    using result_type = typename CastChain<Second, Rest...>::result_type;
+};
+
+template <typename First, typename Second>
+class CastChain<First, Second> {
+public:
+    using result_type = Second;
+    static auto cast(const First& value) -> std::optional<Second> {
+        return safeCast<Second>(value);
+    }
+};
+
+/**
+ * @brief Dynamic type caster with runtime type discovery
+ */
+class DynamicCaster {
+    TypeCaster caster_;
+
+public:
+    template <typename To>
+    auto cast(const std::any& value) -> std::optional<To> {
+        try {
+            auto result = caster_.convert<To>(value);
+            return std::any_cast<To>(result);
+        } catch (...) {
+            return std::nullopt;
+        }
+    }
+
+    template <typename From, typename To>
+    void registerCast(std::function<To(const From&)> converter) {
+        caster_.template registerConversion<From, To>(
+            [converter](const std::any& input) -> std::any {
+                return converter(std::any_cast<From>(input));
+            });
+    }
+
+    TypeCaster& getCaster() { return caster_; }
+};
+
+/**
+ * @brief Global type caster singleton
+ */
+inline TypeCaster& getGlobalTypeCaster() {
+    static TypeCaster instance;
+    return instance;
+}
 
 }  // namespace atom::meta
 

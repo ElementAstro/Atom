@@ -1,5 +1,5 @@
 #include <gtest/gtest.h>
-#include "atom/connection/tcpclient.hpp"
+#include "atom/connection/tcp/tcpclient.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -303,4 +303,275 @@ TEST_F(TcpClientTest, ConnectionTimeout) {
     // Should timeout within reasonable time
     EXPECT_GE(duration, std::chrono::milliseconds(800));
     EXPECT_LE(duration, std::chrono::seconds(5));
+}
+
+// ============================================================================
+// Additional TcpClient Tests
+// ============================================================================
+
+TEST_F(TcpClientTest, GetRemoteEndpoint) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    auto endpoint = client_.getRemoteEndpoint();
+    EXPECT_EQ(endpoint.host, "127.0.0.1");
+    EXPECT_EQ(endpoint.port, 8080);
+}
+
+TEST_F(TcpClientTest, GetLocalEndpoint) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    auto endpoint = client_.getLocalEndpoint();
+    EXPECT_FALSE(endpoint.host.empty());
+    EXPECT_GT(endpoint.port, 0);
+}
+
+TEST_F(TcpClientTest, GetStatistics) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    auto stats = client_.getStatistics();
+    EXPECT_EQ(stats.bytesSent, 0);
+    EXPECT_EQ(stats.bytesReceived, 0);
+}
+
+TEST_F(TcpClientTest, ResetStatistics) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    std::string message = "test";
+    std::span<const char> data_span(message.data(), message.size());
+    client_.send(data_span);
+
+    client_.resetStatistics();
+
+    auto stats = client_.getStatistics();
+    EXPECT_EQ(stats.bytesSent, 0);
+}
+
+TEST_F(TcpClientTest, SetSocketOptions) {
+    TcpClient::SocketOptions options;
+    options.keepAlive = true;
+    options.noDelay = true;
+    options.sendBufferSize = 65536;
+    options.receiveBufferSize = 65536;
+
+    auto result = client_.setSocketOptions(options);
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, SetKeepAlive) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    TcpClient::SocketOptions options;
+    options.keepAlive = true;
+    options.keepAliveIdle = 60;
+    options.keepAliveInterval = 10;
+    options.keepAliveCount = 5;
+
+    auto result = client_.setSocketOptions(options);
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, SetNoDelay) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    TcpClient::SocketOptions options;
+    options.noDelay = true;
+
+    auto result = client_.setSocketOptions(options);
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, SendWithTimeout) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    std::string message = "Timeout test";
+    std::span<const char> data_span(message.data(), message.size());
+
+    auto result = client_.send(data_span, std::chrono::milliseconds(1000));
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, ReceiveWithTimeout) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    std::string message = "Receive timeout test";
+    std::span<const char> data_span(message.data(), message.size());
+    client_.send(data_span);
+
+    auto result = client_.receive(1024, std::chrono::milliseconds(2000));
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, ReceiveTimeoutExpired) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    // Don't send anything, just try to receive
+    auto start = std::chrono::steady_clock::now();
+    auto result = client_.receive(1024, std::chrono::milliseconds(500));
+    auto duration = std::chrono::steady_clock::now() - start;
+
+    // Should timeout
+    EXPECT_GE(duration, std::chrono::milliseconds(400));
+}
+
+TEST_F(TcpClientTest, StartStopReceiving) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    client_.startReceiving(1024);
+    EXPECT_TRUE(client_.isReceiving());
+
+    client_.stopReceiving();
+    EXPECT_FALSE(client_.isReceiving());
+}
+
+TEST_F(TcpClientTest, MoveConstruction) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    TcpClient movedClient(std::move(client_));
+    EXPECT_TRUE(movedClient.isConnected());
+}
+
+TEST_F(TcpClientTest, MoveAssignment) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    TcpClient otherClient(TcpClient::Options{});
+    otherClient = std::move(client_);
+    EXPECT_TRUE(otherClient.isConnected());
+}
+
+TEST_F(TcpClientTest, SendStringOverload) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    std::string message = "String overload test";
+    auto result = client_.send(message);
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, SendBinaryData) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    std::vector<char> binaryData = {0x00, 0x01, 0x02, static_cast<char>(0xFF)};
+    std::span<const char> data_span(binaryData.data(), binaryData.size());
+
+    auto result = client_.send(data_span);
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, ConcurrentSendReceive) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    std::atomic<int> sendCount{0};
+    std::atomic<int> receiveCount{0};
+
+    std::thread sender([this, &sendCount]() {
+        for (int i = 0; i < 5; ++i) {
+            std::string message = "Concurrent_" + std::to_string(i);
+            std::span<const char> data_span(message.data(), message.size());
+            if (client_.send(data_span).has_value()) {
+                sendCount++;
+            }
+        }
+    });
+
+    std::thread receiver([this, &receiveCount]() {
+        for (int i = 0; i < 5; ++i) {
+            auto result = client_.receive(1024, std::chrono::milliseconds(500));
+            if (result.has_value()) {
+                receiveCount++;
+            }
+        }
+    });
+
+    sender.join();
+    receiver.join();
+
+    EXPECT_GT(sendCount.load(), 0);
+}
+
+TEST_F(TcpClientTest, ReconnectAfterDisconnect) {
+    auto connectResult1 =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult1.has_value());
+
+    client_.disconnect();
+    EXPECT_FALSE(client_.isConnected());
+
+    auto connectResult2 =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    EXPECT_TRUE(connectResult2.has_value());
+    EXPECT_TRUE(client_.isConnected());
+}
+
+TEST_F(TcpClientTest, StatisticsAfterSendReceive) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    client_.resetStatistics();
+
+    std::string message = "Stats test";
+    std::span<const char> data_span(message.data(), message.size());
+    client_.send(data_span);
+
+    auto receiveResult = client_.receive(1024, std::chrono::milliseconds(2000));
+
+    auto stats = client_.getStatistics();
+    EXPECT_GE(stats.bytesSent, 0);
+}
+
+TEST_F(TcpClientTest, OptionsConstruction) {
+    TcpClient::Options options;
+    options.connectTimeout = std::chrono::milliseconds(3000);
+    options.sendTimeout = std::chrono::milliseconds(1000);
+    options.receiveTimeout = std::chrono::milliseconds(1000);
+    options.keepAlive = true;
+    options.noDelay = true;
+
+    TcpClient clientWithOptions(options);
+
+    auto result = clientWithOptions.connect("127.0.0.1", 8080,
+                                            std::chrono::milliseconds(5000));
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(TcpClientTest, SendSpecialCharacters) {
+    auto connectResult =
+        client_.connect("127.0.0.1", 8080, std::chrono::milliseconds(5000));
+    ASSERT_TRUE(connectResult.has_value());
+
+    std::string specialMessage = "Special: \n\t\r chars";
+    std::span<const char> data_span(specialMessage.data(),
+                                    specialMessage.size());
+
+    auto result = client_.send(data_span);
+    EXPECT_TRUE(result.has_value());
 }

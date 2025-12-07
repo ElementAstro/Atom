@@ -1,5 +1,5 @@
 # 示例目录: secret
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 
 # 获取子目录名称（用于可执行文件前缀）
 get_filename_component(SUBDIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)

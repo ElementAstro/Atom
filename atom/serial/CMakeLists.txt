@@ -20,11 +20,19 @@ if(PkgConfig_FOUND)
 endif()
 
 # Sources
-set(SOURCES
-    # Core files
-    core/scanner.cpp core/serial_port.cpp
-    # Bluetooth files
-    bluetooth/bluetooth_serial.cpp)
+set(SOURCES # Core files
+    core/scanner.cpp core/serial_port.cpp)
+
+# Add platform-specific Bluetooth sources On macOS, use the Objective-C++
+# implementation (.mm file) On other platforms, use the C++ implementation (.cpp
+# file)
+if(APPLE)
+  list(APPEND SOURCES bluetooth/bluetooth_serial_mac.mm)
+  # Enable Objective-C++ for the .mm file
+  enable_language(OBJCXX)
+else()
+  list(APPEND SOURCES bluetooth/bluetooth_serial.cpp)
+endif()
 
 # Add USB files only if libusb is available
 if(LIBUSB_FOUND)
@@ -32,11 +40,6 @@ if(LIBUSB_FOUND)
   message(STATUS "USB support enabled for atom-serial")
 else()
   message(STATUS "USB support disabled for atom-serial (libusb not found)")
-endif()
-
-# Add platform-specific sources
-if(APPLE)
-  list(APPEND SOURCES bluetooth/bluetooth_serial_mac.mm)
 endif()
 
 # Headers
@@ -71,16 +74,26 @@ add_library(${LIB_NAME} ${SOURCES} ${HEADERS})
 # Configure module using standardized function
 atom_configure_module(${LIB_NAME})
 
+# Find spdlog for logging
+find_package(spdlog QUIET)
+
 # Set platform-specific dependencies
 if(WIN32)
   target_link_libraries(${LIB_NAME} PUBLIC atom-error atom-log SetupAPI
-                                           Cfgmgr32)
+                                           Cfgmgr32 ws2_32 rpcrt4)
+  if(spdlog_FOUND)
+    target_link_libraries(${LIB_NAME} PUBLIC spdlog::spdlog)
+  endif()
 elseif(APPLE)
   find_library(IOKIT_FRAMEWORK IOKit REQUIRED)
   find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+  find_library(IOBLUETOOTH_FRAMEWORK IOBluetooth REQUIRED)
   target_link_libraries(
     ${LIB_NAME} PUBLIC atom-error atom-log ${IOKIT_FRAMEWORK}
-                       ${FOUNDATION_FRAMEWORK})
+                       ${FOUNDATION_FRAMEWORK} ${IOBLUETOOTH_FRAMEWORK})
+  if(spdlog_FOUND)
+    target_link_libraries(${LIB_NAME} PUBLIC spdlog::spdlog)
+  endif()
 else() # Linux/Unix
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(UDEV REQUIRED libudev)
@@ -95,6 +108,10 @@ else() # Linux/Unix
     target_include_directories(${LIB_NAME} PUBLIC ${LIBUSB_INCLUDE_DIRS})
     target_link_libraries(${LIB_NAME} PUBLIC ${LIBUSB_LIBRARIES})
     target_compile_definitions(${LIB_NAME} PUBLIC ATOM_SERIAL_HAS_USB)
+  endif()
+
+  if(spdlog_FOUND)
+    target_link_libraries(${LIB_NAME} PUBLIC spdlog::spdlog)
   endif()
 endif()
 

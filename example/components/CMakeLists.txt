@@ -1,5 +1,5 @@
 # Components Examples Directory
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.21)
 
 # Get subdirectory name (for executable prefix)
 get_filename_component(SUBDIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)

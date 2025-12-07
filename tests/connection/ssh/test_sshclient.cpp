@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <filesystem>
 #include <fstream>
-#include "atom/connection/sshclient.hpp"
+#include "atom/connection/ssh/sshclient.hpp"
 
 using namespace atom::connection;
 

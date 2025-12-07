@@ -102,6 +102,15 @@ public:
     [[nodiscard]] auto calculateMean(const std::vector<f32>& data) -> f32;
 
     /**
+     * @brief Alias for calculateMean for convenience
+     * @param data Input data
+     * @return Mean value
+     */
+    [[nodiscard]] auto mean(const std::vector<f32>& data) -> f32 {
+        return calculateMean(data);
+    }
+
+    /**
      * @brief GPU-accelerated variance calculation
      * @param data Input data
      * @param mean Pre-calculated mean (optional)
@@ -116,9 +125,15 @@ public:
      */
     [[nodiscard]] static auto getInstance() -> GPUMath&;
 
-private:
+public:
     GPUMath() = default;
+    ~GPUMath() = default;
+    GPUMath(const GPUMath&) = delete;
+    GPUMath& operator=(const GPUMath&) = delete;
+    GPUMath(GPUMath&&) = default;
+    GPUMath& operator=(GPUMath&&) = default;
 
+private:
     opencl::ComputeManager* compute_manager_ = nullptr;
     bool initialized_ = false;
 

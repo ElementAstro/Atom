@@ -308,3 +308,186 @@ TEST(MultiModalTest, EscapeLocalMinima) {
     double global_min_energy = -1.0;
     EXPECT_NEAR(energy, global_min_energy, 0.1);
 }
+
+// =============================================================================
+// Additional Edge Case Tests
+// =============================================================================
+
+TEST_F(SimulatedAnnealingTest, ZeroIterations) {
+    auto sa =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setMaxIterations(0)
+            .build();
+    // Should return initial random solution without optimization
+    EXPECT_NO_THROW(sa.optimize());
+}
+
+TEST_F(SimulatedAnnealingTest, SingleIteration) {
+    auto sa =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setMaxIterations(1)
+            .build();
+    EXPECT_NO_THROW(sa.optimize());
+}
+
+TEST_F(SimulatedAnnealingTest, VeryHighTemperature) {
+    auto sa =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setInitialTemperature(1e10)
+            .setMaxIterations(100)
+            .build();
+    // High temperature should accept almost all moves
+    EXPECT_NO_THROW(sa.optimize());
+}
+
+TEST_F(SimulatedAnnealingTest, VeryLowTemperature) {
+    auto sa =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setInitialTemperature(1e-10)
+            .setMaxIterations(100)
+            .build();
+    // Low temperature should be very greedy
+    EXPECT_NO_THROW(sa.optimize());
+}
+
+TEST_F(SimulatedAnnealingTest, FastCooling) {
+    auto sa =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setCoolingRate(0.5)  // Very fast cooling
+            .setMaxIterations(100)
+            .build();
+    EXPECT_NO_THROW(sa.optimize());
+}
+
+TEST_F(SimulatedAnnealingTest, SlowCooling) {
+    auto sa =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setCoolingRate(0.999)  // Very slow cooling
+            .setMaxIterations(100)
+            .build();
+    EXPECT_NO_THROW(sa.optimize());
+}
+
+TEST_F(SimulatedAnnealingTest, GetStatistics) {
+    annealing_->optimize();
+    auto stats = annealing_->getStatistics();
+
+    EXPECT_GE(stats.totalIterations, 0);
+    EXPECT_GE(stats.acceptedMoves, 0);
+    EXPECT_GE(stats.rejectedMoves, 0);
+    EXPECT_LE(stats.acceptedMoves + stats.rejectedMoves, stats.totalIterations);
+}
+
+TEST_F(SimulatedAnnealingTest, GetBestSolution) {
+    double solution = annealing_->optimize();
+    double bestSolution = annealing_->getBestSolution();
+    double bestEnergy = annealing_->getBestEnergy();
+
+    EXPECT_EQ(solution, bestSolution);
+    EXPECT_GE(bestEnergy,
+              0.0);  // Energy is squared distance, always non-negative
+}
+
+TEST_F(SimulatedAnnealingTest, CopyConstructor) {
+    auto sa1 =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setMaxIterations(100)
+            .build();
+
+    auto sa2 = sa1;  // Copy
+
+    double solution1 = sa1.optimize();
+    double solution2 = sa2.optimize();
+
+    // Both should converge to similar solutions
+    EXPECT_NEAR(solution1, 42.0, 1.0);
+    EXPECT_NEAR(solution2, 42.0, 1.0);
+}
+
+TEST_F(SimulatedAnnealingTest, MoveConstructor) {
+    auto sa1 =
+        typename SimulatedAnnealing<TestProblem, double>::Builder(*problem_)
+            .setMaxIterations(100)
+            .build();
+
+    auto sa2 = std::move(sa1);  // Move
+
+    double solution = sa2.optimize();
+    EXPECT_NEAR(solution, 42.0, 1.0);
+}
+
+TEST_F(TSPTest, EmptyCities) {
+    std::vector<std::pair<double, double>> empty_cities;
+    EXPECT_THROW(TSP(empty_cities), std::exception);
+}
+
+TEST_F(TSPTest, SingleCity) {
+    std::vector<std::pair<double, double>> single_city = {{0.0, 0.0}};
+    TSP single_tsp(single_city);
+
+    auto solution = single_tsp.randomSolution();
+    EXPECT_EQ(solution.size(), 1u);
+
+    double energy = single_tsp.energy(solution);
+    EXPECT_NEAR(energy, 0.0, 1e-10);  // No distance for single city
+}
+
+TEST_F(TSPTest, TwoCities) {
+    std::vector<std::pair<double, double>> two_cities = {{0.0, 0.0},
+                                                         {3.0, 4.0}};
+    TSP two_tsp(two_cities);
+
+    auto solution = two_tsp.randomSolution();
+    EXPECT_EQ(solution.size(), 2u);
+
+    double energy = two_tsp.energy(solution);
+    // Distance from (0,0) to (3,4) and back = 2 * 5 = 10
+    EXPECT_NEAR(energy, 10.0, 1e-10);
+}
+
+TEST_F(TSPTest, PathValidation) {
+    auto solution = tsp_->randomSolution();
+    EXPECT_TRUE(tsp_->validate(solution));
+
+    // Invalid path with duplicate
+    std::vector<int> invalid_path = {0, 0, 1, 2, 3};
+    EXPECT_FALSE(tsp_->validate(invalid_path));
+
+    // Invalid path with wrong size
+    std::vector<int> wrong_size = {0, 1, 2};
+    EXPECT_FALSE(tsp_->validate(wrong_size));
+}
+
+class ConstrainedProblem {
+public:
+    double energy(double x) const { return x * x; }
+    double neighbor(double x) const {
+        std::uniform_real_distribution<double> dist(-1.0, 1.0);
+        return x + dist(gen_);
+    }
+    double randomSolution() const {
+        std::uniform_real_distribution<double> dist(-10.0, 10.0);
+        return dist(gen_);
+    }
+    bool validate(double x) const {
+        // Only accept solutions in [-5, 5]
+        return x >= -5.0 && x <= 5.0;
+    }
+
+private:
+    mutable std::mt19937 gen_{std::random_device{}()};
+};
+
+TEST(ConstrainedOptimizationTest, RespectsConstraints) {
+    ConstrainedProblem problem;
+    auto sa = typename SimulatedAnnealing<ConstrainedProblem, double>::Builder(
+                  problem)
+                  .setMaxIterations(500)
+                  .setInitialTemperature(100.0)
+                  .build();
+
+    double solution = sa.optimize();
+    EXPECT_TRUE(problem.validate(solution));
+    EXPECT_GE(solution, -5.0);
+    EXPECT_LE(solution, 5.0);
+}

@@ -337,6 +337,361 @@ TEST_F(LuaEngineTest, LuaInfiniteLoop) {
     EXPECT_TRUE(result.success || !result.errorMessage.empty());
 }
 
+// ============================================================================
+// Additional LuaEngine Tests
+// ============================================================================
+
+TEST_F(LuaEngineTest, LuaBooleanOperations) {
+    std::string script = R"(
+        local a = true
+        local b = false
+        return a and not b
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_TRUE(result.returnValue.get<bool>());
+    }
+}
+
+TEST_F(LuaEngineTest, LuaMultipleReturnValues) {
+    std::string script = R"(
+        function multiReturn()
+            return 1, 2, 3
+        end
+        local a, b, c = multiReturn()
+        return a + b + c
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 6);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaStringPatternMatching) {
+    std::string script = R"(
+        local str = "Hello, World!"
+        local match = string.match(str, "World")
+        return match
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(), "World");
+    }
+}
+
+TEST_F(LuaEngineTest, LuaTableIteration) {
+    std::string script = R"(
+        local t = {a = 1, b = 2, c = 3}
+        local sum = 0
+        for k, v in pairs(t) do
+            sum = sum + v
+        end
+        return sum
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 6);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaNestedTables) {
+    std::string script = R"(
+        local t = {
+            inner = {
+                value = 42
+            }
+        }
+        return t.inner.value
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 42);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaLocalVariableScope) {
+    std::string script = R"(
+        local x = 10
+        do
+            local x = 20
+        end
+        return x
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 10);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaModuloOperation) {
+    std::string script = R"(
+        return 17 % 5
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 2);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaPowerOperation) {
+    std::string script = R"(
+        return 2 ^ 10
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<double>(), 1024.0);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaStringLength) {
+    std::string script = R"(
+        local str = "Hello"
+        return #str
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 5);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaTableLength) {
+    std::string script = R"(
+        local t = {1, 2, 3, 4, 5}
+        return #t
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 5);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaConditionalExpression) {
+    std::string script = R"(
+        local x = 10
+        local result = x > 5 and "greater" or "lesser"
+        return result
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(), "greater");
+    }
+}
+
+TEST_F(LuaEngineTest, LuaTypeFunction) {
+    std::string script = R"(
+        return type(42)
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(), "number");
+    }
+}
+
+TEST_F(LuaEngineTest, LuaToNumberConversion) {
+    std::string script = R"(
+        return tonumber("42") + 8
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 50);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaToStringConversion) {
+    std::string script = R"(
+        return tostring(42) .. " is the answer"
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(), "42 is the answer");
+    }
+}
+
+TEST_F(LuaEngineTest, LuaTableInsert) {
+    std::string script = R"(
+        local t = {1, 2, 3}
+        table.insert(t, 4)
+        return #t
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 4);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaTableRemove) {
+    std::string script = R"(
+        local t = {1, 2, 3, 4}
+        table.remove(t, 2)
+        return #t
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 3);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaTableSort) {
+    std::string script = R"(
+        local t = {3, 1, 4, 1, 5, 9, 2, 6}
+        table.sort(t)
+        return t[1]
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 1);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaStringFormat) {
+    std::string script = R"(
+        return string.format("Value: %d, Name: %s", 42, "test")
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(),
+                  "Value: 42, Name: test");
+    }
+}
+
+TEST_F(LuaEngineTest, LuaPcallErrorHandling) {
+    std::string script = R"(
+        local success, err = pcall(function()
+            error("intentional error")
+        end)
+        return success
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_FALSE(result.returnValue.get<bool>());
+    }
+}
+
+TEST_F(LuaEngineTest, LuaAssert) {
+    std::string script = R"(
+        local function safeAssert()
+            local success, err = pcall(function()
+                assert(false, "assertion failed")
+            end)
+            return success
+        end
+        return safeAssert()
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_FALSE(result.returnValue.get<bool>());
+    }
+}
+
+TEST_F(LuaEngineTest, LuaIpairs) {
+    std::string script = R"(
+        local t = {10, 20, 30}
+        local sum = 0
+        for i, v in ipairs(t) do
+            sum = sum + v
+        end
+        return sum
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 60);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaSelect) {
+    std::string script = R"(
+        local function varargs(...)
+            return select("#", ...)
+        end
+        return varargs(1, 2, 3, 4, 5)
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 5);
+    }
+}
+
+TEST_F(LuaEngineTest, LuaUnpack) {
+    std::string script = R"(
+        local t = {1, 2, 3}
+        local a, b, c = table.unpack(t)
+        return a + b + c
+    )";
+
+    auto result = engine_->executeScript(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 6);
+    }
+}
+
 #else
 
 // Placeholder test when Lua is not enabled

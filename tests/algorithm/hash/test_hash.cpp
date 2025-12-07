@@ -7,7 +7,7 @@
 #include <unordered_map>
 #include <vector>
 #include "atom/algorithm/hash.hpp"
-#include "atom/log/loguru.hpp"
+// Removed: atom/log/loguru.hpp not available
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -36,7 +36,7 @@ protected:
     void SetUp() override {
         static bool initialized = false;
         if (!initialized) {
-            loguru::g_stderr_verbosity = loguru::Verbosity_OFF;
+            // loguru disabled
             initialized = true;
         }
     }

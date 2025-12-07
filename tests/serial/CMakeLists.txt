@@ -4,7 +4,7 @@
 # Project Name: Atom-Serial-Tests Description: Test Suite for Atom Serial Module
 # Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-serial-tests
   VERSION 1.0.0
@@ -16,14 +16,13 @@ project(
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-  pkg_check_modules(LIBUSB QUIET libusb-1.0)
-endif()
-
-if(NOT LIBUSB_FOUND)
-  message(WARNING "libusb-1.0 not found; skipping serial tests")
-  return()
+# Check for libusb on non-Windows platforms (USB tests require it)
+set(LIBUSB_FOUND FALSE)
+if(NOT WIN32)
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(LIBUSB QUIET libusb-1.0)
+  endif()
 endif()
 
 # =============================================================================
@@ -48,11 +47,17 @@ endif()
 # =============================================================================
 # Test Source Configuration
 # =============================================================================
-# For modules with .cpp test files
-file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
+# Core test files (always included)
+set(TEST_SOURCES ${PROJECT_SOURCE_DIR}/test_scanner.cpp
+                 ${PROJECT_SOURCE_DIR}/test_serial.cpp)
 
-# Remove build directory files
-list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/build/.*")
+# Add USB tests only if libusb is available
+if(LIBUSB_FOUND)
+  list(APPEND TEST_SOURCES ${PROJECT_SOURCE_DIR}/test_usb.cpp)
+  message(STATUS "USB tests enabled (libusb found)")
+else()
+  message(STATUS "USB tests disabled (libusb not found)")
+endif()
 
 # =============================================================================
 # Create Test Executable
@@ -76,10 +81,14 @@ target_link_libraries(
           GTest::gtest_main
           GTest::gmock
           GTest::gmock_main
-          # libusb
-          ${LIBUSB_LIBRARIES}
           # System libraries
           Threads::Threads)
+
+# Link libusb only if available
+if(LIBUSB_FOUND)
+  target_link_libraries(atom_serial_tests PRIVATE ${LIBUSB_LIBRARIES})
+  target_compile_definitions(atom_serial_tests PRIVATE ATOM_SERIAL_HAS_USB)
+endif()
 
 # =============================================================================
 # Target Configuration

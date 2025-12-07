@@ -22,7 +22,9 @@ Tests serial communication, Bluetooth, USB, and device management.
 #include "atom/serial/bluetooth_serial.hpp"
 #include "atom/serial/scanner.hpp"
 #include "atom/serial/serial_port.hpp"
+#ifdef ATOM_SERIAL_HAS_USB
 #include "atom/serial/usb.hpp"
+#endif
 
 namespace atom::serial::test {
 

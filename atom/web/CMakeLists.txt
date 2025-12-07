@@ -80,10 +80,10 @@ if(fmt_FOUND)
   list(APPEND LIBS fmt::fmt)
 endif()
 
-# Add spdlog library
+# Add spdlog library (use compiled version to avoid ODR violations)
 find_package(spdlog QUIET)
 if(spdlog_FOUND)
-  list(APPEND LIBS spdlog::spdlog_header_only)
+  list(APPEND LIBS spdlog::spdlog)
 endif()
 
 if(CURL_FOUND)
@@ -111,6 +111,10 @@ atom_configure_module(
   atom-system
   atom-log
   atom-type)
+
+# Ensure spdlog is used as compiled library
+target_compile_definitions(atom-web PRIVATE SPDLOG_COMPILED_LIB
+                                            SPDLOG_FMT_EXTERNAL)
 
 # Link module-specific dependencies
 target_link_libraries(atom-web PRIVATE ${LIBS} atom-web-time)

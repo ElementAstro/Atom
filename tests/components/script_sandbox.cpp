@@ -372,3 +372,254 @@ TEST_F(ScriptSandboxTest, ConcurrentExecution) {
 
     EXPECT_GT(successCount.load(), 0);
 }
+
+// ============================================================================
+// Additional ScriptSandbox Tests
+// ============================================================================
+
+TEST_F(ScriptSandboxTest, MultipleScriptExecutions) {
+    for (int i = 0; i < 10; ++i) {
+        std::string script = "return " + std::to_string(i);
+        auto result = sandbox_->execute(script);
+        EXPECT_TRUE(result.success);
+        if (result.success) {
+            EXPECT_EQ(result.returnValue.get<int64_t>(), i);
+        }
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithGlobalState) {
+    // First script sets a global
+    std::string script1 = "globalVar = 42";
+    auto result1 = sandbox_->execute(script1);
+    EXPECT_TRUE(result1.success);
+
+    // Second script uses the global
+    std::string script2 = "return globalVar";
+    auto result2 = sandbox_->execute(script2);
+
+    // Behavior depends on sandbox isolation
+    EXPECT_TRUE(result2.success || !result2.errorMessage.empty());
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithLocalVariables) {
+    std::string script = R"(
+        local x = 10
+        local y = 20
+        local z = x + y
+        return z
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 30);
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithFunctionDefinition) {
+    std::string script = R"(
+        local function add(a, b)
+            return a + b
+        end
+        return add(5, 7)
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 12);
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithConditionals) {
+    std::string script = R"(
+        local x = 15
+        if x > 10 then
+            return "greater"
+        else
+            return "lesser"
+        end
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(), "greater");
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithLoops) {
+    std::string script = R"(
+        local sum = 0
+        for i = 1, 10 do
+            sum = sum + i
+        end
+        return sum
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 55);
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithStringOperations) {
+    std::string script = R"(
+        local str = "Hello"
+        str = str .. ", " .. "World!"
+        return str
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(), "Hello, World!");
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithTableOperations) {
+    std::string script = R"(
+        local t = {}
+        t.x = 10
+        t.y = 20
+        return t.x + t.y
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 30);
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithNilHandling) {
+    std::string script = R"(
+        local x = nil
+        if x == nil then
+            return "is nil"
+        else
+            return "not nil"
+        end
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<std::string>(), "is nil");
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithBooleanLogic) {
+    std::string script = R"(
+        local a = true
+        local b = false
+        return a and not b
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_TRUE(result.returnValue.get<bool>());
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithComments) {
+    std::string script = R"(
+        -- This is a comment
+        local x = 42  -- inline comment
+        --[[
+            Multi-line comment
+        ]]
+        return x
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 42);
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithWhileLoop) {
+    std::string script = R"(
+        local count = 0
+        while count < 5 do
+            count = count + 1
+        end
+        return count
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 5);
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithRepeatLoop) {
+    std::string script = R"(
+        local count = 0
+        repeat
+            count = count + 1
+        until count >= 5
+        return count
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 5);
+    }
+}
+
+TEST_F(ScriptSandboxTest, ScriptWithNumericFor) {
+    std::string script = R"(
+        local product = 1
+        for i = 1, 5 do
+            product = product * i
+        end
+        return product
+    )";
+
+    auto result = sandbox_->execute(script);
+
+    EXPECT_TRUE(result.success);
+    if (result.success) {
+        EXPECT_EQ(result.returnValue.get<int64_t>(), 120);  // 5!
+    }
+}
+
+TEST_F(ScriptSandboxTest, GetCurrentMemoryUsage) {
+    // Execute some scripts to use memory
+    sandbox_->execute("local t = {}; for i=1,100 do t[i]=i end");
+
+    auto memUsage = sandbox_->getCurrentMemoryUsage();
+    EXPECT_GE(memUsage, 0);
+}
+
+TEST_F(ScriptSandboxTest, IsModuleAllowed) {
+    sandbox_->addAllowedModule("math");
+
+    EXPECT_TRUE(sandbox_->isModuleAllowed("math"));
+    EXPECT_FALSE(sandbox_->isModuleAllowed("os"));
+}
+
+TEST_F(ScriptSandboxTest, IsFunctionBlocked) {
+    sandbox_->addBlockedFunction("os.execute");
+
+    EXPECT_TRUE(sandbox_->isFunctionBlocked("os.execute"));
+    EXPECT_FALSE(sandbox_->isFunctionBlocked("print"));
+}

@@ -287,6 +287,138 @@ template <typename T>
 inline constexpr bool is_member_function_pointer_v =
     is_member_function_pointer<T>::value;
 
+//==============================================================================
+// C++23 Enhanced Overload Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for overloadable callables
+ */
+template <typename T>
+concept Overloadable =
+    std::is_invocable_v<T> || std::is_member_function_pointer_v<T> ||
+    std::is_function_v<std::remove_pointer_t<T>>;
+
+/**
+ * @brief Overload set for multiple callable types
+ */
+template <typename... Fs>
+struct overload_set : Fs... {
+    using Fs::operator()...;
+
+    constexpr overload_set(Fs... fs) : Fs(std::move(fs))... {}
+};
+
+// Deduction guide
+template <typename... Fs>
+overload_set(Fs...) -> overload_set<Fs...>;
+
+/**
+ * @brief Create an overload set
+ */
+template <typename... Fs>
+constexpr auto make_overload(Fs &&...fs) {
+    return overload_set<std::decay_t<Fs>...>(std::forward<Fs>(fs)...);
+}
+
+/**
+ * @brief Select overload by return type
+ */
+template <typename Return>
+struct return_type_selector {
+    template <typename... Args>
+    constexpr auto operator()(Return (*func)(Args...)) const noexcept {
+        return func;
+    }
+
+    template <typename Class, typename... Args>
+    constexpr auto operator()(Return (Class::*func)(Args...)) const noexcept {
+        return func;
+    }
+
+    template <typename Class, typename... Args>
+    constexpr auto operator()(Return (Class::*func)(Args...)
+                                  const) const noexcept {
+        return func;
+    }
+};
+
+/**
+ * @brief Select overload by return type helper
+ */
+template <typename Return>
+inline constexpr return_type_selector<Return> select_return{};
+
+/**
+ * @brief Select overload by argument count
+ */
+template <std::size_t N>
+struct arity_selector {
+    template <typename Return, typename... Args>
+        requires(sizeof...(Args) == N)
+    constexpr auto operator()(Return (*func)(Args...)) const noexcept {
+        return func;
+    }
+
+    template <typename Return, typename Class, typename... Args>
+        requires(sizeof...(Args) == N)
+    constexpr auto operator()(Return (Class::*func)(Args...)) const noexcept {
+        return func;
+    }
+};
+
+/**
+ * @brief Select overload by arity helper
+ */
+template <std::size_t N>
+inline constexpr arity_selector<N> select_arity{};
+
+/**
+ * @brief Combined argument and return type selector
+ */
+template <typename Return, typename... Args>
+struct exact_signature_selector {
+    constexpr auto operator()(Return (*func)(Args...)) const noexcept {
+        return func;
+    }
+
+    template <typename Class>
+    constexpr auto operator()(Return (Class::*func)(Args...)) const noexcept {
+        return func;
+    }
+
+    template <typename Class>
+    constexpr auto operator()(Return (Class::*func)(Args...)
+                                  const) const noexcept {
+        return func;
+    }
+};
+
+/**
+ * @brief Select exact signature helper
+ */
+template <typename Return, typename... Args>
+inline constexpr exact_signature_selector<Return, Args...> select_exact{};
+
+/**
+ * @brief Overload resolution helper using type list
+ */
+template <typename Signature>
+struct signature_selector;
+
+template <typename Return, typename... Args>
+struct signature_selector<Return(Args...)> {
+    constexpr auto operator()(Return (*func)(Args...)) const noexcept {
+        return func;
+    }
+};
+
+/**
+ * @brief Select by signature type
+ */
+template <typename Signature>
+inline constexpr signature_selector<Signature> select_signature{};
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_OVERLOAD_HPP

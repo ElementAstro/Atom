@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <fstream>
 #include <thread>
-#include "atom/connection/sshserver.hpp"
+#include "atom/connection/ssh/sshserver.hpp"
 
 using namespace atom::connection;
 using namespace std::chrono_literals;

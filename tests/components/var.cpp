@@ -305,3 +305,233 @@ TEST(VariableManagerTest, CStringSetValue) {
     auto var = vm.getVariable<std::string>("stringVar");
     EXPECT_EQ(var->get(), "updated");
 }
+
+// =============================================================================
+// Additional VariableManager Tests
+// =============================================================================
+
+TEST(VariableManagerTest, BoolVariable) {
+    VariableManager vm;
+
+    vm.addVariable("boolVar", true, "A boolean variable");
+
+    auto boolVar = vm.getVariable<bool>("boolVar");
+    ASSERT_NE(boolVar, nullptr);
+    EXPECT_TRUE(boolVar->get());
+
+    vm.setValue("boolVar", false);
+    EXPECT_FALSE(boolVar->get());
+}
+
+TEST(VariableManagerTest, CharVariable) {
+    VariableManager vm;
+
+    vm.addVariable("charVar", 'A', "A character variable");
+
+    auto charVar = vm.getVariable<char>("charVar");
+    ASSERT_NE(charVar, nullptr);
+    EXPECT_EQ(charVar->get(), 'A');
+
+    vm.setValue("charVar", 'Z');
+    EXPECT_EQ(charVar->get(), 'Z');
+}
+
+TEST(VariableManagerTest, LongVariable) {
+    VariableManager vm;
+
+    vm.addVariable("longVar", 1234567890L, "A long variable");
+
+    auto longVar = vm.getVariable<long>("longVar");
+    ASSERT_NE(longVar, nullptr);
+    EXPECT_EQ(longVar->get(), 1234567890L);
+}
+
+TEST(VariableManagerTest, NegativeRange) {
+    VariableManager vm;
+
+    vm.addVariable("negVar", 0);
+    vm.setRange("negVar", -100, 100);
+
+    vm.setValue("negVar", -50);
+    EXPECT_EQ(vm.getVariable<int>("negVar")->get(), -50);
+
+    vm.setValue("negVar", 50);
+    EXPECT_EQ(vm.getVariable<int>("negVar")->get(), 50);
+
+    EXPECT_THROW(vm.setValue("negVar", -150), atom::error::OutOfRange);
+    EXPECT_THROW(vm.setValue("negVar", 150), atom::error::OutOfRange);
+}
+
+TEST(VariableManagerTest, RangeBoundaryValues) {
+    VariableManager vm;
+
+    vm.addVariable("boundaryVar", 50);
+    vm.setRange("boundaryVar", 0, 100);
+
+    // Test exact boundary values
+    vm.setValue("boundaryVar", 0);
+    EXPECT_EQ(vm.getVariable<int>("boundaryVar")->get(), 0);
+
+    vm.setValue("boundaryVar", 100);
+    EXPECT_EQ(vm.getVariable<int>("boundaryVar")->get(), 100);
+}
+
+TEST(VariableManagerTest, MultipleAliases) {
+    VariableManager vm;
+
+    vm.addVariable("primary", 42, "Primary variable", "alias1");
+
+    // Access via alias
+    auto varByAlias = vm.getVariable<int>("alias1");
+    ASSERT_NE(varByAlias, nullptr);
+    EXPECT_EQ(varByAlias->get(), 42);
+
+    // Set via alias
+    vm.setValue("alias1", 100);
+    EXPECT_EQ(vm.getVariable<int>("primary")->get(), 100);
+}
+
+TEST(VariableManagerTest, EmptyDescription) {
+    VariableManager vm;
+
+    vm.addVariable("noDesc", 42);
+
+    std::string desc = vm.getDescription("noDesc");
+    EXPECT_TRUE(desc.empty());
+}
+
+TEST(VariableManagerTest, EmptyAlias) {
+    VariableManager vm;
+
+    vm.addVariable("noAlias", 42, "Description", "");
+
+    std::string alias = vm.getAlias("noAlias");
+    EXPECT_TRUE(alias.empty());
+}
+
+TEST(VariableManagerTest, EmptyGroup) {
+    VariableManager vm;
+
+    vm.addVariable("noGroup", 42, "Description", "alias", "");
+
+    std::string group = vm.getGroup("noGroup");
+    EXPECT_TRUE(group.empty());
+}
+
+TEST(VariableManagerTest, VectorVariable) {
+    VariableManager vm;
+
+    std::vector<int> vec = {1, 2, 3, 4, 5};
+    vm.addVariable("vectorVar", vec, "A vector variable");
+
+    auto vectorVar = vm.getVariable<std::vector<int>>("vectorVar");
+    ASSERT_NE(vectorVar, nullptr);
+    EXPECT_EQ(vectorVar->get().size(), 5);
+    EXPECT_EQ(vectorVar->get()[0], 1);
+    EXPECT_EQ(vectorVar->get()[4], 5);
+}
+
+TEST(VariableManagerTest, MapVariable) {
+    VariableManager vm;
+
+    std::map<std::string, int> map = {{"one", 1}, {"two", 2}, {"three", 3}};
+    vm.addVariable("mapVar", map, "A map variable");
+
+    auto mapVar = vm.getVariable<std::map<std::string, int>>("mapVar");
+    ASSERT_NE(mapVar, nullptr);
+    EXPECT_EQ(mapVar->get().size(), 3);
+    EXPECT_EQ(mapVar->get().at("one"), 1);
+}
+
+TEST(VariableManagerTest, ClassMemberWithRange) {
+    struct TestClass {
+        int value;
+    };
+
+    TestClass obj{50};
+    VariableManager vm;
+
+    vm.addVariable("member", &TestClass::value, obj, "Member with range");
+    vm.setRange("member", 0, 100);
+
+    vm.setValue("member", 75);
+    EXPECT_EQ(obj.value, 75);
+
+    EXPECT_THROW(vm.setValue("member", 150), atom::error::OutOfRange);
+}
+
+TEST(VariableManagerTest, ClearAllVariables) {
+    VariableManager vm;
+
+    vm.addVariable("var1", 1);
+    vm.addVariable("var2", 2);
+    vm.addVariable("var3", 3);
+
+    EXPECT_EQ(vm.getAllVariables().size(), 3);
+
+    vm.clear();
+
+    EXPECT_EQ(vm.getAllVariables().size(), 0);
+    EXPECT_FALSE(vm.has("var1"));
+    EXPECT_FALSE(vm.has("var2"));
+    EXPECT_FALSE(vm.has("var3"));
+}
+
+TEST(VariableManagerTest, VariableCount) {
+    VariableManager vm;
+
+    EXPECT_EQ(vm.size(), 0);
+
+    vm.addVariable("var1", 1);
+    EXPECT_EQ(vm.size(), 1);
+
+    vm.addVariable("var2", 2);
+    EXPECT_EQ(vm.size(), 2);
+
+    vm.removeVariable("var1");
+    EXPECT_EQ(vm.size(), 1);
+}
+
+TEST(VariableManagerTest, StringOptionsWithSpecialCharacters) {
+    VariableManager vm;
+
+    vm.addVariable("specialVar", std::string("option-1"));
+    std::vector<std::string> options = {"option-1", "option_2", "option.3",
+                                        "option 4"};
+    vm.setStringOptions("specialVar", options);
+
+    vm.setValue("specialVar", std::string("option_2"));
+    EXPECT_EQ(vm.getVariable<std::string>("specialVar")->get(), "option_2");
+
+    vm.setValue("specialVar", std::string("option.3"));
+    EXPECT_EQ(vm.getVariable<std::string>("specialVar")->get(), "option.3");
+
+    vm.setValue("specialVar", std::string("option 4"));
+    EXPECT_EQ(vm.getVariable<std::string>("specialVar")->get(), "option 4");
+}
+
+TEST(VariableManagerTest, ZeroRange) {
+    VariableManager vm;
+
+    vm.addVariable("zeroRange", 0);
+    vm.setRange("zeroRange", 0, 0);
+
+    vm.setValue("zeroRange", 0);
+    EXPECT_EQ(vm.getVariable<int>("zeroRange")->get(), 0);
+
+    EXPECT_THROW(vm.setValue("zeroRange", 1), atom::error::OutOfRange);
+    EXPECT_THROW(vm.setValue("zeroRange", -1), atom::error::OutOfRange);
+}
+
+TEST(VariableManagerTest, UnsignedIntVariable) {
+    VariableManager vm;
+
+    vm.addVariable("unsignedVar", 42u, "An unsigned int variable");
+
+    auto unsignedVar = vm.getVariable<unsigned int>("unsignedVar");
+    ASSERT_NE(unsignedVar, nullptr);
+    EXPECT_EQ(unsignedVar->get(), 42u);
+
+    vm.setValue("unsignedVar", 100u);
+    EXPECT_EQ(unsignedVar->get(), 100u);
+}

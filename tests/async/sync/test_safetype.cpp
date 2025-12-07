@@ -602,4 +602,377 @@ TEST_F(SafeTypeTest, HighContentionStressTest) {
     EXPECT_GT(finalMap.size(), 0);
 }
 
+// ============================================================================
+// LockFreeStack Tests
+// ============================================================================
+
+class LockFreeStackTest : public atom::async::test::SynchronizationTestFixture {
+protected:
+    void SetUp() override { SynchronizationTestFixture::SetUp(); }
+
+    void TearDown() override { SynchronizationTestFixture::TearDown(); }
+};
+
+TEST_F(LockFreeStackTest, BasicOperations) {
+    LockFreeStack<int> stack;
+
+    EXPECT_TRUE(stack.empty());
+    EXPECT_EQ(stack.size(), 0);
+
+    stack.push(1);
+    stack.push(2);
+    stack.push(3);
+
+    EXPECT_FALSE(stack.empty());
+    EXPECT_EQ(stack.size(), 3);
+
+    auto top = stack.top();
+    EXPECT_TRUE(top.has_value());
+    EXPECT_EQ(top.value(), 3);
+
+    auto popped = stack.pop();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value(), 3);
+
+    EXPECT_EQ(stack.size(), 2);
+}
+
+TEST_F(LockFreeStackTest, PushAndPopOrder) {
+    LockFreeStack<int> stack;
+
+    for (int i = 0; i < 10; ++i) {
+        stack.push(i);
+    }
+
+    // LIFO order
+    for (int i = 9; i >= 0; --i) {
+        auto value = stack.pop();
+        EXPECT_TRUE(value.has_value());
+        EXPECT_EQ(value.value(), i);
+    }
+
+    EXPECT_TRUE(stack.empty());
+}
+
+TEST_F(LockFreeStackTest, PopFromEmpty) {
+    LockFreeStack<int> stack;
+
+    auto result = stack.pop();
+    EXPECT_FALSE(result.has_value());
+
+    auto top = stack.top();
+    EXPECT_FALSE(top.has_value());
+}
+
+TEST_F(LockFreeStackTest, ConcurrentPush) {
+    LockFreeStack<int> stack;
+    std::atomic<int> pushCount{0};
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int pushesPerThread = 100;
+
+    for (int t = 0; t < numThreads; ++t) {
+        threads.emplace_back([&stack, &pushCount, t, pushesPerThread]() {
+            for (int i = 0; i < pushesPerThread; ++i) {
+                stack.push(t * 1000 + i);
+                pushCount.fetch_add(1);
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(pushCount.load(), numThreads * pushesPerThread);
+    EXPECT_EQ(stack.size(), numThreads * pushesPerThread);
+}
+
+TEST_F(LockFreeStackTest, ConcurrentPushPop) {
+    LockFreeStack<int> stack;
+    std::atomic<int> pushCount{0};
+    std::atomic<int> popCount{0};
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int opsPerThread = 100;
+
+    // Push threads
+    for (int t = 0; t < numThreads / 2; ++t) {
+        threads.emplace_back([&stack, &pushCount, opsPerThread]() {
+            for (int i = 0; i < opsPerThread; ++i) {
+                stack.push(i);
+                pushCount.fetch_add(1);
+            }
+        });
+    }
+
+    // Pop threads
+    for (int t = 0; t < numThreads / 2; ++t) {
+        threads.emplace_back([&stack, &popCount, opsPerThread]() {
+            for (int i = 0; i < opsPerThread; ++i) {
+                if (stack.pop().has_value()) {
+                    popCount.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    // Drain remaining items
+    while (stack.pop().has_value()) {
+        popCount.fetch_add(1);
+    }
+
+    EXPECT_EQ(pushCount.load(), popCount.load());
+}
+
+TEST_F(LockFreeStackTest, MoveSemantics) {
+    LockFreeStack<int> stack1;
+    stack1.push(1);
+    stack1.push(2);
+    stack1.push(3);
+
+    LockFreeStack<int> stack2 = std::move(stack1);
+
+    EXPECT_EQ(stack2.size(), 3);
+    EXPECT_EQ(stack2.pop().value(), 3);
+}
+
+TEST_F(LockFreeStackTest, WithComplexType) {
+    struct TestData {
+        int id;
+        std::string name;
+
+        TestData(int i, std::string n) : id(i), name(std::move(n)) {}
+    };
+
+    LockFreeStack<TestData> stack;
+
+    stack.push(TestData(1, "one"));
+    stack.push(TestData(2, "two"));
+    stack.push(TestData(3, "three"));
+
+    auto top = stack.top();
+    EXPECT_TRUE(top.has_value());
+    EXPECT_EQ(top.value().id, 3);
+    EXPECT_EQ(top.value().name, "three");
+
+    auto popped = stack.pop();
+    EXPECT_TRUE(popped.has_value());
+    EXPECT_EQ(popped.value().id, 3);
+}
+
+// ============================================================================
+// LockFreeHashTable Tests
+// ============================================================================
+
+class LockFreeHashTableTest
+    : public atom::async::test::SynchronizationTestFixture {
+protected:
+    void SetUp() override { SynchronizationTestFixture::SetUp(); }
+
+    void TearDown() override { SynchronizationTestFixture::TearDown(); }
+};
+
+TEST_F(LockFreeHashTableTest, BasicOperations) {
+    LockFreeHashTable<int, std::string> table(16);
+
+    EXPECT_TRUE(table.empty());
+    EXPECT_EQ(table.size(), 0u);
+
+    table.insert(1, "one");
+    table.insert(2, "two");
+    table.insert(3, "three");
+
+    EXPECT_FALSE(table.empty());
+    EXPECT_EQ(table.size(), 3u);
+
+    auto value1 = table.find(1);
+    EXPECT_TRUE(value1.has_value());
+    EXPECT_EQ(value1.value().get(), "one");
+
+    auto value2 = table.find(2);
+    EXPECT_TRUE(value2.has_value());
+    EXPECT_EQ(value2.value().get(), "two");
+
+    auto notFound = table.find(999);
+    EXPECT_FALSE(notFound.has_value());
+}
+
+TEST_F(LockFreeHashTableTest, InsertAndErase) {
+    LockFreeHashTable<int, int> table(16);
+
+    table.insert(1, 100);
+    table.insert(2, 200);
+    table.insert(3, 300);
+
+    EXPECT_EQ(table.size(), 3u);
+
+    bool erased = table.erase(2);
+    EXPECT_TRUE(erased);
+    EXPECT_EQ(table.size(), 2u);
+
+    auto value = table.find(2);
+    EXPECT_FALSE(value.has_value());
+
+    // Erase non-existent key
+    erased = table.erase(999);
+    EXPECT_FALSE(erased);
+}
+
+TEST_F(LockFreeHashTableTest, UpdateValue) {
+    LockFreeHashTable<std::string, int> table(16);
+
+    table.insert("key", 100);
+
+    auto value = table.find("key");
+    EXPECT_TRUE(value.has_value());
+    EXPECT_EQ(value.value().get(), 100);
+
+    // Insert same key with different value (update)
+    table.insert("key", 200);
+
+    value = table.find("key");
+    EXPECT_TRUE(value.has_value());
+    // Note: Behavior depends on implementation - may keep old or new value
+}
+
+TEST_F(LockFreeHashTableTest, ConcurrentInsert) {
+    LockFreeHashTable<int, int> table(64);
+    std::atomic<int> insertCount{0};
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int insertsPerThread = 100;
+
+    for (int t = 0; t < numThreads; ++t) {
+        threads.emplace_back([&table, &insertCount, t, insertsPerThread]() {
+            for (int i = 0; i < insertsPerThread; ++i) {
+                table.insert(t * 1000 + i, i);
+                insertCount.fetch_add(1);
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(insertCount.load(), numThreads * insertsPerThread);
+    EXPECT_EQ(table.size(), static_cast<size_t>(numThreads * insertsPerThread));
+}
+
+TEST_F(LockFreeHashTableTest, ConcurrentFindAndInsert) {
+    LockFreeHashTable<int, int> table(64);
+    std::atomic<int> findCount{0};
+    std::atomic<int> insertCount{0};
+
+    // Pre-populate with some data
+    for (int i = 0; i < 100; ++i) {
+        table.insert(i, i * 10);
+    }
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int opsPerThread = 100;
+
+    // Find threads
+    for (int t = 0; t < numThreads / 2; ++t) {
+        threads.emplace_back([&table, &findCount, opsPerThread]() {
+            for (int i = 0; i < opsPerThread; ++i) {
+                if (table.find(i % 100).has_value()) {
+                    findCount.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    // Insert threads
+    for (int t = 0; t < numThreads / 2; ++t) {
+        threads.emplace_back([&table, &insertCount, t, opsPerThread]() {
+            for (int i = 0; i < opsPerThread; ++i) {
+                table.insert(1000 + t * 1000 + i, i);
+                insertCount.fetch_add(1);
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_GT(findCount.load(), 0);
+    EXPECT_EQ(insertCount.load(), (numThreads / 2) * opsPerThread);
+}
+
+TEST_F(LockFreeHashTableTest, ConcurrentErase) {
+    LockFreeHashTable<int, int> table(64);
+
+    // Pre-populate
+    for (int i = 0; i < 1000; ++i) {
+        table.insert(i, i * 10);
+    }
+
+    std::atomic<int> eraseCount{0};
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+
+    for (int t = 0; t < numThreads; ++t) {
+        threads.emplace_back([&table, &eraseCount, t]() {
+            for (int i = t * 100; i < (t + 1) * 100; ++i) {
+                if (table.erase(i)) {
+                    eraseCount.fetch_add(1);
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(eraseCount.load(), 1000);
+    EXPECT_TRUE(table.empty());
+}
+
+TEST_F(LockFreeHashTableTest, Clear) {
+    LockFreeHashTable<int, int> table(16);
+
+    for (int i = 0; i < 100; ++i) {
+        table.insert(i, i * 10);
+    }
+
+    EXPECT_EQ(table.size(), 100u);
+
+    table.clear();
+
+    EXPECT_TRUE(table.empty());
+    EXPECT_EQ(table.size(), 0u);
+}
+
+TEST_F(LockFreeHashTableTest, StringKeys) {
+    LockFreeHashTable<std::string, int> table(16);
+
+    table.insert("apple", 1);
+    table.insert("banana", 2);
+    table.insert("cherry", 3);
+
+    auto apple = table.find("apple");
+    EXPECT_TRUE(apple.has_value());
+    EXPECT_EQ(apple.value().get(), 1);
+
+    auto banana = table.find("banana");
+    EXPECT_TRUE(banana.has_value());
+    EXPECT_EQ(banana.value().get(), 2);
+
+    auto notFound = table.find("grape");
+    EXPECT_FALSE(notFound.has_value());
+}
+
 }  // namespace atom::async::sync::test

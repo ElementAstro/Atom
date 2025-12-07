@@ -43,11 +43,8 @@ else()
   find_package(SQLite3 REQUIRED)
 endif()
 
-if(TARGET spdlog::spdlog_header_only)
-  set(LIBS spdlog::spdlog_header_only ${CMAKE_THREAD_LIBS_INIT})
-else()
-  set(LIBS spdlog::spdlog ${CMAKE_THREAD_LIBS_INIT})
-endif()
+# Always use compiled spdlog library to avoid ODR violations
+set(LIBS spdlog::spdlog ${CMAKE_THREAD_LIBS_INIT})
 if(SQLite3_FOUND)
   list(APPEND LIBS ${SQLite3_LIBRARIES})
 endif()
@@ -71,6 +68,10 @@ add_library(atom-search STATIC ${SOURCES} ${HEADERS})
 
 # Configure module using standardized function
 atom_configure_module(atom-search)
+
+# Ensure spdlog is used as compiled library
+target_compile_definitions(atom-search PRIVATE SPDLOG_COMPILED_LIB
+                                               SPDLOG_FMT_EXTERNAL)
 
 # Link module-specific dependencies
 target_link_libraries(atom-search PRIVATE ${LIBS})

@@ -182,15 +182,15 @@ Examples automatically detect available features:
 
 ### Intermediate Path
 
-4. `core/memory_management` - Optimize performance
-5. `processing/geometric_transforms` - Spatial operations
-6. `processing/image_enhancement` - Quality improvement
+1. `core/memory_management` - Optimize performance
+2. `processing/geometric_transforms` - Spatial operations
+3. `processing/image_enhancement` - Quality improvement
 
 ### Advanced Path
 
-7. `formats/comprehensive_fits` - Specialized formats
-8. `processing/ocr_comprehensive` - Text recognition
-9. `core/backend_integration` - Multi-backend usage
+1. `formats/comprehensive_fits` - Specialized formats
+2. `processing/ocr_comprehensive` - Text recognition
+3. `core/backend_integration` - Multi-backend usage
 
 ## 🔍 Feature Matrix
 

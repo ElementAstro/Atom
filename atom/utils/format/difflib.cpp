@@ -1004,7 +1004,9 @@ auto HtmlDiff::makeTable(std::span<const std::string> fromlines,
 
 auto getCloseMatches(std::string_view word,
                      std::span<const std::string> possibilities, int n,
-                     double cutoff) -> std::vector<std::string> {
+                     double cutoff,
+                     const DiffOptions& options) -> DiffVector<std::string> {
+    (void)options;  // Options reserved for future use
     // Input validation
     if (n <= 0) {
         throw std::invalid_argument("n must be greater than 0");
@@ -1761,6 +1763,142 @@ InlineDiff::~InlineDiff() noexcept = default;
 
 void InlineDiff::setOptions(const DiffOptions& options) {
     pimpl_->setOptions(options);
+}
+
+auto InlineDiff::compareChars(std::string_view str1, std::string_view str2)
+    -> DiffVector<std::tuple<DiffString, DiffString>> {
+    return pimpl_->compareChars(str1, str2);
+}
+
+auto InlineDiff::toHtml(std::string_view str1, std::string_view str2,
+                        const HtmlDiff::HtmlDiffOptions& options)
+    -> std::pair<DiffString, DiffString> {
+    return pimpl_->toHtml(str1, str2, options);
+}
+
+// FuzzyMatcher implementation
+class FuzzyMatcher::Impl {
+public:
+    explicit Impl(const DiffOptions& options) : options_(options) {}
+
+    void setOptions(const DiffOptions& options) { options_ = options; }
+
+private:
+    DiffOptions options_;
+};
+
+FuzzyMatcher::FuzzyMatcher(const DiffOptions& options)
+    : pimpl_(std::make_unique<Impl>(options)) {}
+
+FuzzyMatcher::~FuzzyMatcher() noexcept = default;
+
+int FuzzyMatcher::levenshteinDistance(std::string_view s1,
+                                      std::string_view s2) {
+    const size_t m = s1.size();
+    const size_t n = s2.size();
+
+    if (m == 0)
+        return static_cast<int>(n);
+    if (n == 0)
+        return static_cast<int>(m);
+
+    // Use two rows instead of full matrix for space efficiency
+    std::vector<int> prev(n + 1);
+    std::vector<int> curr(n + 1);
+
+    // Initialize first row
+    for (size_t j = 0; j <= n; ++j) {
+        prev[j] = static_cast<int>(j);
+    }
+
+    for (size_t i = 1; i <= m; ++i) {
+        curr[0] = static_cast<int>(i);
+
+        for (size_t j = 1; j <= n; ++j) {
+            int cost = (s1[i - 1] == s2[j - 1]) ? 0 : 1;
+            curr[j] = std::min({
+                prev[j] + 1,        // deletion
+                curr[j - 1] + 1,    // insertion
+                prev[j - 1] + cost  // substitution
+            });
+        }
+
+        std::swap(prev, curr);
+    }
+
+    return prev[n];
+}
+
+double FuzzyMatcher::similarity(std::string_view s1, std::string_view s2) {
+    if (s1.empty() && s2.empty())
+        return 1.0;
+    if (s1.empty() || s2.empty())
+        return 0.0;
+
+    int distance = levenshteinDistance(s1, s2);
+    size_t maxLen = std::max(s1.size(), s2.size());
+
+    return 1.0 - static_cast<double>(distance) / static_cast<double>(maxLen);
+}
+
+std::pair<DiffString, double> FuzzyMatcher::findBestMatch(
+    std::string_view needle, std::string_view haystack, double cutoff) {
+    if (needle.empty() || haystack.empty()) {
+        return {"", 0.0};
+    }
+
+    DiffString bestMatch;
+    double bestScore = 0.0;
+
+    // Sliding window approach
+    const size_t needleLen = needle.size();
+    if (needleLen > haystack.size()) {
+        double score = similarity(needle, haystack);
+        if (score >= cutoff) {
+            return {DiffString(haystack), score};
+        }
+        return {"", 0.0};
+    }
+
+    for (size_t i = 0; i <= haystack.size() - needleLen; ++i) {
+        std::string_view window = haystack.substr(i, needleLen);
+        double score = similarity(needle, window);
+
+        if (score > bestScore && score >= cutoff) {
+            bestScore = score;
+            bestMatch = DiffString(window);
+        }
+    }
+
+    return {bestMatch, bestScore};
+}
+
+DiffVector<std::pair<DiffString, double>> FuzzyMatcher::findAllMatches(
+    std::string_view needle, std::span<const std::string> haystacks,
+    double cutoff) {
+    DiffVector<std::pair<DiffString, double>> results;
+    results.reserve(haystacks.size());
+
+    for (const auto& haystack : haystacks) {
+        double score = similarity(needle, haystack);
+        if (score >= cutoff) {
+            results.emplace_back(DiffString(haystack), score);
+        }
+    }
+
+    // Sort by score descending
+    std::sort(results.begin(), results.end(),
+              [](const auto& a, const auto& b) { return a.second > b.second; });
+
+    return results;
+}
+
+bool DiffLibConfig::supportsHighPerformanceContainers() {
+#if defined(ATOM_OPTIMIZE_FOR_SPEED)
+    return true;
+#else
+    return false;
+#endif
 }
 
 // 实现DiffLibConfig的静态方法

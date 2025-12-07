@@ -4,7 +4,7 @@
 # Project Name: Atom-Search-Tests Description: Test Suite for Atom Search Module
 # Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-search-tests
   VERSION 1.0.0

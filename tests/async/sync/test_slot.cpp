@@ -671,4 +671,204 @@ TEST_F(SlotTest, MixedOperationsThreadSafety) {
               << ", Clears: " << clearOperations.load() << std::endl;
 }
 
+// ============================================================================
+// Signal Tests
+// ============================================================================
+
+class SignalTest : public atom::async::test::SynchronizationTestFixture {
+protected:
+    void SetUp() override { SynchronizationTestFixture::SetUp(); }
+
+    void TearDown() override { SynchronizationTestFixture::TearDown(); }
+};
+
+TEST_F(SignalTest, BasicSignalConnect) {
+    Signal<int> signal;
+    std::atomic<int> receivedValue{0};
+
+    signal.connect([&receivedValue](int value) { receivedValue = value; });
+
+    EXPECT_EQ(signal.size(), 1u);
+    EXPECT_FALSE(signal.empty());
+
+    signal.emit(42);
+    EXPECT_EQ(receivedValue.load(), 42);
+}
+
+TEST_F(SignalTest, MultipleSlots) {
+    Signal<int, std::string> signal;
+    std::atomic<int> slot1Called{0};
+    std::atomic<int> slot2Called{0};
+    std::atomic<int> slot3Called{0};
+
+    signal.connect([&slot1Called](int, const std::string&) { slot1Called++; });
+    signal.connect([&slot2Called](int, const std::string&) { slot2Called++; });
+    signal.connect([&slot3Called](int, const std::string&) { slot3Called++; });
+
+    EXPECT_EQ(signal.size(), 3u);
+
+    signal.emit(42, "test");
+
+    EXPECT_EQ(slot1Called.load(), 1);
+    EXPECT_EQ(slot2Called.load(), 1);
+    EXPECT_EQ(slot3Called.load(), 1);
+}
+
+TEST_F(SignalTest, SignalClear) {
+    Signal<int> signal;
+
+    signal.connect([](int) {});
+    signal.connect([](int) {});
+
+    EXPECT_EQ(signal.size(), 2u);
+
+    signal.clear();
+
+    EXPECT_EQ(signal.size(), 0u);
+    EXPECT_TRUE(signal.empty());
+}
+
+TEST_F(SignalTest, InvalidSlotConnection) {
+    Signal<int> signal;
+    Signal<int>::SlotType invalidSlot;  // Empty function
+
+    EXPECT_THROW(signal.connect(invalidSlot), SlotConnectionError);
+}
+
+TEST_F(SignalTest, SignalWithNoSlots) {
+    Signal<int> signal;
+
+    // Emitting with no slots should not throw
+    EXPECT_NO_THROW(signal.emit(42));
+}
+
+TEST_F(SignalTest, SignalWithMultipleArguments) {
+    Signal<int, double, std::string> signal;
+    int receivedInt = 0;
+    double receivedDouble = 0.0;
+    std::string receivedString;
+
+    signal.connect([&](int i, double d, const std::string& s) {
+        receivedInt = i;
+        receivedDouble = d;
+        receivedString = s;
+    });
+
+    signal.emit(42, 3.14, "hello");
+
+    EXPECT_EQ(receivedInt, 42);
+    EXPECT_NEAR(receivedDouble, 3.14, 1e-5);
+    EXPECT_EQ(receivedString, "hello");
+}
+
+TEST_F(SignalTest, SignalConcurrentEmit) {
+    Signal<int> signal;
+    std::atomic<int> totalReceived{0};
+
+    signal.connect(
+        [&totalReceived](int value) { totalReceived.fetch_add(value); });
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int emitsPerThread = 100;
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&signal, emitsPerThread]() {
+            for (int j = 0; j < emitsPerThread; ++j) {
+                signal.emit(1);
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(totalReceived.load(), numThreads * emitsPerThread);
+}
+
+// ============================================================================
+// AsyncSignal Tests
+// ============================================================================
+
+TEST_F(SignalTest, AsyncSignalBasic) {
+    AsyncSignal<int> signal;
+    std::atomic<int> receivedValue{0};
+
+    signal.connect([&receivedValue](int value) { receivedValue = value; });
+
+    auto futures = signal.emit(42);
+
+    // Wait for all async operations to complete
+    for (auto& f : futures) {
+        f.wait();
+    }
+
+    EXPECT_EQ(receivedValue.load(), 42);
+}
+
+TEST_F(SignalTest, AsyncSignalMultipleSlots) {
+    AsyncSignal<int> signal;
+    std::atomic<int> totalCalls{0};
+
+    for (int i = 0; i < 5; ++i) {
+        signal.connect([&totalCalls](int) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            totalCalls.fetch_add(1);
+        });
+    }
+
+    auto futures = signal.emit(42);
+
+    // All slots should execute asynchronously
+    for (auto& f : futures) {
+        f.wait();
+    }
+
+    EXPECT_EQ(totalCalls.load(), 5);
+}
+
+TEST_F(SignalTest, AsyncSignalClear) {
+    AsyncSignal<int> signal;
+
+    signal.connect([](int) {});
+    signal.connect([](int) {});
+
+    EXPECT_EQ(signal.size(), 2u);
+
+    signal.clear();
+
+    EXPECT_EQ(signal.size(), 0u);
+    EXPECT_TRUE(signal.empty());
+}
+
+TEST_F(SignalTest, AsyncSignalConcurrentEmit) {
+    AsyncSignal<int> signal;
+    std::atomic<int> totalReceived{0};
+
+    signal.connect(
+        [&totalReceived](int value) { totalReceived.fetch_add(value); });
+
+    std::vector<std::thread> threads;
+    const int numThreads = 5;
+    const int emitsPerThread = 20;
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&signal, emitsPerThread]() {
+            for (int j = 0; j < emitsPerThread; ++j) {
+                auto futures = signal.emit(1);
+                for (auto& f : futures) {
+                    f.wait();
+                }
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(totalReceived.load(), numThreads * emitsPerThread);
+}
+
 }  // namespace atom::async::sync::test

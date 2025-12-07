@@ -32,20 +32,20 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### I/O Module Tests
 
-3. **test_format_detector.hpp** - Format detection and identification
+1. **test_format_detector.hpp** - Format detection and identification
    - Magic number detection for all supported formats
    - File extension mapping and confidence levels
    - Corrupted file handling
    - Custom format registration
 
-4. **test_image_loader.hpp** - Image loading functionality
+2. **test_image_loader.hpp** - Image loading functionality
    - Multi-format support (JPEG, PNG, BMP, TIFF, etc.)
    - Caching mechanisms and statistics
    - Memory mapping and optimization
    - Batch loading operations
    - Error handling for corrupted/missing files
 
-5. **test_image_saver.hpp** - Image saving functionality
+3. **test_image_saver.hpp** - Image saving functionality
    - Format conversion and quality settings
    - Metadata preservation
    - Compression options
@@ -54,7 +54,7 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Metadata Module Tests
 
-6. **test_exif.hpp** - EXIF metadata processing
+1. **test_exif.hpp** - EXIF metadata processing
    - Basic EXIF reading and parsing
    - GPS coordinate extraction and conversion
    - Camera settings and technical data
@@ -63,54 +63,54 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Format-Specific Tests
 
-7. **test_fits_file.hpp** - FITS file operations
+1. **test_fits_file.hpp** - FITS file operations
    - Reading and writing FITS files
    - Multiple HDU (Header Data Unit) support
    - Astronomical image processing
    - Async operations and progress callbacks
    - Error handling and validation
 
-8. **test_fits_data.hpp** - FITS data structures
+2. **test_fits_data.hpp** - FITS data structures
    - Data type enumeration and validation
    - Template method testing
    - Concurrent access patterns
    - Large data handling
 
-9. **test_fits_utils.hpp** - FITS utility functions
+3. **test_fits_utils.hpp** - FITS utility functions
    - FitsImage class functionality
    - Image operations (resize, crop, statistics)
    - Arithmetic operations
    - OpenCV integration (conditional)
 
-10. **test_fits_header.hpp** - FITS header processing
+4. **test_fits_header.hpp** - FITS header processing
     - Header parsing and validation
     - Keyword management
     - Comment and history handling
 
 #### Processing Module Tests
 
-11. **test_filters.hpp** - Image filtering operations
+1. **test_filters.hpp** - Image filtering operations
     - Convolution and morphological operations
     - Gaussian blur, edge detection, noise reduction
     - Custom kernels and separable filters
     - Frequency domain filtering
     - Parameter validation and edge handling
 
-12. **test_transforms.hpp** - Geometric transformations
+2. **test_transforms.hpp** - Geometric transformations
     - Rotation, scaling, translation
     - Interpolation methods (nearest, linear, cubic, etc.)
     - Border modes and edge handling
     - Affine and perspective transformations
     - Distortion correction
 
-13. **test_enhancement.hpp** - Image enhancement
+3. **test_enhancement.hpp** - Image enhancement
     - Histogram equalization and tone mapping
     - Color correction and white balance
     - Brightness/contrast adjustment
     - Sharpening and noise reduction
     - Color space conversions
 
-14. **test_ml_processing.hpp** - Machine learning processing
+4. **test_ml_processing.hpp** - Machine learning processing
     - Super-resolution models (ESRGAN, Real-ESRGAN, etc.)
     - Denoising models (DnCNN, FFDNet, etc.)
     - Style transfer (Neural Style, Fast Style, etc.)
@@ -119,20 +119,20 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Specialized Format Tests
 
-15. **test_hdu.hpp** - HDU (Header Data Unit) functionality
+1. **test_hdu.hpp** - HDU (Header Data Unit) functionality
     - Pixel access and manipulation
     - Image statistics computation
     - Thumbnail creation and ROI extraction
     - Histogram computation
     - Multi-channel operations
 
-16. **test_ocr.hpp** - Optical Character Recognition
+2. **test_ocr.hpp** - Optical Character Recognition
     - Text detection and extraction
     - Preprocessing and enhancement
     - Spell checking and correction
     - Batch processing capabilities
 
-17. **test_ser.hpp** - SER format support
+3. **test_ser.hpp** - SER format support
     - Reading and writing SER files
     - Frame processing and quality assessment
     - Metadata handling
@@ -140,7 +140,7 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Performance and Stress Tests
 
-18. **test_performance.hpp** - Performance benchmarks
+1. **test_performance.hpp** - Performance benchmarks
     - Blob creation and copy performance
     - Image processing operation benchmarks
     - Memory usage and cleanup validation
@@ -151,13 +151,13 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Utility and Support
 
-19. **test_utils.hpp** - Test utilities and helpers
+1. **test_utils.hpp** - Test utilities and helpers
     - Test data generation (gradients, patterns, noise)
     - FITS test data creation
     - File management and cleanup
     - Common assertion patterns
 
-20. **test_runner.cpp** - Test execution framework
+2. **test_runner.cpp** - Test execution framework
     - Custom test listener for formatted output
     - Configuration reporting
     - Dependency checking
@@ -165,7 +165,7 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Computer Vision Module Tests
 
-21. **test_computer_vision.hpp** - Computer vision operations
+1. **test_computer_vision.hpp** - Computer vision operations
     - Feature detection (ORB, SIFT, AKAZE, BRISK, FAST, Harris, GFTT)
     - Feature matching with multiple algorithms
     - Object detection with various models (YOLO, SSD, etc.)
@@ -182,7 +182,7 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### GPU Acceleration Tests
 
-22. **test_gpu_acceleration.hpp** - GPU-accelerated processing
+1. **test_gpu_acceleration.hpp** - GPU-accelerated processing
     - GPU backend detection and selection (CUDA, OpenCL, Vulkan, Metal)
     - Device enumeration and capability querying
     - Buffer management (device, host, unified, pinned memory)
@@ -197,7 +197,7 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Real-time Processing Tests
 
-23. **test_realtime.hpp** - Real-time video processing
+1. **test_realtime.hpp** - Real-time video processing
     - Processor initialization and configuration
     - Frame processing pipeline
     - Capture from multiple sources (camera, file, stream, synthetic)
@@ -213,7 +213,7 @@ This document provides a comprehensive summary of the test suite created for the
 
 #### Advanced Format Tests
 
-24. **test_advanced_formats.hpp** - Advanced image formats
+1. **test_advanced_formats.hpp** - Advanced image formats
     - Format detection from file and data
     - RAW camera format support (CR2, NEF, ARW, DNG, etc.)
     - RAW processing parameters (exposure, white balance, etc.)

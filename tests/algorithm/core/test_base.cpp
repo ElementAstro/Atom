@@ -344,3 +344,244 @@ TEST(ErrorHandlingTest, Base64InvalidInputs) {
             << "Input '" << input << "' should fail";
     }
 }
+
+// =============================================================================
+// Hex Encoding Tests
+// =============================================================================
+
+class HexTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        testData = {0x00, 0x01, 0x0F, 0x10, 0xFF, 0xAB, 0xCD};
+        expectedLower = "00010f10ffabcd";
+        expectedUpper = "00010F10FFABCD";
+    }
+    std::vector<uint8_t> testData;
+    std::string expectedLower;
+    std::string expectedUpper;
+};
+
+TEST_F(HexTest, EncodeBasicData) {
+    auto result = encodeHex(testData, false);
+    EXPECT_EQ(result, expectedLower);
+}
+
+TEST_F(HexTest, EncodeUppercase) {
+    auto result = encodeHex(testData, true);
+    EXPECT_EQ(result, expectedUpper);
+}
+
+TEST_F(HexTest, EncodeEmptyData) {
+    std::vector<uint8_t> emptyData;
+    auto result = encodeHex(emptyData);
+    EXPECT_TRUE(result.empty());
+}
+
+TEST_F(HexTest, EncodeSingleByte) {
+    std::vector<uint8_t> singleByte = {0xAB};
+    auto result = encodeHex(singleByte, true);
+    EXPECT_EQ(result, "AB");
+}
+
+TEST_F(HexTest, DecodeBasicData) {
+    auto result = decodeHex(expectedLower);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), testData);
+}
+
+TEST_F(HexTest, DecodeUppercase) {
+    auto result = decodeHex(expectedUpper);
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), testData);
+}
+
+TEST_F(HexTest, DecodeMixedCase) {
+    auto result = decodeHex("00010F10ffABcd");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), testData);
+}
+
+TEST_F(HexTest, DecodeEmptyString) {
+    auto result = decodeHex("");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(result.value().empty());
+}
+
+TEST_F(HexTest, DecodeOddLength) {
+    auto result = decodeHex("ABC");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(HexTest, DecodeInvalidCharacters) {
+    auto result = decodeHex("GHIJ");
+    EXPECT_FALSE(result.has_value());
+
+    result = decodeHex("12 34");
+    EXPECT_FALSE(result.has_value());
+
+    result = decodeHex("12-34");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(HexTest, RoundTrip) {
+    for (size_t size : {0, 1, 2, 10, 100, 1000}) {
+        auto data = generateRandomBytes(size);
+        auto encoded = encodeHex(data);
+        auto decoded = decodeHex(encoded);
+        ASSERT_TRUE(decoded.has_value());
+        EXPECT_EQ(decoded.value(), data);
+    }
+}
+
+TEST_F(HexTest, AllByteValues) {
+    std::vector<uint8_t> allBytes(256);
+    for (int i = 0; i < 256; ++i) {
+        allBytes[i] = static_cast<uint8_t>(i);
+    }
+    auto encoded = encodeHex(allBytes);
+    EXPECT_EQ(encoded.size(), 512);
+
+    auto decoded = decodeHex(encoded);
+    ASSERT_TRUE(decoded.has_value());
+    EXPECT_EQ(decoded.value(), allBytes);
+}
+
+// =============================================================================
+// URL Encoding Tests
+// =============================================================================
+
+class URLTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        plainText = "Hello World";
+        specialChars = "Hello, World! @#$%^&*()";
+        urlSafe = "HelloWorld123";
+    }
+    std::string plainText;
+    std::string specialChars;
+    std::string urlSafe;
+};
+
+TEST_F(URLTest, EncodeBasicString) {
+    auto result = urlEncode(plainText);
+    EXPECT_EQ(result, "Hello%20World");
+}
+
+TEST_F(URLTest, EncodeSpaceAsPlus) {
+    auto result = urlEncode(plainText, true);
+    EXPECT_EQ(result, "Hello+World");
+}
+
+TEST_F(URLTest, EncodeSpecialCharacters) {
+    auto result = urlEncode(specialChars);
+    // Verify special characters are encoded
+    EXPECT_NE(result.find("%"), std::string::npos);
+    EXPECT_EQ(result.find("@"), std::string::npos);  // @ should be encoded
+    EXPECT_EQ(result.find("#"), std::string::npos);  // # should be encoded
+}
+
+TEST_F(URLTest, EncodeURLSafeCharacters) {
+    auto result = urlEncode(urlSafe);
+    // URL-safe characters should not be encoded
+    EXPECT_EQ(result, urlSafe);
+}
+
+TEST_F(URLTest, EncodeEmptyString) {
+    auto result = urlEncode("");
+    EXPECT_TRUE(result.empty());
+}
+
+TEST_F(URLTest, EncodeUnreservedCharacters) {
+    // RFC 3986 unreserved characters: A-Z a-z 0-9 - . _ ~
+    std::string unreserved =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~";
+    auto result = urlEncode(unreserved);
+    EXPECT_EQ(result, unreserved);
+}
+
+TEST_F(URLTest, DecodeBasicString) {
+    auto result = urlDecode("Hello%20World");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), plainText);
+}
+
+TEST_F(URLTest, DecodePlusAsSpace) {
+    auto result = urlDecode("Hello+World");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_EQ(result.value(), plainText);
+}
+
+TEST_F(URLTest, DecodeEmptyString) {
+    auto result = urlDecode("");
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(result.value().empty());
+}
+
+TEST_F(URLTest, DecodeIncompletePercentSequence) {
+    auto result = urlDecode("Hello%2");
+    EXPECT_FALSE(result.has_value());
+
+    result = urlDecode("Hello%");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(URLTest, DecodeInvalidHexCharacters) {
+    auto result = urlDecode("Hello%GH");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(URLTest, RoundTrip) {
+    std::vector<std::string> testStrings = {"",
+                                            "Hello",
+                                            "Hello World",
+                                            "Hello, World!",
+                                            "user@example.com",
+                                            "path/to/file",
+                                            "key=value&foo=bar",
+                                            "Special: !@#$%^&*()",
+                                            "Unicode: こんにちは"};
+
+    for (const auto& str : testStrings) {
+        auto encoded = urlEncode(str);
+        auto decoded = urlDecode(encoded);
+        ASSERT_TRUE(decoded.has_value()) << "Failed to decode: " << encoded;
+        EXPECT_EQ(decoded.value(), str) << "Round-trip failed for: " << str;
+    }
+}
+
+TEST_F(URLTest, DecodeAllHexValues) {
+    // Test decoding all possible percent-encoded bytes
+    for (int i = 0; i < 256; ++i) {
+        char hex[4];
+        snprintf(hex, sizeof(hex), "%%%02X", i);
+        auto result = urlDecode(hex);
+        ASSERT_TRUE(result.has_value());
+        ASSERT_EQ(result.value().size(), 1);
+        EXPECT_EQ(static_cast<unsigned char>(result.value()[0]), i);
+    }
+}
+
+TEST_F(URLTest, EncodeLowercaseHex) {
+    // URL encoding should produce uppercase hex digits
+    std::string input = "\x0a\x0b\x0c";
+    auto encoded = urlEncode(input);
+    // Check that hex digits are uppercase
+    for (size_t i = 0; i < encoded.size(); ++i) {
+        if (encoded[i] == '%' && i + 2 < encoded.size()) {
+            EXPECT_TRUE(std::isupper(encoded[i + 1]) ||
+                        std::isdigit(encoded[i + 1]));
+            EXPECT_TRUE(std::isupper(encoded[i + 2]) ||
+                        std::isdigit(encoded[i + 2]));
+        }
+    }
+}
+
+TEST_F(URLTest, DecodeLowercaseHex) {
+    // Should decode both uppercase and lowercase hex
+    auto upper = urlDecode("%2F");
+    auto lower = urlDecode("%2f");
+    ASSERT_TRUE(upper.has_value());
+    ASSERT_TRUE(lower.has_value());
+    EXPECT_EQ(upper.value(), lower.value());
+    EXPECT_EQ(upper.value(), "/");
+}

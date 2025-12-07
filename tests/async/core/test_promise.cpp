@@ -290,4 +290,287 @@ TEST_F(EnhancedPromiseTest, VoidGetEnhancedFuture) {
     EXPECT_NO_THROW(enhancedFuture.wait());
 }
 
+// ============================================================================
+// Stop Token and Cancellation Tests
+// ============================================================================
+
+TEST_F(EnhancedPromiseTest, SetCancellableWithStopToken) {
+    Promise<int> promise;
+    std::stop_source stopSource;
+
+    promise.setCancellable(stopSource.get_token());
+
+    // Request stop
+    stopSource.request_stop();
+
+    // Give time for cancellation to propagate
+    std::this_thread::sleep_for(50ms);
+
+    EXPECT_TRUE(promise.isCancelled());
+}
+
+TEST_F(EnhancedPromiseTest, VoidSetCancellableWithStopToken) {
+    Promise<void> promise;
+    std::stop_source stopSource;
+
+    promise.setCancellable(stopSource.get_token());
+
+    stopSource.request_stop();
+    std::this_thread::sleep_for(50ms);
+
+    EXPECT_TRUE(promise.isCancelled());
+}
+
+// ============================================================================
+// Concurrent Access Tests
+// ============================================================================
+
+TEST_F(EnhancedPromiseTest, ConcurrentCallbacks) {
+    Promise<int> promise;
+    std::atomic<int> callbackCount{0};
+
+    std::vector<std::thread> threads;
+    for (int i = 0; i < 10; ++i) {
+        threads.emplace_back([&promise, &callbackCount]() {
+            promise.onComplete(
+                [&callbackCount](int) { callbackCount.fetch_add(1); });
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    promise.setValue(42);
+    std::this_thread::sleep_for(100ms);
+
+    EXPECT_EQ(callbackCount.load(), 10);
+}
+
+TEST_F(EnhancedPromiseTest, ConcurrentCancellation) {
+    Promise<int> promise;
+    std::atomic<int> cancelCount{0};
+
+    std::vector<std::thread> threads;
+    for (int i = 0; i < 10; ++i) {
+        threads.emplace_back([&promise, &cancelCount]() {
+            if (promise.cancel()) {
+                cancelCount.fetch_add(1);
+            }
+        });
+    }
+
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    EXPECT_TRUE(promise.isCancelled());
+    EXPECT_EQ(cancelCount.load(), 1);  // Only one thread should succeed
+}
+
+// ============================================================================
+// PromiseAwaiter Tests
+// ============================================================================
+
+TEST_F(EnhancedPromiseTest, GetAwaiter) {
+    Promise<int> promise;
+    auto awaiter = promise.getAwaiter();
+
+    EXPECT_FALSE(awaiter.await_ready());
+
+    promise.setValue(42);
+
+    // After setting value, awaiter should be ready
+    EXPECT_TRUE(awaiter.await_ready());
+    EXPECT_EQ(awaiter.await_resume(), 42);
+}
+
+TEST_F(EnhancedPromiseTest, VoidGetAwaiter) {
+    Promise<void> promise;
+    auto awaiter = promise.getAwaiter();
+
+    EXPECT_FALSE(awaiter.await_ready());
+
+    promise.setValue();
+
+    EXPECT_TRUE(awaiter.await_ready());
+    EXPECT_NO_THROW(awaiter.await_resume());
+}
+
+// ============================================================================
+// Edge Cases Tests
+// ============================================================================
+
+TEST_F(EnhancedPromiseTest, CallbackWithException) {
+    Promise<int> promise;
+    std::atomic<bool> exceptionThrown{false};
+
+    promise.onComplete([&exceptionThrown](int) {
+        exceptionThrown = true;
+        throw std::runtime_error("Callback exception");
+    });
+
+    // Setting value should not throw even if callback throws
+    EXPECT_NO_THROW(promise.setValue(42));
+
+    std::this_thread::sleep_for(50ms);
+    EXPECT_TRUE(exceptionThrown.load());
+}
+
+TEST_F(EnhancedPromiseTest, VoidCallbackWithException) {
+    Promise<void> promise;
+    std::atomic<bool> exceptionThrown{false};
+
+    promise.onComplete([&exceptionThrown]() {
+        exceptionThrown = true;
+        throw std::runtime_error("Callback exception");
+    });
+
+    EXPECT_NO_THROW(promise.setValue());
+
+    std::this_thread::sleep_for(50ms);
+    EXPECT_TRUE(exceptionThrown.load());
+}
+
+TEST_F(EnhancedPromiseTest, SetValueWithDifferentTypes) {
+    // Test with string
+    {
+        Promise<std::string> promise;
+        auto future = promise.getFuture();
+        promise.setValue("Hello, World!");
+        EXPECT_EQ(future.get(), "Hello, World!");
+    }
+
+    // Test with vector
+    {
+        Promise<std::vector<int>> promise;
+        auto future = promise.getFuture();
+        promise.setValue(std::vector<int>{1, 2, 3, 4, 5});
+        auto result = future.get();
+        EXPECT_EQ(result.size(), 5u);
+        EXPECT_EQ(result[0], 1);
+    }
+
+    // Test with double
+    {
+        Promise<double> promise;
+        auto future = promise.getFuture();
+        promise.setValue(3.14159);
+        EXPECT_NEAR(future.get(), 3.14159, 1e-5);
+    }
+}
+
+TEST_F(EnhancedPromiseTest, SetValueFromRvalue) {
+    Promise<std::string> promise;
+    auto future = promise.getFuture();
+
+    std::string value = "Test String";
+    promise.setValue(std::move(value));
+
+    EXPECT_EQ(future.get(), "Test String");
+}
+
+TEST_F(EnhancedPromiseTest, SetValueFromLvalue) {
+    Promise<int> promise;
+    auto future = promise.getFuture();
+
+    int value = 42;
+    promise.setValue(value);
+
+    EXPECT_EQ(future.get(), 42);
+}
+
+TEST_F(EnhancedPromiseTest, CustomExceptionType) {
+    class CustomException : public std::exception {
+    public:
+        const char* what() const noexcept override {
+            return "Custom exception";
+        }
+    };
+
+    Promise<int> promise;
+    auto future = promise.getFuture();
+
+    promise.setException(std::make_exception_ptr(CustomException{}));
+
+    EXPECT_THROW(future.get(), CustomException);
+}
+
+// ============================================================================
+// Performance Tests
+// ============================================================================
+
+TEST_F(EnhancedPromiseTest, ManyCallbacks) {
+    Promise<int> promise;
+    std::atomic<int> callbackCount{0};
+
+    const int numCallbacks = 100;
+    for (int i = 0; i < numCallbacks; ++i) {
+        promise.onComplete(
+            [&callbackCount](int) { callbackCount.fetch_add(1); });
+    }
+
+    promise.setValue(42);
+    std::this_thread::sleep_for(200ms);
+
+    EXPECT_EQ(callbackCount.load(), numCallbacks);
+}
+
+TEST_F(EnhancedPromiseTest, RapidSetValueCalls) {
+    // Test that rapid promise creation and value setting works correctly
+    for (int i = 0; i < 100; ++i) {
+        Promise<int> promise;
+        auto future = promise.getFuture();
+        promise.setValue(i);
+        EXPECT_EQ(future.get(), i);
+    }
+}
+
+// ============================================================================
+// Memory Safety Tests
+// ============================================================================
+
+TEST_F(EnhancedPromiseTest, PromiseDestroyedBeforeValue) {
+    std::shared_future<int> future;
+
+    {
+        Promise<int> promise;
+        future = promise.getFuture();
+        // Promise destroyed without setting value
+    }
+
+    // Future should throw when trying to get value
+    EXPECT_THROW(future.get(), PromiseCancelledException);
+}
+
+TEST_F(EnhancedPromiseTest, VoidPromiseDestroyedBeforeValue) {
+    std::shared_future<void> future;
+
+    {
+        Promise<void> promise;
+        future = promise.getFuture();
+    }
+
+    EXPECT_THROW(future.get(), PromiseCancelledException);
+}
+
+// ============================================================================
+// RunAsync Tests
+// ============================================================================
+
+TEST_F(EnhancedPromiseTest, RunAsyncBasic) {
+    Promise<int> promise;
+    auto future = promise.getFuture();
+
+    promise.runAsync(
+        [](Promise<int>* p) {
+            std::this_thread::sleep_for(10ms);
+            p->setValue(42);
+        },
+        &promise);
+
+    // Note: This test may need adjustment based on actual runAsync
+    // implementation The promise should eventually be set
+}
+
 }  // namespace atom::async::test

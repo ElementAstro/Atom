@@ -4,7 +4,7 @@
 # Project Name: Atom-Utils Description: A collection of useful functions Author:
 # Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-utils
   VERSION 1.0.0
@@ -55,6 +55,7 @@ set(HEADERS
     difflib.hpp
     error_stack.hpp
     lcg.hpp
+    leak.hpp
     linq.hpp
     print.hpp
     qdatetime.hpp
@@ -92,6 +93,7 @@ set(HEADERS
     conversion/to_any.hpp
     conversion/to_byte.hpp
     crypto/aes.hpp
+    crypto/aes_impl.hpp
     random/random.hpp
     random/uuid.hpp
     random/lcg.hpp
@@ -131,15 +133,10 @@ atom_setup_xml_deps(${PROJECT_NAME})
 atom_setup_logging_deps(${PROJECT_NAME})
 atom_find_tbb(${PROJECT_NAME})
 
-# Find OpenSSL for crypto utilities (optional for MSVC)
-if(MSVC)
-  find_package(OpenSSL QUIET)
-  if(NOT OpenSSL_FOUND)
-    message(
-      WARNING "OpenSSL not found for MSVC - crypto utilities will be disabled")
-  endif()
-else()
-  find_package(OpenSSL REQUIRED)
+# Find OpenSSL for crypto utilities (optional for all builds)
+find_package(OpenSSL QUIET)
+if(NOT OpenSSL_FOUND)
+  message(STATUS "OpenSSL not found - crypto utilities will be disabled")
 endif()
 
 if(OpenSSL_FOUND)
@@ -149,16 +146,10 @@ else()
   target_compile_definitions(${PROJECT_NAME} PUBLIC ATOM_HAS_OPENSSL=0)
 endif()
 
-# Find zlib for compression utilities (optional for MSVC)
-if(MSVC)
-  find_package(ZLIB QUIET)
-  if(NOT ZLIB_FOUND)
-    message(
-      WARNING "ZLIB not found for MSVC - compression utilities will be disabled"
-    )
-  endif()
-else()
-  find_package(ZLIB REQUIRED)
+# Find zlib for compression utilities (optional for all builds)
+find_package(ZLIB QUIET)
+if(NOT ZLIB_FOUND)
+  message(STATUS "ZLIB not found - compression utilities will be disabled")
 endif()
 
 if(ZLIB_FOUND)
@@ -168,19 +159,23 @@ else()
   target_compile_definitions(${PROJECT_NAME} PUBLIC ATOM_HAS_ZLIB=0)
 endif()
 
-# Find fmt for formatting (optional for MSVC)
-if(MSVC)
-  find_package(fmt QUIET)
-  if(NOT fmt_FOUND)
-    message(
-      WARNING "fmt not found for MSVC - formatting features will be limited")
-  endif()
-else()
-  find_package(fmt REQUIRED)
+# Find fmt for formatting (optional for all builds)
+find_package(fmt QUIET)
+if(NOT fmt_FOUND)
+  message(STATUS "fmt not found - formatting features will be limited")
 endif()
 
 if(fmt_FOUND)
   target_link_libraries(${PROJECT_NAME} PUBLIC fmt::fmt)
+endif()
+
+# Find spdlog for logging
+find_package(spdlog QUIET)
+if(spdlog_FOUND)
+  target_link_libraries(${PROJECT_NAME} PUBLIC spdlog::spdlog)
+  # Ensure spdlog is used as compiled library, not header-only
+  target_compile_definitions(${PROJECT_NAME} PUBLIC SPDLOG_COMPILED_LIB
+                                                    SPDLOG_FMT_EXTERNAL)
 endif()
 
 # Link to atom-error (required dependency)
@@ -219,3 +214,63 @@ install(
   NAMESPACE atom::
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
   COMPONENT development)
+
+# Install headers preserving directory structure
+install(FILES ${HEADERS} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils)
+
+# Install subdirectory headers
+install(
+  DIRECTORY text/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/text
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY time/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/time
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY process/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/process
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY conversion/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/conversion
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY crypto/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/crypto
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY random/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/random
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY debug/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/debug
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY format/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/format
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY container/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/container
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY memory/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/memory
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY core/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/utils/core
+  FILES_MATCHING
+  PATTERN "*.hpp")

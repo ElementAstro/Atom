@@ -71,6 +71,17 @@ Advanced glob operations and performance optimization:
 - Large directory tree handling
 - Parallel glob processing
 
+#### `path_utils_example.cpp`
+
+Path validation and security utilities:
+
+- Comprehensive path validation for security and format compliance
+- File and folder name validation
+- Permission validation for read/write operations
+- Platform-specific validation (Windows reserved names, invalid characters)
+- Path traversal detection and prevention
+- Null byte injection detection
+
 ### Async I/O Examples (`async/`)
 
 #### `basic_async_io.cpp`

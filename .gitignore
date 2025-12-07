@@ -25,6 +25,7 @@
 *.so.*
 *.dylib
 *.dll
+*.dll.a
 
 # Fortran module files
 *.mod
@@ -40,6 +41,7 @@
 *.exe
 *.out
 *.app
+*.run
 
 # Debug files
 *.dSYM/
@@ -52,23 +54,26 @@
 # -----------------------------------------------------------------------------
 
 # Build directories
-build/
-build-msvc/
-cmake-build-*/
-out/
-_build/
-python/build-python/
+/build/
+/build-*/
+/build-msvc/
+/build_error/
+/build_serial/
+/cmake-build-*/
+/out/
+/_build/
+/python/build-python/
 
 # CMake cache and generated files
-CMakeCache.txt
-CMakeFiles/
-CMakeScripts/
-cmake_install.cmake
-install_manifest.txt
-compile_commands.json
-CPackConfig.cmake
-CPackSourceConfig.cmake
-*.cmake
+/CMakeCache.txt
+/CMakeFiles/
+/CMakeScripts/
+/cmake_install.cmake
+/install_manifest.txt
+/compile_commands.json
+/CPackConfig.cmake
+/CPackSourceConfig.cmake
+/CMakeUserPresets.json
 
 # CMake temporary files
 .cmake/
@@ -103,20 +108,21 @@ __pycache__/
 
 # Distribution / packaging
 .Python
-build/
-build-*/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
+/.venv/
+/build/
+/build-*/
+/develop-eggs/
+/dist/
+/downloads/
+/eggs/
+/.eggs/
+/lib/
+/lib64/
+/parts/
+/sdist/
+/var/
+/wheels/
+/share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
@@ -239,6 +245,9 @@ cython_debug/
 *.vcxproj.filters
 *.VC.db
 *.VC.VC.opendb
+*.ipch
+*.opendb
+*.tlog
 
 # IntelliJ IDEA / CLion / PyCharm
 .idea/
@@ -246,6 +255,7 @@ cython_debug/
 *.iml
 *.ipr
 cmake-build-*/
+/.fleet/
 
 # Xcode
 *.xcodeproj/
@@ -281,6 +291,7 @@ tramp
 # Sphinx documentation
 docs/_build/
 docs/build/
+docs/doctrees/
 
 # Doxygen
 doc/html/
@@ -402,11 +413,17 @@ coverage/
 
 # Test artifacts and temporary test files
 test_*.dat
-test_*.cpp
-test_*.c
+# Note: test_*.cpp in tests/ directory is NOT ignored (actual test files)
+# Only ignore test_*.cpp in root and non-test directories
+/test_*.cpp
+/test_*.c
 *.test
 test_output/
 test_results/
+
+# Generated bindings/tests scratch
+/build_error/
+/build_serial/
 
 # Configuration files with sensitive data
 config.local.*
@@ -482,6 +499,15 @@ test_package/
 # Python Release builds (generated)
 python/Release/
 python/build-python/
+
+# Editor caches
+/.clangd/
+/.ccls-cache/
+/.cache/
+
+# Node tooling
+/node_modules/
+/.pnpm-store/
 
 # -----------------------------------------------------------------------------
 # End of .gitignore

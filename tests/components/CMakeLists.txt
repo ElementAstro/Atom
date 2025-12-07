@@ -4,7 +4,7 @@
 # Project Name: Atom-Components-Tests Description: Test Suite for Atom
 # Components Module (Custom Build) Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-components-tests
   VERSION 1.0.0
@@ -90,22 +90,22 @@ set(TEST_SOURCES
     ${PROJECT_SOURCE_DIR}/component.cpp
     ${PROJECT_SOURCE_DIR}/component_pool.cpp
     ${PROJECT_SOURCE_DIR}/registry.cpp
+    ${PROJECT_SOURCE_DIR}/package.cpp
     # Lifecycle system tests
     ${PROJECT_SOURCE_DIR}/lifecycle.cpp
     ${PROJECT_SOURCE_DIR}/dispatch.cpp
-    # ${PROJECT_SOURCE_DIR}/iteration.cpp  # Temporarily disabled - extensive
-    # API changes needed Data management tests
+    ${PROJECT_SOURCE_DIR}/iteration.cpp
+    # Data management tests
     ${PROJECT_SOURCE_DIR}/var.cpp
-    # ${PROJECT_SOURCE_DIR}/serialization.cpp  # Temporarily disabled - needs
-    # API fixes ${PROJECT_SOURCE_DIR}/type_conversion.cpp  # Temporarily
-    # disabled - needs API fixes Scripting system tests
-    # ${PROJECT_SOURCE_DIR}/scripting_api.cpp  # Temporarily disabled - needs
-    # API fixes ${PROJECT_SOURCE_DIR}/script_sandbox.cpp  # Temporarily disabled
-    # - needs API fixes ${PROJECT_SOURCE_DIR}/advanced_bindings.cpp  #
-    # Temporarily disabled - needs API fixes Utility tests
-    # ${PROJECT_SOURCE_DIR}/types_and_macros.cpp  # Temporarily disabled - needs
-    # API fixes
-)
+    ${PROJECT_SOURCE_DIR}/serialization.cpp
+    ${PROJECT_SOURCE_DIR}/type_conversion.cpp
+    # Scripting system tests
+    ${PROJECT_SOURCE_DIR}/scripting_api.cpp
+    ${PROJECT_SOURCE_DIR}/script_sandbox.cpp
+    ${PROJECT_SOURCE_DIR}/script_engine.cpp
+    ${PROJECT_SOURCE_DIR}/advanced_bindings.cpp
+    # Utility tests
+    ${PROJECT_SOURCE_DIR}/types_and_macros.cpp)
 
 # Conditionally add engine-specific tests based on build configuration
 if(ATOM_ENABLE_LUA)
@@ -124,14 +124,15 @@ add_executable(atom_components_tests ${TEST_SOURCES})
 # =============================================================================
 # Link Libraries
 # =============================================================================
-# Link with atom-component library and its dependencies
+# Link with atom-component library and its dependencies Note: atom-component
+# already links atom-error internally, so we don't link it again to avoid
+# multiple definition errors
 target_link_libraries(
   atom_components_tests
   PRIVATE # Test infrastructure (if available)
           $<TARGET_NAME_IF_EXISTS:atom-test-common>
-          # Module under test and its dependencies
+          # Module under test (already includes atom-error)
           atom-component
-          atom-error
           atom-utils
           # GoogleTest
           gtest

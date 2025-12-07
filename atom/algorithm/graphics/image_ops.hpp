@@ -223,6 +223,63 @@ public:
     }
 
     /**
+     * @brief Adjust brightness only
+     * @param image Input image data
+     * @param brightness Brightness adjustment (-255 to 255)
+     * @return Adjusted image
+     */
+    template <typename T>
+    [[nodiscard]] static auto adjustBrightness(
+        std::span<const T> image, f32 brightness) -> std::vector<T> {
+        return adjustBrightnessContrast(image, brightness, 1.0f);
+    }
+
+    /**
+     * @brief Adjust contrast only
+     * @param image Input image data
+     * @param contrast Contrast multiplier (0.0 to 3.0, 1.0 = no change)
+     * @return Adjusted image
+     */
+    template <typename T>
+    [[nodiscard]] static auto adjustContrast(std::span<const T> image,
+                                             f32 contrast) -> std::vector<T> {
+        return adjustBrightnessContrast(image, 0.0f, contrast);
+    }
+
+    /**
+     * @brief Apply threshold to image
+     * @param image Input image data
+     * @param threshold_value Threshold value
+     * @return Binary image (0 or max value)
+     */
+    template <typename T>
+    [[nodiscard]] static auto threshold(std::span<const T> image,
+                                        T threshold_value) -> std::vector<T> {
+        std::vector<T> result(image.size());
+        for (usize i = 0; i < image.size(); ++i) {
+            result[i] = image[i] >= threshold_value
+                            ? std::numeric_limits<T>::max()
+                            : T{0};
+        }
+        return result;
+    }
+
+    /**
+     * @brief Invert image colors
+     * @param image Input image data
+     * @return Inverted image
+     */
+    template <typename T>
+    [[nodiscard]] static auto invert(std::span<const T> image)
+        -> std::vector<T> {
+        std::vector<T> result(image.size());
+        for (usize i = 0; i < image.size(); ++i) {
+            result[i] = std::numeric_limits<T>::max() - image[i];
+        }
+        return result;
+    }
+
+    /**
      * @brief Compute histogram of image intensities
      * @param image Input image data
      * @param bins Number of histogram bins

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Comprehensive examples for atom::meta::concept utilities
  *
  * This file demonstrates all concept categories from atom/meta/concept.hpp:
@@ -8,123 +8,76 @@
  * 4. Container Concepts
  * 5. Multi-threading Concepts
  * 6. Asynchronous Concepts
+ * 7. C++23 Enhanced Concepts (NEW)
+ * 8. Meta Module Interoperability Concepts (NEW)
+ * 9. Advanced Type Manipulation Concepts (NEW)
  */
 
-#include "atom/meta/concept.hpp"
+#include "" atom / meta / concept.hpp ""
 
 #include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
 #include <complex>
+#include <deque>
 #include <functional>
 #include <future>
 #include <iostream>
+#include <list>
 #include <map>
 #include <memory>
 #include <mutex>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <shared_mutex>
 #include <string>
+#include <tuple>
+#include <variant>
 #include <vector>
 
 // Helper function to print concept check results
 template <bool Result>
 void printConceptCheck(const std::string& conceptName,
                        const std::string& typeName) {
-    std::cout << conceptName << " check for " << typeName << ": "
-              << (Result ? "Satisfied" : "Not satisfied") << std::endl;
+    std::cout << ""
+                 ""
+              << conceptName << "" <
+        "" << typeName << "" >
+        : "" << (Result ? "" Satisfied "" : "" Not satisfied "") << std::endl;
+}
+
+void printSection(const std::string& title) {
+    std::cout << ""\n "" << std::string(60, '=') << std::endl;
+    std::cout << ""
+                 ""
+              << title << std::endl;
+    std::cout << std::string(60, '=') << std::endl;
 }
 
 // -----------------------------------------------------------------------------
-// Function Concept Examples
+// Helper Classes
 // -----------------------------------------------------------------------------
 
-// Example function to test function concepts
 int add(int a, int b) { return a + b; }
-
-// Noexcept function example
 void noexceptFunc() noexcept {}
 
-// Class with operator()
 class Functor {
 public:
     int operator()(int a, int b) const { return a * b; }
 };
 
-// Class with noexcept operator()
 class NoexceptFunctor {
 public:
     int operator()(int a, int b) const noexcept { return a * b; }
 };
 
-// Member function for testing
 class TestClass {
 public:
     int multiply(int a, int b) const { return a * b; }
 };
 
-// Function to demonstrate function concepts
-void testFunctionConcepts() {
-    std::cout << "=== Function Concepts Tests ===" << std::endl;
-
-    // Test Invocable
-    printConceptCheck<Invocable<decltype(add), int, int>>("Invocable",
-                                                          "add(int, int)");
-
-    // Test InvocableR
-    printConceptCheck<InvocableR<decltype(add), int, int, int>>(
-        "InvocableR<int>", "add(int, int)");
-    printConceptCheck<InvocableR<decltype(add), float, int, int>>(
-        "InvocableR<float>", "add(int, int)");
-
-    // Test NothrowInvocable
-    printConceptCheck<NothrowInvocable<decltype(noexceptFunc)>>(
-        "NothrowInvocable", "noexceptFunc()");
-    printConceptCheck<NothrowInvocable<decltype(add), int, int>>(
-        "NothrowInvocable", "add(int, int)");
-
-    // Test NothrowInvocableR
-    printConceptCheck<NothrowInvocableR<decltype(noexceptFunc), void>>(
-        "NothrowInvocableR<void>", "noexceptFunc()");
-
-    // Test FunctionPointer
-    printConceptCheck<FunctionPointer<decltype(&add)>>("FunctionPointer",
-                                                       "&add");
-
-    // Test MemberFunctionPointer
-    printConceptCheck<MemberFunctionPointer<decltype(&TestClass::multiply)>>(
-        "MemberFunctionPointer", "&TestClass::multiply");
-
-    // Test Callable
-    Functor functor;
-    printConceptCheck<Callable<Functor>>("Callable", "Functor");
-    int result = functor(5, 3);  // Actually use functor
-    std::cout << "Functor result: " << result << std::endl;
-    printConceptCheck<Callable<decltype(add)>>("Callable", "add function");
-
-    // Test CallableReturns
-    printConceptCheck<CallableReturns<Functor, int, int, int>>(
-        "CallableReturns<int>", "Functor");
-
-    // Test CallableNoexcept
-    NoexceptFunctor noexceptFunctor;
-    printConceptCheck<CallableNoexcept<NoexceptFunctor, int, int>>(
-        "CallableNoexcept", "NoexceptFunctor");
-    result = noexceptFunctor(4, 2);  // Actually use noexceptFunctor
-    std::cout << "NoexceptFunctor result: " << result << std::endl;
-
-    // Test StdFunction
-    std::function<int(int, int)> stdFunc = add;
-    printConceptCheck<StdFunction<decltype(stdFunc)>>(
-        "StdFunction", "std::function<int(int, int)>");
-
-    std::cout << std::endl;
-}
-
-// -----------------------------------------------------------------------------
-// Object Concept Examples
-// -----------------------------------------------------------------------------
-
-// Class that satisfies Relocatable
 class RelocatableClass {
 public:
     RelocatableClass() = default;
@@ -132,50 +85,35 @@ public:
     RelocatableClass& operator=(RelocatableClass&&) noexcept = default;
 };
 
-// Class that is not Relocatable
-class NonRelocatableClass {
-public:
-    NonRelocatableClass() = default;
-    NonRelocatableClass(NonRelocatableClass&&) = default;  // Not noexcept
-};
-
-// Class for testing equality and comparison
 class ComparableClass {
 private:
     int value;
 
 public:
     ComparableClass(int v) : value(v) {}
-
     bool operator==(const ComparableClass& other) const {
         return value == other.value;
     }
-
     bool operator!=(const ComparableClass& other) const {
         return value != other.value;
     }
-
     bool operator<(const ComparableClass& other) const {
         return value < other.value;
     }
 };
 
-// Class for testing Hashable
 class HashableClass {
 private:
     int value;
 
 public:
     HashableClass(int v) : value(v) {}
-
     bool operator==(const HashableClass& other) const {
         return value == other.value;
     }
-
     int getValue() const { return value; }
 };
 
-// Custom hash function for HashableClass
 namespace std {
 template <>
 struct hash<HashableClass> {
@@ -185,451 +123,469 @@ struct hash<HashableClass> {
 };
 }  // namespace std
 
-// Function to demonstrate object concepts
+enum Color { Red, Green, Blue };
+enum class ScopedColor { Red, Green, Blue };
+
+class PolymorphicBase {
+public:
+    virtual ~PolymorphicBase() = default;
+    virtual void doSomething() = 0;
+};
+
+class DerivedClass : public PolymorphicBase {
+public:
+    void doSomething() override {}
+};
+
+class FinalClass final {};
+
+struct AggregateStruct {
+    int x;
+    double y;
+    std::string z;
+};
+
+struct WithToString {
+    std::string toString() const { return "" WithToString ""; }
+};
+
+struct WithToJson {
+    int toJson() const { return 0; }
+};
+
+struct CloneableClass {
+    std::unique_ptr<CloneableClass> clone() const {
+        return std::make_unique<CloneableClass>(*this);
+    }
+};
+
+// -----------------------------------------------------------------------------
+// Function Concept Examples
+// -----------------------------------------------------------------------------
+
+void testFunctionConcepts() {
+    printSection("" Function Concepts "");
+
+    printConceptCheck<Invocable<decltype(add), int, int>>("" Invocable "",
+                                                          "" add(int, int) "");
+    printConceptCheck<InvocableR<decltype(add), int, int, int>>(
+        "" InvocableR < int > "", "" add(int, int) "");
+    printConceptCheck<NothrowInvocable<decltype(noexceptFunc)>>(
+        "" NothrowInvocable "", "" noexceptFunc() "");
+    printConceptCheck<FunctionPointer<decltype(&add)>>("" FunctionPointer "",
+                                                       "" & add "");
+    printConceptCheck<MemberFunctionPointer<decltype(&TestClass::multiply)>>(
+        "" MemberFunctionPointer "", "" & TestClass::multiply "");
+    printConceptCheck<Callable<Functor>>("" Callable "", "" Functor "");
+    printConceptCheck<CallableReturns<Functor, int, int, int>>(
+        "" CallableReturns < int > "", "" Functor "");
+    printConceptCheck<CallableNoexcept<NoexceptFunctor, int, int>>(
+        "" CallableNoexcept "", "" NoexceptFunctor "");
+}
+
+// -----------------------------------------------------------------------------
+// Object Concept Examples
+// -----------------------------------------------------------------------------
+
 void testObjectConcepts() {
-    std::cout << "=== Object Concepts Tests ===" << std::endl;
+    printSection("" Object Concepts "");
 
-    // Test Relocatable
-    printConceptCheck<Relocatable<RelocatableClass>>("Relocatable",
-                                                     "RelocatableClass");
-    printConceptCheck<Relocatable<NonRelocatableClass>>("Relocatable",
-                                                        "NonRelocatableClass");
-
-    // Test DefaultConstructible
-    printConceptCheck<DefaultConstructible<RelocatableClass>>(
-        "DefaultConstructible", "RelocatableClass");
-
-    // Test CopyConstructible
-    printConceptCheck<CopyConstructible<std::string>>("CopyConstructible",
-                                                      "std::string");
-
-    // Test CopyAssignable
-    printConceptCheck<CopyAssignable<std::string>>("CopyAssignable",
-                                                   "std::string");
-
-    // Test MoveAssignable
-    printConceptCheck<MoveAssignable<std::string>>("MoveAssignable",
-                                                   "std::string");
-
-    // Test EqualityComparable
-    printConceptCheck<EqualityComparable<ComparableClass>>("EqualityComparable",
-                                                           "ComparableClass");
-
-    // Test LessThanComparable
-    printConceptCheck<LessThanComparable<ComparableClass>>("LessThanComparable",
-                                                           "ComparableClass");
-
-    // Test Hashable
-    printConceptCheck<Hashable<HashableClass>>("Hashable", "HashableClass");
-
-    // Test Swappable
-    printConceptCheck<Swappable<std::string>>("Swappable", "std::string");
-
-    // Test Copyable
-    printConceptCheck<Copyable<std::string>>("Copyable", "std::string");
-
-    // Test Destructible
-    printConceptCheck<Destructible<std::string>>("Destructible", "std::string");
-
-    std::cout << std::endl;
+    printConceptCheck<Relocatable<RelocatableClass>>("" Relocatable "",
+                                                     "" RelocatableClass "");
+    printConceptCheck<DefaultConstructible<TestClass>>(
+        "" DefaultConstructible "", "" TestClass "");
+    printConceptCheck<CopyConstructible<std::string>>("" CopyConstructible "",
+                                                      "" std::string "");
+    printConceptCheck<CopyAssignable<std::string>>("" CopyAssignable "",
+                                                   "" std::string "");
+    printConceptCheck<MoveConstructible<std::unique_ptr<int>>>(
+        "" MoveConstructible "", "" std::unique_ptr < int > "");
+    printConceptCheck<MoveAssignable<std::unique_ptr<int>>>(
+        "" MoveAssignable "", "" std::unique_ptr < int > "");
+    printConceptCheck<EqualityComparable<ComparableClass>>(
+        "" EqualityComparable "", "" ComparableClass "");
+    printConceptCheck<LessThanComparable<ComparableClass>>(
+        "" LessThanComparable "", "" ComparableClass "");
+    printConceptCheck<Hashable<HashableClass>>("" Hashable "",
+                                               "" HashableClass "");
+    printConceptCheck<Swappable<std::string>>("" Swappable "",
+                                              "" std::string "");
+    printConceptCheck<Copyable<std::string>>("" Copyable "", "" std::string "");
+    printConceptCheck<Destructible<std::string>>("" Destructible "",
+                                                 "" std::string "");
 }
 
 // -----------------------------------------------------------------------------
 // Type Concept Examples
 // -----------------------------------------------------------------------------
 
-// Enum for testing
-enum Color { Red, Green, Blue };
-
-// Function to demonstrate type concepts
 void testTypeConcepts() {
-    std::cout << "=== Type Concepts Tests ===" << std::endl;
+    printSection("" Type Concepts "");
 
-    // Test Arithmetic
-    printConceptCheck<Arithmetic<int>>("Arithmetic", "int");
-    printConceptCheck<Arithmetic<std::string>>("Arithmetic", "std::string");
-
-    // Test Integral
-    printConceptCheck<Integral<int>>("Integral", "int");
-    printConceptCheck<Integral<float>>("Integral", "float");
-
-    // Test FloatingPoint
-    printConceptCheck<FloatingPoint<float>>("FloatingPoint", "float");
-    printConceptCheck<FloatingPoint<int>>("FloatingPoint", "int");
-
-    // Test SignedInteger
-    printConceptCheck<SignedInteger<int>>("SignedInteger", "int");
-    printConceptCheck<SignedInteger<unsigned int>>("SignedInteger",
-                                                   "unsigned int");
-
-    // Test UnsignedInteger
-    printConceptCheck<UnsignedInteger<unsigned int>>("UnsignedInteger",
-                                                     "unsigned int");
-    printConceptCheck<UnsignedInteger<int>>("UnsignedInteger", "int");
-
-    // Test Number
-    printConceptCheck<Number<float>>("Number", "float");
-    printConceptCheck<Number<std::string>>("Number", "std::string");
-
-    // Test ComplexNumber
-    std::complex<double> complexNum(1.0, 2.0);
-    printConceptCheck<ComplexNumber<decltype(complexNum)>>(
-        "ComplexNumber", "std::complex<double>");
-
-    // Test Char
-    printConceptCheck<Char<char>>("Char", "char");
-    printConceptCheck<Char<int>>("Char", "int");
-
-    // Test WChar
-    printConceptCheck<WChar<wchar_t>>("WChar", "wchar_t");
-
-    // Test Char16
-    printConceptCheck<Char16<char16_t>>("Char16", "char16_t");
-
-    // Test Char32
-    printConceptCheck<Char32<char32_t>>("Char32", "char32_t");
-
-    // Test AnyChar
-    printConceptCheck<AnyChar<char>>("AnyChar", "char");
-    printConceptCheck<AnyChar<char16_t>>("AnyChar", "char16_t");
-
-    // Test StringType
-    printConceptCheck<StringType<std::string>>("StringType", "std::string");
-    printConceptCheck<StringType<std::string_view>>("StringType",
-                                                    "std::string_view");
-
-    // Test IsBuiltIn
-    printConceptCheck<IsBuiltIn<int>>("IsBuiltIn", "int");
-    printConceptCheck<IsBuiltIn<std::string>>("IsBuiltIn", "std::string");
-    printConceptCheck<IsBuiltIn<Color>>("IsBuiltIn", "Color enum");
-
-    // Test Enum
-    printConceptCheck<Enum<Color>>("Enum", "Color");
-    printConceptCheck<Enum<int>>("Enum", "int");
-
-    // Test Pointer
-    int* ptr = nullptr;
-    printConceptCheck<Pointer<decltype(ptr)>>("Pointer", "int*");
-    printConceptCheck<Pointer<int>>("Pointer", "int");
-
-    // Test UniquePointer
-    std::unique_ptr<int> uniquePtr = std::make_unique<int>(42);
-    printConceptCheck<UniquePointer<decltype(uniquePtr)>>(
-        "UniquePointer", "std::unique_ptr<int>");
-
-    // Test SharedPointer
-    std::shared_ptr<int> sharedPtr = std::make_shared<int>(42);
-    printConceptCheck<SharedPointer<decltype(sharedPtr)>>(
-        "SharedPointer", "std::shared_ptr<int>");
-
-    // Test WeakPointer
-    std::weak_ptr<int> weakPtr = sharedPtr;
-    printConceptCheck<WeakPointer<decltype(weakPtr)>>("WeakPointer",
-                                                      "std::weak_ptr<int>");
-
-    // Test SmartPointer
-    printConceptCheck<SmartPointer<decltype(uniquePtr)>>(
-        "SmartPointer", "std::unique_ptr<int>");
-    printConceptCheck<SmartPointer<decltype(sharedPtr)>>(
-        "SmartPointer", "std::shared_ptr<int>");
-    printConceptCheck<SmartPointer<int*>>("SmartPointer", "int*");
-
-    // Test Reference
-    int value = 42;
-    int& ref = value;
-    printConceptCheck<Reference<decltype(ref)>>("Reference", "int&");
-
-    // Test LvalueReference
-    printConceptCheck<LvalueReference<decltype(ref)>>("LvalueReference",
-                                                      "int&");
-
-    // Test RvalueReference
-    auto&& movedValue = std::move(value);  // Use auto instead of explicit type
-    printConceptCheck<RvalueReference<decltype(movedValue)>>("RvalueReference",
-                                                             "moved int");
-
-    // Test Const
-    const int constValue = 42;
-    const int& constRef = constValue;
-    printConceptCheck<Const<decltype(constRef)>>("Const", "const int&");
-    printConceptCheck<Const<decltype(ref)>>("Const", "int&");
-
-    // Test Trivial
-    printConceptCheck<Trivial<int>>("Trivial", "int");
-    printConceptCheck<Trivial<std::string>>("Trivial", "std::string");
-
-    // Test TriviallyConstructible
-    printConceptCheck<TriviallyConstructible<int>>("TriviallyConstructible",
-                                                   "int");
-    printConceptCheck<TriviallyConstructible<std::string>>(
-        "TriviallyConstructible", "std::string");
-
-    // Test TriviallyCopyable
-    printConceptCheck<TriviallyCopyable<int>>("TriviallyCopyable", "int");
-    printConceptCheck<TriviallyCopyable<std::string>>("TriviallyCopyable",
-                                                      "std::string");
-
-    std::cout << std::endl;
+    printConceptCheck<Arithmetic<int>>("" Arithmetic "", "" int "");
+    printConceptCheck<Integral<int>>("" Integral "", "" int "");
+    printConceptCheck<FloatingPoint<double>>("" FloatingPoint "", "" double "");
+    printConceptCheck<SignedInteger<int>>("" SignedInteger "", "" int "");
+    printConceptCheck<UnsignedInteger<unsigned int>>("" UnsignedInteger "",
+                                                     "" unsigned int "");
+    printConceptCheck<Number<float>>("" Number "", "" float "");
+    printConceptCheck<ComplexNumber<std::complex<double>>>(
+        "" ComplexNumber "", "" std::complex < double > "");
+    printConceptCheck<Char<char>>("" Char "", "" char "");
+    printConceptCheck<WChar<wchar_t>>("" WChar "", "" wchar_t "");
+    printConceptCheck<AnyChar<char16_t>>("" AnyChar "", "" char16_t "");
+    printConceptCheck<StringType<std::string>>("" StringType "",
+                                               "" std::string "");
+    printConceptCheck<IsBuiltIn<int>>("" IsBuiltIn "", "" int "");
+    printConceptCheck<Enum<Color>>("" Enum "", "" Color "");
+    printConceptCheck<Pointer<int*>>("" Pointer "", "" int * "");
+    printConceptCheck<UniquePointer<std::unique_ptr<int>>>(
+        "" UniquePointer "", "" std::unique_ptr < int > "");
+    printConceptCheck<SharedPointer<std::shared_ptr<int>>>(
+        "" SharedPointer "", "" std::shared_ptr < int > "");
+    printConceptCheck<WeakPointer<std::weak_ptr<int>>>(
+        "" WeakPointer "", "" std::weak_ptr < int > "");
+    printConceptCheck<SmartPointer<std::unique_ptr<int>>>(
+        "" SmartPointer "", "" std::unique_ptr < int > "");
+    printConceptCheck<Reference<int&>>("" Reference "", "" int & "");
+    printConceptCheck<LvalueReference<int&>>("" LvalueReference "",
+                                             "" int & "");
+    printConceptCheck<RvalueReference<int&&>>("" RvalueReference "",
+                                              "" int && "");
+    printConceptCheck<Const<const int>>("" Const "", "" const int "");
+    printConceptCheck<Trivial<int>>("" Trivial "", "" int "");
+    printConceptCheck<TriviallyConstructible<int>>("" TriviallyConstructible "",
+                                                   "" int "");
+    printConceptCheck<TriviallyCopyable<int>>("" TriviallyCopyable "",
+                                              "" int "");
 }
 
 // -----------------------------------------------------------------------------
 // Container Concept Examples
 // -----------------------------------------------------------------------------
 
-// Custom container class that satisfies Iterable but not Container
-class BasicIterable {
-private:
-    std::vector<int> data_;
-
-public:
-    BasicIterable() : data_{1, 2, 3, 4, 5} {}
-
-    auto begin() { return data_.begin(); }
-    auto end() { return data_.end(); }
-};
-
-// Custom string-like container
-class StringLike {
-private:
-    std::string data_;
-
-public:
-    using value_type = char;
-
-    StringLike(const std::string& s) : data_(s) {}
-
-    void push_back(char c) { data_.push_back(c); }
-    size_t size() const { return data_.size(); }
-    bool empty() const { return data_.empty(); }
-    auto begin() { return data_.begin(); }
-    auto end() { return data_.end(); }
-};
-
-// Function to demonstrate container concepts
 void testContainerConcepts() {
-    std::cout << "=== Container Concepts Tests ===" << std::endl;
+    printSection("" Container Concepts "");
 
-    // Test Iterable
-    std::vector<int> vec = {1, 2, 3, 4, 5};
-    BasicIterable basicIter;
-
-    printConceptCheck<Iterable<decltype(vec)>>("Iterable", "std::vector<int>");
-    printConceptCheck<Iterable<BasicIterable>>("Iterable", "BasicIterable");
-
-    // Test Container
-    printConceptCheck<Container<decltype(vec)>>("Container",
-                                                "std::vector<int>");
-    printConceptCheck<Container<BasicIterable>>("Container", "BasicIterable");
-
-    // Test StringContainer
-    std::string str = "test";
-    StringLike strLike("test");
-
-    printConceptCheck<StringContainer<decltype(str)>>("StringContainer",
-                                                      "std::string");
-    printConceptCheck<StringContainer<StringLike>>("StringContainer",
-                                                   "StringLike");
-
-    // Test NumberContainer
-    std::vector<int> numContainer{1, 2, 3};  // Initialize with values
-
-    printConceptCheck<NumberContainer<std::vector<int>>>("NumberContainer",
-                                                         "std::vector<int>");
-
-    // Fix template argument issue
-    printConceptCheck<NumberContainer<decltype(numContainer)>>(
-        "NumberContainer", "numContainer type");
-
-    // Test AssociativeContainer
-    std::map<int, std::string> map;
-
-    printConceptCheck<AssociativeContainer<decltype(map)>>(
-        "AssociativeContainer", "std::map<int, std::string>");
-    printConceptCheck<AssociativeContainer<decltype(vec)>>(
-        "AssociativeContainer", "std::vector<int>");
-
-    // Test Iterator
-    auto vecIter = vec.begin();
-
-    printConceptCheck<Iterator<decltype(vecIter)>>(
-        "Iterator", "std::vector<int>::iterator");
-
-    // Test NotSequenceContainer
-    std::set<int> set = {1, 2, 3};
-
-    printConceptCheck<NotSequenceContainer<decltype(set)>>(
-        "NotSequenceContainer", "std::set<int>");
-    printConceptCheck<NotSequenceContainer<decltype(vec)>>(
-        "NotSequenceContainer", "std::vector<int>");
-
-    // Test NotAssociativeOrSequenceContainer
-    printConceptCheck<NotAssociativeOrSequenceContainer<decltype(set)>>(
-        "NotAssociativeOrSequenceContainer", "std::set<int>");
-
-    // Test String
-    printConceptCheck<String<std::string>>("String", "std::string");
-    printConceptCheck<String<decltype(vec)>>("String", "std::vector<int>");
-
-    std::cout << std::endl;
+    printConceptCheck<Iterable<std::vector<int>>>("" Iterable "",
+                                                  "" std::vector < int > "");
+    printConceptCheck<Container<std::vector<int>>>("" Container "",
+                                                   "" std::vector < int > "");
+    printConceptCheck<StringContainer<std::string>>("" StringContainer "",
+                                                    "" std::string "");
+    printConceptCheck<NumberContainer<std::vector<int>>>(
+        "" NumberContainer "", "" std::vector < int > "");
+    printConceptCheck<AssociativeContainer<std::map<int, std::string>>>(
+        "" AssociativeContainer "", "" std::map < int, std::string > "");
+    printConceptCheck<Iterator<std::vector<int>::iterator>>(
+        "" Iterator "", "" std::vector<int>::iterator "");
+    printConceptCheck<SequenceContainer<std::vector<int>>>(
+        "" SequenceContainer "", "" std::vector < int > "");
+    printConceptCheck<SequenceContainer<std::list<int>>>(
+        "" SequenceContainer "", "" std::list < int > "");
+    printConceptCheck<SequenceContainer<std::deque<int>>>(
+        "" SequenceContainer "", "" std::deque < int > "");
 }
 
 // -----------------------------------------------------------------------------
 // Multi-threading Concept Examples
 // -----------------------------------------------------------------------------
 
-// Custom lockable class
-class SimpleLock {
-private:
-    bool locked_ = false;
-
-public:
-    void lock() { locked_ = true; }
-    void unlock() { locked_ = false; }
-};
-
-// Custom shared lockable class
-class SimpleSharedLock {
-private:
-    int readers_ = 0;
-    bool writer_locked_ = false;
-
-public:
-    void lock() { writer_locked_ = true; }
-    void unlock() { writer_locked_ = false; }
-    void lock_shared() { readers_++; }
-    void unlock_shared() { readers_--; }
-};
-
-// Custom mutex class
-class SimpleMutex : public SimpleLock {
-public:
-    bool try_lock() { return !locked_; }
-
-private:
-    bool locked_ = false;
-};
-
-// Custom shared mutex class
-class SimpleSharedMutex : public SimpleSharedLock {
-public:
-    bool try_lock() { return !writer_locked_; }
-    bool try_lock_shared() { return !writer_locked_; }
-
-private:
-    bool writer_locked_ = false;
-};
-
-// Function to demonstrate multi-threading concepts
 void testMultiThreadingConcepts() {
-    std::cout << "=== Multi-threading Concepts Tests ===" << std::endl;
+    printSection("" Multi - threading Concepts "");
 
-    // Test Lockable
-    SimpleLock simpleLock;
-    simpleLock.lock();  // Actually use simpleLock
-    simpleLock.unlock();
-    printConceptCheck<Lockable<SimpleLock>>("Lockable", "SimpleLock");
-
-    std::mutex stdMutex;
-    std::lock_guard<std::mutex> guard(stdMutex);  // Actually use stdMutex
-    printConceptCheck<Lockable<std::mutex>>("Lockable", "std::mutex");
-
-    // Test SharedLockable
-    SimpleSharedLock simpleSharedLock;
-    simpleSharedLock.lock_shared();  // Actually use simpleSharedLock
-    simpleSharedLock.unlock_shared();
-    printConceptCheck<SharedLockable<SimpleSharedLock>>("SharedLockable",
-                                                        "SimpleSharedLock");
-    std::shared_mutex stdSharedMutex;
-    std::shared_lock<std::shared_mutex> sharedGuard(
-        stdSharedMutex);  // Actually use stdSharedMutex
-    printConceptCheck<SharedLockable<std::shared_mutex>>("SharedLockable",
-                                                         "std::shared_mutex");
-
-    // Test Mutex
-    SimpleMutex simpleMutex;
-    simpleMutex.try_lock();  // Actually use simpleMutex
-    simpleMutex.unlock();
-    printConceptCheck<Mutex<SimpleMutex>>("Mutex", "SimpleMutex");
-    printConceptCheck<Mutex<std::mutex>>("Mutex", "std::mutex");
-
-    // Test SharedMutex
-    SimpleSharedMutex simpleSharedMutex;
-    simpleSharedMutex.try_lock_shared();  // Actually use simpleSharedMutex
-    simpleSharedMutex.unlock_shared();
-    printConceptCheck<SharedMutex<SimpleSharedMutex>>("SharedMutex",
-                                                      "SimpleSharedMutex");
-    printConceptCheck<SharedMutex<std::shared_mutex>>("SharedMutex",
-                                                      "std::shared_mutex");
-
-    std::cout << std::endl;
+    printConceptCheck<Lockable<std::mutex>>("" Lockable "", "" std::mutex "");
+    printConceptCheck<SharedLockable<std::shared_mutex>>(
+        "" SharedLockable "", "" std::shared_mutex "");
+    printConceptCheck<Mutex<std::mutex>>("" Mutex "", "" std::mutex "");
+    printConceptCheck<SharedMutex<std::shared_mutex>>("" SharedMutex "",
+                                                      "" std::shared_mutex "");
 }
 
 // -----------------------------------------------------------------------------
 // Asynchronous Concept Examples
 // -----------------------------------------------------------------------------
 
-// Custom future-like class
-template <typename T>
-class SimpleFuture {
-private:
-    T value_;
-
-public:
-    using value_type = T;
-
-    SimpleFuture(T val) : value_(val) {}
-
-    T get() { return value_; }
-    void wait() {}
-};
-
-// Custom promise-like class
-template <typename T>
-class SimplePromise {
-private:
-    T value_;
-
-public:
-    using value_type = T;
-
-    void set_value(T val) { value_ = val; }
-    void set_exception(std::exception_ptr) {}
-};
-
-// Function to demonstrate asynchronous concepts
 void testAsynchronousConcepts() {
-    std::cout << "=== Asynchronous Concepts Tests ===" << std::endl;
+    printSection("" Asynchronous Concepts "");
 
-    // Test Future
-    std::future<int> stdFuture =
-        std::async(std::launch::deferred, [] { return 42; });
-    SimpleFuture<int> simpleFuture(42);
-
-    printConceptCheck<Future<decltype(stdFuture)>>("Future",
-                                                   "std::future<int>");
-    printConceptCheck<Future<SimpleFuture<int>>>("Future", "SimpleFuture<int>");
-
-    // Test Promise
-    std::promise<int> stdPromise;
-    SimplePromise<int> simplePromise;
-    simplePromise.set_value(42);  // Actually use simplePromise
-
-    printConceptCheck<Promise<decltype(stdPromise)>>("Promise",
-                                                     "std::promise<int>");
-    printConceptCheck<Promise<SimplePromise<int>>>("Promise",
-                                                   "SimplePromise<int>");
-
-    // Test AsyncResult
-    printConceptCheck<AsyncResult<decltype(stdFuture)>>("AsyncResult",
-                                                        "std::future<int>");
-    printConceptCheck<AsyncResult<decltype(stdPromise)>>("AsyncResult",
-                                                         "std::promise<int>");
-
-    std::cout << std::endl;
+    printConceptCheck<Future<std::future<int>>>("" Future "",
+                                                "" std::future < int > "");
+    printConceptCheck<Promise<std::promise<int>>>("" Promise "",
+                                                  "" std::promise < int > "");
+    printConceptCheck<AsyncResult<std::future<int>>>("" AsyncResult "",
+                                                     "" std::future < int > "");
 }
 
 // -----------------------------------------------------------------------------
-// Practical Examples
+// C++23 Enhanced Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testCpp23EnhancedConcepts() {
+    printSection("" C++ 23 Enhanced Concepts "");
+
+    // Formatting and Serialization
+    printConceptCheck<Formattable<int>>("" Formattable "", "" int "");
+    printConceptCheck<Formattable<std::string>>("" Formattable "",
+                                                "" std::string "");
+    printConceptCheck<HasToString<WithToString>>("" HasToString "",
+                                                 "" WithToString "");
+    printConceptCheck<StringViewConvertible<std::string>>(
+        "" StringViewConvertible "", "" std::string "");
+    printConceptCheck<JsonSerializable<WithToJson>>("" JsonSerializable "",
+                                                    "" WithToJson "");
+
+    // Range Concepts
+    printConceptCheck<SpanCompatible<std::vector<int>>>(
+        "" SpanCompatible "", "" std::vector < int > "");
+    printConceptCheck<ContiguousRange<std::vector<int>>>(
+        "" ContiguousRange "", "" std::vector < int > "");
+    printConceptCheck<ContiguousRange<std::list<int>>>("" ContiguousRange "",
+                                                       "" std::list < int > "");
+    printConceptCheck<SizedRange<std::vector<int>>>("" SizedRange "",
+                                                    "" std::vector < int > "");
+    printConceptCheck<ViewableRange<std::vector<int>>>(
+        "" ViewableRange "", "" std::vector < int > "");
+
+    // Memory Concepts
+    printConceptCheck<TriviallyRelocatable<int>>("" TriviallyRelocatable "",
+                                                 "" int "");
+    printConceptCheck<Aggregate<AggregateStruct>>("" Aggregate "",
+                                                  "" AggregateStruct "");
+    printConceptCheck<StandardLayout<int>>("" StandardLayout "", "" int "");
+    printConceptCheck<PodType<int>>("" PodType "", "" int "");
+}
+
+// -----------------------------------------------------------------------------
+// Type Relationship Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testTypeRelationshipConcepts() {
+    printSection("" Type Relationship Concepts "");
+
+    printConceptCheck<HasVirtualDestructor<PolymorphicBase>>(
+        "" HasVirtualDestructor "", "" PolymorphicBase "");
+    printConceptCheck<PolymorphicType<PolymorphicBase>>("" PolymorphicType "",
+                                                        "" PolymorphicBase "");
+    printConceptCheck<FinalClass<FinalClass>>("" FinalClass "",
+                                              "" FinalClass "");
+    printConceptCheck<AbstractClass<PolymorphicBase>>("" AbstractClass "",
+                                                      "" PolymorphicBase "");
+    printConceptCheck<EnumType<Color>>("" EnumType "", "" Color "");
+    printConceptCheck<ScopedEnumType<ScopedColor>>("" ScopedEnumType "",
+                                                   "" ScopedColor "");
+    printConceptCheck<UnscopedEnumType<Color>>("" UnscopedEnumType "",
+                                               "" Color "");
+}
+
+// -----------------------------------------------------------------------------
+// Enhanced Numeric Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testEnhancedNumericConcepts() {
+    printSection("" Enhanced Numeric Concepts "");
+
+    printConceptCheck<SignedIntegralType<int>>("" SignedIntegralType "",
+                                               "" int "");
+    printConceptCheck<UnsignedIntegralType<unsigned int>>(
+        "" UnsignedIntegralType "", "" unsigned int "");
+    printConceptCheck<FloatingPointPrecise<double>>("" FloatingPointPrecise "",
+                                                    "" double "");
+    printConceptCheck<NumericArithmetic<int>>("" NumericArithmetic "",
+                                              "" int "");
+    printConceptCheck<BitwiseOperable<int>>("" BitwiseOperable "", "" int "");
+    printConceptCheck<BitwiseOperable<double>>("" BitwiseOperable "",
+                                               "" double "");
+}
+
+// -----------------------------------------------------------------------------
+// Optional/Expected Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testOptionalExpectedConcepts() {
+    printSection("" Optional / Expected Concepts "");
+
+    printConceptCheck<OptionalLike<std::optional<int>>>(
+        "" OptionalLike "", "" std::optional < int > "");
+}
+
+// -----------------------------------------------------------------------------
+// Tuple and Variant Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testTupleVariantConcepts() {
+    printSection("" Tuple and Variant Concepts "");
+
+    printConceptCheck<TupleLikeType<std::tuple<int, double>>>(
+        "" TupleLikeType "", "" std::tuple < int, double > "");
+    printConceptCheck<TupleLikeType<std::pair<int, double>>>(
+        "" TupleLikeType "", "" std::pair < int, double > "");
+    printConceptCheck<TupleLikeType<std::array<int, 5>>>(
+        "" TupleLikeType "", "" std::array < int, 5 > "");
+    printConceptCheck<VariantLike<std::variant<int, double, std::string>>>(
+        "" VariantLike "", "" std::variant < ... > "");
+}
+
+// -----------------------------------------------------------------------------
+// Meta Module Interoperability Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testMetaModuleConcepts() {
+    printSection("" Meta Module Interoperability Concepts "");
+
+    printConceptCheck<Demanglable<int>>("" Demanglable "", "" int "");
+    printConceptCheck<TypeInfoSupported<std::string>>("" TypeInfoSupported "",
+                                                      "" std::string "");
+    printConceptCheck<BoxCompatible<int>>("" BoxCompatible "", "" int "");
+    printConceptCheck<BoxCompatible<std::unique_ptr<int>>>(
+        "" BoxCompatible "", "" std::unique_ptr < int > "");
+
+    auto lambda = []() {};
+    printConceptCheck<ProxyCompatible<decltype(lambda)>>("" ProxyCompatible "",
+                                                         "" lambda "");
+    printConceptCheck<DecoratorCompatible<decltype(lambda)>>(
+        "" DecoratorCompatible "", "" lambda "");
+    printConceptCheck<ReflectionCompatible<AggregateStruct>>(
+        "" ReflectionCompatible "", "" AggregateStruct "");
+    printConceptCheck<EnumWithTraits<Color>>("" EnumWithTraits "", "" Color "");
+
+    auto intFunc = []() { return 42; };
+    auto voidFunc = []() {};
+    printConceptCheck<InvokableWithResult<decltype(intFunc)>>(
+        "" InvokableWithResult "", "" intFunc "");
+    printConceptCheck<VoidInvokable<decltype(voidFunc)>>("" VoidInvokable "",
+                                                         "" voidFunc "");
+
+    auto noexceptFunc = []() noexcept {};
+    printConceptCheck<NothrowInvokable<decltype(noexceptFunc)>>(
+        "" NothrowInvokable "", "" noexceptFunc "");
+
+    printConceptCheck<MetaComparable<int>>("" MetaComparable "", "" int "");
+    printConceptCheck<MetaHashable<int>>("" MetaHashable "", "" int "");
+    printConceptCheck<RegistryCompatible<int>>("" RegistryCompatible "",
+                                               "" int "");
+    printConceptCheck<FactoryCreatable<TestClass>>("" FactoryCreatable "",
+                                                   "" TestClass "");
+    printConceptCheck<Cloneable<CloneableClass>>("" Cloneable "",
+                                                 "" CloneableClass "");
+}
+
+// -----------------------------------------------------------------------------
+// Advanced Container Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testAdvancedContainerConcepts() {
+    printSection("" Advanced Container Concepts "");
+
+    printConceptCheck<Subscriptable<std::vector<int>>>(
+        "" Subscriptable "", "" std::vector < int > "");
+    printConceptCheck<Reservable<std::vector<int>>>("" Reservable "",
+                                                    "" std::vector < int > "");
+    printConceptCheck<Reservable<std::list<int>>>("" Reservable "",
+                                                  "" std::list < int > "");
+    printConceptCheck<AssociativeLookup<std::map<int, int>>>(
+        "" AssociativeLookup "", "" std::map < int, int > "");
+    printConceptCheck<OrderedContainer<std::set<int>>>("" OrderedContainer "",
+                                                       "" std::set < int > "");
+
+    printConceptCheck<Duration<std::chrono::seconds>>(
+        "" Duration "", "" std::chrono::seconds "");
+    printConceptCheck<TimePoint<std::chrono::system_clock::time_point>>(
+        "" TimePoint "", "" time_point "");
+
+    printConceptCheck<HasSize<std::vector<int>>>("" HasSize "",
+                                                 "" std::vector < int > "");
+    printConceptCheck<EmptyCheckable<std::vector<int>>>(
+        "" EmptyCheckable "", "" std::vector < int > "");
+    printConceptCheck<Clearable<std::vector<int>>>("" Clearable "",
+                                                   "" std::vector < int > "");
+    printConceptCheck<BackInsertable<std::vector<int>>>(
+        "" BackInsertable "", "" std::vector < int > "");
+    printConceptCheck<BackEmplaceable<std::vector<int>>>(
+        "" BackEmplaceable "", "" std::vector < int > "");
+    printConceptCheck<FrontBackAccessible<std::vector<int>>>(
+        "" FrontBackAccessible "", "" std::vector < int > "");
+}
+
+// -----------------------------------------------------------------------------
+// Thread Safety and Atomic Concept Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testThreadSafetyAtomicConcepts() {
+    printSection("" Thread Safety and Atomic Concepts "");
+
+    printConceptCheck<Nullable<std::optional<int>>>(
+        "" Nullable "", "" std::optional < int > "");
+    printConceptCheck<Nullable<std::unique_ptr<int>>>(
+        "" Nullable "", "" std::unique_ptr < int > "");
+    printConceptCheck<ThreadSafe<std::mutex>>("" ThreadSafe "",
+                                              "" std::mutex "");
+    printConceptCheck<AtomicLike<std::atomic<int>>>("" AtomicLike "",
+                                                    "" std::atomic < int > "");
+    printConceptCheck<MoveOnly<std::unique_ptr<int>>>(
+        "" MoveOnly "", "" std::unique_ptr < int > "");
+    printConceptCheck<Regular<int>>("" Regular "", "" int "");
+    printConceptCheck<Semiregular<int>>("" Semiregular "", "" int "");
+}
+
+// -----------------------------------------------------------------------------
+// Type Constraint Helper Examples (NEW)
+// -----------------------------------------------------------------------------
+
+void testTypeConstraintHelpers() {
+    printSection("" Type Constraint Helpers "");
+
+    std::cout << "" all_satisfy_concept_v<Integral, int, long, short> : ""
+              << (all_satisfy_concept_v<Integral, int, long, short>
+                      ? "" true ""
+                      : "" false "")
+              << std::endl;
+    std::cout << "" all_satisfy_concept_v<Integral, int, double, short> : ""
+              << (all_satisfy_concept_v<Integral, int, double, short>
+                      ? "" true ""
+                      : "" false "")
+              << std::endl;
+
+    std::cout << "" any_satisfy_concept_v<Integral, int, double, std::string>
+        : ""
+              << (any_satisfy_concept_v<Integral, int, double, std::string>
+                      ? "" true ""
+                      : "" false "")
+              << std::endl;
+    std::cout << "" any_satisfy_concept_v<Integral, double, float, std::string>
+        : ""
+              << (any_satisfy_concept_v<Integral, double, float, std::string>
+                      ? "" true ""
+                      : "" false "")
+              << std::endl;
+
+    std::cout << "" count_satisfying_v<Integral, int, double, long, std::string>
+        : ""
+              << count_satisfying_v<Integral, int, double, long,
+                                    std::string> << std::endl;
+
+    std::cout << "" is_one_of_v<int, char, int, double>
+        : "" << (is_one_of_v<int, char, int, double> ? "" true "" : "" false "")
+              << std::endl;
+    std::cout << "" is_one_of_v<float, char, int, double> : ""
+              << (is_one_of_v<float, char, int, double> ? "" true ""
+                                                        : "" false "")
+              << std::endl;
+
+    std::cout << "" first_type_t<int, double, char> is int : ""
+              << (std::is_same_v<first_type_t<int, double, char>, int>
+                      ? "" true ""
+                      : "" false "")
+              << std::endl;
+    std::cout << "" last_type_t<int, double, char> is char : ""
+              << (std::is_same_v<last_type_t<int, double, char>, char>
+                      ? "" true ""
+                      : "" false "")
+              << std::endl;
+}
+
+// -----------------------------------------------------------------------------
+// Practical Usage Examples
 // -----------------------------------------------------------------------------
 
 // Generic function that works only on arithmetic types
@@ -642,100 +598,48 @@ T average(const std::vector<T>& values) {
            static_cast<T>(values.size());
 }
 
-// Function that requires a container with iterators
+// Function that requires a container
 template <Container T>
 auto findMax(const T& container) {
     if (container.begin() == container.end()) {
-        throw std::runtime_error("Empty container");
+        throw std::runtime_error("" Empty container "");
     }
     return *std::max_element(container.begin(), container.end());
-}
-
-// Function that requires a callable returning a specific type
-template <typename Func, typename... Args>
-    requires CallableReturns<Func, int, Args...>
-int safeCall(Func&& func, Args&&... args) {
-    try {
-        return std::invoke(std::forward<Func>(func),
-                           std::forward<Args>(args)...);
-    } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << std::endl;
-        return -1;
-    }
 }
 
 // Function that works only on smart pointers
 template <typename T>
     requires SmartPointer<T>
 void useResource(T ptr) {
-    if (ptr) {
-        std::cout << "Resource is valid" << std::endl;
-    } else {
-        std::cout << "Resource is not valid" << std::endl;
-    }
+    std::cout << "" Resource is "" << (ptr ? "" valid "" : "" invalid "")
+              << std::endl;
 }
 
-// Function to demonstrate practical usage of concepts
 void testPracticalExamples() {
-    std::cout << "=== Practical Examples ===" << std::endl;
+    printSection("" Practical Usage Examples "");
 
-    // Test average function with arithmetic types
     std::vector<int> intValues = {1, 2, 3, 4, 5};
     std::vector<double> doubleValues = {1.5, 2.5, 3.5};
 
-    std::cout << "Int average: " << average(intValues) << std::endl;
-    std::cout << "Double average: " << average(doubleValues) << std::endl;
+    std::cout << "" Int average : "" << average(intValues) << std::endl;
+    std::cout << "" Double average : "" << average(doubleValues) << std::endl;
+    std::cout << "" Max int value : "" << findMax(intValues) << std::endl;
+    std::cout << "" Max double value : "" << findMax(doubleValues) << std::endl;
 
-    // Uncomment to see compilation error
-    // std::vector<std::string> stringValues = {"a", "b", "c"};
-    // average(stringValues);  // Error: 'average' requires arithmetic type
-
-    // Test findMax function with containers
-    std::cout << "Max int value: " << findMax(intValues) << std::endl;
-    std::cout << "Max double value: " << findMax(doubleValues) << std::endl;
-
-    std::map<int, std::string> testMap = {{1, "one"}, {2, "two"}, {3, "three"}};
-    try {
-        auto maxPair = findMax(testMap);
-        std::cout << "Max map key: " << maxPair.first << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << e.what() << std::endl;
-    }
-
-    // Test safeCall with callable returning int
-    auto safeResult = safeCall(add, 5, 7);
-    std::cout << "Safe call result: " << safeResult << std::endl;
-
-    // Test useResource with smart pointers
+    std::cout << ""\n Smart pointer usage : "" << std::endl;
     auto uniquePtr = std::make_unique<int>(42);
     auto sharedPtr = std::make_shared<int>(100);
-    std::weak_ptr<int> weakPtr = sharedPtr;
 
-    useResource(std::move(uniquePtr));  // Now uniquePtr is null
-    useResource(sharedPtr);             // Still valid
-
-    // Convert weak_ptr to shared_ptr before using
-    if (auto lockedPtr = weakPtr.lock()) {
-        useResource(lockedPtr);
-    }
-
-    // Uncomment to see compilation error
-    // int* rawPtr = new int(200);
-    // useResource(rawPtr);  // Error: raw pointer does not satisfy SmartPointer
-    // concept delete rawPtr;
-
-    std::cout << std::endl;
+    useResource(std::move(uniquePtr));
+    useResource(sharedPtr);
 }
 
-// Main function to run all examples
+// Main function
 int main() {
-    std::cout << "======================================================="
-              << std::endl;
-    std::cout << "   Concept Utilities Comprehensive Examples            "
-              << std::endl;
-    std::cout << "======================================================="
-              << std::endl
-              << std::endl;
+    std::cout << std::string(60, '=') << std::endl;
+    std::cout << "" Concept Utilities Comprehensive Examples "" << std::endl;
+    std::cout << ""(Including C++ 23 Enhanced Concepts) "" << std::endl;
+    std::cout << std::string(60, '=') << std::endl;
 
     testFunctionConcepts();
     testObjectConcepts();
@@ -743,8 +647,20 @@ int main() {
     testContainerConcepts();
     testMultiThreadingConcepts();
     testAsynchronousConcepts();
+    testCpp23EnhancedConcepts();
+    testTypeRelationshipConcepts();
+    testEnhancedNumericConcepts();
+    testOptionalExpectedConcepts();
+    testTupleVariantConcepts();
+    testMetaModuleConcepts();
+    testAdvancedContainerConcepts();
+    testThreadSafetyAtomicConcepts();
+    testTypeConstraintHelpers();
     testPracticalExamples();
 
-    std::cout << "All examples completed successfully!" << std::endl;
+    std::cout << ""\n "" << std::string(60, '=') << std::endl;
+    std::cout << "" All examples completed successfully !"" << std::endl;
+    std::cout << std::string(60, '=') << std::endl;
+
     return 0;
 }

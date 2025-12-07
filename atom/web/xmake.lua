@@ -16,6 +16,12 @@ includes("time/xmake.lua")
 
 -- Define source files from new structure
 local sources = {
+    -- Address functionality
+    "address/address.cpp",
+    "address/ipv4.cpp",
+    "address/ipv6.cpp",
+    "address/unix_domain.cpp",
+
     -- HTTP functionality
     "http/curl.cpp",
     "http/downloader.cpp",
@@ -49,13 +55,22 @@ local headers = {
     "time.hpp",
     "utils.hpp",
 
-    -- Implementation headers
+    -- Address implementation headers
+    "address/address.hpp",
+    "address/ipv4.hpp",
+    "address/ipv6.hpp",
+    "address/main.hpp",
+    "address/unix_domain.hpp",
+
+    -- HTTP implementation headers
     "http/curl.hpp",
     "http/downloader.hpp",
     "http/httpparser.hpp",
 
+    -- MIME implementation headers
     "mime/minetype.hpp",
 
+    -- Utils implementation headers
     "utils/common.hpp",
     "utils/addr_info.hpp",
     "utils/dns.hpp",

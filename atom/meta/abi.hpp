@@ -9,16 +9,28 @@
 #ifndef ATOM_META_ABI_HPP
 #define ATOM_META_ABI_HPP
 
+#include <array>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <shared_mutex>
 #include <source_location>
+#include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <typeinfo>
+#include <version>
 
 #include "atom/containers/high_performance.hpp"
+
+// C++23 feature detection
+#if __cpp_lib_expected >= 202202L
+#include <expected>
+#define ATOM_ABI_HAS_EXPECTED 1
+#else
+#define ATOM_ABI_HAS_EXPECTED 0
+#endif
 
 #ifdef _WIN32
 #ifdef _MSC_VER
@@ -50,9 +62,36 @@ using Vector = containers::Vector<containers::String>;
  * \brief Configuration options for the ABI utilities
  */
 struct AbiConfig {
-    static constexpr std::size_t buffer_size = 2048;
-    static constexpr std::size_t max_cache_size = 1024;
+    static constexpr std::size_t buffer_size = 4096;
+    static constexpr std::size_t max_cache_size = 2048;
     static constexpr bool thread_safe_cache = true;
+    static constexpr bool enable_lru_eviction = true;
+    static constexpr std::size_t eviction_batch_size = 256;
+};
+
+/*!
+ * \brief Error codes for ABI operations
+ */
+enum class AbiErrorCode {
+    Success = 0,
+    BufferTooSmall,
+    DemangleFailed,
+    InvalidInput,
+    UnknownError
+};
+
+/*!
+ * \brief Result structure for ABI operations (when std::expected is not
+ * available)
+ */
+struct AbiResult {
+    String value;
+    AbiErrorCode error = AbiErrorCode::Success;
+
+    [[nodiscard]] bool hasValue() const noexcept {
+        return error == AbiErrorCode::Success;
+    }
+    [[nodiscard]] explicit operator bool() const noexcept { return hasValue(); }
 };
 
 /*!
@@ -214,6 +253,215 @@ public:
     static bool isTemplateType(const String& demangled_name) {
         return demangled_name.find('<') != String::npos &&
                demangled_name.find('>') != String::npos;
+    }
+
+    /*!
+     * \brief Get bare type name without qualifiers and namespaces
+     * \param demangled_name The demangled type name
+     * \return The bare type name
+     */
+    static auto getBareTypeName(std::string_view demangled_name) -> String {
+        String result(demangled_name);
+
+        // Remove const/volatile qualifiers
+        auto removePrefix = [&result](std::string_view prefix) {
+            if (result.size() > prefix.size() &&
+                std::string_view(result.data(), prefix.size()) == prefix) {
+                result = String(result.data() + prefix.size(),
+                                result.size() - prefix.size());
+            }
+        };
+
+        removePrefix("const ");
+        removePrefix("volatile ");
+
+        // Find last :: to get bare name
+        auto pos = result.rfind("::");
+        if (pos != String::npos && pos + 2 < result.size()) {
+            result = String(result.data() + pos + 2, result.size() - pos - 2);
+        }
+
+        // Remove template parameters for bare name
+        auto templatePos = result.find('<');
+        if (templatePos != String::npos) {
+            result = String(result.data(), templatePos);
+        }
+
+        return result;
+    }
+
+    /*!
+     * \brief Extract namespace from a demangled type name
+     * \param demangled_name The demangled type name
+     * \return The namespace, or empty string if none
+     */
+    static auto extractNamespace(std::string_view demangled_name) -> String {
+        auto pos = demangled_name.rfind("::");
+        if (pos != std::string_view::npos) {
+            return String(demangled_name.data(), pos);
+        }
+        return String{};
+    }
+
+    /*!
+     * \brief Extract template arguments from a demangled type name
+     * \param demangled_name The demangled type name
+     * \return Vector of template argument strings
+     */
+    static auto extractTemplateArgs(std::string_view demangled_name) -> Vector {
+        Vector args;
+        auto start = demangled_name.find('<');
+        auto end = demangled_name.rfind('>');
+
+        if (start == std::string_view::npos || end == std::string_view::npos ||
+            start >= end) {
+            return args;
+        }
+
+        std::string_view params =
+            demangled_name.substr(start + 1, end - start - 1);
+
+        int depth = 0;
+        std::size_t argStart = 0;
+
+        for (std::size_t i = 0; i < params.size(); ++i) {
+            char c = params[i];
+            if (c == '<' || c == '(')
+                ++depth;
+            else if (c == '>' || c == ')')
+                --depth;
+            else if (c == ',' && depth == 0) {
+                auto arg = params.substr(argStart, i - argStart);
+                // Trim whitespace
+                while (!arg.empty() && arg.front() == ' ')
+                    arg.remove_prefix(1);
+                while (!arg.empty() && arg.back() == ' ')
+                    arg.remove_suffix(1);
+                args.push_back(String(arg));
+                argStart = i + 1;
+            }
+        }
+
+        // Add last argument
+        auto arg = params.substr(argStart);
+        while (!arg.empty() && arg.front() == ' ')
+            arg.remove_prefix(1);
+        while (!arg.empty() && arg.back() == ' ')
+            arg.remove_suffix(1);
+        if (!arg.empty()) {
+            args.push_back(String(arg));
+        }
+
+        return args;
+    }
+
+    /*!
+     * \brief Check if a type is a pointer type
+     * \param demangled_name The demangled type name
+     * \return true if the type is a pointer
+     */
+    static bool isPointerType(std::string_view demangled_name) noexcept {
+        if (demangled_name.empty())
+            return false;
+        // Skip trailing spaces and check for *
+        auto pos = demangled_name.size();
+        while (pos > 0 && demangled_name[pos - 1] == ' ')
+            --pos;
+        return pos > 0 && demangled_name[pos - 1] == '*';
+    }
+
+    /*!
+     * \brief Check if a type is a reference type
+     * \param demangled_name The demangled type name
+     * \return true if the type is a reference
+     */
+    static bool isReferenceType(std::string_view demangled_name) noexcept {
+        if (demangled_name.empty())
+            return false;
+        auto pos = demangled_name.size();
+        while (pos > 0 && demangled_name[pos - 1] == ' ')
+            --pos;
+        return pos > 0 && demangled_name[pos - 1] == '&';
+    }
+
+    /*!
+     * \brief Check if a type is const qualified
+     * \param demangled_name The demangled type name
+     * \return true if the type is const
+     */
+    static bool isConstType(std::string_view demangled_name) noexcept {
+        return demangled_name.find("const") != std::string_view::npos;
+    }
+
+    /*!
+     * \brief Try to demangle without throwing exceptions
+     * \param mangled_name The mangled name
+     * \return AbiResult containing the demangled name or error
+     */
+    static auto tryDemangle(std::string_view mangled_name) noexcept
+        -> AbiResult {
+        try {
+            return AbiResult{demangleInternal(mangled_name),
+                             AbiErrorCode::Success};
+        } catch (...) {
+            return AbiResult{String(mangled_name),
+                             AbiErrorCode::DemangleFailed};
+        }
+    }
+
+#if ATOM_ABI_HAS_EXPECTED
+    /*!
+     * \brief Demangle using std::expected (C++23)
+     * \param mangled_name The mangled name
+     * \return Expected containing demangled name or error code
+     */
+    static auto demangleExpected(std::string_view mangled_name)
+        -> std::expected<String, AbiErrorCode> {
+        try {
+            return demangleInternal(mangled_name);
+        } catch (...) {
+            return std::unexpected(AbiErrorCode::DemangleFailed);
+        }
+    }
+#endif
+
+    /*!
+     * \brief Get type category as a string
+     * \tparam T The type to categorize
+     * \return String describing the type category
+     */
+    template <typename T>
+    static auto getTypeCategory() -> String {
+        if constexpr (std::is_void_v<T>)
+            return String("void");
+        else if constexpr (std::is_null_pointer_v<T>)
+            return String("nullptr_t");
+        else if constexpr (std::is_integral_v<T>)
+            return String("integral");
+        else if constexpr (std::is_floating_point_v<T>)
+            return String("floating_point");
+        else if constexpr (std::is_array_v<T>)
+            return String("array");
+        else if constexpr (std::is_enum_v<T>)
+            return String("enum");
+        else if constexpr (std::is_union_v<T>)
+            return String("union");
+        else if constexpr (std::is_class_v<T>)
+            return String("class");
+        else if constexpr (std::is_function_v<T>)
+            return String("function");
+        else if constexpr (std::is_pointer_v<T>)
+            return String("pointer");
+        else if constexpr (std::is_lvalue_reference_v<T>)
+            return String("lvalue_reference");
+        else if constexpr (std::is_rvalue_reference_v<T>)
+            return String("rvalue_reference");
+        else if constexpr (std::is_member_object_pointer_v<T>)
+            return String("member_object_pointer");
+        else if constexpr (std::is_member_function_pointer_v<T>)
+            return String("member_function_pointer");
+        else
+            return String("unknown");
     }
 
 private:

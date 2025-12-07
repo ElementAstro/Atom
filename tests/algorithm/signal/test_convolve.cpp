@@ -288,3 +288,166 @@ TEST_F(ConvolveTest, MultithreadedIDFT) {
     auto recon_multi = idfT2D(frequency, 4);
     EXPECT_TRUE(matricesNearlyEqual(recon_single, recon_multi, 1e-5));
 }
+
+// =============================================================================
+// Additional Edge Case Tests
+// =============================================================================
+
+TEST_F(ConvolveTest, SinglePixelImage) {
+    std::vector<std::vector<double>> single_pixel{{5.0}};
+    std::vector<std::vector<double>> kernel{{1.0}};
+    auto result = convolve2D(single_pixel, kernel);
+    ASSERT_EQ(result.size(), 1u);
+    ASSERT_EQ(result[0].size(), 1u);
+    EXPECT_NEAR(result[0][0], 5.0, 1e-6);
+}
+
+TEST_F(ConvolveTest, LargerKernelThanImage) {
+    std::vector<std::vector<double>> small_image{{1, 2}, {3, 4}};
+    std::vector<std::vector<double>> large_kernel{{1, 0, 1, 0, 1},
+                                                  {0, 1, 0, 1, 0},
+                                                  {1, 0, 1, 0, 1},
+                                                  {0, 1, 0, 1, 0},
+                                                  {1, 0, 1, 0, 1}};
+    // Should throw since kernel is larger than image
+    EXPECT_THROW(convolve2D(small_image, large_kernel), ConvolveError);
+}
+
+TEST_F(ConvolveTest, ZeroKernel) {
+    std::vector<std::vector<double>> zero_kernel{
+        {0, 0, 0}, {0, 0, 0}, {0, 0, 0}};
+    auto result = convolve2D(simple_image, zero_kernel);
+    ASSERT_EQ(result.size(), simple_image.size());
+    for (const auto& row : result) {
+        for (const auto& val : row) {
+            EXPECT_NEAR(val, 0.0, 1e-10);
+        }
+    }
+}
+
+TEST_F(ConvolveTest, NegativeKernelValues) {
+    std::vector<std::vector<double>> negative_kernel{
+        {-1, -1, -1}, {-1, -1, -1}, {-1, -1, -1}};
+    auto result = convolve2D(simple_image, negative_kernel);
+    ASSERT_EQ(result.size(), simple_image.size());
+    // Result should be negative of sum of neighbors
+    for (const auto& row : result) {
+        for (const auto& val : row) {
+            EXPECT_LE(val, 0.0);
+        }
+    }
+}
+
+TEST_F(ConvolveTest, AsymmetricKernel) {
+    std::vector<std::vector<double>> asymmetric_kernel{
+        {1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    auto result = convolve2D(simple_image, asymmetric_kernel);
+    ASSERT_EQ(result.size(), simple_image.size());
+    // Just verify it doesn't crash and produces valid output
+    for (const auto& row : result) {
+        for (const auto& val : row) {
+            EXPECT_FALSE(std::isnan(val));
+            EXPECT_FALSE(std::isinf(val));
+        }
+    }
+}
+
+TEST_F(ConvolveTest, GaussianKernelDifferentSigmas) {
+    std::vector<double> sigmas = {0.5, 1.0, 2.0, 5.0};
+    for (double sigma : sigmas) {
+        auto kernel = generateGaussianKernel(5, sigma);
+        ASSERT_EQ(kernel.size(), 5u);
+        ASSERT_EQ(kernel[0].size(), 5u);
+
+        // Verify kernel sums to 1
+        double sum = 0.0;
+        for (const auto& row : kernel) {
+            for (const auto& val : row) {
+                sum += val;
+            }
+        }
+        EXPECT_NEAR(sum, 1.0, 1e-10);
+
+        // Verify center is maximum
+        double center = kernel[2][2];
+        for (const auto& row : kernel) {
+            for (const auto& val : row) {
+                EXPECT_LE(val, center + 1e-10);
+            }
+        }
+    }
+}
+
+TEST_F(ConvolveTest, GaussianKernelDifferentSizes) {
+    std::vector<int> sizes = {3, 5, 7, 9, 11};
+    for (int size : sizes) {
+        auto kernel = generateGaussianKernel(size, 1.0);
+        ASSERT_EQ(kernel.size(), static_cast<size_t>(size));
+        ASSERT_EQ(kernel[0].size(), static_cast<size_t>(size));
+
+        // Verify symmetry
+        for (int i = 0; i < size; ++i) {
+            for (int j = 0; j < size; ++j) {
+                EXPECT_NEAR(kernel[i][j], kernel[size - 1 - i][size - 1 - j],
+                            1e-10);
+            }
+        }
+    }
+}
+
+TEST_F(ConvolveTest, ConvolutionCommutativity) {
+    // Convolution is commutative: A * B = B * A
+    // But only for same-sized matrices
+    std::vector<std::vector<double>> a{{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+    std::vector<std::vector<double>> b{{9, 8, 7}, {6, 5, 4}, {3, 2, 1}};
+
+    auto result_ab = convolve2D(a, b);
+    auto result_ba = convolve2D(b, a);
+
+    EXPECT_TRUE(matricesNearlyEqual(result_ab, result_ba, 1e-6));
+}
+
+TEST_F(ConvolveTest, DFTLinearity) {
+    // DFT is linear: DFT(a*x + b*y) = a*DFT(x) + b*DFT(y)
+    auto x = generateRandomMatrix(8, 8, 0.0, 10.0);
+    auto y = generateRandomMatrix(8, 8, 0.0, 10.0);
+    double a = 2.0, b = 3.0;
+
+    // Compute a*x + b*y
+    std::vector<std::vector<double>> combined(8, std::vector<double>(8));
+    for (size_t i = 0; i < 8; ++i) {
+        for (size_t j = 0; j < 8; ++j) {
+            combined[i][j] = a * x[i][j] + b * y[i][j];
+        }
+    }
+
+    auto dft_combined = dfT2D(combined);
+    auto dft_x = dfT2D(x);
+    auto dft_y = dfT2D(y);
+
+    // Verify linearity
+    for (size_t i = 0; i < 8; ++i) {
+        for (size_t j = 0; j < 8; ++j) {
+            auto expected = a * dft_x[i][j] + b * dft_y[i][j];
+            EXPECT_NEAR(dft_combined[i][j].real(), expected.real(), 1e-5);
+            EXPECT_NEAR(dft_combined[i][j].imag(), expected.imag(), 1e-5);
+        }
+    }
+}
+
+TEST_F(ConvolveTest, LargeImagePerformance) {
+    auto large_image = generateRandomMatrix(256, 256);
+    auto kernel = generateGaussianKernel(5, 1.0);
+
+    auto start = std::chrono::high_resolution_clock::now();
+    auto result = convolve2D(large_image, kernel);
+    auto end = std::chrono::high_resolution_clock::now();
+
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
+            .count();
+    spdlog::info("Convolution of 256x256 matrix took: {}ms", duration);
+
+    EXPECT_EQ(result.size(), large_image.size());
+    EXPECT_EQ(result[0].size(), large_image[0].size());
+}

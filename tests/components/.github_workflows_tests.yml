@@ -2,13 +2,13 @@ name: Atom Components Tests
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'atom/components/**'
       - 'tests/components/**'
       - '.github/workflows/tests.yml'
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, develop]
     paths:
       - 'atom/components/**'
       - 'tests/components/**'

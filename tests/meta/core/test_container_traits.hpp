@@ -594,21 +594,21 @@ TEST_F(ContainerTraitsTest, ReferenceContainerTraits) {
 TEST_F(ContainerTraitsTest, VariableTemplates) {
     // Sequence container checks
     EXPECT_TRUE(atom::meta::is_sequence_container_v<std::vector<int>>);
-    EXPECT_FALSE(atom::meta::is_sequence_container_v<std::map<int, int>>);
+    EXPECT_FALSE((atom::meta::is_sequence_container_v<std::map<int, int>>));
 
     // Associative container checks
-    EXPECT_TRUE(atom::meta::is_associative_container_v<std::map<int, int>>);
-    EXPECT_FALSE(atom::meta::is_associative_container_v<std::vector<int>>);
+    EXPECT_TRUE((atom::meta::is_associative_container_v<std::map<int, int>>));
+    EXPECT_FALSE((atom::meta::is_associative_container_v<std::vector<int>>));
 
     // Unordered associative container checks
-    EXPECT_TRUE(atom::meta::is_unordered_associative_container_v<
-                std::unordered_map<int, int>>);
+    EXPECT_TRUE((atom::meta::is_unordered_associative_container_v<
+                 std::unordered_map<int, int>>));
     EXPECT_FALSE(
-        atom::meta::is_unordered_associative_container_v<std::map<int, int>>);
+        (atom::meta::is_unordered_associative_container_v<std::map<int, int>>));
 
     // Container adapter checks
-    EXPECT_TRUE(atom::meta::is_container_adapter_v<std::stack<int>>);
-    EXPECT_FALSE(atom::meta::is_container_adapter_v<std::vector<int>>);
+    EXPECT_TRUE((atom::meta::is_container_adapter_v<std::stack<int>>));
+    EXPECT_FALSE((atom::meta::is_container_adapter_v<std::vector<int>>));
 
     // Iterator capability checks
     EXPECT_TRUE(atom::meta::has_random_access_v<std::vector<int>>);
@@ -632,7 +632,7 @@ TEST_F(ContainerTraitsTest, VariableTemplates) {
     EXPECT_FALSE(atom::meta::has_capacity_v<std::list<int>>);
 
     EXPECT_TRUE(atom::meta::has_push_back_v<std::vector<int>>);
-    EXPECT_FALSE(atom::meta::has_push_back_v<std::array<int, 5>>);
+    EXPECT_FALSE((atom::meta::has_push_back_v<std::array<int, 5>>));
 
     EXPECT_TRUE(atom::meta::has_push_front_v<std::deque<int>>);
     EXPECT_FALSE(atom::meta::has_push_front_v<std::vector<int>>);
@@ -641,10 +641,10 @@ TEST_F(ContainerTraitsTest, VariableTemplates) {
     EXPECT_FALSE(atom::meta::has_insert_v<std::stack<int>>);
 
     // Container property checks
-    EXPECT_TRUE(atom::meta::is_fixed_size_v<std::array<int, 5>>);
+    EXPECT_TRUE((atom::meta::is_fixed_size_v<std::array<int, 5>>));
     EXPECT_FALSE(atom::meta::is_fixed_size_v<std::vector<int>>);
 
-    EXPECT_TRUE(atom::meta::is_sorted_v<std::map<int, int>>);
+    EXPECT_TRUE((atom::meta::is_sorted_v<std::map<int, int>>));
     EXPECT_FALSE(atom::meta::is_sorted_v<std::vector<int>>);
 
     EXPECT_TRUE(atom::meta::is_unique_v<std::set<int>>);
@@ -697,25 +697,25 @@ TEST_F(ContainerTraitsTest, UtilityFunctions) {
     EXPECT_TRUE(
         atom::meta::supports_efficient_random_access<std::vector<int>>());
     EXPECT_TRUE(
-        atom::meta::supports_efficient_random_access<std::array<int, 5>>());
+        (atom::meta::supports_efficient_random_access<std::array<int, 5>>()));
     EXPECT_FALSE(
         atom::meta::supports_efficient_random_access<std::list<int>>());
     EXPECT_FALSE(
-        atom::meta::supports_efficient_random_access<std::map<int, int>>());
+        (atom::meta::supports_efficient_random_access<std::map<int, int>>()));
 
     // Test can_grow_dynamically
     EXPECT_TRUE(atom::meta::can_grow_dynamically<std::vector<int>>());
     EXPECT_TRUE(atom::meta::can_grow_dynamically<std::list<int>>());
-    EXPECT_TRUE(atom::meta::can_grow_dynamically<std::map<int, int>>());
-    EXPECT_FALSE(atom::meta::can_grow_dynamically<std::array<int, 5>>());
+    EXPECT_TRUE((atom::meta::can_grow_dynamically<std::map<int, int>>()));
+    EXPECT_FALSE((atom::meta::can_grow_dynamically<std::array<int, 5>>()));
     EXPECT_FALSE(atom::meta::can_grow_dynamically<
                  std::stack<int>>());  // Adapters don't directly support growth
 
     // Test supports_key_lookup
-    EXPECT_TRUE(atom::meta::supports_key_lookup<std::map<int, int>>());
+    EXPECT_TRUE((atom::meta::supports_key_lookup<std::map<int, int>>()));
     EXPECT_TRUE(atom::meta::supports_key_lookup<std::set<int>>());
     EXPECT_TRUE(
-        atom::meta::supports_key_lookup<std::unordered_map<int, int>>());
+        (atom::meta::supports_key_lookup<std::unordered_map<int, int>>()));
     EXPECT_FALSE(atom::meta::supports_key_lookup<std::vector<int>>());
     EXPECT_FALSE(atom::meta::supports_key_lookup<std::list<int>>());
 }

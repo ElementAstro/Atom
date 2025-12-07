@@ -4,7 +4,7 @@
 #include <mutex>
 #include <thread>
 
-#include "atom/connection/sockethub.hpp"
+#include "atom/connection/shared/sockethub.hpp"
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -273,4 +273,228 @@ TEST_F(SocketHubTest, ServerRestart) {
     }
 
     ::close(clientSocket);
+}
+
+// ============================================================================
+// Additional SocketHub Tests
+// ============================================================================
+
+TEST_F(SocketHubTest, GetClientCount) {
+    EXPECT_EQ(socketHub_->getClientCount(), 0);
+
+    int clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_NE(clientSocket, -1);
+
+    sockaddr_in serverAddress{};
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port_);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+    int result = ::connect(clientSocket, (sockaddr *)&serverAddress,
+                           sizeof(serverAddress));
+    ASSERT_EQ(result, 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    EXPECT_GE(socketHub_->getClientCount(), 1);
+
+    ::close(clientSocket);
+}
+
+TEST_F(SocketHubTest, BroadcastMessage) {
+    const int clientCount = 3;
+    std::vector<int> clientSockets(clientCount);
+
+    for (int i = 0; i < clientCount; ++i) {
+        clientSockets[i] = ::socket(AF_INET, SOCK_STREAM, 0);
+        ASSERT_NE(clientSockets[i], -1);
+
+        sockaddr_in serverAddress{};
+        serverAddress.sin_family = AF_INET;
+        serverAddress.sin_port = htons(port_);
+        inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+        int result = ::connect(clientSockets[i], (sockaddr *)&serverAddress,
+                               sizeof(serverAddress));
+        ASSERT_EQ(result, 0);
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    std::string broadcastMsg = "Broadcast message";
+    socketHub_->broadcast(broadcastMsg);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    for (int i = 0; i < clientCount; ++i) {
+        ::close(clientSockets[i]);
+    }
+}
+
+TEST_F(SocketHubTest, GetStatistics) {
+    auto stats = socketHub_->getStatistics();
+    EXPECT_EQ(stats.totalConnections, 0);
+    EXPECT_EQ(stats.totalMessagesReceived, 0);
+}
+
+TEST_F(SocketHubTest, ResetStatistics) {
+    int clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_NE(clientSocket, -1);
+
+    sockaddr_in serverAddress{};
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port_);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+    int result = ::connect(clientSocket, (sockaddr *)&serverAddress,
+                           sizeof(serverAddress));
+    ASSERT_EQ(result, 0);
+
+    std::string statsMsg = "Stats test";
+    ::send(clientSocket, statsMsg.c_str(), statsMsg.size(), 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    socketHub_->resetStatistics();
+
+    auto stats = socketHub_->getStatistics();
+    EXPECT_EQ(stats.totalMessagesReceived, 0);
+
+    ::close(clientSocket);
+}
+
+TEST_F(SocketHubTest, SetMaxClients) {
+    socketHub_->setMaxClients(2);
+
+    std::vector<int> clientSockets(3);
+
+    for (int i = 0; i < 3; ++i) {
+        clientSockets[i] = ::socket(AF_INET, SOCK_STREAM, 0);
+        ASSERT_NE(clientSockets[i], -1);
+
+        sockaddr_in serverAddress{};
+        serverAddress.sin_family = AF_INET;
+        serverAddress.sin_port = htons(port_);
+        inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+        ::connect(clientSockets[i], (sockaddr *)&serverAddress,
+                  sizeof(serverAddress));
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    EXPECT_LE(socketHub_->getClientCount(), 2);
+
+    for (int i = 0; i < 3; ++i) {
+        ::close(clientSockets[i]);
+    }
+}
+
+TEST_F(SocketHubTest, SetOnClientConnectedCallback) {
+    std::atomic<int> connectCount{0};
+
+    socketHub_->setOnClientConnectedCallback(
+        [&connectCount](int) { connectCount++; });
+
+    int clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_NE(clientSocket, -1);
+
+    sockaddr_in serverAddress{};
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port_);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+    int result = ::connect(clientSocket, (sockaddr *)&serverAddress,
+                           sizeof(serverAddress));
+    ASSERT_EQ(result, 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    EXPECT_GE(connectCount.load(), 1);
+
+    ::close(clientSocket);
+}
+
+TEST_F(SocketHubTest, SetOnClientDisconnectedCallback) {
+    std::atomic<int> disconnectCount{0};
+
+    socketHub_->setOnClientDisconnectedCallback(
+        [&disconnectCount](int) { disconnectCount++; });
+
+    int clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_NE(clientSocket, -1);
+
+    sockaddr_in serverAddress{};
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port_);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+    int result = ::connect(clientSocket, (sockaddr *)&serverAddress,
+                           sizeof(serverAddress));
+    ASSERT_EQ(result, 0);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+    ::close(clientSocket);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    EXPECT_GE(disconnectCount.load(), 1);
+}
+
+TEST_F(SocketHubTest, SendBinaryData) {
+    int clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+    ASSERT_NE(clientSocket, -1);
+
+    sockaddr_in serverAddress{};
+    serverAddress.sin_family = AF_INET;
+    serverAddress.sin_port = htons(port_);
+    inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+    int result = ::connect(clientSocket, (sockaddr *)&serverAddress,
+                           sizeof(serverAddress));
+    ASSERT_EQ(result, 0);
+
+    char binaryData[] = {0x00, 0x01, 0x02, static_cast<char>(0xFF)};
+    result = ::send(clientSocket, binaryData, sizeof(binaryData), 0);
+    ASSERT_NE(result, -1);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+
+    ::close(clientSocket);
+}
+
+TEST_F(SocketHubTest, ConcurrentConnections) {
+    const int numThreads = 5;
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([this, i, &successCount]() {
+            int clientSocket = ::socket(AF_INET, SOCK_STREAM, 0);
+            if (clientSocket == -1)
+                return;
+
+            sockaddr_in serverAddress{};
+            serverAddress.sin_family = AF_INET;
+            serverAddress.sin_port = htons(port_);
+            inet_pton(AF_INET, "127.0.0.1", &serverAddress.sin_addr);
+
+            int result = ::connect(clientSocket, (sockaddr *)&serverAddress,
+                                   sizeof(serverAddress));
+            if (result == 0) {
+                std::string concurrentMsg = "Thread_" + std::to_string(i);
+                ::send(clientSocket, concurrentMsg.c_str(),
+                       concurrentMsg.size(), 0);
+                successCount++;
+            }
+
+            ::close(clientSocket);
+        });
+    }
+
+    for (auto &thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(successCount.load(), 0);
 }

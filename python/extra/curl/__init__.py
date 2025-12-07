@@ -77,3 +77,19 @@ try:
     __all__.extend(["websocket"])
 except ImportError:
     pass
+
+# Import REST client module if available
+try:
+    from .rest_client import *  # noqa: F401, F403
+
+    __all__.extend(["rest_client"])
+except ImportError:
+    pass
+
+# Import multi-session module if available
+try:
+    from .multi_session import *  # noqa: F401, F403
+
+    __all__.extend(["multi_session"])
+except ImportError:
+    pass

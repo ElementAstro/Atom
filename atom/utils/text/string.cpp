@@ -834,7 +834,7 @@ auto splitTokens(std::string_view& str, const std::string_view& delims)
  * @param base Number base (2-36)
  * @return True if string is a valid number in the given base
  */
-auto isValidNumber(std::string_view str, int base = 10) -> bool {
+auto isValidNumber(std::string_view str, int base) -> bool {
     if (str.empty() || base < 2 || base > 36) {
         return false;
     }

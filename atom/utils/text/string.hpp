@@ -290,6 +290,16 @@ auto stol(std::string_view str, std::size_t* idx = nullptr,
 auto splitTokens(std::string_view& str, const std::string_view& delims)
     -> std::optional<std::string_view>;
 
+/**
+ * @brief Validates if a string is a valid number in a given base.
+ *
+ * @param str String to validate.
+ * @param base Number base (2-36), default is 10.
+ * @return True if string is a valid number in the given base.
+ * @throws None
+ */
+[[nodiscard]] auto isValidNumber(std::string_view str, int base = 10) -> bool;
+
 // Modern C++20 split implementation with concepts
 template <DelimiterPredicate Delimiter>
 struct SplitString {

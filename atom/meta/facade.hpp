@@ -1098,6 +1098,93 @@ std::ostream& operator<<(std::ostream& os, const proxy<F>& p) {
     return os;
 }
 
+//==============================================================================
+// C++23 Enhanced Facade Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for types that can be proxied
+ */
+template <typename T, typename F>
+concept ProxiableFor = facade<F> && requires {
+    requires sizeof(T) <= F::constraints.max_size;
+    requires alignof(T) <= F::constraints.max_align;
+};
+
+/**
+ * @brief Create a proxy from a value
+ */
+template <facade F, typename T>
+    requires ProxiableFor<T, F>
+auto make_proxy(T&& value) -> proxy<F> {
+    return proxy<F>(std::forward<T>(value));
+}
+
+/**
+ * @brief Facade registry for runtime introspection
+ */
+class FacadeRegistry {
+    struct FacadeInfo {
+        std::string name;
+        std::size_t max_size;
+        std::size_t max_align;
+    };
+
+    std::vector<FacadeInfo> facades_;
+
+public:
+    template <facade F>
+    void registerFacade(std::string_view name) {
+        FacadeInfo info;
+        info.name = std::string(name);
+        info.max_size = F::constraints.max_size;
+        info.max_align = F::constraints.max_align;
+        facades_.push_back(std::move(info));
+    }
+
+    [[nodiscard]] const std::vector<FacadeInfo>& getFacades() const {
+        return facades_;
+    }
+
+    static FacadeRegistry& getInstance() {
+        static FacadeRegistry instance;
+        return instance;
+    }
+};
+
+/**
+ * @brief Proxy wrapper with type info integration
+ */
+template <facade F>
+class TypedProxy {
+    proxy<F> proxy_;
+
+public:
+    template <typename T>
+        requires ProxiableFor<T, F>
+    explicit TypedProxy(T&& value) : proxy_(std::forward<T>(value)) {}
+
+    [[nodiscard]] bool hasValue() const noexcept { return proxy_.has_value(); }
+    [[nodiscard]] const std::type_info& type() const { return proxy_.type(); }
+
+    proxy<F>& get() noexcept { return proxy_; }
+    const proxy<F>& get() const noexcept { return proxy_; }
+
+    void reset() noexcept { proxy_.reset(); }
+};
+
+/**
+ * @brief Create a typed proxy
+ */
+template <facade F, typename T>
+auto makeTypedProxy(T&& value) -> TypedProxy<F> {
+    return TypedProxy<F>(std::forward<T>(value));
+}
+
+#define ATOM_REGISTER_FACADE(FacadeType)                                  \
+    atom::meta::FacadeRegistry::getInstance().registerFacade<FacadeType>( \
+        #FacadeType)
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_FACADE_HPP

@@ -4,7 +4,7 @@
 # Project Name: Atom Test Suite Description: Comprehensive test suite for Atom
 # framework Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-test-suite
   VERSION 1.0.0
@@ -22,20 +22,25 @@ find_package(Threads REQUIRED)
 # Function to copy required DLLs to test executable directory
 function(copy_test_dlls TARGET_NAME)
   if(WIN32)
-    # List of all DLL targets that might be needed by tests
-    set(DLL_TARGETS atom-error atom-log atom-component)
+    # List of all DLL targets that might be needed by tests Note: Only copy
+    # targets that are SHARED libraries, not OBJECT libraries
+    set(DLL_TARGETS atom-log atom-component)
 
-    # Copy each DLL if it exists as a target
+    # Copy each DLL if it exists as a SHARED library target
     foreach(DLL_TARGET ${DLL_TARGETS})
       if(TARGET ${DLL_TARGET})
-        add_custom_command(
-          TARGET ${TARGET_NAME}
-          POST_BUILD
-          COMMAND
-            ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:${DLL_TARGET}>"
-            "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
-          COMMENT "Copying ${DLL_TARGET} DLL to ${TARGET_NAME} directory"
-          VERBATIM)
+        get_target_property(TARGET_TYPE ${DLL_TARGET} TYPE)
+        if(TARGET_TYPE STREQUAL "SHARED_LIBRARY")
+          add_custom_command(
+            TARGET ${TARGET_NAME}
+            POST_BUILD
+            COMMAND
+              ${CMAKE_COMMAND} -E copy_if_different
+              "$<TARGET_FILE:${DLL_TARGET}>"
+              "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+            COMMENT "Copying ${DLL_TARGET} DLL to ${TARGET_NAME} directory"
+            VERBATIM)
+        endif()
       endif()
     endforeach()
   endif()
@@ -48,20 +53,26 @@ endmacro()
 
 # Add a global post-build step to copy DLLs to all test directories
 if(WIN32)
-  # This custom target will copy DLLs after all tests are built
+  # This custom target will copy DLLs after all tests are built Note: atom-error
+  # is an OBJECT library, so we only copy atom-log if it's a shared lib
   add_custom_target(
     copy_all_test_dlls ALL
     COMMAND ${CMAKE_COMMAND} -E echo "Copying DLLs to all test directories..."
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_BINARY_DIR}/atom/error/libatom-error.dll"
-      "${CMAKE_CURRENT_BINARY_DIR}/"
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_if_different
-      "${CMAKE_BINARY_DIR}/atom/log/libatom-log.dll"
-      "${CMAKE_CURRENT_BINARY_DIR}/"
-    DEPENDS atom-error atom-log
     COMMENT "Copying DLLs to test root directory")
+
+  # Only add copy commands for actual shared libraries
+  if(TARGET atom-log)
+    get_target_property(ATOM_LOG_TYPE atom-log TYPE)
+    if(ATOM_LOG_TYPE STREQUAL "SHARED_LIBRARY")
+      add_custom_command(
+        TARGET copy_all_test_dlls
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:atom-log>"
+                "${CMAKE_CURRENT_BINARY_DIR}/"
+        COMMENT "Copying atom-log DLL")
+      add_dependencies(copy_all_test_dlls atom-log)
+    endif()
+  endif()
 endif()
 
 # Include test infrastructure first
@@ -300,47 +311,46 @@ endif()
 # =============================================================================
 # Copy DLLs to All Test Directories (Windows)
 # =============================================================================
-if(WIN32)
-  # Get all test executables
-  set(TEST_SUBDIRS
-      algorithm
-      async
-      components
-      connection
-      containers
-      error
-      extra
-      image
-      io
-      log
-      memory
-      meta
-      search
-      secret
-      serial
-      sysinfo
-      type
-      utils
-      web)
+# Note: atom-error is an OBJECT library and doesn't produce a DLL Only copy
+# actual shared libraries
+if(WIN32 AND TARGET atom-log)
+  get_target_property(ATOM_LOG_TYPE_CHECK atom-log TYPE)
+  if(ATOM_LOG_TYPE_CHECK STREQUAL "SHARED_LIBRARY")
+    set(TEST_SUBDIRS
+        algorithm
+        async
+        components
+        connection
+        containers
+        error
+        extra
+        image
+        io
+        log
+        memory
+        meta
+        search
+        secret
+        serial
+        sysinfo
+        type
+        utils
+        web)
 
-  # Copy DLLs to each test subdirectory
-  foreach(SUBDIR ${TEST_SUBDIRS})
-    if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}")
-      add_custom_command(
-        TARGET copy_all_test_dlls
-        POST_BUILD
-        COMMAND
-          ${CMAKE_COMMAND} -E copy_if_different
-          "${CMAKE_BINARY_DIR}/atom/error/libatom-error.dll"
-          "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
-        COMMAND
-          ${CMAKE_COMMAND} -E copy_if_different
-          "${CMAKE_BINARY_DIR}/atom/log/libatom-log.dll"
-          "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
-        COMMENT "Copying DLLs to ${SUBDIR} test directory"
-        VERBATIM)
-    endif()
-  endforeach()
+    # Copy DLLs to each test subdirectory
+    foreach(SUBDIR ${TEST_SUBDIRS})
+      if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}")
+        add_custom_command(
+          TARGET copy_all_test_dlls
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:atom-log>"
+            "${CMAKE_CURRENT_BINARY_DIR}/${SUBDIR}/"
+          COMMENT "Copying DLLs to ${SUBDIR} test directory"
+          VERBATIM)
+      endif()
+    endforeach()
 
-  message(STATUS "Configured DLL copying for all test directories")
+    message(STATUS "Configured DLL copying for all test directories")
+  endif()
 endif()

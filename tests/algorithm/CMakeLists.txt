@@ -4,7 +4,7 @@
 # Project Name: Atom-Algorithm-Tests Description: Test Suite for Atom Algorithm
 # Module Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-algorithm-tests
   VERSION 1.0.0
@@ -84,8 +84,9 @@ endif()
 # For modules with .cpp test files
 file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 
-# Remove any problematic test files (customize as needed) list(FILTER
-# TEST_SOURCES EXCLUDE REGEX ".*test_problematic\.cpp$")
+# Remove duplicate test files from other directories (already in graphics)
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_flood\\.cpp$")
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/signal/test_perlin\\.cpp$")
 
 # =============================================================================
 # Create Test Executable
@@ -139,7 +140,8 @@ if(TARGET spdlog::spdlog_header_only)
 elseif(TARGET spdlog::spdlog)
   # Use header-only mode to avoid linking conflicts
   target_link_libraries(atom_algorithm_tests PRIVATE spdlog::spdlog)
-  target_compile_definitions(atom_algorithm_tests PRIVATE SPDLOG_HEADER_ONLY)
+  target_compile_definitions(atom_algorithm_tests PRIVATE SPDLOG_COMPILED_LIB
+                                                          SPDLOG_FMT_EXTERNAL)
   message(STATUS "Linking spdlog via spdlog::spdlog target (header-only mode)")
 elseif(SPDLOG_LIBRARY)
   target_link_libraries(atom_algorithm_tests PRIVATE ${SPDLOG_LIBRARY})

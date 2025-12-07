@@ -3,7 +3,7 @@
 #include <filesystem>
 #include <future>
 #include <thread>
-#include "atom/connection/async_fifoserver.hpp"
+#include "atom/connection/fifo/async_fifoserver.hpp"
 
 #ifdef _WIN32
 #include <windows.h>

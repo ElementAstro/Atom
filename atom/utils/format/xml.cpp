@@ -341,17 +341,71 @@ auto XMLReader::getValuesByPathsAsync(const std::vector<std::string>& paths)
     });
 }
 
-auto XMLReader::getElementByPath([[maybe_unused]] std::string_view path) const
+auto XMLReader::getElementByPath(std::string_view path) const
     -> tinyxml2::XMLElement* {
-    // Implementation for path-based element retrieval
-    // This would need to be implemented based on your path format
-    return nullptr;  // Placeholder
+    if (path.empty()) {
+        return nullptr;
+    }
+
+    // Split path by '/' delimiter
+    std::vector<std::string> pathParts;
+    std::string currentPart;
+
+    for (char c : path) {
+        if (c == '/') {
+            if (!currentPart.empty()) {
+                pathParts.push_back(currentPart);
+                currentPart.clear();
+            }
+        } else {
+            currentPart += c;
+        }
+    }
+    if (!currentPart.empty()) {
+        pathParts.push_back(currentPart);
+    }
+
+    if (pathParts.empty()) {
+        return nullptr;
+    }
+
+    // Navigate through the path
+    tinyxml2::XMLElement* element =
+        doc_.FirstChildElement(pathParts[0].c_str());
+
+    for (size_t i = 1; i < pathParts.size() && element != nullptr; ++i) {
+        element = element->FirstChildElement(pathParts[i].c_str());
+    }
+
+    return element;
 }
 
 auto XMLReader::isValidPath(std::string_view path) -> bool {
-    // Implementation for path validation
-    // This would need to be implemented based on your path format
-    return !path.empty();  // Placeholder
+    if (path.empty()) {
+        return false;
+    }
+
+    // Check for valid path characters
+    for (char c : path) {
+        if (!std::isalnum(static_cast<unsigned char>(c)) && c != '/' &&
+            c != '_' && c != '-' && c != '.') {
+            return false;
+        }
+    }
+
+    // Check for double slashes or leading/trailing slashes
+    if (path.front() == '/' || path.back() == '/') {
+        return false;
+    }
+
+    // Check for consecutive slashes
+    for (size_t i = 1; i < path.size(); ++i) {
+        if (path[i] == '/' && path[i - 1] == '/') {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 }  // namespace atom::utils

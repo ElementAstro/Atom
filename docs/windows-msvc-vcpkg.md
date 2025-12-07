@@ -13,7 +13,7 @@ This document records the exact steps and source changes required to build Atom 
 1. Clone or point vcpkg (manifest mode is already enabled via `vcpkg.json`):
    - Optional: `git clone https://github.com/microsoft/vcpkg.git vcpkg && vcpkg\bootstrap-vcpkg.bat`
 
-1. Configure using Visual Studio generator and vcpkg toolchain:
+2. Configure using Visual Studio generator and vcpkg toolchain:
    - Use VS-bundled CMake to avoid MSYS2/MinGW picking:
      "C:\\Program Files\\Microsoft Visual Studio\\2022\\Community\\Common7\\IDE\\CommonExtensions\\Microsoft\\CMake\\CMake\\bin\\cmake.exe"
 

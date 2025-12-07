@@ -552,24 +552,24 @@ TEST_F(TemplateTraitsTest, ContainerTraitsTests) {
     // Test container_traits
     EXPECT_TRUE(container_traits<std::vector<int>>::is_container);
     EXPECT_TRUE(container_traits<std::list<double>>::is_container);
-    EXPECT_TRUE(container_traits<std::map<int, std::string>>::is_container);
+    EXPECT_TRUE((container_traits<std::map<int, std::string>>::is_container));
     EXPECT_FALSE(container_traits<int>::is_container);
 
     // Test sequence container
     EXPECT_TRUE(container_traits<std::vector<int>>::is_sequence_container);
     EXPECT_TRUE(container_traits<std::list<double>>::is_sequence_container);
     EXPECT_FALSE(
-        container_traits<std::map<int, std::string>>::is_sequence_container);
+        (container_traits<std::map<int, std::string>>::is_sequence_container));
 
     // Test associative container
     EXPECT_FALSE(container_traits<std::vector<int>>::is_associative_container);
-    EXPECT_TRUE(
-        container_traits<std::map<int, std::string>>::is_associative_container);
-    EXPECT_TRUE(container_traits<
-                std::unordered_map<int, double>>::is_associative_container);
+    EXPECT_TRUE((container_traits<
+                 std::map<int, std::string>>::is_associative_container));
+    EXPECT_TRUE((container_traits<
+                 std::unordered_map<int, double>>::is_associative_container));
 
     // Test fixed size container
-    EXPECT_TRUE(container_traits<std::array<int, 10>>::is_fixed_size);
+    EXPECT_TRUE((container_traits<std::array<int, 10>>::is_fixed_size));
     EXPECT_FALSE(container_traits<std::vector<int>>::is_fixed_size);
 }
 

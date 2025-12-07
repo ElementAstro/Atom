@@ -268,4 +268,182 @@ TEST_F(MHashTest, ThreadSafety) {
     }
 }
 
+// =============================================================================
+// Keccak256 Tests
+// =============================================================================
+
+TEST_F(MHashTest, Keccak256BasicHash) {
+    // Test basic hashing functionality
+    std::string input = "hello";
+    auto hash = keccak256(input);
+    EXPECT_EQ(hash.size(), K_HASH_SIZE);
+
+    // Same input should produce same hash
+    auto hash2 = keccak256(input);
+    EXPECT_EQ(hash, hash2);
+}
+
+TEST_F(MHashTest, Keccak256EmptyInput) {
+    // Test empty input
+    std::string emptyInput = "";
+    auto hash = keccak256(emptyInput);
+    EXPECT_EQ(hash.size(), K_HASH_SIZE);
+
+    // Empty span version
+    std::vector<uint8_t> emptyVec;
+    auto hash2 = keccak256(std::span<const uint8_t>(emptyVec));
+    EXPECT_EQ(hash2.size(), K_HASH_SIZE);
+}
+
+TEST_F(MHashTest, Keccak256DifferentInputs) {
+    // Different inputs should produce different hashes
+    auto hash1 = keccak256("input1");
+    auto hash2 = keccak256("input2");
+    EXPECT_NE(hash1, hash2);
+}
+
+TEST_F(MHashTest, Keccak256BinaryData) {
+    // Test with binary data
+    std::vector<uint8_t> binaryData = {0x00, 0x01, 0x02, 0xFF, 0xFE, 0xFD};
+    auto hash = keccak256(std::span<const uint8_t>(binaryData));
+    EXPECT_EQ(hash.size(), K_HASH_SIZE);
+}
+
+TEST_F(MHashTest, Keccak256LargeInput) {
+    // Test with large input
+    std::string largeInput(10000, 'A');
+    auto hash = keccak256(largeInput);
+    EXPECT_EQ(hash.size(), K_HASH_SIZE);
+}
+
+TEST_F(MHashTest, Keccak256Deterministic) {
+    // Test determinism across multiple calls
+    std::string input = "test determinism";
+    std::array<uint8_t, K_HASH_SIZE> firstHash = keccak256(input);
+
+    for (int i = 0; i < 10; ++i) {
+        auto hash = keccak256(input);
+        EXPECT_EQ(hash, firstHash);
+    }
+}
+
+TEST_F(MHashTest, Keccak256SpanOverload) {
+    // Test span overload
+    std::string strInput = "test";
+    std::vector<uint8_t> vecInput(strInput.begin(), strInput.end());
+
+    auto hashFromString = keccak256(strInput);
+    auto hashFromSpan = keccak256(std::span<const uint8_t>(vecInput));
+
+    EXPECT_EQ(hashFromString, hashFromSpan);
+}
+
+// =============================================================================
+// HashContext Tests
+// =============================================================================
+
+TEST_F(MHashTest, HashContextConstruction) {
+    EXPECT_NO_THROW({ HashContext ctx; });
+}
+
+TEST_F(MHashTest, HashContextUpdateAndFinalize) {
+    HashContext ctx;
+
+    // Update with string_view
+    EXPECT_TRUE(ctx.update("hello"));
+
+    // Finalize and get result
+    auto result = ctx.finalize();
+    EXPECT_TRUE(result.has_value());
+    EXPECT_EQ(result->size(), K_HASH_SIZE);
+}
+
+TEST_F(MHashTest, HashContextIncrementalUpdate) {
+    HashContext ctx1;
+    ctx1.update("hello");
+    ctx1.update("world");
+    auto result1 = ctx1.finalize();
+
+    HashContext ctx2;
+    ctx2.update("helloworld");
+    auto result2 = ctx2.finalize();
+
+    // Incremental updates should produce same result as single update
+    ASSERT_TRUE(result1.has_value());
+    ASSERT_TRUE(result2.has_value());
+    EXPECT_EQ(*result1, *result2);
+}
+
+TEST_F(MHashTest, HashContextUpdateWithPointer) {
+    HashContext ctx;
+    const char* data = "test data";
+    EXPECT_TRUE(ctx.update(data, strlen(data)));
+
+    auto result = ctx.finalize();
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(MHashTest, HashContextUpdateWithSpan) {
+    HashContext ctx;
+    std::vector<std::byte> data = {std::byte{0x01}, std::byte{0x02},
+                                   std::byte{0x03}};
+    EXPECT_TRUE(ctx.update(std::span<const std::byte>(data)));
+
+    auto result = ctx.finalize();
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(MHashTest, HashContextMoveSemantics) {
+    HashContext ctx1;
+    ctx1.update("test");
+
+    // Move constructor
+    HashContext ctx2(std::move(ctx1));
+    auto result = ctx2.finalize();
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(MHashTest, HashContextMoveAssignment) {
+    HashContext ctx1;
+    ctx1.update("test");
+
+    HashContext ctx2;
+    ctx2 = std::move(ctx1);
+    auto result = ctx2.finalize();
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(MHashTest, HashContextEmptyInput) {
+    HashContext ctx;
+    // Don't update, just finalize
+    auto result = ctx.finalize();
+    EXPECT_TRUE(result.has_value());
+}
+
+TEST_F(MHashTest, HashContextLargeData) {
+    HashContext ctx;
+    std::string largeData(100000, 'X');
+    EXPECT_TRUE(ctx.update(largeData));
+
+    auto result = ctx.finalize();
+    EXPECT_TRUE(result.has_value());
+}
+
+// =============================================================================
+// supportsHexStringConversion Tests
+// =============================================================================
+
+TEST_F(MHashTest, SupportsHexStringConversion) {
+    // Valid hex strings
+    EXPECT_TRUE(supportsHexStringConversion("0123456789ABCDEF"));
+    EXPECT_TRUE(supportsHexStringConversion("0123456789abcdef"));
+    EXPECT_TRUE(supportsHexStringConversion("DeAdBeEf"));
+
+    // Invalid hex strings
+    EXPECT_FALSE(supportsHexStringConversion(""));
+    EXPECT_FALSE(supportsHexStringConversion("GHIJ"));
+    EXPECT_FALSE(supportsHexStringConversion("12 34"));
+    EXPECT_FALSE(supportsHexStringConversion("12-34"));
+}
+
 // Main function removed - using gtest_main

@@ -3,7 +3,10 @@
 #include <spdlog/spdlog.h>
 #include <cmath>
 #include <map>
+#include <numeric>
+#include <set>
 #include <sstream>
+#include <thread>
 #include <vector>
 #include "atom/algorithm/weight.hpp"
 #include "atom/error/exception.hpp"
@@ -322,4 +325,269 @@ TEST_F(WeightSelectorTest, EdgeCaseWeights) {
         }
         EXPECT_GT(counts[2], NUM_SELECTIONS * 0.99);
     }
+}
+
+// =============================================================================
+// WeightCollection Tests
+// =============================================================================
+
+class WeightCollectionTest : public ::testing::Test {
+protected:
+    void SetUp() override {
+        static bool initialized = false;
+        if (!initialized) {
+            spdlog::set_level(spdlog::level::off);
+            initialized = true;
+        }
+    }
+};
+
+TEST_F(WeightCollectionTest, BasicConstruction) {
+    WeightCollection<double> collection;
+    EXPECT_EQ(collection.size(), 0u);
+    EXPECT_TRUE(collection.empty());
+}
+
+TEST_F(WeightCollectionTest, AddAndGetWeights) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+    collection.add("item3", 3.0);
+
+    EXPECT_EQ(collection.size(), 3u);
+    EXPECT_FALSE(collection.empty());
+
+    auto weight1 = collection.get("item1");
+    ASSERT_TRUE(weight1.has_value());
+    EXPECT_EQ(weight1.value(), 1.0);
+
+    auto weight2 = collection.get("item2");
+    ASSERT_TRUE(weight2.has_value());
+    EXPECT_EQ(weight2.value(), 2.0);
+
+    auto nonexistent = collection.get("nonexistent");
+    EXPECT_FALSE(nonexistent.has_value());
+}
+
+TEST_F(WeightCollectionTest, UpdateWeight) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+
+    collection.update("item1", 10.0);
+    auto weight = collection.get("item1");
+    ASSERT_TRUE(weight.has_value());
+    EXPECT_EQ(weight.value(), 10.0);
+}
+
+TEST_F(WeightCollectionTest, RemoveWeight) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+
+    EXPECT_TRUE(collection.remove("item1"));
+    EXPECT_EQ(collection.size(), 1u);
+    EXPECT_FALSE(collection.get("item1").has_value());
+
+    EXPECT_FALSE(collection.remove("nonexistent"));
+}
+
+TEST_F(WeightCollectionTest, ContainsKey) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+
+    EXPECT_TRUE(collection.contains("item1"));
+    EXPECT_FALSE(collection.contains("item2"));
+}
+
+TEST_F(WeightCollectionTest, Clear) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+
+    collection.clear();
+    EXPECT_EQ(collection.size(), 0u);
+    EXPECT_TRUE(collection.empty());
+}
+
+TEST_F(WeightCollectionTest, TotalWeight) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+    collection.add("item3", 3.0);
+
+    EXPECT_NEAR(collection.totalWeight(), 6.0, 1e-10);
+}
+
+TEST_F(WeightCollectionTest, NormalizeWeights) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+    collection.add("item3", 3.0);
+    collection.add("item4", 4.0);
+
+    collection.normalize();
+
+    EXPECT_NEAR(collection.totalWeight(), 1.0, 1e-10);
+
+    auto weight1 = collection.get("item1");
+    ASSERT_TRUE(weight1.has_value());
+    EXPECT_NEAR(weight1.value(), 0.1, 1e-10);
+}
+
+TEST_F(WeightCollectionTest, ScaleWeights) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+
+    collection.scale(2.0);
+
+    auto weight1 = collection.get("item1");
+    ASSERT_TRUE(weight1.has_value());
+    EXPECT_NEAR(weight1.value(), 2.0, 1e-10);
+
+    auto weight2 = collection.get("item2");
+    ASSERT_TRUE(weight2.has_value());
+    EXPECT_NEAR(weight2.value(), 4.0, 1e-10);
+}
+
+TEST_F(WeightCollectionTest, GetKeys) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+    collection.add("item3", 3.0);
+
+    auto keys = collection.keys();
+    EXPECT_EQ(keys.size(), 3u);
+
+    std::set<std::string> keySet(keys.begin(), keys.end());
+    EXPECT_TRUE(keySet.count("item1") > 0);
+    EXPECT_TRUE(keySet.count("item2") > 0);
+    EXPECT_TRUE(keySet.count("item3") > 0);
+}
+
+TEST_F(WeightCollectionTest, GetValues) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+    collection.add("item3", 3.0);
+
+    auto values = collection.values();
+    EXPECT_EQ(values.size(), 3u);
+
+    double sum = std::accumulate(values.begin(), values.end(), 0.0);
+    EXPECT_NEAR(sum, 6.0, 1e-10);
+}
+
+TEST_F(WeightCollectionTest, ThreadSafety) {
+    WeightCollection<double> collection;
+
+    std::vector<std::thread> threads;
+    const int numThreads = 4;
+    const int numOps = 100;
+
+    // Writers
+    for (int t = 0; t < numThreads; ++t) {
+        threads.emplace_back([&collection, t, numOps]() {
+            for (int i = 0; i < numOps; ++i) {
+                std::string key =
+                    "thread" + std::to_string(t) + "_item" + std::to_string(i);
+                collection.add(key, static_cast<double>(i));
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(collection.size(), static_cast<size_t>(numThreads * numOps));
+}
+
+TEST_F(WeightCollectionTest, SelectWeighted) {
+    WeightCollection<double> collection;
+    collection.add("rare", 1.0);
+    collection.add("common", 99.0);
+
+    std::map<std::string, int> counts;
+    const int numSelections = 10000;
+
+    for (int i = 0; i < numSelections; ++i) {
+        auto selected = collection.selectWeighted();
+        if (selected.has_value()) {
+            counts[selected.value()]++;
+        }
+    }
+
+    // "common" should be selected much more often than "rare"
+    EXPECT_GT(counts["common"], counts["rare"] * 50);
+}
+
+TEST_F(WeightCollectionTest, FilterByPredicate) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+    collection.add("item3", 3.0);
+    collection.add("item4", 4.0);
+    collection.add("item5", 5.0);
+
+    auto filtered = collection.filter(
+        [](const std::string&, double weight) { return weight > 2.5; });
+
+    EXPECT_EQ(filtered.size(), 3u);
+    EXPECT_TRUE(filtered.contains("item3"));
+    EXPECT_TRUE(filtered.contains("item4"));
+    EXPECT_TRUE(filtered.contains("item5"));
+    EXPECT_FALSE(filtered.contains("item1"));
+    EXPECT_FALSE(filtered.contains("item2"));
+}
+
+TEST_F(WeightCollectionTest, ApplyFunction) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 2.0);
+    collection.add("item3", 3.0);
+
+    collection.apply([](double w) { return w * w; });
+
+    auto weight1 = collection.get("item1");
+    ASSERT_TRUE(weight1.has_value());
+    EXPECT_NEAR(weight1.value(), 1.0, 1e-10);
+
+    auto weight2 = collection.get("item2");
+    ASSERT_TRUE(weight2.has_value());
+    EXPECT_NEAR(weight2.value(), 4.0, 1e-10);
+
+    auto weight3 = collection.get("item3");
+    ASSERT_TRUE(weight3.has_value());
+    EXPECT_NEAR(weight3.value(), 9.0, 1e-10);
+}
+
+TEST_F(WeightCollectionTest, MaxAndMinWeight) {
+    WeightCollection<double> collection;
+    collection.add("item1", 1.0);
+    collection.add("item2", 5.0);
+    collection.add("item3", 3.0);
+
+    auto maxKey = collection.maxWeightKey();
+    ASSERT_TRUE(maxKey.has_value());
+    EXPECT_EQ(maxKey.value(), "item2");
+
+    auto minKey = collection.minWeightKey();
+    ASSERT_TRUE(minKey.has_value());
+    EXPECT_EQ(minKey.value(), "item1");
+}
+
+TEST_F(WeightCollectionTest, EmptyCollectionOperations) {
+    WeightCollection<double> collection;
+
+    EXPECT_NEAR(collection.totalWeight(), 0.0, 1e-10);
+    EXPECT_FALSE(collection.maxWeightKey().has_value());
+    EXPECT_FALSE(collection.minWeightKey().has_value());
+    EXPECT_FALSE(collection.selectWeighted().has_value());
+
+    auto keys = collection.keys();
+    EXPECT_TRUE(keys.empty());
+
+    auto values = collection.values();
+    EXPECT_TRUE(values.empty());
 }

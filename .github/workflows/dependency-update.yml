@@ -2,7 +2,7 @@ name: Dependency Updates
 
 on:
   schedule:
-    - cron: "0 6 * * 1" # Weekly on Monday at 6 AM
+    - cron: "0 6 * * 1"  # Weekly on Monday at 6 AM
   workflow_dispatch:
     inputs:
       update_type:
@@ -21,7 +21,10 @@ jobs:
   update-vcpkg:
     name: Update vcpkg Baseline
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event.inputs.update_type == 'all' || github.event.inputs.update_type == 'vcpkg'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event.inputs.update_type == 'all' ||
+      github.event.inputs.update_type == 'vcpkg'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -98,7 +101,10 @@ jobs:
   update-submodules:
     name: Update Git Submodules
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event.inputs.update_type == 'all' || github.event.inputs.update_type == 'submodules'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event.inputs.update_type == 'all' ||
+      github.event.inputs.update_type == 'submodules'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -148,7 +154,10 @@ jobs:
   update-python-deps:
     name: Update Python Dependencies
     runs-on: ubuntu-latest
-    if: github.event_name == 'schedule' || github.event.inputs.update_type == 'all' || github.event.inputs.update_type == 'python'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event.inputs.update_type == 'all' ||
+      github.event.inputs.update_type == 'python'
     steps:
       - uses: actions/checkout@v4
         with:

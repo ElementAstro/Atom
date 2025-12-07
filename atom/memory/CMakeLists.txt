@@ -10,9 +10,19 @@ project(
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Find all source files
-file(GLOB_RECURSE SOURCES "*.cpp")
-file(GLOB_RECURSE HEADERS "*.h" "*.hpp")
+# Explicit source files (avoid GLOB for better build system reliability)
+set(SOURCES instantiations.cpp tracker.cpp)
+
+# Explicit header files
+set(HEADERS
+    memory.hpp
+    memory_pool.hpp
+    object.hpp
+    ring.hpp
+    shared.hpp
+    short_alloc.hpp
+    tracker.hpp
+    utils.hpp)
 
 # Determine if this is header-only
 if(NOT SOURCES)
@@ -30,17 +40,32 @@ else()
   atom_configure_module(atom-memory)
 endif()
 
+# Find spdlog for shared.hpp
+find_package(spdlog QUIET)
+
 # Link module-specific dependencies
 if(IS_HEADER_ONLY)
   target_link_libraries(
     atom-memory INTERFACE atom-meta # For concept.hpp
                           atom-type # For noncopyable.hpp
   )
+  # Add spdlog compile definitions for header-only mode
+  target_compile_definitions(atom-memory INTERFACE SPDLOG_COMPILED_LIB
+                                                   SPDLOG_FMT_EXTERNAL)
+  if(spdlog_FOUND)
+    target_link_libraries(atom-memory INTERFACE spdlog::spdlog)
+  endif()
 else()
   target_link_libraries(
     atom-memory PUBLIC atom-meta # For concept.hpp
                        atom-type # For noncopyable.hpp
   )
+  # Add spdlog compile definitions
+  target_compile_definitions(atom-memory PUBLIC SPDLOG_COMPILED_LIB
+                                                SPDLOG_FMT_EXTERNAL)
+  if(spdlog_FOUND)
+    target_link_libraries(atom-memory PUBLIC spdlog::spdlog)
+  endif()
 endif()
 
 # Install headers

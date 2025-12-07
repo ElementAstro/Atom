@@ -246,7 +246,8 @@ auto filterAddrInfo(const struct addrinfo* addrInfo, int family)
         }
 
         return std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>(
-            head, ::freeaddrinfo);
+            head,
+            [](struct addrinfo* ptr) noexcept { freeAddrInfoChain(ptr); });
 
     } catch (const std::exception& e) {
         spdlog::error("Failed to filter addrinfo: {}", e.what());
@@ -287,7 +288,8 @@ auto sortAddrInfo(const struct addrinfo* addrInfo)
         }
 
         return std::unique_ptr<struct addrinfo, decltype(&::freeaddrinfo)>(
-            head, ::freeaddrinfo);
+            head,
+            [](struct addrinfo* ptr) noexcept { freeAddrInfoChain(ptr); });
 
     } catch (const std::exception& e) {
         spdlog::error("Failed to sort addrinfo: {}", e.what());

@@ -119,7 +119,7 @@ ATOM_INLINE void registerTest(std::string name, std::function<void()> func,
 - **C++20 Required**: Use concepts, ranges, source_location
 - **RAII Everywhere**: Smart pointers, automatic resource management
 - **Template Heavy**: Meta-programming in `atom/meta/` - extensive concept usage
-- **Error Propagation**: Use Result<T> types from `atom-error`, not exceptions in normal flow
+- **Error Propagation**: Use `Result<T>` types from `atom-error`, not exceptions in normal flow
 - **Documentation**: Doxygen format with `@brief`, `@param`, `@return`
 
 When working on this codebase, always check module dependencies first, respect the build order, and follow the established patterns for testing and examples.

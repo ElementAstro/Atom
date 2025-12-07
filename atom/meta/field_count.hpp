@@ -253,6 +253,69 @@ consteval auto fieldCountOf() -> std::size_t {
     return 0;
 }
 
+//==============================================================================
+// C++23 Enhanced Field Count Utilities
+//==============================================================================
+
+/**
+ * @brief Variable template for field count
+ */
+template <typename T>
+inline constexpr std::size_t field_count_v = fieldCountOf<T>();
+
+/**
+ * @brief Check if a type has fields
+ */
+template <typename T>
+inline constexpr bool has_fields_v = field_count_v<T> > 0;
+
+/**
+ * @brief Concept for types with specific field count
+ */
+template <typename T, std::size_t N>
+concept HasFieldCount = AggregateType<T> && (fieldCountOf<T>() == N);
+
+/**
+ * @brief Concept for types with at least N fields
+ */
+template <typename T, std::size_t N>
+concept HasAtLeastFields = AggregateType<T> && (fieldCountOf<T>() >= N);
+
+/**
+ * @brief Get field count as compile-time constant
+ */
+template <AggregateType T>
+struct FieldCountOf : std::integral_constant<std::size_t, fieldCountOf<T>()> {};
+
+/**
+ * @brief Compare field counts of two types
+ */
+template <typename T, typename U>
+inline constexpr bool same_field_count_v =
+    AggregateType<T> && AggregateType<U> &&
+    (fieldCountOf<T>() == fieldCountOf<U>());
+
+/**
+ * @brief Get the maximum field count among multiple types
+ */
+template <typename... Ts>
+inline constexpr std::size_t max_field_count_v =
+    std::max({fieldCountOf<Ts>()...});
+
+/**
+ * @brief Get the minimum field count among multiple types
+ */
+template <typename... Ts>
+    requires(sizeof...(Ts) > 0)
+inline constexpr std::size_t min_field_count_v =
+    std::min({fieldCountOf<Ts>()...});
+
+/**
+ * @brief Get total field count of multiple types
+ */
+template <typename... Ts>
+inline constexpr std::size_t total_field_count_v = (fieldCountOf<Ts>() + ...);
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_FIELD_COUNT_HPP

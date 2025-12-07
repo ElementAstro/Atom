@@ -3,7 +3,7 @@
 #include <chrono>
 #include <future>
 #include <thread>
-#include "atom/connection/ttybase.hpp"
+#include "atom/connection/serial/ttybase.hpp"
 
 // TTYBase is not in atom::connection namespace
 using namespace std::chrono_literals;

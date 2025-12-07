@@ -841,6 +841,139 @@ auto make_container_pipe(Container&& container) {
         /* Add specific capabilities here */                                   \
     }
 
+//==============================================================================
+// C++23 Enhanced Container Traits Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for sequence containers
+ */
+template <typename C>
+concept SequenceContainer = requires(C c) {
+    typename C::value_type;
+    typename C::iterator;
+    { c.begin() } -> std::input_or_output_iterator;
+    { c.end() } -> std::input_or_output_iterator;
+    { c.size() } -> std::convertible_to<std::size_t>;
+};
+
+/**
+ * @brief Concept for associative containers
+ */
+template <typename C>
+concept AssociativeContainer = requires(C c) {
+    typename C::key_type;
+    typename C::mapped_type;
+    { c.find(std::declval<typename C::key_type>()) };
+};
+
+/**
+ * @brief Concept for containers with random access
+ */
+template <typename C>
+concept RandomAccessContainer =
+    SequenceContainer<C> && requires(C c, std::size_t i) {
+        { c[i] } -> std::convertible_to<typename C::value_type&>;
+    };
+
+/**
+ * @brief Concept for resizable containers
+ */
+template <typename C>
+concept ResizableContainer =
+    SequenceContainer<C> && requires(C c, std::size_t n) {
+        { c.resize(n) };
+        { c.reserve(n) };
+    };
+
+/**
+ * @brief Get container type category as string
+ */
+template <typename Container>
+constexpr std::string_view getContainerCategory() {
+    using Traits = ContainerTraits<Container>;
+    if constexpr (Traits::is_sequence_container)
+        return "sequence";
+    else if constexpr (Traits::is_associative_container)
+        return "associative";
+    else if constexpr (Traits::is_unordered_associative_container)
+        return "unordered_associative";
+    else if constexpr (Traits::is_container_adapter)
+        return "adapter";
+    else
+        return "unknown";
+}
+
+/**
+ * @brief Container capability checker
+ */
+template <typename Container>
+struct ContainerCapabilities {
+    using Traits = ContainerTraits<Container>;
+
+    static constexpr bool can_push_back = Traits::has_push_back;
+    static constexpr bool can_push_front = Traits::has_push_front;
+    static constexpr bool can_random_access = Traits::has_random_access;
+    static constexpr bool can_iterate_reverse = Traits::has_rbegin_rend;
+    static constexpr bool can_insert = Traits::has_insert;
+    static constexpr bool can_erase = Traits::has_erase;
+
+    static auto summary() -> std::string {
+        std::string result = "Container Capabilities:\n";
+        result +=
+            "  Push Back: " + std::string(can_push_back ? "Yes" : "No") + "\n";
+        result +=
+            "  Push Front: " + std::string(can_push_front ? "Yes" : "No") +
+            "\n";
+        result += "  Random Access: " +
+                  std::string(can_random_access ? "Yes" : "No") + "\n";
+        result += "  Reverse Iterate: " +
+                  std::string(can_iterate_reverse ? "Yes" : "No") + "\n";
+        return result;
+    }
+};
+
+/**
+ * @brief Type-safe container operations
+ */
+template <SequenceContainer Container>
+class SafeContainerOps {
+    Container& container_;
+
+public:
+    explicit SafeContainerOps(Container& c) : container_(c) {}
+
+    auto safeAt(std::size_t index)
+        -> std::optional<typename Container::value_type> {
+        if (index < container_.size()) {
+            return container_[index];
+        }
+        return std::nullopt;
+    }
+
+    auto front() -> std::optional<typename Container::value_type> {
+        if (!container_.empty()) {
+            return container_.front();
+        }
+        return std::nullopt;
+    }
+
+    auto back() -> std::optional<typename Container::value_type> {
+        if (!container_.empty()) {
+            return container_.back();
+        }
+        return std::nullopt;
+    }
+};
+
+/**
+ * @brief Create safe container operations wrapper
+ */
+template <SequenceContainer Container>
+auto makeSafeOps(Container& c) {
+    return SafeContainerOps<Container>(c);
+}
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_CONTAINER_TRAITS_HPP

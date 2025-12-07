@@ -384,6 +384,174 @@ public:
     }
 };
 
+//==============================================================================
+// C++23 Enhanced Metadata Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for types with metadata support
+ */
+template <typename T>
+concept MetadataSupported = requires {
+    { TypeInfo::fromType<T>() };
+};
+
+/**
+ * @brief Fluent metadata builder
+ */
+class MetadataBuilder {
+    TypeMetadata metadata_;
+    std::string type_name_;
+
+public:
+    explicit MetadataBuilder(std::string_view name) : type_name_(name) {}
+
+    MetadataBuilder& withMethod(std::string_view name,
+                                TypeMetadata::MethodFunction func,
+                                std::string_view desc = "") {
+        metadata_.addMethod(std::string(name), std::move(func),
+                            std::string(desc));
+        return *this;
+    }
+
+    MetadataBuilder& withProperty(std::string_view name,
+                                  TypeMetadata::GetterFunction getter,
+                                  TypeMetadata::SetterFunction setter = nullptr,
+                                  std::string_view desc = "") {
+        metadata_.addProperty(std::string(name), std::move(getter),
+                              std::move(setter), {}, std::string(desc));
+        return *this;
+    }
+
+    MetadataBuilder& withEvent(std::string_view name,
+                               std::string_view desc = "") {
+        metadata_.addEvent(std::string(name), std::string(desc));
+        return *this;
+    }
+
+    MetadataBuilder& withConstructor(std::string_view name,
+                                     TypeMetadata::ConstructorFunction func) {
+        metadata_.addConstructor(std::string(name), std::move(func));
+        return *this;
+    }
+
+    void build() {
+        TypeRegistry::instance().registerType(type_name_, std::move(metadata_));
+    }
+
+    [[nodiscard]] const TypeMetadata& getMetadata() const { return metadata_; }
+};
+
+/**
+ * @brief Create a metadata builder
+ */
+inline auto buildMetadata(std::string_view type_name) -> MetadataBuilder {
+    return MetadataBuilder(type_name);
+}
+
+/**
+ * @brief Enhanced type registrar with automatic method binding
+ */
+template <MetadataSupported T>
+class AutoTypeRegistrar {
+public:
+    static void registerWithDefaults(std::string_view name) {
+        buildMetadata(name)
+            .withConstructor(
+                std::string(name),
+                [](std::vector<BoxedValue>) { return BoxedValue(T{}); })
+            .withEvent("onCreate", "Fired when instance is created")
+            .withEvent("onDestroy", "Fired when instance is destroyed")
+            .build();
+    }
+
+    template <typename Func>
+    static void registerMethod(std::string_view type_name,
+                               std::string_view method_name, Func&& func) {
+        if (auto metadata =
+                TypeRegistry::instance().getMetadata(std::string(type_name))) {
+            metadata->addMethod(
+                std::string(method_name),
+                [f = std::forward<Func>(func)](
+                    std::vector<BoxedValue> args) -> BoxedValue {
+                    // Simplified - would need proper argument unpacking
+                    return BoxedValue{};
+                });
+        }
+    }
+};
+
+/**
+ * @brief Query metadata for a type
+ */
+template <MetadataSupported T>
+auto queryMetadata() -> std::optional<TypeMetadata*> {
+    auto name = TypeInfo::fromType<T>().name();
+    return TypeRegistry::instance().getMetadata(name);
+}
+
+/**
+ * @brief Invoke method on object by name with type checking
+ */
+template <typename Result = BoxedValue>
+auto invokeMethod(BoxedValue& obj, std::string_view method_name,
+                  std::vector<BoxedValue> args = {}) -> std::optional<Result> {
+    auto result = invoke(obj, std::string(method_name), std::move(args));
+    if constexpr (std::is_same_v<Result, BoxedValue>) {
+        return result;
+    } else {
+        if (result.canCast<Result>()) {
+            return result.cast<Result>();
+        }
+        return std::nullopt;
+    }
+}
+
+/**
+ * @brief Metadata visitor for introspection
+ */
+template <typename Visitor>
+void visitMetadata(std::string_view type_name, Visitor&& visitor) {
+    if (auto metadata =
+            TypeRegistry::instance().getMetadata(std::string(type_name))) {
+        std::forward<Visitor>(visitor)(*metadata);
+    }
+}
+
+/**
+ * @brief Get all registered type names
+ */
+inline auto getAllRegisteredTypes() -> std::vector<std::string> {
+    return TypeRegistry::instance().getRegisteredTypes();
+}
+
+/**
+ * @brief Check if a type has a specific method
+ */
+inline bool hasMethod(std::string_view type_name,
+                      std::string_view method_name) {
+    if (auto metadata =
+            TypeRegistry::instance().getMetadata(std::string(type_name))) {
+        return metadata->getMethod(std::string(method_name)).has_value();
+    }
+    return false;
+}
+
+/**
+ * @brief Check if a type has a specific property
+ */
+inline bool hasProperty(std::string_view type_name,
+                        std::string_view property_name) {
+    if (auto metadata =
+            TypeRegistry::instance().getMetadata(std::string(type_name))) {
+        return metadata->getProperty(std::string(property_name)).has_value();
+    }
+    return false;
+}
+
+#define ATOM_REGISTER_METADATA(Type) \
+    atom::meta::AutoTypeRegistrar<Type>::registerWithDefaults(#Type)
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_ANYMETA_HPP

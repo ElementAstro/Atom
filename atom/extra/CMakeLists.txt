@@ -4,7 +4,7 @@
 # Project Name: Atom Extra Components Description: Additional utility libraries
 # and wrappers for the Atom framework Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(atom-extra LANGUAGES CXX)
 
 # Set C++ standard for all extra components

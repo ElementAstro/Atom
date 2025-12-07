@@ -356,4 +356,196 @@ void GlobalSharedPtrManager::addDeleter(
     }
 }
 
+//==============================================================================
+// C++23 Enhanced Global Pointer Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for pointer-like types
+ */
+template <typename T>
+concept PointerLike = requires(T t) {
+    { *t };
+    { t.get() };
+    { static_cast<bool>(t) };
+};
+
+/**
+ * @brief Concept for shared pointer types
+ */
+template <typename T>
+concept SharedPointerLike = PointerLike<T> && requires(T t) {
+    { t.use_count() } -> std::convertible_to<long>;
+};
+
+/**
+ * @brief Safe global pointer access with optional result
+ */
+template <typename T>
+auto safeGetPtr(std::string_view key) -> std::optional<std::shared_ptr<T>> {
+    auto ptr = GlobalSharedPtrManager::getInstance().getSharedPtr<T>(key);
+    if (ptr) {
+        return ptr;
+    }
+    return std::nullopt;
+}
+
+/**
+ * @brief Get or create with factory function
+ */
+template <typename T, typename Factory>
+    requires std::invocable<Factory> &&
+                 std::same_as<std::invoke_result_t<Factory>, std::shared_ptr<T>>
+auto getOrCreate(std::string_view key,
+                 Factory&& factory) -> std::shared_ptr<T> {
+    return GlobalSharedPtrManager::getInstance().getOrCreateSharedPtr<T>(
+        key, std::forward<Factory>(factory));
+}
+
+/**
+ * @brief Scoped pointer registration (RAII)
+ */
+template <typename T>
+class ScopedGlobalPtr {
+    std::string key_;
+
+public:
+    ScopedGlobalPtr(std::string_view key, std::shared_ptr<T> ptr) : key_(key) {
+        GlobalSharedPtrManager::getInstance().addSharedPtr<T>(key,
+                                                              std::move(ptr));
+    }
+
+    ~ScopedGlobalPtr() {
+        GlobalSharedPtrManager::getInstance().removeSharedPtr(key_);
+    }
+
+    ScopedGlobalPtr(const ScopedGlobalPtr&) = delete;
+    ScopedGlobalPtr& operator=(const ScopedGlobalPtr&) = delete;
+    ScopedGlobalPtr(ScopedGlobalPtr&&) = default;
+    ScopedGlobalPtr& operator=(ScopedGlobalPtr&&) = default;
+
+    [[nodiscard]] std::shared_ptr<T> get() const {
+        return GlobalSharedPtrManager::getInstance().getSharedPtr<T>(key_);
+    }
+
+    [[nodiscard]] const std::string& key() const { return key_; }
+};
+
+/**
+ * @brief Create a scoped global pointer
+ */
+template <typename T>
+auto makeScopedGlobalPtr(std::string_view key, std::shared_ptr<T> ptr) {
+    return ScopedGlobalPtr<T>(key, std::move(ptr));
+}
+
+/**
+ * @brief Global pointer guard for temporary pointer usage
+ */
+template <typename T>
+class GlobalPtrGuard {
+    std::weak_ptr<T> weak_ptr_;
+    std::string key_;
+
+public:
+    explicit GlobalPtrGuard(std::string_view key)
+        : weak_ptr_(GlobalSharedPtrManager::getInstance().getWeakPtr<T>(key)),
+          key_(key) {}
+
+    [[nodiscard]] std::shared_ptr<T> lock() const { return weak_ptr_.lock(); }
+
+    [[nodiscard]] bool expired() const { return weak_ptr_.expired(); }
+
+    [[nodiscard]] explicit operator bool() const { return !expired(); }
+};
+
+/**
+ * @brief Typed pointer registry for specific type families
+ */
+template <typename Base>
+class TypedPtrRegistry {
+    std::unordered_map<std::string, std::shared_ptr<Base>> ptrs_;
+    mutable std::shared_mutex mutex_;
+
+public:
+    template <typename Derived>
+        requires std::is_base_of_v<Base, Derived>
+    void add(std::string_view key, std::shared_ptr<Derived> ptr) {
+        std::unique_lock lock(mutex_);
+        ptrs_[std::string(key)] = std::move(ptr);
+    }
+
+    template <typename Derived = Base>
+        requires std::is_base_of_v<Base, Derived>
+    auto get(std::string_view key) -> std::shared_ptr<Derived> {
+        std::shared_lock lock(mutex_);
+        auto it = ptrs_.find(std::string(key));
+        if (it != ptrs_.end()) {
+            return std::dynamic_pointer_cast<Derived>(it->second);
+        }
+        return nullptr;
+    }
+
+    void remove(std::string_view key) {
+        std::unique_lock lock(mutex_);
+        ptrs_.erase(std::string(key));
+    }
+
+    [[nodiscard]] std::vector<std::string> keys() const {
+        std::shared_lock lock(mutex_);
+        std::vector<std::string> result;
+        result.reserve(ptrs_.size());
+        for (const auto& [k, _] : ptrs_) {
+            result.push_back(k);
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::size_t size() const {
+        std::shared_lock lock(mutex_);
+        return ptrs_.size();
+    }
+};
+
+/**
+ * @brief Pointer lifecycle observer
+ */
+template <typename T>
+class PtrLifecycleObserver {
+public:
+    using CreateCallback =
+        std::function<void(const std::string&, std::shared_ptr<T>)>;
+    using DestroyCallback = std::function<void(const std::string&)>;
+
+private:
+    std::vector<CreateCallback> on_create_;
+    std::vector<DestroyCallback> on_destroy_;
+    mutable std::mutex mutex_;
+
+public:
+    void onCreated(CreateCallback callback) {
+        std::lock_guard lock(mutex_);
+        on_create_.push_back(std::move(callback));
+    }
+
+    void onDestroyed(DestroyCallback callback) {
+        std::lock_guard lock(mutex_);
+        on_destroy_.push_back(std::move(callback));
+    }
+
+    void notifyCreated(const std::string& key, std::shared_ptr<T> ptr) {
+        std::lock_guard lock(mutex_);
+        for (const auto& cb : on_create_) {
+            cb(key, ptr);
+        }
+    }
+
+    void notifyDestroyed(const std::string& key) {
+        std::lock_guard lock(mutex_);
+        for (const auto& cb : on_destroy_) {
+            cb(key);
+        }
+    }
+};
+
 #endif  // ATOM_META_GLOBAL_PTR_HPP

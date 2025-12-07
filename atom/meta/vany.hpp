@@ -498,6 +498,161 @@ public:
     }
 };
 
+//==============================================================================
+// C++23 Enhanced Any Utilities
+//==============================================================================
+
+/**
+ * @brief Concept for types that can be stored in Any
+ */
+template <typename T>
+concept AnyStorable = std::copy_constructible<T> || std::move_constructible<T>;
+
+/**
+ * @brief Try to cast Any to a specific type safely
+ */
+template <typename T>
+auto tryAnyCast(const Any& any) -> std::optional<T> {
+    try {
+        return any.template cast<T>();
+    } catch (...) {
+        return std::nullopt;
+    }
+}
+
+/**
+ * @brief Visit an Any value with a visitor
+ */
+template <typename Visitor>
+auto visitAny(const Any& any, Visitor&& visitor) {
+    any.invoke([&visitor](const void* ptr) { visitor(ptr); });
+}
+
+/**
+ * @brief Array of Any values with type-safe operations
+ */
+class AnyArray {
+    std::vector<Any> values_;
+
+public:
+    AnyArray() = default;
+
+    template <typename... Args>
+    explicit AnyArray(Args&&... args) {
+        values_.reserve(sizeof...(Args));
+        (values_.emplace_back(std::forward<Args>(args)), ...);
+    }
+
+    void push_back(Any value) { values_.push_back(std::move(value)); }
+
+    template <typename T>
+    void emplace_back(T&& value) {
+        values_.emplace_back(std::forward<T>(value));
+    }
+
+    [[nodiscard]] size_t size() const noexcept { return values_.size(); }
+    [[nodiscard]] bool empty() const noexcept { return values_.empty(); }
+
+    Any& operator[](size_t index) { return values_[index]; }
+    const Any& operator[](size_t index) const { return values_[index]; }
+
+    auto begin() { return values_.begin(); }
+    auto end() { return values_.end(); }
+    [[nodiscard]] auto begin() const { return values_.begin(); }
+    [[nodiscard]] auto end() const { return values_.end(); }
+
+    /**
+     * @brief Filter values by type
+     */
+    template <typename T>
+    [[nodiscard]] AnyArray filterByType() const {
+        AnyArray result;
+        for (const auto& val : values_) {
+            if (val.is<T>()) {
+                result.push_back(val);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Extract all values of a specific type
+     */
+    template <typename T>
+    [[nodiscard]] std::vector<T> extractAll() const {
+        std::vector<T> result;
+        for (const auto& val : values_) {
+            if (val.is<T>()) {
+                result.push_back(val.template cast<T>());
+            }
+        }
+        return result;
+    }
+
+    /**
+     * @brief Convert all values to strings
+     */
+    [[nodiscard]] std::vector<std::string> toStrings() const {
+        std::vector<std::string> result;
+        result.reserve(values_.size());
+        for (const auto& val : values_) {
+            result.push_back(val.toString());
+        }
+        return result;
+    }
+};
+
+/**
+ * @brief Map with Any values
+ */
+class AnyMap {
+    std::unordered_map<std::string, Any> values_;
+
+public:
+    AnyMap() = default;
+
+    template <typename T>
+    void set(const std::string& key, T&& value) {
+        values_[key] = Any(std::forward<T>(value));
+    }
+
+    [[nodiscard]] std::optional<std::reference_wrapper<Any>> get(
+        const std::string& key) {
+        auto it = values_.find(key);
+        if (it != values_.end()) {
+            return std::ref(it->second);
+        }
+        return std::nullopt;
+    }
+
+    template <typename T>
+    [[nodiscard]] std::optional<T> getAs(const std::string& key) const {
+        auto it = values_.find(key);
+        if (it != values_.end() && it->second.template is<T>()) {
+            return it->second.template cast<T>();
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] bool contains(const std::string& key) const {
+        return values_.contains(key);
+    }
+
+    void remove(const std::string& key) { values_.erase(key); }
+
+    [[nodiscard]] size_t size() const noexcept { return values_.size(); }
+    [[nodiscard]] bool empty() const noexcept { return values_.empty(); }
+
+    [[nodiscard]] std::vector<std::string> keys() const {
+        std::vector<std::string> result;
+        result.reserve(values_.size());
+        for (const auto& [k, _] : values_) {
+            result.push_back(k);
+        }
+        return result;
+    }
+};
+
 }  // namespace atom::meta
 
 #endif  // ATOM_META_ANY_HPP

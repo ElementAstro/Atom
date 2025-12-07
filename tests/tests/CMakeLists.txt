@@ -4,7 +4,7 @@
 # Project Name: Atom-Test-Infrastructure Description: Common test infrastructure
 # and utilities for Atom Test Suite Author: Max Qian License: GPL3
 
-cmake_minimum_required(VERSION 3.20)
+cmake_minimum_required(VERSION 3.21)
 project(
   atom-test-infrastructure
   VERSION 1.0.0
@@ -45,8 +45,9 @@ if(MSVC)
 else()
   target_compile_options(atom-test-common INTERFACE -Wall -Wextra -Wpedantic)
 endif()
-target_compile_definitions(atom-test-common INTERFACE SPDLOG_HEADER_ONLY
-                                                      SPDLOG_USE_STD_FORMAT=1)
+# Note: Do NOT define SPDLOG_USE_STD_FORMAT - system spdlog uses fmt
+target_compile_definitions(atom-test-common INTERFACE SPDLOG_COMPILED_LIB
+                                                      SPDLOG_FMT_EXTERNAL)
 
 # Test runner executable for infrastructure validation (with guard)
 if(NOT TARGET test-infrastructure-validation)

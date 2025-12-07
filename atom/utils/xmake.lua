@@ -17,7 +17,6 @@ local sources = {
     "text/string.cpp",
     "text/utf.cpp",
     "text/valid_string.cpp",
-    "text/to_string.cpp",
 
     -- Time utilities
     "time/time.cpp",

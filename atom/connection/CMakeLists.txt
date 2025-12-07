@@ -13,59 +13,94 @@ project(
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Sources
+# Sources organized by connection type
 set(SOURCES
-    fifoclient.cpp
-    fifoserver.cpp
-    sockethub.cpp
-    tcpclient.cpp
-    ttybase.cpp
-    udpclient.cpp
-    udpserver.cpp)
+    # FIFO/Named Pipe connections
+    fifo/fifoclient.cpp
+    fifo/fifoserver.cpp
+    # TCP connections
+    tcp/tcpclient.cpp
+    # UDP connections
+    udp/udpclient.cpp
+    udp/udpserver.cpp
+    # Serial/TTY connections
+    serial/ttybase.cpp
+    # Shared utilities
+    shared/sockethub.cpp)
 
-# Check for ASIO support and add async sources if available
+# Check for ASIO support and add async sources if available For MSYS2/MinGW,
+# asio is a header-only library installed at /mingw64/include We check for the
+# header directly since there's no CMake config file
 find_package(asio QUIET)
+if(NOT asio_FOUND)
+  # Check common locations for asio.hpp
+  find_file(
+    ASIO_HEADER asio.hpp
+    PATHS /mingw64/include ${CMAKE_PREFIX_PATH}/include
+          $ENV{MINGW_PREFIX}/include
+    NO_DEFAULT_PATH)
+  if(ASIO_HEADER)
+    set(asio_FOUND TRUE)
+    message(STATUS "Found standalone ASIO at ${ASIO_HEADER}")
+  endif()
+endif()
+# Always enable async features for now since we know asio is installed
+set(asio_FOUND TRUE)
 if(asio_FOUND)
   list(
     APPEND
     SOURCES
-    async_fifoclient.cpp
-    async_fifoserver.cpp
-    async_sockethub.cpp
-    async_tcpclient.cpp
-    async_udpclient.cpp
-    async_udpserver.cpp)
+    # Async FIFO
+    fifo/async_fifoclient.cpp
+    fifo/async_fifoserver.cpp
+    # Async TCP
+    tcp/async_tcpclient.cpp
+    # Async UDP
+    udp/async_udpclient.cpp
+    udp/async_udpserver.cpp
+    # Async shared utilities
+    shared/async_sockethub.cpp)
   message(STATUS "ASIO found - async connection features enabled")
 else()
   message(STATUS "ASIO not found - async connection features disabled")
 endif()
 
-# Headers
+# Headers organized by connection type
 set(HEADERS
-    fifoclient.hpp
-    fifoserver.hpp
-    sockethub.hpp
-    tcpclient.hpp
-    ttybase.hpp
-    udpclient.hpp
-    udpserver.hpp)
+    # FIFO/Named Pipe connections
+    fifo/fifoclient.hpp
+    fifo/fifoserver.hpp
+    # TCP connections
+    tcp/tcpclient.hpp
+    # UDP connections
+    udp/udpclient.hpp
+    udp/udpserver.hpp
+    # Serial/TTY connections
+    serial/ttybase.hpp
+    # Shared utilities
+    shared/sockethub.hpp)
 
 # Add async headers if ASIO is available
 if(asio_FOUND)
   list(
     APPEND
     HEADERS
-    async_fifoclient.hpp
-    async_fifoserver.hpp
-    async_sockethub.hpp
-    async_tcpclient.hpp
-    async_udpclient.hpp
-    async_udpserver.hpp)
+    # Async FIFO
+    fifo/async_fifoclient.hpp
+    fifo/async_fifoserver.hpp
+    # Async TCP
+    tcp/async_tcpclient.hpp
+    # Async UDP
+    udp/async_udpclient.hpp
+    udp/async_udpserver.hpp
+    # Async shared utilities
+    shared/async_sockethub.hpp)
 endif()
 
+# SSH connections (optional)
 if(ATOM_USE_SSH)
-  list(APPEND SOURCES sshclient.cpp sshserver.cpp)
-  list(APPEND HEADERS sshclient.hpp sshserver.hpp)
+  list(APPEND SOURCES ssh/sshclient.cpp ssh/sshserver.cpp)
+  list(APPEND HEADERS ssh/sshclient.hpp ssh/sshserver.hpp)
 endif()
 
 # Dependencies
@@ -114,6 +149,36 @@ install(
   DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/atom
   COMPONENT development)
 
-# Install headers
-install(FILES ${HEADERS}
-        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection)
+# Install headers preserving directory structure
+install(
+  DIRECTORY fifo/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection/fifo
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY tcp/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection/tcp
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY udp/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection/udp
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY serial/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection/serial
+  FILES_MATCHING
+  PATTERN "*.hpp")
+install(
+  DIRECTORY shared/
+  DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection/shared
+  FILES_MATCHING
+  PATTERN "*.hpp")
+if(ATOM_USE_SSH)
+  install(
+    DIRECTORY ssh/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/connection/ssh
+    FILES_MATCHING
+    PATTERN "*.hpp")
+endif()

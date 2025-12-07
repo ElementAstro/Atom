@@ -10,9 +10,45 @@ project(
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Find all source files
-file(GLOB_RECURSE SOURCES "*.cpp")
-file(GLOB_RECURSE HEADERS "*.h" "*.hpp")
+# Explicit source files (avoid GLOB for better build system reliability)
+set(SOURCES rjson.cpp ryaml.cpp)
+
+# Explicit header files
+set(HEADERS
+    args.hpp
+    argsview.hpp
+    auto_table.hpp
+    compat.hpp
+    concurrent_map.hpp
+    concurrent_set.hpp
+    concurrent_vector.hpp
+    cstream.hpp
+    expected.hpp
+    flatmap.hpp
+    flatset.hpp
+    indestructible.hpp
+    iter.hpp
+    json-schema.hpp
+    json.hpp
+    json_fwd.hpp
+    no_offset_ptr.hpp
+    noncopyable.hpp
+    optional.hpp
+    pod_vector.hpp
+    pointer.hpp
+    qvariant.hpp
+    rjson.hpp
+    robin_hood.hpp
+    rtype.hpp
+    ryaml.hpp
+    small_list.hpp
+    small_vector.hpp
+    static_string.hpp
+    static_vector.hpp
+    string.hpp
+    trackable.hpp
+    uint.hpp
+    weak_ptr.hpp)
 
 # Determine if this is header-only
 if(NOT SOURCES)

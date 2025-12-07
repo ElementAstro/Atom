@@ -489,7 +489,7 @@ inline void theta(StateArray &stateArray) noexcept {
 inline void rho(StateArray &stateArray) noexcept {
     // Use fast bit rotation
     for (usize colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
-        for (usize rowIndex = 0; colIndex < K_STATE_SIZE; ++rowIndex) {
+        for (usize rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
             stateArray[colIndex][rowIndex] = std::rotl(
                 stateArray[colIndex][rowIndex],
                 static_cast<i32>(K_ROTATION_CONSTANTS[colIndex][rowIndex]));
@@ -501,7 +501,7 @@ inline void rho(StateArray &stateArray) noexcept {
 inline void pi(StateArray &stateArray) noexcept {
     StateArray temp = stateArray;
     for (usize colIndex = 0; colIndex < K_STATE_SIZE; ++colIndex) {
-        for (usize rowIndex = 0; colIndex < K_STATE_SIZE; ++rowIndex) {
+        for (usize rowIndex = 0; rowIndex < K_STATE_SIZE; ++rowIndex) {
             stateArray[colIndex][rowIndex] =
                 temp[(colIndex + 3 * rowIndex) % K_STATE_SIZE][colIndex];
         }

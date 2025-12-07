@@ -187,7 +187,8 @@ jobs:
       - name: Determine test parameters
         id: test-params
         run: |
-          if [ "${{ github.event.inputs.test_category }}" != "" ] && [ "${{ github.event.inputs.test_category }}" != "all" ]; then
+          TEST_CAT="${{ github.event.inputs.test_category }}"
+          if [ "$TEST_CAT" != "" ] && [ "$TEST_CAT" != "all" ]; then
             TEST_CATEGORY="${{ github.event.inputs.test_category }}"
             TEST_FLAG="--category $TEST_CATEGORY"
           elif [ "${{ github.event.inputs.test_module }}" != "" ]; then
