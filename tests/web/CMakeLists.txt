@@ -146,3 +146,20 @@ add_custom_target(
 set_property(TARGET atom_web_tests PROPERTY FOLDER "Tests/Web")
 set_property(TARGET test_web PROPERTY FOLDER "Tests/Web")
 set_property(TARGET test_web_performance PROPERTY FOLDER "Tests/Web")
+
+# =============================================================================
+# DLL Copying (Windows)
+# =============================================================================
+if(WIN32)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_web_tests)
+  endif()
+
+  add_custom_command(
+    TARGET atom_web_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_web_tests> $<TARGET_FILE_DIR:atom_web_tests>
+    COMMAND_EXPAND_LISTS)
+endif()

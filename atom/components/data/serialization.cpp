@@ -20,8 +20,7 @@ SerializationResult JsonSerializer::serialize(
 
     try {
         nlohmann::json json = componentToJson(component, options);
-        std::string jsonString =
-            json.dump(options.customOptions.contains("indent") ? 4 : -1);
+        std::string jsonString = json.dump(options.prettyPrint ? 4 : -1);
 
         result.data.assign(jsonString.begin(), jsonString.end());
         result.originalSize = result.data.size();
@@ -310,6 +309,22 @@ SerializationManager::SerializationManager() {
 void SerializationManager::registerSerializer(
     std::unique_ptr<ISerializer> serializer) {
     serializers_.push_back(std::move(serializer));
+}
+
+void SerializationManager::registerSerializer(
+    SerializationFormat /*format*/, std::unique_ptr<ISerializer> serializer) {
+    // The format parameter is informational; the serializer reports its own
+    // supported formats via supportsFormat()
+    serializers_.push_back(std::move(serializer));
+}
+
+bool SerializationManager::hasSerializer(SerializationFormat format) const {
+    for (const auto& serializer : serializers_) {
+        if (serializer->supportsFormat(format)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 SerializationResult SerializationManager::serialize(

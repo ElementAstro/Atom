@@ -54,7 +54,8 @@ set(REQUIRED_CMAKE_MODULES
     TestsBuildOptions.cmake
     ScanModule.cmake
     PackagingConfig.cmake
-    ModularInstall.cmake)
+    ModularInstall.cmake
+    CopyDependencies.cmake)
 
 foreach(MODULE ${REQUIRED_CMAKE_MODULES})
   set(MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake/${MODULE}")
@@ -259,37 +260,6 @@ if(ATOM_AUTO_RESOLVE_DEPS)
   atom_resolve_all_dependencies()
 endif()
 
-# Skip platform-specific dependencies for now Linux/WSL/Windows
-# platform-specific dependencies if(LINUX) find_package(X11 REQUIRED)
-# if(X11_FOUND) include_directories(${X11_INCLUDE_DIR}) else()
-# message(FATAL_ERROR "X11 development files not found. Please install
-# libx11-dev or equivalent.") endif() find_package(PkgConfig REQUIRED)
-# pkg_check_modules(UDEV REQUIRED libudev) if(UDEV_FOUND)
-# include_directories(${UDEV_INCLUDE_DIRS})
-# link_directories(${UDEV_LIBRARY_DIRS}) else() message(FATAL_ERROR "libudev
-# development files not found. Please install libudev-dev or equivalent.")
-# endif() endif()
-
-# Skip Boost for now Boost if(ATOM_USE_BOOST) set(Boost_USE_STATIC_LIBS ON)
-# set(Boost_USE_MULTITHREADED ON) set(Boost_USE_STATIC_RUNTIME OFF)
-# set(BOOST_COMPONENTS) if(ATOM_USE_BOOST_CONTAINER) list(APPEND
-# BOOST_COMPONENTS container) endif() if(ATOM_USE_BOOST_LOCKFREE) list(APPEND
-# BOOST_COMPONENTS atomic thread) endif() if(ATOM_USE_BOOST_GRAPH) list(APPEND
-# BOOST_COMPONENTS graph) endif() # intrusive is header-only find_package(Boost
-# 1.74 REQUIRED COMPONENTS ${BOOST_COMPONENTS})
-# include_directories(${Boost_INCLUDE_DIRS}) message(STATUS "Found Boost:
-# ${Boost_VERSION} (${Boost_INCLUDE_DIRS})") endif()
-
-# -----------------------------------------------------------------------------
-# Version Info Header
-# -----------------------------------------------------------------------------
-# Configure version information
-atom_configure_version(VERSION_VARIABLE PROJECT_VERSION)
-
-# Also configure the version info header
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/version_info.h.in
-               ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h @ONLY)
-
 # -----------------------------------------------------------------------------
 # Ninja Generator Support
 # -----------------------------------------------------------------------------
@@ -316,42 +286,6 @@ if(ATOM_BUILD_TESTS)
   enable_testing()
   add_subdirectory(tests)
 endif()
-
-# Add minimal timer test for debugging Temporarily commented out due to missing
-# source files add_executable(test_timer_minimal_isolated
-# test_timer_minimal_isolated.cpp)
-# target_link_libraries(test_timer_minimal_isolated PRIVATE atom-async
-# atom-utils atom-error ) target_compile_features(test_timer_minimal_isolated
-# PRIVATE cxx_std_20) target_include_directories(test_timer_minimal_isolated
-# PRIVATE ${CMAKE_SOURCE_DIR})
-
-# Add header-only test Temporarily commented out due to missing source files
-# add_executable(test_timer_header_only test_timer_header_only.cpp)
-# target_link_libraries(test_timer_header_only PRIVATE atom-async atom-utils
-# atom-error ) target_compile_features(test_timer_header_only PRIVATE
-# cxx_std_20) target_include_directories(test_timer_header_only PRIVATE
-# ${CMAKE_SOURCE_DIR})
-
-# Add constructor-only test Temporarily commented out due to missing source
-# files add_executable(test_timer_constructor_only
-# test_timer_constructor_only.cpp)
-# target_link_libraries(test_timer_constructor_only PRIVATE atom-async
-# atom-utils atom-error ) target_compile_features(test_timer_constructor_only
-# PRIVATE cxx_std_20) target_include_directories(test_timer_constructor_only
-# PRIVATE ${CMAKE_SOURCE_DIR})
-
-# Basic C++ test removed during cleanup - test_basic_cpp.cpp was a temporary
-# debugging file
-
-# Add minimal timer test (no Atom dependencies) Temporarily commented out due to
-# missing source files add_executable(test_minimal_timer_isolated
-# test_minimal_timer_isolated.cpp)
-# target_compile_features(test_minimal_timer_isolated PRIVATE cxx_std_20)
-
-# Add isolated timer test (no Atom dependencies, more complete implementation)
-# Temporarily commented out due to missing source files
-# add_executable(test_timer_no_atom_deps test_timer_no_atom_deps.cpp)
-# target_compile_features(test_timer_no_atom_deps PRIVATE cxx_std_20)
 
 # -----------------------------------------------------------------------------
 # Documentation

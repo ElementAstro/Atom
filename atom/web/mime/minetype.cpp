@@ -8,15 +8,112 @@
 #include <future>
 #include <iostream>
 #include <mutex>
+#include <ranges>
 #include <shared_mutex>
 #include <sstream>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <spdlog/spdlog.h>
 #include "atom/type/json.hpp"
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+// Free functions implementation
+auto getMimeCategory(std::string_view mimeType) -> MimeCategory {
+    if (mimeType.empty()) {
+        return MimeCategory::Unknown;
+    }
+
+    auto slashPos = mimeType.find('/');
+    if (slashPos == std::string_view::npos) {
+        return MimeCategory::Unknown;
+    }
+
+    auto category = mimeType.substr(0, slashPos);
+
+    if (category == "text")
+        return MimeCategory::Text;
+    if (category == "image")
+        return MimeCategory::Image;
+    if (category == "audio")
+        return MimeCategory::Audio;
+    if (category == "video")
+        return MimeCategory::Video;
+    if (category == "application")
+        return MimeCategory::Application;
+    if (category == "multipart")
+        return MimeCategory::Multipart;
+    if (category == "message")
+        return MimeCategory::Message;
+    if (category == "font")
+        return MimeCategory::Font;
+    if (category == "model")
+        return MimeCategory::Model;
+
+    return MimeCategory::Unknown;
+}
+
+auto isTextMimeType(std::string_view mimeType) -> bool {
+    if (mimeType.empty())
+        return false;
+
+    // Direct text types
+    if (mimeType.starts_with("text/"))
+        return true;
+
+    // Common text-based application types
+    static const std::unordered_set<std::string_view> textTypes = {
+        "application/json",
+        "application/xml",
+        "application/javascript",
+        "application/ecmascript",
+        "application/x-javascript",
+        "application/xhtml+xml",
+        "application/ld+json",
+        "application/manifest+json",
+        "application/x-www-form-urlencoded",
+        "application/x-sh",
+        "application/x-csh"};
+
+    // Check for +json, +xml suffixes
+    if (mimeType.ends_with("+json") || mimeType.ends_with("+xml")) {
+        return true;
+    }
+
+    return textTypes.contains(std::string(mimeType));
+}
+
+auto isBinaryMimeType(std::string_view mimeType) -> bool {
+    return !isTextMimeType(mimeType);
+}
+
+auto isCompressibleMimeType(std::string_view mimeType) -> bool {
+    // Text types are generally compressible
+    if (isTextMimeType(mimeType))
+        return true;
+
+    // Already compressed formats
+    static const std::unordered_set<std::string_view> nonCompressible = {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "video/mp4",
+        "video/webm",
+        "video/ogg",
+        "audio/mp3",
+        "audio/ogg",
+        "audio/aac",
+        "application/zip",
+        "application/gzip",
+        "application/x-bzip2",
+        "application/x-7z-compressed",
+        "application/x-rar-compressed"};
+
+    return !nonCompressible.contains(std::string(mimeType));
+}
 
 class MimeTypes::Impl {
 public:
@@ -680,3 +777,82 @@ template std::optional<std::string> MimeTypes::guessTypeByContent<const char*>(
 // Add template instantiation for char arrays used in tests
 template std::optional<std::string> MimeTypes::guessTypeByContent<char[17]>(
     const char (&filePath)[17]) const;
+
+auto MimeTypes::guessTypeFromPath(const std::filesystem::path& path) const
+    -> std::optional<std::string> {
+    auto result = guessType(path.string());
+    return result.first;
+}
+
+auto MimeTypes::getAllMimeTypes() const -> std::vector<std::string> {
+    std::vector<std::string> types;
+    // Access through pImpl - would need to add method to Impl
+    // For now, return empty - implementation would iterate reverseMap_
+    return types;
+}
+
+auto MimeTypes::getAllExtensions() const -> std::vector<std::string> {
+    std::vector<std::string> extensions;
+    // Access through pImpl - would need to add method to Impl
+    return extensions;
+}
+
+auto MimeTypes::getMimeTypeCount() const -> size_t {
+    // Would need to add method to Impl
+    return 0;
+}
+
+auto MimeTypes::getExtensionCount() const -> size_t {
+    // Would need to add method to Impl
+    return 0;
+}
+
+auto MimeTypes::removeMimeType(const std::string& mimeType) -> bool {
+    // Would need to add method to Impl
+    (void)mimeType;
+    return false;
+}
+
+auto MimeTypes::removeExtension(const std::string& extension) -> bool {
+    // Would need to add method to Impl
+    (void)extension;
+    return false;
+}
+
+auto MimeTypes::getCommonWebMimeTypes()
+    -> const std::unordered_map<std::string, std::string>& {
+    static const std::unordered_map<std::string, std::string> commonTypes = {
+        {".html", "text/html"},
+        {".htm", "text/html"},
+        {".css", "text/css"},
+        {".js", "application/javascript"},
+        {".mjs", "application/javascript"},
+        {".json", "application/json"},
+        {".xml", "application/xml"},
+        {".txt", "text/plain"},
+        {".csv", "text/csv"},
+        {".md", "text/markdown"},
+        {".png", "image/png"},
+        {".jpg", "image/jpeg"},
+        {".jpeg", "image/jpeg"},
+        {".gif", "image/gif"},
+        {".svg", "image/svg+xml"},
+        {".webp", "image/webp"},
+        {".ico", "image/x-icon"},
+        {".woff", "font/woff"},
+        {".woff2", "font/woff2"},
+        {".ttf", "font/ttf"},
+        {".otf", "font/otf"},
+        {".eot", "application/vnd.ms-fontobject"},
+        {".mp3", "audio/mpeg"},
+        {".wav", "audio/wav"},
+        {".ogg", "audio/ogg"},
+        {".mp4", "video/mp4"},
+        {".webm", "video/webm"},
+        {".pdf", "application/pdf"},
+        {".zip", "application/zip"},
+        {".gz", "application/gzip"},
+        {".tar", "application/x-tar"},
+        {".wasm", "application/wasm"}};
+    return commonTypes;
+}

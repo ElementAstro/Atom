@@ -327,10 +327,18 @@ void Blowfish::remove_padding(std::span<std::byte> data, usize& length) {
 template <ByteType T>
 void Blowfish::encrypt_data(std::span<T> data) {
     spdlog::info("Encrypting data of length: {}", data.size());
-    validate_block_size(data.size());
+
+    // Data must be block-aligned for in-place encryption
+    // Caller is responsible for ensuring proper padding if needed
+    if (data.size() % BLOCK_SIZE != 0) {
+        spdlog::error(
+            "Data size must be a multiple of block size for in-place "
+            "encryption");
+        THROW_RUNTIME_ERROR(
+            "Data size must be a multiple of block size (8 bytes)");
+    }
 
     usize length = data.size();
-    ::atom::algorithm::pkcs7_padding<T>(data, length);
 
     // Multi-threaded encryption for optimal performance
     const usize num_blocks = length / BLOCK_SIZE;
@@ -441,11 +449,11 @@ void Blowfish::decrypt_data(std::span<T> data, usize& length) {
         }
     }
 
-    auto byte_span = std::span<std::byte>(
-        reinterpret_cast<std::byte*>(data.data()), data.size());
-    remove_padding(byte_span, length);
+    // Note: Padding removal is not performed here since encrypt_data doesn't
+    // add padding For symmetric operation, caller should handle padding if
+    // needed length remains unchanged
 
-    spdlog::info("Data decrypted successfully, actual length: {}", length);
+    spdlog::info("Data decrypted successfully, length: {}", length);
 }
 
 void Blowfish::encrypt_file(std::string_view input_file,

@@ -6,7 +6,7 @@
 #include <numeric>
 #include <random>
 #include <vector>
-#include "atom/algorithm/annealing.hpp"
+#include "atom/algorithm/optimization/annealing.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace testing;

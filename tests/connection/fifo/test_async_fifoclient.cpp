@@ -131,7 +131,7 @@ TEST_F(AsyncFifoClientTest, BasicRead) {
         }
     });
 
-    auto result = client_->read(1024, 3s);
+    auto result = client_->read(3s);
 
     writer.join();
 
@@ -139,9 +139,8 @@ TEST_F(AsyncFifoClientTest, BasicRead) {
     EXPECT_EQ(result.value(), testMessage);
 }
 
-TEST_F(AsyncFifoClientTest, ReadWithSpecificSize) {
-    std::string testMessage = "Partial read test message";
-    size_t readSize = 7;  // Read only "Partial"
+TEST_F(AsyncFifoClientTest, ReadWithTimeout) {
+    std::string testMessage = "Timeout read test message";
 
     std::thread writer([this, testMessage]() {
         std::this_thread::sleep_for(100ms);
@@ -153,18 +152,18 @@ TEST_F(AsyncFifoClientTest, ReadWithSpecificSize) {
         }
     });
 
-    auto result = client_->read(readSize, 3s);
+    auto result = client_->read(3s);
 
     writer.join();
 
     ASSERT_TRUE(result.has_value());
-    EXPECT_EQ(result.value(), testMessage.substr(0, readSize));
+    EXPECT_EQ(result.value(), testMessage);
 }
 
-TEST_F(AsyncFifoClientTest, ReadTimeout) {
+TEST_F(AsyncFifoClientTest, ReadTimeoutExpired) {
     // No writer - should timeout
     auto start = std::chrono::steady_clock::now();
-    auto result = client_->read(1024, 500ms);
+    auto result = client_->read(500ms);
     auto duration = std::chrono::steady_clock::now() - start;
 
     EXPECT_FALSE(result.has_value());
@@ -338,9 +337,13 @@ TEST_F(AsyncFifoClientTest, ConcurrentOperations) {
     EXPECT_EQ(receivedMessages.size(), numThreads);
 }
 
-TEST_F(AsyncFifoClientTest, IsOpenStatus) {
+TEST_F(AsyncFifoClientTest, IsOpenAndCloseStatus) {
     // Client should be open after construction
     EXPECT_TRUE(client_->isOpen());
+
+    // Close the client
+    client_->close();
+    EXPECT_FALSE(client_->isOpen());
 
     // Test write to verify it's actually functional
     std::promise<bool> writePromise;
@@ -408,7 +411,7 @@ TEST_F(AsyncFifoClientTest, WriteReadCycle) {
         }
     });
 
-    auto result = client_->read(testMessage.length(), 3s);
+    auto result = client_->read(3s);
 
     writer.join();
 

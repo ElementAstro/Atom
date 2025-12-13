@@ -43,7 +43,10 @@ file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
 list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_file_permission.cpp$")
 list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_pushd.cpp$")
 
-# Note: test_async_io.cpp is now included after fixes
+# Exclude async tests that require ASIO (not available in this build)
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_async_compress.cpp$")
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_async_io.cpp$")
+list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/test_async_glob.cpp$")
 
 # =============================================================================
 # Create Test Executable
@@ -149,6 +152,23 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
     COMMAND genhtml -o io_coverage_html io_coverage.info
     DEPENDS test_io
     COMMENT "Generating code coverage report for io")
+endif()
+
+# =============================================================================
+# DLL Copying (Windows)
+# =============================================================================
+if(WIN32)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_io_tests)
+  endif()
+
+  add_custom_command(
+    TARGET atom_io_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:atom_io_tests>
+      $<TARGET_FILE_DIR:atom_io_tests>
+    COMMAND_EXPAND_LISTS)
 endif()
 
 # =============================================================================

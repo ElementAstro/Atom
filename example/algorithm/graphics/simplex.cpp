@@ -92,7 +92,7 @@ void demonstrateOctaveNoise() {
     std::cout << "Position (0.5, 0.5, 0.0):\n";
 
     for (int octaves = 1; octaves <= 6; ++octaves) {
-        f64 value = noise.octaveNoise2D(0.5, 0.5, octaves, 0.5);
+        f64 value = noise.fractal2D(0.5, 0.5, octaves, 0.5);
         std::cout << "  " << octaves << " octave(s): " << std::fixed
                   << std::setprecision(4) << value << "\n";
     }
@@ -106,7 +106,7 @@ void demonstrateOctaveNoise() {
         for (int x = 0; x < 40; ++x) {
             f64 nx = static_cast<f64>(x) / 10.0;
             f64 ny = static_cast<f64>(y) / 10.0;
-            f64 value = noise.octaveNoise2D(nx, ny, 4, 0.5);
+            f64 value = noise.fractal2D(nx, ny, 4, 0.5);
             std::cout << noiseToChar(value);
         }
         std::cout << "|\n";
@@ -211,7 +211,7 @@ void benchmarkSimplexNoise() {
     for (int i = 0; i < ITERATIONS / 10; ++i) {
         f64 x = static_cast<f64>(i % 100) / 10.0;
         f64 y = static_cast<f64>(i / 100) / 10.0;
-        sum_octave += noise.octaveNoise2D(x, y, 4, 0.5);
+        sum_octave += noise.fractal2D(x, y, 4, 0.5);
     }
     end = std::chrono::high_resolution_clock::now();
     auto duration_octave =
@@ -242,7 +242,7 @@ void demonstrateTerrainGeneration() {
             f64 ny = static_cast<f64>(y) / 15.0;
 
             // Generate terrain height using octave noise
-            f64 height = noise.octaveNoise2D(nx, ny, 6, 0.5);
+            f64 height = noise.fractal2D(nx, ny, 6, 0.5);
 
             // Map height to terrain type
             char terrain;

@@ -25,6 +25,7 @@ set(USE_GMOCK OFF)
 # Exclude problematic test files
 set(EXCLUDE_SOURCES
     "crypto/test_aes_main\\.cpp"
+    "crypto/test_aes\\.hpp" # Requires OpenSSL
     "core/test_uuid\\.cpp"
     "string/test_cstring\\.hpp"
     "string/test_to_string\\.hpp"

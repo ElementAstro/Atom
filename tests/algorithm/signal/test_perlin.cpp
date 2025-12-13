@@ -6,7 +6,7 @@
 #include <future>
 #include <string>
 #include <vector>
-#include "atom/algorithm/perlin.hpp"
+#include "atom/algorithm/graphics/perlin.hpp"
 #include "spdlog/spdlog.h"
 
 using namespace atom::algorithm;

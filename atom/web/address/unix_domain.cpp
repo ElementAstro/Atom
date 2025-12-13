@@ -2,6 +2,9 @@
 
 #include <algorithm>
 #include <bitset>
+#include <compare>
+#include <filesystem>
+#include <format>
 #include <iomanip>
 #include <sstream>
 #include <string>
@@ -206,6 +209,82 @@ auto UnixDomain::isEqual(const Address& other) const -> bool {
 }
 
 auto UnixDomain::getType() const -> std::string_view { return "UnixDomain"; }
+
+auto UnixDomain::operator<=>(const Address& other) const
+    -> std::partial_ordering {
+    if (other.getType() != "UnixDomain") {
+        return std::partial_ordering::unordered;
+    }
+
+    const auto* unixOther = dynamic_cast<const UnixDomain*>(&other);
+    if (!unixOther) {
+        return std::partial_ordering::unordered;
+    }
+
+    if (addressStr < unixOther->addressStr) {
+        return std::partial_ordering::less;
+    }
+    if (addressStr > unixOther->addressStr) {
+        return std::partial_ordering::greater;
+    }
+    return std::partial_ordering::equivalent;
+}
+
+auto UnixDomain::exists() const -> bool {
+    if (isAbstract()) {
+        return false;  // Abstract sockets don't have filesystem presence
+    }
+    try {
+        return std::filesystem::exists(addressStr);
+    } catch (const std::exception& e) {
+        spdlog::warn("Error checking socket existence: {}", e.what());
+        return false;
+    }
+}
+
+auto UnixDomain::isAbstract() const -> bool {
+#ifdef _WIN32
+    return false;  // Windows doesn't support abstract sockets
+#else
+    return !addressStr.empty() && addressStr[0] == '\0';
+#endif
+}
+
+auto UnixDomain::getFilename() const -> std::string {
+    try {
+        std::filesystem::path p(addressStr);
+        return p.filename().string();
+    } catch (const std::exception& e) {
+        spdlog::warn("Error getting filename: {}", e.what());
+        return "";
+    }
+}
+
+auto UnixDomain::getParentPath() const -> std::string {
+    try {
+        std::filesystem::path p(addressStr);
+        return p.parent_path().string();
+    } catch (const std::exception& e) {
+        spdlog::warn("Error getting parent path: {}", e.what());
+        return "";
+    }
+}
+
+auto UnixDomain::fromPath(const std::filesystem::path& path) -> UnixDomain {
+    return UnixDomain(path.string());
+}
+
+#ifndef _WIN32
+auto UnixDomain::createAbstract(std::string_view name) -> UnixDomain {
+    std::string abstractPath;
+    abstractPath.push_back('\0');
+    abstractPath.append(name);
+
+    UnixDomain addr;
+    addr.addressStr = std::move(abstractPath);
+    return addr;
+}
+#endif
 
 auto UnixDomain::getNetworkAddress([[maybe_unused]] std::string_view mask) const
     -> std::string {

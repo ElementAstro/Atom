@@ -436,10 +436,9 @@ auto dataFromHexstring(std::string_view data) noexcept(false) -> std::string {
                 result[i] = static_cast<char>(byte);
             }
         }
+    } catch (const atom::error::InvalidArgument &) {
+        throw;  // Rethrow InvalidArgument exceptions directly
     } catch (const std::exception &e) {
-        if (dynamic_cast<const std::invalid_argument *>(&e)) {
-            throw;  // Rethrow original exception
-        }
 #ifdef ATOM_USE_BOOST
         throw boost::enable_error_info(std::runtime_error(
             std::string("Failed to convert from hex: ") + e.what()));

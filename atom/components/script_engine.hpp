@@ -6,10 +6,10 @@
  * "atom/components/scripting/script_engine.hpp" instead.
  */
 
-#ifndef ATOM_COMPONENT_SCRIPT_ENGINE_HPP
-#define ATOM_COMPONENT_SCRIPT_ENGINE_HPP
+#ifndef ATOM_COMPONENT_SCRIPT_ENGINE_COMPAT_HPP
+#define ATOM_COMPONENT_SCRIPT_ENGINE_COMPAT_HPP
 
 // Forward to the new location
 #include "scripting/script_engine.hpp"
 
-#endif  // ATOM_COMPONENT_SCRIPT_ENGINE_HPP
+#endif  // ATOM_COMPONENT_SCRIPT_ENGINE_COMPAT_HPP

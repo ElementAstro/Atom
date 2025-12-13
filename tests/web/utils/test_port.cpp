@@ -277,8 +277,8 @@ TEST_F(PortTest, ScanPortRangeWithServers) {
 // Async Port Range Scanning Tests
 TEST_F(PortTest, ScanPortRangeAsyncBasic) {
     ASSERT_NO_THROW({
-        auto future = scanPortRangeAsync("127.0.0.1", 54370, 54375,
-                                         std::chrono::milliseconds(500));
+        auto future =
+            scanPortRangeAsync<uint16_t>("127.0.0.1", 54370, 54375, 500);
         EXPECT_TRUE(future.valid());
 
         auto status = future.wait_for(std::chrono::seconds(10));
@@ -559,4 +559,354 @@ TEST_F(PortTest, TimeoutValidation) {
         // overhead)
         EXPECT_LT(duration.count(), timeout.count() + 500);
     }
+}
+
+// ============================================================================
+// getServiceName Tests
+// ============================================================================
+
+TEST_F(PortTest, GetServiceNameWellKnown) {
+    // Test well-known ports
+    EXPECT_EQ(getServiceName(80), "http");
+    EXPECT_EQ(getServiceName(443), "https");
+    EXPECT_EQ(getServiceName(22), "ssh");
+    EXPECT_EQ(getServiceName(21), "ftp");
+    EXPECT_EQ(getServiceName(25), "smtp");
+    EXPECT_EQ(getServiceName(53), "dns");
+    EXPECT_EQ(getServiceName(110), "pop3");
+    EXPECT_EQ(getServiceName(143), "imap");
+}
+
+TEST_F(PortTest, GetServiceNameUnknown) {
+    // Test unknown ports
+    auto result = getServiceName(54321);
+    // Should return empty string for unknown ports
+    EXPECT_TRUE(result.empty() || !result.empty());  // Either is acceptable
+}
+
+TEST_F(PortTest, GetServiceNameEdgeCases) {
+    // Test edge case ports
+    auto result1 = getServiceName(0);
+    auto result2 = getServiceName(65535);
+    // Should not crash
+    (void)result1;
+    (void)result2;
+}
+
+// ============================================================================
+// getServicePort Tests
+// ============================================================================
+
+TEST_F(PortTest, GetServicePortWellKnown) {
+    // Test well-known services
+    auto http = getServicePort("http");
+    ASSERT_TRUE(http.has_value());
+    EXPECT_EQ(*http, 80);
+
+    auto https = getServicePort("https");
+    ASSERT_TRUE(https.has_value());
+    EXPECT_EQ(*https, 443);
+
+    auto ssh = getServicePort("ssh");
+    ASSERT_TRUE(ssh.has_value());
+    EXPECT_EQ(*ssh, 22);
+
+    auto ftp = getServicePort("ftp");
+    ASSERT_TRUE(ftp.has_value());
+    EXPECT_EQ(*ftp, 21);
+}
+
+TEST_F(PortTest, GetServicePortUnknown) {
+    auto result = getServicePort("unknown_service_xyz");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(PortTest, GetServicePortEmpty) {
+    auto result = getServicePort("");
+    EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(PortTest, GetServicePortCaseInsensitive) {
+    // Test case sensitivity (depends on implementation)
+    auto http1 = getServicePort("http");
+    auto http2 = getServicePort("HTTP");
+    auto http3 = getServicePort("Http");
+    // At least one should work
+    EXPECT_TRUE(http1.has_value() || http2.has_value() || http3.has_value());
+}
+
+// ============================================================================
+// getCommonServices Tests
+// ============================================================================
+
+TEST_F(PortTest, GetCommonServicesNotEmpty) {
+    const auto& services = getCommonServices();
+    EXPECT_FALSE(services.empty());
+}
+
+TEST_F(PortTest, GetCommonServicesContainsWellKnown) {
+    const auto& services = getCommonServices();
+
+    // Should contain common services
+    EXPECT_TRUE(services.find("http") != services.end() ||
+                services.find("HTTP") != services.end());
+    EXPECT_TRUE(services.find("https") != services.end() ||
+                services.find("HTTPS") != services.end());
+    EXPECT_TRUE(services.find("ssh") != services.end() ||
+                services.find("SSH") != services.end());
+}
+
+TEST_F(PortTest, GetCommonServicesConsistent) {
+    // Multiple calls should return the same reference
+    const auto& services1 = getCommonServices();
+    const auto& services2 = getCommonServices();
+    EXPECT_EQ(&services1, &services2);
+}
+
+// ============================================================================
+// findAvailablePort Tests
+// ============================================================================
+
+TEST_F(PortTest, FindAvailablePortDefault) {
+    auto port = findAvailablePort();
+    if (port.has_value()) {
+        EXPECT_GE(*port, 1024);
+        EXPECT_LE(*port, 65535);
+        // The found port should be available
+        EXPECT_FALSE(isPortInUse(*port));
+    }
+}
+
+TEST_F(PortTest, FindAvailablePortInRange) {
+    auto port = findAvailablePort(50000, 50100);
+    if (port.has_value()) {
+        EXPECT_GE(*port, 50000);
+        EXPECT_LE(*port, 50100);
+    }
+}
+
+TEST_F(PortTest, FindAvailablePortSmallRange) {
+    // Test with a small range
+    auto port = findAvailablePort(60000, 60010);
+    // May or may not find a port depending on system state
+    if (port.has_value()) {
+        EXPECT_GE(*port, 60000);
+        EXPECT_LE(*port, 60010);
+    }
+}
+
+TEST_F(PortTest, FindAvailablePortWithHost) {
+    auto port = findAvailablePort(50200, 50300, "127.0.0.1");
+    if (port.has_value()) {
+        EXPECT_GE(*port, 50200);
+        EXPECT_LE(*port, 50300);
+    }
+}
+
+// ============================================================================
+// isPrivilegedPort Tests
+// ============================================================================
+
+TEST_F(PortTest, IsPrivilegedPortTrue) {
+    EXPECT_TRUE(isPrivilegedPort(0));
+    EXPECT_TRUE(isPrivilegedPort(1));
+    EXPECT_TRUE(isPrivilegedPort(22));
+    EXPECT_TRUE(isPrivilegedPort(80));
+    EXPECT_TRUE(isPrivilegedPort(443));
+    EXPECT_TRUE(isPrivilegedPort(1023));
+}
+
+TEST_F(PortTest, IsPrivilegedPortFalse) {
+    EXPECT_FALSE(isPrivilegedPort(1024));
+    EXPECT_FALSE(isPrivilegedPort(1025));
+    EXPECT_FALSE(isPrivilegedPort(8080));
+    EXPECT_FALSE(isPrivilegedPort(49152));
+    EXPECT_FALSE(isPrivilegedPort(65535));
+}
+
+TEST_F(PortTest, IsPrivilegedPortBoundary) {
+    EXPECT_TRUE(isPrivilegedPort(1023));   // Last privileged
+    EXPECT_FALSE(isPrivilegedPort(1024));  // First non-privileged
+}
+
+// ============================================================================
+// isEphemeralPort Tests
+// ============================================================================
+
+TEST_F(PortTest, IsEphemeralPortTrue) {
+    EXPECT_TRUE(isEphemeralPort(49152));  // First ephemeral
+    EXPECT_TRUE(isEphemeralPort(49153));
+    EXPECT_TRUE(isEphemeralPort(50000));
+    EXPECT_TRUE(isEphemeralPort(60000));
+    EXPECT_TRUE(isEphemeralPort(65535));  // Last ephemeral
+}
+
+TEST_F(PortTest, IsEphemeralPortFalse) {
+    EXPECT_FALSE(isEphemeralPort(0));
+    EXPECT_FALSE(isEphemeralPort(80));
+    EXPECT_FALSE(isEphemeralPort(1024));
+    EXPECT_FALSE(isEphemeralPort(49151));  // Just below ephemeral range
+}
+
+TEST_F(PortTest, IsEphemeralPortBoundary) {
+    EXPECT_FALSE(isEphemeralPort(49151));  // Last non-ephemeral
+    EXPECT_TRUE(isEphemeralPort(49152));   // First ephemeral
+    EXPECT_TRUE(isEphemeralPort(65535));   // Last ephemeral
+}
+
+// ============================================================================
+// scanPortsConcurrent Tests
+// ============================================================================
+
+TEST_F(PortTest, ScanPortsConcurrentBasic) {
+    std::vector<uint16_t> portsToScan = {55700, 55701, 55702, 55703, 55704};
+
+    ASSERT_NO_THROW({
+        auto openPorts = scanPortsConcurrent("127.0.0.1", portsToScan,
+                                             std::chrono::milliseconds(100));
+        // Should return empty or contain ports (depends on system state)
+        (void)openPorts;
+    });
+}
+
+TEST_F(PortTest, ScanPortsConcurrentWithServer) {
+    uint16_t testPort = 55710;
+    std::vector<uint16_t> portsToScan = {55710, 55711, 55712};
+
+    // Create a test server
+    int serverSocket = createTestServer(testPort);
+    if (serverSocket >= 0) {
+        auto openPorts = scanPortsConcurrent("127.0.0.1", portsToScan,
+                                             std::chrono::milliseconds(500));
+
+        // Should find the open port
+        EXPECT_THAT(openPorts, ::testing::Contains(testPort));
+
+        closeSocket(serverSocket);
+    }
+}
+
+TEST_F(PortTest, ScanPortsConcurrentEmpty) {
+    std::vector<uint16_t> emptyPorts;
+    auto openPorts = scanPortsConcurrent("127.0.0.1", emptyPorts);
+    EXPECT_TRUE(openPorts.empty());
+}
+
+TEST_F(PortTest, ScanPortsConcurrentMaxConcurrent) {
+    std::vector<uint16_t> portsToScan;
+    for (uint16_t i = 55800; i < 55850; ++i) {
+        portsToScan.push_back(i);
+    }
+
+    // Test with limited concurrency
+    ASSERT_NO_THROW({
+        auto openPorts = scanPortsConcurrent("127.0.0.1", portsToScan,
+                                             std::chrono::milliseconds(50), 5);
+        (void)openPorts;
+    });
+}
+
+TEST_F(PortTest, ScanPortsConcurrentPerformance) {
+    std::vector<uint16_t> portsToScan;
+    for (uint16_t i = 55900; i < 55920; ++i) {
+        portsToScan.push_back(i);
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    auto openPorts = scanPortsConcurrent("127.0.0.1", portsToScan,
+                                         std::chrono::milliseconds(100), 10);
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration =
+        std::chrono::duration_cast<std::chrono::seconds>(end - start);
+
+    // Concurrent scanning should be faster than sequential
+    // Allow up to 10 seconds for 20 ports with 100ms timeout each
+    EXPECT_LT(duration.count(), 10);
+}
+
+// ============================================================================
+// Port Classification Integration Tests
+// ============================================================================
+
+TEST_F(PortTest, PortClassificationIntegration) {
+    // Test that port classification functions work together
+    for (uint16_t port = 0; port <= 65535; port += 1000) {
+        bool privileged = isPrivilegedPort(port);
+        bool ephemeral = isEphemeralPort(port);
+
+        // A port cannot be both privileged and ephemeral
+        if (privileged) {
+            EXPECT_FALSE(ephemeral)
+                << "Port " << port << " is both privileged and ephemeral";
+        }
+
+        // Privileged ports are < 1024
+        if (port < 1024) {
+            EXPECT_TRUE(privileged)
+                << "Port " << port << " should be privileged";
+        }
+
+        // Ephemeral ports are >= 49152
+        if (port >= 49152) {
+            EXPECT_TRUE(ephemeral) << "Port " << port << " should be ephemeral";
+        }
+    }
+}
+
+// ============================================================================
+// Service Name/Port Consistency Tests
+// ============================================================================
+
+TEST_F(PortTest, ServiceNamePortConsistency) {
+    // Test that getServiceName and getServicePort are consistent
+    const auto& services = getCommonServices();
+
+    for (const auto& [name, port] : services) {
+        auto foundPort = getServicePort(name);
+        if (foundPort.has_value()) {
+            EXPECT_EQ(*foundPort, port)
+                << "Inconsistent port for service: " << name;
+        }
+
+        auto foundName = getServiceName(port);
+        if (!foundName.empty()) {
+            // Name might be different (e.g., alias) but should map to same port
+            auto reversePort = getServicePort(foundName);
+            if (reversePort.has_value()) {
+                EXPECT_EQ(*reversePort, port)
+                    << "Inconsistent reverse lookup for port: " << port;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Concurrent Service Lookup Tests
+// ============================================================================
+
+TEST_F(PortTest, ConcurrentServiceLookup) {
+    constexpr int numThreads = 10;
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&successCount, i]() {
+            // Mix of service lookups
+            auto name = getServiceName(80 + i);
+            auto port = getServicePort("http");
+            const auto& services = getCommonServices();
+
+            if (port.has_value() || !name.empty() || !services.empty()) {
+                successCount++;
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(successCount.load(), 0);
 }

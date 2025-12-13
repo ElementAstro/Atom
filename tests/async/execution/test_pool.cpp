@@ -148,24 +148,22 @@ TEST_F(ThreadPoolTest, SubmitWithPromise) {
 
 TEST_F(ThreadPoolTest, QueueSizeMonitoring) {
     ThreadPool::Options options;
-    options.initialThreadCount = 1;  // Single thread to create queue backlog
-    options.maxThreadCount = 1;
+    options.initialThreadCount = 2;  // Need enough threads for the latch
+    options.maxThreadCount = 4;
     ThreadPool pool(options);
 
     std::atomic<int> counter{0};
-    std::latch sync(10);
 
     // Submit many tasks quickly to fill the queue
     std::vector<EnhancedFuture<void>> futures;
     for (int i = 0; i < 10; ++i) {
-        futures.push_back(pool.submit([&counter, &sync]() {
-            sync.arrive_and_wait();
+        futures.push_back(pool.submit([&counter]() {
             counter.fetch_add(1);
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }));
     }
 
-    // Queue should have tasks
+    // Queue should have tasks (or they may already be running)
     EXPECT_GE(pool.getQueueSize(), 0);
 
     // Wait for all tasks to complete

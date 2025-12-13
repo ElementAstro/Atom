@@ -9,14 +9,13 @@ on:
     - cron: "0 2 * * 1"  # Weekly on Monday at 2 AM
   workflow_dispatch:
 
-env:
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-
 jobs:
   # Static analysis with multiple tools
   static-analysis:
     name: Static Analysis
     runs-on: ubuntu-latest
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     steps:
       - uses: actions/checkout@v4
         with:
@@ -40,6 +39,14 @@ jobs:
             iwyu include-what-you-use \
             valgrind lcov cmake ninja-build
 
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "dbe35ceb30c688bf72e952ab23778e009a578f18"
+
+      - name: Setup CMake
+        uses: lukka/get-cmake@latest
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
@@ -48,6 +55,35 @@ jobs:
       - name: Install Python tools
         run: |
           pip install cpplint lizard complexity-report
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ~/.cache/vcpkg
+          key: ${{ runner.os }}-analysis-vcpkg-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-analysis-vcpkg-
+
+      - name: Cache CMake configure (compile commands)
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: >-
+            ${{ runner.os }}-analysis-cmake-${{ hashFiles('CMakeLists.txt', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            ${{ runner.os }}-analysis-cmake-
+
+      - name: Configure project (compile_commands)
+        run: |
+          cmake --preset debug \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DUSE_VCPKG=ON \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=OFF \
+            -DATOM_BUILD_PYTHON_BINDINGS=OFF \
+            -DATOM_BUILD_DOCS=OFF
 
       - name: Run cppcheck
         run: |
@@ -64,9 +100,6 @@ jobs:
 
       - name: Run clang-tidy
         run: |
-          # Generate compile commands using CMakePresets
-          cmake --preset debug -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
           # Run clang-tidy on source files
           find atom/ -name "*.cpp" | head -20 | xargs -I {} \
             clang-tidy {} -p build/ \
@@ -271,12 +304,14 @@ jobs:
           lcov --list coverage.info
 
       - name: Upload coverage to Codecov
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        if: ${{ env.CODECOV_TOKEN != '' }}
         uses: codecov/codecov-action@v4
         with:
           file: build/coverage.info
           flags: unittests
           name: codecov-umbrella
-          token: ${{ secrets.CODECOV_TOKEN }}
 
   # Documentation quality
   documentation-quality:

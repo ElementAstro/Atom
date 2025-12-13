@@ -641,6 +641,16 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
             }
         }
 
+        // Check if kernel is larger than input
+        const usize inputRows = input.size();
+        const usize kernelRows = kernel.size();
+        if (kernelRows > inputRows || kernelCols > inputCols) {
+            THROW_CONVOLVE_ERROR(
+                "Kernel dimensions ({},{}) cannot be larger than input "
+                "dimensions ({},{})",
+                kernelRows, kernelCols, inputRows, inputCols);
+        }
+
         // 线程数验证和调整
         i32 availableThreads =
             static_cast<i32>(std::thread::hardware_concurrency());
@@ -653,9 +663,6 @@ auto convolve2D(const std::vector<std::vector<f64>>& input,
 #if ATOM_USE_OPENCL
         return convolve2DOpenCL(input, kernel, numThreads);
 #else
-        const usize inputRows = input.size();
-        const usize kernelRows = kernel.size();
-
         // 扩展输入和卷积核以便于计算
         auto extendedInput = extend2D(input, inputRows + kernelRows - 1,
                                       inputCols + kernelCols - 1);

@@ -7,11 +7,17 @@ project(
 # Include standardized module configuration
 include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# Find OpenSSL package (optional for all builds)
-find_package(OpenSSL QUIET)
-if(NOT OpenSSL_FOUND)
-  message(
-    STATUS "OpenSSL not found - some cryptographic features will be disabled")
+# Find OpenSSL package (optional for all builds) First check if targets already
+# exist from parent scope
+if(TARGET OpenSSL::SSL AND TARGET OpenSSL::Crypto)
+  set(OpenSSL_FOUND TRUE)
+  message(STATUS "OpenSSL targets found from parent scope")
+else()
+  find_package(OpenSSL QUIET)
+  if(NOT OpenSSL_FOUND)
+    message(
+      STATUS "OpenSSL not found - some cryptographic features will be disabled")
+  endif()
 endif()
 
 # Find TBB package (optional for now due to vcpkg network issues)
@@ -131,8 +137,9 @@ add_library(atom-algorithm STATIC ${SOURCES} ${HEADERS})
 # Configure module using standardized function
 atom_configure_module(atom-algorithm)
 
-# Link module-specific dependencies
-target_link_libraries(atom-algorithm PRIVATE ${LIBS} ${CMAKE_THREAD_LIBS_INIT})
+# Link module-specific dependencies Use PUBLIC for static library so consumers
+# get transitive dependencies
+target_link_libraries(atom-algorithm PUBLIC ${LIBS} ${CMAKE_THREAD_LIBS_INIT})
 
 # Define OpenSSL availability for conditional compilation
 if(OpenSSL_FOUND)

@@ -57,6 +57,141 @@ endif()
 
 target_link_libraries(test-infrastructure-validation PRIVATE atom-test-common)
 
+# ============================================================================
+# Core Test Files
+# ============================================================================
+set(CORE_TEST_SOURCES core/test_assertions.cpp core/test_test_runner.cpp
+                      core/test_test_cli.cpp core/test_test_registry.cpp)
+
+# ============================================================================
+# Assertions Test Files
+# ============================================================================
+set(ASSERTIONS_TEST_SOURCES
+    assertions/test_matchers.cpp assertions/test_death_test.cpp
+    assertions/test_string_matchers.cpp)
+
+# ============================================================================
+# Fixtures Test Files
+# ============================================================================
+set(FIXTURES_TEST_SOURCES
+    fixtures/test_test_fixture.cpp fixtures/test_parameterized.cpp
+    fixtures/test_typed_test.cpp)
+
+# ============================================================================
+# Mocking Test Files
+# ============================================================================
+set(MOCKING_TEST_SOURCES mocking/test_mock.cpp mocking/test_mock_matchers.cpp)
+
+# ============================================================================
+# Utilities Test Files
+# ============================================================================
+set(UTILITIES_TEST_SOURCES utilities/test_skip.cpp utilities/test_data.cpp
+                           utilities/test_environment.cpp)
+
+# ============================================================================
+# Reporters Test Files
+# ============================================================================
+set(REPORTERS_TEST_SOURCES reporters/test_reporters.cpp)
+
+# ============================================================================
+# Performance Test Files
+# ============================================================================
+set(PERFORMANCE_TEST_SOURCES
+    performance/test_benchmark.cpp performance/test_fuzz.cpp
+    performance/test_perf.cpp)
+
+# ============================================================================
+# Create Test Executables by Category
+# ============================================================================
+
+# Core tests
+if(NOT TARGET test-atom-tests-core)
+  add_executable(test-atom-tests-core ${CORE_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-core PRIVATE atom-test-common
+                                                     atom-tests)
+  add_test(NAME AtomTestsCore COMMAND test-atom-tests-core)
+  set_tests_properties(AtomTestsCore PROPERTIES LABELS "atom_tests;core")
+endif()
+
+# Assertions tests
+if(NOT TARGET test-atom-tests-assertions)
+  add_executable(test-atom-tests-assertions ${ASSERTIONS_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-assertions PRIVATE atom-test-common
+                                                           atom-tests)
+  add_test(NAME AtomTestsAssertions COMMAND test-atom-tests-assertions)
+  set_tests_properties(AtomTestsAssertions PROPERTIES LABELS
+                                                      "atom_tests;assertions")
+endif()
+
+# Fixtures tests
+if(NOT TARGET test-atom-tests-fixtures)
+  add_executable(test-atom-tests-fixtures ${FIXTURES_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-fixtures PRIVATE atom-test-common
+                                                         atom-tests)
+  add_test(NAME AtomTestsFixtures COMMAND test-atom-tests-fixtures)
+  set_tests_properties(AtomTestsFixtures PROPERTIES LABELS
+                                                    "atom_tests;fixtures")
+endif()
+
+# Mocking tests
+if(NOT TARGET test-atom-tests-mocking)
+  add_executable(test-atom-tests-mocking ${MOCKING_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-mocking PRIVATE atom-test-common
+                                                        atom-tests)
+  add_test(NAME AtomTestsMocking COMMAND test-atom-tests-mocking)
+  set_tests_properties(AtomTestsMocking PROPERTIES LABELS "atom_tests;mocking")
+endif()
+
+# Utilities tests
+if(NOT TARGET test-atom-tests-utilities)
+  add_executable(test-atom-tests-utilities ${UTILITIES_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-utilities PRIVATE atom-test-common
+                                                          atom-tests)
+  add_test(NAME AtomTestsUtilities COMMAND test-atom-tests-utilities)
+  set_tests_properties(AtomTestsUtilities PROPERTIES LABELS
+                                                     "atom_tests;utilities")
+endif()
+
+# Reporters tests
+if(NOT TARGET test-atom-tests-reporters)
+  add_executable(test-atom-tests-reporters ${REPORTERS_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-reporters PRIVATE atom-test-common
+                                                          atom-tests)
+  add_test(NAME AtomTestsReporters COMMAND test-atom-tests-reporters)
+  set_tests_properties(AtomTestsReporters PROPERTIES LABELS
+                                                     "atom_tests;reporters")
+endif()
+
+# Performance tests
+if(NOT TARGET test-atom-tests-performance)
+  add_executable(test-atom-tests-performance ${PERFORMANCE_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-performance PRIVATE atom-test-common
+                                                            atom-tests)
+  add_test(NAME AtomTestsPerformance COMMAND test-atom-tests-performance)
+  set_tests_properties(AtomTestsPerformance
+                       PROPERTIES LABELS "atom_tests;performance" TIMEOUT 600)
+endif()
+
+# ============================================================================
+# Combined Test Executable (all tests in one)
+# ============================================================================
+set(ALL_TEST_SOURCES
+    ${CORE_TEST_SOURCES}
+    ${ASSERTIONS_TEST_SOURCES}
+    ${FIXTURES_TEST_SOURCES}
+    ${MOCKING_TEST_SOURCES}
+    ${UTILITIES_TEST_SOURCES}
+    ${REPORTERS_TEST_SOURCES}
+    ${PERFORMANCE_TEST_SOURCES})
+
+if(NOT TARGET test-atom-tests-all)
+  add_executable(test-atom-tests-all ${ALL_TEST_SOURCES})
+  target_link_libraries(test-atom-tests-all PRIVATE atom-test-common atom-tests)
+  add_test(NAME AtomTestsAll COMMAND test-atom-tests-all)
+  set_tests_properties(AtomTestsAll PROPERTIES LABELS "atom_tests;all" TIMEOUT
+                                               900)
+endif()
+
 # Enable testing
 enable_testing()
 

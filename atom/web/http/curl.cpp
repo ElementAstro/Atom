@@ -13,9 +13,13 @@
 #include <openssl/ssl.h>
 #endif
 
+#include <chrono>
 #include <condition_variable>
+#include <filesystem>
 #include <fstream>
+#include <future>
 #include <stdexcept>
+#include <stop_token>
 #include <thread>
 
 #include <spdlog/spdlog.h>
@@ -59,6 +63,17 @@ public:
     auto performAsync() -> CurlWrapper::Impl &;
     void waitAll();
     auto setMaxDownloadSpeed(size_t speed) -> CurlWrapper::Impl &;
+    auto setMaxUploadSpeed(size_t speed) -> CurlWrapper::Impl &;
+    void setProgressCallback(
+        std::function<void(size_t, size_t, size_t, size_t)> callback);
+    void applyConfig(const RequestConfig &config);
+    [[nodiscard]] auto getResponseCode() const -> int;
+    [[nodiscard]] auto getEffectiveUrl() const -> std::string;
+    [[nodiscard]] auto getContentType() const -> std::string;
+    [[nodiscard]] auto getDownloadSize() const -> size_t;
+    void reset();
+    [[nodiscard]] auto performAsyncCancellable(std::stop_token stopToken)
+        -> std::future<HttpResponse>;
 
 private:
     CURL *handle_;
@@ -73,11 +88,16 @@ private:
     std::unique_ptr<std::ifstream> uploadFile_;
     std::thread worker_;
     bool asyncRunning_ = false;
+    std::function<void(size_t, size_t, size_t, size_t)> progressCallback_;
+    std::chrono::steady_clock::time_point requestStartTime_;
 
     static auto writeCallback(void *contents, size_t size, size_t nmemb,
                               void *userp) -> size_t;
     static auto readCallback(void *ptr, size_t size, size_t nmemb,
                              void *userp) -> size_t;
+    static auto progressCallbackWrapper(void *clientp, curl_off_t dltotal,
+                                        curl_off_t dlnow, curl_off_t ultotal,
+                                        curl_off_t ulnow) -> int;
     void updateHeaders();
 };
 
@@ -156,6 +176,226 @@ void CurlWrapper::waitAll() { pImpl_->waitAll(); }
 auto CurlWrapper::setMaxDownloadSpeed(size_t speed) -> CurlWrapper & {
     pImpl_->setMaxDownloadSpeed(speed);
     return *this;
+}
+
+void CurlWrapper::setOnErrorCallback(
+    std::function<void(const std::string &)> callback) {
+    pImpl_->setOnErrorCallback([callback](CURLcode code) {
+        if (callback) {
+            callback(curl_easy_strerror(code));
+        }
+    });
+}
+
+void CurlWrapper::setOnResponseCallback(
+    std::function<void(const std::string &)> callback) {
+    pImpl_->setOnResponseCallback(std::move(callback));
+}
+
+void CurlWrapper::setProgressCallback(
+    std::function<void(size_t, size_t, size_t, size_t)> callback) {
+    pImpl_->setProgressCallback(std::move(callback));
+}
+
+void CurlWrapper::setMaxUploadSpeed(long bytesPerSecond) {
+    pImpl_->setMaxUploadSpeed(static_cast<size_t>(bytesPerSecond));
+}
+
+void CurlWrapper::applyConfig(const RequestConfig &config) {
+    pImpl_->applyConfig(config);
+}
+
+auto CurlWrapper::getResponseCode() const -> int {
+    return pImpl_->getResponseCode();
+}
+
+auto CurlWrapper::getEffectiveUrl() const -> std::string {
+    return pImpl_->getEffectiveUrl();
+}
+
+auto CurlWrapper::getContentType() const -> std::string {
+    return pImpl_->getContentType();
+}
+
+auto CurlWrapper::getDownloadSize() const -> size_t {
+    return pImpl_->getDownloadSize();
+}
+
+void CurlWrapper::reset() { pImpl_->reset(); }
+
+auto CurlWrapper::performAsyncCancellable(std::stop_token stopToken)
+    -> std::future<HttpResponse> {
+    return pImpl_->performAsyncCancellable(std::move(stopToken));
+}
+
+auto CurlWrapper::get(std::string_view url,
+                      const RequestConfig &config) -> HttpResponse {
+    CurlWrapper wrapper;
+    wrapper.setUrl(std::string(url));
+    wrapper.setRequestMethod("GET");
+    wrapper.applyConfig(config);
+
+    HttpResponse response;
+    auto startTime = std::chrono::steady_clock::now();
+
+    try {
+        response.body = wrapper.perform();
+        response.statusCode = wrapper.getResponseCode();
+        response.effectiveUrl = wrapper.getEffectiveUrl();
+        response.contentType = wrapper.getContentType();
+        response.downloadedBytes = wrapper.getDownloadSize();
+    } catch (const std::exception &e) {
+        spdlog::error("GET request failed: {}", e.what());
+        response.statusCode = 0;
+        response.statusMessage = e.what();
+    }
+
+    auto endTime = std::chrono::steady_clock::now();
+    response.responseTime =
+        std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                              startTime);
+
+    return response;
+}
+
+auto CurlWrapper::post(std::string_view url, std::string_view body,
+                       std::string_view contentType,
+                       const RequestConfig &config) -> HttpResponse {
+    CurlWrapper wrapper;
+    wrapper.setUrl(std::string(url));
+    wrapper.setRequestMethod("POST");
+    wrapper.setRequestBody(std::string(body));
+    wrapper.addHeader("Content-Type", std::string(contentType));
+    wrapper.applyConfig(config);
+
+    HttpResponse response;
+    auto startTime = std::chrono::steady_clock::now();
+
+    try {
+        response.body = wrapper.perform();
+        response.statusCode = wrapper.getResponseCode();
+        response.effectiveUrl = wrapper.getEffectiveUrl();
+        response.contentType = wrapper.getContentType();
+        response.downloadedBytes = wrapper.getDownloadSize();
+    } catch (const std::exception &e) {
+        spdlog::error("POST request failed: {}", e.what());
+        response.statusCode = 0;
+        response.statusMessage = e.what();
+    }
+
+    auto endTime = std::chrono::steady_clock::now();
+    response.responseTime =
+        std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                              startTime);
+
+    return response;
+}
+
+auto CurlWrapper::put(std::string_view url, std::string_view body,
+                      std::string_view contentType,
+                      const RequestConfig &config) -> HttpResponse {
+    CurlWrapper wrapper;
+    wrapper.setUrl(std::string(url));
+    wrapper.setRequestMethod("PUT");
+    wrapper.setRequestBody(std::string(body));
+    wrapper.addHeader("Content-Type", std::string(contentType));
+    wrapper.applyConfig(config);
+
+    HttpResponse response;
+    auto startTime = std::chrono::steady_clock::now();
+
+    try {
+        response.body = wrapper.perform();
+        response.statusCode = wrapper.getResponseCode();
+        response.effectiveUrl = wrapper.getEffectiveUrl();
+        response.contentType = wrapper.getContentType();
+        response.downloadedBytes = wrapper.getDownloadSize();
+    } catch (const std::exception &e) {
+        spdlog::error("PUT request failed: {}", e.what());
+        response.statusCode = 0;
+        response.statusMessage = e.what();
+    }
+
+    auto endTime = std::chrono::steady_clock::now();
+    response.responseTime =
+        std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                              startTime);
+
+    return response;
+}
+
+auto CurlWrapper::del(std::string_view url,
+                      const RequestConfig &config) -> HttpResponse {
+    CurlWrapper wrapper;
+    wrapper.setUrl(std::string(url));
+    wrapper.setRequestMethod("DELETE");
+    wrapper.applyConfig(config);
+
+    HttpResponse response;
+    auto startTime = std::chrono::steady_clock::now();
+
+    try {
+        response.body = wrapper.perform();
+        response.statusCode = wrapper.getResponseCode();
+        response.effectiveUrl = wrapper.getEffectiveUrl();
+        response.contentType = wrapper.getContentType();
+        response.downloadedBytes = wrapper.getDownloadSize();
+    } catch (const std::exception &e) {
+        spdlog::error("DELETE request failed: {}", e.what());
+        response.statusCode = 0;
+        response.statusMessage = e.what();
+    }
+
+    auto endTime = std::chrono::steady_clock::now();
+    response.responseTime =
+        std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                              startTime);
+
+    return response;
+}
+
+auto CurlWrapper::downloadFile(
+    std::string_view url, std::string_view filePath,
+    std::function<void(size_t, size_t)> progressCallback,
+    std::stop_token stopToken) -> bool {
+    try {
+        std::ofstream outFile(std::string(filePath), std::ios::binary);
+        if (!outFile) {
+            spdlog::error("Failed to open file for writing: {}", filePath);
+            return false;
+        }
+
+        CurlWrapper wrapper;
+        wrapper.setUrl(std::string(url));
+        wrapper.setRequestMethod("GET");
+
+        if (progressCallback) {
+            wrapper.setProgressCallback(
+                [&progressCallback](size_t dl, size_t dlTotal, size_t, size_t) {
+                    progressCallback(dl, dlTotal);
+                });
+        }
+
+        std::string response = wrapper.perform();
+
+        if (stopToken.stop_requested()) {
+            spdlog::info("Download cancelled");
+            outFile.close();
+            std::filesystem::remove(std::string(filePath));
+            return false;
+        }
+
+        outFile.write(response.data(),
+                      static_cast<std::streamsize>(response.size()));
+        outFile.close();
+
+        spdlog::info("File downloaded successfully: {}", filePath);
+        return true;
+
+    } catch (const std::exception &e) {
+        spdlog::error("Download failed: {}", e.what());
+        return false;
+    }
 }
 
 CurlWrapper::Impl::Impl()
@@ -449,6 +689,185 @@ auto CurlWrapper::Impl::setMaxDownloadSpeed(size_t speed)
     curl_easy_setopt(handle_, CURLOPT_MAX_RECV_SPEED_LARGE,
                      static_cast<curl_off_t>(speed));
     return *this;
+}
+
+auto CurlWrapper::Impl::setMaxUploadSpeed(size_t speed) -> CurlWrapper::Impl & {
+    spdlog::info("Setting max upload speed: {} bytes/sec", speed);
+    curl_easy_setopt(handle_, CURLOPT_MAX_SEND_SPEED_LARGE,
+                     static_cast<curl_off_t>(speed));
+    return *this;
+}
+
+void CurlWrapper::Impl::setProgressCallback(
+    std::function<void(size_t, size_t, size_t, size_t)> callback) {
+    progressCallback_ = std::move(callback);
+    if (progressCallback_) {
+        curl_easy_setopt(handle_, CURLOPT_XFERINFOFUNCTION,
+                         progressCallbackWrapper);
+        curl_easy_setopt(handle_, CURLOPT_XFERINFODATA, this);
+        curl_easy_setopt(handle_, CURLOPT_NOPROGRESS, 0L);
+    } else {
+        curl_easy_setopt(handle_, CURLOPT_NOPROGRESS, 1L);
+    }
+}
+
+auto CurlWrapper::Impl::progressCallbackWrapper(void *clientp,
+                                                curl_off_t dltotal,
+                                                curl_off_t dlnow,
+                                                curl_off_t ultotal,
+                                                curl_off_t ulnow) -> int {
+    auto *impl = static_cast<CurlWrapper::Impl *>(clientp);
+    if (impl && impl->progressCallback_) {
+        impl->progressCallback_(
+            static_cast<size_t>(dlnow), static_cast<size_t>(dltotal),
+            static_cast<size_t>(ulnow), static_cast<size_t>(ultotal));
+    }
+    return 0;
+}
+
+void CurlWrapper::Impl::applyConfig(const RequestConfig &config) {
+    setTimeout(static_cast<long>(config.timeout.count()));
+    curl_easy_setopt(handle_, CURLOPT_CONNECTTIMEOUT,
+                     static_cast<long>(config.connectTimeout.count()));
+    setFollowLocation(config.followRedirects);
+    if (config.followRedirects) {
+        curl_easy_setopt(handle_, CURLOPT_MAXREDIRS,
+                         static_cast<long>(config.maxRedirects));
+    }
+    setSSLOptions(config.verifySSL, config.verifyHost);
+
+    if (!config.userAgent.empty()) {
+        curl_easy_setopt(handle_, CURLOPT_USERAGENT, config.userAgent.c_str());
+    }
+
+    if (!config.proxy.empty()) {
+        setProxy(config.proxy);
+    }
+
+    if (config.basicAuth.has_value()) {
+        std::string auth =
+            config.basicAuth->first + ":" + config.basicAuth->second;
+        curl_easy_setopt(handle_, CURLOPT_USERPWD, auth.c_str());
+    }
+
+    if (config.bearerToken.has_value()) {
+        addHeader("Authorization", "Bearer " + *config.bearerToken);
+    }
+}
+
+auto CurlWrapper::Impl::getResponseCode() const -> int {
+    long responseCode = 0;
+    curl_easy_getinfo(handle_, CURLINFO_RESPONSE_CODE, &responseCode);
+    return static_cast<int>(responseCode);
+}
+
+auto CurlWrapper::Impl::getEffectiveUrl() const -> std::string {
+    char *url = nullptr;
+    curl_easy_getinfo(handle_, CURLINFO_EFFECTIVE_URL, &url);
+    return url ? std::string(url) : "";
+}
+
+auto CurlWrapper::Impl::getContentType() const -> std::string {
+    char *contentType = nullptr;
+    curl_easy_getinfo(handle_, CURLINFO_CONTENT_TYPE, &contentType);
+    return contentType ? std::string(contentType) : "";
+}
+
+auto CurlWrapper::Impl::getDownloadSize() const -> size_t {
+    curl_off_t size = 0;
+    curl_easy_getinfo(handle_, CURLINFO_SIZE_DOWNLOAD_T, &size);
+    return static_cast<size_t>(size);
+}
+
+void CurlWrapper::Impl::reset() {
+    waitAll();
+    if (headersList_) {
+        curl_slist_free_all(headersList_);
+        headersList_ = nullptr;
+    }
+    curl_easy_reset(handle_);
+    curl_easy_setopt(handle_, CURLOPT_NOSIGNAL, 1L);
+    responseData_.clear();
+    requestBody_.clear();
+    uploadFile_.reset();
+    progressCallback_ = nullptr;
+    onErrorCallback_ = nullptr;
+    onResponseCallback_ = nullptr;
+}
+
+auto CurlWrapper::Impl::performAsyncCancellable(std::stop_token stopToken)
+    -> std::future<HttpResponse> {
+    return std::async(std::launch::async, [this, stopToken]() -> HttpResponse {
+        HttpResponse response;
+        auto startTime = std::chrono::steady_clock::now();
+
+        try {
+            {
+                std::lock_guard lock(mutex_);
+                responseData_.clear();
+                responseData_.reserve(4096);
+                curl_easy_setopt(handle_, CURLOPT_WRITEFUNCTION, writeCallback);
+                curl_easy_setopt(handle_, CURLOPT_WRITEDATA, &responseData_);
+            }
+
+            CURLcode res = CURLE_OK;
+            int stillRunning = 0;
+
+            CURLMcode multiCode = curl_multi_add_handle(multiHandle_, handle_);
+            if (multiCode != CURLM_OK) {
+                response.statusMessage = curl_multi_strerror(multiCode);
+                return response;
+            }
+
+            curl_multi_perform(multiHandle_, &stillRunning);
+
+            while (stillRunning > 0 && !stopToken.stop_requested()) {
+                int numfds;
+                multiCode =
+                    curl_multi_wait(multiHandle_, nullptr, 0, 100, &numfds);
+                if (multiCode != CURLM_OK) {
+                    break;
+                }
+                curl_multi_perform(multiHandle_, &stillRunning);
+            }
+
+            if (stopToken.stop_requested()) {
+                curl_multi_remove_handle(multiHandle_, handle_);
+                response.statusMessage = "Request cancelled";
+                return response;
+            }
+
+            CURLMsg *msg;
+            int msgsLeft;
+            while ((msg = curl_multi_info_read(multiHandle_, &msgsLeft)) !=
+                   nullptr) {
+                if (msg->msg == CURLMSG_DONE) {
+                    res = msg->data.result;
+                    curl_multi_remove_handle(multiHandle_, msg->easy_handle);
+                }
+            }
+
+            if (res == CURLE_OK) {
+                response.body = responseData_;
+                response.statusCode = getResponseCode();
+                response.effectiveUrl = getEffectiveUrl();
+                response.contentType = getContentType();
+                response.downloadedBytes = getDownloadSize();
+            } else {
+                response.statusMessage = curl_easy_strerror(res);
+            }
+
+        } catch (const std::exception &e) {
+            response.statusMessage = e.what();
+        }
+
+        auto endTime = std::chrono::steady_clock::now();
+        response.responseTime =
+            std::chrono::duration_cast<std::chrono::milliseconds>(endTime -
+                                                                  startTime);
+
+        return response;
+    });
 }
 
 }  // namespace atom::web

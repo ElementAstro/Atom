@@ -26,6 +26,8 @@ jobs:
   build-release:
     name: Build Release (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     strategy:
       matrix:
         include:
@@ -103,6 +105,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-${{ matrix.arch }}-vcpkg-release-
 
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: >-
+            ${{ runner.os }}-${{ matrix.arch }}-release-${{ matrix.preset }}-
+            ${{ hashFiles('CMakeLists.txt', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-release-${{ matrix.preset }}-
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Install system dependencies (Ubuntu)
         if: matrix.os == 'ubuntu-latest'
         run: |
@@ -129,6 +146,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DUSE_VCPKG=ON \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_ALL=ON \
             -DATOM_BUILD_EXAMPLES=ON \
             -DATOM_BUILD_TESTS=ON \
             -DATOM_BUILD_PYTHON_BINDINGS=ON \

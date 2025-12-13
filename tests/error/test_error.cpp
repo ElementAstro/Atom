@@ -18,7 +18,7 @@ Tests error handling, stack traces, and exception management.
 #include <string>
 #include <vector>
 
-#include "atom/error/error_code.hpp"
+#include "atom/error/core/error_codes.hpp"
 #include "atom/error/exception.hpp"
 #include "atom/error/stacktrace.hpp"
 

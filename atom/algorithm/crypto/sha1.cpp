@@ -5,6 +5,8 @@
 #include <cstring>
 #include <future>
 
+#include "atom/error/exception.hpp"
+
 #ifdef ATOM_USE_BOOST
 #include <boost/endian/conversion.hpp>
 #endif
@@ -31,7 +33,7 @@ void SHA1::update(const u8* data, usize length) {
     // Input validation
     if (!data && length > 0) {
         spdlog::error("SHA1: Null data pointer with non-zero length");
-        throw std::invalid_argument("Null data pointer with non-zero length");
+        THROW_INVALID_ARGUMENT("Null data pointer with non-zero length");
     }
 
     usize remaining = length;
@@ -70,22 +72,22 @@ auto SHA1::digest() noexcept -> std::array<u8, SHA1::DIGEST_SIZE> {
 
     // Backup current state to ensure digest() operation doesn't affect object
     // state
-    auto hashCopy = hash_;
-    auto bufferCopy = buffer_;
-    auto bitCountCopy = bitCount_;
+    auto hashBackup = hash_;
+    auto bufferBackup = buffer_;
+    auto bitCountBackup = bitCount_;
 
     // Padding
-    usize bufferOffset = (bitCountCopy / 8) % BLOCK_SIZE;
-    bufferCopy[bufferOffset] = PADDING_BYTE;  // Append the bit '1'
+    usize bufferOffset = (bitCountBackup / 8) % BLOCK_SIZE;
+    buffer_[bufferOffset] = PADDING_BYTE;  // Append the bit '1'
 
     // Fill the rest of the buffer with zeros
-    std::fill(bufferCopy.begin() + bufferOffset + 1,
-              bufferCopy.begin() + BLOCK_SIZE, 0);
+    std::fill(buffer_.begin() + bufferOffset + 1, buffer_.begin() + BLOCK_SIZE,
+              0);
 
     if (bufferOffset >= BLOCK_SIZE - LENGTH_SIZE) {
         // Process current block, create new block for storing length
-        processBlock(bufferCopy.data());
-        std::fill(bufferCopy.begin(), bufferCopy.end(), 0);
+        processBlock(buffer_.data());
+        std::fill(buffer_.begin(), buffer_.end(), 0);
     }
 
     // Use C++20 bit operations to handle byte order
@@ -102,16 +104,16 @@ auto SHA1::digest() noexcept -> std::array<u8, SHA1::DIGEST_SIZE> {
     }
 
     // Append message length
-    std::memcpy(bufferCopy.data() + BLOCK_SIZE - LENGTH_SIZE, &bitLength,
+    std::memcpy(buffer_.data() + BLOCK_SIZE - LENGTH_SIZE, &bitLength,
                 LENGTH_SIZE);
 
-    processBlock(bufferCopy.data());
+    processBlock(buffer_.data());
 
     // Generate final hash value
     std::array<u8, DIGEST_SIZE> result;
 
     for (usize i = 0; i < HASH_SIZE; ++i) {
-        u32 value = hashCopy[i];
+        u32 value = hash_[i];
         if constexpr (std::endian::native == std::endian::little) {
             // Byte order conversion needed on little endian systems
             value = ((value & 0xff000000) >> 24) | ((value & 0x00ff0000) >> 8) |
@@ -119,6 +121,11 @@ auto SHA1::digest() noexcept -> std::array<u8, SHA1::DIGEST_SIZE> {
         }
         std::memcpy(&result[i * 4], &value, 4);
     }
+
+    // Restore state so digest() doesn't affect object state
+    hash_ = hashBackup;
+    buffer_ = bufferBackup;
+    bitCount_ = bitCountBackup;
 
     return result;
 }

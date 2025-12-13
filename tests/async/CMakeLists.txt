@@ -26,11 +26,25 @@ set(USE_GMOCK OFF)
 set(EXCLUDE_SOURCES
     "${PROJECT_SOURCE_DIR}/test_async_main.cpp"
     "${PROJECT_SOURCE_DIR}/sync/test_limiter.cpp"
+    "${PROJECT_SOURCE_DIR}/sync/test_slot.cpp" # Uses non-existent AsyncSignal
+                                               # methods
     "${PROJECT_SOURCE_DIR}/threading/test_threadlocal.cpp"
     "${PROJECT_SOURCE_DIR}/threading/test_lock.cpp"
     "${PROJECT_SOURCE_DIR}/threading/test_thread_wrapper.cpp"
     "${PROJECT_SOURCE_DIR}/utils/test_lodash.cpp"
-    "${PROJECT_SOURCE_DIR}/utils/test_timer.cpp")
+    "${PROJECT_SOURCE_DIR}/utils/test_timer.cpp"
+    "${PROJECT_SOURCE_DIR}/core/test_future.cpp" # Uses non-existent whenAny
+                                                 # function
+    "${PROJECT_SOURCE_DIR}/messaging/test_eventstack.cpp" # Uses non-existent
+                                                          # EventStack methods
+    "${PROJECT_SOURCE_DIR}/messaging/test_message_queue.cpp" # Uses non-existent
+                                                             # MessageQueue
+                                                             # methods
+    "${PROJECT_SOURCE_DIR}/sync/test_trigger.cpp" # Uses non-existent Trigger
+                                                  # methods
+    "${PROJECT_SOURCE_DIR}/messaging/test_queue.cpp") # Conflicts with
+                                                      # test_pool.cpp
+                                                      # ThreadSafeQueueTest
 
 # =============================================================================
 # Include Standard Test Template

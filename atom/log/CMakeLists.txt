@@ -22,6 +22,9 @@ add_library(atom-log SHARED ${ATOM_LOG_SOURCES} ${ATOM_LOG_HEADERS})
 find_package(spdlog REQUIRED)
 message(STATUS "spdlog found - linking to atom-log")
 
+# Compression support (required for mmap_logger compression path)
+find_package(ZLIB REQUIRED)
+
 # Find and link fmt if available (required for spdlog)
 find_package(fmt QUIET)
 if(fmt_FOUND)
@@ -35,7 +38,7 @@ atom_configure_module(atom-log)
 # issues with MinGW
 target_link_libraries(
   atom-log
-  PUBLIC spdlog::spdlog atom-error atom-utils
+  PUBLIC spdlog::spdlog atom-error atom-utils ZLIB::ZLIB
          $<$<TARGET_EXISTS:ZLIB::ZLIB>:ZLIB::ZLIB>
          $<$<TARGET_EXISTS:fmt::fmt>:fmt::fmt>)
 

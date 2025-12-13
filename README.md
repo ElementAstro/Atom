@@ -8,57 +8,58 @@ A comprehensive, modular C++20/C++23 foundational library for astronomical softw
 
 ## 🌟 Features
 
-- **18+ Modular Components**: Independently buildable modules with explicit dependency management
-- **Cross-Platform Support**: Windows (MSVC), Linux (GCC/Clang), macOS (Clang)
-- **Multi-Build System**: CMake (primary) and XMake support with feature parity
-- **Python Bindings**: Full pybind11 integration for Python 3.8+
-- **High Performance**: SIMD optimization, memory pooling, lock-free data structures
-- **Astronomical Focus**: Specialized support for FITS, SER formats, and astronomical image processing
-- **Modern C++**: C++20 standard with C++23 support where available
+- **Modular Core (18+ domains)**: Each module can be enabled/disabled independently with explicit dependencies
+- **Cross-Platform**: Windows (MSVC/MSYS2 MinGW64), Linux (GCC/Clang), macOS (Clang)
+- **Primary Build: CMake** with presets for Ninja, Makefiles, MSVC, and MSYS2 MinGW64; **XMake** supported
+- **Python Bindings (pybind11)**: Optional bindings for major modules (Python 3.8+)
+- **Performance-Oriented**: SIMD where available, memory pooling, lock-free queues, tuned allocators
+- **Astronomy-Friendly**: FITS/SER helpers and image utilities for astro workflows
+- **Modern C++**: Targets C++20, uses C++23 features when the toolchain supports them
 
 ## 📦 Modules
 
 ### Core Modules
 
-| Module | Purpose | Key Features |
-|--------|---------|--------------|
-| **error** | Error handling & stack traces | Comprehensive error context, stack trace generation, error recovery |
-| **log** | Logging framework | Async logging, memory-mapped logging, log management |
-| **type** | Type utilities & containers | JSON/YAML support, concurrent containers, small vector optimization |
-| **meta** | Reflection & metaprogramming | Type introspection, property system, FFI support |
-| **utils** | General utilities | String processing, time utilities, cryptography, UUID generation |
+| Module | Purpose | Key Capabilities |
+|--------|---------|------------------|
+| **error** | Error handling | Error contexts, stack traces, recovery helpers |
+| **log** | Logging | Async logging, rotation, memory-mapped sinks |
+| **type** | Type & containers | Variant/any helpers, small-vector, JSON/YAML helpers |
+| **meta** | Reflection & meta | Type traits, property helpers, light FFI utilities |
+| **utils** | General utilities | Strings/time, hashing, UUIDs, crypto helpers, helpers for CLI/process |
 
 ### Specialized Modules
 
-| Module | Purpose | Key Features |
-|--------|---------|--------------|
-| **algorithm** | Algorithms & data structures | Cryptography, compression, signal processing, pathfinding, optimization |
-| **async** | Asynchronous programming | Futures, promises, thread pools, message queues, coroutine support |
-| **components** | Component system | Memory pooling, lifecycle management, scripting integration (Lua/Python) |
-| **connection** | Network communication | TCP/UDP, SSH, FIFO, TTY, async operations, connection pooling |
-| **containers** | High-performance containers | Boost containers, lock-free structures, graph algorithms, intrusive containers |
-| **image** | Image processing | FITS/SER format support, OCR, format conversion, SIMD optimization |
-| **io** | Input/output operations | File operations, compression, glob patterns, async I/O |
-| **memory** | Memory management | Memory pools, tracking, shared pointers, ring buffers |
-| **search** | Search & caching | LRU cache, TTL cache, SQLite/MySQL database support |
-| **secret** | Security & encryption | Password management, encryption, secure storage |
-| **serial** | Serial communication | Serial ports, Bluetooth, USB support, cross-platform |
-| **sysinfo** | System information | CPU, memory, disk, GPU, battery, network, OS info |
-| **system** | System integration | Process management, environment, registry, signals, scheduling |
-| **web** | Web utilities | HTTP client, MIME types, URL handling, downloader |
+| Module | Purpose | Key Capabilities |
+|--------|---------|------------------|
+| **algorithm** | Algorithms & data structures | Compression, crypto primitives, hashing, filters, pathfinding |
+| **async** | Async primitives | Futures/promises, executors, workers, messaging |
+| **components** | Component system | Pools, lifecycle management, lightweight ECS-like utilities |
+| **connection** | Networking & IPC | TCP/UDP, FIFO/TTY helpers, async sockets, pooling |
+| **containers** | Extra containers | Lock-free queues, intrusive/graph helpers (Boost optional) |
+| **image** | Image helpers | FITS/SER helpers, basic transforms, optional OCR/OpenCV |
+| **io** | I/O utilities | File ops, compression, globbing, async I/O helpers |
+| **memory** | Memory tooling | Pools, arenas, tracking, custom allocators |
+| **search** | Caches & search | LRU/TTL caches, pluggable storage (SQLite/MySQL optional) |
+| **secret** | Security helpers | Password/crypto helpers, secure storage utilities |
+| **serial** | Serial comms | Serial ports and adapters with cross-platform helpers |
+| **sysinfo** | System info | CPU/mem/disk/GPU/network/system introspection |
+| **system** | System integration | Process management, env/registry, scheduling, signals |
+| **web** | Web utilities | HTTP client, MIME helpers, URL tools, downloaders |
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- **C++ Compiler**: GCC 11+, Clang 12+, or MSVC 2022+
-- **CMake**: 3.21 or later
-- **Python**: 3.8+ (for Python bindings)
-- **Dependencies**: OpenSSL, spdlog, optional: OpenCV, CFITSIO, Tesseract
+- **C++ Compiler**: GCC 11+/Clang 12+/MSVC 2022+ (C++20; C++23 used where supported)
+- **CMake**: 3.21+
+- **Python**: 3.8+ if building bindings/tests
+- **Core deps**: spdlog (compiled), OpenSSL
+- **Optional**: OpenCV/CFITSIO/Tesseract (image), Boost (containers/graph), ASIO or system ASIO (connection), pybind11 (Python bindings)
 
 ### Building
 
-#### Using Build Scripts (Recommended)
+#### Using Build Scripts
 
 ```bash
 # Unix/Linux/macOS
@@ -68,22 +69,20 @@ A comprehensive, modular C++20/C++23 foundational library for astronomical softw
 scripts\build.bat --release --tests --examples
 ```
 
-#### Using CMake Presets
+#### Using CMake Presets (recommended)
 
 ```bash
-# Configure with preset
-cmake --preset release
+# Configure (choose one)
+cmake --preset debug           # or release / relwithdebinfo
+cmake --preset debug-msys2     # MSYS2 MinGW64
+cmake --preset debug-vs        # MSVC
 
 # Build
-cmake --build --preset release -j
+cmake --build --preset debug -j
 
-# Run tests
+# Run tests (if enabled)
 ctest --preset default --output-on-failure
 ```
-
-#### Windows (MSYS2 MinGW64)
-
-For a native GCC/MinGW64 build on Windows using MSYS2, see BUILD_MINGW64.md for step-by-step setup and the dedicated presets (`*-msys2`).
 
 #### Using CMake Directly
 
@@ -91,7 +90,8 @@ For a native GCC/MinGW64 build on Windows using MSYS2, see BUILD_MINGW64.md for 
 # Configure
 cmake -B build -DCMAKE_BUILD_TYPE=Release \
   -DATOM_BUILD_TESTS=ON \
-  -DATOM_BUILD_EXAMPLES=ON
+  -DATOM_BUILD_EXAMPLES=ON \
+  -DATOM_BUILD_PYTHON_BINDINGS=ON
 
 # Build
 cmake --build build -j
@@ -103,13 +103,9 @@ cmake --install build
 #### Using XMake
 
 ```bash
-# Configure and build
 xmake build -y
-
-# Run tests
 xmake test
-
-# Build with options
+# With options
 xmake build -y --build_all=true --build_tests=true
 ```
 
@@ -118,23 +114,39 @@ xmake build -y --build_all=true --build_tests=true
 Common CMake options:
 
 ```cmake
--DATOM_BUILD_ALL=ON                    # Build all modules (default: ON)
--DATOM_BUILD_TESTS=ON                  # Build test suite
--DATOM_BUILD_EXAMPLES=ON                # Build examples
--DATOM_BUILD_PYTHON_BINDINGS=ON        # Build Python bindings
--DATOM_BUILD_DOCS=ON                   # Generate documentation
--DATOM_USE_SSH=ON                      # Enable SSH support
--DATOM_USE_CFITSIO=ON                  # Enable CFITSIO for FITS support
--DBUILD_SHARED_LIBS=ON                 # Build shared libraries
+-DATOM_BUILD_ALL=ON                    # Build all modules (default ON)
+-DATOM_BUILD_TESTS=ON                  # Build C++ tests
+-DATOM_BUILD_EXAMPLES=ON               # Build examples
+-DATOM_BUILD_PYTHON_BINDINGS=ON        # Build pybind11 bindings
+-DATOM_BUILD_DOCS=ON                   # Build docs (Doxygen/Sphinx)
+-DATOM_USE_SSH=ON                      # Enable SSH support in connection
+-DATOM_USE_CFITSIO=ON                  # FITS support for image
+-DATOM_USE_BOOST=ON                    # Enable Boost-based containers/graph
+-DBUILD_SHARED_LIBS=ON                 # Build shared libs
 ```
 
-Selective module building:
+Per-module toggles (all default to `ATOM_BUILD_ALL`):
 
 ```cmake
 -DATOM_BUILD_ALGORITHM=ON
 -DATOM_BUILD_ASYNC=ON
+-DATOM_BUILD_COMPONENTS=ON
+-DATOM_BUILD_CONNECTION=ON
+-DATOM_BUILD_CONTAINERS=ON
+-DATOM_BUILD_ERROR=ON
 -DATOM_BUILD_IMAGE=ON
-# ... and so on for each module
+-DATOM_BUILD_IO=ON
+-DATOM_BUILD_LOG=ON
+-DATOM_BUILD_MEMORY=ON
+-DATOM_BUILD_META=ON
+-DATOM_BUILD_SEARCH=ON
+-DATOM_BUILD_SECRET=ON
+-DATOM_BUILD_SERIAL=ON
+-DATOM_BUILD_SYSINFO=ON
+-DATOM_BUILD_SYSTEM=ON
+-DATOM_BUILD_TYPE=ON
+-DATOM_BUILD_UTILS=ON
+-DATOM_BUILD_WEB=ON
 ```
 
 ## 🧪 Testing
@@ -142,39 +154,37 @@ Selective module building:
 ### Running Tests
 
 ```bash
-# Build and run all tests
-./scripts/build.sh --debug --tests --run-tests
-
-# Using CMake
-cmake --preset debug
+# Build + run all C++ tests (CMake preset)
+cmake --preset debug -DATOM_BUILD_TESTS=ON
 cmake --build --preset debug -j
 ctest --preset default --output-on-failure
 
 # Run specific test module
 ctest -R "algorithm_*" --output-on-failure
 
-# Using XMake
-xmake test
+# Python tests
+pip install -e .[dev]
+pytest -q
+
+# Using scripts
+./scripts/build.sh --debug --tests --run-tests
 ```
 
 ### Test Framework
 
-- **C++ Tests**: GoogleTest (GTest) framework
-- **Python Tests**: pytest with coverage reporting
-- **Test Organization**: Tests organized by module under `tests/` directory
-- **Coverage**: Configured via `pyproject.toml` for Python tests
+- **C++**: GoogleTest via CTest presets
+- **Python**: pytest (coverage configured in `pyproject.toml`)
+- **Layout**: Tests organized by module under `tests/`
 
 ## 🐍 Python Bindings
 
-Atom provides comprehensive Python bindings for most modules using pybind11.
+Atom offers optional pybind11 bindings for major modules.
 
 ### Installation
 
 ```bash
-# From source with Python bindings
-pip install -e .[dev]
-
-# Or build and install
+pip install -e .[dev]           # editable install with dev extras
+# or via build script
 ./scripts/build.sh --python --release
 ```
 
@@ -182,30 +192,16 @@ pip install -e .[dev]
 
 ```python
 import atom
-
-# Example: Using algorithm module
 from atom.algorithm import hash_functions
-
-# Example: Using async module
 from atom.async import Promise, Future
-
-# Example: Using system module
 from atom.system import get_cpu_info, get_memory_info
 ```
 
 ### Available Python Modules
 
-- `atom.algorithm` - Algorithm and cryptographic functions
-- `atom.async` - Asynchronous programming primitives
-- `atom.connection` - Network communication
-- `atom.error` - Error handling
-- `atom.io` - Input/output operations
-- `atom.search` - Search and caching
-- `atom.sysinfo` - System information
-- `atom.system` - System integration
-- `atom.type` - Type utilities
-- `atom.utils` - General utilities
-- `atom.web` - Web utilities
+- `atom.algorithm`, `atom.async`, `atom.connection`, `atom.error`, `atom.io`,
+  `atom.search`, `atom.sysinfo`, `atom.system`, `atom.type`, `atom.utils`,
+  `atom.web` (availability depends on build options)
 
 ## 📚 Documentation
 

@@ -6,10 +6,10 @@
  * "atom/components/scripting/lua_engine.hpp" instead.
  */
 
-#ifndef ATOM_COMPONENT_LUA_ENGINE_HPP
-#define ATOM_COMPONENT_LUA_ENGINE_HPP
+#ifndef ATOM_COMPONENT_LUA_ENGINE_COMPAT_HPP
+#define ATOM_COMPONENT_LUA_ENGINE_COMPAT_HPP
 
 // Forward to the new location
 #include "scripting/lua_engine.hpp"
 
-#endif  // ATOM_COMPONENT_LUA_ENGINE_HPP
+#endif  // ATOM_COMPONENT_LUA_ENGINE_COMPAT_HPP

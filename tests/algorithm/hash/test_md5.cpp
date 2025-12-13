@@ -9,7 +9,7 @@
 #include <string_view>
 #include <thread>
 #include <vector>
-#include "atom/algorithm/md5.hpp"
+#include "atom/algorithm/crypto/md5.hpp"
 
 using namespace atom::algorithm;
 using namespace std::chrono_literals;
@@ -531,16 +531,27 @@ TEST_F(MD5Test, VerificationEdgeCases) {
     std::string input = "Test";
     std::string correct_hash = MD5::encrypt(input);
     std::string wrong_case_hash = correct_hash;
-    if (wrong_case_hash[0] >= 'a' && wrong_case_hash[0] <= 'f') {
-        wrong_case_hash[0] =
-            wrong_case_hash[0] - 'a' + 'A';  // Convert to uppercase
-    } else if (wrong_case_hash[0] >= 'A' && wrong_case_hash[0] <= 'F') {
-        wrong_case_hash[0] =
-            wrong_case_hash[0] - 'A' + 'a';  // Convert to lowercase
+    // Find a hex letter character to change case
+    bool foundLetter = false;
+    for (size_t i = 0; i < wrong_case_hash.size(); ++i) {
+        if (wrong_case_hash[i] >= 'a' && wrong_case_hash[i] <= 'f') {
+            wrong_case_hash[i] =
+                wrong_case_hash[i] - 'a' + 'A';  // Convert to uppercase
+            foundLetter = true;
+            break;
+        } else if (wrong_case_hash[i] >= 'A' && wrong_case_hash[i] <= 'F') {
+            wrong_case_hash[i] =
+                wrong_case_hash[i] - 'A' + 'a';  // Convert to lowercase
+            foundLetter = true;
+            break;
+        }
     }
 
     EXPECT_TRUE(MD5::verify(input, correct_hash));
-    EXPECT_FALSE(MD5::verify(input, wrong_case_hash));
+    // Only test case sensitivity if we found a letter to modify
+    if (foundLetter) {
+        EXPECT_FALSE(MD5::verify(input, wrong_case_hash));
+    }
 
     // Test with invalid hash length
     EXPECT_FALSE(MD5::verify(input, "short"));

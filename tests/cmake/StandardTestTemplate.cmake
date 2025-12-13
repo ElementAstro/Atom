@@ -167,6 +167,7 @@ int main(int argc, char** argv) {
 
   # Copy all dependent runtime DLLs next to the test executable on Windows
   if(WIN32)
+    # Use CMake's built-in runtime DLL copying (CMake 3.21+)
     add_custom_command(
       TARGET ${STANDARD_TEST_TEST_TARGET_NAME}
       POST_BUILD
@@ -175,6 +176,11 @@ int main(int argc, char** argv) {
         $<TARGET_RUNTIME_DLLS:${STANDARD_TEST_TEST_TARGET_NAME}>
         $<TARGET_FILE_DIR:${STANDARD_TEST_TEST_TARGET_NAME}>
       COMMAND_EXPAND_LISTS)
+
+    # Also use copy_test_dlls function if available for comprehensive coverage
+    if(COMMAND copy_test_dlls)
+      copy_test_dlls(${STANDARD_TEST_TEST_TARGET_NAME})
+    endif()
   endif()
 
   # =============================================================================

@@ -19,12 +19,44 @@ endif()
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
+# Include CopyDependencies module if available
+if(EXISTS "${CMAKE_SOURCE_DIR}/cmake/CopyDependencies.cmake")
+  include(${CMAKE_SOURCE_DIR}/cmake/CopyDependencies.cmake)
+endif()
+
 # Function to copy required DLLs to test executable directory
 function(copy_test_dlls TARGET_NAME)
   if(WIN32)
-    # List of all DLL targets that might be needed by tests Note: Only copy
-    # targets that are SHARED libraries, not OBJECT libraries
-    set(DLL_TARGETS atom-log atom-component)
+    # Use the comprehensive DLL copy function if available
+    if(COMMAND atom_setup_runtime_dependencies)
+      atom_setup_runtime_dependencies(${TARGET_NAME})
+      if(USE_VCPKG)
+        atom_copy_vcpkg_dlls(${TARGET_NAME})
+      endif()
+      return()
+    endif()
+
+    # Fallback: List of all DLL targets that might be needed by tests
+    set(DLL_TARGETS
+        atom-algorithm
+        atom-async
+        atom-components
+        atom-connection
+        atom-containers
+        atom-error
+        atom-image
+        atom-io
+        atom-log
+        atom-memory
+        atom-meta
+        atom-search
+        atom-secret
+        atom-serial
+        atom-sysinfo
+        atom-system
+        atom-type
+        atom-utils
+        atom-web)
 
     # Copy each DLL if it exists as a SHARED library target
     foreach(DLL_TARGET ${DLL_TARGETS})
@@ -43,6 +75,118 @@ function(copy_test_dlls TARGET_NAME)
         endif()
       endif()
     endforeach()
+
+    # Copy third-party DLLs (spdlog, fmt, etc.)
+    if(TARGET spdlog::spdlog)
+      get_target_property(SPDLOG_TYPE spdlog::spdlog TYPE)
+      if(SPDLOG_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:spdlog::spdlog>" "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying spdlog DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    if(TARGET fmt::fmt)
+      get_target_property(FMT_TYPE fmt::fmt TYPE)
+      if(FMT_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                  "$<TARGET_FILE:fmt::fmt>" "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying fmt DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    # Copy TBB DLLs if available
+    if(TARGET TBB::tbb)
+      get_target_property(TBB_TYPE TBB::tbb TYPE)
+      if(TBB_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                  "$<TARGET_FILE:TBB::tbb>" "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying TBB DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    # Copy GTest/GMock DLLs if they are shared libraries
+    if(TARGET GTest::gtest)
+      get_target_property(GTEST_TYPE GTest::gtest TYPE)
+      if(GTEST_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GTest::gtest>"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying GTest DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    if(TARGET GTest::gtest_main)
+      get_target_property(GTEST_MAIN_TYPE GTest::gtest_main TYPE)
+      if(GTEST_MAIN_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:GTest::gtest_main>"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying GTest main DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    if(TARGET GTest::gmock)
+      get_target_property(GMOCK_TYPE GTest::gmock TYPE)
+      if(GMOCK_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:GTest::gmock>"
+            "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying GMock DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    # Copy MSYS2/MinGW runtime DLLs from system bin directory
+    if(MINGW)
+      set(MINGW_BIN_DIR "$ENV{MINGW_PREFIX}/bin")
+      if(NOT MINGW_BIN_DIR OR NOT EXISTS "${MINGW_BIN_DIR}")
+        set(MINGW_BIN_DIR "D:/msys64/mingw64/bin")
+      endif()
+
+      # List of common runtime DLLs needed
+      set(MINGW_RUNTIME_DLLS libfmt-12.dll libspdlog-1.15.dll libtbb12.dll
+                             libgtest.dll libgtest_main.dll libgmock.dll)
+
+      foreach(DLL_NAME ${MINGW_RUNTIME_DLLS})
+        if(EXISTS "${MINGW_BIN_DIR}/${DLL_NAME}")
+          add_custom_command(
+            TARGET ${TARGET_NAME}
+            POST_BUILD
+            COMMAND
+              ${CMAKE_COMMAND} -E copy_if_different
+              "${MINGW_BIN_DIR}/${DLL_NAME}"
+              "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+            COMMENT "Copying ${DLL_NAME} to ${TARGET_NAME} directory"
+            VERBATIM)
+        endif()
+      endforeach()
+    endif()
   endif()
 endfunction()
 

@@ -430,6 +430,22 @@ add_custom_target(
   DEPENDS atom_image_tests
   COMMENT "Running performance benchmarks")
 
+# DLL Copying (Windows)
+if(WIN32)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_image_tests)
+  endif()
+
+  add_custom_command(
+    TARGET atom_image_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_image_tests>
+      $<TARGET_FILE_DIR:atom_image_tests>
+    COMMAND_EXPAND_LISTS)
+endif()
+
 # Print configuration summary
 message(STATUS "Atom Image Tests Configuration:")
 message(STATUS "  OpenCV: ${OpenCV_FOUND}")

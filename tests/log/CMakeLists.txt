@@ -32,7 +32,7 @@ set(TEST_SOURCES test_logger.cpp)
 # Create test executable
 add_executable(atom-log-tests ${TEST_SOURCES})
 
-target_link_libraries(atom-log-tests PRIVATE GTest::GTest GTest::Main
+target_link_libraries(atom-log-tests PRIVATE atom-log GTest::GTest GTest::Main
                                              Threads::Threads)
 
 # Set C++ standard
@@ -50,6 +50,21 @@ enable_testing()
 
 # Add test cases
 add_test(NAME LogTests COMMAND atom-log-tests)
+
+# DLL Copying (Windows)
+if(WIN32)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom-log-tests)
+  endif()
+
+  add_custom_command(
+    TARGET atom-log-tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom-log-tests> $<TARGET_FILE_DIR:atom-log-tests>
+    COMMAND_EXPAND_LISTS)
+endif()
 
 # Custom test targets
 add_custom_target(

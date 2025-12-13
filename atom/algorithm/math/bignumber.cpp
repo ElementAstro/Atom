@@ -147,6 +147,7 @@ auto BigNumber::add(const BigNumber& other) const -> BigNumber {
 
         BigNumber result;
         result.isNegative_ = isNegative_;
+        result.digits_.clear();  // Clear the default {0} digit
 
         const auto& a = digits_;
         const auto& b = other.digits_;
@@ -216,6 +217,7 @@ auto BigNumber::subtract(const BigNumber& other) const -> BigNumber {
 
         BigNumber result;
         result.isNegative_ = resultNegative;
+        result.digits_.clear();  // Clear the default {0} digit
 
         const auto& a = larger->digits_;
         const auto& b = smaller->digits_;
@@ -271,9 +273,11 @@ auto BigNumber::multiply(const BigNumber& other) const -> BigNumber {
             return BigNumber();
         }
 
-        if (digits_.size() > 100 && other.digits_.size() > 100) {
-            return multiplyKaratsuba(other);
-        }
+        // Karatsuba algorithm disabled due to correctness issues
+        // TODO: Fix Karatsuba implementation
+        // if (digits_.size() > 100 && other.digits_.size() > 100) {
+        //     return multiplyKaratsuba(other);
+        // }
 
         bool resultNegative = isNegative_ != other.isNegative_;
         const size_t resultSize = digits_.size() + other.digits_.size();

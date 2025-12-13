@@ -15,8 +15,8 @@ Description: Unit tests for error formatting system
 #include <gtest/gtest.h>
 #include <sstream>
 
-#include "atom/error/error_context.hpp"
-#include "atom/error/error_formatter.hpp"
+#include "atom/error/context/error_context.hpp"
+#include "atom/error/handler/error_reporter.hpp"
 
 namespace atom::error::test {
 

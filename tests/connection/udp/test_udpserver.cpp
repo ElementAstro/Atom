@@ -90,15 +90,15 @@ TEST_F(UdpServerTest, MessageHandler) {
 
     bool handlerCalled = false;
 
-    server_->addMessageHandler([&](std::string_view message,
-                                   std::string_view host, std::uint16_t port) {
-        if (!handlerCalled) {
-            handlerCalled = true;
-            messagePromise.set_value(std::string(message));
-            hostPromise.set_value(std::string(host));
-            portPromise.set_value(port);
-        }
-    });
+    server_->addMessageHandler(
+        [&](const std::string& message, const std::string& host, int port) {
+            if (!handlerCalled) {
+                handlerCalled = true;
+                messagePromise.set_value(message);
+                hostPromise.set_value(host);
+                portPromise.set_value(static_cast<std::uint16_t>(port));
+            }
+        });
 
     auto startResult = server_->start(12502);
     if (!startResult.has_value()) {
@@ -152,11 +152,11 @@ TEST_F(UdpServerTest, MultipleMessageHandlers) {
     std::atomic<int> handler1Count{0};
     std::atomic<int> handler2Count{0};
 
-    server_->addMessageHandler([&](std::string_view, std::string_view,
-                                   std::uint16_t) { handler1Count++; });
+    server_->addMessageHandler(
+        [&](const std::string&, const std::string&, int) { handler1Count++; });
 
-    server_->addMessageHandler([&](std::string_view, std::string_view,
-                                   std::uint16_t) { handler2Count++; });
+    server_->addMessageHandler(
+        [&](const std::string&, const std::string&, int) { handler2Count++; });
 
     auto startResult = server_->start(12503);
     if (!startResult.has_value()) {
@@ -205,7 +205,7 @@ TEST_F(UdpServerTest, MultipleMessageHandlers) {
 TEST_F(UdpServerTest, RemoveMessageHandler) {
     std::atomic<int> handlerCount{0};
 
-    auto handler = [&](std::string_view, std::string_view, std::uint16_t) {
+    auto handler = [&](const std::string&, const std::string&, int) {
         handlerCount++;
     };
 
@@ -381,8 +381,8 @@ TEST_F(UdpServerTest, SendToSpecificEndpoint) {
 TEST_F(UdpServerTest, ConcurrentClients) {
     std::atomic<int> messagesReceived{0};
 
-    server_->addMessageHandler([&](std::string_view, std::string_view,
-                                   std::uint16_t) { messagesReceived++; });
+    server_->addMessageHandler([&](const std::string&, const std::string&,
+                                   int) { messagesReceived++; });
 
     auto startResult = server_->start(12511);
     if (!startResult.has_value()) {
@@ -443,7 +443,7 @@ TEST_F(UdpServerTest, LargeMessageHandling) {
     bool handlerCalled = false;
 
     server_->addMessageHandler(
-        [&](std::string_view message, std::string_view, std::uint16_t) {
+        [&](const std::string& message, const std::string&, int) {
             if (!handlerCalled) {
                 handlerCalled = true;
                 sizePromise.set_value(message.size());

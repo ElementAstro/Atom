@@ -52,8 +52,6 @@
 
 namespace atom::system {
 
-constexpr size_t BUFFER_SIZE = 256;
-
 class ProcessManager::ProcessManagerImpl {
 public:
     explicit ProcessManagerImpl(int maxProcess) : m_maxProcesses(maxProcess) {}

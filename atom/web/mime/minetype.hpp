@@ -2,11 +2,14 @@
 #define ATOM_WEB_MIME_MINETYPE_HPP
 
 #include <concepts>
+#include <filesystem>
 #include <memory>
 #include <optional>
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 /**
@@ -37,7 +40,53 @@ struct MimeTypeConfig {
         false;  ///< Whether to enable deep content scanning.
     std::string defaultType =
         "application/octet-stream";  ///< Default MIME type when unknown.
+    size_t maxFileSizeForContentDetection =
+        1024 * 1024;  ///< Max file size for content-based detection (1MB).
 };
+
+/**
+ * @brief MIME type category enumeration.
+ */
+enum class MimeCategory {
+    Text,
+    Image,
+    Audio,
+    Video,
+    Application,
+    Multipart,
+    Message,
+    Font,
+    Model,
+    Unknown
+};
+
+/**
+ * @brief Get the category of a MIME type.
+ * @param mimeType The MIME type string.
+ * @return The category.
+ */
+[[nodiscard]] auto getMimeCategory(std::string_view mimeType) -> MimeCategory;
+
+/**
+ * @brief Check if a MIME type is text-based.
+ * @param mimeType The MIME type string.
+ * @return True if text-based.
+ */
+[[nodiscard]] auto isTextMimeType(std::string_view mimeType) -> bool;
+
+/**
+ * @brief Check if a MIME type is binary.
+ * @param mimeType The MIME type string.
+ * @return True if binary.
+ */
+[[nodiscard]] auto isBinaryMimeType(std::string_view mimeType) -> bool;
+
+/**
+ * @brief Check if a MIME type is compressible.
+ * @param mimeType The MIME type string.
+ * @return True if compressible.
+ */
+[[nodiscard]] auto isCompressibleMimeType(std::string_view mimeType) -> bool;
 
 /**
  * @class MimeTypes
@@ -182,6 +231,59 @@ public:
      * @return True if the extension is registered, false otherwise.
      */
     bool hasExtension(const std::string& extension) const;
+
+    /**
+     * @brief Get MIME type from filesystem path.
+     * @param path The filesystem path.
+     * @return The MIME type if found.
+     */
+    [[nodiscard]] auto guessTypeFromPath(
+        const std::filesystem::path& path) const -> std::optional<std::string>;
+
+    /**
+     * @brief Get all registered MIME types.
+     * @return Vector of all MIME types.
+     */
+    [[nodiscard]] auto getAllMimeTypes() const -> std::vector<std::string>;
+
+    /**
+     * @brief Get all registered extensions.
+     * @return Vector of all extensions.
+     */
+    [[nodiscard]] auto getAllExtensions() const -> std::vector<std::string>;
+
+    /**
+     * @brief Get the number of registered MIME types.
+     * @return Count of MIME types.
+     */
+    [[nodiscard]] auto getMimeTypeCount() const -> size_t;
+
+    /**
+     * @brief Get the number of registered extensions.
+     * @return Count of extensions.
+     */
+    [[nodiscard]] auto getExtensionCount() const -> size_t;
+
+    /**
+     * @brief Remove a MIME type and its extensions.
+     * @param mimeType The MIME type to remove.
+     * @return True if removed.
+     */
+    auto removeMimeType(const std::string& mimeType) -> bool;
+
+    /**
+     * @brief Remove an extension mapping.
+     * @param extension The extension to remove.
+     * @return True if removed.
+     */
+    auto removeExtension(const std::string& extension) -> bool;
+
+    /**
+     * @brief Get common MIME types for web content.
+     * @return Map of extension to MIME type for common web types.
+     */
+    [[nodiscard]] static auto getCommonWebMimeTypes()
+        -> const std::unordered_map<std::string, std::string>&;
 
 private:
     class Impl;

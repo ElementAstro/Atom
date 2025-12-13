@@ -540,7 +540,8 @@ TEST_F(EnhancedPromiseTest, PromiseDestroyedBeforeValue) {
     }
 
     // Future should throw when trying to get value
-    EXPECT_THROW(future.get(), PromiseCancelledException);
+    // Standard library throws std::future_error for broken promise
+    EXPECT_THROW(future.get(), std::future_error);
 }
 
 TEST_F(EnhancedPromiseTest, VoidPromiseDestroyedBeforeValue) {
@@ -551,7 +552,8 @@ TEST_F(EnhancedPromiseTest, VoidPromiseDestroyedBeforeValue) {
         future = promise.getFuture();
     }
 
-    EXPECT_THROW(future.get(), PromiseCancelledException);
+    // Standard library throws std::future_error for broken promise
+    EXPECT_THROW(future.get(), std::future_error);
 }
 
 // ============================================================================

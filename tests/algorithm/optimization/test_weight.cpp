@@ -8,7 +8,7 @@
 #include <sstream>
 #include <thread>
 #include <vector>
-#include "atom/algorithm/weight.hpp"
+#include "atom/algorithm/utils/weight.hpp"
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 

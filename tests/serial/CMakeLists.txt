@@ -148,3 +148,21 @@ add_custom_target(
 set_property(TARGET atom_serial_tests PROPERTY FOLDER "Tests/Serial")
 set_property(TARGET test_serial PROPERTY FOLDER "Tests/Serial")
 set_property(TARGET test_serial_performance PROPERTY FOLDER "Tests/Serial")
+
+# =============================================================================
+# DLL Copying (Windows)
+# =============================================================================
+if(WIN32)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_serial_tests)
+  endif()
+
+  add_custom_command(
+    TARGET atom_serial_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_serial_tests>
+      $<TARGET_FILE_DIR:atom_serial_tests>
+    COMMAND_EXPAND_LISTS)
+endif()

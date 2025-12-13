@@ -152,6 +152,23 @@ if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
 endif()
 
 # =============================================================================
+# DLL Copying (Windows)
+# =============================================================================
+if(WIN32)
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_type_tests)
+  endif()
+
+  add_custom_command(
+    TARGET atom_type_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_type_tests> $<TARGET_FILE_DIR:atom_type_tests>
+    COMMAND_EXPAND_LISTS)
+endif()
+
+# =============================================================================
 # Status Message
 # =============================================================================
 message(STATUS "Type tests configured successfully")

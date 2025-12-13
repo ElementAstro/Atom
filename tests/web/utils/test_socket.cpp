@@ -639,3 +639,462 @@ TEST_F(SocketTest, RobustnessUnderLoad) {
     EXPECT_GT(successCount.load(), numOperations / 2);
     EXPECT_EQ(successCount.load() + errorCount.load(), numOperations);
 }
+
+// ============================================================================
+// SocketError String Conversion Tests
+// ============================================================================
+
+TEST_F(SocketTest, SocketErrorToString) {
+    EXPECT_EQ(socketErrorToString(SocketError::Success), "Success");
+    EXPECT_EQ(socketErrorToString(SocketError::InvalidHandle),
+              "Invalid socket handle");
+    EXPECT_EQ(socketErrorToString(SocketError::CreationFailed),
+              "Socket creation failed");
+    EXPECT_EQ(socketErrorToString(SocketError::BindFailed),
+              "Socket bind failed");
+    EXPECT_EQ(socketErrorToString(SocketError::ListenFailed),
+              "Socket listen failed");
+    EXPECT_EQ(socketErrorToString(SocketError::AcceptFailed),
+              "Socket accept failed");
+    EXPECT_EQ(socketErrorToString(SocketError::ConnectFailed),
+              "Connection failed");
+    EXPECT_EQ(socketErrorToString(SocketError::SendFailed), "Send failed");
+    EXPECT_EQ(socketErrorToString(SocketError::ReceiveFailed),
+              "Receive failed");
+    EXPECT_EQ(socketErrorToString(SocketError::Timeout), "Operation timed out");
+    EXPECT_EQ(socketErrorToString(SocketError::ConnectionReset),
+              "Connection reset by peer");
+    EXPECT_EQ(socketErrorToString(SocketError::ConnectionRefused),
+              "Connection refused");
+    EXPECT_EQ(socketErrorToString(SocketError::NetworkUnreachable),
+              "Network unreachable");
+    EXPECT_EQ(socketErrorToString(SocketError::AddressInUse),
+              "Address already in use");
+    EXPECT_EQ(socketErrorToString(SocketError::WouldBlock),
+              "Operation would block");
+    EXPECT_EQ(socketErrorToString(SocketError::NotConnected),
+              "Socket not connected");
+    EXPECT_EQ(socketErrorToString(SocketError::AlreadyConnected),
+              "Socket already connected");
+    EXPECT_EQ(socketErrorToString(SocketError::InvalidAddress),
+              "Invalid address");
+    EXPECT_EQ(socketErrorToString(SocketError::OperationNotSupported),
+              "Operation not supported");
+    EXPECT_EQ(socketErrorToString(SocketError::Unknown), "Unknown error");
+}
+
+// ============================================================================
+// Socket Class Tests
+// ============================================================================
+
+TEST_F(SocketTest, SocketClassDefaultConstructor) {
+    Socket sock;
+    EXPECT_FALSE(sock.isValid());
+    EXPECT_FALSE(sock.isConnected());
+    EXPECT_EQ(sock.native(), INVALID_SOCKET_HANDLE);
+}
+
+TEST_F(SocketTest, SocketClassCreateTcp) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(result->isValid());
+    EXPECT_FALSE(result->isConnected());
+}
+
+TEST_F(SocketTest, SocketClassCreateTcpIPv6) {
+    auto result = Socket::createTcp(AddressFamily::IPv6);
+    // May fail if IPv6 is not available
+    if (result.has_value()) {
+        EXPECT_TRUE(result->isValid());
+    }
+}
+
+TEST_F(SocketTest, SocketClassCreateUdp) {
+    auto result = Socket::createUdp();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(result->isValid());
+}
+
+TEST_F(SocketTest, SocketClassCreateUdpIPv6) {
+    auto result = Socket::createUdp(AddressFamily::IPv6);
+    // May fail if IPv6 is not available
+    if (result.has_value()) {
+        EXPECT_TRUE(result->isValid());
+    }
+}
+
+TEST_F(SocketTest, SocketClassMoveConstructor) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    SocketHandle originalHandle = result->native();
+    Socket movedSocket(std::move(*result));
+
+    EXPECT_TRUE(movedSocket.isValid());
+    EXPECT_EQ(movedSocket.native(), originalHandle);
+    EXPECT_FALSE(result->isValid());  // Original should be invalid after move
+}
+
+TEST_F(SocketTest, SocketClassMoveAssignment) {
+    auto result1 = Socket::createTcp();
+    auto result2 = Socket::createTcp();
+    ASSERT_TRUE(result1.has_value());
+    ASSERT_TRUE(result2.has_value());
+
+    SocketHandle handle2 = result2->native();
+    *result1 = std::move(*result2);
+
+    EXPECT_TRUE(result1->isValid());
+    EXPECT_EQ(result1->native(), handle2);
+    EXPECT_FALSE(result2->isValid());
+}
+
+TEST_F(SocketTest, SocketClassBoolConversion) {
+    Socket invalidSocket;
+    EXPECT_FALSE(static_cast<bool>(invalidSocket));
+
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(static_cast<bool>(*result));
+}
+
+TEST_F(SocketTest, SocketClassRelease) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    SocketHandle handle = result->release();
+    EXPECT_NE(handle, INVALID_SOCKET_HANDLE);
+    EXPECT_FALSE(result->isValid());
+
+    // Clean up the released handle
+#ifdef _WIN32
+    closesocket(handle);
+#else
+    close(handle);
+#endif
+}
+
+TEST_F(SocketTest, SocketClassClose) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+    EXPECT_TRUE(result->isValid());
+
+    result->close();
+    EXPECT_FALSE(result->isValid());
+}
+
+TEST_F(SocketTest, SocketClassBindPort) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    auto bindResult = result->bind(0);  // Let system choose port
+    EXPECT_TRUE(bindResult.has_value());
+}
+
+TEST_F(SocketTest, SocketClassBindAddress) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    SocketAddress addr;
+    addr.host = "127.0.0.1";
+    addr.port = 0;
+    addr.family = AddressFamily::IPv4;
+
+    auto bindResult = result->bind(addr);
+    EXPECT_TRUE(bindResult.has_value());
+}
+
+TEST_F(SocketTest, SocketClassListen) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    auto bindResult = result->bind(0);
+    ASSERT_TRUE(bindResult.has_value());
+
+    auto listenResult = result->listen();
+    EXPECT_TRUE(listenResult.has_value());
+}
+
+TEST_F(SocketTest, SocketClassSetNonBlocking) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    auto nbResult = result->setNonBlocking(true);
+    EXPECT_TRUE(nbResult.has_value());
+
+    auto nbResult2 = result->setNonBlocking(false);
+    EXPECT_TRUE(nbResult2.has_value());
+}
+
+TEST_F(SocketTest, SocketClassApplyOptions) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    SocketOptions options;
+    options.reuseAddress = true;
+    options.keepAlive = true;
+    options.noDelay = true;
+    options.nonBlocking = false;
+
+    auto applyResult = result->applyOptions(options);
+    EXPECT_TRUE(applyResult.has_value());
+}
+
+TEST_F(SocketTest, SocketClassGetLocalAddress) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    auto bindResult = result->bind(0);
+    ASSERT_TRUE(bindResult.has_value());
+
+    auto localAddr = result->getLocalAddress();
+    if (localAddr.has_value()) {
+        EXPECT_GT(localAddr->port, 0);
+    }
+}
+
+// ============================================================================
+// SocketAddress Tests
+// ============================================================================
+
+TEST_F(SocketTest, SocketAddressToString) {
+    SocketAddress addr;
+    addr.host = "192.168.1.1";
+    addr.port = 8080;
+    addr.family = AddressFamily::IPv4;
+
+    auto str = addr.toString();
+    EXPECT_FALSE(str.empty());
+    EXPECT_NE(str.find("192.168.1.1"), std::string::npos);
+    EXPECT_NE(str.find("8080"), std::string::npos);
+}
+
+TEST_F(SocketTest, SocketAddressParse) {
+    auto result = SocketAddress::parse("192.168.1.1:8080");
+    if (result.has_value()) {
+        EXPECT_EQ(result->host, "192.168.1.1");
+        EXPECT_EQ(result->port, 8080);
+    }
+}
+
+TEST_F(SocketTest, SocketAddressParseInvalid) {
+    auto result1 = SocketAddress::parse("");
+    EXPECT_FALSE(result1.has_value());
+
+    auto result2 = SocketAddress::parse("invalid");
+    // May or may not parse depending on implementation
+    (void)result2;
+}
+
+// ============================================================================
+// SocketOptions Tests
+// ============================================================================
+
+TEST_F(SocketTest, SocketOptionsDefaults) {
+    SocketOptions options;
+    EXPECT_TRUE(options.reuseAddress);
+    EXPECT_FALSE(options.reusePort);
+    EXPECT_FALSE(options.keepAlive);
+    EXPECT_TRUE(options.noDelay);
+    EXPECT_FALSE(options.nonBlocking);
+    EXPECT_EQ(options.sendTimeout.count(), 0);
+    EXPECT_EQ(options.receiveTimeout.count(), 0);
+    EXPECT_EQ(options.sendBufferSize, 0);
+    EXPECT_EQ(options.receiveBufferSize, 0);
+    EXPECT_EQ(options.ttl, 0);
+    EXPECT_FALSE(options.broadcast);
+}
+
+TEST_F(SocketTest, SocketOptionsApplyAll) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    SocketOptions options;
+    options.reuseAddress = true;
+    options.keepAlive = true;
+    options.noDelay = true;
+    options.nonBlocking = true;
+    options.sendTimeout = std::chrono::milliseconds(5000);
+    options.receiveTimeout = std::chrono::milliseconds(5000);
+
+    auto applyResult = result->applyOptions(options);
+    EXPECT_TRUE(applyResult.has_value());
+}
+
+// ============================================================================
+// getLastSocketError Tests
+// ============================================================================
+
+TEST_F(SocketTest, GetLastSocketError) {
+    auto error = getLastSocketError();
+    // Just verify it doesn't crash and returns a valid enum
+    auto errorStr = socketErrorToString(error);
+    EXPECT_FALSE(errorStr.empty());
+}
+
+TEST_F(SocketTest, GetLastSocketErrorMessage) {
+    auto message = getLastSocketErrorMessage();
+    // Just verify it doesn't crash
+    (void)message;
+}
+
+// ============================================================================
+// Socket Connect Tests
+// ============================================================================
+
+TEST_F(SocketTest, SocketClassConnectTimeout) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    // Try to connect to a non-routable address with short timeout
+    auto connectResult =
+        result->connect("10.255.255.1", 12345, std::chrono::milliseconds(100));
+    EXPECT_FALSE(connectResult.has_value());
+}
+
+TEST_F(SocketTest, SocketClassConnectAddress) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    SocketAddress addr;
+    addr.host = "10.255.255.1";
+    addr.port = 12345;
+    addr.family = AddressFamily::IPv4;
+
+    auto connectResult = result->connect(addr, std::chrono::milliseconds(100));
+    EXPECT_FALSE(connectResult.has_value());
+}
+
+// ============================================================================
+// Socket Wait Tests
+// ============================================================================
+
+TEST_F(SocketTest, SocketClassWaitReadable) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    auto bindResult = result->bind(0);
+    ASSERT_TRUE(bindResult.has_value());
+
+    // Should timeout since nothing to read
+    auto waitResult = result->waitReadable(std::chrono::milliseconds(10));
+    if (waitResult.has_value()) {
+        EXPECT_FALSE(*waitResult);  // Should timeout (not readable)
+    }
+}
+
+TEST_F(SocketTest, SocketClassWaitWritable) {
+    auto result = Socket::createTcp();
+    ASSERT_TRUE(result.has_value());
+
+    // Unconnected socket should be writable
+    auto waitResult = result->waitWritable(std::chrono::milliseconds(10));
+    // Result depends on socket state
+    (void)waitResult;
+}
+
+// ============================================================================
+// Socket Concurrent Tests
+// ============================================================================
+
+TEST_F(SocketTest, ConcurrentSocketClassCreation) {
+    constexpr int numThreads = 10;
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&successCount]() {
+            auto result = Socket::createTcp();
+            if (result.has_value() && result->isValid()) {
+                successCount++;
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(successCount.load(), numThreads);
+}
+
+TEST_F(SocketTest, ConcurrentSocketOperations) {
+    constexpr int numThreads = 5;
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&successCount, i]() {
+            auto sock = Socket::createTcp();
+            if (!sock.has_value())
+                return;
+
+            if (i % 2 == 0) {
+                sock->bind(0);
+            }
+
+            SocketOptions options;
+            options.nonBlocking = true;
+            sock->applyOptions(options);
+
+            sock->setNonBlocking(true);
+            successCount++;
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(successCount.load(), 0);
+}
+
+// ============================================================================
+// AddressFamily and SocketType Tests
+// ============================================================================
+
+TEST_F(SocketTest, AddressFamilyValues) {
+    EXPECT_EQ(static_cast<int>(AddressFamily::IPv4), AF_INET);
+    EXPECT_EQ(static_cast<int>(AddressFamily::IPv6), AF_INET6);
+    EXPECT_EQ(static_cast<int>(AddressFamily::Unspecified), AF_UNSPEC);
+}
+
+TEST_F(SocketTest, SocketTypeValues) {
+    EXPECT_EQ(static_cast<int>(SocketType::Stream), SOCK_STREAM);
+    EXPECT_EQ(static_cast<int>(SocketType::Datagram), SOCK_DGRAM);
+}
+
+TEST_F(SocketTest, SocketProtocolValues) {
+    EXPECT_EQ(static_cast<int>(SocketProtocol::TCP), IPPROTO_TCP);
+    EXPECT_EQ(static_cast<int>(SocketProtocol::UDP), IPPROTO_UDP);
+    EXPECT_EQ(static_cast<int>(SocketProtocol::Auto), 0);
+}
+
+// ============================================================================
+// Socket Stress Tests
+// ============================================================================
+
+TEST_F(SocketTest, SocketClassStressTest) {
+    for (int i = 0; i < 100; ++i) {
+        auto sock = Socket::createTcp();
+        if (sock.has_value()) {
+            sock->bind(0);
+            sock->setNonBlocking(true);
+            // Socket automatically closed when going out of scope
+        }
+    }
+    SUCCEED();
+}
+
+TEST_F(SocketTest, SocketClassUdpStressTest) {
+    for (int i = 0; i < 50; ++i) {
+        auto sock = Socket::createUdp();
+        if (sock.has_value()) {
+            SocketOptions options;
+            options.broadcast = true;
+            sock->applyOptions(options);
+            sock->bind(0);
+        }
+    }
+    SUCCEED();
+}

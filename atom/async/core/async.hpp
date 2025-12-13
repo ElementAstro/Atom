@@ -453,8 +453,31 @@ public:
     // Rule of five - prevent copy, allow move
     AsyncWorker(const AsyncWorker&) = delete;
     AsyncWorker& operator=(const AsyncWorker&) = delete;
-    AsyncWorker(AsyncWorker&&) noexcept = default;
-    AsyncWorker& operator=(AsyncWorker&&) noexcept = default;
+    AsyncWorker(AsyncWorker&& other) noexcept
+        : state_(other.state_.load(std::memory_order_acquire)),
+          task_(std::move(other.task_)),
+          callback_(std::move(other.callback_)),
+          timeout_(other.timeout_),
+          desired_priority_(other.desired_priority_),
+          preferred_cpu_(other.preferred_cpu_),
+          priority_guard_(std::move(other.priority_guard_)) {
+        other.state_.store(State::INITIAL, std::memory_order_release);
+    }
+
+    AsyncWorker& operator=(AsyncWorker&& other) noexcept {
+        if (this != &other) {
+            state_.store(other.state_.load(std::memory_order_acquire),
+                         std::memory_order_release);
+            task_ = std::move(other.task_);
+            callback_ = std::move(other.callback_);
+            timeout_ = other.timeout_;
+            desired_priority_ = other.desired_priority_;
+            preferred_cpu_ = other.preferred_cpu_;
+            priority_guard_ = std::move(other.priority_guard_);
+            other.state_.store(State::INITIAL, std::memory_order_release);
+        }
+        return *this;
+    }
 
     /**
      * @brief Sets the thread priority for this worker

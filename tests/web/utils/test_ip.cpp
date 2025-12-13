@@ -487,3 +487,346 @@ TEST_F(IPUtilsTest, StressTestValidation) {
         EXPECT_NO_THROW(isValidIPv6(ipv6));
     }
 }
+
+// ============================================================================
+// ipToString (string return version) Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, IpToStringReturnIPv4) {
+    auto addr = createIPv4SockAddr("192.168.1.1");
+    auto result = ipToString(reinterpret_cast<struct sockaddr*>(&addr));
+    EXPECT_EQ(result, "192.168.1.1");
+}
+
+TEST_F(IPUtilsTest, IpToStringReturnIPv6) {
+    auto addr = createIPv6SockAddr("2001:db8::1");
+    auto result = ipToString(reinterpret_cast<struct sockaddr*>(&addr));
+    EXPECT_EQ(result, "2001:db8::1");
+}
+
+TEST_F(IPUtilsTest, IpToStringReturnNull) {
+    auto result = ipToString(nullptr);
+    EXPECT_TRUE(result.empty());
+}
+
+// ============================================================================
+// isIPInCIDR Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, IsIPInCIDRValidIPv4) {
+    EXPECT_TRUE(isIPInCIDR("192.168.1.100", "192.168.1.0/24"));
+    EXPECT_TRUE(isIPInCIDR("192.168.1.1", "192.168.1.0/24"));
+    EXPECT_TRUE(isIPInCIDR("192.168.1.254", "192.168.1.0/24"));
+    EXPECT_TRUE(isIPInCIDR("10.0.0.5", "10.0.0.0/8"));
+    EXPECT_TRUE(isIPInCIDR("172.16.5.10", "172.16.0.0/12"));
+}
+
+TEST_F(IPUtilsTest, IsIPInCIDRNotInRange) {
+    EXPECT_FALSE(isIPInCIDR("192.168.2.1", "192.168.1.0/24"));
+    EXPECT_FALSE(isIPInCIDR("10.1.0.1", "10.0.0.0/16"));
+    EXPECT_FALSE(isIPInCIDR("172.32.0.1", "172.16.0.0/12"));
+}
+
+TEST_F(IPUtilsTest, IsIPInCIDREdgeCases) {
+    // Network address
+    EXPECT_TRUE(isIPInCIDR("192.168.1.0", "192.168.1.0/24"));
+    // Broadcast address
+    EXPECT_TRUE(isIPInCIDR("192.168.1.255", "192.168.1.0/24"));
+    // /32 - single host
+    EXPECT_TRUE(isIPInCIDR("192.168.1.1", "192.168.1.1/32"));
+    EXPECT_FALSE(isIPInCIDR("192.168.1.2", "192.168.1.1/32"));
+    // /0 - all addresses
+    EXPECT_TRUE(isIPInCIDR("1.2.3.4", "0.0.0.0/0"));
+}
+
+TEST_F(IPUtilsTest, IsIPInCIDRInvalidInput) {
+    EXPECT_FALSE(isIPInCIDR("", "192.168.1.0/24"));
+    EXPECT_FALSE(isIPInCIDR("192.168.1.1", ""));
+    EXPECT_FALSE(isIPInCIDR("invalid", "192.168.1.0/24"));
+    EXPECT_FALSE(isIPInCIDR("192.168.1.1", "invalid"));
+    EXPECT_FALSE(isIPInCIDR("192.168.1.1", "192.168.1.0"));  // No prefix
+}
+
+// ============================================================================
+// parseCIDR Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, ParseCIDRValid) {
+    auto result1 = parseCIDR("192.168.1.0/24");
+    ASSERT_TRUE(result1.has_value());
+    EXPECT_EQ(result1->first, "192.168.1.0");
+    EXPECT_EQ(result1->second, 24);
+
+    auto result2 = parseCIDR("10.0.0.0/8");
+    ASSERT_TRUE(result2.has_value());
+    EXPECT_EQ(result2->first, "10.0.0.0");
+    EXPECT_EQ(result2->second, 8);
+
+    auto result3 = parseCIDR("0.0.0.0/0");
+    ASSERT_TRUE(result3.has_value());
+    EXPECT_EQ(result3->first, "0.0.0.0");
+    EXPECT_EQ(result3->second, 0);
+
+    auto result4 = parseCIDR("192.168.1.1/32");
+    ASSERT_TRUE(result4.has_value());
+    EXPECT_EQ(result4->first, "192.168.1.1");
+    EXPECT_EQ(result4->second, 32);
+}
+
+TEST_F(IPUtilsTest, ParseCIDRInvalid) {
+    EXPECT_FALSE(parseCIDR("").has_value());
+    EXPECT_FALSE(parseCIDR("192.168.1.0").has_value());   // No prefix
+    EXPECT_FALSE(parseCIDR("192.168.1.0/").has_value());  // Empty prefix
+    EXPECT_FALSE(parseCIDR("/24").has_value());           // No IP
+    EXPECT_FALSE(
+        parseCIDR("192.168.1.0/33").has_value());  // Invalid prefix for IPv4
+    EXPECT_FALSE(parseCIDR("192.168.1.0/-1").has_value());  // Negative prefix
+    EXPECT_FALSE(parseCIDR("invalid/24").has_value());      // Invalid IP
+}
+
+// ============================================================================
+// isPrivateIP Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, IsPrivateIPValid) {
+    // Class A private: 10.0.0.0/8
+    EXPECT_TRUE(isPrivateIP("10.0.0.1"));
+    EXPECT_TRUE(isPrivateIP("10.255.255.255"));
+
+    // Class B private: 172.16.0.0/12
+    EXPECT_TRUE(isPrivateIP("172.16.0.1"));
+    EXPECT_TRUE(isPrivateIP("172.31.255.255"));
+
+    // Class C private: 192.168.0.0/16
+    EXPECT_TRUE(isPrivateIP("192.168.0.1"));
+    EXPECT_TRUE(isPrivateIP("192.168.255.255"));
+}
+
+TEST_F(IPUtilsTest, IsPrivateIPPublic) {
+    EXPECT_FALSE(isPrivateIP("8.8.8.8"));
+    EXPECT_FALSE(isPrivateIP("1.1.1.1"));
+    EXPECT_FALSE(isPrivateIP("172.32.0.1"));  // Just outside Class B private
+    EXPECT_FALSE(
+        isPrivateIP("172.15.255.255"));        // Just outside Class B private
+    EXPECT_FALSE(isPrivateIP("192.167.1.1"));  // Just outside Class C private
+}
+
+TEST_F(IPUtilsTest, IsPrivateIPEdgeCases) {
+    EXPECT_FALSE(isPrivateIP(""));
+    EXPECT_FALSE(isPrivateIP("invalid"));
+    EXPECT_FALSE(isPrivateIP("127.0.0.1"));  // Loopback is not private
+}
+
+// ============================================================================
+// isLoopbackIP Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, IsLoopbackIPValid) {
+    // IPv4 loopback range: 127.0.0.0/8
+    EXPECT_TRUE(isLoopbackIP("127.0.0.1"));
+    EXPECT_TRUE(isLoopbackIP("127.0.0.0"));
+    EXPECT_TRUE(isLoopbackIP("127.255.255.255"));
+    EXPECT_TRUE(isLoopbackIP("127.1.2.3"));
+
+    // IPv6 loopback
+    EXPECT_TRUE(isLoopbackIP("::1"));
+}
+
+TEST_F(IPUtilsTest, IsLoopbackIPNotLoopback) {
+    EXPECT_FALSE(isLoopbackIP("192.168.1.1"));
+    EXPECT_FALSE(isLoopbackIP("10.0.0.1"));
+    EXPECT_FALSE(isLoopbackIP("8.8.8.8"));
+    EXPECT_FALSE(isLoopbackIP("128.0.0.1"));  // Just outside loopback range
+}
+
+TEST_F(IPUtilsTest, IsLoopbackIPEdgeCases) {
+    EXPECT_FALSE(isLoopbackIP(""));
+    EXPECT_FALSE(isLoopbackIP("invalid"));
+}
+
+// ============================================================================
+// isMulticastIP Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, IsMulticastIPValid) {
+    // IPv4 multicast range: 224.0.0.0 - 239.255.255.255
+    EXPECT_TRUE(isMulticastIP("224.0.0.1"));
+    EXPECT_TRUE(isMulticastIP("239.255.255.255"));
+    EXPECT_TRUE(isMulticastIP("230.0.0.1"));
+
+    // IPv6 multicast (ff00::/8)
+    EXPECT_TRUE(isMulticastIP("ff02::1"));
+    EXPECT_TRUE(isMulticastIP("ff00::"));
+}
+
+TEST_F(IPUtilsTest, IsMulticastIPNotMulticast) {
+    EXPECT_FALSE(isMulticastIP("192.168.1.1"));
+    EXPECT_FALSE(isMulticastIP("223.255.255.255"));  // Just below multicast
+    EXPECT_FALSE(isMulticastIP("240.0.0.0"));        // Just above multicast
+    EXPECT_FALSE(isMulticastIP("127.0.0.1"));
+}
+
+TEST_F(IPUtilsTest, IsMulticastIPEdgeCases) {
+    EXPECT_FALSE(isMulticastIP(""));
+    EXPECT_FALSE(isMulticastIP("invalid"));
+}
+
+// ============================================================================
+// getLocalIPAddresses Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, GetLocalIPAddressesDefault) {
+    auto addresses = getLocalIPAddresses();
+    // Should return at least one address on most systems
+    // Note: May be empty in some environments
+    for (const auto& addr : addresses) {
+        EXPECT_FALSE(addr.empty());
+        // Should be valid IP
+        EXPECT_TRUE(isValidIPv4(addr) || isValidIPv6(addr));
+    }
+}
+
+TEST_F(IPUtilsTest, GetLocalIPAddressesWithLoopback) {
+    auto addresses = getLocalIPAddresses(true);
+    // With loopback included, should have at least loopback
+    bool hasLoopback = false;
+    for (const auto& addr : addresses) {
+        if (addr == "127.0.0.1" || addr == "::1") {
+            hasLoopback = true;
+            break;
+        }
+    }
+    // Note: Implementation might not include loopback even when requested
+    (void)hasLoopback;
+}
+
+TEST_F(IPUtilsTest, GetLocalIPAddressesWithoutLoopback) {
+    auto addresses = getLocalIPAddresses(false);
+    for (const auto& addr : addresses) {
+        EXPECT_NE(addr, "127.0.0.1") << "Should not include IPv4 loopback";
+        EXPECT_NE(addr, "::1") << "Should not include IPv6 loopback";
+    }
+}
+
+// ============================================================================
+// normalizeIP Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, NormalizeIPIPv4) {
+    auto result = normalizeIP("192.168.1.1");
+    EXPECT_FALSE(result.empty());
+    EXPECT_TRUE(isValidIPv4(result) || isValidIPv6(result));
+}
+
+TEST_F(IPUtilsTest, NormalizeIPIPv6) {
+    auto result = normalizeIP("2001:db8::1");
+    EXPECT_FALSE(result.empty());
+}
+
+TEST_F(IPUtilsTest, NormalizeIPIPv6Expanded) {
+    auto result = normalizeIP("2001:0db8:0000:0000:0000:0000:0000:0001");
+    EXPECT_FALSE(result.empty());
+}
+
+TEST_F(IPUtilsTest, NormalizeIPEdgeCases) {
+    auto empty = normalizeIP("");
+    // Empty input should return empty or handle gracefully
+    (void)empty;
+
+    auto invalid = normalizeIP("invalid");
+    // Invalid input should return empty or handle gracefully
+    (void)invalid;
+}
+
+// ============================================================================
+// compareIP Tests
+// ============================================================================
+
+TEST_F(IPUtilsTest, CompareIPIPv4Equal) {
+    EXPECT_EQ(compareIP("192.168.1.1", "192.168.1.1"), 0);
+    EXPECT_EQ(compareIP("0.0.0.0", "0.0.0.0"), 0);
+    EXPECT_EQ(compareIP("255.255.255.255", "255.255.255.255"), 0);
+}
+
+TEST_F(IPUtilsTest, CompareIPIPv4LessThan) {
+    EXPECT_LT(compareIP("192.168.1.1", "192.168.1.2"), 0);
+    EXPECT_LT(compareIP("192.168.0.255", "192.168.1.0"), 0);
+    EXPECT_LT(compareIP("0.0.0.0", "255.255.255.255"), 0);
+}
+
+TEST_F(IPUtilsTest, CompareIPIPv4GreaterThan) {
+    EXPECT_GT(compareIP("192.168.1.2", "192.168.1.1"), 0);
+    EXPECT_GT(compareIP("192.168.1.0", "192.168.0.255"), 0);
+    EXPECT_GT(compareIP("255.255.255.255", "0.0.0.0"), 0);
+}
+
+TEST_F(IPUtilsTest, CompareIPIPv6Equal) {
+    EXPECT_EQ(compareIP("::1", "::1"), 0);
+    EXPECT_EQ(compareIP("2001:db8::1", "2001:db8::1"), 0);
+}
+
+TEST_F(IPUtilsTest, CompareIPIPv6Ordering) {
+    EXPECT_LT(compareIP("::1", "::2"), 0);
+    EXPECT_GT(compareIP("::2", "::1"), 0);
+}
+
+TEST_F(IPUtilsTest, CompareIPEdgeCases) {
+    // Empty strings
+    auto result1 = compareIP("", "192.168.1.1");
+    auto result2 = compareIP("192.168.1.1", "");
+    // Results depend on implementation
+    (void)result1;
+    (void)result2;
+
+    // Invalid IPs
+    auto result3 = compareIP("invalid", "192.168.1.1");
+    (void)result3;
+}
+
+// ============================================================================
+// Concurrent Access Tests for New Functions
+// ============================================================================
+
+TEST_F(IPUtilsTest, ConcurrentCIDROperations) {
+    constexpr int numThreads = 10;
+    std::vector<std::thread> threads;
+    std::atomic<int> successCount{0};
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&successCount, i]() {
+            std::string ip = "192.168.1." + std::to_string(i % 256);
+            if (isIPInCIDR(ip, "192.168.1.0/24")) {
+                successCount++;
+            }
+            auto parsed = parseCIDR("10.0.0.0/8");
+            if (parsed.has_value()) {
+                successCount++;
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_GT(successCount.load(), 0);
+}
+
+TEST_F(IPUtilsTest, ConcurrentIPClassification) {
+    constexpr int numThreads = 10;
+    std::vector<std::thread> threads;
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([i]() {
+            isPrivateIP("10.0.0." + std::to_string(i % 256));
+            isLoopbackIP("127.0.0." + std::to_string(i % 256));
+            isMulticastIP("224.0.0." + std::to_string(i % 256));
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    SUCCEED();
+}

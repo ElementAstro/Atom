@@ -6,10 +6,10 @@
  * "atom/components/core/types.hpp" instead.
  */
 
-#ifndef ATOM_COMPONENT_TYPES_HPP
-#define ATOM_COMPONENT_TYPES_HPP
+#ifndef ATOM_COMPONENT_TYPES_COMPAT_HPP
+#define ATOM_COMPONENT_TYPES_COMPAT_HPP
 
 // Forward to the new location
 #include "core/types.hpp"
 
-#endif  // ATOM_COMPONENT_TYPES_HPP
+#endif  // ATOM_COMPONENT_TYPES_COMPAT_HPP

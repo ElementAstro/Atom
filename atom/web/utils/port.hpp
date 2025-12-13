@@ -8,9 +8,11 @@
 #define ATOM_WEB_UTILS_PORT_HPP
 
 #include <chrono>
+#include <cstdint>
 #include <future>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "common.hpp"
@@ -117,10 +119,73 @@ auto scanPortRange(
  * @return std::future<std::vector<uint16_t>> Future result containing list of
  * open ports
  */
-auto scanPortRangeAsync(
-    const std::string& host, uint16_t startPort, uint16_t endPort,
-    std::chrono::milliseconds timeout = std::chrono::milliseconds(1000))
-    -> std::future<std::vector<uint16_t>>;
+template <PortNumber T>
+auto scanPortRangeAsync(const std::string& host, T startPort, T endPort,
+                        int timeout = 1000) -> std::future<std::vector<T>>;
+
+/**
+ * @brief Get the service name for a well-known port.
+ * @param port The port number.
+ * @return Service name if known, empty string otherwise.
+ */
+[[nodiscard]] auto getServiceName(uint16_t port) -> std::string;
+
+/**
+ * @brief Get the port number for a well-known service.
+ * @param serviceName The service name.
+ * @return Port number if known, nullopt otherwise.
+ */
+[[nodiscard]] auto getServicePort(std::string_view serviceName)
+    -> std::optional<uint16_t>;
+
+/**
+ * @brief Get a map of common service names to ports.
+ * @return Map of service name to port number.
+ */
+[[nodiscard]] auto getCommonServices()
+    -> const std::unordered_map<std::string, uint16_t>&;
+
+/**
+ * @brief Find an available port in a range.
+ * @param startPort Start of the range.
+ * @param endPort End of the range.
+ * @param host The host to check (default localhost).
+ * @return Available port if found, nullopt otherwise.
+ */
+[[nodiscard]] auto findAvailablePort(
+    uint16_t startPort = 1024, uint16_t endPort = 65535,
+    std::string_view host = "127.0.0.1") -> std::optional<uint16_t>;
+
+/**
+ * @brief Check if a port is a privileged port (< 1024).
+ * @param port The port number.
+ * @return True if privileged.
+ */
+[[nodiscard]] constexpr auto isPrivilegedPort(uint16_t port) noexcept -> bool {
+    return port < 1024;
+}
+
+/**
+ * @brief Check if a port is in the ephemeral range.
+ * @param port The port number.
+ * @return True if ephemeral.
+ */
+[[nodiscard]] constexpr auto isEphemeralPort(uint16_t port) noexcept -> bool {
+    return port >= 49152 && port <= 65535;
+}
+
+/**
+ * @brief Scan multiple ports concurrently.
+ * @param host The host to scan.
+ * @param ports Vector of ports to scan.
+ * @param timeout Timeout per port in milliseconds.
+ * @param maxConcurrent Maximum concurrent scans.
+ * @return Vector of open ports.
+ */
+[[nodiscard]] auto scanPortsConcurrent(
+    std::string_view host, const std::vector<uint16_t>& ports,
+    std::chrono::milliseconds timeout = std::chrono::milliseconds(1000),
+    size_t maxConcurrent = 100) -> std::vector<uint16_t>;
 
 }  // namespace atom::web
 

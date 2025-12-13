@@ -97,11 +97,23 @@ Quick Start Example:
 )";
 
     // Register exception translations
-    registerExceptionTranslations(m);
+    py::register_exception_translator([](std::exception_ptr p) {
+        try {
+            if (p)
+                std::rethrow_exception(p);
+        } catch (const std::invalid_argument& e) {
+            PyErr_SetString(PyExc_ValueError, e.what());
+        } catch (const std::runtime_error& e) {
+            PyErr_SetString(PyExc_RuntimeError, e.what());
+        } catch (const std::system_error& e) {
+            PyErr_SetString(PyExc_OSError, e.what());
+        } catch (const std::exception& e) {
+            PyErr_SetString(PyExc_Exception, e.what());
+        }
+    });
 
     // Bind supporting structures
     bindTcpClientOptions(m);
-    bindTaskVoid(m);
 
     // Bind the main TcpClient class
     py::class_<atom::connection::TcpClient>(
@@ -437,7 +449,4 @@ Examples:
                 }
             },
             "Ensure client is disconnected when exiting context");
-
-    // Bind supporting structures
-    bindTcpClientOptions(m);
 }

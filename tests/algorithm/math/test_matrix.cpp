@@ -2,7 +2,7 @@
 #include <gtest/gtest.h>
 #include <spdlog/spdlog.h>
 #include <vector>
-#include "atom/algorithm/matrix.hpp"
+#include "atom/algorithm/math/matrix.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
@@ -449,25 +449,28 @@ TEST_F(MatrixTest, LuDecomposition) {
     EXPECT_DOUBLE_EQ(L(0, 0), 1.0);
     EXPECT_DOUBLE_EQ(L(0, 1), 0.0);
     EXPECT_DOUBLE_EQ(L(0, 2), 0.0);
-    EXPECT_NEAR(L(1, 0), 0.5, 1e-10);
+    EXPECT_NEAR(L(1, 0), 0.5, 1e-10);  // 2/4 = 0.5
     EXPECT_DOUBLE_EQ(L(1, 1), 1.0);
     EXPECT_DOUBLE_EQ(L(1, 2), 0.0);
-    EXPECT_NEAR(L(2, 0), 0.25, 1e-10);
-    EXPECT_NEAR(L(2, 1), 0.8, 1e-10);
+    EXPECT_NEAR(L(2, 0), 0.25, 1e-10);  // 1/4 = 0.25
+    // L(2,1) = (5 - 0.25*3) / 4.5 = 4.25/4.5 = 0.9444...
+    EXPECT_NEAR(L(2, 1), 17.0 / 18.0, 1e-10);
     EXPECT_DOUBLE_EQ(L(2, 2), 1.0);
 
     // Check U is upper triangular
     EXPECT_DOUBLE_EQ(U(0, 0), 4.0);
     EXPECT_DOUBLE_EQ(U(0, 1), 3.0);
     EXPECT_DOUBLE_EQ(U(0, 2), 8.0);
-    EXPECT_DOUBLE_EQ(U(1, 0), 0.0);
-    EXPECT_DOUBLE_EQ(U(1, 1), 4.5);
-    EXPECT_DOUBLE_EQ(U(1, 2), 3.0);
-    EXPECT_DOUBLE_EQ(U(2, 0), 0.0);
-    EXPECT_DOUBLE_EQ(U(2, 1), 0.0);
-    EXPECT_NEAR(U(2, 2), 4.0, 1e-9);
+    EXPECT_NEAR(U(1, 0), 0.0, 1e-10);
+    EXPECT_DOUBLE_EQ(U(1, 1), 4.5);  // 6 - 0.5*3 = 4.5
+    EXPECT_DOUBLE_EQ(U(1, 2), 3.0);  // 7 - 0.5*8 = 3
+    EXPECT_NEAR(U(2, 0), 0.0, 1e-10);
+    EXPECT_NEAR(U(2, 1), 0.0, 1e-10);
+    // U(2,2) = 9 - 0.25*8 - (17/18)*3 = 9 - 2 - 51/18 = 7 - 17/6 = 25/6
+    // ≈ 4.1667
+    EXPECT_NEAR(U(2, 2), 25.0 / 6.0, 1e-9);
 
-    // Check L*U = A
+    // Check L*U = A (this is the most important check)
     Matrix<double, 3, 3> product = L * U;
     expectMatricesNear(product, a);
 }

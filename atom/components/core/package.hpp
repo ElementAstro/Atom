@@ -32,10 +32,18 @@ constexpr auto Trim(std::string_view str) -> std::string_view {
     auto isSpace = [](char character) {
         return character == ' ' || character == '\n' || character == '\t';
     };
-    str.remove_prefix(std::ranges::find_if_not(str, isSpace) - str.begin());
-    str.remove_suffix(
-        std::ranges::find_if_not(str | std::views::reverse, isSpace).base() -
-        str.end());
+    // Find first non-space character
+    auto start = std::ranges::find_if_not(str, isSpace);
+    if (start == str.end()) {
+        return {};  // All spaces or empty string
+    }
+    str.remove_prefix(start - str.begin());
+    // Find last non-space character from the end
+    auto rend = std::ranges::find_if_not(str | std::views::reverse, isSpace);
+    auto suffixLen = rend.base() - str.begin();
+    if (suffixLen > 0) {
+        str.remove_suffix(str.size() - static_cast<size_t>(suffixLen));
+    }
     return str;
 }
 

@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "atom/algorithm/rust_numeric.hpp"
+#include "atom/algorithm/core/rust_numeric.hpp"
 #include "atom/error/exception.hpp"
 
 #include <cmath>
@@ -550,7 +550,8 @@ TEST(RustNumericFloatTest, ConversionMethods) {
     auto int_from_large_float = F32::try_into<i8>(500.0f);
     EXPECT_TRUE(int_from_large_float.is_none());
 
-    auto float_from_double = F64::try_into<float>(1e30);
+    // 1e40 exceeds float max (~3.4e38), should fail
+    auto float_from_double = F64::try_into<float>(1e40);
     EXPECT_TRUE(float_from_double.is_none());
 
     // From String
@@ -602,7 +603,7 @@ TEST(RustNumericFloatTest, BasicMathOperations) {
     EXPECT_FLOAT_EQ(F32::ceil(42.2f), 43.0f);
     EXPECT_FLOAT_EQ(F32::round(42.5f), 43.0f);
     EXPECT_FLOAT_EQ(F32::trunc(42.7f), 42.0f);
-    EXPECT_FLOAT_EQ(F32::fract(42.7f), 0.7f);
+    EXPECT_NEAR(F32::fract(42.7f), 0.7f, 1e-5f);
 
     EXPECT_FLOAT_EQ(F32::sqrt(16.0f), 4.0f);
     EXPECT_FLOAT_EQ(F32::cbrt(8.0f), 2.0f);

@@ -85,34 +85,19 @@ function(create_web_example EXAMPLE_PATH CATEGORY)
   endif()
 endfunction()
 
-# Define examples by category
+# Define examples by category - only include files that actually exist
 set(ADDRESS_EXAMPLES
     address/ipv4_example address/ipv6_example address/unix_domain_example
     address/address_factory_example)
 
-set(HTTP_EXAMPLES
-    http/curl_basic_example
-    http/curl_comprehensive_example
-    http/curl_async_example
-    http/curl_proxy_example
-    http/downloader_example
-    http/httpparser_basic_example
-    http/httpparser_comprehensive_example
-    http/httpparser_cookies_url_example)
+set(HTTP_EXAMPLES http/curl_comprehensive_example http/downloader_example
+                  http/httpparser_comprehensive_example)
 
-set(MIME_EXAMPLES mime/minetype_basic_example
-                  mime/minetype_comprehensive_example)
+set(MIME_EXAMPLES mime/minetype_comprehensive_example)
 
-set(TIME_EXAMPLES time/time_manager_example time/time_utils_example)
+set(TIME_EXAMPLES) # No time examples exist yet
 
-set(UTILS_EXAMPLES
-    utils/addr_info_example
-    utils/dns_resolution_example
-    utils/ip_validation_example
-    utils/network_connectivity_example
-    utils/network_utils_example
-    utils/port_operations_example
-    utils/socket_operations_example)
+set(UTILS_EXAMPLES) # No utils examples exist yet
 
 set(INTEGRATION_EXAMPLES integration_example)
 

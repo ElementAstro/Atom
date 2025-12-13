@@ -7,7 +7,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "atom/algorithm/base.hpp"
+#include "atom/algorithm/encoding/base.hpp"
 
 using namespace atom::algorithm;
 using namespace testing;

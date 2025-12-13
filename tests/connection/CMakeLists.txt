@@ -39,19 +39,24 @@ endif()
 # =============================================================================
 # Test Source Configuration
 # =============================================================================
-# For modules with .cpp test files
-file(GLOB_RECURSE TEST_SOURCES ${PROJECT_SOURCE_DIR}/*.cpp)
+# Test subdirectories matching atom/connection structure
+set(CONNECTION_TEST_SUBDIRS fifo shared tcp serial udp)
 
-# Remove problematic test files (preserve existing exclusions)
+# Collect test sources from subdirectories
+set(TEST_SOURCES "")
+foreach(subdir ${CONNECTION_TEST_SUBDIRS})
+  file(GLOB SUBDIR_SOURCES "${PROJECT_SOURCE_DIR}/${subdir}/*.cpp")
+  list(APPEND TEST_SOURCES ${SUBDIR_SOURCES})
+endforeach()
+
+# SSH tests require libssh which may not be available
+if(ATOM_USE_SSH)
+  file(GLOB SSH_SOURCES "${PROJECT_SOURCE_DIR}/ssh/*.cpp")
+  list(APPEND TEST_SOURCES ${SSH_SOURCES})
+endif()
+
+# Remove problematic test files
 list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/build/.*")
-list(REMOVE_ITEM TEST_SOURCES ${PROJECT_SOURCE_DIR}/udpclient.cpp)
-# Temporarily disable tests with API mismatches
-list(REMOVE_ITEM TEST_SOURCES
-     ${PROJECT_SOURCE_DIR}/fifo/test_async_fifoserver.cpp)
-list(REMOVE_ITEM TEST_SOURCES ${PROJECT_SOURCE_DIR}/ssh/test_sshserver.cpp)
-list(REMOVE_ITEM TEST_SOURCES ${PROJECT_SOURCE_DIR}/ssh/test_sshclient.cpp)
-list(REMOVE_ITEM TEST_SOURCES
-     ${PROJECT_SOURCE_DIR}/socket/test_async_sockethub.cpp)
 
 # =============================================================================
 # Create Test Executable
@@ -98,6 +103,26 @@ if(WIN32)
   target_compile_definitions(
     atom_connection_tests PRIVATE _WIN32_WINNT=0x0601 WIN32_LEAN_AND_MEAN
                                   NOMINMAX)
+endif()
+
+# =============================================================================
+# DLL Copying (Windows)
+# =============================================================================
+if(WIN32)
+  # Use copy_test_dlls function if available
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_connection_tests)
+  endif()
+
+  # Also use CMake's built-in runtime DLL copying
+  add_custom_command(
+    TARGET atom_connection_tests
+    POST_BUILD
+    COMMAND
+      ${CMAKE_COMMAND} -E copy_if_different
+      $<TARGET_RUNTIME_DLLS:atom_connection_tests>
+      $<TARGET_FILE_DIR:atom_connection_tests>
+    COMMAND_EXPAND_LISTS)
 endif()
 
 # =============================================================================

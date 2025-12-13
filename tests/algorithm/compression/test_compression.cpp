@@ -19,7 +19,7 @@ Tests Huffman coding, matrix compression, and other compression algorithms.
 #include <string>
 #include <vector>
 
-#include "atom/algorithm/huffman.hpp"
+#include "atom/algorithm/compression/huffman.hpp"
 
 namespace atom::algorithm::compression::test {
 

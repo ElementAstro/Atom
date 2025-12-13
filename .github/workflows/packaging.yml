@@ -35,6 +35,8 @@ jobs:
   build-packages:
     name: Build Packages (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     strategy:
       fail-fast: false
       matrix:
@@ -132,6 +134,16 @@ jobs:
           python -m pip install --upgrade pip
           pip install build twine wheel pybind11 numpy
 
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: >-
+            ${{ runner.os }}-${{ matrix.arch }}-packaging-${{ matrix.preset }}-
+            ${{ hashFiles('CMakeLists.txt', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-packaging-${{ matrix.preset }}-
+
       - name: Install system dependencies (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
@@ -164,6 +176,7 @@ jobs:
             -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
             -DUSE_VCPKG=ON \
             -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_ALL=ON \
             -DATOM_BUILD_EXAMPLES=ON \
             -DATOM_BUILD_TESTS=OFF \
             -DATOM_BUILD_PYTHON_BINDINGS=ON \

@@ -5,7 +5,7 @@
 #include <future>
 #include <random>
 #include <thread>
-#include "atom/algorithm/error_calibration.hpp"
+#include "atom/algorithm/utils/error_calibration.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
@@ -252,21 +252,21 @@ TEST_F(ErrorCalibrationTest, ExceptionHandling) {
     EXPECT_THROW(calibrator.linearCalibrate(x, mismatched),
                  atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.polynomialCalibrate(with_nan, y, 1),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.polynomialCalibrate(x, with_inf, 1),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.polynomialCalibrate(x, y, 0),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.polynomialCalibrate(x, y, 10),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.logarithmicCalibrate(negative, y),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.exponentialCalibrate(x, negative),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.powerLawCalibrate(negative, y),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
     EXPECT_THROW(calibrator.powerLawCalibrate(x, negative),
-                 std::invalid_argument);
+                 atom::error::InvalidArgument);
 }
 
 TEST_F(ErrorCalibrationTest, VaryingTypes) {

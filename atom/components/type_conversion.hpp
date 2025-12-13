@@ -6,10 +6,10 @@
  * "atom/components/data/type_conversion.hpp" instead.
  */
 
-#ifndef ATOM_COMPONENT_TYPE_CONVERSION_HPP
-#define ATOM_COMPONENT_TYPE_CONVERSION_HPP
+#ifndef ATOM_COMPONENT_TYPE_CONVERSION_COMPAT_HPP
+#define ATOM_COMPONENT_TYPE_CONVERSION_COMPAT_HPP
 
 // Forward to the new location
 #include "data/type_conversion.hpp"
 
-#endif  // ATOM_COMPONENT_TYPE_CONVERSION_HPP
+#endif  // ATOM_COMPONENT_TYPE_CONVERSION_COMPAT_HPP

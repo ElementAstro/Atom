@@ -277,7 +277,8 @@ public:
 
         // Back substitution
         std::vector<T> x(n);
-        for (i64 i = static_cast<i64>(n) - 1; i >= 0; --i) {
+        for (i64 ii = static_cast<i64>(n) - 1; ii >= 0; --ii) {
+            usize i = static_cast<usize>(ii);
             x[i] = b[i];
             for (usize j = i + 1; j < n; ++j) {
                 x[i] -= A[i][j] * x[j];

@@ -34,15 +34,14 @@ on:
         default: false
         type: boolean
 
-env:
-  VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-
 jobs:
   # Quick validation test
   quick-test:
     name: Quick Validation Test
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     steps:
       - uses: actions/checkout@v4
@@ -55,18 +54,18 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential cmake ninja-build libssl-dev zlib1g-dev
+          sudo apt-get install -y build-essential cmake ninja-build libssl-dev zlib1g-dev fmt libsqlite3-dev
 
-      - name: Configure for tests
+      - name: Configure for tests (CMakePresets)
         run: |
-          cmake -B build \
+          cmake --preset debug \
             -DATOM_BUILD_TESTS=ON \
             -DATOM_BUILD_EXAMPLES=OFF \
             -DATOM_BUILD_DOCS=OFF
 
       - name: Build unified test runner
         run: |
-          cmake --build build --target run_all_tests --parallel
+          cmake --build --preset debug --target run_all_tests --parallel
 
       - name: Quick test validation
         run: |
@@ -86,6 +85,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     needs: quick-test
     if: always() && (needs.quick-test.result == 'success' || needs.quick-test.result == 'skipped')
+    env:
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
 
     strategy:
       fail-fast: false
@@ -95,42 +96,89 @@ jobs:
           - os: ubuntu-latest
             config: "Debug"
             preset: "debug"
-            build_type: "Debug"
+            build_preset: "debug"
+            triplet: x64-linux
+            arch: x64
+            compiler: gcc
+            module_set: all
             coverage: true
+            build_examples: true
+            build_python: true
+            build_docs: false
           - os: ubuntu-latest
-            config: "Release"
-            preset: "release"
-            build_type: "Release"
+            config: "RelWithDebInfo"
+            preset: "relwithdebinfo"
+            build_preset: "relwithdebinfo"
+            triplet: x64-linux
+            arch: x64
+            compiler: clang
+            module_set: io_net
             coverage: false
+            build_examples: false
+            build_python: false
+            build_docs: true
 
-          # Windows configurations
+          # Windows configurations (MSVC)
           - os: windows-latest
             config: "Debug"
-            preset: "debug"
-            build_type: "Debug"
+            preset: "debug-vs"
+            build_preset: "debug-vs"
+            triplet: x64-windows
+            arch: x64
+            compiler: msvc
+            module_set: all
             coverage: false
+            build_examples: false
+            build_python: false
+            build_docs: false
           - os: windows-latest
             config: "Release"
-            preset: "release"
-            build_type: "Release"
+            preset: "release-vs"
+            build_preset: "release-vs"
+            triplet: x64-windows
+            arch: x64
+            compiler: msvc
+            module_set: all
             coverage: false
+            build_examples: true
+            build_python: true
+            build_docs: false
 
           # macOS configurations
           - os: macos-13
-            config: "Debug"
-            preset: "debug"
-            build_type: "Debug"
-            coverage: false
-          - os: macos-14
             config: "Release"
             preset: "release"
-            build_type: "Release"
+            build_preset: "release"
+            triplet: x64-osx
+            arch: x64
+            compiler: clang
+            module_set: all
             coverage: false
+            build_examples: true
+            build_python: true
+            build_docs: false
+          - os: macos-14
+            config: "RelWithDebInfo"
+            preset: "relwithdebinfo"
+            build_preset: "relwithdebinfo"
+            triplet: arm64-osx
+            arch: arm64
+            compiler: clang
+            module_set: core
+            coverage: false
+            build_examples: false
+            build_python: false
+            build_docs: true
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Setup vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: "dbe35ceb30c688bf72e952ab23778e009a578f18"
 
       - name: Setup CMake
         uses: lukka/get-cmake@latest
@@ -140,6 +188,26 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/vcpkg
+            ~/.cache/vcpkg
+          key: ${{ runner.os }}-${{ matrix.arch }}-vcpkg-tests-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-vcpkg-tests-
+
+      - name: Cache CMake build
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: >-
+            ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.compiler }}-tests-${{ matrix.preset }}-
+            ${{ hashFiles('CMakeLists.txt', 'cmake/**', 'CMakePresets.json') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-${{ matrix.compiler }}-tests-${{ matrix.preset }}-
+
       - name: Install system dependencies (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
@@ -147,37 +215,75 @@ jobs:
           sudo apt-get install -y \
             build-essential ninja-build \
             libssl-dev zlib1g-dev libsqlite3-dev \
-            libfmt-dev python3-dev lcov jq
+            libfmt-dev python3-dev lcov jq doxygen graphviz
 
       - name: Install system dependencies (macOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install ninja openssl zlib sqlite3 fmt python3 lcov
+          brew install ninja openssl zlib sqlite3 fmt python3 lcov doxygen graphviz
 
       - name: Install system dependencies (Windows)
         if: matrix.os == 'windows-latest'
         run: |
-          choco install ninja
+          choco install ninja doxygen.install graphviz
 
-      - name: Configure CMake
+      - name: Setup ccache (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
-          cmake -B build \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-            -DATOM_BUILD_TESTS=ON \
-            -DATOM_BUILD_EXAMPLES=ON \
-            -DATOM_BUILD_DOCS=OFF
+          ccache --set-config=cache_dir=$HOME/.ccache
+          ccache --set-config=max_size=2G
+          ccache --zero-stats
 
-          if [ "${{ matrix.coverage }}" == "true" ]; then
-            cmake -B build \
-              -DCMAKE_BUILD_TYPE=Debug \
-              -DCMAKE_CXX_FLAGS_DEBUG="--coverage" \
-              -DCMAKE_C_FLAGS_DEBUG="--coverage" \
-              -DATOM_BUILD_TESTS=ON
+      - name: Select compiler (clang/GCC)
+        if: matrix.compiler == 'clang'
+        run: |
+          echo "CC=clang" >> $GITHUB_ENV
+          echo "CXX=clang++" >> $GITHUB_ENV
+
+      - name: Configure CMake with presets
+        shell: bash
+        run: |
+          MODULE_ARGS=()
+          case "${{ matrix.module_set }}" in
+            all)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=ON)
+              ;;
+            core)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=OFF -DATOM_BUILD_ERROR=ON -DATOM_BUILD_UTILS=ON)
+              MODULE_ARGS+=(-DATOM_BUILD_TYPE=ON -DATOM_BUILD_LOG=ON -DATOM_BUILD_META=ON -DATOM_BUILD_COMPONENTS=ON)
+              ;;
+            io_net)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=OFF -DATOM_BUILD_IO=ON -DATOM_BUILD_IMAGE=ON)
+              MODULE_ARGS+=(-DATOM_BUILD_SERIAL=ON -DATOM_BUILD_CONNECTION=ON -DATOM_BUILD_WEB=ON -DATOM_BUILD_ASYNC=ON)
+              ;;
+            *)
+              MODULE_ARGS+=(-DATOM_BUILD_ALL=ON)
+              ;;
+          esac
+
+          COVERAGE_ARGS=()
+          if [ "${{ matrix.coverage }}" = "true" ]; then
+            COVERAGE_ARGS+=(
+              -DCMAKE_BUILD_TYPE=Debug
+              -DCMAKE_CXX_FLAGS_DEBUG="--coverage"
+              -DCMAKE_C_FLAGS_DEBUG="--coverage"
+            )
           fi
+
+          cmake --preset ${{ matrix.preset }} \
+            -DCMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake \
+            -DUSE_VCPKG=ON \
+            -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }} \
+            -DATOM_BUILD_TESTS=ON \
+            -DATOM_BUILD_EXAMPLES=${{ matrix.build_examples }} \
+            -DATOM_BUILD_PYTHON_BINDINGS=${{ matrix.build_python }} \
+            -DATOM_BUILD_DOCS=${{ matrix.build_docs }} \
+            "${MODULE_ARGS[@]}" \
+            "${COVERAGE_ARGS[@]}"
 
       - name: Build project
         run: |
-          cmake --build build --parallel
+          cmake --build --preset ${{ matrix.build_preset }} --parallel
 
       - name: Make scripts executable (Unix)
         if: runner.os != 'Windows'

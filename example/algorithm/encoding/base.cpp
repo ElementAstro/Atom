@@ -14,7 +14,7 @@
  * @date 2024-12-19
  */
 
-#include "atom/algorithm/base.hpp"
+#include "atom/algorithm/encoding/base.hpp"
 
 #include <chrono>
 #include <iomanip>

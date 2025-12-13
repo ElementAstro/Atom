@@ -120,6 +120,15 @@ public:
                                          f32 mean = 0.0f) -> f32;
 
     /**
+     * @brief Convenience wrapper for variance calculation
+     * @param data Input data
+     * @return Variance value
+     */
+    [[nodiscard]] auto variance(const std::vector<f32>& data) -> f32 {
+        return calculateVariance(data);
+    }
+
+    /**
      * @brief Get singleton instance
      * @return Reference to singleton instance
      */

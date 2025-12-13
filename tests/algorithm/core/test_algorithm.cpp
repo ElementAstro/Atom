@@ -6,7 +6,7 @@
 #include <random>
 #include <string>
 #include <vector>
-#include "atom/algorithm/algorithm.hpp"
+#include "atom/algorithm/core/algorithm.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;

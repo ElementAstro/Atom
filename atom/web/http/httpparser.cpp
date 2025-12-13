@@ -17,7 +17,9 @@ Description: Http Header Parser with C++20 features
 #include <algorithm>
 #include <cctype>
 #include <chrono>
+#include <cstdint>
 #include <iomanip>
+#include <span>
 #include <sstream>
 #include <string_view>
 
@@ -48,7 +50,7 @@ HttpHeaderParser::~HttpHeaderParser() {
     spdlog::debug("HttpHeaderParser destructor called");
 }
 
-void HttpHeaderParser::parseHeaders(const std::string& rawHeaders) {
+auto HttpHeaderParser::parseHeaders(std::string_view rawHeaders) -> bool {
     spdlog::debug("parseHeaders called");
     impl_->headers.clear();
 
@@ -93,9 +95,10 @@ void HttpHeaderParser::parseHeaders(const std::string& rawHeaders) {
     }
 
     spdlog::debug("parseHeaders completed");
+    return true;
 }
 
-bool HttpHeaderParser::parseRequest(const std::string& rawRequest) {
+auto HttpHeaderParser::parseRequest(std::string_view rawRequest) -> bool {
     spdlog::debug("parseRequest called");
 
     // Clear existing data
@@ -103,7 +106,7 @@ bool HttpHeaderParser::parseRequest(const std::string& rawRequest) {
     impl_->cookies.clear();
     impl_->body.clear();
 
-    std::istringstream iss(rawRequest);
+    std::istringstream iss(std::string(rawRequest));
     std::string line;
 
     // Parse request line
@@ -198,7 +201,7 @@ bool HttpHeaderParser::parseRequest(const std::string& rawRequest) {
     return true;
 }
 
-bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
+auto HttpHeaderParser::parseResponse(std::string_view rawResponse) -> bool {
     spdlog::debug("parseResponse called");
 
     // Clear existing data
@@ -206,7 +209,7 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
     impl_->cookies.clear();
     impl_->body.clear();
 
-    std::istringstream iss(rawResponse);
+    std::istringstream iss(std::string(rawResponse));
     std::string line;
 
     // Parse status line
@@ -458,34 +461,39 @@ bool HttpHeaderParser::parseResponse(const std::string& rawResponse) {
     return true;
 }
 
-void HttpHeaderParser::setHeaderValue(const std::string& key,
-                                      const std::string& value) {
+auto HttpHeaderParser::setHeaderValue(
+    std::string_view key, std::string_view value) -> HttpHeaderParser& {
     spdlog::trace("setHeaderValue called: {}={}", key, value);
-    impl_->headers[key] = {value};
+    impl_->headers[std::string(key)] = {std::string(value)};
+    return *this;
 }
 
-void HttpHeaderParser::setHeaders(
-    const std::map<std::string, std::vector<std::string>>& headers) {
+auto HttpHeaderParser::setHeaders(
+    const std::map<std::string, std::vector<std::string>>& headers)
+    -> HttpHeaderParser& {
     spdlog::debug("setHeaders called");
     impl_->headers = headers;
+    return *this;
 }
 
-void HttpHeaderParser::addHeaderValue(const std::string& key,
-                                      const std::string& value) {
+auto HttpHeaderParser::addHeaderValue(
+    std::string_view key, std::string_view value) -> HttpHeaderParser& {
     spdlog::trace("addHeaderValue called: {}={}", key, value);
-    impl_->headers[key].push_back(value);
+    impl_->headers[std::string(key)].push_back(std::string(value));
+    return *this;
 }
 
-auto HttpHeaderParser::getHeaderValues(const std::string& key) const
+auto HttpHeaderParser::getHeaderValues(std::string_view key) const
     -> std::optional<std::vector<std::string>> {
     spdlog::trace("getHeaderValues called: {}", key);
-    if (auto it = impl_->headers.find(key); it != impl_->headers.end()) {
+    if (auto it = impl_->headers.find(std::string(key));
+        it != impl_->headers.end()) {
         return it->second;
     }
     return std::nullopt;
 }
 
-auto HttpHeaderParser::getHeaderValue(const std::string& key) const
+auto HttpHeaderParser::getHeaderValue(std::string_view key) const
     -> std::optional<std::string> {
     spdlog::trace("getHeaderValue called: {}", key);
 
@@ -497,9 +505,10 @@ auto HttpHeaderParser::getHeaderValue(const std::string& key) const
     return std::nullopt;
 }
 
-void HttpHeaderParser::removeHeader(const std::string& key) {
+auto HttpHeaderParser::removeHeader(std::string_view key) -> HttpHeaderParser& {
     spdlog::trace("removeHeader called: {}", key);
-    impl_->headers.erase(key);
+    impl_->headers.erase(std::string(key));
+    return *this;
 }
 
 auto HttpHeaderParser::getAllHeaders() const
@@ -508,17 +517,18 @@ auto HttpHeaderParser::getAllHeaders() const
     return impl_->headers;
 }
 
-auto HttpHeaderParser::hasHeader(const std::string& key) const -> bool {
+auto HttpHeaderParser::hasHeader(std::string_view key) const noexcept -> bool {
     spdlog::trace("hasHeader called: {}", key);
-    return impl_->headers.contains(key);  // C++20 contains method
+    return impl_->headers.contains(std::string(key));  // C++20 contains method
 }
 
-void HttpHeaderParser::clearHeaders() {
+auto HttpHeaderParser::clearHeaders() -> HttpHeaderParser& {
     spdlog::trace("clearHeaders called");
     impl_->headers.clear();
+    return *this;
 }
 
-void HttpHeaderParser::addCookie(const Cookie& cookie) {
+auto HttpHeaderParser::addCookie(const Cookie& cookie) -> HttpHeaderParser& {
     spdlog::debug("addCookie called: {}", cookie.name);
 
     // Check if cookie with the same name already exists
@@ -571,10 +581,11 @@ void HttpHeaderParser::addCookie(const Cookie& cookie) {
     }
 
     addHeaderValue("Set-Cookie", cookieStr);
+    return *this;
 }
 
-std::map<std::string, std::string> HttpHeaderParser::parseCookies(
-    const std::string& cookieStr) const {
+auto HttpHeaderParser::parseCookies(std::string_view cookieStr) const
+    -> std::map<std::string, std::string> {
     spdlog::trace("parseCookies called");
 
     std::map<std::string, std::string> cookies;
@@ -644,17 +655,17 @@ std::map<std::string, std::string> HttpHeaderParser::parseCookies(
     return cookies;
 }
 
-std::vector<Cookie> HttpHeaderParser::getAllCookies() const {
+auto HttpHeaderParser::getAllCookies() const -> std::vector<Cookie> {
     spdlog::trace("getAllCookies called");
     return impl_->cookies;
 }
 
-std::optional<Cookie> HttpHeaderParser::getCookie(
-    const std::string& name) const {
+auto HttpHeaderParser::getCookie(std::string_view name) const
+    -> std::optional<Cookie> {
     spdlog::trace("getCookie called: {}", name);
 
     auto it = std::find_if(impl_->cookies.begin(), impl_->cookies.end(),
-                           [&name](const Cookie& c) { return c.name == name; });
+                           [name](const Cookie& c) { return c.name == name; });
 
     if (it != impl_->cookies.end()) {
         return *it;
@@ -663,27 +674,30 @@ std::optional<Cookie> HttpHeaderParser::getCookie(
     return std::nullopt;
 }
 
-void HttpHeaderParser::removeCookie(const std::string& name) {
+auto HttpHeaderParser::removeCookie(std::string_view name)
+    -> HttpHeaderParser& {
     spdlog::debug("removeCookie called: {}", name);
 
     impl_->cookies.erase(
         std::remove_if(impl_->cookies.begin(), impl_->cookies.end(),
-                       [&name](const Cookie& c) { return c.name == name; }),
+                       [name](const Cookie& c) { return c.name == name; }),
         impl_->cookies.end());
+    return *this;
 }
 
-std::map<std::string, std::string> HttpHeaderParser::parseUrlParameters(
-    const std::string& url) const {
+auto HttpHeaderParser::parseUrlParameters(std::string_view url) const
+    -> std::map<std::string, std::string> {
     spdlog::debug("parseUrlParameters called");
 
     std::map<std::string, std::string> parameters;
     size_t queryStart = url.find('?');
+    std::string urlStr(url);
 
     if (queryStart == std::string::npos) {
         return parameters;
     }
 
-    std::string_view queryString(url.c_str() + queryStart + 1);
+    std::string_view queryString(urlStr.c_str() + queryStart + 1);
     size_t pos = 0;
     size_t nextAmp;
 
@@ -724,17 +738,19 @@ std::map<std::string, std::string> HttpHeaderParser::parseUrlParameters(
     return parameters;
 }
 
-void HttpHeaderParser::setMethod(HttpMethod method) {
+auto HttpHeaderParser::setMethod(HttpMethod method) -> HttpHeaderParser& {
     spdlog::trace("setMethod called: {}", static_cast<int>(method));
     impl_->method = method;
+    return *this;
 }
 
-HttpMethod HttpHeaderParser::getMethod() const {
+auto HttpHeaderParser::getMethod() const noexcept -> HttpMethod {
     spdlog::trace("getMethod called");
     return impl_->method;
 }
 
-HttpMethod HttpHeaderParser::stringToMethod(const std::string& methodStr) {
+auto HttpHeaderParser::stringToMethod(std::string_view methodStr) noexcept
+    -> HttpMethod {
     std::string_view sv(methodStr);
 
     // Convert to uppercase for comparison
@@ -752,7 +768,7 @@ HttpMethod HttpHeaderParser::stringToMethod(const std::string& methodStr) {
     if (upperView == "PUT")
         return HttpMethod::PUT;
     if (upperView == "DELETE")
-        return HttpMethod::DELETE;
+        return HttpMethod::DELETE_;
     if (upperView == "HEAD")
         return HttpMethod::HEAD;
     if (upperView == "OPTIONS")
@@ -767,7 +783,8 @@ HttpMethod HttpHeaderParser::stringToMethod(const std::string& methodStr) {
     return HttpMethod::UNKNOWN;
 }
 
-std::string HttpHeaderParser::methodToString(HttpMethod method) {
+auto HttpHeaderParser::methodToString(HttpMethod method) noexcept
+    -> std::string_view {
     switch (method) {
         case HttpMethod::GET:
             return "GET";
@@ -775,7 +792,7 @@ std::string HttpHeaderParser::methodToString(HttpMethod method) {
             return "POST";
         case HttpMethod::PUT:
             return "PUT";
-        case HttpMethod::DELETE:
+        case HttpMethod::DELETE_:
             return "DELETE";
         case HttpMethod::HEAD:
             return "HEAD";
@@ -792,47 +809,52 @@ std::string HttpHeaderParser::methodToString(HttpMethod method) {
     }
 }
 
-void HttpHeaderParser::setStatus(const HttpStatus& status) {
+auto HttpHeaderParser::setStatus(const HttpStatus& status)
+    -> HttpHeaderParser& {
     spdlog::trace("setStatus called: {} {}", status.code, status.description);
     impl_->status = status;
+    return *this;
 }
 
-HttpStatus HttpHeaderParser::getStatus() const {
+auto HttpHeaderParser::getStatus() const noexcept -> HttpStatus {
     spdlog::trace("getStatus called");
     return impl_->status;
 }
 
-void HttpHeaderParser::setPath(const std::string& path) {
+auto HttpHeaderParser::setPath(std::string_view path) -> HttpHeaderParser& {
     spdlog::trace("setPath called: {}", path);
-    impl_->path = path;
+    impl_->path = std::string(path);
+    return *this;
 }
 
-std::string HttpHeaderParser::getPath() const {
+auto HttpHeaderParser::getPath() const -> std::string_view {
     spdlog::trace("getPath called");
     return impl_->path;
 }
 
-void HttpHeaderParser::setVersion(HttpVersion version) {
+auto HttpHeaderParser::setVersion(HttpVersion version) -> HttpHeaderParser& {
     spdlog::trace("setVersion called: {}", static_cast<int>(version));
     impl_->version = version;
+    return *this;
 }
 
-HttpVersion HttpHeaderParser::getVersion() const {
+auto HttpHeaderParser::getVersion() const noexcept -> HttpVersion {
     spdlog::trace("getVersion called");
     return impl_->version;
 }
 
-void HttpHeaderParser::setBody(const std::string& body) {
+auto HttpHeaderParser::setBody(std::string_view body) -> HttpHeaderParser& {
     spdlog::debug("setBody called: {} bytes", body.length());
-    impl_->body = body;
+    impl_->body = std::string(body);
+    return *this;
 }
 
-std::string HttpHeaderParser::getBody() const {
+auto HttpHeaderParser::getBody() const -> std::string_view {
     spdlog::trace("getBody called");
     return impl_->body;
 }
 
-std::string HttpHeaderParser::urlDecode(const std::string& str) {
+auto HttpHeaderParser::urlDecode(std::string_view str) -> std::string {
     std::string result;
     result.reserve(str.size());
 
@@ -874,7 +896,7 @@ std::string HttpHeaderParser::urlDecode(const std::string& str) {
     return result;
 }
 
-std::string HttpHeaderParser::urlEncode(const std::string& str) {
+auto HttpHeaderParser::urlEncode(std::string_view str) -> std::string {
     static const char hexChars[] = "0123456789ABCDEF";
     static const bool shouldEscape[256] = {/* 0x00-0x0F */ true,
                                            true,
@@ -1155,7 +1177,7 @@ std::string HttpHeaderParser::urlEncode(const std::string& str) {
     return result;
 }
 
-std::string HttpHeaderParser::buildRequest() const {
+auto HttpHeaderParser::buildRequest() const -> std::string {
     spdlog::debug("buildRequest called");
 
     std::stringstream request;
@@ -1201,7 +1223,7 @@ std::string HttpHeaderParser::buildRequest() const {
     return request.str();
 }
 
-std::string HttpHeaderParser::buildResponse() const {
+auto HttpHeaderParser::buildResponse() const -> std::string {
     spdlog::debug("buildResponse called");
 
     std::stringstream response;
@@ -1243,6 +1265,263 @@ std::string HttpHeaderParser::buildResponse() const {
     }
 
     return response.str();
+}
+
+auto HttpHeaderParser::headerCount() const noexcept -> size_t {
+    return impl_->headers.size();
+}
+
+auto HttpHeaderParser::cookieCount() const noexcept -> size_t {
+    return impl_->cookies.size();
+}
+
+auto HttpHeaderParser::setStatus(int code) -> HttpHeaderParser& {
+    impl_->status.code = code;
+    // Set default description based on common status codes
+    switch (code) {
+        case 200:
+            impl_->status.description = "OK";
+            break;
+        case 201:
+            impl_->status.description = "Created";
+            break;
+        case 204:
+            impl_->status.description = "No Content";
+            break;
+        case 301:
+            impl_->status.description = "Moved Permanently";
+            break;
+        case 302:
+            impl_->status.description = "Found";
+            break;
+        case 304:
+            impl_->status.description = "Not Modified";
+            break;
+        case 400:
+            impl_->status.description = "Bad Request";
+            break;
+        case 401:
+            impl_->status.description = "Unauthorized";
+            break;
+        case 403:
+            impl_->status.description = "Forbidden";
+            break;
+        case 404:
+            impl_->status.description = "Not Found";
+            break;
+        case 405:
+            impl_->status.description = "Method Not Allowed";
+            break;
+        case 500:
+            impl_->status.description = "Internal Server Error";
+            break;
+        case 502:
+            impl_->status.description = "Bad Gateway";
+            break;
+        case 503:
+            impl_->status.description = "Service Unavailable";
+            break;
+        default:
+            impl_->status.description = "Unknown";
+            break;
+    }
+    return *this;
+}
+
+auto HttpHeaderParser::setBody(std::span<const std::byte> data)
+    -> HttpHeaderParser& {
+    impl_->body.assign(reinterpret_cast<const char*>(data.data()), data.size());
+    return *this;
+}
+
+auto HttpHeaderParser::getBodySize() const noexcept -> size_t {
+    return impl_->body.size();
+}
+
+auto HttpHeaderParser::hasBody() const noexcept -> bool {
+    return !impl_->body.empty();
+}
+
+auto HttpHeaderParser::base64Encode(std::span<const std::byte> data)
+    -> std::string {
+    static constexpr char base64Chars[] =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+    std::string result;
+    result.reserve(((data.size() + 2) / 3) * 4);
+
+    size_t i = 0;
+    while (i < data.size()) {
+        uint32_t octet_a =
+            i < data.size() ? static_cast<uint8_t>(data[i++]) : 0;
+        uint32_t octet_b =
+            i < data.size() ? static_cast<uint8_t>(data[i++]) : 0;
+        uint32_t octet_c =
+            i < data.size() ? static_cast<uint8_t>(data[i++]) : 0;
+
+        uint32_t triple = (octet_a << 16) + (octet_b << 8) + octet_c;
+
+        result += base64Chars[(triple >> 18) & 0x3F];
+        result += base64Chars[(triple >> 12) & 0x3F];
+        result +=
+            (i > data.size() + 1) ? '=' : base64Chars[(triple >> 6) & 0x3F];
+        result += (i > data.size()) ? '=' : base64Chars[triple & 0x3F];
+    }
+
+    return result;
+}
+
+auto HttpHeaderParser::base64Decode(std::string_view str)
+    -> std::vector<std::byte> {
+    static constexpr uint8_t decodeTable[256] = {
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 62, 64, 64, 64, 63, 52, 53, 54, 55, 56, 57,
+        58, 59, 60, 61, 64, 64, 64, 64, 64, 64, 64, 0,  1,  2,  3,  4,  5,  6,
+        7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        25, 64, 64, 64, 64, 64, 64, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+        37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64, 64,
+        64, 64, 64, 64};
+
+    std::vector<std::byte> result;
+    result.reserve((str.size() / 4) * 3);
+
+    uint32_t temp = 0;
+    int bits = 0;
+
+    for (char c : str) {
+        if (c == '=' || c == '\n' || c == '\r')
+            continue;
+        uint8_t val = decodeTable[static_cast<uint8_t>(c)];
+        if (val == 64)
+            continue;  // Invalid character
+
+        temp = (temp << 6) | val;
+        bits += 6;
+
+        if (bits >= 8) {
+            bits -= 8;
+            result.push_back(static_cast<std::byte>((temp >> bits) & 0xFF));
+        }
+    }
+
+    return result;
+}
+
+auto HttpHeaderParser::parseContentType(std::string_view contentType)
+    -> std::pair<std::string, std::map<std::string, std::string>> {
+    std::string mimeType;
+    std::map<std::string, std::string> params;
+
+    size_t semicolonPos = contentType.find(';');
+    if (semicolonPos == std::string_view::npos) {
+        mimeType = std::string(contentType);
+        // Trim whitespace
+        while (!mimeType.empty() && std::isspace(mimeType.back())) {
+            mimeType.pop_back();
+        }
+        return {mimeType, params};
+    }
+
+    mimeType = std::string(contentType.substr(0, semicolonPos));
+    // Trim whitespace from mime type
+    while (!mimeType.empty() && std::isspace(mimeType.back())) {
+        mimeType.pop_back();
+    }
+
+    // Parse parameters
+    std::string_view paramStr = contentType.substr(semicolonPos + 1);
+    size_t pos = 0;
+
+    while (pos < paramStr.size()) {
+        // Skip whitespace
+        while (pos < paramStr.size() && std::isspace(paramStr[pos])) {
+            ++pos;
+        }
+
+        size_t eqPos = paramStr.find('=', pos);
+        if (eqPos == std::string_view::npos)
+            break;
+
+        std::string key(paramStr.substr(pos, eqPos - pos));
+        // Trim key
+        while (!key.empty() && std::isspace(key.back())) {
+            key.pop_back();
+        }
+
+        pos = eqPos + 1;
+
+        // Handle quoted values
+        std::string value;
+        if (pos < paramStr.size() && paramStr[pos] == '"') {
+            ++pos;
+            size_t endQuote = paramStr.find('"', pos);
+            if (endQuote != std::string_view::npos) {
+                value = std::string(paramStr.substr(pos, endQuote - pos));
+                pos = endQuote + 1;
+            }
+        } else {
+            size_t nextSemi = paramStr.find(';', pos);
+            if (nextSemi == std::string_view::npos) {
+                value = std::string(paramStr.substr(pos));
+                pos = paramStr.size();
+            } else {
+                value = std::string(paramStr.substr(pos, nextSemi - pos));
+                pos = nextSemi + 1;
+            }
+            // Trim value
+            while (!value.empty() && std::isspace(value.back())) {
+                value.pop_back();
+            }
+        }
+
+        params[key] = value;
+    }
+
+    return {mimeType, params};
+}
+
+auto HttpHeaderParser::isJsonContent() const -> bool {
+    auto ct = getContentType();
+    if (!ct)
+        return false;
+    return ct->find("application/json") != std::string::npos;
+}
+
+auto HttpHeaderParser::isFormContent() const -> bool {
+    auto ct = getContentType();
+    if (!ct)
+        return false;
+    return ct->find("application/x-www-form-urlencoded") != std::string::npos;
+}
+
+auto HttpHeaderParser::isMultipartContent() const -> bool {
+    auto ct = getContentType();
+    if (!ct)
+        return false;
+    return ct->find("multipart/") != std::string::npos;
+}
+
+auto HttpHeaderParser::getContentType() const -> std::optional<std::string> {
+    return getHeaderValue("Content-Type");
+}
+
+auto HttpHeaderParser::getContentLength() const -> std::optional<size_t> {
+    auto cl = getHeaderValue("Content-Length");
+    if (!cl)
+        return std::nullopt;
+    try {
+        return std::stoull(*cl);
+    } catch (...) {
+        return std::nullopt;
+    }
 }
 
 }  // namespace atom::web

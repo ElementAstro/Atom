@@ -145,10 +145,53 @@ if(MSVC)
     )
   endif()
 else()
-  atom_find_dependency(OpenSSL QUIET)
-  if(NOT OpenSSL_FOUND)
-    message(
-      STATUS "OpenSSL not found - some cryptographic features will be disabled")
+  # Try manual lookup first for MinGW/MSYS2
+  find_path(
+    OPENSSL_INCLUDE_DIR
+    NAMES openssl/ssl.h
+    PATHS /mingw64/include /usr/include /usr/local/include
+          D:/msys64/mingw64/include ${CMAKE_PREFIX_PATH}/include)
+  find_library(
+    OPENSSL_SSL_LIBRARY
+    NAMES ssl
+    PATHS /mingw64/lib /usr/lib /usr/local/lib D:/msys64/mingw64/lib
+          ${CMAKE_PREFIX_PATH}/lib)
+  find_library(
+    OPENSSL_CRYPTO_LIBRARY
+    NAMES crypto
+    PATHS /mingw64/lib /usr/lib /usr/local/lib D:/msys64/mingw64/lib
+          ${CMAKE_PREFIX_PATH}/lib)
+  if(OPENSSL_INCLUDE_DIR
+     AND OPENSSL_SSL_LIBRARY
+     AND OPENSSL_CRYPTO_LIBRARY)
+    if(NOT TARGET OpenSSL::SSL)
+      add_library(OpenSSL::SSL UNKNOWN IMPORTED GLOBAL)
+      set_target_properties(
+        OpenSSL::SSL
+        PROPERTIES IMPORTED_LOCATION ${OPENSSL_SSL_LIBRARY}
+                   INTERFACE_INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE_DIR})
+    endif()
+    if(NOT TARGET OpenSSL::Crypto)
+      add_library(OpenSSL::Crypto UNKNOWN IMPORTED GLOBAL)
+      set_target_properties(
+        OpenSSL::Crypto
+        PROPERTIES IMPORTED_LOCATION ${OPENSSL_CRYPTO_LIBRARY}
+                   INTERFACE_INCLUDE_DIRECTORIES ${OPENSSL_INCLUDE_DIR})
+    endif()
+    set(OpenSSL_FOUND
+        TRUE
+        CACHE BOOL "OpenSSL found" FORCE)
+    set(OPENSSL_FOUND
+        TRUE
+        CACHE BOOL "OpenSSL found" FORCE)
+    message(STATUS "OpenSSL found via manual lookup: ${OPENSSL_SSL_LIBRARY}")
+  else()
+    atom_find_dependency(OpenSSL QUIET)
+    if(NOT OpenSSL_FOUND)
+      message(
+        STATUS
+          "OpenSSL not found - some cryptographic features will be disabled")
+    endif()
   endif()
 endif()
 
@@ -161,10 +204,29 @@ if(MSVC)
         "ZLIB not found for MSVC - some compression features will be disabled")
   endif()
 else()
-  atom_find_dependency(ZLIB QUIET)
-  if(NOT ZLIB_FOUND)
-    message(
-      STATUS "ZLIB not found - some compression features will be disabled")
+  # Try manual lookup first (common on MinGW/Unix)
+  find_path(
+    ZLIB_INCLUDE_DIR
+    NAMES zlib.h
+    PATHS /mingw64/include /usr/include /usr/local/include
+          D:/msys64/mingw64/include ${CMAKE_PREFIX_PATH}/include)
+  find_library(
+    ZLIB_LIBRARY
+    NAMES z zlib
+    PATHS /mingw64/lib /usr/lib /usr/local/lib D:/msys64/mingw64/lib
+          ${CMAKE_PREFIX_PATH}/lib)
+  if(ZLIB_INCLUDE_DIR AND ZLIB_LIBRARY)
+    if(NOT TARGET ZLIB::ZLIB)
+      add_library(ZLIB::ZLIB UNKNOWN IMPORTED)
+      set_target_properties(
+        ZLIB::ZLIB PROPERTIES IMPORTED_LOCATION ${ZLIB_LIBRARY}
+                              INTERFACE_INCLUDE_DIRECTORIES ${ZLIB_INCLUDE_DIR})
+    endif()
+    set(ZLIB_FOUND TRUE)
+    message(STATUS "ZLIB found via manual lookup: ${ZLIB_LIBRARY}")
+  else()
+    # Fallback to standard search and fail hard if still missing
+    atom_find_dependency(ZLIB REQUIRED)
   endif()
 endif()
 
@@ -178,19 +240,36 @@ atom_find_dependency(fmt QUIET PKG_CONFIG_NAME fmt)
 # Header-only Dependencies
 # =============================================================================
 
-# Asio - Networking (header-only, standalone)
-atom_find_dependency(
-  asio
-  QUIET
-  PATHS
-  asio.hpp
-  HINTS
-  /mingw64/include
-  /usr/include
-  /usr/local/include)
-if(ASIO_FOUND)
+# Asio - Networking (header-only, standalone) Try manual lookup first for
+# MinGW/MSYS2
+find_path(
+  ASIO_INCLUDE_DIR
+  NAMES asio.hpp
+  PATHS /mingw64/include /usr/include /usr/local/include
+        D:/msys64/mingw64/include ${CMAKE_PREFIX_PATH}/include)
+if(ASIO_INCLUDE_DIR)
+  set(ASIO_FOUND TRUE)
   add_definitions(-DASIO_STANDALONE)
-  atom_setup_dependency_target(asio asio::asio)
+  if(NOT TARGET asio::asio)
+    add_library(asio::asio INTERFACE IMPORTED)
+    set_target_properties(asio::asio PROPERTIES INTERFACE_INCLUDE_DIRECTORIES
+                                                ${ASIO_INCLUDE_DIR})
+  endif()
+  message(STATUS "Asio found via manual lookup: ${ASIO_INCLUDE_DIR}")
+else()
+  atom_find_dependency(
+    asio
+    QUIET
+    PATHS
+    asio.hpp
+    HINTS
+    /mingw64/include
+    /usr/include
+    /usr/local/include)
+  if(ASIO_FOUND)
+    add_definitions(-DASIO_STANDALONE)
+    atom_setup_dependency_target(asio asio::asio)
+  endif()
 endif()
 
 # =============================================================================

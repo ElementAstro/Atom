@@ -181,11 +181,17 @@ void demonstrateRangeMinMax() {
     std::vector<f64> data = {-5.5, 2.3, 8.7, -1.2, 15.4, 3.3, -8.9, 12.1};
     printVector(data, "Data");
 
+    // Use std::ranges for min/max since Statistics class doesn't have these
+    auto [min_it, max_it] = std::ranges::minmax_element(data);
+    f64 min_val = *min_it;
+    f64 max_val = *max_it;
+    f64 range_val = max_val - min_val;
+
     std::cout << "\nStatistics:\n";
-    std::cout << "  Min: " << std::fixed << std::setprecision(2)
-              << Stats::min(data) << "\n";
-    std::cout << "  Max: " << Stats::max(data) << "\n";
-    std::cout << "  Range: " << Stats::range(data) << "\n";
+    std::cout << "  Min: " << std::fixed << std::setprecision(2) << min_val
+              << "\n";
+    std::cout << "  Max: " << max_val << "\n";
+    std::cout << "  Range: " << range_val << "\n";
 }
 
 // Demonstrate z-score normalization
@@ -202,7 +208,7 @@ void demonstrateZScore() {
 
     std::cout << "Mean: " << mean << ", Std Dev: " << stddev << "\n";
 
-    auto z_scores = Stats::zScoreNormalize(data);
+    auto z_scores = Stats::zScores(data);
     printVector(z_scores, "Z-scores");
 
     // Verify z-scores have mean ~0 and std dev ~1

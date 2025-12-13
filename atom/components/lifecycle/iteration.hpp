@@ -52,7 +52,8 @@ template <typename T>
 #ifdef __AVX2__
 static constexpr size_t SIMD_WIDTH = sizeof(__m256) / sizeof(T);
 #else
-static constexpr size_t SIMD_WIDTH = 4 / sizeof(T);  // Fallback for non-AVX2
+// Fallback for non-AVX2: ensure at least 1 element per SIMD operation
+static constexpr size_t SIMD_WIDTH = (sizeof(T) <= 4) ? (4 / sizeof(T)) : 1;
 #endif
 
 /**

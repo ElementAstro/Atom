@@ -291,6 +291,12 @@ set_property(TARGET run_utility_tests PROPERTY FOLDER "Tests/SysInfo/Custom")
 
 # Copy all dependent runtime DLLs next to the test executable on Windows
 if(WIN32)
+  # Use copy_test_dlls function if available for comprehensive coverage
+  if(COMMAND copy_test_dlls)
+    copy_test_dlls(atom_sysinfo_tests)
+  endif()
+
+  # Also use CMake's built-in runtime DLL copying
   add_custom_command(
     TARGET atom_sysinfo_tests
     POST_BUILD

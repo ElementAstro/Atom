@@ -19,12 +19,11 @@ Description: Integration tests for the complete error handling system
 #include <thread>
 #include <vector>
 
-#include "atom/error/error_code.hpp"
-#include "atom/error/error_context.hpp"
-#include "atom/error/error_formatter.hpp"
-#include "atom/error/error_handler.hpp"
-#include "atom/error/error_recovery.hpp"
+#include "atom/error/context/error_context.hpp"
+#include "atom/error/core/error_codes.hpp"
 #include "atom/error/exception.hpp"
+#include "atom/error/handler/error_reporter.hpp"
+#include "atom/error/handler/global_handler.hpp"
 
 namespace atom::error::test {
 

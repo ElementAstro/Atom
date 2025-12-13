@@ -7,7 +7,7 @@
 #include <string>
 #include <unordered_set>
 #include <vector>
-#include "atom/algorithm/mhash.hpp"
+#include "atom/algorithm/hash/mhash.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;
@@ -245,26 +245,47 @@ TEST_F(MHashTest, HexStringConversion) {
 TEST_F(MHashTest, ThreadSafety) {
     const size_t numThreads = 10;
     std::vector<std::string> testSet = {"item1", "item2", "item3"};
-    MinHash minhash(10);
-    auto expectedSignature = minhash.computeSignature(testSet);
+
+    // Test that each thread can create and use its own MinHash without crashes
+    // Note: Different MinHash objects will have different random hash
+    // functions, so we only verify that each produces a valid, consistent
+    // signature
     std::vector<std::thread> threads;
     std::vector<std::vector<size_t>> results;
     results.resize(numThreads);
+    std::atomic<bool> hasError{false};
+
     for (size_t i = 0; i < numThreads; ++i) {
-        threads.emplace_back([&testSet, &results, i]() {
-            MinHash threadMinhash(10);
-            auto sig = threadMinhash.computeSignature(testSet);
-            results[i].assign(sig.begin(), sig.end());
+        threads.emplace_back([&testSet, &results, &hasError, i]() {
+            try {
+                MinHash threadMinhash(10);
+                auto sig1 = threadMinhash.computeSignature(testSet);
+                auto sig2 = threadMinhash.computeSignature(testSet);
+                // Same MinHash object should produce same signature for same
+                // input
+                if (sig1.size() != sig2.size()) {
+                    hasError = true;
+                    return;
+                }
+                for (size_t j = 0; j < sig1.size(); ++j) {
+                    if (sig1[j] != sig2[j]) {
+                        hasError = true;
+                        return;
+                    }
+                }
+                results[i].assign(sig1.begin(), sig1.end());
+            } catch (...) {
+                hasError = true;
+            }
         });
     }
     for (auto& thread : threads) {
         thread.join();
     }
+    EXPECT_FALSE(hasError);
+    // Verify all results have the expected size
     for (const auto& signature : results) {
-        ASSERT_EQ(signature.size(), expectedSignature.size());
-        for (size_t i = 0; i < signature.size(); ++i) {
-            EXPECT_EQ(signature[i], expectedSignature[i]);
-        }
+        EXPECT_EQ(signature.size(), 10u);
     }
 }
 

@@ -148,6 +148,21 @@ foreach(TEST_SOURCE ${TEST_SOURCES})
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     set_tests_properties(${TEST_NAME} PROPERTIES LABELS "meta" TIMEOUT 300)
   endif()
+
+  # Copy DLLs on Windows
+  if(WIN32)
+    if(COMMAND copy_test_dlls)
+      copy_test_dlls(${TEST_NAME})
+    endif()
+
+    add_custom_command(
+      TARGET ${TEST_NAME}
+      POST_BUILD
+      COMMAND
+        ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_RUNTIME_DLLS:${TEST_NAME}> $<TARGET_FILE_DIR:${TEST_NAME}>
+      COMMAND_EXPAND_LISTS)
+  endif()
 endforeach()
 
 # =============================================================================

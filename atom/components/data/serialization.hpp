@@ -53,8 +53,13 @@ struct SerializationOptions {
     bool includeMetadata = true;
     bool includeTimestamp = true;
     bool includeVersion = true;
+    bool includeVariables = true;
+    bool includeCommands = false;
+    bool prettyPrint = false;
     bool compressData = false;
     bool encryptData = false;
+    bool enableCompression = false;  // Alias for compressData
+    bool enableEncryption = false;   // Alias for encryptData
     std::string encryptionKey;
     uint32_t version = 1;
     std::unordered_map<std::string, std::any> customOptions;
@@ -200,6 +205,21 @@ public:
      * @param serializer Serializer implementation
      */
     void registerSerializer(std::unique_ptr<ISerializer> serializer);
+
+    /**
+     * @brief Registers a custom serializer for a specific format
+     * @param format The format to register the serializer for
+     * @param serializer Serializer implementation
+     */
+    void registerSerializer(SerializationFormat format,
+                            std::unique_ptr<ISerializer> serializer);
+
+    /**
+     * @brief Checks if a serializer is registered for a format
+     * @param format The format to check
+     * @return True if a serializer is registered for the format
+     */
+    bool hasSerializer(SerializationFormat format) const;
 
     /**
      * @brief Serializes a component

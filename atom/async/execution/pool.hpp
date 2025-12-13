@@ -163,6 +163,24 @@ public:
 
     /**
      * @brief Adds an element to the back of the queue
+     * @param value The element to add (const lvalue reference)
+     * @throws ThreadPoolError If the queue is full or if the add operation
+     * fails
+     */
+    void pushBack(const T& value) {
+        std::scoped_lock lock(mutex_);
+        if (data_.size() >= max_size) {
+            throw ThreadPoolError("Queue is full");
+        }
+        try {
+            data_.push_back(value);
+        } catch (const std::exception& e) {
+            throw ThreadPoolError(std::string("Push back failed: ") + e.what());
+        }
+    }
+
+    /**
+     * @brief Adds an element to the back of the queue
      * @param value The element to add (rvalue reference)
      * @throws ThreadPoolError If the queue is full or if the add operation
      * fails
@@ -173,9 +191,28 @@ public:
             throw ThreadPoolError("Queue is full");
         }
         try {
-            data_.push_back(std::forward<T>(value));
+            data_.push_back(std::move(value));
         } catch (const std::exception& e) {
             throw ThreadPoolError(std::string("Push back failed: ") + e.what());
+        }
+    }
+
+    /**
+     * @brief Adds an element to the front of the queue
+     * @param value The element to add (const lvalue reference)
+     * @throws ThreadPoolError If the queue is full or if the add operation
+     * fails
+     */
+    void pushFront(const T& value) {
+        std::scoped_lock lock(mutex_);
+        if (data_.size() >= max_size) {
+            throw ThreadPoolError("Queue is full");
+        }
+        try {
+            data_.push_front(value);
+        } catch (const std::exception& e) {
+            throw ThreadPoolError(std::string("Push front failed: ") +
+                                  e.what());
         }
     }
 
@@ -191,7 +228,7 @@ public:
             throw ThreadPoolError("Queue is full");
         }
         try {
-            data_.push_front(std::forward<T>(value));
+            data_.push_front(std::move(value));
         } catch (const std::exception& e) {
             throw ThreadPoolError(std::string("Push front failed: ") +
                                   e.what());

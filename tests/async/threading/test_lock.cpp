@@ -79,10 +79,37 @@ protected:
         EXPECT_EQ(counter.load(), numThreads * incrementsPerThread);
     }
 
-    // Helper function to test tryLock functionality
+    // Helper function to test tryLock functionality for standard locks
     template <typename LockType>
     void testTryLockFunctionality() {
         LockType lock;
+        std::atomic<bool> lockAcquired{false};
+
+        std::thread t1([&lock, &lockAcquired]() {
+            lock.lock();
+            lockAcquired.store(true);
+            std::this_thread::sleep_for(100ms);
+            lock.unlock();
+        });
+
+        // Wait for first thread to acquire lock
+        while (!lockAcquired.load()) {
+            std::this_thread::yield();
+        }
+
+        // Try to acquire lock from another thread - should fail
+        EXPECT_FALSE(lock.tryLock());
+
+        t1.join();
+
+        // Now should be able to acquire lock
+        EXPECT_TRUE(lock.tryLock());
+        lock.unlock();
+    }
+
+    // Helper function to test tryLock functionality for TicketSpinlock
+    void testTicketSpinlockTryLock() {
+        TicketSpinlock lock;
         std::atomic<bool> lockAcquired{false};
 
         std::thread t1([&lock, &lockAcquired]() {
@@ -102,9 +129,12 @@ protected:
 
         t1.join();
 
-        // Now should be able to acquire lock
+        // Now should be able to acquire lock - but tryLock doesn't return
+        // ticket So we test it differently: just verify tryLock succeeds when
+        // unlocked
         EXPECT_TRUE(lock.tryLock());
-        lock.unlock();
+        // Note: After tryLock succeeds, we need to unlock but don't have ticket
+        // This is a limitation of the TicketSpinlock API design
     }
 };
 
@@ -114,15 +144,94 @@ TEST_F(LockTest, SpinlockBasicFunctionality) {
 
 TEST_F(LockTest, SpinlockTryLock) { testTryLockFunctionality<Spinlock>(); }
 
+// Note: TicketSpinlock uses lock() returning ticket and unlock(ticket) API
+// which is incompatible with std::lock_guard, so we test it separately
 TEST_F(LockTest, TicketSpinlockBasicFunctionality) {
-    testBasicLockFunctionality<TicketSpinlock>();
+    TicketSpinlock lock;
+    std::atomic<int> counter{0};
+    std::atomic<bool> ready{false};
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int incrementsPerThread = 100;
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&lock, &counter, &ready, incrementsPerThread]() {
+            while (!ready.load()) {
+                std::this_thread::yield();
+            }
+
+            for (int j = 0; j < incrementsPerThread; ++j) {
+                auto ticket = lock.lock();
+                ++counter;
+                lock.unlock(ticket);
+            }
+        });
+    }
+
+    ready.store(true);
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(counter.load(), numThreads * incrementsPerThread);
 }
 
-// TEST_F(LockTest, TicketSpinlockTryLock) {
-//     testTryLockFunctionality<TicketSpinlock>();
-// }
-// Note: TicketSpinlock API is incompatible with standard lock interface
-// tryLock() doesn't return ticket needed for unlock()
+TEST_F(LockTest, TicketSpinlockTryLock) { testTicketSpinlockTryLock(); }
+
+TEST_F(LockTest, TicketSpinlockLockGuard) {
+    TicketSpinlock lock;
+    std::atomic<int> counter{0};
+
+    std::vector<std::thread> threads;
+    const int numThreads = 10;
+    const int incrementsPerThread = 100;
+
+    for (int i = 0; i < numThreads; ++i) {
+        threads.emplace_back([&lock, &counter, incrementsPerThread]() {
+            for (int j = 0; j < incrementsPerThread; ++j) {
+                TicketSpinlock::LockGuard guard(lock);
+                ++counter;
+            }
+        });
+    }
+
+    for (auto& thread : threads) {
+        thread.join();
+    }
+
+    EXPECT_EQ(counter.load(), numThreads * incrementsPerThread);
+}
+
+TEST_F(LockTest, TicketSpinlockWaitingThreads) {
+    TicketSpinlock lock;
+
+    // Initially no waiting threads
+    EXPECT_EQ(lock.waitingThreads(), 0);
+
+    auto ticket = lock.lock();
+    EXPECT_EQ(lock.waitingThreads(), 0);
+
+    std::atomic<bool> threadStarted{false};
+    std::thread waiter([&lock, &threadStarted]() {
+        threadStarted.store(true);
+        auto t = lock.lock();
+        lock.unlock(t);
+    });
+
+    // Wait for waiter thread to start
+    while (!threadStarted.load()) {
+        std::this_thread::yield();
+    }
+    std::this_thread::sleep_for(10ms);
+
+    // Now there should be a waiting thread
+    EXPECT_GE(lock.waitingThreads(), 1);
+
+    lock.unlock(ticket);
+    waiter.join();
+}
 
 TEST_F(LockTest, UnfairSpinlockBasicFunctionality) {
     testBasicLockFunctionality<UnfairSpinlock>();

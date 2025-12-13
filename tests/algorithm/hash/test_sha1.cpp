@@ -6,7 +6,7 @@
 #include <random>
 #include <string>
 #include <vector>
-#include "atom/algorithm/sha1.hpp"
+#include "atom/algorithm/crypto/sha1.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;

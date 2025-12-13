@@ -4,7 +4,7 @@
 #include <random>
 #include <vector>
 
-#include "atom/algorithm/flood.hpp"
+#include "atom/algorithm/graphics/flood.hpp"
 #include "atom/error/exception.hpp"
 // Removed: atom/log/loguru.hpp not available
 

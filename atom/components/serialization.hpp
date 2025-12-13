@@ -6,10 +6,10 @@
  * "atom/components/data/serialization.hpp" instead.
  */
 
-#ifndef ATOM_COMPONENT_SERIALIZATION_HPP
-#define ATOM_COMPONENT_SERIALIZATION_HPP
+#ifndef ATOM_COMPONENT_SERIALIZATION_COMPAT_HPP
+#define ATOM_COMPONENT_SERIALIZATION_COMPAT_HPP
 
 // Forward to the new location
 #include "data/serialization.hpp"
 
-#endif  // ATOM_COMPONENT_SERIALIZATION_HPP
+#endif  // ATOM_COMPONENT_SERIALIZATION_COMPAT_HPP

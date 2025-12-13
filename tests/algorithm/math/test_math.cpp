@@ -4,7 +4,7 @@
 #include <limits>
 #include <vector>
 
-#include "atom/algorithm/math.hpp"
+#include "atom/algorithm/math/math.hpp"
 #include "atom/error/exception.hpp"
 #include "atom/macro.hpp"
 
@@ -155,11 +155,12 @@ TEST(MathTest, ParallelVectorAdd) {
 }
 
 // Test parallelVectorAdd
-TEST(MathTest, ParallelVectorMul) {
+TEST(MathTest, ParallelVectorAdd2) {
     std::vector<uint64_t> a = {2, 3, 4};
     std::vector<uint64_t> b = {5, 6, 7};
     auto result = atom::algorithm::parallelVectorAdd(a, b);
-    std::vector<uint64_t> expected = {10, 18, 28};
+    std::vector<uint64_t> expected = {7, 9,
+                                      11};  // Addition, not multiplication
     EXPECT_EQ(result, expected);
 }
 

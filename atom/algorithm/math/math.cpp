@@ -514,36 +514,10 @@ auto montgomeryMultiply(u64 a, u64 b, u64 n) -> u64 {
             THROW_INVALID_ARGUMENT("Division by zero");
         }
 
-        // Cannot use Montgomery multiplication if n is even
-        if ((n & 1) == 0) {
-            // Fallback to standard modular multiplication
-            return (a * b) % n;
-        }
-
-        // Compute R^2 mod n
-        u64 r_sq = 0;
-        for (i32 i = 0; i < 128; ++i) {
-            r_sq = (r_sq << 1) % n;
-        }
-
-        // Convert a and b to Montgomery form
-        u64 a_mont = (a * r_sq) % n;
-        u64 b_mont = (b * r_sq) % n;
-
-        // Compute Montgomery multiplication
-        u64 t = a_mont * b_mont;
-
-        // Convert back from Montgomery form
-        u64 result = 0;
-        for (i32 i = 0; i < 64; ++i) {
-            result = (result + ((t & 1) * n)) >> 1;
-            t >>= 1;
-        }
-        if (result >= n) {
-            result -= n;
-        }
-
-        return result;
+        // Use 128-bit multiplication to avoid overflow
+        // (a * b) mod n
+        __uint128_t prod = static_cast<__uint128_t>(a % n) * (b % n);
+        return static_cast<u64>(prod % n);
     } catch (const atom::error::Exception&) {
         // Re-throw atom exceptions
         throw;

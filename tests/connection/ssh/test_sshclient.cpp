@@ -55,24 +55,19 @@ TEST_F(SSHClientTest, ConstructorWithDefaultPort) {
     EXPECT_NO_THROW(SSHClient client(host_));
 }
 
-TEST_F(SSHClientTest, CopyConstructor) {
-    SSHClient original(host_, port_);
-    EXPECT_NO_THROW(SSHClient copy(original));
-}
+// SSHClient has deleted copy constructor, so we only test move semantics
 
 TEST_F(SSHClientTest, MoveConstructor) {
     SSHClient original(host_, port_);
     EXPECT_NO_THROW(SSHClient moved(std::move(original)));
 }
 
-TEST_F(SSHClientTest, AssignmentOperators) {
+TEST_F(SSHClientTest, MoveAssignment) {
     SSHClient client1(host_, port_);
     SSHClient client2("192.168.1.1", 2222);
 
-    EXPECT_NO_THROW(client2 = client1);  // Copy assignment
-
-    SSHClient client3("10.0.0.1", 3333);
-    EXPECT_NO_THROW(client3 = std::move(client1));  // Move assignment
+    // Only move assignment is supported (copy is deleted)
+    EXPECT_NO_THROW(client2 = std::move(client1));
 }
 
 // Note: The following tests require an actual SSH server running
@@ -162,10 +157,9 @@ TEST_F(MockSSHClientTest, CreateDirectoryWithoutConnection) {
 }
 
 TEST_F(MockSSHClientTest, ListDirectoryWithoutConnection) {
-    std::vector<std::string> files;
-
     // Should throw when trying to list directory without connection
-    EXPECT_THROW(client_->listDirectory("/remote/path", files), std::exception);
+    // listDirectory returns std::vector<std::string>
+    EXPECT_THROW(client_->listDirectory("/remote/path"), std::exception);
 }
 
 TEST_F(MockSSHClientTest, RemoveFileWithoutConnection) {
@@ -173,29 +167,49 @@ TEST_F(MockSSHClientTest, RemoveFileWithoutConnection) {
     EXPECT_THROW(client_->removeFile("/remote/path/file.txt"), std::exception);
 }
 
+// Note: getFileInfo requires sftp_attributes& parameter and libssh headers
+// This test is conditionally compiled only when libssh is available
+#if __has_include(<libssh/libssh.h>)
 TEST_F(MockSSHClientTest, GetFileInfoWithoutConnection) {
+    sftp_attributes attrs;
     // Should throw when trying to get file info without connection
-    EXPECT_THROW(client_->getFileInfo("/remote/path/file.txt"), std::exception);
+    EXPECT_THROW(client_->getFileInfo("/remote/path/file.txt", attrs),
+                 std::exception);
 }
+#endif
 
-// Test SSH key authentication methods
-TEST_F(SSHClientTest, ConnectWithPublicKeyInvalidFiles) {
+// Note: SSHClient uses password-based connect() method
+// Public key authentication is handled internally by libssh
+TEST_F(SSHClientTest, FileExistsWithoutConnection) {
     SSHClient client(host_, port_);
 
-    // Should throw when using non-existent key files
-    EXPECT_THROW(
-        client.connectWithPublicKey("testuser", "nonexistent_private_key",
-                                    "nonexistent_public_key", 5),
-        std::exception);
+    // Should return false or throw when checking file without connection
+    // Behavior depends on implementation
+    EXPECT_NO_THROW({
+        bool exists = client.fileExists("/remote/path/file.txt");
+        (void)exists;  // Result is undefined without connection
+    });
 }
 
-TEST_F(SSHClientTest, ConnectWithPublicKeyValidFiles) {
+TEST_F(SSHClientTest, RenameWithoutConnection) {
     SSHClient client(host_, port_);
 
-    // Should handle key files gracefully (may still fail due to invalid keys or
-    // no server)
-    EXPECT_THROW(client.connectWithPublicKey("testuser", private_key_path_,
-                                             public_key_path_, 5),
+    // Should throw when trying to rename without connection
+    EXPECT_THROW(client.rename("/old/path", "/new/path"), std::exception);
+}
+
+TEST_F(SSHClientTest, RemoveDirectoryWithoutConnection) {
+    SSHClient client(host_, port_);
+
+    // Should throw when trying to remove directory without connection
+    EXPECT_THROW(client.removeDirectory("/remote/directory"), std::exception);
+}
+
+TEST_F(SSHClientTest, UploadDirectoryWithoutConnection) {
+    SSHClient client(host_, port_);
+
+    // Should throw when trying to upload directory without connection
+    EXPECT_THROW(client.uploadDirectory("/local/dir", "/remote/dir"),
                  std::exception);
 }
 
@@ -284,10 +298,9 @@ TEST_F(SSHFileTest, CreateEmptyDirectory) {
 }
 
 TEST_F(SSHFileTest, ListEmptyDirectory) {
-    std::vector<std::string> files;
-
     // Should throw when trying to list directory with empty path
-    EXPECT_THROW(client_->listDirectory("", files), std::exception);
+    // listDirectory returns std::vector<std::string>
+    EXPECT_THROW(client_->listDirectory(""), std::exception);
 }
 
 TEST_F(SSHFileTest, RemoveEmptyFile) {
@@ -295,10 +308,14 @@ TEST_F(SSHFileTest, RemoveEmptyFile) {
     EXPECT_THROW(client_->removeFile(""), std::exception);
 }
 
+// Note: getFileInfo requires sftp_attributes& parameter
+#if __has_include(<libssh/libssh.h>)
 TEST_F(SSHFileTest, GetFileInfoEmptyPath) {
+    sftp_attributes attrs;
     // Should throw when trying to get file info with empty path
-    EXPECT_THROW(client_->getFileInfo(""), std::exception);
+    EXPECT_THROW(client_->getFileInfo("", attrs), std::exception);
 }
+#endif
 
 // Test connection timeout scenarios
 class SSHTimeoutTest : public ::testing::Test {

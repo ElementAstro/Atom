@@ -118,18 +118,21 @@ void demonstrateUUIDVersion() {
     // Version 4 (random)
     auto v4_uuid = UUID::generateRandom();
     std::cout << "Random UUID: " << v4_uuid.toString() << "\n";
-    std::cout << "  Version: " << static_cast<int>(v4_uuid.version()) << "\n";
+    std::cout << "  Version: " << static_cast<int>(v4_uuid.getVersion())
+              << "\n";
 
     // Version 1 (time-based)
     std::array<u8, 6> node_id = {0x00, 0x1A, 0x2B, 0x3C, 0x4D, 0x5E};
     auto v1_uuid = UUID::generateTimeBased(node_id);
     std::cout << "\nTime-based UUID: " << v1_uuid.toString() << "\n";
-    std::cout << "  Version: " << static_cast<int>(v1_uuid.version()) << "\n";
+    std::cout << "  Version: " << static_cast<int>(v1_uuid.getVersion())
+              << "\n";
 
     // Nil UUID
     auto nil_uuid = UUID::generateNil();
     std::cout << "\nNil UUID: " << nil_uuid.toString() << "\n";
-    std::cout << "  Version: " << static_cast<int>(nil_uuid.version()) << "\n";
+    std::cout << "  Version: " << static_cast<int>(nil_uuid.getVersion())
+              << "\n";
 }
 
 // Demonstrate UUID comparison
@@ -177,7 +180,7 @@ void demonstrateRawDataAccess() {
     auto uuid = UUID::generateRandom();
     std::cout << "UUID: " << uuid.toString() << "\n";
 
-    const auto& data = uuid.data();
+    const auto& data = uuid.getData();
     std::cout << "Raw bytes: ";
     for (auto byte : data) {
         std::cout << std::hex << std::setw(2) << std::setfill('0')

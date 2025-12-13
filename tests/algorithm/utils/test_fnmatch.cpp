@@ -10,7 +10,7 @@
 #include <string>
 #include <string_view>
 #include <vector>
-#include "atom/algorithm/fnmatch.hpp"
+#include "atom/algorithm/utils/fnmatch.hpp"
 // Removed: atom/log/loguru.hpp not available
 #include "atom/macro.hpp"
 #include "spdlog/spdlog.h"

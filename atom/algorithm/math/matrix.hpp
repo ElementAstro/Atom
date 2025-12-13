@@ -264,24 +264,37 @@ public:
         }
 
         auto [L, U] = luDecomposition(*this);
-        Matrix<T, Rows, Cols> inv = identity<T, Rows>();
+        Matrix<T, Rows, Cols> inv;
 
-        // Forward substitution (L * Y = I)
-        for (usize k = 0; k < Cols; ++k) {
-            for (usize i = k + 1; i < Rows; ++i) {
-                for (usize j = 0; j < k; ++j) {
-                    inv(i, k) -= L(i, j) * inv(j, k);
+        // Solve for each column of the inverse
+        for (usize col = 0; col < Cols; ++col) {
+            // Create unit vector for this column
+            std::array<T, Rows> e{};
+            e[col] = T{1};
+
+            // Forward substitution: L * y = e
+            std::array<T, Rows> y{};
+            for (usize i = 0; i < Rows; ++i) {
+                y[i] = e[i];
+                for (usize j = 0; j < i; ++j) {
+                    y[i] -= L(i, j) * y[j];
                 }
+                // L has 1's on diagonal, no division needed
             }
-        }
 
-        // Backward substitution (U * X = Y)
-        for (usize k = 0; k < Cols; ++k) {
-            for (usize i = Rows; i-- > 0;) {
-                for (usize j = i + 1; j < Cols; ++j) {
-                    inv(i, k) -= U(i, j) * inv(j, k);
+            // Backward substitution: U * x = y
+            std::array<T, Rows> x{};
+            for (usize ii = Rows; ii-- > 0;) {
+                x[ii] = y[ii];
+                for (usize j = ii + 1; j < Cols; ++j) {
+                    x[ii] -= U(ii, j) * x[j];
                 }
-                inv(i, k) /= U(i, i);
+                x[ii] /= U(ii, ii);
+            }
+
+            // Copy result to inverse matrix column
+            for (usize i = 0; i < Rows; ++i) {
+                inv(i, col) = x[i];
             }
         }
 
@@ -554,49 +567,77 @@ auto singularValueDecomposition(const Matrix<T, Rows, Cols>& m)
     Matrix<T, Cols, Rows> mt = transpose(m);
     Matrix<T, Cols, Cols> mtm = mt * m;
 
-    // 使用幂法计算最大特征值和对应的特征向量
-    auto powerIteration = [&mtm](usize max_iter = 100, T tol = 1e-10) {
+    // Power iteration to find eigenvalue and eigenvector
+    auto powerIteration = [](Matrix<T, Cols, Cols>& mat, usize max_iter = 1000,
+                             T tol = 1e-12) -> std::pair<T, std::vector<T>> {
         std::vector<T> v(Cols);
-        std::generate(v.begin(), v.end(),
-                      []() { return static_cast<T>(rand()) / RAND_MAX; });
+        // Initialize with a deterministic vector for reproducibility
+        for (usize i = 0; i < Cols; ++i) {
+            v[i] = T{1} / std::sqrt(static_cast<T>(Cols));
+        }
+
         T lambdaOld = 0;
         for (usize iter = 0; iter < max_iter; ++iter) {
-            std::vector<T> vNew(Cols);
+            std::vector<T> vNew(Cols, T{0});
             for (usize i = 0; i < Cols; ++i) {
                 for (usize j = 0; j < Cols; ++j) {
-                    vNew[i] += mtm(i, j) * v[j];
+                    vNew[i] += mat(i, j) * v[j];
                 }
             }
-            T lambda = 0;
+
+            // Compute Rayleigh quotient (eigenvalue estimate)
+            T lambda = T{0};
             for (usize i = 0; i < Cols; ++i) {
                 lambda += vNew[i] * v[i];
             }
+
+            // Normalize
             T norm = std::sqrt(std::inner_product(vNew.begin(), vNew.end(),
-                                                  vNew.begin(), T(0)));
+                                                  vNew.begin(), T{0}));
+            if (norm < tol) {
+                return {T{0}, v};
+            }
             for (auto& x : vNew) {
                 x /= norm;
             }
+
             if (std::abs(lambda - lambdaOld) < tol) {
-                return std::sqrt(lambda);
+                return {lambda, vNew};
             }
             lambdaOld = lambda;
             v = vNew;
         }
-        THROW_RUNTIME_ERROR("Power iteration did not converge");
-    };
-
-    std::vector<T> singularValues;
-    for (usize i = 0; i < n; ++i) {
-        T sigma = powerIteration();
-        singularValues.push_back(sigma);
-        // Deflate the matrix
-        Matrix<T, Cols, Cols> vvt;
-        for (usize j = 0; j < Cols; ++j) {
-            for (usize k = 0; k < Cols; ++k) {
-                vvt(j, k) = mtm(j, k) / (sigma * sigma);
+        // Return best estimate even if not fully converged
+        T lambda = T{0};
+        std::vector<T> vNew(Cols, T{0});
+        for (usize i = 0; i < Cols; ++i) {
+            for (usize j = 0; j < Cols; ++j) {
+                vNew[i] += mat(i, j) * v[j];
             }
         }
-        mtm = mtm - vvt;
+        for (usize i = 0; i < Cols; ++i) {
+            lambda += vNew[i] * v[i];
+        }
+        return {lambda, v};
+    };
+
+    constexpr T svdTol = T{1e-12};
+    std::vector<T> singularValues;
+    for (usize i = 0; i < n; ++i) {
+        auto [eigenvalue, eigenvector] = powerIteration(mtm);
+        if (eigenvalue < svdTol) {
+            singularValues.push_back(T{0});
+            continue;
+        }
+        T sigma = std::sqrt(std::abs(eigenvalue));
+        singularValues.push_back(sigma);
+
+        // Deflate: A = A - lambda * v * v^T
+        for (usize j = 0; j < Cols; ++j) {
+            for (usize k = 0; k < Cols; ++k) {
+                mtm(j, k) -= eigenvalue * eigenvector[j] * eigenvector[k];
+            }
+        }
     }
 
     std::sort(singularValues.begin(), singularValues.end(), std::greater<T>());

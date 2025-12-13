@@ -6,12 +6,26 @@
 #include "atom/connection/fifo/fifoclient.hpp"
 #include "atom/connection/fifo/fifoserver.hpp"
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 using namespace atom::connection;
+
+namespace {
+#ifdef _WIN32
+std::string createPipePath(const std::string& name) {
+    return "\\\\.\\pipe\\" + name + "_" + std::to_string(GetCurrentProcessId());
+}
+#else
+std::string createPipePath(const std::string& name) { return "/tmp/" + name; }
+#endif
+}  // namespace
 
 class FifoClientTest : public ::testing::Test {
 protected:
     void SetUp() override {
-        fifo_path_ = "/tmp/test_fifo";
+        fifo_path_ = createPipePath("test_fifo");
         server_ = std::make_unique<FIFOServer>(fifo_path_);
         ClientConfig config{};
         client_ = std::make_unique<FifoClient>(fifo_path_, config);
@@ -22,7 +36,9 @@ protected:
         server_->stop();
         client_.reset();
         server_.reset();
+#ifndef _WIN32
         std::filesystem::remove(fifo_path_);
+#endif
     }
 
     std::string fifo_path_;
@@ -36,7 +52,8 @@ TEST_F(FifoClientTest, WriteToFifo) {
     ASSERT_TRUE(client_->isOpen());
 
     std::string message = "Hello, FIFO!";
-    ASSERT_TRUE(client_->write(message));
+    auto result = client_->write(message);
+    ASSERT_TRUE(result.has_value());
 }
 
 TEST_F(FifoClientTest, ReadFromFifo) {
@@ -63,7 +80,8 @@ TEST_F(FifoClientTest, WriteAndReadWithTimeout) {
     ASSERT_TRUE(client_->isOpen());
 
     std::string message = "Hello, FIFO!";
-    ASSERT_TRUE(client_->write(message, std::chrono::seconds(1)));
+    auto writeResult = client_->write(message, std::chrono::seconds(1));
+    ASSERT_TRUE(writeResult.has_value());
 
     auto future =
         std::async(std::launch::async,
@@ -99,7 +117,8 @@ TEST_F(FifoClientTest, WriteEmptyString) {
     ASSERT_TRUE(client_->isOpen());
 
     std::string emptyMessage = "";
-    EXPECT_TRUE(client_->write(emptyMessage));
+    auto result = client_->write(emptyMessage);
+    EXPECT_TRUE(result.has_value());
 }
 
 TEST_F(FifoClientTest, WriteLargeData) {
@@ -109,7 +128,8 @@ TEST_F(FifoClientTest, WriteLargeData) {
     std::string largeMessage(8192, 'X');
     largeMessage += "END_MARKER";
 
-    EXPECT_TRUE(client_->write(largeMessage));
+    auto result = client_->write(largeMessage);
+    EXPECT_TRUE(result.has_value());
 }
 
 TEST_F(FifoClientTest, ReadWithZeroSize) {
@@ -142,7 +162,8 @@ TEST_F(FifoClientTest, ConcurrentWrites) {
     for (int i = 0; i < numThreads; ++i) {
         writers.emplace_back([this, i, &successCount]() {
             std::string message = "Thread_" + std::to_string(i) + "_message";
-            if (client_->write(message)) {
+            auto result = client_->write(message);
+            if (result.has_value()) {
                 successCount++;
             }
         });
@@ -216,7 +237,8 @@ TEST_F(FifoClientTest, ResetStatistics) {
     ASSERT_TRUE(client_->isOpen());
 
     // Write some data
-    client_->write("test message");
+    auto writeResult = client_->write("test message");
+    (void)writeResult;  // Result may or may not succeed
 
     // Reset statistics
     client_->resetStatistics();
@@ -286,7 +308,7 @@ TEST_F(FifoClientTest, WriteAsyncWithCallback) {
 
     int opId = client_->writeAsync(
         "Async message",
-        [&promise](bool success, std::error_code ec, size_t bytes) {
+        [&promise](bool success, std::error_code /*ec*/, size_t /*bytes*/) {
             promise.set_value(success);
         });
 
@@ -320,14 +342,14 @@ TEST_F(FifoClientTest, ReadAsyncWithCallback) {
     server_->sendMessage("Test for async read");
 
     int opId = client_->readAsync(
-        [&promise](bool success, std::error_code ec, size_t bytes) {
+        [&promise](bool success, std::error_code /*ec*/, size_t /*bytes*/) {
             promise.set_value(success);
         },
         0, std::chrono::milliseconds(3000));
 
     EXPECT_GE(opId, 0);
 
-    auto status = future.wait_for(std::chrono::seconds(5));
+    (void)future.wait_for(std::chrono::seconds(5));
     // Result depends on timing
 }
 
@@ -353,7 +375,7 @@ TEST_F(FifoClientTest, CancelOperation) {
     int opId = client_->writeAsync("Message to cancel",
                                    [](bool, std::error_code, size_t) {});
 
-    bool cancelled = client_->cancelOperation(opId);
+    (void)client_->cancelOperation(opId);
     // May or may not succeed depending on timing
 }
 
@@ -361,7 +383,7 @@ TEST_F(FifoClientTest, RegisterConnectionCallback) {
     std::atomic<bool> callbackCalled{false};
 
     int callbackId = client_->registerConnectionCallback(
-        [&callbackCalled](bool connected, std::error_code ec) {
+        [&callbackCalled](bool /*connected*/, std::error_code /*ec*/) {
             callbackCalled = true;
         });
 
@@ -390,7 +412,8 @@ TEST_F(FifoClientTest, MoveAssignment) {
     ASSERT_TRUE(client_->isOpen());
 
     ClientConfig config{};
-    FifoClient otherClient(fifo_path_ + "_other", config);
+    std::string otherPath = createPipePath("test_fifo_other");
+    FifoClient otherClient(otherPath, config);
 
     otherClient = std::move(*client_);
     EXPECT_TRUE(otherClient.isOpen());
@@ -407,7 +430,8 @@ TEST_F(FifoClientTest, WriteSpecialCharacters) {
 TEST_F(FifoClientTest, WriteBinaryData) {
     ASSERT_TRUE(client_->isOpen());
 
-    std::vector<char> binaryData = {0x00, 0x01, 0x02, 0xFF, 0xFE};
+    std::vector<char> binaryData = {0x00, 0x01, 0x02, static_cast<char>(0xFF),
+                                    static_cast<char>(0xFE)};
     std::string binaryString(binaryData.begin(), binaryData.end());
 
     auto result = client_->write(binaryString);
@@ -418,7 +442,7 @@ TEST_F(FifoClientTest, WriteWithShortTimeout) {
     ASSERT_TRUE(client_->isOpen());
 
     std::string message = "Short timeout message";
-    auto result = client_->write(message, std::chrono::milliseconds(10));
+    (void)client_->write(message, std::chrono::milliseconds(10));
     // May succeed or timeout
 }
 
@@ -435,9 +459,12 @@ TEST_F(FifoClientTest, StatisticsAfterWrites) {
 
     client_->resetStatistics();
 
-    client_->write("Message 1");
-    client_->write("Message 2");
-    client_->write("Message 3");
+    auto r1 = client_->write("Message 1");
+    auto r2 = client_->write("Message 2");
+    auto r3 = client_->write("Message 3");
+    (void)r1;
+    (void)r2;
+    (void)r3;  // Results may vary
 
     auto stats = client_->getStatistics();
     EXPECT_GE(stats.messages_sent,

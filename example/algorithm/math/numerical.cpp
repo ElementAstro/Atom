@@ -13,6 +13,14 @@
 #include <iomanip>
 #include <iostream>
 
+// Define M_PI and M_E if not available (Windows compatibility)
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#ifndef M_E
+#define M_E 2.71828182845904523536
+#endif
+
 using namespace atom::algorithm;
 
 // Demonstrate Newton-Raphson root finding

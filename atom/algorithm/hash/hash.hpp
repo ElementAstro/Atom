@@ -138,11 +138,10 @@ inline void hashCombine(usize& seed, usize hash) noexcept {
  * This function implements the hash combining technique proposed by Boost.
  * Optimized with SIMD instructions when available.
  *
- * @param seed The initial hash value.
+ * @param seed The initial hash value (modified in place).
  * @param hash The hash value to combine with the seed.
- * @return usize The combined hash value.
  */
-inline auto hashCombine(usize seed, usize hash) noexcept -> usize {
+inline void hashCombine(usize& seed, usize hash) noexcept {
 #if defined(__AVX2__)
     __m256i seed_vec = _mm256_set1_epi64x(seed);
     __m256i hash_vec = _mm256_set1_epi64x(hash);
@@ -154,10 +153,10 @@ inline auto hashCombine(usize seed, usize hash) noexcept -> usize {
             _mm256_add_epi64(
                 magic, _mm256_add_epi64(_mm256_slli_epi64(seed_vec, 6),
                                         _mm256_srli_epi64(seed_vec, 2)))));
-    return _mm256_extract_epi64(result, 0);
+    seed = _mm256_extract_epi64(result, 0);
 #else
     // Fallback to original implementation
-    return seed ^ (hash + 0x9e3779b9 + (seed << 6) + (seed >> 2));
+    seed ^= (hash + 0x9e3779b9 + (seed << 6) + (seed >> 2));
 #endif
 }
 #endif
@@ -174,10 +173,14 @@ template <Hashable T>
 inline auto computeHash(const T& value,
                         HashAlgorithm algorithm = HashAlgorithm::STD) noexcept
     -> usize {
+    // Only use cache for default STD algorithm to avoid returning wrong cached
+    // results
     static thread_local HashCache<T> cache;
 
-    if (auto cached = cache.get(value); cached) {
-        return *cached;
+    if (algorithm == HashAlgorithm::STD) {
+        if (auto cached = cache.get(value); cached) {
+            return *cached;
+        }
     }
 
     usize result = 0;
@@ -186,7 +189,13 @@ inline auto computeHash(const T& value,
             result = std::hash<T>{}(value);
             break;
         case HashAlgorithm::FNV1A:
-            result = hash(reinterpret_cast<const char*>(&value), sizeof(T));
+            // For string types, hash the actual content
+            if constexpr (std::is_same_v<T, std::string> ||
+                          std::is_same_v<T, std::string_view>) {
+                result = hash(value.data(), value.size());
+            } else {
+                result = hash(reinterpret_cast<const char*>(&value), sizeof(T));
+            }
             break;
         // Other algorithms would be implemented here
         default:
@@ -194,7 +203,10 @@ inline auto computeHash(const T& value,
             break;
     }
 
-    cache.set(value, result);
+    // Only cache STD algorithm results
+    if (algorithm == HashAlgorithm::STD) {
+        cache.set(value, result);
+    }
     return result;
 }
 

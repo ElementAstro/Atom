@@ -7,7 +7,7 @@
 #include <random>
 #include <string>
 #include <vector>
-#include "atom/algorithm/blowfish.hpp"
+#include "atom/algorithm/crypto/blowfish.hpp"
 #include "atom/error/exception.hpp"
 
 using namespace atom::algorithm;

@@ -6,10 +6,10 @@
  * "atom/components/lifecycle/lifecycle.hpp" instead.
  */
 
-#ifndef ATOM_COMPONENT_LIFECYCLE_HPP
-#define ATOM_COMPONENT_LIFECYCLE_HPP
+#ifndef ATOM_COMPONENT_LIFECYCLE_COMPAT_HPP
+#define ATOM_COMPONENT_LIFECYCLE_COMPAT_HPP
 
 // Forward to the new location
 #include "lifecycle/lifecycle.hpp"
 
-#endif  // ATOM_COMPONENT_LIFECYCLE_HPP
+#endif  // ATOM_COMPONENT_LIFECYCLE_COMPAT_HPP

@@ -6,10 +6,10 @@
  * "atom/components/lifecycle/iteration.hpp" instead.
  */
 
-#ifndef ATOM_COMPONENT_ITERATION_HPP
-#define ATOM_COMPONENT_ITERATION_HPP
+#ifndef ATOM_COMPONENT_ITERATION_COMPAT_HPP
+#define ATOM_COMPONENT_ITERATION_COMPAT_HPP
 
 // Forward to the new location
 #include "lifecycle/iteration.hpp"
 
-#endif  // ATOM_COMPONENT_ITERATION_HPP
+#endif  // ATOM_COMPONENT_ITERATION_COMPAT_HPP

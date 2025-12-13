@@ -10,18 +10,49 @@ project(
   VERSION 1.0.0
   LANGUAGES C CXX)
 
-# Sources and Headers
-set(SOURCES benchmark.cpp fuzz.cpp perf.cpp)
+# Sources (implementation files)
+set(SOURCES performance/benchmark.cpp performance/fuzz.cpp performance/perf.cpp)
 
+# Main entry point header
+set(MAIN_HEADERS atom_test.hpp)
+
+# Core testing framework headers
+set(CORE_HEADERS core/test.hpp core/test_runner.hpp core/test_cli.hpp
+                 core/test_registry.hpp)
+
+# Assertion and matcher headers
+set(ASSERTION_HEADERS assertions/matchers.hpp assertions/death_test.hpp
+                      assertions/string_matchers.hpp)
+
+# Test fixture headers
+set(FIXTURE_HEADERS fixtures/test_fixture.hpp fixtures/test_parameterized.hpp
+                    fixtures/typed_test.hpp)
+
+# Mocking framework headers
+set(MOCKING_HEADERS mocking/test_mock.hpp mocking/mock_matchers.hpp)
+
+# Test utility headers
+set(UTILITY_HEADERS utilities/test_skip.hpp utilities/test_data.hpp
+                    utilities/test_environment.hpp)
+
+# Reporter headers
+set(REPORTER_HEADERS reporters/test_reporter.hpp
+                     reporters/test_reporter_charts.hpp)
+
+# Performance testing headers
+set(PERFORMANCE_HEADERS performance/benchmark.hpp performance/fuzz.hpp
+                        performance/perf.hpp)
+
+# Combine all headers
 set(HEADERS
-    benchmark.hpp
-    fuzz.hpp
-    perf.hpp
-    test_cli.hpp
-    test_registry.hpp
-    test_reporter.hpp
-    test_runner.hpp
-    test.hpp)
+    ${MAIN_HEADERS}
+    ${CORE_HEADERS}
+    ${ASSERTION_HEADERS}
+    ${FIXTURE_HEADERS}
+    ${MOCKING_HEADERS}
+    ${UTILITY_HEADERS}
+    ${REPORTER_HEADERS}
+    ${PERFORMANCE_HEADERS})
 
 # Find nlohmann/json
 find_package(nlohmann_json QUIET)
@@ -86,3 +117,35 @@ install(
   ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
   LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
   PUBLIC_HEADER DESTINATION include/${PROJECT_NAME})
+
+# Install main headers
+install(FILES ${MAIN_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests)
+
+# Install core headers
+install(FILES ${CORE_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests/core)
+
+# Install assertion headers
+install(FILES ${ASSERTION_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests/assertions)
+
+# Install fixture headers
+install(FILES ${FIXTURE_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests/fixtures)
+
+# Install mocking headers
+install(FILES ${MOCKING_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests/mocking)
+
+# Install utility headers
+install(FILES ${UTILITY_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests/utilities)
+
+# Install reporter headers
+install(FILES ${REPORTER_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests/reporters)
+
+# Install performance headers
+install(FILES ${PERFORMANCE_HEADERS}
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom/tests/performance)

@@ -11,8 +11,11 @@
 #include <algorithm>
 #include <bitset>
 #include <charconv>
+#include <compare>
 #include <cstring>
+#include <format>
 #include <iomanip>
+#include <ranges>
 #include <sstream>
 #include <string>
 
@@ -300,6 +303,88 @@ auto IPv6::isEqual(const Address& other) const -> bool {
 }
 
 auto IPv6::getType() const -> std::string_view { return "IPv6"; }
+
+auto IPv6::operator<=>(const Address& other) const -> std::partial_ordering {
+    if (other.getType() != "IPv6") {
+        return std::partial_ordering::unordered;
+    }
+
+    const auto* ipv6Other = dynamic_cast<const IPv6*>(&other);
+    if (!ipv6Other) {
+        return std::partial_ordering::unordered;
+    }
+
+    for (size_t i = 0; i < SEGMENT_COUNT; ++i) {
+        if (ipSegments[i] < ipv6Other->ipSegments[i]) {
+            return std::partial_ordering::less;
+        }
+        if (ipSegments[i] > ipv6Other->ipSegments[i]) {
+            return std::partial_ordering::greater;
+        }
+    }
+    return std::partial_ordering::equivalent;
+}
+
+auto IPv6::isLoopback() const -> bool {
+    // ::1
+    return std::ranges::all_of(ipSegments | std::views::take(7),
+                               [](uint16_t seg) { return seg == 0; }) &&
+           ipSegments[7] == 1;
+}
+
+auto IPv6::isLinkLocal() const -> bool {
+    // fe80::/10 - first 10 bits are 1111111010
+    return (ipSegments[0] & 0xFFC0) == 0xFE80;
+}
+
+auto IPv6::isMulticast() const -> bool {
+    // ff00::/8 - first 8 bits are 11111111
+    return (ipSegments[0] & 0xFF00) == 0xFF00;
+}
+
+auto IPv6::isUniqueLocal() const -> bool {
+    // fc00::/7 - first 7 bits are 1111110
+    return (ipSegments[0] & 0xFE00) == 0xFC00;
+}
+
+auto IPv6::isIPv4Mapped() const -> bool {
+    // ::ffff:x.x.x.x - first 80 bits are 0, next 16 bits are 1
+    for (size_t i = 0; i < 5; ++i) {
+        if (ipSegments[i] != 0) {
+            return false;
+        }
+    }
+    return ipSegments[5] == 0xFFFF;
+}
+
+auto IPv6::getEmbeddedIPv4() const -> std::optional<std::string> {
+    if (!isIPv4Mapped()) {
+        return std::nullopt;
+    }
+
+    uint8_t a = static_cast<uint8_t>(ipSegments[6] >> 8);
+    uint8_t b = static_cast<uint8_t>(ipSegments[6] & 0xFF);
+    uint8_t c = static_cast<uint8_t>(ipSegments[7] >> 8);
+    uint8_t d = static_cast<uint8_t>(ipSegments[7] & 0xFF);
+
+    return std::format("{}.{}.{}.{}", a, b, c, d);
+}
+
+auto IPv6::fromSegments(std::span<const uint16_t, SEGMENT_COUNT> segments)
+    -> IPv6 {
+    std::ostringstream oss;
+    for (size_t i = 0; i < SEGMENT_COUNT; ++i) {
+        if (i > 0)
+            oss << ":";
+        oss << std::hex << segments[i];
+    }
+    return IPv6(oss.str());
+}
+
+auto IPv6::fromIPv4Mapped(std::string_view ipv4Str) -> IPv6 {
+    std::string ipv6Str = std::format("::ffff:{}", ipv4Str);
+    return IPv6(ipv6Str);
+}
 
 auto IPv6::getNetworkAddress(std::string_view mask) const -> std::string {
     try {

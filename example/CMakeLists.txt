@@ -21,8 +21,102 @@ if(NOT DEFINED ATOM_EXAMPLE_BUILD_ALL)
   include(${CMAKE_SOURCE_DIR}/cmake/ExamplesBuildOptions.cmake)
 endif()
 
+# Include CopyDependencies module if available
+if(EXISTS "${CMAKE_SOURCE_DIR}/cmake/CopyDependencies.cmake")
+  include(${CMAKE_SOURCE_DIR}/cmake/CopyDependencies.cmake)
+endif()
+
 # Include directories
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
+
+# =============================================================================
+# Function to copy DLLs to example executable directory
+# =============================================================================
+function(copy_example_dlls TARGET_NAME)
+  if(WIN32)
+    # Use the comprehensive DLL copy function if available
+    if(COMMAND atom_setup_runtime_dependencies)
+      atom_setup_runtime_dependencies(${TARGET_NAME})
+      if(USE_VCPKG)
+        atom_copy_vcpkg_dlls(${TARGET_NAME})
+      endif()
+      return()
+    endif()
+
+    # Fallback: List of all DLL targets that might be needed by examples
+    set(DLL_TARGETS
+        atom-algorithm
+        atom-async
+        atom-components
+        atom-connection
+        atom-containers
+        atom-error
+        atom-image
+        atom-io
+        atom-log
+        atom-memory
+        atom-meta
+        atom-search
+        atom-secret
+        atom-serial
+        atom-sysinfo
+        atom-system
+        atom-type
+        atom-utils
+        atom-web)
+
+    # Copy each DLL if it exists as a SHARED library target
+    foreach(DLL_TARGET ${DLL_TARGETS})
+      if(TARGET ${DLL_TARGET})
+        get_target_property(TARGET_TYPE ${DLL_TARGET} TYPE)
+        if(TARGET_TYPE STREQUAL "SHARED_LIBRARY")
+          add_custom_command(
+            TARGET ${TARGET_NAME}
+            POST_BUILD
+            COMMAND
+              ${CMAKE_COMMAND} -E copy_if_different
+              "$<TARGET_FILE:${DLL_TARGET}>"
+              "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+            COMMENT "Copying ${DLL_TARGET} DLL to ${TARGET_NAME} directory"
+            VERBATIM)
+        endif()
+      endif()
+    endforeach()
+
+    # Copy third-party DLLs (spdlog, fmt, etc.)
+    if(TARGET spdlog::spdlog)
+      get_target_property(SPDLOG_TYPE spdlog::spdlog TYPE)
+      if(SPDLOG_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND
+            ${CMAKE_COMMAND} -E copy_if_different
+            "$<TARGET_FILE:spdlog::spdlog>" "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying spdlog DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+
+    if(TARGET fmt::fmt)
+      get_target_property(FMT_TYPE fmt::fmt TYPE)
+      if(FMT_TYPE STREQUAL "SHARED_LIBRARY")
+        add_custom_command(
+          TARGET ${TARGET_NAME}
+          POST_BUILD
+          COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                  "$<TARGET_FILE:fmt::fmt>" "$<TARGET_FILE_DIR:${TARGET_NAME}>/"
+          COMMENT "Copying fmt DLL to ${TARGET_NAME} directory"
+          VERBATIM)
+      endif()
+    endif()
+  endif()
+endfunction()
+
+# Make the function available globally for example subdirectories
+macro(copy_example_dlls_macro TARGET_NAME)
+  copy_example_dlls(${TARGET_NAME})
+endmacro()
 
 # 有条件地添加子目录
 if(ATOM_EXAMPLE_BUILD_ALGORITHM
@@ -123,6 +217,11 @@ endif()
 if(ATOM_EXAMPLE_BUILD_WEB AND EXISTS
                               "${CMAKE_CURRENT_SOURCE_DIR}/web/CMakeLists.txt")
   add_subdirectory(web)
+endif()
+
+# Test framework examples
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tests/CMakeLists.txt")
+  add_subdirectory(tests)
 endif()
 
 # Set example targets grouping

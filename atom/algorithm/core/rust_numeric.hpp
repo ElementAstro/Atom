@@ -687,15 +687,23 @@ public:
     }
 
     static Int next_power_of_two(Int value) {
-        if (value <= 0)
+        if (value <= 1)
             return 1;
 
-        const int bit_shift = sizeof(Int) * 8 - 1 - leading_zeros(value - 1);
+        // For value > 1, find smallest power of 2 >= value
+        --value;
+        value |= value >> 1;
+        value |= value >> 2;
+        value |= value >> 4;
+        if constexpr (sizeof(Int) >= 2)
+            value |= value >> 8;
+        if constexpr (sizeof(Int) >= 4)
+            value |= value >> 16;
+        if constexpr (sizeof(Int) >= 8)
+            value |= value >> 32;
+        ++value;
 
-        if (bit_shift >= sizeof(Int) * 8 - 1)
-            return 0;
-
-        return 1 << (bit_shift + 1);
+        return value;
     }
 
     static std::string to_string(Int value, int base = 10) {
