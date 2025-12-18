@@ -8,17 +8,21 @@
 
 Date: 2024-12-22
 
-Description: Tests for parameterized tests in atom/tests/fixtures/test_parameterized.hpp
+Description: Tests for parameterized tests in
+atom/tests/fixtures/test_parameterized.hpp
 
 **************************************************/
 
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <string>
 #include <tuple>
 #include <vector>
 
-#include "atom/tests/fixtures/test_parameterized.hpp"
+// Note: We use GoogleTest's native parameterized test macros directly
+// The custom test_parameterized.hpp provides alternative implementations
+// but conflicts with gtest's macros when both are included
 
 namespace atom::test::fixtures::tests {
 
@@ -49,8 +53,7 @@ INSTANTIATE_TEST_SUITE_P(Zero, BasicParamTest, ::testing::Values(0));
 // Parameterized Test with Pairs
 // ============================================================================
 
-class PairParamTest
-    : public ::testing::TestWithParam<std::pair<int, int>> {
+class PairParamTest : public ::testing::TestWithParam<std::pair<int, int>> {
 protected:
     void SetUp() override {}
     void TearDown() override {}
@@ -104,11 +107,10 @@ TEST_P(TupleParamTest, TupleElements) {
     // flag can be true or false
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    TupleValues, TupleParamTest,
-    ::testing::Values(std::make_tuple(1, "one", true),
-                      std::make_tuple(2, "two", false),
-                      std::make_tuple(3, "three", true)));
+INSTANTIATE_TEST_SUITE_P(TupleValues, TupleParamTest,
+                         ::testing::Values(std::make_tuple(1, "one", true),
+                                           std::make_tuple(2, "two", false),
+                                           std::make_tuple(3, "three", true)));
 
 // ============================================================================
 // Parameterized Test with Range
@@ -126,8 +128,7 @@ TEST_P(RangeParamTest, ValueInRange) {
     EXPECT_LT(value, 10);
 }
 
-INSTANTIATE_TEST_SUITE_P(ZeroToNine, RangeParamTest,
-                         ::testing::Range(0, 10));
+INSTANTIATE_TEST_SUITE_P(ZeroToNine, RangeParamTest, ::testing::Range(0, 10));
 
 INSTANTIATE_TEST_SUITE_P(EvenNumbers, RangeParamTest,
                          ::testing::Range(0, 10, 2));
@@ -187,8 +188,7 @@ TEST_P(NamedParamTest, ValueIsPositive) {
     }
 }
 
-std::string CustomNameGenerator(
-    const ::testing::TestParamInfo<int>& info) {
+std::string CustomNameGenerator(const ::testing::TestParamInfo<int>& info) {
     return "Value_" + std::to_string(info.param);
 }
 
@@ -280,9 +280,9 @@ TEST_P(EdgeCaseParamTest, HandlesEdgeCases) {
     EXPECT_TRUE(value == 0 || value != 0);
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    EdgeCases, EdgeCaseParamTest,
-    ::testing::Values(0, -1, 1, std::numeric_limits<int>::min(),
-                      std::numeric_limits<int>::max()));
+INSTANTIATE_TEST_SUITE_P(EdgeCases, EdgeCaseParamTest,
+                         ::testing::Values(0, -1, 1,
+                                           std::numeric_limits<int>::min(),
+                                           std::numeric_limits<int>::max()));
 
 }  // namespace atom::test::fixtures::tests

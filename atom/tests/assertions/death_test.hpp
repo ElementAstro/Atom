@@ -17,8 +17,8 @@
 #include <string>
 
 #ifdef _WIN32
-#include <windows.h>
 #include <process.h>
+#include <windows.h>
 #else
 #include <sys/wait.h>
 #include <unistd.h>
@@ -108,14 +108,25 @@ namespace detail {
 inline DeathTestResult runDeathTestWindows(std::function<void()> func) {
     DeathTestResult result;
 
-    // Use SEH to catch crashes
+    // Use SEH to catch crashes (MSVC only). For other toolchains (e.g. MinGW),
+    // fall back to C++ exception handling.
+#ifdef _MSC_VER
     __try {
         func();
         result.terminated = false;
     } __except (EXCEPTION_EXECUTE_HANDLER) {
         result.terminated = true;
-        result.exitCode = GetExceptionCode();
+        result.exitCode = static_cast<int>(GetExceptionCode());
     }
+#else
+    try {
+        func();
+        result.terminated = false;
+    } catch (...) {
+        result.terminated = true;
+        result.exitCode = 1;
+    }
+#endif
 
     return result;
 }
@@ -330,9 +341,9 @@ inline auto expectDeathDebug(std::function<void()> func,
         return {false, file, line,
                 "Expected death, but statement returned normally (debug mode)"};
     } catch (const std::exception& e) {
-        return {true, file, line,
-                "Statement threw exception (debug mode): " +
-                    std::string(e.what())};
+        return {
+            true, file, line,
+            "Statement threw exception (debug mode): " + std::string(e.what())};
     } catch (...) {
         return {true, file, line,
                 "Statement threw unknown exception (debug mode)"};
@@ -379,24 +390,24 @@ public:
 #define ASSERT_DEATH(statement, regex) \
     atom::test::expectDeath([&]() { statement; }, regex, __FILE__, __LINE__)
 
-#define EXPECT_DEATH_IF_SUPPORTED(statement, regex)       \
-    do {                                                  \
-        if (atom::test::deathTestsSupported()) {          \
-            EXPECT_DEATH(statement, regex);               \
-        }                                                 \
+#define EXPECT_DEATH_IF_SUPPORTED(statement, regex) \
+    do {                                            \
+        if (atom::test::deathTestsSupported()) {    \
+            EXPECT_DEATH(statement, regex);         \
+        }                                           \
     } while (0)
 
-#define EXPECT_EXIT(statement, predicate, regex)                              \
+#define EXPECT_EXIT(statement, predicate, regex)                             \
     atom::test::expectExit([&]() { statement; }, predicate, regex, __FILE__, \
-                            __LINE__)
+                           __LINE__)
 
-#define ASSERT_EXIT(statement, predicate, regex)                              \
+#define ASSERT_EXIT(statement, predicate, regex)                             \
     atom::test::expectExit([&]() { statement; }, predicate, regex, __FILE__, \
-                            __LINE__)
+                           __LINE__)
 
-#define EXPECT_DEBUG_DEATH(statement, regex)                                 \
+#define EXPECT_DEBUG_DEATH(statement, regex)                            \
     atom::test::expectDeathDebug([&]() { statement; }, regex, __FILE__, \
-                                  __LINE__)
+                                 __LINE__)
 
 // Convenience predicates
 #define ExitedWithCode(code) atom::test::ExitedWithCode(code)

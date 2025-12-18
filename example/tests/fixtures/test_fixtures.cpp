@@ -30,9 +30,7 @@ protected:
     std::string message;
 };
 
-TEST_F(SimpleFixture, ValueIsInitialized) {
-    expect_eq(value, 42);
-}
+TEST_F(SimpleFixture, ValueIsInitialized) { expect_eq(value, 42); }
 
 TEST_F(SimpleFixture, MessageIsInitialized) {
     expect_eq(message, "Hello, Test!");
@@ -56,20 +54,14 @@ protected:
         resource->push_back(3);
     }
 
-    void TearDown() override {
-        resource.reset();
-    }
+    void TearDown() override { resource.reset(); }
 
     std::unique_ptr<std::vector<int>> resource;
 };
 
-TEST_F(ResourceFixture, ResourceIsCreated) {
-    expect_not_null(resource.get());
-}
+TEST_F(ResourceFixture, ResourceIsCreated) { expect_not_null(resource.get()); }
 
-TEST_F(ResourceFixture, ResourceHasCorrectSize) {
-    expect_size(*resource, 3);
-}
+TEST_F(ResourceFixture, ResourceHasCorrectSize) { expect_size(*resource, 3); }
 
 TEST_F(ResourceFixture, ResourceContainsExpectedValues) {
     expect_contains_element(*resource, 1);
@@ -83,9 +75,7 @@ TEST_F(ResourceFixture, ResourceContainsExpectedValues) {
 
 class CounterFixture : public TestFixture {
 protected:
-    void SetUp() override {
-        counter = 0;
-    }
+    void SetUp() override { counter = 0; }
 
     void TearDown() override {
         // Verify counter was modified
@@ -94,9 +84,7 @@ protected:
     int counter = -1;
 };
 
-TEST_F(CounterFixture, CounterStartsAtZero) {
-    expect_eq(counter, 0);
-}
+TEST_F(CounterFixture, CounterStartsAtZero) { expect_eq(counter, 0); }
 
 TEST_F(CounterFixture, CanIncrementCounter) {
     counter++;
@@ -132,9 +120,7 @@ protected:
     std::map<std::string, std::string> records;
 };
 
-TEST_F(DatabaseFixture, IsConnected) {
-    expect_true(connected);
-}
+TEST_F(DatabaseFixture, IsConnected) { expect_true(connected); }
 
 TEST_F(DatabaseFixture, HasRecords) {
     expect_not_empty(records);
@@ -184,13 +170,9 @@ TEST_F_DISABLED(SimpleFixture, DisabledFixtureTest) {
 // Tagged Tests
 // ============================================================================
 
-TEST_TAGGED(TaggedTests, FastTest, "fast", "unit") {
-    expect_true(true);
-}
+TEST_TAGGED(TaggedTests, FastTest, "fast", "unit") { expect_true(true); }
 
-TEST_TAGGED(TaggedTests, SlowTest, "slow", "integration") {
-    expect_true(true);
-}
+TEST_TAGGED(TaggedTests, SlowTest, "slow", "integration") { expect_true(true); }
 
 TEST_TAGGED(TaggedTests, DatabaseTest, "database", "integration") {
     expect_true(true);
@@ -215,9 +197,7 @@ TEST_TIMEOUT(TimeoutTests, FastOperation, 1000) {
 
 class TimedFixture : public TestFixture {
 protected:
-    void SetUp() override {
-        startTime = std::chrono::steady_clock::now();
-    }
+    void SetUp() override { startTime = std::chrono::steady_clock::now(); }
 
     void TearDown() override {
         auto endTime = std::chrono::steady_clock::now();
@@ -239,6 +219,4 @@ TEST_F_TIMEOUT(TimedFixture, TimedFixtureTest, 500) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

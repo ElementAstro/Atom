@@ -9,8 +9,11 @@ include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
 # Sources
 set(SOURCES
-    # Core search functionality
-    core/search.cpp
+    # Core search functionality (modular components)
+    core/document.cpp
+    core/tokenizer.cpp
+    core/scoring.cpp
+    core/search_engine.cpp
     # Database backends
     database/sqlite.cpp)
 
@@ -23,12 +26,24 @@ set(HEADERS
     mysql.hpp
     sqlite.hpp
     search.hpp
-    # Actual implementation headers (in subdirectories)
+    # Core module headers (modular components)
+    core/types.hpp
+    core/exceptions.hpp
+    core/document.hpp
+    core/tokenizer.hpp
+    core/scoring.hpp
+    core/search_engine.hpp
     core/search.hpp
+    # Database headers (modular components)
+    database/types.hpp
     database/sqlite.hpp
-    cache/cache.hpp
-    cache/lru.hpp
-    cache/ttl.hpp)
+    # Cache headers (modular components)
+    cache/types.hpp
+    cache/exceptions.hpp
+    cache/resource_cache.hpp
+    cache/lru_cache.hpp
+    cache/ttl_cache.hpp
+    cache/cache.hpp)
 
 # Dependencies
 find_package(spdlog CONFIG REQUIRED)
@@ -65,6 +80,7 @@ endif()
 
 # Create library target
 add_library(atom-search STATIC ${SOURCES} ${HEADERS})
+add_library(atom::search ALIAS atom-search)
 
 # Configure module using standardized function
 atom_configure_module(atom-search)

@@ -70,6 +70,7 @@ endif()
 
 # Create library target
 add_library(${LIB_NAME} ${SOURCES} ${HEADERS})
+add_library(atom::serial ALIAS ${LIB_NAME})
 
 # Configure module using standardized function
 atom_configure_module(${LIB_NAME})

@@ -16,7 +16,8 @@ set_languages("c++20")
 add_rules("mode.debug", "mode.release")
 
 -- Add required packages
-add_requires("loguru")
+local use_system_packages = has_config("use_system_packages")
+add_requires("loguru", {system = use_system_packages})
 
 -- Define sources by module
 local core_sources = {
@@ -110,7 +111,7 @@ target("atom-error")
     add_includedirs(".", "..", {public = true})
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("dbghelp", "psapi")
         add_defines("WIN32_LEAN_AND_MEAN", "NOMINMAX")
     elseif is_plat("linux") then

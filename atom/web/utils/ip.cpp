@@ -54,6 +54,14 @@ auto isValidIPv6(const std::string& ipAddress) -> bool {
     return true;
 }
 
+auto isValidIPv4(std::string_view ipAddress) -> bool {
+    return isValidIPv4(std::string(ipAddress));
+}
+
+auto isValidIPv6(std::string_view ipAddress) -> bool {
+    return isValidIPv6(std::string(ipAddress));
+}
+
 auto ipToString(const struct sockaddr* addr, char* strBuf,
                 size_t bufSize) -> bool {
     if (!addr || !strBuf || bufSize == 0) {

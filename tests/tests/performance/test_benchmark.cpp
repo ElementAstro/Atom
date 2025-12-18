@@ -113,7 +113,8 @@ protected:
 
 TEST_F(BenchmarkLogLevelTest, SilentLevel) {
     auto level = Benchmark::LogLevel::Silent;
-    EXPECT_EQ(static_cast<int>(level), static_cast<int>(Benchmark::LogLevel::Silent));
+    EXPECT_EQ(static_cast<int>(level),
+              static_cast<int>(Benchmark::LogLevel::Silent));
 }
 
 TEST_F(BenchmarkLogLevelTest, MinimalLevel) {
@@ -162,17 +163,27 @@ TEST_F(BenchmarkExportFormatTest, PlainTextFormat) {
 }
 
 TEST_F(BenchmarkExportFormatTest, ParseFormat) {
-    EXPECT_EQ(Benchmark::Config::parseFormat("json"), Benchmark::ExportFormat::Json);
-    EXPECT_EQ(Benchmark::Config::parseFormat("csv"), Benchmark::ExportFormat::Csv);
-    EXPECT_EQ(Benchmark::Config::parseFormat("markdown"), Benchmark::ExportFormat::Markdown);
-    EXPECT_EQ(Benchmark::Config::parseFormat("text"), Benchmark::ExportFormat::PlainText);
+    EXPECT_EQ(Benchmark::Config::parseFormat("json"),
+              Benchmark::ExportFormat::Json);
+    EXPECT_EQ(Benchmark::Config::parseFormat("csv"),
+              Benchmark::ExportFormat::Csv);
+    EXPECT_EQ(Benchmark::Config::parseFormat("markdown"),
+              Benchmark::ExportFormat::Markdown);
+    EXPECT_EQ(Benchmark::Config::parseFormat("text"),
+              Benchmark::ExportFormat::PlainText);
 }
 
 TEST_F(BenchmarkExportFormatTest, FormatToString) {
-    EXPECT_EQ(Benchmark::Config::formatToString(Benchmark::ExportFormat::Json), "json");
-    EXPECT_EQ(Benchmark::Config::formatToString(Benchmark::ExportFormat::Csv), "csv");
-    EXPECT_EQ(Benchmark::Config::formatToString(Benchmark::ExportFormat::Markdown), "markdown");
-    EXPECT_EQ(Benchmark::Config::formatToString(Benchmark::ExportFormat::PlainText), "text");
+    EXPECT_EQ(Benchmark::Config::formatToString(Benchmark::ExportFormat::Json),
+              "json");
+    EXPECT_EQ(Benchmark::Config::formatToString(Benchmark::ExportFormat::Csv),
+              "csv");
+    EXPECT_EQ(
+        Benchmark::Config::formatToString(Benchmark::ExportFormat::Markdown),
+        "markdown");
+    EXPECT_EQ(
+        Benchmark::Config::formatToString(Benchmark::ExportFormat::PlainText),
+        "text");
 }
 
 // ============================================================================
@@ -272,7 +283,8 @@ TEST_F(BenchmarkTimingTest, HighResolutionClock) {
     std::this_thread::sleep_for(std::chrono::milliseconds(10));
     auto end = Benchmark::Clock::now();
 
-    auto duration = std::chrono::duration_cast<Benchmark::Milliseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<Benchmark::Milliseconds>(end - start);
     EXPECT_GE(duration.count(), 9);
 }
 
@@ -280,7 +292,8 @@ TEST_F(BenchmarkTimingTest, NanosecondPrecision) {
     auto start = Benchmark::Clock::now();
     auto end = Benchmark::Clock::now();
 
-    auto duration = std::chrono::duration_cast<Benchmark::Nanoseconds>(end - start);
+    auto duration =
+        std::chrono::duration_cast<Benchmark::Nanoseconds>(end - start);
     EXPECT_GE(duration.count(), 0);
 }
 
@@ -324,9 +337,8 @@ TEST_F(BenchmarkGlobalSettingsTest, SetGlobalLogLevel) {
 
 TEST_F(BenchmarkGlobalSettingsTest, RegisterGlobalLogger) {
     bool loggerCalled = false;
-    Benchmark::registerGlobalLogger([&loggerCalled](const std::string&) {
-        loggerCalled = true;
-    });
+    Benchmark::registerGlobalLogger(
+        [&loggerCalled](const std::string&) { loggerCalled = true; });
     // Should not throw
     EXPECT_TRUE(true);
 }
@@ -355,14 +367,13 @@ TEST_F(BenchmarkRunTest, SimpleRun) {
 
     Benchmark bench("TestSuite", "SimpleRun", config);
 
-    bench.run(
-        []() { return 0; },
-        [](int&) {
-            volatile int x = 1 + 1;
-            (void)x;
-            return size_t{1};
-        },
-        [](int&) {});
+    bench.run([]() { return 0; },
+              [](int&) {
+                  volatile int x = 1 + 1;
+                  (void)x;
+                  return size_t{1};
+              },
+              [](int&) {});
 
     auto results = Benchmark::getResults();
     EXPECT_FALSE(results.empty());

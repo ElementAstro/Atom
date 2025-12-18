@@ -277,11 +277,11 @@ private:
         std::shared_ptr<spdlog::logger> logger;
     };
 
-    static inline thread_local PerfThreadLocal perthread;
-    static inline PerfAsyncLogger asyncLogger;
-    static inline PerfGather gathered;
-    static inline Config config_;
-    static inline std::shared_ptr<spdlog::logger> logger;
+    static thread_local PerfThreadLocal perthread;
+    static PerfAsyncLogger asyncLogger;
+    static PerfGather gathered;
+    static Config config_;
+    static std::shared_ptr<spdlog::logger> logger;
 };
 
 /**

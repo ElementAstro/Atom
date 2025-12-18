@@ -22,7 +22,8 @@ set_languages("c11", "cxx17")
 add_rules("mode.debug", "mode.release")
 
 -- Add required packages
-add_requires("loguru")
+local use_system_packages = has_config("use_system_packages")
+add_requires("loguru", {system = use_system_packages})
 
 -- Define sources and headers from new structure
 local sources = {
@@ -121,7 +122,9 @@ target("atom-component")
     add_deps("atom-error", "atom-utils")
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Enable position independent code (automatic for shared libraries)
     set_policy("build.optimization.lto", true)
@@ -188,7 +191,9 @@ target("atom-component-object")
     add_includedirs(".")
     add_packages("loguru")
     add_deps("atom-error", "atom-utils")
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Enable position independent code
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})

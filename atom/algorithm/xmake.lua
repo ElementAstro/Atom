@@ -15,7 +15,10 @@ add_rules("mode.debug", "mode.release")
 local atom_algorithm_depends = {"atom-error"}
 
 -- Add required packages
-add_requires("openssl", "tbb", "loguru")
+local use_system_packages = has_config("use_system_packages")
+add_requires("openssl", {system = use_system_packages})
+add_requires("tbb", {system = use_system_packages})
+add_requires("loguru", {system = use_system_packages})
 
 -- Define the main target
 target("atom-algorithm")
@@ -54,7 +57,9 @@ target("atom-algorithm")
     add_packages("openssl", "tbb", "loguru")
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Add dependencies (assuming they are other xmake targets or libraries)
     for _, dep in ipairs(atom_algorithm_depends) do
@@ -86,6 +91,8 @@ target("atom-algorithm")
         os.cp(target:targetfile(), path.join(installdir, "lib"))
         os.cp("*.hpp", path.join(installdir, "include", "atom-algorithm"))
     end)
+
+target_end()
 
 -- Optional: Add option to control dependency building
 option("enable-deps-check")

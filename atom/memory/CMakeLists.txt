@@ -34,9 +34,11 @@ endif()
 # Create library target
 if(IS_HEADER_ONLY)
   add_library(atom-memory INTERFACE)
+  add_library(atom::memory ALIAS atom-memory)
   atom_configure_module(atom-memory HEADER_ONLY)
 else()
   add_library(atom-memory STATIC ${SOURCES} ${HEADERS})
+  add_library(atom::memory ALIAS atom-memory)
   atom_configure_module(atom-memory)
 endif()
 

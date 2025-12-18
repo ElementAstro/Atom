@@ -690,8 +690,8 @@ template <typename Signature>
 void verifyMock(const MockFunction<Signature>& mock,
                 const std::string& mockName = "Mock") {
     if (!mock.verify()) {
-        throw MockException(mockName +
-                            " verification failed: " + mock.getVerificationErrors());
+        throw MockException(
+            mockName + " verification failed: " + mock.getVerificationErrors());
     }
 }
 
@@ -754,8 +754,7 @@ public:
 #define expect_mock_verified(mock) \
     atom::test::expectMockVerified(mock, __FILE__, __LINE__)
 
-#define MOCK_FUNCTION(name, signature) \
-    atom::test::MockFunction<signature> name
+#define MOCK_FUNCTION(name, signature) atom::test::MockFunction<signature> name
 
 #define SPY_FUNCTION(name, signature, impl) \
     atom::test::Spy<signature> name(impl)

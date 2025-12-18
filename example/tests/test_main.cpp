@@ -96,7 +96,10 @@ TEST(BasicAssertions, ExceptionAssertions) {
     expect_throws([]() { throw std::runtime_error("error"); });
     expect_throws_with_message(
         []() { throw std::runtime_error("specific error"); }, "specific");
-    expect_no_throw([]() { int x = 1 + 1; (void)x; });
+    expect_no_throw([]() {
+        int x = 1 + 1;
+        (void)x;
+    });
 }
 
 // ============================================================================
@@ -105,13 +108,9 @@ TEST(BasicAssertions, ExceptionAssertions) {
 
 class VectorFixture : public TestFixture {
 protected:
-    void SetUp() override {
-        vec = {1, 2, 3, 4, 5};
-    }
+    void SetUp() override { vec = {1, 2, 3, 4, 5}; }
 
-    void TearDown() override {
-        vec.clear();
-    }
+    void TearDown() override { vec.clear(); }
 
     std::vector<int> vec;
 };
@@ -127,9 +126,7 @@ TEST_F(VectorFixture, CanModifyVector) {
     expect_contains_element(vec, 6);
 }
 
-TEST_F(VectorFixture, VectorIsSorted) {
-    expect_sorted(vec);
-}
+TEST_F(VectorFixture, VectorIsSorted) { expect_sorted(vec); }
 
 class ResourceFixture : public TestFixture {
 protected:
@@ -137,9 +134,7 @@ protected:
         resource = std::make_unique<std::string>("Test Resource");
     }
 
-    void TearDown() override {
-        resource.reset();
-    }
+    void TearDown() override { resource.reset(); }
 
     std::unique_ptr<std::string> resource;
 };
@@ -164,12 +159,12 @@ TEST_P(SquareTest, SquareIsCorrect) {
     expect_eq(input * input, expected);
 }
 
-class StringLengthTest : public ParameterizedTest<std::pair<std::string, size_t>> {};
+class StringLengthTest
+    : public ParameterizedTest<std::pair<std::string, size_t>> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    StringLengths, StringLengthTest,
-    Values<std::pair<std::string, size_t>>(
-        {{"", 0}, {"a", 1}, {"hello", 5}, {"world!", 6}}));
+INSTANTIATE_TEST_SUITE_P(StringLengths, StringLengthTest,
+                         Values<std::pair<std::string, size_t>>(
+                             {{"", 0}, {"a", 1}, {"hello", 5}, {"world!", 6}}));
 
 TEST_P(StringLengthTest, LengthIsCorrect) {
     const auto& [str, expectedLen] = GetParam();
@@ -303,9 +298,25 @@ TEST(ReporterTests, GenerateReport) {
     stats.results.push_back({"Test2", true, false, "", 15.0, false});
     stats.results.push_back({"Test3", false, false, "Error", 5.0, false});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
+
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
+
+    auto outFile = outDir / "test_report.json";
+    expect_true(std::filesystem::exists(outFile));
+
+    std::ifstream file(outFile);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string report = buffer.str();
     expect_not_empty(report);
-    expect_contains(report, "totalTests");
+    expect_contains(report, "total_tests");
 }
 
 // ============================================================================
@@ -324,9 +335,7 @@ TEST(RegistryTests, GetTestInfo) {
 // SECTION 9: Tagged Tests
 // ============================================================================
 
-TEST_TAGGED(TaggedTests, UnitTest, "unit", "fast") {
-    expect_true(true);
-}
+TEST_TAGGED(TaggedTests, UnitTest, "unit", "fast") { expect_true(true); }
 
 TEST_TAGGED(TaggedTests, IntegrationTest, "integration", "slow") {
     expect_true(true);
@@ -336,9 +345,7 @@ TEST_TAGGED(TaggedTests, IntegrationTest, "integration", "slow") {
 // SECTION 10: Disabled Tests
 // ============================================================================
 
-TEST_DISABLED(DisabledTests, ThisWontRun) {
-    FAIL("This should not execute");
-}
+TEST_DISABLED(DisabledTests, ThisWontRun) { FAIL("This should not execute"); }
 
 // ============================================================================
 // SECTION 11: Custom Assertions
@@ -346,8 +353,9 @@ TEST_DISABLED(DisabledTests, ThisWontRun) {
 
 TEST(CustomAssertions, CustomPredicate) {
     int value = 42;
-    expect_that(value, [](int x) { return x > 0 && x < 100; },
-                "Value should be positive and less than 100");
+    expect_that(
+        value, [](int x) { return x > 0 && x < 100; },
+        "Value should be positive and less than 100");
 }
 
 TEST(CustomAssertions, SetEquality) {

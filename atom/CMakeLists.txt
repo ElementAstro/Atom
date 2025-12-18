@@ -288,11 +288,11 @@ endif()
 # =============================================================================
 
 # Process module dependencies (if functions are available)
-if(COMMAND scan_module_dependencies)
-  scan_module_dependencies()
+if(COMMAND atom_scan_module_dependencies)
+  atom_scan_module_dependencies()
 endif()
-if(COMMAND process_module_dependencies)
-  process_module_dependencies()
+if(COMMAND atom_process_module_dependencies)
+  atom_process_module_dependencies()
 endif()
 
 # =============================================================================

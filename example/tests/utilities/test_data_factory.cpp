@@ -66,9 +66,18 @@ TEST(DataBuilder, BuildWithVariations) {
                           .set(&Person::age, 30);
 
     std::vector<typename TestDataBuilder<Person>::BuilderFunc> variations = {
-        [](Person& p) { p.name = "Alice"; p.age = 25; },
-        [](Person& p) { p.name = "Bob"; p.age = 35; },
-        [](Person& p) { p.name = "Charlie"; p.age = 40; }};
+        [](Person& p) {
+            p.name = "Alice";
+            p.age = 25;
+        },
+        [](Person& p) {
+            p.name = "Bob";
+            p.age = 35;
+        },
+        [](Person& p) {
+            p.name = "Charlie";
+            p.age = 40;
+        }};
 
     auto people = basePerson.buildWithVariations(variations);
 
@@ -89,9 +98,8 @@ TEST(DataFactory, RegisterAndCreate) {
         return Person{"Admin", 40, "admin@example.com", true};
     });
 
-    factory.registerPreset("guest", []() {
-        return Person{"Guest", 0, "", false};
-    });
+    factory.registerPreset("guest",
+                           []() { return Person{"Guest", 0, "", false}; });
 
     auto admin = factory.create("admin");
     expect_eq(admin.name, "Admin");
@@ -236,17 +244,15 @@ TEST(RandomData, RandomChoice) {
 
     std::string choice = rng.randomChoice({"apple", "banana", "cherry"});
 
-    expect_any_of(
-        std::vector<std::string>{"apple", "banana", "cherry"},
-        [&choice](const std::string& s) { return s == choice; });
+    expect_any_of((std::vector<std::string>{"apple", "banana", "cherry"}),
+                  [&choice](const std::string& s) { return s == choice; });
 }
 
 TEST(RandomData, RandomVector) {
     RandomTestData rng(42);
 
-    auto vec = rng.randomVector<int>(10, [&rng]() {
-        return rng.randomInt(0, 100);
-    });
+    auto vec =
+        rng.randomVector<int>(10, [&rng]() { return rng.randomInt(0, 100); });
 
     expect_size(vec, 10);
     expect_all_of(vec, [](int x) { return x >= 0 && x <= 100; });
@@ -373,6 +379,4 @@ TEST(BoundaryValues, ForArrayIndex) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

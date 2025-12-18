@@ -115,6 +115,7 @@ endif()
 
 # Create library target
 add_library(atom-image STATIC ${ATOM_IMAGE_SOURCES})
+add_library(atom::image ALIAS atom-image)
 
 # Configure module using standardized function
 atom_configure_module(atom-image)

@@ -3,6 +3,7 @@
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -45,6 +46,16 @@ public:
     auto getActiveTaskCount() const -> size_t;
     auto getTotalTaskCount() const -> size_t;
     auto isRunning() const -> bool;
+
+    auto findTaskIndexByUrl(std::string_view url) const
+        -> std::optional<size_t>;
+    auto getTaskInfoByIndex(size_t index) const
+        -> std::optional<DownloadTaskInfo>;
+    auto getAllTaskInfo() const -> std::vector<DownloadTaskInfo>;
+    void setConfig(const DownloadManagerConfig& config);
+    auto getConfig() const -> DownloadManagerConfig;
+    auto saveTasks(std::string_view filePath) const -> bool;
+    auto loadTasks(std::string_view filePath) -> bool;
 
 private:
     enum class TaskStatus {
@@ -95,6 +106,8 @@ private:
     std::atomic<size_t> maxRetries_{3};
     std::atomic<size_t> threadCount_{std::thread::hardware_concurrency()};
     std::atomic<size_t> activeTaskCount_{0};
+
+    DownloadManagerConfig config_{};
 
     std::vector<std::thread> workers_;
 
@@ -452,143 +465,44 @@ void DownloadManager::Impl::downloadTask(size_t taskIndex, DownloadTask& task,
     task.lastUpdateTime = task.startTime;
 
     try {
-        CurlWrapper curl;
-        bool success = false;
-
-        curl.setUrl(task.url)
-            .setRequestMethod("GET")
-            .setOnResponseCallback([&](const std::string& data) {
-                std::ofstream ofs(task.filepath,
-                                  std::ios::binary | std::ios::app);
-                if (ofs) {
-                    ofs.write(data.c_str(), data.size());
-                    task.downloadedBytes += data.size();
-
-                    auto now = std::chrono::steady_clock::now();
-                    if (std::chrono::duration_cast<std::chrono::milliseconds>(
-                            now - task.lastUpdateTime)
-                            .count() > 100) {
-                        task.lastUpdateTime = now;
-
-                        if (onProgress_) {
-                            double progress = -1.0;
-                            if (task.totalBytes > 0) {
-                                progress =
-                                    (static_cast<double>(task.downloadedBytes) /
-                                     task.totalBytes) *
-                                    100.0;
-                            }
-                            // Use taskIndex directly
-                            onProgress_(taskIndex, progress);
-                        }
-                    }
-                } else {
-                    spdlog::error("Failed to open file for writing: {}",
-                                  task.filepath);
+        auto progressCb = [&](size_t dlNow, size_t dlTotal) {
+            task.downloadedBytes = dlNow;
+            task.totalBytes = dlTotal;
+            if (onProgress_) {
+                double progress = -1.0;
+                if (dlTotal > 0) {
+                    progress = (static_cast<double>(dlNow) / dlTotal) * 100.0;
                 }
-            })
-            .setOnErrorCallback([&](CURLcode code) {
-                std::string errorMsg =
-                    "Download error: " + std::to_string(static_cast<int>(code));
-                spdlog::error("Download error for URL {}: {}", task.url,
-                              errorMsg);
+                onProgress_(taskIndex, progress);
+            }
+        };
 
-                if (onError_) {
-                    // Use taskIndex directly
-                    onError_(taskIndex, errorMsg);
-                }
+        auto result =
+            CurlWrapper::downloadFile(task.url, task.filepath, progressCb, {});
+        if (result) {
+            updateTaskStatus(taskIndex, TaskStatus::Completed);
+            spdlog::info("Download completed: {}", task.url);
+            if (onComplete_) {
+                onComplete_(taskIndex, true);
+            }
+        } else {
+            std::string errorMsg = "Download failed";
+            if (onError_) {
+                onError_(taskIndex, errorMsg);
+            }
 
-                if (task.retries < maxRetries_) {
-                    task.retries++;
-                    std::lock_guard queueLock(queueMutex_);
-                    // Use taskIndex directly
-                    taskQueue_.push(taskIndex);
-                    taskCondition_.notify_one();
-                } else {
-                    // Use taskIndex directly
-                    updateTaskStatus(taskIndex, TaskStatus::Failed);
-                }
-            });
-
-        if (download_speed > 0) {
-            curl.setMaxDownloadSpeed(download_speed);
-        }
-
-#ifdef USE_ASIO
-        // For ASIO, ensure 'success' is correctly handled.
-        // The lambda captures 'success' by reference.
-        io_context_->post([&curl, &success, &task, this, taskIndex]() {
-            std::string result_str = curl.perform();
-            // Assuming perform returns an empty string on success (no error
-            // message) and onError callback handles CURLcode errors.
-            success = result_str.empty();
-        });
-        // Note: For ASIO, the subsequent 'if (success)' block will execute
-        // potentially before the posted task completes. This needs careful
-        // synchronization or a different pattern for handling completion. For
-        // simplicity of this fix, I am keeping the structure, but this is a
-        // potential issue. A robust ASIO implementation would likely use the
-        // completion handler of the post or a promise/future to signal
-        // completion and success.
-#else
-        std::string result_str = curl.perform();
-        // Assuming perform returns an empty string on success (no error
-        // message) and onError callback handles CURLcode errors.
-        success = result_str.empty();
-#endif
-
-        // This check might be problematic with ASIO's async nature as 'success'
-        // might not be set yet. This part of the logic might need further
-        // refinement if ASIO is used.
-        if (success) {
-            // Check task status again, as onError might have been called in
-            // another thread (less likely without ASIO for perform) or if
-            // perform itself is asynchronous internally. A read lock is safer
-            // if getTaskByIndex is used.
-            std::shared_lock lock(tasksMutex_);
-            DownloadTask* currentTaskState = tasks_[taskIndex].get();
-            lock.unlock();
-
-            // Only mark as completed if it wasn't marked failed by onError
-            if (currentTaskState &&
-                currentTaskState->status != TaskStatus::Failed &&
-                currentTaskState->status != TaskStatus::Pending) {
-                updateTaskStatus(taskIndex, TaskStatus::Completed);
-                spdlog::info("Download completed: {}", task.url);
-
+            if (task.retries < maxRetries_) {
+                task.retries++;
+                std::lock_guard queueLock(queueMutex_);
+                taskQueue_.push(taskIndex);
+                taskCondition_.notify_one();
+            } else {
+                updateTaskStatus(taskIndex, TaskStatus::Failed);
                 if (onComplete_) {
-                    onComplete_(taskIndex, true);
-                }
-            } else if (currentTaskState &&
-                       (currentTaskState->status == TaskStatus::Failed ||
-                        currentTaskState->status == TaskStatus::Pending)) {
-                // onError already handled it, or it's pending retry.
-                // `success` might have been true from result.empty() but
-                // onError took precedence.
-                spdlog::warn(
-                    "Download for {} had perform() success but task status is "
-                    "{} due to onError or retry.",
-                    task.url, static_cast<int>(currentTaskState->status));
-                if (onComplete_ &&
-                    currentTaskState->status ==
-                        TaskStatus::Failed) {  // Only call onComplete if truly
-                                               // failed and not retrying
                     onComplete_(taskIndex, false);
                 }
             }
         }
-        // If !success (i.e., result_str was not empty), and onError was not
-        // called, the task remains 'Running' and then eventually finishes the
-        // downloadTask scope. This might leave it in an inconsistent state if
-        // result_str indicated an error not caught by CURLcode. A more robust
-        // solution would be to also treat non-empty result_str as an error. For
-        // example: if (!success && onError_) { // if result_str was not empty
-        //     onError_(taskIndex, "Download failed: " + result_str); //
-        //     Assuming result_str is an error message
-        //     updateTaskStatus(taskIndex, TaskStatus::Failed);
-        //     if (onComplete_) onComplete_(taskIndex, false);
-        // }
-
     } catch (const std::exception& e) {
         spdlog::error("Exception during download of {}: {}", task.url,
                       e.what());
@@ -607,6 +521,180 @@ void DownloadManager::Impl::downloadTask(size_t taskIndex, DownloadTask& task,
     }
 
     activeTaskCount_--;
+}
+
+auto DownloadManager::Impl::findTaskIndexByUrl(std::string_view url) const
+    -> std::optional<size_t> {
+    std::shared_lock lock(tasksMutex_);
+    for (size_t i = 0; i < tasks_.size(); ++i) {
+        if (tasks_[i] && tasks_[i]->url == url) {
+            return i;
+        }
+    }
+    return std::nullopt;
+}
+
+auto DownloadManager::Impl::getTaskInfoByIndex(size_t index) const
+    -> std::optional<DownloadTaskInfo> {
+    std::shared_lock lock(tasksMutex_);
+    if (index >= tasks_.size() || !tasks_[index]) {
+        return std::nullopt;
+    }
+    const auto& task = *tasks_[index];
+
+    DownloadTaskInfo info;
+    info.taskId = task.url;
+    info.url = task.url;
+    info.filePath = task.filepath;
+    switch (task.status) {
+        case TaskStatus::Pending:
+            info.status = DownloadStatus::Pending;
+            break;
+        case TaskStatus::Running:
+            info.status = DownloadStatus::Downloading;
+            break;
+        case TaskStatus::Paused:
+            info.status = DownloadStatus::Paused;
+            break;
+        case TaskStatus::Completed:
+            info.status = DownloadStatus::Completed;
+            break;
+        case TaskStatus::Cancelled:
+            info.status = DownloadStatus::Cancelled;
+            break;
+        case TaskStatus::Failed:
+            info.status = DownloadStatus::Failed;
+            break;
+        default:
+            info.status = DownloadStatus::Failed;
+            break;
+    }
+    info.downloadedBytes = task.downloadedBytes.load();
+    info.totalBytes = task.totalBytes.load();
+    if (info.totalBytes > 0) {
+        info.progress =
+            (static_cast<double>(info.downloadedBytes) / info.totalBytes) *
+            100.0;
+    } else {
+        info.progress = 0.0;
+    }
+    info.retryCount = static_cast<int>(task.retries.load());
+    info.priority = task.priority;
+    return info;
+}
+
+auto DownloadManager::Impl::getAllTaskInfo() const
+    -> std::vector<DownloadTaskInfo> {
+    std::vector<DownloadTaskInfo> result;
+    std::shared_lock lock(tasksMutex_);
+    result.reserve(tasks_.size());
+    for (size_t i = 0; i < tasks_.size(); ++i) {
+        if (!tasks_[i]) {
+            continue;
+        }
+        const auto& task = *tasks_[i];
+
+        DownloadTaskInfo info;
+        info.taskId = task.url;
+        info.url = task.url;
+        info.filePath = task.filepath;
+        switch (task.status) {
+            case TaskStatus::Pending:
+                info.status = DownloadStatus::Pending;
+                break;
+            case TaskStatus::Running:
+                info.status = DownloadStatus::Downloading;
+                break;
+            case TaskStatus::Paused:
+                info.status = DownloadStatus::Paused;
+                break;
+            case TaskStatus::Completed:
+                info.status = DownloadStatus::Completed;
+                break;
+            case TaskStatus::Cancelled:
+                info.status = DownloadStatus::Cancelled;
+                break;
+            case TaskStatus::Failed:
+                info.status = DownloadStatus::Failed;
+                break;
+            default:
+                info.status = DownloadStatus::Failed;
+                break;
+        }
+        info.downloadedBytes = task.downloadedBytes.load();
+        info.totalBytes = task.totalBytes.load();
+        if (info.totalBytes > 0) {
+            info.progress =
+                (static_cast<double>(info.downloadedBytes) / info.totalBytes) *
+                100.0;
+        }
+        info.retryCount = static_cast<int>(task.retries.load());
+        info.priority = task.priority;
+
+        result.push_back(std::move(info));
+    }
+    return result;
+}
+
+void DownloadManager::Impl::setConfig(const DownloadManagerConfig& config) {
+    config_ = config;
+    setThreadCount(config.maxConcurrentDownloads);
+    setMaxRetries(config.maxRetries);
+}
+
+auto DownloadManager::Impl::getConfig() const -> DownloadManagerConfig {
+    return config_;
+}
+
+auto DownloadManager::Impl::saveTasks(std::string_view filePath) const -> bool {
+    try {
+        std::ofstream ofs{std::string(filePath), std::ios::trunc};
+        if (!ofs) {
+            return false;
+        }
+        std::shared_lock lock(tasksMutex_);
+        for (const auto& task : tasks_) {
+            if (task) {
+                ofs << task->url << " " << task->filepath << " "
+                    << task->priority << "\n";
+            }
+        }
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
+
+auto DownloadManager::Impl::loadTasks(std::string_view filePath) -> bool {
+    try {
+        std::ifstream ifs{std::string(filePath)};
+        if (!ifs) {
+            return false;
+        }
+        std::unique_lock lock(tasksMutex_);
+        tasks_.clear();
+        while (!taskQueue_.empty()) {
+            taskQueue_.pop();
+        }
+
+        std::string url;
+        std::string filepath;
+        int priority;
+        while (ifs >> url >> filepath >> priority) {
+            auto task = std::make_unique<DownloadTask>();
+            task->url = url;
+            task->filepath = filepath;
+            task->priority = priority;
+            task->status = TaskStatus::Pending;
+            tasks_.push_back(std::move(task));
+            taskQueue_.push(tasks_.size() - 1);
+        }
+
+        taskCondition_.notify_all();
+        return true;
+    } catch (...) {
+        return false;
+    }
 }
 
 void DownloadManager::Impl::updateTaskStatus(size_t index, TaskStatus status) {
@@ -687,61 +775,107 @@ DownloadManager::DownloadManager(const std::string& task_file)
 
 DownloadManager::~DownloadManager() = default;
 
-void DownloadManager::addTask(const std::string& url,
-                              const std::string& filepath, int priority) {
-    impl_->addTask(url, filepath, priority);
+auto DownloadManager::addTask(std::string_view url, std::string_view filePath,
+                              int priority) -> std::string {
+    impl_->addTask(std::string(url), std::string(filePath), priority);
+    return std::string(url);
 }
 
-bool DownloadManager::removeTask(size_t index) {
-    return impl_->removeTask(index);
+auto DownloadManager::addTasks(
+    std::span<const std::pair<std::string, std::string>> tasks,
+    int priority) -> std::vector<std::string> {
+    std::vector<std::string> ids;
+    ids.reserve(tasks.size());
+    for (const auto& [url, path] : tasks) {
+        ids.push_back(addTask(url, path, priority));
+    }
+    return ids;
 }
 
-void DownloadManager::start(size_t thread_count, size_t download_speed) {
-    impl_->start(thread_count, download_speed);
+auto DownloadManager::removeTask(std::string_view url) -> bool {
+    auto idx = impl_->findTaskIndexByUrl(url);
+    if (!idx) {
+        return false;
+    }
+    return impl_->removeTask(*idx);
 }
 
-void DownloadManager::stop() { impl_->stop(); }
-
-void DownloadManager::pauseTask(size_t index) { impl_->pauseTask(index); }
+auto DownloadManager::removeTaskById(std::string_view taskId) -> bool {
+    return removeTask(taskId);
+}
 
 void DownloadManager::resumeTask(size_t index) { impl_->resumeTask(index); }
 
-size_t DownloadManager::getDownloadedBytes(size_t index) const {
-    return impl_->getDownloadedBytes(index);
+auto DownloadManager::getProgress(std::string_view url) const -> double {
+    auto idx = impl_->findTaskIndexByUrl(url);
+    if (!idx) {
+        return -1.0;
+    }
+    return impl_->getProgress(*idx);
 }
 
-size_t DownloadManager::getTotalBytes(size_t index) const {
-    return impl_->getTotalBytes(index);
+auto DownloadManager::getTaskInfo(std::string_view url) const
+    -> std::optional<DownloadTaskInfo> {
+    auto idx = impl_->findTaskIndexByUrl(url);
+    if (!idx) {
+        return std::nullopt;
+    }
+    return impl_->getTaskInfoByIndex(*idx);
 }
 
-double DownloadManager::getProgress(size_t index) const {
-    return impl_->getProgress(index);
+auto DownloadManager::getAllTaskInfo() const -> std::vector<DownloadTaskInfo> {
+    return impl_->getAllTaskInfo();
 }
 
-void DownloadManager::cancelTask(size_t index) { impl_->cancelTask(index); }
-
-void DownloadManager::setThreadCount(size_t thread_count) {
-    impl_->setThreadCount(thread_count);
+auto DownloadManager::getActiveDownloadCount() const -> size_t {
+    return impl_->getActiveTaskCount();
 }
 
-void DownloadManager::setMaxRetries(size_t retries) {
-    impl_->setMaxRetries(retries);
-}
+auto DownloadManager::getTotalDownloadSpeed() const -> double { return 0.0; }
 
 void DownloadManager::onDownloadComplete(
-    const std::function<void(size_t, bool)>& callback) {
-    impl_->onDownloadComplete(callback);
+    std::function<void(const std::string&, const std::string&)> callback) {
+    impl_->onDownloadComplete(
+        [this, cb = std::move(callback)](size_t index, bool) {
+            if (!cb) {
+                return;
+            }
+            if (auto info = impl_->getTaskInfoByIndex(index)) {
+                cb(info->url, info->filePath);
+            }
+        });
 }
 
 void DownloadManager::onProgressUpdate(
-    const std::function<void(size_t, double)>& callback) {
-    impl_->onProgressUpdate(callback);
+    std::function<void(const std::string&, double, double,
+                       std::chrono::seconds)>
+        callback) {
+    impl_->onProgressUpdate(
+        [this, cb = std::move(callback)](size_t index, double progress) {
+            if (!cb) {
+                return;
+            }
+            if (auto info = impl_->getTaskInfoByIndex(index)) {
+                cb(info->url, progress, 0.0, std::chrono::seconds{0});
+            }
+        });
 }
 
 void DownloadManager::onError(
-    const std::function<void(size_t, const std::string&)>& callback) {
-    impl_->onError(callback);
+    std::function<void(const std::string&, const std::string&)> callback) {
+    impl_->onError(
+        [this, cb = std::move(callback)](size_t index, const std::string& msg) {
+            if (!cb) {
+                return;
+            }
+            if (auto info = impl_->getTaskInfoByIndex(index)) {
+                cb(info->url, msg);
+            }
+        });
 }
+
+void DownloadManager::onStatusChange(
+    std::function<void(const std::string&, DownloadStatus, DownloadStatus)>) {}
 
 size_t DownloadManager::getActiveTaskCount() const {
     return impl_->getActiveTaskCount();
@@ -752,5 +886,183 @@ size_t DownloadManager::getTotalTaskCount() const {
 }
 
 bool DownloadManager::isRunning() const { return impl_->isRunning(); }
+
+auto DownloadManager::pauseTask(std::string_view url) -> bool {
+    auto idx = impl_->findTaskIndexByUrl(url);
+    if (!idx) {
+        return false;
+    }
+    impl_->pauseTask(*idx);
+    return true;
+}
+
+auto DownloadManager::resumeTaskByUrl(std::string_view url) -> bool {
+    auto idx = impl_->findTaskIndexByUrl(url);
+    if (!idx) {
+        return false;
+    }
+    impl_->resumeTask(*idx);
+    return true;
+}
+
+auto DownloadManager::cancelTask(std::string_view url) -> bool {
+    auto idx = impl_->findTaskIndexByUrl(url);
+    if (!idx) {
+        return false;
+    }
+    impl_->cancelTask(*idx);
+    return true;
+}
+
+void DownloadManager::pauseAll() {
+    auto infos = impl_->getAllTaskInfo();
+    for (const auto& info : infos) {
+        (void)pauseTask(info.url);
+    }
+}
+
+void DownloadManager::resumeAll() {
+    auto infos = impl_->getAllTaskInfo();
+    for (const auto& info : infos) {
+        (void)resumeTaskByUrl(info.url);
+    }
+}
+
+void DownloadManager::cancelAll() {
+    auto infos = impl_->getAllTaskInfo();
+    for (const auto& info : infos) {
+        (void)cancelTask(info.url);
+    }
+}
+
+auto DownloadManager::saveTasks(std::string_view filePath) const -> bool {
+    return impl_->saveTasks(filePath);
+}
+
+auto DownloadManager::loadTasks(std::string_view filePath) -> bool {
+    return impl_->loadTasks(filePath);
+}
+
+void DownloadManager::applyConfig(const DownloadManagerConfig& config) {
+    impl_->setConfig(config);
+}
+
+auto DownloadManager::getConfig() const -> DownloadManagerConfig {
+    return impl_->getConfig();
+}
+
+auto DownloadManager::waitForCompletion(std::chrono::seconds timeout) -> bool {
+    auto deadline = std::chrono::steady_clock::now() + timeout;
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (impl_->getActiveTaskCount() == 0) {
+            return true;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    }
+    return false;
+}
+
+auto DownloadManager::hasTask(std::string_view url) const -> bool {
+    return impl_->findTaskIndexByUrl(url).has_value();
+}
+
+void DownloadManager::start() {
+    impl_->start(std::thread::hardware_concurrency(),
+                 static_cast<size_t>(impl_->getConfig().maxDownloadSpeed));
+}
+
+void DownloadManager::stop() { impl_->stop(); }
+
+void DownloadManager::setThreadCount(size_t count) {
+    impl_->setThreadCount(count);
+}
+
+void DownloadManager::setMaxRetries(size_t count) {
+    impl_->setMaxRetries(count);
+}
+
+auto DownloadManager::setChecksum(std::string_view, ChecksumType,
+                                  std::string_view) -> bool {
+    return false;
+}
+
+auto DownloadManager::setPriority(std::string_view, int) -> bool {
+    return false;
+}
+
+auto DownloadManager::getTasksByStatus(DownloadStatus) const
+    -> std::vector<DownloadTaskInfo> {
+    return {};
+}
+
+auto DownloadManager::clearCompletedTasks() -> size_t { return 0; }
+
+auto DownloadManager::clearFailedTasks() -> size_t { return 0; }
+
+auto DownloadManager::retryFailedTasks() -> size_t { return 0; }
+
+auto DownloadManager::downloadSync(
+    std::string_view url, std::string_view filePath,
+    std::function<void(size_t, size_t)> progressCallback)
+    -> expected<size_t, DownloadError> {
+    auto httpRes =
+        CurlWrapper::downloadFile(url, filePath, progressCallback, {});
+    if (!httpRes) {
+        return unexpected(DownloadError::NetworkError);
+    }
+    return *httpRes;
+}
+
+auto DownloadManager::downloadAsync(
+    std::string_view url, std::string_view filePath,
+    std::function<void(size_t, size_t)> progressCallback,
+    std::stop_token stopToken) -> std::future<expected<size_t, DownloadError>> {
+    return std::async(std::launch::async,
+                      [url = std::string(url), filePath = std::string(filePath),
+                       progressCallback = std::move(progressCallback),
+                       stopToken]() -> expected<size_t, DownloadError> {
+                          if (stopToken.stop_requested()) {
+                              return unexpected(DownloadError::Cancelled);
+                          }
+                          return downloadSync(url, filePath, progressCallback);
+                      });
+}
+
+auto DownloadManager::downloadBatch(
+    std::span<const std::pair<std::string, std::string>> downloads,
+    size_t) -> std::vector<expected<size_t, DownloadError>> {
+    std::vector<expected<size_t, DownloadError>> results;
+    results.reserve(downloads.size());
+    for (const auto& [url, path] : downloads) {
+        results.push_back(downloadSync(url, path));
+    }
+    return results;
+}
+
+auto download(std::string_view url, std::string_view filePath,
+              std::chrono::seconds timeout) -> expected<size_t, DownloadError> {
+    RequestConfig cfg;
+    cfg.timeout = timeout;
+    auto httpRes = CurlWrapper::downloadFile(url, filePath, nullptr, {});
+    if (!httpRes) {
+        return unexpected(DownloadError::NetworkError);
+    }
+    return *httpRes;
+}
+
+auto downloadToMemory(std::string_view url, std::chrono::seconds timeout)
+    -> expected<std::vector<std::byte>, DownloadError> {
+    RequestConfig cfg;
+    cfg.timeout = timeout;
+    auto httpRes = CurlWrapper::get(url, cfg);
+    if (!httpRes) {
+        return unexpected(DownloadError::NetworkError);
+    }
+    const auto& body = httpRes->body;
+    std::vector<std::byte> out;
+    out.resize(body.size());
+    std::memcpy(out.data(), body.data(), body.size());
+    return out;
+}
 
 }  // namespace atom::web

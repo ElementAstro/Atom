@@ -143,11 +143,10 @@ TEST(TimeoutTests, ExpectCompletesWithin) {
 // Conditional Test Registration
 // ============================================================================
 
-TEST(ConditionalTests, AlwaysRuns) {
-    expect_true(true);
-}
+TEST(ConditionalTests, AlwaysRuns) { expect_true(true); }
 
-TEST_CONDITIONAL(ConditionalTests, RunsOnlyIfTrue, false, "Condition is false") {
+TEST_CONDITIONAL(ConditionalTests, RunsOnlyIfTrue, false,
+                 "Condition is false") {
     // This test will be skipped because condition is false
     expect_true(true);
 }
@@ -169,21 +168,15 @@ TEST(SkipTests, SkipIfEnvNotSet) {
 
 class SkipFixture : public TestFixture {
 protected:
-    void SetUp() override {
-        setupCalled = true;
-    }
+    void SetUp() override { setupCalled = true; }
 
-    void TearDown() override {
-        teardownCalled = true;
-    }
+    void TearDown() override { teardownCalled = true; }
 
     bool setupCalled = false;
     bool teardownCalled = false;
 };
 
-TEST_F(SkipFixture, NormalFixtureTest) {
-    expect_true(setupCalled);
-}
+TEST_F(SkipFixture, NormalFixtureTest) { expect_true(setupCalled); }
 
 // ============================================================================
 // Timeout with Fixture
@@ -191,9 +184,7 @@ TEST_F(SkipFixture, NormalFixtureTest) {
 
 class TimedFixture : public TestFixture {
 protected:
-    void SetUp() override {
-        startTime = std::chrono::steady_clock::now();
-    }
+    void SetUp() override { startTime = std::chrono::steady_clock::now(); }
 
     void TearDown() override {
         auto endTime = std::chrono::steady_clock::now();
@@ -216,9 +207,7 @@ TEST_F_TIMEOUT(TimedFixture, TimedFixtureTest, 1000) {
 
 TEST(TimeoutTests, RunWithTimeoutSuccess) {
     auto [success, message] = runWithTimeout(
-        []() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-        },
+        []() { std::this_thread::sleep_for(std::chrono::milliseconds(10)); },
         std::chrono::milliseconds(1000));
 
     expect_true(success);
@@ -226,9 +215,9 @@ TEST(TimeoutTests, RunWithTimeoutSuccess) {
 }
 
 TEST(TimeoutTests, RunWithTimeoutException) {
-    auto [success, message] = runWithTimeout(
-        []() { throw std::runtime_error("Test exception"); },
-        std::chrono::milliseconds(1000));
+    auto [success, message] =
+        runWithTimeout([]() { throw std::runtime_error("Test exception"); },
+                       std::chrono::milliseconds(1000));
 
     expect_false(success);
     expect_contains(message, "Test exception");
@@ -238,6 +227,4 @@ TEST(TimeoutTests, RunWithTimeoutException) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

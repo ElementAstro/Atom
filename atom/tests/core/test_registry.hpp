@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <mutex>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <unordered_set>
@@ -27,6 +28,10 @@ public:
         return registry;
     }
 
+    void registerTest(std::string_view suiteName, TestCase testCase) {
+        registerTest(std::move(testCase), suiteName);
+    }
+
     /**
      * @brief Register a test suite
      * @param suite The test suite to register
@@ -34,6 +39,23 @@ public:
     void registerSuite(TestSuite suite) {
         std::lock_guard<std::mutex> lock(mutex_);
         suites_.emplace_back(std::move(suite));
+    }
+
+    void registerSuite(std::string_view suiteName) {
+        TestSuite suite;
+        suite.name = std::string(suiteName);
+        registerSuite(std::move(suite));
+    }
+
+    [[nodiscard]] auto getAllSuiteNames() const -> std::vector<std::string> {
+        std::vector<std::string> names;
+        names.reserve(suites_.size());
+        for (const auto& suite : suites_) {
+            if (!suite.name.empty()) {
+                names.push_back(suite.name);
+            }
+        }
+        return names;
     }
 
     /**
@@ -140,6 +162,48 @@ public:
             }
         }
 
+        return result;
+    }
+
+    [[nodiscard]] auto getTestsByTag(std::string_view tag) const
+        -> std::vector<const TestCase*> {
+        return findTestsByTag(tag);
+    }
+
+    [[nodiscard]] auto getTestsInSuite(std::string_view suiteName) const
+        -> std::vector<const TestCase*> {
+        return getTestsFromSuite(suiteName);
+    }
+
+    [[nodiscard]] auto findTestsByPattern(std::string_view pattern) const
+        -> std::vector<const TestCase*> {
+        std::string regexStr;
+        regexStr.reserve(pattern.size() * 2);
+        regexStr.push_back('^');
+        for (char ch : std::string(pattern)) {
+            if (ch == '*') {
+                regexStr += ".*";
+            } else if (ch == '?') {
+                regexStr.push_back('.');
+            } else if (std::isalnum(static_cast<unsigned char>(ch)) ||
+                       ch == '_' || ch == ':' || ch == '/' || ch == '.') {
+                regexStr.push_back(ch);
+            } else {
+                regexStr.push_back('\\');
+                regexStr.push_back(ch);
+            }
+        }
+        regexStr.push_back('$');
+
+        std::regex re(regexStr);
+        std::vector<const TestCase*> result;
+        for (const auto& suite : suites_) {
+            for (const auto& test : suite.testCases) {
+                if (std::regex_search(test.name, re)) {
+                    result.push_back(&test);
+                }
+            }
+        }
         return result;
     }
 
@@ -383,7 +447,8 @@ inline auto setTestEnabled(std::string_view testName, bool enabled) -> bool {
  * @param enabled Whether to enable or disable
  * @return Number of tests modified
  */
-inline auto setSuiteEnabled(std::string_view suiteName, bool enabled) -> size_t {
+inline auto setSuiteEnabled(std::string_view suiteName,
+                            bool enabled) -> size_t {
     size_t count = 0;
     auto& suites = TestRegistry::instance().getSuites();
     for (auto& suite : suites) {

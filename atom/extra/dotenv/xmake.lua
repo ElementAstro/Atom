@@ -44,10 +44,12 @@ target("atom-extra-dotenv")
     add_includedirs(".", {public = true})
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Windows-specific libraries
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("ws2_32")
     end
 

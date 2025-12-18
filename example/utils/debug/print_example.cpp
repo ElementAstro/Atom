@@ -3,11 +3,11 @@
  * @brief Examples for atom::utils print utilities
  */
 
-#include "atom/utils/debug/print.hpp"
 #include <iostream>
 #include <sstream>
 #include <string>
 #include <vector>
+#include "atom/utils/debug/print.hpp"
 
 using namespace atom::utils;
 
@@ -24,7 +24,8 @@ void demonstrateBasicLogging() {
     log(std::cout, LogLevel::DEBUG_LEVEL, "Debug message: value = {}", 42);
     log(std::cout, LogLevel::INFO_LEVEL, "Info message: status = {}", "OK");
     log(std::cout, LogLevel::WARNING_LEVEL, "Warning: memory at {}%", 85);
-    log(std::cout, LogLevel::ERROR_LEVEL, "Error: file {} not found", "config.json");
+    log(std::cout, LogLevel::ERROR_LEVEL, "Error: file {} not found",
+        "config.json");
 }
 
 void demonstratePrintToStream() {
@@ -67,9 +68,12 @@ void demonstrateProgressBar() {
         int filled = i / 2;
         std::cout << "[";
         for (int j = 0; j < 50; ++j) {
-            if (j < filled) std::cout << "=";
-            else if (j == filled) std::cout << ">";
-            else std::cout << " ";
+            if (j < filled)
+                std::cout << "=";
+            else if (j == filled)
+                std::cout << ">";
+            else
+                std::cout << " ";
         }
         std::cout << "]" << std::endl;
     }
@@ -80,8 +84,10 @@ void demonstrateProgressBar() {
         int filled = i / 2;
         std::cout << "[";
         for (int j = 0; j < 50; ++j) {
-            if (j < filled) std::cout << "\u2588";
-            else std::cout << " ";
+            if (j < filled)
+                std::cout << "\u2588";
+            else
+                std::cout << " ";
         }
         std::cout << "]" << std::endl;
     }
@@ -96,7 +102,8 @@ void demonstrateContainerPrinting() {
     std::cout << "--- Vector of integers ---" << std::endl;
     std::cout << "  [";
     for (size_t i = 0; i < numbers.size(); ++i) {
-        if (i > 0) std::cout << ", ";
+        if (i > 0)
+            std::cout << ", ";
         std::cout << numbers[i];
     }
     std::cout << "]" << std::endl;
@@ -104,7 +111,8 @@ void demonstrateContainerPrinting() {
     std::cout << "\n--- Vector of strings ---" << std::endl;
     std::cout << "  [";
     for (size_t i = 0; i < words.size(); ++i) {
-        if (i > 0) std::cout << ", ";
+        if (i > 0)
+            std::cout << ", ";
         std::cout << "\"" << words[i] << "\"";
     }
     std::cout << "]" << std::endl;
@@ -116,10 +124,14 @@ void demonstrateFileLogging() {
     std::stringstream fileSimulator;
 
     log(fileSimulator, LogLevel::INFO_LEVEL, "Application started");
-    log(fileSimulator, LogLevel::INFO_LEVEL, "Loading configuration from {}", "config.yaml");
-    log(fileSimulator, LogLevel::WARNING_LEVEL, "Deprecated API used in {}", "legacy.cpp");
-    log(fileSimulator, LogLevel::INFO_LEVEL, "Server listening on port {}", 8080);
-    log(fileSimulator, LogLevel::ERROR_LEVEL, "Failed to connect to database: {}", "timeout");
+    log(fileSimulator, LogLevel::INFO_LEVEL, "Loading configuration from {}",
+        "config.yaml");
+    log(fileSimulator, LogLevel::WARNING_LEVEL, "Deprecated API used in {}",
+        "legacy.cpp");
+    log(fileSimulator, LogLevel::INFO_LEVEL, "Server listening on port {}",
+        8080);
+    log(fileSimulator, LogLevel::ERROR_LEVEL,
+        "Failed to connect to database: {}", "timeout");
     log(fileSimulator, LogLevel::INFO_LEVEL, "Retrying connection...");
     log(fileSimulator, LogLevel::INFO_LEVEL, "Database connected successfully");
 
@@ -132,13 +144,11 @@ void demonstrateBuildOutput() {
 
     std::cout << "--- Compilation Progress ---" << std::endl;
 
-    std::vector<std::pair<std::string, bool>> files = {
-        {"main.cpp", true},
-        {"utils.cpp", true},
-        {"network.cpp", true},
-        {"database.cpp", false},
-        {"cache.cpp", true}
-    };
+    std::vector<std::pair<std::string, bool>> files = {{"main.cpp", true},
+                                                       {"utils.cpp", true},
+                                                       {"network.cpp", true},
+                                                       {"database.cpp", false},
+                                                       {"cache.cpp", true}};
 
     for (const auto& [file, success] : files) {
         std::cout << "  Compiling " << file << "... ";
@@ -152,8 +162,10 @@ void demonstrateBuildOutput() {
     std::cout << "\n--- Build Summary ---" << std::endl;
     int succeeded = 0, failed = 0;
     for (const auto& [file, success] : files) {
-        if (success) ++succeeded;
-        else ++failed;
+        if (success)
+            ++succeeded;
+        else
+            ++failed;
     }
     printToStream(std::cout, "  Succeeded: {}\n", succeeded);
     printToStream(std::cout, "  Failed: {}\n", failed);

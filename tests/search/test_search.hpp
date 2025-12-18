@@ -107,19 +107,21 @@ TEST_F(SearchEngineTest, SearchByTags) {
         << "Should find documents with 'world' tag";
 
     // Now test multi-tag search (documents that have ALL specified tags)
-    auto result = engine->searchByTags({"greeting", "world"});
+    std::vector<std::string> tags = {"greeting", "world"};
+    auto result = engine->searchByTags(tags);
     // Only doc1 has both "greeting" and "world" tags
     EXPECT_EQ(result.size(), 1)
         << "Should find 1 document with both 'greeting' and 'world' tags";
     if (result.size() > 0) {
-        EXPECT_EQ(result[0]->getId(), "1");
+        EXPECT_EQ(result[0]->getId(), "1");  // DocumentList contains shared_ptr
     }
 }
 
 TEST_F(SearchEngineTest, SearchByContent) {
     auto result = engine->searchByContent("Goodbye");
     ASSERT_EQ(result.size(), 1);
-    ASSERT_EQ(result[0]->getId(), "2");
+    ASSERT_EQ(result[0].document->getId(),
+              "2");  // ScoredDocument has document member
 }
 
 TEST_F(SearchEngineTest, BooleanSearch) {
@@ -129,7 +131,7 @@ TEST_F(SearchEngineTest, BooleanSearch) {
     EXPECT_EQ(result.size(), 1)
         << "Boolean search 'Hello AND world' should find exactly 1 document";
     if (result.size() > 0) {
-        EXPECT_EQ(result[0]->getId(), "1");
+        EXPECT_EQ(result[0]->getId(), "1");  // DocumentList contains shared_ptr
     }
 }
 

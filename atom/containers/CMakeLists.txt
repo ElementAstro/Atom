@@ -11,6 +11,10 @@ include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 set(HEADERS boost_containers.hpp graph.hpp high_performance.hpp intrusive.hpp
             lockfree.hpp)
 
+# Create interface library for header-only module
+add_library(atom-containers INTERFACE)
+add_library(atom::containers ALIAS atom-containers)
+
 # Configure module using standardized function
 atom_configure_module(atom-containers HEADER_ONLY)
 

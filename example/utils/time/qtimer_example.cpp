@@ -3,11 +3,11 @@
  * @brief Examples for atom::utils ElapsedTimer and QTimer
  */
 
-#include "atom/utils/time/qtimer.hpp"
 #include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
+#include "atom/utils/time/qtimer.hpp"
 
 using namespace atom::utils;
 
@@ -40,15 +40,18 @@ void demonstrateTimerValidity() {
     ElapsedTimer timer;
 
     std::cout << "Before start:" << std::endl;
-    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false") << std::endl;
+    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false")
+              << std::endl;
 
     timer.start();
     std::cout << "\nAfter start:" << std::endl;
-    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false") << std::endl;
+    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false")
+              << std::endl;
 
     timer.invalidate();
     std::cout << "\nAfter invalidate:" << std::endl;
-    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false") << std::endl;
+    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false")
+              << std::endl;
 }
 
 void demonstrateAutoStart() {
@@ -60,7 +63,8 @@ void demonstrateAutoStart() {
 
     std::cout << "Timer started in constructor:" << std::endl;
     std::cout << "  Elapsed: " << timer.elapsedMs() << " ms" << std::endl;
-    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false") << std::endl;
+    std::cout << "  isValid(): " << (timer.isValid() ? "true" : "false")
+              << std::endl;
 }
 
 void demonstrateTemplateElapsed() {
@@ -70,10 +74,14 @@ void demonstrateTemplateElapsed() {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
     std::cout << "Using template elapsed<>:" << std::endl;
-    std::cout << "  Nanoseconds: " << timer.elapsed<std::chrono::nanoseconds>() << std::endl;
-    std::cout << "  Microseconds: " << timer.elapsed<std::chrono::microseconds>() << std::endl;
-    std::cout << "  Milliseconds: " << timer.elapsed<std::chrono::milliseconds>() << std::endl;
-    std::cout << "  Seconds: " << timer.elapsed<std::chrono::seconds>() << std::endl;
+    std::cout << "  Nanoseconds: " << timer.elapsed<std::chrono::nanoseconds>()
+              << std::endl;
+    std::cout << "  Microseconds: "
+              << timer.elapsed<std::chrono::microseconds>() << std::endl;
+    std::cout << "  Milliseconds: "
+              << timer.elapsed<std::chrono::milliseconds>() << std::endl;
+    std::cout << "  Seconds: " << timer.elapsed<std::chrono::seconds>()
+              << std::endl;
 }
 
 void demonstrateTimerRestart() {
@@ -82,7 +90,8 @@ void demonstrateTimerRestart() {
     ElapsedTimer timer(true);
 
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
-    std::cout << "First measurement: " << timer.elapsedMs() << " ms" << std::endl;
+    std::cout << "First measurement: " << timer.elapsedMs() << " ms"
+              << std::endl;
 
     timer.start();  // Restart
     std::this_thread::sleep_for(std::chrono::milliseconds(30));
@@ -106,7 +115,8 @@ void demonstrateBenchmarking() {
     std::cout << "Benchmark results:" << std::endl;
     std::cout << "  Iterations: " << iterations << std::endl;
     std::cout << "  Total time: " << elapsed << " ns" << std::endl;
-    std::cout << "  Per iteration: " << (elapsed / iterations) << " ns" << std::endl;
+    std::cout << "  Per iteration: " << (elapsed / iterations) << " ns"
+              << std::endl;
 }
 
 void demonstrateQTimer() {
@@ -163,11 +173,9 @@ void demonstrateTimerComparison() {
         int iterations;
     };
 
-    std::vector<Operation> operations = {
-        {"Vector push_back", 10000},
-        {"String concatenation", 1000},
-        {"Integer arithmetic", 100000}
-    };
+    std::vector<Operation> operations = {{"Vector push_back", 10000},
+                                         {"String concatenation", 1000},
+                                         {"Integer arithmetic", 100000}};
 
     for (const auto& op : operations) {
         ElapsedTimer timer(true);
@@ -189,8 +197,9 @@ void demonstrateTimerComparison() {
             }
         }
 
-        std::cout << op.name << " (" << op.iterations << " iterations): "
-                  << timer.elapsedUs() << " us" << std::endl;
+        std::cout << op.name << " (" << op.iterations
+                  << " iterations): " << timer.elapsedUs() << " us"
+                  << std::endl;
     }
 }
 

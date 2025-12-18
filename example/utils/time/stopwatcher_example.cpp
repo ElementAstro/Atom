@@ -3,12 +3,12 @@
  * @brief Examples for atom::utils StopWatcher
  */
 
-#include "atom/utils/time/stopwatcher.hpp"
 #include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
 #include <vector>
+#include "atom/utils/time/stopwatcher.hpp"
 
 using namespace atom::utils;
 
@@ -35,7 +35,8 @@ void demonstrateBasicUsage() {
     auto stopResult = sw.stop();
     if (stopResult) {
         std::cout << "Elapsed time:" << std::endl;
-        std::cout << "  Milliseconds: " << sw.elapsedMilliseconds() << " ms" << std::endl;
+        std::cout << "  Milliseconds: " << sw.elapsedMilliseconds() << " ms"
+                  << std::endl;
         std::cout << "  Seconds: " << sw.elapsedSeconds() << " s" << std::endl;
         std::cout << "  Formatted: " << sw.elapsedFormatted() << std::endl;
     }
@@ -51,18 +52,21 @@ void demonstratePauseResume() {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     sw.pause();
-    std::cout << "Paused. Time so far: " << sw.elapsedMilliseconds() << " ms" << std::endl;
+    std::cout << "Paused. Time so far: " << sw.elapsedMilliseconds() << " ms"
+              << std::endl;
 
     std::cout << "Sleeping 100ms while paused..." << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    std::cout << "Time after sleep (should be same): " << sw.elapsedMilliseconds() << " ms" << std::endl;
+    std::cout << "Time after sleep (should be same): "
+              << sw.elapsedMilliseconds() << " ms" << std::endl;
 
     sw.resume();
     std::cout << "Resumed. Running for another 50ms..." << std::endl;
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
 
     sw.stop();
-    std::cout << "Final time: " << sw.elapsedMilliseconds() << " ms" << std::endl;
+    std::cout << "Final time: " << sw.elapsedMilliseconds() << " ms"
+              << std::endl;
     std::cout << "(Should be ~100ms, not ~200ms)" << std::endl;
 }
 
@@ -76,7 +80,8 @@ void demonstrateLapTimes() {
     for (int i = 1; i <= 5; ++i) {
         std::this_thread::sleep_for(std::chrono::milliseconds(20 * i));
         sw.lap();
-        std::cout << "  Lap " << i << ": " << sw.elapsedMilliseconds() << " ms" << std::endl;
+        std::cout << "  Lap " << i << ": " << sw.elapsedMilliseconds() << " ms"
+                  << std::endl;
     }
 
     sw.stop();
@@ -120,10 +125,18 @@ void demonstrateStates() {
         auto state = sw.getState();
         std::string stateName;
         switch (state) {
-            case StopWatcherState::Idle: stateName = "Idle"; break;
-            case StopWatcherState::Running: stateName = "Running"; break;
-            case StopWatcherState::Paused: stateName = "Paused"; break;
-            case StopWatcherState::Stopped: stateName = "Stopped"; break;
+            case StopWatcherState::Idle:
+                stateName = "Idle";
+                break;
+            case StopWatcherState::Running:
+                stateName = "Running";
+                break;
+            case StopWatcherState::Paused:
+                stateName = "Paused";
+                break;
+            case StopWatcherState::Stopped:
+                stateName = "Stopped";
+                break;
         }
         std::cout << "  Current state: " << stateName << std::endl;
     };
@@ -161,12 +174,14 @@ void demonstrateCallbacks() {
         std::cout << "  [Callback] 50ms interval triggered" << std::endl;
     });
 
-    std::cout << "Running with 50ms interval callback for 200ms..." << std::endl;
+    std::cout << "Running with 50ms interval callback for 200ms..."
+              << std::endl;
     sw.start();
     std::this_thread::sleep_for(std::chrono::milliseconds(200));
     sw.stop();
 
-    std::cout << "Stopped. Total time: " << sw.elapsedMilliseconds() << " ms" << std::endl;
+    std::cout << "Stopped. Total time: " << sw.elapsedMilliseconds() << " ms"
+              << std::endl;
 }
 
 void demonstrateBenchmarking() {
@@ -219,9 +234,12 @@ void demonstrateMultipleTimers() {
     total.stop();
 
     std::cout << "\nTiming results:" << std::endl;
-    std::cout << "  Phase 1: " << phase1.elapsedMilliseconds() << " ms" << std::endl;
-    std::cout << "  Phase 2: " << phase2.elapsedMilliseconds() << " ms" << std::endl;
-    std::cout << "  Total: " << total.elapsedMilliseconds() << " ms" << std::endl;
+    std::cout << "  Phase 1: " << phase1.elapsedMilliseconds() << " ms"
+              << std::endl;
+    std::cout << "  Phase 2: " << phase2.elapsedMilliseconds() << " ms"
+              << std::endl;
+    std::cout << "  Total: " << total.elapsedMilliseconds() << " ms"
+              << std::endl;
 }
 
 int main() {

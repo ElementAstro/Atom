@@ -3,11 +3,11 @@
  * @brief Examples for atom::utils UUID class
  */
 
-#include "atom/utils/random/uuid.hpp"
 #include <iostream>
 #include <set>
 #include <string>
 #include <vector>
+#include "atom/utils/random/uuid.hpp"
 
 using namespace atom::utils;
 
@@ -57,17 +57,15 @@ void demonstrateUUIDParsing() {
 
     std::vector<std::string> testStrings = {
         "550e8400-e29b-41d4-a716-446655440000",
-        "550E8400-E29B-41D4-A716-446655440000",
-        "invalid-uuid-string",
-        "550e8400e29b41d4a716446655440000",
-        ""
-    };
+        "550E8400-E29B-41D4-A716-446655440000", "invalid-uuid-string",
+        "550e8400e29b41d4a716446655440000", ""};
 
     for (const auto& str : testStrings) {
         std::cout << "Parsing: \"" << str << "\"" << std::endl;
         auto result = UUID::fromString(str);
         if (result.has_value()) {
-            std::cout << "  Success: " << result.value().toString() << std::endl;
+            std::cout << "  Success: " << result.value().toString()
+                      << std::endl;
         } else {
             std::cout << "  Failed: Invalid UUID format" << std::endl;
         }
@@ -78,17 +76,14 @@ void demonstrateUUIDValidation() {
     printSection("4. UUID Validation");
 
     std::vector<std::string> testStrings = {
-        "550e8400-e29b-41d4-a716-446655440000",
-        "not-a-uuid",
-        "550e8400-e29b-41d4-a716",
-        "550e8400-e29b-41d4-a716-4466554400001",
-        "gggggggg-gggg-gggg-gggg-gggggggggggg"
-    };
+        "550e8400-e29b-41d4-a716-446655440000", "not-a-uuid",
+        "550e8400-e29b-41d4-a716", "550e8400-e29b-41d4-a716-4466554400001",
+        "gggggggg-gggg-gggg-gggg-gggggggggggg"};
 
     for (const auto& str : testStrings) {
         bool valid = UUID::isValidUUID(str);
-        std::cout << "  \"" << str << "\": "
-                  << (valid ? "Valid" : "Invalid") << std::endl;
+        std::cout << "  \"" << str << "\": " << (valid ? "Valid" : "Invalid")
+                  << std::endl;
     }
 }
 
@@ -104,10 +99,14 @@ void demonstrateUUIDComparison() {
     std::cout << "UUID 3: (copy of UUID 1)" << std::endl;
 
     std::cout << "\nComparisons:" << std::endl;
-    std::cout << "  UUID 1 == UUID 2: " << (uuid1 == uuid2 ? "true" : "false") << std::endl;
-    std::cout << "  UUID 1 == UUID 3: " << (uuid1 == uuid3 ? "true" : "false") << std::endl;
-    std::cout << "  UUID 1 != UUID 2: " << (uuid1 != uuid2 ? "true" : "false") << std::endl;
-    std::cout << "  UUID 1 < UUID 2: " << (uuid1 < uuid2 ? "true" : "false") << std::endl;
+    std::cout << "  UUID 1 == UUID 2: " << (uuid1 == uuid2 ? "true" : "false")
+              << std::endl;
+    std::cout << "  UUID 1 == UUID 3: " << (uuid1 == uuid3 ? "true" : "false")
+              << std::endl;
+    std::cout << "  UUID 1 != UUID 2: " << (uuid1 != uuid2 ? "true" : "false")
+              << std::endl;
+    std::cout << "  UUID 1 < UUID 2: " << (uuid1 < uuid2 ? "true" : "false")
+              << std::endl;
 }
 
 void demonstrateUUIDUniqueness() {
@@ -126,7 +125,8 @@ void demonstrateUUIDUniqueness() {
     std::cout << "  Generated: " << count << std::endl;
     std::cout << "  Unique: " << uuids.size() << std::endl;
     std::cout << "  Duplicates: " << (count - uuids.size()) << std::endl;
-    std::cout << "  All unique: " << (uuids.size() == count ? "Yes" : "No") << std::endl;
+    std::cout << "  All unique: " << (uuids.size() == count ? "Yes" : "No")
+              << std::endl;
 }
 
 void demonstrateNameBasedUUID() {
@@ -146,7 +146,8 @@ void demonstrateNameBasedUUID() {
     std::cout << "(Same name + namespace = same UUID)" << std::endl;
 
     std::cout << "\nDifferent names:" << std::endl;
-    std::vector<std::string> names = {"alice@example.com", "bob@example.com", "charlie@example.com"};
+    std::vector<std::string> names = {"alice@example.com", "bob@example.com",
+                                      "charlie@example.com"};
     for (const auto& n : names) {
         UUID uuid = UUID::generateV5(namespace_uuid, n);
         std::cout << "  " << n << " -> " << uuid.toString() << std::endl;
@@ -165,7 +166,8 @@ void demonstrateUUIDData() {
     for (size_t i = 0; i < data.size(); ++i) {
         std::cout << std::hex << std::setw(2) << std::setfill('0')
                   << static_cast<int>(data[i]);
-        if (i == 3 || i == 5 || i == 7 || i == 9) std::cout << "-";
+        if (i == 3 || i == 5 || i == 7 || i == 9)
+            std::cout << "-";
     }
     std::cout << std::dec << std::endl;
 

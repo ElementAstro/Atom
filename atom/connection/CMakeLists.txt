@@ -126,6 +126,7 @@ endif()
 
 # Create library target
 add_library(atom-connection STATIC ${SOURCES} ${HEADERS})
+add_library(atom::connection ALIAS atom-connection)
 
 # Configure module using standardized function
 atom_configure_module(atom-connection)

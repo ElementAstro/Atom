@@ -665,7 +665,8 @@ private:
 
 /**
  * @brief Factory function to create a specific reporter instance
- * @param format Report format identifier ("console", "json", "xml", "html", "markdown")
+ * @param format Report format identifier ("console", "json", "xml", "html",
+ * "markdown")
  * @return Smart pointer to the appropriate reporter implementation
  */
 [[nodiscard]] inline auto createReporter(std::string_view format)

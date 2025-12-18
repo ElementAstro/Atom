@@ -60,9 +60,8 @@ TEST_F(TestDataBuilderTest, BuildWithDefaults) {
 }
 
 TEST_F(TestDataBuilderTest, BuildMany) {
-    auto people = TestDataBuilder<Person>()
-                      .set(&Person::active, true)
-                      .buildMany(5);
+    auto people =
+        TestDataBuilder<Person>().set(&Person::active, true).buildMany(5);
 
     EXPECT_EQ(people.size(), 5);
     for (const auto& person : people) {
@@ -72,13 +71,12 @@ TEST_F(TestDataBuilderTest, BuildMany) {
 
 TEST_F(TestDataBuilderTest, BuildWithVariations) {
     std::vector<std::function<void(Person&)>> variations = {
-        [](Person& p) { p.name = "Alice"; },
-        [](Person& p) { p.name = "Bob"; },
+        [](Person& p) { p.name = "Alice"; }, [](Person& p) { p.name = "Bob"; },
         [](Person& p) { p.name = "Charlie"; }};
 
-    auto people =
-        TestDataBuilder<Person>().set(&Person::age, 25).buildWithVariations(
-            variations);
+    auto people = TestDataBuilder<Person>()
+                      .set(&Person::age, 25)
+                      .buildWithVariations(variations);
 
     EXPECT_EQ(people.size(), 3);
     EXPECT_EQ(people[0].name, "Alice");
@@ -357,20 +355,25 @@ TEST_F(BoundaryValuesTest, ArrayIndexBoundaries) {
 // TestDataFixture Tests
 // ============================================================================
 
-class TestDataFixtureTest : public TestDataFixture {
+class TestDataFixtureTest : public ::testing::Test {
 protected:
-    void SetUp() override { TestDataFixture::SetUp(); }
-    void TearDown() override { TestDataFixture::TearDown(); }
+    void SetUp() override {}
+    void TearDown() override {}
+
+    TestDataFixture<Person> fixture_;
 };
 
-TEST_F(TestDataFixtureTest, RandomDataAvailable) {
-    EXPECT_NE(random(), nullptr);
+TEST_F(TestDataFixtureTest, AddAndRetrieveData) {
+    Person p{"Alice", 30, true};
+    fixture_.addData("alice", p);
+    EXPECT_TRUE(fixture_.hasData("alice"));
+    EXPECT_EQ(fixture_.getData("alice").name, "Alice");
 }
 
-TEST_F(TestDataFixtureTest, UseRandomData) {
-    int value = random()->randomInt(0, 100);
-    EXPECT_GE(value, 0);
-    EXPECT_LE(value, 100);
+TEST_F(TestDataFixtureTest, GetAllData) {
+    fixture_.addData("alice", Person{"Alice", 30, true});
+    fixture_.addData("bob", Person{"Bob", 25, false});
+    EXPECT_EQ(fixture_.getAllData().size(), 2);
 }
 
 // ============================================================================

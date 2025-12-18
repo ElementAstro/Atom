@@ -99,7 +99,8 @@ public:
      * program name)
      * @return ParseResult containing success status and any error messages
      */
-    [[nodiscard]] auto parse(std::span<const std::string_view> args) -> ParseResult {
+    [[nodiscard]] auto parse(std::span<const std::string_view> args)
+        -> ParseResult {
         ParseResult result;
         if (!args.empty()) {
             programName_ = std::string(args[0]);
@@ -208,14 +209,17 @@ public:
     void applyToConfig(TestRunnerConfig& config) const {
         if (contains("--parallel")) {
             config.enableParallel = true;
-            config.numThreads = getValue<int>("--threads", config.numThreads);
+            config.numThreads =
+                std::max(1, getValue<int>("--threads", config.numThreads));
         } else if (contains("--threads")) {
             config.enableParallel = true;
-            config.numThreads = getValue<int>("--threads", config.numThreads);
+            config.numThreads =
+                std::max(1, getValue<int>("--threads", config.numThreads));
         }
 
         if (contains("--retry")) {
-            config.maxRetries = getValue<int>("--retry", config.maxRetries);
+            config.maxRetries =
+                std::max(0, getValue<int>("--retry", config.maxRetries));
         }
 
         if (contains("--fail-fast")) {
@@ -251,12 +255,14 @@ public:
         if (contains("--shuffle")) {
             config.shuffleTests = true;
             if (contains("--seed")) {
-                config.randomSeed =
-                    getValue<int>("--seed", config.randomSeed.value_or(0));
+                int seed = getValue<int>(
+                    "--seed", static_cast<int>(config.randomSeed.value_or(0)));
+                config.randomSeed = static_cast<uint64_t>(std::max(0, seed));
             }
         } else if (contains("--seed")) {
-            config.randomSeed =
-                getValue<int>("--seed", config.randomSeed.value_or(0));
+            int seed = getValue<int>(
+                "--seed", static_cast<int>(config.randomSeed.value_or(0)));
+            config.randomSeed = static_cast<uint64_t>(std::max(0, seed));
         }
     }
 
@@ -284,8 +290,8 @@ private:
      * program name)
      * @return ParseResult containing success status and any error messages
      */
-    [[nodiscard]] auto parseArgsWithResult(std::span<const std::string_view> args)
-        -> ParseResult {
+    [[nodiscard]] auto parseArgsWithResult(
+        std::span<const std::string_view> args) -> ParseResult {
         ParseResult result;
 
         for (auto& [name, option] : options_) {
@@ -424,10 +430,9 @@ private:
                         optionPtr->value = std::string(valueArg);
                     }
                 } catch (const std::exception& e) {
-                    result.errorMessage = "Invalid value '" +
-                                          std::string(valueArg) +
-                                          "' for option " + std::string(arg) +
-                                          ". " + e.what();
+                    result.errorMessage =
+                        "Invalid value '" + std::string(valueArg) +
+                        "' for option " + std::string(arg) + ". " + e.what();
                     return result;
                 }
             }

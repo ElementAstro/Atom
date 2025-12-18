@@ -146,7 +146,7 @@ target("atom-sysinfo-object")
     -- Platform-specific settings
     if is_plat("linux") then
         add_syslinks("pthread")
-    elseif is_plat("windows") then
+    elseif is_plat("windows", "mingw") then
         add_syslinks("pdh", "wlanapi")
     end
 
@@ -166,7 +166,7 @@ target("atom-sysinfo")
     -- Platform-specific settings
     if is_plat("linux") then
         add_syslinks("pthread")
-    elseif is_plat("windows") then
+    elseif is_plat("windows", "mingw") then
         add_syslinks("pdh", "wlanapi")
     end
 

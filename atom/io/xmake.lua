@@ -21,7 +21,11 @@ set_languages("c11", "cxx17")
 add_rules("mode.debug", "mode.release")
 
 -- Add required packages
-add_requires("loguru", "minizip", "zlib", "tbb")
+local use_system_packages = has_config("use_system_packages")
+add_requires("loguru", {system = use_system_packages})
+add_requires("minizip", {system = use_system_packages})
+add_requires("zlib", {system = use_system_packages})
+add_requires("tbb", {system = use_system_packages})
 
 -- Define sources and headers from new structure
 local sources = {
@@ -87,10 +91,12 @@ target("atom-io")
     add_packages("loguru", "minizip", "zlib", "tbb")
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Windows-specific libraries
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("ws2_32", "wsock32")
     end
 
@@ -136,10 +142,12 @@ target("atom-io-object")
     -- Configuration
     add_includedirs(".")
     add_packages("loguru", "minizip", "zlib", "tbb")
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Windows-specific libraries
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("ws2_32", "wsock32")
     end
 

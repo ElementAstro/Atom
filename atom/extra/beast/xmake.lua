@@ -10,10 +10,11 @@ set_license("GPL-3.0")
 set_languages("c++20")
 
 -- Add required packages
-add_requires("boost", {configs = {system = true}})
-add_requires("nlohmann_json")
-add_requires("fmt")
-add_requires("spdlog")
+local use_system_packages = has_config("use_system_packages")
+add_requires("boost", {configs = {system = use_system_packages}})
+add_requires("nlohmann_json", {system = use_system_packages})
+add_requires("fmt", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages})
 
 -- Source files
 local sources = {

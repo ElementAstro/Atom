@@ -18,9 +18,7 @@ class IntegerTest : public ParameterizedTest<int> {};
 
 INSTANTIATE_TEST_SUITE_P(Integers, IntegerTest, Values({1, 2, 3, 4, 5}));
 
-TEST_P(IntegerTest, IsPositive) {
-    expect_gt(GetParam(), 0);
-}
+TEST_P(IntegerTest, IsPositive) { expect_gt(GetParam(), 0); }
 
 TEST_P(IntegerTest, SquareIsPositive) {
     int value = GetParam();
@@ -35,9 +33,7 @@ class RangeTest : public ParameterizedTest<int> {};
 
 INSTANTIATE_TEST_SUITE_P(Range0To10, RangeTest, Range(0, 10, 2));
 
-TEST_P(RangeTest, IsEven) {
-    expect_eq(GetParam() % 2, 0);
-}
+TEST_P(RangeTest, IsEven) { expect_eq(GetParam() % 2, 0); }
 
 // ============================================================================
 // Boolean Parameterized Tests
@@ -58,17 +54,13 @@ TEST_P(BoolTest, DoubleNegationIsIdentity) {
 
 class StringTest : public ParameterizedTest<std::string> {};
 
-INSTANTIATE_TEST_SUITE_P(
-    Strings, StringTest,
-    Values<std::string>({"hello", "world", "test", "atom"}));
+INSTANTIATE_TEST_SUITE_P(Strings, StringTest,
+                         Values<std::string>({"hello", "world", "test",
+                                              "atom"}));
 
-TEST_P(StringTest, IsNotEmpty) {
-    expect_not_empty(GetParam());
-}
+TEST_P(StringTest, IsNotEmpty) { expect_not_empty(GetParam()); }
 
-TEST_P(StringTest, HasPositiveLength) {
-    expect_gt(GetParam().length(), 0);
-}
+TEST_P(StringTest, HasPositiveLength) { expect_gt(GetParam().length(), 0); }
 
 // ============================================================================
 // Floating Point Parameterized Tests
@@ -146,9 +138,7 @@ INSTANTIATE_TEST_SUITE_P(
     NamedParams, NamedParamTest,
     ValuesIn<int>({{"zero", 0}, {"one", 1}, {"two", 2}, {"ten", 10}}));
 
-TEST_P(NamedParamTest, IsNonNegative) {
-    expect_ge(GetParam(), 0);
-}
+TEST_P(NamedParamTest, IsNonNegative) { expect_ge(GetParam(), 0); }
 
 // ============================================================================
 // Fibonacci Test
@@ -162,7 +152,8 @@ INSTANTIATE_TEST_SUITE_P(
         {{0, 0}, {1, 1}, {2, 1}, {3, 2}, {4, 3}, {5, 5}, {6, 8}, {7, 13}}));
 
 int fibonacci(int n) {
-    if (n <= 1) return n;
+    if (n <= 1)
+        return n;
     int a = 0, b = 1;
     for (int i = 2; i <= n; ++i) {
         int temp = a + b;
@@ -184,25 +175,26 @@ TEST_P(FibonacciTest, ComputesCorrectly) {
 class PrimeTest : public ParameterizedTest<std::pair<int, bool>> {};
 
 bool isPrime(int n) {
-    if (n < 2) return false;
+    if (n < 2)
+        return false;
     for (int i = 2; i * i <= n; ++i) {
-        if (n % i == 0) return false;
+        if (n % i == 0)
+            return false;
     }
     return true;
 }
 
-INSTANTIATE_TEST_SUITE_P(
-    Primes, PrimeTest,
-    Values<std::pair<int, bool>>({{2, true},
-                                   {3, true},
-                                   {4, false},
-                                   {5, true},
-                                   {6, false},
-                                   {7, true},
-                                   {8, false},
-                                   {9, false},
-                                   {10, false},
-                                   {11, true}}));
+INSTANTIATE_TEST_SUITE_P(Primes, PrimeTest,
+                         Values<std::pair<int, bool>>({{2, true},
+                                                       {3, true},
+                                                       {4, false},
+                                                       {5, true},
+                                                       {6, false},
+                                                       {7, true},
+                                                       {8, false},
+                                                       {9, false},
+                                                       {10, false},
+                                                       {11, true}}));
 
 TEST_P(PrimeTest, IsPrimeCorrect) {
     const auto& [n, expected] = GetParam();
@@ -213,6 +205,4 @@ TEST_P(PrimeTest, IsPrimeCorrect) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

@@ -87,8 +87,9 @@ void basicConnectionExample(const std::string& host,
 
         Logger::log(Logger::LOG_INFO, "Example1",
                     "Created SSHClient for host: " + host);
-        Logger::log(Logger::LOG_INFO, "Example1",
-                    "isConnected: " + std::string(client.isConnected() ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example1",
+            "isConnected: " + std::string(client.isConnected() ? "yes" : "no"));
 
         // Connect with credentials
         Logger::log(Logger::LOG_INFO, "Example1",
@@ -109,14 +110,15 @@ void basicConnectionExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1", "Basic connection example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Basic connection example completed\n");
 }
 
 // Example 2: Single command execution
-void singleCommandExample(const std::string& host,
-                          const std::string& username,
+void singleCommandExample(const std::string& host, const std::string& username,
                           const std::string& password) {
-    Logger::log(Logger::LOG_INFO, "Example2", "=== Single Command Execution ===");
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "=== Single Command Execution ===");
 
     try {
         atom::connection::SSHClient client(host, 22);
@@ -126,23 +128,18 @@ void singleCommandExample(const std::string& host,
             Logger::log(Logger::LOG_SUCCESS, "Example2", "Connected");
 
             // Execute various commands
-            std::vector<std::string> commands = {
-                "whoami",
-                "pwd",
-                "date",
-                "uname -a",
-                "ls -la /tmp"
-            };
+            std::vector<std::string> commands = {"whoami", "pwd", "date",
+                                                 "uname -a", "ls -la /tmp"};
 
             for (const auto& cmd : commands) {
-                Logger::log(Logger::LOG_INFO, "Example2",
-                            "Executing: " + cmd);
+                Logger::log(Logger::LOG_INFO, "Example2", "Executing: " + cmd);
 
                 std::vector<std::string> output;
                 client.executeCommand(cmd, output);
 
-                Logger::log(Logger::LOG_SUCCESS, "Example2",
-                            "Output (" + std::to_string(output.size()) + " lines):");
+                Logger::log(
+                    Logger::LOG_SUCCESS, "Example2",
+                    "Output (" + std::to_string(output.size()) + " lines):");
                 for (const auto& line : output) {
                     std::cout << "  " << line << std::endl;
                 }
@@ -156,14 +153,16 @@ void singleCommandExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2", "Single command example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "Single command example completed\n");
 }
 
 // Example 3: Multiple commands execution
 void multipleCommandsExample(const std::string& host,
                              const std::string& username,
                              const std::string& password) {
-    Logger::log(Logger::LOG_INFO, "Example3", "=== Multiple Commands Execution ===");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "=== Multiple Commands Execution ===");
 
     try {
         atom::connection::SSHClient client(host, 22);
@@ -174,21 +173,19 @@ void multipleCommandsExample(const std::string& host,
 
             // Prepare multiple commands
             std::vector<std::string> commands = {
-                "echo 'Step 1: Check system'",
-                "hostname",
-                "echo 'Step 2: Check disk'",
-                "df -h",
-                "echo 'Step 3: Check memory'",
-                "free -m"
-            };
+                "echo 'Step 1: Check system'", "hostname",
+                "echo 'Step 2: Check disk'",   "df -h",
+                "echo 'Step 3: Check memory'", "free -m"};
 
-            Logger::log(Logger::LOG_INFO, "Example3",
-                        "Executing " + std::to_string(commands.size()) + " commands");
+            Logger::log(
+                Logger::LOG_INFO, "Example3",
+                "Executing " + std::to_string(commands.size()) + " commands");
 
             std::vector<std::vector<std::string>> outputs;
             client.executeCommands(commands, outputs);
 
-            Logger::log(Logger::LOG_SUCCESS, "Example3", "All commands executed");
+            Logger::log(Logger::LOG_SUCCESS, "Example3",
+                        "All commands executed");
 
             for (size_t i = 0; i < commands.size() && i < outputs.size(); ++i) {
                 Logger::log(Logger::LOG_INFO, "Example3",
@@ -206,12 +203,12 @@ void multipleCommandsExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3", "Multiple commands example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "Multiple commands example completed\n");
 }
 
 // Example 4: File existence check
-void fileExistsExample(const std::string& host,
-                       const std::string& username,
+void fileExistsExample(const std::string& host, const std::string& username,
                        const std::string& password) {
     Logger::log(Logger::LOG_INFO, "Example4", "=== File Existence Check ===");
 
@@ -224,12 +221,8 @@ void fileExistsExample(const std::string& host,
 
             // Check various paths
             std::vector<std::string> paths = {
-                "/etc/passwd",
-                "/etc/hosts",
-                "/tmp",
-                "/nonexistent/path/file.txt",
-                "/home"
-            };
+                "/etc/passwd", "/etc/hosts", "/tmp",
+                "/nonexistent/path/file.txt", "/home"};
 
             for (const auto& path : paths) {
                 bool exists = client.fileExists(path);
@@ -246,7 +239,8 @@ void fileExistsExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example4", "File exists example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "File exists example completed\n");
 }
 
 // Example 5: Directory operations
@@ -262,8 +256,11 @@ void directoryOperationsExample(const std::string& host,
         if (client.isConnected()) {
             Logger::log(Logger::LOG_SUCCESS, "Example5", "Connected");
 
-            std::string testDir = "/tmp/ssh_example_dir_" +
-                std::to_string(std::chrono::system_clock::now().time_since_epoch().count());
+            std::string testDir =
+                "/tmp/ssh_example_dir_" +
+                std::to_string(std::chrono::system_clock::now()
+                                   .time_since_epoch()
+                                   .count());
 
             // Create directory
             Logger::log(Logger::LOG_INFO, "Example5",
@@ -298,12 +295,12 @@ void directoryOperationsExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example5", "Directory operations example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "Directory operations example completed\n");
 }
 
 // Example 6: File upload and download
-void fileTransferExample(const std::string& host,
-                         const std::string& username,
+void fileTransferExample(const std::string& host, const std::string& username,
                          const std::string& password) {
     Logger::log(Logger::LOG_INFO, "Example6", "=== File Upload/Download ===");
 
@@ -322,7 +319,11 @@ void fileTransferExample(const std::string& host,
             {
                 std::ofstream ofs(localFile);
                 ofs << "SSH File Transfer Test\n";
-                ofs << "Timestamp: " << std::chrono::system_clock::now().time_since_epoch().count() << "\n";
+                ofs << "Timestamp: "
+                    << std::chrono::system_clock::now()
+                           .time_since_epoch()
+                           .count()
+                    << "\n";
                 ofs << "This file was uploaded via SSHClient.\n";
             }
             Logger::log(Logger::LOG_INFO, "Example6",
@@ -342,13 +343,15 @@ void fileTransferExample(const std::string& host,
                 // Get file info
                 sftp_attributes attrs;
                 client.getFileInfo(remoteFile, attrs);
-                Logger::log(Logger::LOG_INFO, "Example6",
-                            "File size: " + std::to_string(attrs->size) + " bytes");
+                Logger::log(
+                    Logger::LOG_INFO, "Example6",
+                    "File size: " + std::to_string(attrs->size) + " bytes");
                 sftp_attributes_free(attrs);
 
                 // Download file
-                Logger::log(Logger::LOG_INFO, "Example6",
-                            "Downloading: " + remoteFile + " -> " + downloadFile);
+                Logger::log(
+                    Logger::LOG_INFO, "Example6",
+                    "Downloading: " + remoteFile + " -> " + downloadFile);
                 client.downloadFile(remoteFile, downloadFile);
                 Logger::log(Logger::LOG_SUCCESS, "Example6", "File downloaded");
 
@@ -356,12 +359,14 @@ void fileTransferExample(const std::string& host,
                 if (std::filesystem::exists(downloadFile)) {
                     auto size = std::filesystem::file_size(downloadFile);
                     Logger::log(Logger::LOG_SUCCESS, "Example6",
-                                "Downloaded file size: " + std::to_string(size) + " bytes");
+                                "Downloaded file size: " +
+                                    std::to_string(size) + " bytes");
                 }
 
                 // Clean up remote file
                 client.removeFile(remoteFile);
-                Logger::log(Logger::LOG_INFO, "Example6", "Remote file removed");
+                Logger::log(Logger::LOG_INFO, "Example6",
+                            "Remote file removed");
             }
 
             // Clean up local files
@@ -377,12 +382,12 @@ void fileTransferExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example6", "File transfer example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example6",
+                "File transfer example completed\n");
 }
 
 // Example 7: File rename
-void fileRenameExample(const std::string& host,
-                       const std::string& username,
+void fileRenameExample(const std::string& host, const std::string& username,
                        const std::string& password) {
     Logger::log(Logger::LOG_INFO, "Example7", "=== File Rename ===");
 
@@ -398,7 +403,8 @@ void fileRenameExample(const std::string& host,
 
             // Create file via command
             std::vector<std::string> output;
-            client.executeCommand("echo 'Rename test' > " + originalFile, output);
+            client.executeCommand("echo 'Rename test' > " + originalFile,
+                                  output);
             Logger::log(Logger::LOG_INFO, "Example7",
                         "Created file: " + originalFile);
 
@@ -430,7 +436,8 @@ void fileRenameExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example7", "File rename example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example7",
+                "File rename example completed\n");
 }
 
 // Example 8: Directory upload
@@ -456,15 +463,17 @@ void directoryUploadExample(const std::string& host,
             {
                 std::ofstream(localDir + "/file1.txt") << "File 1 content\n";
                 std::ofstream(localDir + "/file2.txt") << "File 2 content\n";
-                std::ofstream(localDir + "/subdir1/nested.txt") << "Nested file\n";
+                std::ofstream(localDir + "/subdir1/nested.txt")
+                    << "Nested file\n";
             }
 
             Logger::log(Logger::LOG_INFO, "Example8",
                         "Created local directory structure: " + localDir);
 
             // Upload directory
-            Logger::log(Logger::LOG_INFO, "Example8",
-                        "Uploading directory: " + localDir + " -> " + remoteDir);
+            Logger::log(
+                Logger::LOG_INFO, "Example8",
+                "Uploading directory: " + localDir + " -> " + remoteDir);
             client.uploadDirectory(localDir, remoteDir);
             Logger::log(Logger::LOG_SUCCESS, "Example8", "Directory uploaded");
 
@@ -472,7 +481,8 @@ void directoryUploadExample(const std::string& host,
             if (client.fileExists(remoteDir)) {
                 auto contents = client.listDirectory(remoteDir);
                 Logger::log(Logger::LOG_INFO, "Example8",
-                            "Remote directory contents (" + std::to_string(contents.size()) + " items):");
+                            "Remote directory contents (" +
+                                std::to_string(contents.size()) + " items):");
                 for (const auto& item : contents) {
                     std::cout << "  " << item << std::endl;
                 }
@@ -492,12 +502,12 @@ void directoryUploadExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example8", "Directory upload example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example8",
+                "Directory upload example completed\n");
 }
 
 // Example 9: Move semantics
-void moveSemanticsExample(const std::string& host,
-                          const std::string& username,
+void moveSemanticsExample(const std::string& host, const std::string& username,
                           const std::string& password) {
     Logger::log(Logger::LOG_INFO, "Example9", "=== Move Semantics ===");
 
@@ -507,14 +517,16 @@ void moveSemanticsExample(const std::string& host,
         client1.connect(username, password);
 
         Logger::log(Logger::LOG_INFO, "Example9",
-                    "client1 connected: " + std::string(client1.isConnected() ? "yes" : "no"));
+                    "client1 connected: " +
+                        std::string(client1.isConnected() ? "yes" : "no"));
 
         // Move to new client
         atom::connection::SSHClient client2 = std::move(client1);
 
         Logger::log(Logger::LOG_INFO, "Example9", "After move:");
         Logger::log(Logger::LOG_INFO, "Example9",
-                    "client2 connected: " + std::string(client2.isConnected() ? "yes" : "no"));
+                    "client2 connected: " +
+                        std::string(client2.isConnected() ? "yes" : "no"));
 
         // Use moved client
         if (client2.isConnected()) {
@@ -532,12 +544,12 @@ void moveSemanticsExample(const std::string& host,
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example9", "Move semantics example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example9",
+                "Move semantics example completed\n");
 }
 
 // Example 10: Error handling
-void errorHandlingExample(const std::string& host,
-                          const std::string& username,
+void errorHandlingExample(const std::string& host, const std::string& username,
                           const std::string& password) {
     Logger::log(Logger::LOG_INFO, "Example10", "=== Error Handling ===");
 
@@ -553,7 +565,8 @@ void errorHandlingExample(const std::string& host,
 
     // Test invalid credentials
     try {
-        Logger::log(Logger::LOG_INFO, "Example10", "Testing invalid credentials...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Testing invalid credentials...");
         atom::connection::SSHClient client(host, 22);
         client.connect("invalid_user", "invalid_pass", 5);
     } catch (const std::exception& e) {
@@ -563,7 +576,8 @@ void errorHandlingExample(const std::string& host,
 
     // Test operations on disconnected client
     try {
-        Logger::log(Logger::LOG_INFO, "Example10", "Testing operations when disconnected...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Testing operations when disconnected...");
         atom::connection::SSHClient client(host, 22);
         // Don't connect, try to execute command
         std::vector<std::string> output;
@@ -573,7 +587,8 @@ void errorHandlingExample(const std::string& host,
                     "Expected error (not connected): " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example10", "Error handling example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "Error handling example completed\n");
 }
 
 int main() {
@@ -582,13 +597,14 @@ int main() {
     std::string username = "testuser";
     std::string password = "testpass";
 
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_INFO, "Main", "  SSHClient Comprehensive Examples");
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_WARNING, "Main",
                 "Note: Requires SSH server and libssh library");
-    Logger::log(Logger::LOG_INFO, "Main",
-                "Target: " + username + "@" + host);
+    Logger::log(Logger::LOG_INFO, "Main", "Target: " + username + "@" + host);
     Logger::log(Logger::LOG_INFO, "Main", "");
 
     // Run all examples
@@ -603,9 +619,12 @@ int main() {
     moveSemanticsExample(host, username, password);
     errorHandlingExample(host, username, password);
 
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "  All SSHClient examples completed!");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "  All SSHClient examples completed!");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
 
     return 0;
 }
@@ -616,8 +635,10 @@ int main() {
     std::cout << "  SSHClient Example" << std::endl;
     std::cout << "========================================" << std::endl;
     std::cout << std::endl;
-    std::cout << "This example requires libssh library to be available." << std::endl;
-    std::cout << "Please install libssh and rebuild with SSH support enabled." << std::endl;
+    std::cout << "This example requires libssh library to be available."
+              << std::endl;
+    std::cout << "Please install libssh and rebuild with SSH support enabled."
+              << std::endl;
     std::cout << std::endl;
     std::cout << "Installation:" << std::endl;
     std::cout << "  Ubuntu/Debian: sudo apt install libssh-dev" << std::endl;

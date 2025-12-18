@@ -3,9 +3,9 @@
  * @brief Examples for atom::utils XMLReader
  */
 
-#include "atom/utils/format/xml.hpp"
 #include <iostream>
 #include <string>
+#include "atom/utils/format/xml.hpp"
 
 using namespace atom::utils;
 

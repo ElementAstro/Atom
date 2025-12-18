@@ -3,9 +3,9 @@
  * @brief Examples for atom::utils QDateTime
  */
 
-#include "atom/utils/time/qdatetime.hpp"
 #include <iostream>
 #include <string>
+#include "atom/utils/time/qdatetime.hpp"
 
 using namespace atom::utils;
 
@@ -22,7 +22,8 @@ void demonstrateCurrentDateTime() {
 
     std::cout << "Current date/time:" << std::endl;
     std::cout << "  toString(): " << now.toString() << std::endl;
-    std::cout << "  ISO format: " << now.toString("yyyy-MM-dd HH:mm:ss") << std::endl;
+    std::cout << "  ISO format: " << now.toString("yyyy-MM-dd HH:mm:ss")
+              << std::endl;
 
     auto date = now.date();
     std::cout << "\nDate components:" << std::endl;
@@ -43,14 +44,16 @@ void demonstrateDateTimeConstruction() {
 
     std::cout << "--- From components ---" << std::endl;
     QDateTime dt1(2024, 12, 25, 10, 30, 0);
-    std::cout << "  QDateTime(2024, 12, 25, 10, 30, 0): " << dt1.toString() << std::endl;
+    std::cout << "  QDateTime(2024, 12, 25, 10, 30, 0): " << dt1.toString()
+              << std::endl;
 
     QDateTime dt2(2024, 1, 1);  // Midnight
     std::cout << "  QDateTime(2024, 1, 1): " << dt2.toString() << std::endl;
 
     std::cout << "\n--- From string ---" << std::endl;
     QDateTime dt3("2024-06-15 14:30:00", "yyyy-MM-dd HH:mm:ss");
-    std::cout << "  Parsed '2024-06-15 14:30:00': " << dt3.toString() << std::endl;
+    std::cout << "  Parsed '2024-06-15 14:30:00': " << dt3.toString()
+              << std::endl;
 }
 
 void demonstrateDateTimeArithmetic() {
@@ -95,10 +98,12 @@ void demonstrateDateTimeComparison() {
     std::cout << "dt3: " << dt3.toString() << std::endl;
 
     std::cout << "\nComparisons:" << std::endl;
-    std::cout << "  dt1 == dt3: " << (dt1 == dt3 ? "true" : "false") << std::endl;
+    std::cout << "  dt1 == dt3: " << (dt1 == dt3 ? "true" : "false")
+              << std::endl;
     std::cout << "  dt1 < dt2: " << (dt1 < dt2 ? "true" : "false") << std::endl;
     std::cout << "  dt2 > dt1: " << (dt2 > dt1 ? "true" : "false") << std::endl;
-    std::cout << "  dt1 != dt2: " << (dt1 != dt2 ? "true" : "false") << std::endl;
+    std::cout << "  dt1 != dt2: " << (dt1 != dt2 ? "true" : "false")
+              << std::endl;
 }
 
 void demonstrateDateTimeFormatting() {
@@ -110,7 +115,8 @@ void demonstrateDateTimeFormatting() {
     std::cout << "\nFormat patterns:" << std::endl;
     std::cout << "  'yyyy-MM-dd': " << dt.toString("yyyy-MM-dd") << std::endl;
     std::cout << "  'HH:mm:ss': " << dt.toString("HH:mm:ss") << std::endl;
-    std::cout << "  'yyyy/MM/dd HH:mm': " << dt.toString("yyyy/MM/dd HH:mm") << std::endl;
+    std::cout << "  'yyyy/MM/dd HH:mm': " << dt.toString("yyyy/MM/dd HH:mm")
+              << std::endl;
     std::cout << "  'dd.MM.yyyy': " << dt.toString("dd.MM.yyyy") << std::endl;
 }
 
@@ -121,11 +127,13 @@ void demonstrateDateTimeValidity() {
     QDateTime invalid;
 
     std::cout << "Valid datetime:" << std::endl;
-    std::cout << "  isValid(): " << (valid.isValid() ? "true" : "false") << std::endl;
+    std::cout << "  isValid(): " << (valid.isValid() ? "true" : "false")
+              << std::endl;
     std::cout << "  toString(): " << valid.toString() << std::endl;
 
     std::cout << "\nDefault (invalid) datetime:" << std::endl;
-    std::cout << "  isValid(): " << (invalid.isValid() ? "true" : "false") << std::endl;
+    std::cout << "  isValid(): " << (invalid.isValid() ? "true" : "false")
+              << std::endl;
 }
 
 void demonstrateDayOfWeek() {
@@ -133,13 +141,14 @@ void demonstrateDayOfWeek() {
 
     std::cout << "Days of the week for dates in June 2024:" << std::endl;
 
-    const char* dayNames[] = {"Sunday", "Monday", "Tuesday", "Wednesday",
-                               "Thursday", "Friday", "Saturday"};
+    const char* dayNames[] = {"Sunday",   "Monday", "Tuesday", "Wednesday",
+                              "Thursday", "Friday", "Saturday"};
 
     for (int day = 1; day <= 7; ++day) {
         QDateTime dt(2024, 6, day);
         int dow = dt.dayOfWeek();
-        std::cout << "  June " << day << ", 2024: " << dayNames[dow] << std::endl;
+        std::cout << "  June " << day << ", 2024: " << dayNames[dow]
+                  << std::endl;
     }
 }
 
@@ -150,12 +159,14 @@ void demonstrateUnixTimestamp() {
 
     std::cout << "Current datetime: " << now.toString() << std::endl;
     std::cout << "Unix timestamp: " << now.toSecsSinceEpoch() << std::endl;
-    std::cout << "Milliseconds since epoch: " << now.toMSecsSinceEpoch() << std::endl;
+    std::cout << "Milliseconds since epoch: " << now.toMSecsSinceEpoch()
+              << std::endl;
 
     std::cout << "\n--- From timestamp ---" << std::endl;
     int64_t timestamp = 1700000000;  // Example timestamp
     QDateTime fromTs = QDateTime::fromSecsSinceEpoch(timestamp);
-    std::cout << "Timestamp " << timestamp << " = " << fromTs.toString() << std::endl;
+    std::cout << "Timestamp " << timestamp << " = " << fromTs.toString()
+              << std::endl;
 }
 
 void demonstrateRealWorldExamples() {
@@ -171,7 +182,8 @@ void demonstrateRealWorldExamples() {
          today.date().day < birthDate.date().day)) {
         years--;
     }
-    std::cout << "  Birth date: " << birthDate.toString("yyyy-MM-dd") << std::endl;
+    std::cout << "  Birth date: " << birthDate.toString("yyyy-MM-dd")
+              << std::endl;
     std::cout << "  Age: " << years << " years" << std::endl;
 
     std::cout << "\n--- Days until event ---" << std::endl;
@@ -185,7 +197,8 @@ void demonstrateRealWorldExamples() {
 
     std::cout << "\n--- Log timestamp ---" << std::endl;
     QDateTime logTime = QDateTime::currentDateTime();
-    std::cout << "  [" << logTime.toString("yyyy-MM-dd HH:mm:ss.zzz") << "] Log message" << std::endl;
+    std::cout << "  [" << logTime.toString("yyyy-MM-dd HH:mm:ss.zzz")
+              << "] Log message" << std::endl;
 }
 
 int main() {

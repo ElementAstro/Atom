@@ -18,6 +18,12 @@ option("shared_libs")
     set_description("Build shared libraries instead of static")
 option_end()
 
+option("use_system_packages")
+    set_default(false)
+    set_showmenu(true)
+    set_description("Prefer system packages (e.g. pacman on MSYS2) over xmake packages")
+option_end()
+
 option("build_python")
     set_default(false)
     set_showmenu(true)
@@ -52,32 +58,33 @@ option_end()
 
 for _, module in ipairs(modules) do
     option("build_" .. module)
-        set_default(has_config("build_all"))
+        set_default(false)
         set_showmenu(true)
         set_description("Build " .. module .. " module")
     option_end()
 end
 
 -- Add required packages (matching CMake dependencies)
-add_requires("openssl", {system = false})
-add_requires("asio", {system = false})
-add_requires("loguru", {system = false})
-add_requires("zlib", {system = false})
-add_requires("libzippp", {system = false})
-add_requires("cpp-httplib", {system = false})
-add_requires("tinyxml2", {system = false})
+local use_system_packages = has_config("use_system_packages")
+add_requires("openssl", {system = use_system_packages})
+add_requires("asio", {system = use_system_packages})
+add_requires("loguru", {system = use_system_packages})
+add_requires("zlib", {system = use_system_packages})
+add_requires("libzippp", {system = use_system_packages})
+add_requires("cpp-httplib", {system = use_system_packages})
+add_requires("tinyxml2", {system = use_system_packages})
 
 -- Add threading support (optional for compatibility)
 -- Note: threads package may not be available on all platforms
 -- add_requires("threads")
 
 -- Optional packages
-add_requires("cfitsio", {optional = true})
-add_requires("libssh", {optional = true})
+add_requires("cfitsio", {optional = true, system = use_system_packages})
+add_requires("libssh", {optional = true, system = use_system_packages})
 
 -- Windows-specific packages
-if is_plat("windows") then
-    add_requires("dlfcn-win32", {system = false, optional = true})
+if is_plat("windows", "mingw") then
+    add_requires("dlfcn-win32", {system = use_system_packages, optional = true})
 end
 
 -- Conditionally add Python requirements

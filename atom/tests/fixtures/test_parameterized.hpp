@@ -137,8 +137,8 @@ auto ValuesIn(const Container& container)
  * @param step Step size (default: 1)
  * @return Vector of TestParam<int>
  */
-inline auto Range(int start, int end, int step = 1)
-    -> std::vector<TestParam<int>> {
+inline auto Range(int start, int end,
+                  int step = 1) -> std::vector<TestParam<int>> {
     std::vector<TestParam<int>> result;
     for (int i = start; i < end; i += step) {
         result.emplace_back(i);
@@ -191,8 +191,9 @@ auto Combine(const std::vector<TestParam<T1>>& params1,
             for (const auto& p3 : params3) {
                 std::string combinedName =
                     p1.name + "_" + p2.name + "_" + p3.name;
-                result.emplace_back(std::make_tuple(p1.value, p2.value, p3.value),
-                                    combinedName);
+                result.emplace_back(
+                    std::make_tuple(p1.value, p2.value, p3.value),
+                    combinedName);
             }
         }
     }
@@ -315,7 +316,8 @@ class FunctionParamNameGenerator : public ParamNameGenerator<ParamType> {
 public:
     using NameFunc = std::function<std::string(const ParamType&)>;
 
-    explicit FunctionParamNameGenerator(NameFunc func) : func_(std::move(func)) {}
+    explicit FunctionParamNameGenerator(NameFunc func)
+        : func_(std::move(func)) {}
 
     std::string operator()(const ParamType& param,
                            [[maybe_unused]] size_t index) const override {
@@ -352,36 +354,34 @@ struct PrintToStringParamName {
  * ParameterizedTest)
  * @param test_name The test case name
  */
-#define TEST_P(test_suite, test_name)                                         \
-    class test_suite##_##test_name##_Test : public test_suite {               \
-    public:                                                                   \
-        void TestBody();                                                      \
-    };                                                                        \
-    static struct test_suite##_##test_name##_Registrar {                      \
-        test_suite##_##test_name##_Registrar() {                              \
-            const auto& params =                                              \
-                atom::test::ParamStorage<test_suite>::params;                 \
-            for (size_t i = 0; i < params.size(); ++i) {                      \
-                const auto& param = params[i];                                \
-                std::string fullName =                                        \
-                    std::string(#test_suite) + "." + #test_name + "/" +       \
-                    param.name;                                               \
-                auto testFunc = [paramValue = param.value]() {                \
-                    test_suite##_##test_name##_Test fixture;                  \
-                    fixture.SetParam(paramValue);                             \
-                    fixture.SetUp();                                          \
-                    try {                                                     \
-                        fixture.TestBody();                                   \
-                    } catch (...) {                                           \
-                        fixture.TearDown();                                   \
-                        throw;                                                \
-                    }                                                         \
-                    fixture.TearDown();                                       \
-                };                                                            \
-                atom::test::registerTest(fullName, std::move(testFunc));      \
-            }                                                                 \
-        }                                                                     \
-    } test_suite##_##test_name##_registrar_instance;                          \
+#define TEST_P(test_suite, test_name)                                          \
+    class test_suite##_##test_name##_Test : public test_suite {                \
+    public:                                                                    \
+        void TestBody();                                                       \
+    };                                                                         \
+    static struct test_suite##_##test_name##_Registrar {                       \
+        test_suite##_##test_name##_Registrar() {                               \
+            const auto& params = atom::test::ParamStorage<test_suite>::params; \
+            for (size_t i = 0; i < params.size(); ++i) {                       \
+                const auto& param = params[i];                                 \
+                std::string fullName = std::string(#test_suite) + "." +        \
+                                       #test_name + "/" + param.name;          \
+                auto testFunc = [paramValue = param.value]() {                 \
+                    test_suite##_##test_name##_Test fixture;                   \
+                    fixture.SetParam(paramValue);                              \
+                    fixture.SetUp();                                           \
+                    try {                                                      \
+                        fixture.TestBody();                                    \
+                    } catch (...) {                                            \
+                        fixture.TearDown();                                    \
+                        throw;                                                 \
+                    }                                                          \
+                    fixture.TearDown();                                        \
+                };                                                             \
+                atom::test::registerTest(fullName, std::move(testFunc));       \
+            }                                                                  \
+        }                                                                      \
+    } test_suite##_##test_name##_registrar_instance;                           \
     void test_suite##_##test_name##_Test::TestBody()
 
 /**
@@ -390,16 +390,16 @@ struct PrintToStringParamName {
  * @param test_suite The parameterized test suite class
  * @param params_generator Expression that generates test parameters
  */
-#define INSTANTIATE_TEST_SUITE_P(prefix, test_suite, params_generator)        \
-    static struct prefix##_##test_suite##_ParamInit {                         \
-        prefix##_##test_suite##_ParamInit() {                                 \
-            atom::test::ParamStorage<test_suite>::params = params_generator;  \
-        }                                                                     \
+#define INSTANTIATE_TEST_SUITE_P(prefix, test_suite, ...)               \
+    static struct prefix##_##test_suite##_ParamInit {                   \
+        prefix##_##test_suite##_ParamInit() {                           \
+            atom::test::ParamStorage<test_suite>::params = __VA_ARGS__; \
+        }                                                               \
     } prefix##_##test_suite##_param_init_instance
 
 // GTest compatibility alias
-#define INSTANTIATE_TEST_CASE_P(prefix, test_suite, params_generator) \
-    INSTANTIATE_TEST_SUITE_P(prefix, test_suite, params_generator)
+#define INSTANTIATE_TEST_CASE_P(prefix, test_suite, ...) \
+    INSTANTIATE_TEST_SUITE_P(prefix, test_suite, __VA_ARGS__)
 
 /**
  * @brief Helper macro to get the current parameter in a TEST_P body

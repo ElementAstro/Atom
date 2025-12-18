@@ -1,8 +1,8 @@
 /**
  * @file typed_test.hpp
  * @brief Type-parameterized tests for testing template code
- * @details Provides TYPED_TEST and TYPED_TEST_SUITE macros for GTest-style typed
- * tests
+ * @details Provides TYPED_TEST and TYPED_TEST_SUITE macros for GTest-style
+ * typed tests
  *
  * @author Max Qian
  * @copyright GPL3 License
@@ -33,8 +33,8 @@ struct TypeList {
 };
 
 // Alias for GTest compatibility
-template <typename... Types>
-using Types = TypeList<Types...>;
+template <typename... Ts>
+using Types = TypeList<Ts...>;
 
 /**
  * @brief Get human-readable type name
@@ -45,16 +45,26 @@ std::string getTypeName() {
 #if defined(__GNUC__) || defined(__clang__)
     const char* name = typeid(T).name();
     // Basic demangling for common types
-    if constexpr (std::is_same_v<T, int>) return "int";
-    if constexpr (std::is_same_v<T, long>) return "long";
-    if constexpr (std::is_same_v<T, long long>) return "long long";
-    if constexpr (std::is_same_v<T, unsigned int>) return "unsigned int";
-    if constexpr (std::is_same_v<T, unsigned long>) return "unsigned long";
-    if constexpr (std::is_same_v<T, float>) return "float";
-    if constexpr (std::is_same_v<T, double>) return "double";
-    if constexpr (std::is_same_v<T, char>) return "char";
-    if constexpr (std::is_same_v<T, bool>) return "bool";
-    if constexpr (std::is_same_v<T, std::string>) return "std::string";
+    if constexpr (std::is_same_v<T, int>)
+        return "int";
+    if constexpr (std::is_same_v<T, long>)
+        return "long";
+    if constexpr (std::is_same_v<T, long long>)
+        return "long long";
+    if constexpr (std::is_same_v<T, unsigned int>)
+        return "unsigned int";
+    if constexpr (std::is_same_v<T, unsigned long>)
+        return "unsigned long";
+    if constexpr (std::is_same_v<T, float>)
+        return "float";
+    if constexpr (std::is_same_v<T, double>)
+        return "double";
+    if constexpr (std::is_same_v<T, char>)
+        return "char";
+    if constexpr (std::is_same_v<T, bool>)
+        return "bool";
+    if constexpr (std::is_same_v<T, std::string>)
+        return "std::string";
     return name;
 #elif defined(_MSC_VER)
     return typeid(T).name();
@@ -97,10 +107,10 @@ using TypeAt_t = typename TypeAt<I, TypeList>::type;
 /**
  * @brief Typed test registrar for automatic test registration
  */
-template <typename FixtureTemplate, typename TypeList>
+template <template <typename> class FixtureTemplate, typename TypeList>
 class TypedTestRegistrar;
 
-template <typename FixtureTemplate, typename... Types>
+template <template <typename> class FixtureTemplate, typename... Types>
 class TypedTestRegistrar<FixtureTemplate, TypeList<Types...>> {
 public:
     /**
@@ -111,7 +121,8 @@ public:
      */
     template <typename TestMethod>
     static void registerTest(const std::string& suiteName,
-                             const std::string& testName, TestMethod testMethod) {
+                             const std::string& testName,
+                             TestMethod testMethod) {
         registerTestImpl<0, Types...>(suiteName, testName, testMethod);
     }
 
@@ -230,18 +241,19 @@ private:
                                const std::string& testName, TestFunc func) {
         std::string fullName =
             suiteName + "/" + getTypeName<T>() + "." + testName;
-        atom::test::registerTest(fullName, [func]() { func.template operator()<T>(); });
+        atom::test::registerTest(fullName,
+                                 [func]() { func.template operator()<T>(); });
     }
 };
 
 // Common type lists for convenience
 using IntegerTypes = Types<short, int, long, long long>;
-using UnsignedTypes = Types<unsigned short, unsigned int, unsigned long,
-                            unsigned long long>;
+using UnsignedTypes =
+    Types<unsigned short, unsigned int, unsigned long, unsigned long long>;
 using FloatingTypes = Types<float, double, long double>;
 using NumericTypes = Types<short, int, long, long long, float, double>;
-using CharTypes = Types<char, signed char, unsigned char, wchar_t, char16_t,
-                        char32_t>;
+using CharTypes =
+    Types<char, signed char, unsigned char, wchar_t, char16_t, char32_t>;
 using PodTypes = Types<char, short, int, long, float, double>;
 
 }  // namespace atom::test
@@ -251,10 +263,10 @@ using PodTypes = Types<char, short, int, long, float, double>;
  * @param fixture_name The fixture template name
  * @param types_list The type list to use
  */
-#define TYPED_TEST_SUITE(fixture_name, types_list)                             \
-    template <>                                                                \
-    struct atom::test::TypedTestTypes<fixture_name> {                          \
-        using Types = types_list;                                              \
+#define TYPED_TEST_SUITE(fixture_name, types_list)    \
+    template <>                                       \
+    struct atom::test::TypedTestTypes<fixture_name> { \
+        using Types = types_list;                     \
     }
 
 // GTest compatibility alias
@@ -309,27 +321,25 @@ using PodTypes = Types<char, short, int, long, float, double>;
 /**
  * @brief Type-parameterized test suite (for more advanced use)
  */
-#define TYPED_TEST_SUITE_P(suite_name)                                         \
-    template <typename TypeParam>                                              \
+#define TYPED_TEST_SUITE_P(suite_name) \
+    template <typename TypeParam>      \
     class suite_name : public atom::test::TypedTestFixture<TypeParam>
 
 /**
  * @brief Register a type-parameterized test
  */
-#define REGISTER_TYPED_TEST_SUITE_P(suite_name, ...)                           \
-    template <typename TypeParam>                                              \
-    struct suite_name##_TestNames {                                            \
-        static constexpr const char* names[] = {__VA_ARGS__};                  \
+#define REGISTER_TYPED_TEST_SUITE_P(suite_name, ...)          \
+    template <typename TypeParam>                             \
+    struct suite_name##_TestNames {                           \
+        static constexpr const char* names[] = {__VA_ARGS__}; \
     }
 
 /**
  * @brief Instantiate typed tests for specific types
  */
-#define INSTANTIATE_TYPED_TEST_SUITE_P(prefix, suite_name, types_list)         \
-    static struct prefix##_##suite_name##_Instantiator {                       \
-        prefix##_##suite_name##_Instantiator() {                               \
-            /* Instantiation logic */                                          \
-        }                                                                      \
+#define INSTANTIATE_TYPED_TEST_SUITE_P(prefix, suite_name, types_list)       \
+    static struct prefix##_##suite_name##_Instantiator {                     \
+        prefix##_##suite_name##_Instantiator() { /* Instantiation logic */ } \
     } prefix##_##suite_name##_instantiator_instance
 
 /**

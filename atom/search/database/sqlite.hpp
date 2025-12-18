@@ -4,10 +4,17 @@
  * Copyright (C) 2023-2024 Max Qian <lightapt.com>
  */
 
-#ifndef ATOM_SEARCH_SQLITE_HPP
-#define ATOM_SEARCH_SQLITE_HPP
+/**
+ * @file sqlite.hpp
+ * @brief Thread-safe SQLite database wrapper with advanced features.
+ * @details Provides a high-level interface for SQLite database operations
+ *          including prepared statement caching, transaction management,
+ *          and thread safety using the Pimpl design pattern.
+ */
 
-#include <exception>
+#ifndef ATOM_SEARCH_DATABASE_SQLITE_HPP
+#define ATOM_SEARCH_DATABASE_SQLITE_HPP
+
 #include <functional>
 #include <memory>
 #include <optional>
@@ -17,38 +24,21 @@
 #include <spdlog/spdlog.h>
 #include <sqlite3.h>
 
-#include "atom/containers/high_performance.hpp"
+#include "base.hpp"
+#include "statement_cache.hpp"
+#include "types.hpp"
 
-using atom::containers::String;
-using atom::containers::Vector;
+namespace atom::search {
 
-/**
- * @brief Custom exception class for SQLite operations
- *
- * This exception is thrown when SQLite operations fail or encounter errors.
- * It provides detailed error messages to help with debugging.
- */
-class SQLiteException : public std::exception {
-private:
-    String message;
+// Import types from database namespace
+using database::DatabaseException;
+using database::ResultSet;
+using database::RowData;
+using database::String;
+using database::Vector;
 
-public:
-    /**
-     * @brief Construct a new SQLite Exception object
-     *
-     * @param msg Error message describing the exception
-     */
-    explicit SQLiteException(std::string_view msg) : message(msg) {}
-
-    /**
-     * @brief Get the exception message
-     *
-     * @return const char* Null-terminated error message string
-     */
-    [[nodiscard]] const char* what() const noexcept override {
-        return message.c_str();
-    }
-};
+// Legacy alias for backward compatibility
+using SQLiteException = database::DatabaseException;
 
 /**
  * @class SqliteDB
@@ -58,8 +48,16 @@ public:
  * including prepared statement caching, transaction management, and thread
  * safety. It uses the Pimpl design pattern for implementation hiding and better
  * compilation times.
+ *
+ * Features:
+ * - Thread-safe operations with shared_mutex
+ * - Prepared statement caching for performance
+ * - Transaction support with RAII guards
+ * - Parameterized queries for SQL injection prevention
+ * - Pagination support
+ * - Table schema introspection
  */
-class SqliteDB {
+class SqliteDB : public database::ThreadSafeMixin<SqliteDB> {
 public:
     /**
      * @brief Type alias for a single row of query results
@@ -345,6 +343,53 @@ public:
      */
     [[nodiscard]] bool analyze();
 
+    /**
+     * @brief Get list of all tables in the database.
+     * @return Vector of table names.
+     */
+    [[nodiscard]] std::vector<String> getTables();
+
+    /**
+     * @brief Get list of columns for a table.
+     * @param tableName Name of the table.
+     * @return Vector of column names.
+     */
+    [[nodiscard]] std::vector<String> getColumns(std::string_view tableName);
+
+    /**
+     * @brief Execute a batch of queries.
+     * @param queries Vector of SQL queries to execute.
+     * @return true if all queries succeeded.
+     */
+    [[nodiscard]] bool executeBatch(const std::vector<std::string>& queries);
+
+    /**
+     * @brief Execute a batch of queries within a transaction.
+     * @param queries Vector of SQL queries to execute.
+     * @return true if all queries succeeded, false if any failed (rolled back).
+     */
+    [[nodiscard]] bool executeBatchTransaction(
+        const std::vector<std::string>& queries);
+
+    /**
+     * @brief Get SQLite version string.
+     * @return SQLite library version.
+     */
+    [[nodiscard]] static std::string getVersion();
+
+    /**
+     * @brief Check database integrity.
+     * @return true if database passes integrity check.
+     */
+    [[nodiscard]] bool integrityCheck();
+
+    /**
+     * @brief Backup database to a file.
+     * @param destPath Destination file path.
+     * @return true if backup succeeded.
+     */
+    [[nodiscard]] bool backup(std::string_view destPath);
+
 private:
     class Impl;
     std::unique_ptr<Impl> pImpl;
@@ -379,4 +424,6 @@ private:
 #endif
 };
 
-#endif  // ATOM_SEARCH_SQLITE_HPP
+}  // namespace atom::search
+
+#endif  // ATOM_SEARCH_DATABASE_SQLITE_HPP

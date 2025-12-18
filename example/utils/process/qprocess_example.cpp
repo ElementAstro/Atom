@@ -3,11 +3,11 @@
  * @brief Examples for atom::utils QProcess
  */
 
-#include "atom/utils/process/qprocess.hpp"
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <chrono>
+#include "atom/utils/process/qprocess.hpp"
 
 using namespace atom::utils;
 
@@ -73,11 +73,8 @@ void demonstrateEnvironment() {
 
     std::cout << "Setting environment variables..." << std::endl;
 
-    std::vector<std::string> env = {
-        "MY_VAR=hello",
-        "MY_NUMBER=42",
-        "MY_PATH=/custom/path"
-    };
+    std::vector<std::string> env = {"MY_VAR=hello", "MY_NUMBER=42",
+                                    "MY_PATH=/custom/path"};
 
     process.setEnvironment(env);
 
@@ -94,19 +91,21 @@ void demonstrateCallbacks() {
 
     std::cout << "Setting up callbacks..." << std::endl;
 
-    process.setStartedCallback([]() {
-        std::cout << "  [Callback] Process started!" << std::endl;
-    });
+    process.setStartedCallback(
+        []() { std::cout << "  [Callback] Process started!" << std::endl; });
 
     process.setFinishedCallback([](int exitCode, QProcess::ExitStatus status) {
-        std::cout << "  [Callback] Process finished with code: " << exitCode << std::endl;
+        std::cout << "  [Callback] Process finished with code: " << exitCode
+                  << std::endl;
         std::cout << "  [Callback] Status: "
-                  << (status == QProcess::ExitStatus::NormalExit ? "Normal" : "Crash")
+                  << (status == QProcess::ExitStatus::NormalExit ? "Normal"
+                                                                 : "Crash")
                   << std::endl;
     });
 
     process.setErrorCallback([](QProcess::ProcessError error) {
-        std::cout << "  [Callback] Error occurred: " << static_cast<int>(error) << std::endl;
+        std::cout << "  [Callback] Error occurred: " << static_cast<int>(error)
+                  << std::endl;
     });
 
     process.setReadyReadStandardOutputCallback([](std::string_view data) {
@@ -133,8 +132,9 @@ void demonstrateProcessState() {
 
     auto state = process.state();
     std::cout << "Current state: "
-              << (state == QProcess::ProcessState::NotRunning ? "NotRunning" :
-                  state == QProcess::ProcessState::Starting ? "Starting" : "Running")
+              << (state == QProcess::ProcessState::NotRunning ? "NotRunning"
+                  : state == QProcess::ProcessState::Starting ? "Starting"
+                                                              : "Running")
               << std::endl;
 }
 

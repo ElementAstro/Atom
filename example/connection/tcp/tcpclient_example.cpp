@@ -80,7 +80,7 @@ void basicTcpClientExample() {
 
         Logger::log(Logger::LOG_INFO, "Example1",
                     "Created TcpClient, isConnected: " +
-                    std::string(client.isConnected() ? "yes" : "no"));
+                        std::string(client.isConnected() ? "yes" : "no"));
 
         // Connect to server (example: HTTP server)
         std::string host = "httpbin.org";
@@ -92,9 +92,11 @@ void basicTcpClientExample() {
         bool connected = client.connect(host, port);
 
         if (connected) {
-            Logger::log(Logger::LOG_SUCCESS, "Example1", "Connected successfully");
+            Logger::log(Logger::LOG_SUCCESS, "Example1",
+                        "Connected successfully");
             Logger::log(Logger::LOG_INFO, "Example1",
-                        "isConnected: " + std::string(client.isConnected() ? "yes" : "no"));
+                        "isConnected: " +
+                            std::string(client.isConnected() ? "yes" : "no"));
 
             // Disconnect
             client.disconnect();
@@ -108,7 +110,8 @@ void basicTcpClientExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1", "Basic TcpClient example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Basic TcpClient example completed\n");
 }
 
 // Example 2: Custom options
@@ -128,25 +131,32 @@ void customOptionsExample() {
         options.write_timeout = std::chrono::seconds(30);
 
         Logger::log(Logger::LOG_INFO, "Example2", "Options:");
+        Logger::log(
+            Logger::LOG_INFO, "Example2",
+            "  - IPv6: " + std::string(options.use_ipv6 ? "yes" : "no"));
         Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - IPv6: " + std::string(options.use_ipv6 ? "yes" : "no"));
+                    "  - Keep alive: " +
+                        std::string(options.keep_alive ? "yes" : "no"));
         Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Keep alive: " + std::string(options.keep_alive ? "yes" : "no"));
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - No delay (Nagle off): " + std::string(options.no_delay ? "yes" : "no"));
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Send buffer: " + std::to_string(options.send_buffer_size));
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Recv buffer: " + std::to_string(options.recv_buffer_size));
+                    "  - No delay (Nagle off): " +
+                        std::string(options.no_delay ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example2",
+            "  - Send buffer: " + std::to_string(options.send_buffer_size));
+        Logger::log(
+            Logger::LOG_INFO, "Example2",
+            "  - Recv buffer: " + std::to_string(options.recv_buffer_size));
 
         // Create client with options
         atom::connection::TcpClient client(options);
 
-        Logger::log(Logger::LOG_SUCCESS, "Example2", "Client created with custom options");
+        Logger::log(Logger::LOG_SUCCESS, "Example2",
+                    "Client created with custom options");
 
         // Connect
         if (client.connect("httpbin.org", 80)) {
-            Logger::log(Logger::LOG_SUCCESS, "Example2", "Connected with custom options");
+            Logger::log(Logger::LOG_SUCCESS, "Example2",
+                        "Connected with custom options");
             client.disconnect();
         }
 
@@ -155,12 +165,14 @@ void customOptionsExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2", "Custom options example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "Custom options example completed\n");
 }
 
 // Example 3: Synchronous send/receive
 void syncSendReceiveExample() {
-    Logger::log(Logger::LOG_INFO, "Example3", "=== Synchronous Send/Receive ===");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "=== Synchronous Send/Receive ===");
 
     try {
         atom::connection::TcpClient client;
@@ -176,7 +188,8 @@ void syncSendReceiveExample() {
                 "\r\n";
 
             Logger::log(Logger::LOG_INFO, "Example3",
-                        "Sending HTTP request (" + std::to_string(request.size()) + " bytes)");
+                        "Sending HTTP request (" +
+                            std::to_string(request.size()) + " bytes)");
 
             ssize_t sent = client.send(request);
             if (sent > 0) {
@@ -188,22 +201,26 @@ void syncSendReceiveExample() {
 
                 if (!response.empty()) {
                     Logger::log(Logger::LOG_SUCCESS, "Example3",
-                                "Received " + std::to_string(response.size()) + " bytes");
+                                "Received " + std::to_string(response.size()) +
+                                    " bytes");
 
                     // Show first few lines
                     size_t pos = 0;
                     int lineCount = 0;
                     while (pos < response.size() && lineCount < 5) {
                         size_t end = response.find('\n', pos);
-                        if (end == std::string::npos) end = response.size();
+                        if (end == std::string::npos)
+                            end = response.size();
                         std::string line = response.substr(pos, end - pos);
-                        if (!line.empty() && line.back() == '\r') line.pop_back();
+                        if (!line.empty() && line.back() == '\r')
+                            line.pop_back();
                         Logger::log(Logger::LOG_DEBUG, "Example3", "  " + line);
                         pos = end + 1;
                         lineCount++;
                     }
                 } else {
-                    Logger::log(Logger::LOG_WARNING, "Example3", "No response received");
+                    Logger::log(Logger::LOG_WARNING, "Example3",
+                                "No response received");
                 }
             } else {
                 Logger::log(Logger::LOG_WARNING, "Example3", "Send failed");
@@ -217,7 +234,8 @@ void syncSendReceiveExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3", "Sync send/receive example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "Sync send/receive example completed\n");
 }
 
 // Example 4: Callbacks
@@ -229,14 +247,16 @@ void callbacksExample() {
 
         // Set connect callback
         client.setConnectCallback([](bool success) {
-            Logger::log(success ? Logger::LOG_SUCCESS : Logger::LOG_WARNING,
-                        "ConnectCB",
-                        success ? "Connection established" : "Connection failed");
+            Logger::log(
+                success ? Logger::LOG_SUCCESS : Logger::LOG_WARNING,
+                "ConnectCB",
+                success ? "Connection established" : "Connection failed");
         });
 
         // Set disconnect callback
         client.setDisconnectCallback([]() {
-            Logger::log(Logger::LOG_INFO, "DisconnectCB", "Disconnected from server");
+            Logger::log(Logger::LOG_INFO, "DisconnectCB",
+                        "Disconnected from server");
         });
 
         // Set data callback
@@ -279,7 +299,8 @@ void callbacksExample() {
 
 // Example 5: Async connect with coroutines
 void asyncConnectExample() {
-    Logger::log(Logger::LOG_INFO, "Example5", "=== Async Connect (Coroutines) ===");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "=== Async Connect (Coroutines) ===");
 
     try {
         atom::connection::TcpClient client;
@@ -291,7 +312,8 @@ void asyncConnectExample() {
         // In a real application, you would co_await this in a coroutine
 
         // For demonstration, we'll use the synchronous version
-        Logger::log(Logger::LOG_INFO, "Example5", "Using synchronous connect for demo");
+        Logger::log(Logger::LOG_INFO, "Example5",
+                    "Using synchronous connect for demo");
 
         if (client.connect("httpbin.org", 80)) {
             Logger::log(Logger::LOG_SUCCESS, "Example5", "Connected");
@@ -307,7 +329,8 @@ void asyncConnectExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example5", "Async connect example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "Async connect example completed\n");
 }
 
 // Example 6: Binary data transfer
@@ -322,19 +345,19 @@ void binaryDataExample() {
 
             // Send binary data using vector
             std::vector<char> binaryRequest = {
-                'G', 'E', 'T', ' ', '/', 'g', 'e', 't', ' ',
-                'H', 'T', 'T', 'P', '/', '1', '.', '1', '\r', '\n',
-                'H', 'o', 's', 't', ':', ' ', 'h', 't', 't', 'p',
-                'b', 'i', 'n', '.', 'o', 'r', 'g', '\r', '\n',
-                'C', 'o', 'n', 'n', 'e', 'c', 't', 'i', 'o', 'n',
-                ':', ' ', 'c', 'l', 'o', 's', 'e', '\r', '\n',
-                '\r', '\n'
-            };
+                'G', 'E', 'T', ' ', '/', 'g',  'e',  't',  ' ',  'H',
+                'T', 'T', 'P', '/', '1', '.',  '1',  '\r', '\n', 'H',
+                'o', 's', 't', ':', ' ', 'h',  't',  't',  'p',  'b',
+                'i', 'n', '.', 'o', 'r', 'g',  '\r', '\n', 'C',  'o',
+                'n', 'n', 'e', 'c', 't', 'i',  'o',  'n',  ':',  ' ',
+                'c', 'l', 'o', 's', 'e', '\r', '\n', '\r', '\n'};
 
             Logger::log(Logger::LOG_INFO, "Example6",
-                        "Sending binary data (" + std::to_string(binaryRequest.size()) + " bytes)");
+                        "Sending binary data (" +
+                            std::to_string(binaryRequest.size()) + " bytes)");
 
-            ssize_t sent = client.send(binaryRequest.data(), binaryRequest.size());
+            ssize_t sent =
+                client.send(binaryRequest.data(), binaryRequest.size());
             if (sent > 0) {
                 Logger::log(Logger::LOG_SUCCESS, "Example6",
                             "Sent " + std::to_string(sent) + " bytes");
@@ -344,8 +367,9 @@ void binaryDataExample() {
                 ssize_t received = client.receive(buffer.data(), buffer.size());
 
                 if (received > 0) {
-                    Logger::log(Logger::LOG_SUCCESS, "Example6",
-                                "Received " + std::to_string(received) + " bytes");
+                    Logger::log(
+                        Logger::LOG_SUCCESS, "Example6",
+                        "Received " + std::to_string(received) + " bytes");
                 }
             }
 
@@ -357,12 +381,14 @@ void binaryDataExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example6", "Binary data example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example6",
+                "Binary data example completed\n");
 }
 
 // Example 7: Connection state management
 void connectionStateExample() {
-    Logger::log(Logger::LOG_INFO, "Example7", "=== Connection State Management ===");
+    Logger::log(Logger::LOG_INFO, "Example7",
+                "=== Connection State Management ===");
 
     try {
         atom::connection::TcpClient client;
@@ -370,25 +396,25 @@ void connectionStateExample() {
         // Check initial state
         Logger::log(Logger::LOG_INFO, "Example7",
                     "Initial state - isConnected: " +
-                    std::string(client.isConnected() ? "yes" : "no"));
+                        std::string(client.isConnected() ? "yes" : "no"));
 
         // Connect
         client.connect("httpbin.org", 80);
         Logger::log(Logger::LOG_INFO, "Example7",
                     "After connect - isConnected: " +
-                    std::string(client.isConnected() ? "yes" : "no"));
+                        std::string(client.isConnected() ? "yes" : "no"));
 
         // Disconnect
         client.disconnect();
         Logger::log(Logger::LOG_INFO, "Example7",
                     "After disconnect - isConnected: " +
-                    std::string(client.isConnected() ? "yes" : "no"));
+                        std::string(client.isConnected() ? "yes" : "no"));
 
         // Reconnect
         client.connect("httpbin.org", 80);
         Logger::log(Logger::LOG_INFO, "Example7",
                     "After reconnect - isConnected: " +
-                    std::string(client.isConnected() ? "yes" : "no"));
+                        std::string(client.isConnected() ? "yes" : "no"));
 
         client.disconnect();
 
@@ -397,7 +423,8 @@ void connectionStateExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example7", "Connection state example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example7",
+                "Connection state example completed\n");
 }
 
 // Example 8: Move semantics
@@ -410,14 +437,16 @@ void moveSemanticsExample() {
         client1.connect("httpbin.org", 80);
 
         Logger::log(Logger::LOG_INFO, "Example8",
-                    "client1 connected: " + std::string(client1.isConnected() ? "yes" : "no"));
+                    "client1 connected: " +
+                        std::string(client1.isConnected() ? "yes" : "no"));
 
         // Move to new client
         atom::connection::TcpClient client2 = std::move(client1);
 
         Logger::log(Logger::LOG_INFO, "Example8", "After move:");
         Logger::log(Logger::LOG_INFO, "Example8",
-                    "client2 connected: " + std::string(client2.isConnected() ? "yes" : "no"));
+                    "client2 connected: " +
+                        std::string(client2.isConnected() ? "yes" : "no"));
 
         // Use moved client
         if (client2.isConnected()) {
@@ -429,7 +458,8 @@ void moveSemanticsExample() {
             client2.send(request);
             std::string response = client2.receive(1024);
             Logger::log(Logger::LOG_SUCCESS, "Example8",
-                        "Received " + std::to_string(response.size()) + " bytes from moved client");
+                        "Received " + std::to_string(response.size()) +
+                            " bytes from moved client");
             client2.disconnect();
         }
 
@@ -438,7 +468,8 @@ void moveSemanticsExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example8", "Move semantics example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example8",
+                "Move semantics example completed\n");
 }
 
 // Example 9: Error handling
@@ -449,9 +480,12 @@ void errorHandlingExample() {
     try {
         Logger::log(Logger::LOG_INFO, "Example9", "Testing invalid host...");
         atom::connection::TcpClient client;
-        bool connected = client.connect("invalid.host.that.does.not.exist.example", 80);
-        Logger::log(Logger::LOG_INFO, "Example9",
-                    "Connect result: " + std::string(connected ? "success" : "failed (expected)"));
+        bool connected =
+            client.connect("invalid.host.that.does.not.exist.example", 80);
+        Logger::log(
+            Logger::LOG_INFO, "Example9",
+            "Connect result: " +
+                std::string(connected ? "success" : "failed (expected)"));
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_WARNING, "Example9",
                     "Exception (expected): " + std::string(e.what()));
@@ -459,11 +493,15 @@ void errorHandlingExample() {
 
     // Test invalid port
     try {
-        Logger::log(Logger::LOG_INFO, "Example9", "Testing connection refused...");
-        atom::connection::TcpClient client;
-        bool connected = client.connect("localhost", 59999);  // Unlikely to be open
         Logger::log(Logger::LOG_INFO, "Example9",
-                    "Connect result: " + std::string(connected ? "success" : "failed (expected)"));
+                    "Testing connection refused...");
+        atom::connection::TcpClient client;
+        bool connected =
+            client.connect("localhost", 59999);  // Unlikely to be open
+        Logger::log(
+            Logger::LOG_INFO, "Example9",
+            "Connect result: " +
+                std::string(connected ? "success" : "failed (expected)"));
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_WARNING, "Example9",
                     "Exception (expected): " + std::string(e.what()));
@@ -471,22 +509,26 @@ void errorHandlingExample() {
 
     // Test operations on disconnected client
     try {
-        Logger::log(Logger::LOG_INFO, "Example9", "Testing send when disconnected...");
+        Logger::log(Logger::LOG_INFO, "Example9",
+                    "Testing send when disconnected...");
         atom::connection::TcpClient client;
         ssize_t sent = client.send("test");
-        Logger::log(Logger::LOG_INFO, "Example9",
-                    "Send result: " + std::to_string(sent) + " (expected <= 0)");
+        Logger::log(
+            Logger::LOG_INFO, "Example9",
+            "Send result: " + std::to_string(sent) + " (expected <= 0)");
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_WARNING, "Example9",
                     "Exception (expected): " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example9", "Error handling example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example9",
+                "Error handling example completed\n");
 }
 
 // Example 10: Complete HTTP client workflow
 void completeWorkflowExample() {
-    Logger::log(Logger::LOG_INFO, "Example10", "=== Complete HTTP Client Workflow ===");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "=== Complete HTTP Client Workflow ===");
 
     try {
         // Configure client
@@ -501,7 +543,8 @@ void completeWorkflowExample() {
         // Set callbacks
         client.setConnectCallback([](bool success) {
             Logger::log(Logger::LOG_DEBUG, "Workflow",
-                        "Connect callback: " + std::string(success ? "success" : "failed"));
+                        "Connect callback: " +
+                            std::string(success ? "success" : "failed"));
         });
 
         client.setErrorCallback([](const std::string& error) {
@@ -517,7 +560,8 @@ void completeWorkflowExample() {
         Logger::log(Logger::LOG_SUCCESS, "Example10", "Connected");
 
         // Send request
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 2: Sending request...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 2: Sending request...");
         std::string request =
             "GET /json HTTP/1.1\r\n"
             "Host: httpbin.org\r\n"
@@ -530,7 +574,8 @@ void completeWorkflowExample() {
                     "Sent " + std::to_string(sent) + " bytes");
 
         // Receive response
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 3: Receiving response...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 3: Receiving response...");
         std::string fullResponse;
         std::string chunk;
 
@@ -539,11 +584,13 @@ void completeWorkflowExample() {
             fullResponse += chunk;
         } while (!chunk.empty());
 
-        Logger::log(Logger::LOG_SUCCESS, "Example10",
-                    "Received total " + std::to_string(fullResponse.size()) + " bytes");
+        Logger::log(
+            Logger::LOG_SUCCESS, "Example10",
+            "Received total " + std::to_string(fullResponse.size()) + " bytes");
 
         // Parse response
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 4: Parsing response...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 4: Parsing response...");
         size_t headerEnd = fullResponse.find("\r\n\r\n");
         if (headerEnd != std::string::npos) {
             std::string headers = fullResponse.substr(0, headerEnd);
@@ -560,20 +607,24 @@ void completeWorkflowExample() {
         // Disconnect
         Logger::log(Logger::LOG_INFO, "Example10", "Step 5: Disconnecting...");
         client.disconnect();
-        Logger::log(Logger::LOG_SUCCESS, "Example10", "Workflow completed successfully");
+        Logger::log(Logger::LOG_SUCCESS, "Example10",
+                    "Workflow completed successfully");
 
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_ERR, "Example10",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example10", "Complete workflow example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "Complete workflow example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_INFO, "Main", "  TcpClient Comprehensive Examples");
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_WARNING, "Main",
                 "Note: Examples connect to httpbin.org (requires internet)");
     Logger::log(Logger::LOG_INFO, "Main", "");
@@ -590,9 +641,12 @@ int main() {
     errorHandlingExample();
     completeWorkflowExample();
 
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "  All TcpClient examples completed!");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "  All TcpClient examples completed!");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
 
     return 0;
 }

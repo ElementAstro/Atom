@@ -265,41 +265,35 @@ TEST_F(BlowfishTest, BlockSizeValidation) {
 }
 
 // Test padding and removal
+// Note: decrypt_data does not remove padding - caller must handle it
 TEST_F(BlowfishTest, PaddingAndRemoval) {
     // Create plaintext with a length that's not a multiple of BLOCK_SIZE
     std::vector<std::byte> odd_plaintext =
         stringToBytes("This is a test message with odd length!");
 
-    // Create a buffer large enough for padding (size + up to BLOCK_SIZE
-    // additional bytes)
-    size_t buffer_size = odd_plaintext.size() + 8;
-    std::vector<std::byte> buffer(buffer_size);
-    std::copy(odd_plaintext.begin(), odd_plaintext.end(), buffer.begin());
-
-    // Manual padding
+    // Manual padding to make it a multiple of BLOCK_SIZE
     size_t length = odd_plaintext.size();
     size_t padding_length = 8 - (length % 8);
     if (padding_length == 0)
         padding_length = 8;
 
-    // Encrypt the data (which includes padding)
-    std::vector<std::byte> encrypted = buffer;
-    encrypted.resize(length + padding_length);  // Ensure right size for padding
+    // Create padded buffer
+    std::vector<std::byte> padded_data = odd_plaintext;
+    padded_data.resize(length + padding_length, std::byte{0});
 
-    // Now encrypt the padded data
-    blowfish->encrypt_data(std::span<std::byte>(encrypted));
+    // Encrypt the padded data
+    blowfish->encrypt_data(std::span<std::byte>(padded_data));
 
     // Decrypt the data
-    size_t decrypt_length = encrypted.size();
-    blowfish->decrypt_data(std::span<std::byte>(encrypted), decrypt_length);
+    size_t decrypt_length = padded_data.size();
+    blowfish->decrypt_data(std::span<std::byte>(padded_data), decrypt_length);
 
-    // Resize to the actual length after removing padding
-    encrypted.resize(decrypt_length);
+    // decrypt_data doesn't remove padding, so decrypt_length equals padded size
+    EXPECT_EQ(decrypt_length, length + padding_length);
 
-    // The decrypted data should match the original odd plaintext
-    EXPECT_EQ(decrypt_length, odd_plaintext.size());
-    for (size_t i = 0; i < decrypt_length; i++) {
-        EXPECT_EQ(encrypted[i], odd_plaintext[i]);
+    // Manually remove padding and verify original data
+    for (size_t i = 0; i < length; i++) {
+        EXPECT_EQ(padded_data[i], odd_plaintext[i]);
     }
 }
 

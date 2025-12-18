@@ -7,7 +7,7 @@
 cmake_minimum_required(VERSION 3.21)
 project(
   atom-secret-tests
-  VERSION 1.0.0
+  VERSION 2.0.0
   LANGUAGES C CXX)
 
 # Find required packages
@@ -22,83 +22,31 @@ if(TARGET GTest::gtest_main AND NOT TARGET GTest::Main)
   add_library(GTest::Main ALIAS GTest::gtest_main)
 endif()
 
-# Include parent directory for secret headers
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../..)
-
-# Test executable
-add_executable(${PROJECT_NAME} test_secret.cpp)
-
-# Link libraries
-target_link_libraries(${PROJECT_NAME} PRIVATE GTest::GTest GTest::Main
-                                              Threads::Threads)
-
-# Set C++ standard
-target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
-
-# Compiler-specific options
-if(MSVC)
-  target_compile_options(${PROJECT_NAME} PRIVATE /W4)
-else()
-  target_compile_options(${PROJECT_NAME} PRIVATE -Wall -Wextra -Wpedantic)
-endif()
-
 # Enable testing
 enable_testing()
 
-# Add test cases
-add_test(NAME EncryptionTests COMMAND ${PROJECT_NAME}
-                                      --gtest_filter="EncryptionTest.*")
-add_test(NAME PasswordEntryTests COMMAND ${PROJECT_NAME}
-                                         --gtest_filter="PasswordEntryTest.*")
-add_test(NAME SecureStorageTests COMMAND ${PROJECT_NAME}
-                                         --gtest_filter="SecureStorageTest.*")
-add_test(NAME ResultTests COMMAND ${PROJECT_NAME} --gtest_filter="ResultTest.*")
-add_test(NAME CommonUtilitiesTests
-         COMMAND ${PROJECT_NAME} --gtest_filter="CommonUtilitiesTest.*")
-add_test(NAME IntegrationTests COMMAND ${PROJECT_NAME}
-                                       --gtest_filter="SecretIntegrationTest.*")
-add_test(NAME SecurityTests COMMAND ${PROJECT_NAME}
-                                    --gtest_filter="SecurityTest.*")
+# Add subdirectories for modular tests
+add_subdirectory(core)
+add_subdirectory(crypto)
+add_subdirectory(password)
+add_subdirectory(otp)
+add_subdirectory(storage)
+add_subdirectory(manager)
+add_subdirectory(serialization)
 
 # Custom test targets
 add_custom_target(
   run_secret_tests
   COMMAND ${CMAKE_CTEST_COMMAND} --verbose
-  DEPENDS ${PROJECT_NAME}
   COMMENT "Running all secret management tests")
 
 add_custom_target(
-  run_encryption_tests
-  COMMAND ${PROJECT_NAME} --gtest_filter="EncryptionTest.*"
-  DEPENDS ${PROJECT_NAME}
-  COMMENT "Running encryption tests")
-
-add_custom_target(
-  run_secret_security_tests
-  COMMAND ${PROJECT_NAME} --gtest_filter="SecurityTest.*"
-  DEPENDS ${PROJECT_NAME}
-  COMMENT "Running secret security tests")
-
-# DLL Copying (Windows)
-if(WIN32)
-  if(COMMAND copy_test_dlls)
-    copy_test_dlls(${PROJECT_NAME})
-  endif()
-
-  add_custom_command(
-    TARGET ${PROJECT_NAME}
-    POST_BUILD
-    COMMAND
-      ${CMAKE_COMMAND} -E copy_if_different
-      $<TARGET_RUNTIME_DLLS:${PROJECT_NAME}> $<TARGET_FILE_DIR:${PROJECT_NAME}>
-    COMMAND_EXPAND_LISTS)
-endif()
+  run_secret_core_tests
+  COMMAND ${CMAKE_CTEST_COMMAND} --verbose -R "secret_test_.*"
+  COMMENT "Running core secret tests")
 
 # Code coverage (if available)
 if(CMAKE_BUILD_TYPE STREQUAL "Debug" AND CMAKE_COMPILER_IS_GNUCXX)
-  target_compile_options(${PROJECT_NAME} PRIVATE --coverage)
-  target_link_options(${PROJECT_NAME} PRIVATE --coverage)
-
   add_custom_target(
     secret_coverage
     COMMAND lcov --directory . --capture --output-file coverage.info

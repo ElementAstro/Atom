@@ -4,7 +4,8 @@
  *
  * This example demonstrates all span utility functions including:
  * - Basic operations (sum, contains, sortSpan, filterSpan, countIfSpan)
- * - Min/Max operations (minElementSpan, maxElementSpan, minElementIndex, maxElementIndex)
+ * - Min/Max operations (minElementSpan, maxElementSpan, minElementIndex,
+ * maxElementIndex)
  * - Statistical functions (mean, median, mode, standardDeviation, variance)
  * - Top/Bottom N elements (topNElements, bottomNElements)
  * - Cumulative operations (cumulativeSum, cumulativeProduct)
@@ -34,7 +35,8 @@ void printVector(const std::string& label, const std::vector<T>& vec) {
     std::cout << label << ": [";
     bool first = true;
     for (const auto& item : vec) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << item;
         first = false;
     }
@@ -46,7 +48,8 @@ void printSpan(const std::string& label, std::span<const T> sp) {
     std::cout << label << ": [";
     bool first = true;
     for (const auto& item : sp) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << item;
         first = false;
     }
@@ -84,22 +87,18 @@ void demonstrateBasicOperations() {
 
     // filterSpan - Filter elements based on predicate
     std::cout << "\n--- filterSpan ---" << std::endl;
-    auto evenNumbers =
-        filterSpan(dataSpan, [](int x) { return x % 2 == 0; });
+    auto evenNumbers = filterSpan(dataSpan, [](int x) { return x % 2 == 0; });
     printVector("Even numbers", evenNumbers);
 
-    auto greaterThan5 =
-        filterSpan(dataSpan, [](int x) { return x > 5; });
+    auto greaterThan5 = filterSpan(dataSpan, [](int x) { return x > 5; });
     printVector("Numbers > 5", greaterThan5);
 
     // countIfSpan - Count elements matching predicate
     std::cout << "\n--- countIfSpan ---" << std::endl;
-    auto evenCount =
-        countIfSpan(dataSpan, [](int x) { return x % 2 == 0; });
+    auto evenCount = countIfSpan(dataSpan, [](int x) { return x % 2 == 0; });
     std::cout << "Count of even numbers: " << evenCount << std::endl;
 
-    auto positiveCount =
-        countIfSpan(dataSpan, [](int x) { return x > 0; });
+    auto positiveCount = countIfSpan(dataSpan, [](int x) { return x > 0; });
     std::cout << "Count of positive numbers: " << positiveCount << std::endl;
 }
 
@@ -126,14 +125,14 @@ void demonstrateMinMaxOperations() {
     // minElementIndex - Find index of minimum element
     std::cout << "\n--- minElementIndex ---" << std::endl;
     auto minIdx = minElementIndex(dataSpan);
-    std::cout << "Index of minimum element: " << minIdx << " (value: "
-              << data[minIdx] << ")" << std::endl;
+    std::cout << "Index of minimum element: " << minIdx
+              << " (value: " << data[minIdx] << ")" << std::endl;
 
     // maxElementIndex - Find index of maximum element
     std::cout << "\n--- maxElementIndex ---" << std::endl;
     auto maxIdx = maxElementIndex(dataSpan);
-    std::cout << "Index of maximum element: " << maxIdx << " (value: "
-              << data[maxIdx] << ")" << std::endl;
+    std::cout << "Index of maximum element: " << maxIdx
+              << " (value: " << data[maxIdx] << ")" << std::endl;
 }
 
 // ============================================
@@ -149,7 +148,8 @@ void demonstrateStatisticalFunctions() {
     std::cout << "Data: [";
     bool first = true;
     for (auto val : data) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -317,7 +317,8 @@ void demonstrateMatrixOperations() {
     std::cout << "Before normalization: [";
     bool first = true;
     for (auto v : values) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << v;
         first = false;
     }
@@ -328,7 +329,8 @@ void demonstrateMatrixOperations() {
     std::cout << "After normalization:  [";
     first = true;
     for (auto v : values) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << v;
         first = false;
     }
@@ -351,7 +353,8 @@ void demonstrateVectorOperations() {
     std::cout << "Vector 1: [";
     bool first = true;
     for (auto v : vec1) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << v;
         first = false;
     }
@@ -360,7 +363,8 @@ void demonstrateVectorOperations() {
     std::cout << "Vector 2: [";
     first = true;
     for (auto v : vec2) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << v;
         first = false;
     }
@@ -389,7 +393,8 @@ void demonstrateComplexUseCases() {
     std::cout << "Sensor readings: [";
     bool first = true;
     for (auto r : sensorReadings) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << r;
         first = false;
     }

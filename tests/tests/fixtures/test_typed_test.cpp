@@ -14,13 +14,16 @@ Description: Tests for typed tests in atom/tests/fixtures/typed_test.hpp
 
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdint>
 #include <limits>
 #include <string>
 #include <type_traits>
 #include <vector>
 
-#include "atom/tests/fixtures/typed_test.hpp"
+// Note: We use GoogleTest's native typed test macros directly
+// The custom typed_test.hpp provides alternative implementations
+// but conflicts with gtest's macros when both are included
 
 namespace atom::test::fixtures::tests {
 
@@ -61,7 +64,7 @@ protected:
 };
 
 using IntegerTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t,
-                                       uint8_t, uint16_t, uint32_t, uint64_t>;
+                                      uint8_t, uint16_t, uint32_t, uint64_t>;
 TYPED_TEST_SUITE(IntegerTypedTest, IntegerTypes);
 
 TYPED_TEST(IntegerTypedTest, HasMinValue) {
@@ -122,9 +125,8 @@ protected:
     T container;
 };
 
-using ContainerTypes =
-    ::testing::Types<std::vector<int>, std::vector<double>,
-                     std::vector<std::string>>;
+using ContainerTypes = ::testing::Types<std::vector<int>, std::vector<double>,
+                                        std::vector<std::string>>;
 TYPED_TEST_SUITE(ContainerTypedTest, ContainerTypes);
 
 TYPED_TEST(ContainerTypedTest, StartsEmpty) {
@@ -224,9 +226,7 @@ protected:
 using SizeTypes = ::testing::Types<char, short, int, long, long long>;
 TYPED_TEST_SUITE(SizeTypedTest, SizeTypes);
 
-TYPED_TEST(SizeTypedTest, HasPositiveSize) {
-    EXPECT_GT(sizeof(TypeParam), 0);
-}
+TYPED_TEST(SizeTypedTest, HasPositiveSize) { EXPECT_GT(sizeof(TypeParam), 0); }
 
 TYPED_TEST(SizeTypedTest, SizeMatchesExpected) {
     // Size should be consistent with type

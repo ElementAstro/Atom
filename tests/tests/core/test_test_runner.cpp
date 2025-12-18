@@ -40,7 +40,7 @@ TEST_F(TestRunnerConfigTest, DefaultConfiguration) {
     EXPECT_GE(config.numThreads, 1);
     EXPECT_EQ(config.maxRetries, 0);
     EXPECT_FALSE(config.failFast);
-    EXPECT_TRUE(config.verbose);
+    EXPECT_FALSE(config.enableVerboseOutput);
 }
 
 TEST_F(TestRunnerConfigTest, CustomConfiguration) {
@@ -49,27 +49,29 @@ TEST_F(TestRunnerConfigTest, CustomConfiguration) {
     config.numThreads = 8;
     config.maxRetries = 3;
     config.failFast = true;
-    config.verbose = false;
+    config.enableVerboseOutput = false;
 
     EXPECT_TRUE(config.enableParallel);
     EXPECT_EQ(config.numThreads, 8);
     EXPECT_EQ(config.maxRetries, 3);
     EXPECT_TRUE(config.failFast);
-    EXPECT_FALSE(config.verbose);
+    EXPECT_FALSE(config.enableVerboseOutput);
 }
 
 TEST_F(TestRunnerConfigTest, OutputFormatConfiguration) {
     TestRunnerConfig config;
     config.outputFormat = "json";
 
-    EXPECT_EQ(config.outputFormat, "json");
+    ASSERT_TRUE(config.outputFormat.has_value());
+    EXPECT_EQ(*config.outputFormat, "json");
 }
 
 TEST_F(TestRunnerConfigTest, FilterConfiguration) {
     TestRunnerConfig config;
-    config.filter = "TestSuite.*";
+    config.testFilter = "TestSuite.*";
 
-    EXPECT_EQ(config.filter, "TestSuite.*");
+    ASSERT_TRUE(config.testFilter.has_value());
+    EXPECT_EQ(*config.testFilter, "TestSuite.*");
 }
 
 TEST_F(TestRunnerConfigTest, TimeoutConfiguration) {
@@ -85,7 +87,8 @@ TEST_F(TestRunnerConfigTest, ShuffleConfiguration) {
     config.randomSeed = 12345;
 
     EXPECT_TRUE(config.shuffleTests);
-    EXPECT_EQ(config.randomSeed, 12345);
+    ASSERT_TRUE(config.randomSeed.has_value());
+    EXPECT_EQ(*config.randomSeed, 12345);
 }
 
 // ============================================================================
@@ -127,31 +130,35 @@ protected:
 
 TEST_F(TestRunnerFilterTest, EmptyFilter) {
     TestRunnerConfig config;
-    config.filter = "";
+    config.testFilter = std::string("");
 
     // Empty filter should match all tests
-    EXPECT_TRUE(config.filter.empty());
+    ASSERT_TRUE(config.testFilter.has_value());
+    EXPECT_TRUE(config.testFilter->empty());
 }
 
 TEST_F(TestRunnerFilterTest, WildcardFilter) {
     TestRunnerConfig config;
-    config.filter = "*";
+    config.testFilter = "*";
 
-    EXPECT_EQ(config.filter, "*");
+    ASSERT_TRUE(config.testFilter.has_value());
+    EXPECT_EQ(*config.testFilter, "*");
 }
 
 TEST_F(TestRunnerFilterTest, PrefixFilter) {
     TestRunnerConfig config;
-    config.filter = "TestSuite.*";
+    config.testFilter = "TestSuite.*";
 
-    EXPECT_EQ(config.filter, "TestSuite.*");
+    ASSERT_TRUE(config.testFilter.has_value());
+    EXPECT_EQ(*config.testFilter, "TestSuite.*");
 }
 
 TEST_F(TestRunnerFilterTest, NegativeFilter) {
     TestRunnerConfig config;
-    config.filter = "-SlowTests.*";
+    config.testFilter = "-SlowTests.*";
 
-    EXPECT_EQ(config.filter, "-SlowTests.*");
+    ASSERT_TRUE(config.testFilter.has_value());
+    EXPECT_EQ(*config.testFilter, "-SlowTests.*");
 }
 
 // ============================================================================
@@ -208,17 +215,17 @@ TEST_F(TestRunnerHooksTest, AfterAllHook) {
 
 TEST_F(TestRunnerHooksTest, BeforeEachHook) {
     TestHooks hooks;
-    hooks.beforeEach = [this](const std::string&) { hookCalled = true; };
+    hooks.beforeEach = [this]() { hookCalled = true; };
 
-    hooks.beforeEach("TestName");
+    hooks.beforeEach();
     EXPECT_TRUE(hookCalled);
 }
 
 TEST_F(TestRunnerHooksTest, AfterEachHook) {
     TestHooks hooks;
-    hooks.afterEach = [this](const std::string&, bool) { hookCalled = true; };
+    hooks.afterEach = [this]() { hookCalled = true; };
 
-    hooks.afterEach("TestName", true);
+    hooks.afterEach();
     EXPECT_TRUE(hookCalled);
 }
 
@@ -236,21 +243,24 @@ TEST_F(TestRunnerOutputFormatTest, ConsoleFormat) {
     TestRunnerConfig config;
     config.outputFormat = "console";
 
-    EXPECT_EQ(config.outputFormat, "console");
+    ASSERT_TRUE(config.outputFormat.has_value());
+    EXPECT_EQ(*config.outputFormat, "console");
 }
 
 TEST_F(TestRunnerOutputFormatTest, JsonFormat) {
     TestRunnerConfig config;
     config.outputFormat = "json";
 
-    EXPECT_EQ(config.outputFormat, "json");
+    ASSERT_TRUE(config.outputFormat.has_value());
+    EXPECT_EQ(*config.outputFormat, "json");
 }
 
 TEST_F(TestRunnerOutputFormatTest, XmlFormat) {
     TestRunnerConfig config;
     config.outputFormat = "xml";
 
-    EXPECT_EQ(config.outputFormat, "xml");
+    ASSERT_TRUE(config.outputFormat.has_value());
+    EXPECT_EQ(*config.outputFormat, "xml");
 }
 
 }  // namespace atom::test::core::tests

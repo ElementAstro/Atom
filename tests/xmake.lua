@@ -21,7 +21,8 @@ set_license("GPL-3.0")
 set_languages("c++20")
 
 -- Add required packages (matching CMake)
-add_requires("gtest")
+local use_system_packages = has_config("use_system_packages")
+add_requires("gtest", {system = use_system_packages})
 
 -- =============================================================================
 -- Test Module Options

@@ -60,9 +60,11 @@ endif()
 # Create library target
 if(IS_HEADER_ONLY)
   add_library(atom-type INTERFACE)
+  add_library(atom::type ALIAS atom-type)
   atom_configure_module(atom-type HEADER_ONLY)
 else()
   add_library(atom-type STATIC ${SOURCES} ${HEADERS})
+  add_library(atom::type ALIAS atom-type)
   atom_configure_module(atom-type)
 endif()
 

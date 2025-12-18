@@ -170,7 +170,7 @@ function(atom_module_exists module_name result_var)
   string(REPLACE "atom-" "" dir_name "${module_name}")
 
   # Check if directory exists and has a CMakeLists.txt file
-  set(module_path "${CMAKE_CURRENT_SOURCE_DIR}/../atom/${dir_name}")
+  set(module_path "${CMAKE_SOURCE_DIR}/atom/${dir_name}")
   if(EXISTS "${module_path}" AND EXISTS "${module_path}/CMakeLists.txt")
     set(${result_var}
         TRUE

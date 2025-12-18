@@ -1161,7 +1161,7 @@ struct DiffKeyHasher {
 // Global cache for diff operations using the correct template parameters
 using DiffCache = atom::search::ThreadSafeLRUCache<
     std::pair<std::string, std::string>,
-    std::vector<std::tuple<std::string, int, int, int, int>>>;
+    std::vector<std::tuple<std::string, int, int, int, int>>, DiffKeyHasher>;
 
 // Initialize cache with size 100
 inline DiffCache g_diff_cache(100);

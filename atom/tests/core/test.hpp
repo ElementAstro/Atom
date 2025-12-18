@@ -433,9 +433,8 @@ ATOM_INLINE void runTestCase(const TestCase& test, int retryCount = 0) {
 
     std::lock_guard lock(getTestMutex());
     stats.totalTests++;
-    stats.results.emplace_back(TestResult{test.name, passed, false,
-                                          resultMessage, timer.elapsed(),
-                                          timedOut});
+    stats.results.emplace_back(TestResult{
+        test.name, passed, false, resultMessage, timer.elapsed(), timedOut});
 
     if (timedOut) {
         printColored(resultMessage + " (TIMEOUT)", "1;31");
@@ -474,8 +473,7 @@ ATOM_INLINE void runTestsInParallel(const std::vector<TestCase>& tests,
  * @param parallel Enable parallel execution
  * @param numThreads Number of threads for parallel execution
  */
-ATOM_INLINE void runAllTests(int retryCount = 0, bool parallel = false,
-                             int numThreads = 4);
+ATOM_INLINE void runAllTests(int retryCount, bool parallel, int numThreads);
 
 /**
  * @brief Execute tests with command line argument parsing
@@ -701,6 +699,11 @@ struct ExpectNonFatal {
     [[nodiscard]] explicit operator bool() const { return result; }
 };
 
+template <typename T>
+concept StreamInsertable = requires(std::ostream& os, const T& v) {
+    { os << v } -> std::same_as<std::ostream&>;
+};
+
 /**
  * @brief Approximate floating-point equality assertion
  */
@@ -720,9 +723,14 @@ auto expectEq(const T& lhs, const U& rhs, const char* file,
             lhs == rhs, file, line,
             "Expected " + std::to_string(lhs) + " == " + std::to_string(rhs));
     } else {
-        std::stringstream stream;
-        stream << "Expected " << lhs << " == " << rhs;
-        return Expect(lhs == rhs, file, line, stream.str());
+        if constexpr (StreamInsertable<T> && StreamInsertable<U>) {
+            std::stringstream stream;
+            stream << "Expected " << lhs << " == " << rhs;
+            return Expect(lhs == rhs, file, line, stream.str());
+        } else {
+            return Expect(lhs == rhs, file, line,
+                          "Expected values to be equal");
+        }
     }
 }
 
@@ -734,9 +742,14 @@ auto expectNe(const T& lhs, const U& rhs, const char* file,
             lhs != rhs, file, line,
             "Expected " + std::to_string(lhs) + " != " + std::to_string(rhs));
     } else {
-        std::stringstream stream;
-        stream << "Expected " << lhs << " != " << rhs;
-        return Expect(lhs != rhs, file, line, stream.str());
+        if constexpr (StreamInsertable<T> && StreamInsertable<U>) {
+            std::stringstream stream;
+            stream << "Expected " << lhs << " != " << rhs;
+            return Expect(lhs != rhs, file, line, stream.str());
+        } else {
+            return Expect(lhs != rhs, file, line,
+                          "Expected values to be different");
+        }
     }
 }
 
@@ -748,9 +761,14 @@ auto expectGt(const T& lhs, const U& rhs, const char* file,
             lhs > rhs, file, line,
             "Expected " + std::to_string(lhs) + " > " + std::to_string(rhs));
     } else {
-        std::stringstream stream;
-        stream << "Expected " << lhs << " > " << rhs;
-        return Expect(lhs > rhs, file, line, stream.str());
+        if constexpr (StreamInsertable<T> && StreamInsertable<U>) {
+            std::stringstream stream;
+            stream << "Expected " << lhs << " > " << rhs;
+            return Expect(lhs > rhs, file, line, stream.str());
+        } else {
+            return Expect(lhs > rhs, file, line,
+                          "Expected left value to be greater than right");
+        }
     }
 }
 
@@ -762,9 +780,14 @@ auto expectLt(const T& lhs, const U& rhs, const char* file,
             lhs < rhs, file, line,
             "Expected " + std::to_string(lhs) + " < " + std::to_string(rhs));
     } else {
-        std::stringstream stream;
-        stream << "Expected " << lhs << " < " << rhs;
-        return Expect(lhs < rhs, file, line, stream.str());
+        if constexpr (StreamInsertable<T> && StreamInsertable<U>) {
+            std::stringstream stream;
+            stream << "Expected " << lhs << " < " << rhs;
+            return Expect(lhs < rhs, file, line, stream.str());
+        } else {
+            return Expect(lhs < rhs, file, line,
+                          "Expected left value to be less than right");
+        }
     }
 }
 
@@ -776,9 +799,14 @@ auto expectGe(const T& lhs, const U& rhs, const char* file,
             lhs >= rhs, file, line,
             "Expected " + std::to_string(lhs) + " >= " + std::to_string(rhs));
     } else {
-        std::stringstream stream;
-        stream << "Expected " << lhs << " >= " << rhs;
-        return Expect(lhs >= rhs, file, line, stream.str());
+        if constexpr (StreamInsertable<T> && StreamInsertable<U>) {
+            std::stringstream stream;
+            stream << "Expected " << lhs << " >= " << rhs;
+            return Expect(lhs >= rhs, file, line, stream.str());
+        } else {
+            return Expect(lhs >= rhs, file, line,
+                          "Expected left value to be >= right");
+        }
     }
 }
 
@@ -792,9 +820,14 @@ auto expectLe(const T& lhs, const U& rhs, const char* file,
             lhs <= rhs, file, line,
             "Expected " + std::to_string(lhs) + " <= " + std::to_string(rhs));
     } else {
-        std::stringstream stream;
-        stream << "Expected " << lhs << " <= " << rhs;
-        return Expect(lhs <= rhs, file, line, stream.str());
+        if constexpr (StreamInsertable<T> && StreamInsertable<U>) {
+            std::stringstream stream;
+            stream << "Expected " << lhs << " <= " << rhs;
+            return Expect(lhs <= rhs, file, line, stream.str());
+        } else {
+            return Expect(lhs <= rhs, file, line,
+                          "Expected left value to be <= right");
+        }
     }
 }
 
@@ -810,14 +843,17 @@ ATOM_INLINE auto expectContains(std::string_view str, std::string_view substr,
 }
 
 /**
- * @brief Set equality assertion for vectors
+ * @brief Set equality assertion for iterable containers
  */
-template <typename T>
-ATOM_INLINE auto expectSetEq(const std::vector<T>& lhs,
-                             const std::vector<T>& rhs, const char* file,
-                             int line) -> Expect {
-    std::set<T> lhsSet(lhs.begin(), lhs.end());
-    std::set<T> rhsSet(rhs.begin(), rhs.end());
+template <typename ContainerL, typename ContainerR>
+ATOM_INLINE auto expectSetEq(const ContainerL& lhs, const ContainerR& rhs,
+                             const char* file, int line) -> Expect {
+    using LVal = std::decay_t<decltype(*std::begin(lhs))>;
+    using RVal = std::decay_t<decltype(*std::begin(rhs))>;
+    using Val = std::common_type_t<LVal, RVal>;
+
+    std::set<Val> lhsSet(std::begin(lhs), std::end(lhs));
+    std::set<Val> rhsSet(std::begin(rhs), std::end(rhs));
     return {lhsSet == rhsSet, file, line, "Expected sets to be equal"};
 }
 
@@ -1010,8 +1046,9 @@ ATOM_INLINE auto expectEndsWith(std::string_view str, std::string_view suffix,
  */
 ATOM_INLINE auto expectMatches(std::string_view str, std::string_view pattern,
                                const char* file, int line) -> Expect {
-    std::regex regexPattern(std::string(pattern));
-    bool result = std::regex_search(std::string(str), regexPattern);
+    std::regex regexPattern{std::string(pattern)};
+    std::string strCopy(str);
+    bool result = std::regex_search(strCopy, regexPattern);
     return {result, file, line,
             "Expected \"" + std::string(str) + "\" to match pattern \"" +
                 std::string(pattern) + "\""};
@@ -1084,9 +1121,8 @@ auto expectUnique(const Container& container, const char* file,
 template <typename Container, typename T>
 auto expectContainsElement(const Container& container, const T& element,
                            const char* file, int line) -> Expect {
-    bool result =
-        std::find(container.begin(), container.end(), element) !=
-        container.end();
+    bool result = std::find(container.begin(), container.end(), element) !=
+                  container.end();
     return {result, file, line,
             result ? "Container contains element"
                    : "Container does not contain element"};
@@ -1123,8 +1159,9 @@ auto expectPtrEq(const T* ptr1, const T* ptr2, const char* file,
                  int line) -> Expect {
     bool result = ptr1 == ptr2;
     std::stringstream stream;
-    stream << "Expected pointers to be equal: " << static_cast<const void*>(ptr1)
-           << " vs " << static_cast<const void*>(ptr2);
+    stream << "Expected pointers to be equal: "
+           << static_cast<const void*>(ptr1) << " vs "
+           << static_cast<const void*>(ptr2);
     return {result, file, line, stream.str()};
 }
 
@@ -1153,8 +1190,8 @@ ATOM_INLINE auto expectRelativelyNear(double lhs, double rhs,
     bool result = diff <= relTolerance * maxVal;
     return {result, file, line,
             "Expected " + std::to_string(lhs) + " relatively near " +
-                std::to_string(rhs) + " (rel tolerance: " +
-                std::to_string(relTolerance) +
+                std::to_string(rhs) +
+                " (rel tolerance: " + std::to_string(relTolerance) +
                 ", actual rel diff: " + std::to_string(diff / maxVal) + ")"};
 }
 
@@ -1253,7 +1290,6 @@ ATOM_INLINE void recordProperty(const std::string& key,
 }  // namespace atom::test
 
 // Assertion macros
-#define expect(expr) atom::test::Expect(expr, __FILE__, __LINE__, #expr)
 #define expect_eq(lhs, rhs) atom::test::expectEq(lhs, rhs, __FILE__, __LINE__)
 #define expect_ne(lhs, rhs) atom::test::expectNe(lhs, rhs, __FILE__, __LINE__)
 #define expect_gt(lhs, rhs) atom::test::expectGt(lhs, rhs, __FILE__, __LINE__)

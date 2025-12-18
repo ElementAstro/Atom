@@ -3,7 +3,8 @@
  * @brief Comprehensive examples for atom::utils container utilities
  *
  * This example demonstrates all container utility functions including:
- * - Set operations (isSubset, intersection, union, difference, symmetricDifference)
+ * - Set operations (isSubset, intersection, union, difference,
+ * symmetricDifference)
  * - Container manipulation (contains, unique, flatten, zip, cartesianProduct)
  * - Filtering and partitioning (filter, partition, findIf)
  * - Transformation (applyAndStore, transformToVector)
@@ -24,7 +25,8 @@ void printVector(const std::string& label, const Container& vec) {
     std::cout << label << ": [";
     bool first = true;
     for (const auto& item : vec) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << item;
         first = false;
     }
@@ -38,7 +40,8 @@ void printPairs(const std::string& label,
     std::cout << label << ": [";
     bool first = true;
     for (const auto& [a, b] : pairs) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << "(" << a << ", " << b << ")";
         first = false;
     }
@@ -254,7 +257,8 @@ void demonstrateTransformation() {
     std::cout << "Salaries: [";
     bool first = true;
     for (const auto& s : salaries) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << "$" << s;
         first = false;
     }
@@ -269,7 +273,8 @@ void demonstrateTransformation() {
     std::cout << "String lengths: [";
     first = true;
     for (const auto& len : lengths) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << len;
         first = false;
     }
@@ -285,11 +290,13 @@ void demonstrateStringLiteralOperator() {
     // Using the _vec literal operator
     auto fruits = "apple, banana, cherry, date, elderberry"_vec;
     std::cout << "Created vector from string literal:" << std::endl;
-    std::cout << "  \"apple, banana, cherry, date, elderberry\"_vec" << std::endl;
+    std::cout << "  \"apple, banana, cherry, date, elderberry\"_vec"
+              << std::endl;
     std::cout << "Result: [";
     bool first = true;
     for (const auto& fruit : fruits) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << "\"" << fruit << "\"";
         first = false;
     }
@@ -300,7 +307,8 @@ void demonstrateStringLiteralOperator() {
     std::cout << "\nColors: [";
     first = true;
     for (const auto& color : colors) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << "\"" << color << "\"";
         first = false;
     }
@@ -351,7 +359,7 @@ void demonstrateComplexUseCases() {
     std::cout << "\n--- Combining Data Sources ---" << std::endl;
     Vector<int> ids = {1, 2, 3, 4};
     Vector<std::string> names = {"Product A", "Product B", "Product C",
-                                  "Product D"};
+                                 "Product D"};
 
     auto combined = zip(ids, names);
     std::cout << "Combined product data:" << std::endl;

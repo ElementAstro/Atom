@@ -50,7 +50,8 @@ local header_files = {
 }
 
 -- Add required packages
-add_requires("cfitsio", {optional = true})
+local use_system_packages = has_config("use_system_packages")
+add_requires("cfitsio", {optional = true, system = use_system_packages})
 
 -- Object Library
 target("atom-image-object")

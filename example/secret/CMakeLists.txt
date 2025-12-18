@@ -1,35 +1,19 @@
-# 示例目录: secret
+# CMakeLists.txt for Atom-Secret Examples This project is licensed under the
+# terms of the GPL3 license.
+#
+# Project Name: Atom-Secret-Examples Description: Example programs for Atom
+# Secret Management Library Author: Max Qian License: GPL3
+
 cmake_minimum_required(VERSION 3.21)
 
-# 获取子目录名称（用于可执行文件前缀）
-get_filename_component(SUBDIR_NAME ${CMAKE_CURRENT_SOURCE_DIR} NAME)
-
-# 可选: 添加特定于secret示例的选项
+# Option to build all secret examples
 option(ATOM_EXAMPLE_SECRET_BUILD_ALL "Build all secret examples" ON)
 
-# 获取所有CPP文件
-file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
-
-# 为每个CPP文件创建可执行文件
-foreach(CPP_FILE ${CPP_FILES})
-  # 获取不带扩展名的文件名
-  get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
-
-  # 构造可执行文件名称（子目录名_文件名）
-  set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
-
-  # 配置选项，允许单独控制每个示例的构建
-  string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
-  option(ATOM_EXAMPLE_SECRET_${EXAMPLE_NAME_UPPER}
-         "Build secret example: ${EXAMPLE_NAME}"
-         ${ATOM_EXAMPLE_SECRET_BUILD_ALL})
-
-  # 有条件地添加可执行文件
-  if(ATOM_EXAMPLE_SECRET_${EXAMPLE_NAME_UPPER})
-    add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
-    target_link_libraries(${EXECUTABLE_NAME} atom)
-
-    # 设置IDE文件夹分组
-    set_property(TARGET ${EXECUTABLE_NAME} PROPERTY FOLDER "Examples/Secret")
-  endif()
-endforeach()
+# Add subdirectories for modular examples
+add_subdirectory(core)
+add_subdirectory(crypto)
+add_subdirectory(password)
+add_subdirectory(otp)
+add_subdirectory(storage)
+add_subdirectory(manager)
+add_subdirectory(serialization)

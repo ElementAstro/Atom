@@ -231,7 +231,8 @@ auto IPv6::isInRange(std::string_view start, std::string_view end) -> bool {
         auto endIp = ipToArray(end);
 
         if (compareArrays(startIp, endIp) > 0) {
-            throw AddressRangeError("Invalid range: start IP > end IP");
+            throw AddressRangeError(
+                std::string_view{"Invalid range: start IP > end IP"});
         }
 
         bool inRange = compareArrays(ipSegments, startIp) >= 0 &&

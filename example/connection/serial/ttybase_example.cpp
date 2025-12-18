@@ -117,11 +117,13 @@ public:
     // High-level connect method
     bool connectToDevice(const std::string& device, uint32_t baudRate = 9600) {
         Logger::log(Logger::LOG_INFO, "SerialDevice",
-                    "Connecting to " + device + " at " + std::to_string(baudRate) + " baud");
+                    "Connecting to " + device + " at " +
+                        std::to_string(baudRate) + " baud");
 
         auto response = connect(device, baudRate, 8, 0, 1);
         if (response == TTYResponse::OK) {
-            Logger::log(Logger::LOG_SUCCESS, "SerialDevice", "Connected successfully");
+            Logger::log(Logger::LOG_SUCCESS, "SerialDevice",
+                        "Connected successfully");
             return true;
         } else {
             Logger::log(Logger::LOG_ERR, "SerialDevice",
@@ -175,7 +177,7 @@ void basicUsageExample() {
 
         Logger::log(Logger::LOG_INFO, "Example1",
                     "Created TTYBase instance, isConnected: " +
-                    std::string(device.isConnected() ? "yes" : "no"));
+                        std::string(device.isConnected() ? "yes" : "no"));
 
         // Get port file descriptor (will be -1 if not connected)
         Logger::log(Logger::LOG_INFO, "Example1",
@@ -195,8 +197,9 @@ void basicUsageExample() {
 
             // Disconnect
             auto disconnectResponse = device.disconnect();
-            Logger::log(Logger::LOG_INFO, "Example1",
-                        "Disconnect result: " + responseToString(disconnectResponse));
+            Logger::log(
+                Logger::LOG_INFO, "Example1",
+                "Disconnect result: " + responseToString(disconnectResponse));
         }
 
     } catch (const std::exception& e) {
@@ -204,7 +207,8 @@ void basicUsageExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1", "Basic usage example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Basic usage example completed\n");
 }
 
 // Example 2: Connection parameters
@@ -224,10 +228,12 @@ void connectionParametersExample() {
         }
 
         // Word sizes
-        Logger::log(Logger::LOG_INFO, "Example2", "Word sizes: 5, 6, 7, 8 bits");
+        Logger::log(Logger::LOG_INFO, "Example2",
+                    "Word sizes: 5, 6, 7, 8 bits");
 
         // Parity options
-        Logger::log(Logger::LOG_INFO, "Example2", "Parity: 0=None, 1=Odd, 2=Even");
+        Logger::log(Logger::LOG_INFO, "Example2",
+                    "Parity: 0=None, 1=Odd, 2=Even");
 
         // Stop bits
         Logger::log(Logger::LOG_INFO, "Example2", "Stop bits: 1 or 2");
@@ -247,21 +253,20 @@ void connectionParametersExample() {
             {9600, 8, 0, 1, "Standard 9600-8-N-1"},
             {115200, 8, 0, 1, "Fast 115200-8-N-1"},
             {9600, 7, 2, 1, "7-bit even parity"},
-            {19200, 8, 1, 2, "Odd parity, 2 stop bits"}
-        };
+            {19200, 8, 1, 2, "Odd parity, 2 stop bits"}};
 
         for (const auto& config : configs) {
             Logger::log(Logger::LOG_INFO, "Example2",
                         "Config: " + config.description);
             Logger::log(Logger::LOG_DEBUG, "Example2",
                         "  Baud=" + std::to_string(config.baudRate) +
-                        ", Word=" + std::to_string(config.wordSize) +
-                        ", Parity=" + std::to_string(config.parity) +
-                        ", Stop=" + std::to_string(config.stopBits));
+                            ", Word=" + std::to_string(config.wordSize) +
+                            ", Parity=" + std::to_string(config.parity) +
+                            ", Stop=" + std::to_string(config.stopBits));
 
-            auto response = device.connect(devicePath, config.baudRate,
-                                          config.wordSize, config.parity,
-                                          config.stopBits);
+            auto response =
+                device.connect(devicePath, config.baudRate, config.wordSize,
+                               config.parity, config.stopBits);
 
             Logger::log(Logger::LOG_INFO, "Example2",
                         "  Result: " + responseToString(response));
@@ -276,7 +281,8 @@ void connectionParametersExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2", "Connection parameters example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "Connection parameters example completed\n");
 }
 
 // Example 3: Synchronous read/write operations
@@ -301,17 +307,19 @@ void syncReadWriteExample() {
         std::vector<uint8_t> binaryData = {0x01, 0x02, 0x03, 0x04, 0x05};
         uint32_t bytesWritten = 0;
 
-        auto writeResponse = device.write(std::span<const uint8_t>(binaryData), bytesWritten);
+        auto writeResponse =
+            device.write(std::span<const uint8_t>(binaryData), bytesWritten);
         Logger::log(Logger::LOG_INFO, "Example3",
                     "Binary write result: " + responseToString(writeResponse) +
-                    " (" + std::to_string(bytesWritten) + " bytes)");
+                        " (" + std::to_string(bytesWritten) + " bytes)");
 
         // Write string
         std::string textData = "Hello Serial Port!";
         auto stringWriteResponse = device.writeString(textData, bytesWritten);
-        Logger::log(Logger::LOG_INFO, "Example3",
-                    "String write result: " + responseToString(stringWriteResponse) +
-                    " (" + std::to_string(bytesWritten) + " bytes)");
+        Logger::log(
+            Logger::LOG_INFO, "Example3",
+            "String write result: " + responseToString(stringWriteResponse) +
+                " (" + std::to_string(bytesWritten) + " bytes)");
 
         // Demonstrate read operation
         Logger::log(Logger::LOG_INFO, "Example3", "--- Read Operations ---");
@@ -319,10 +327,11 @@ void syncReadWriteExample() {
         std::vector<uint8_t> readBuffer(256);
         uint32_t bytesRead = 0;
 
-        auto readResponse = device.read(std::span<uint8_t>(readBuffer), 2, bytesRead);
+        auto readResponse =
+            device.read(std::span<uint8_t>(readBuffer), 2, bytesRead);
         Logger::log(Logger::LOG_INFO, "Example3",
-                    "Read result: " + responseToString(readResponse) +
-                    " (" + std::to_string(bytesRead) + " bytes)");
+                    "Read result: " + responseToString(readResponse) + " (" +
+                        std::to_string(bytesRead) + " bytes)");
 
         if (device.isConnected()) {
             device.disconnect();
@@ -333,12 +342,14 @@ void syncReadWriteExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3", "Sync read/write example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "Sync read/write example completed\n");
 }
 
 // Example 4: Asynchronous operations
 void asyncOperationsExample() {
-    Logger::log(Logger::LOG_INFO, "Example4", "=== Asynchronous Operations ===");
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "=== Asynchronous Operations ===");
 
     try {
         SerialDevice device("AsyncIODriver");
@@ -350,17 +361,21 @@ void asyncOperationsExample() {
         Logger::log(Logger::LOG_INFO, "Example4", "--- Async Write ---");
 
         std::vector<uint8_t> writeData = {0xAA, 0xBB, 0xCC, 0xDD};
-        auto writeFuture = device.writeAsync(std::span<const uint8_t>(writeData));
+        auto writeFuture =
+            device.writeAsync(std::span<const uint8_t>(writeData));
 
-        Logger::log(Logger::LOG_INFO, "Example4", "Async write initiated, waiting...");
+        Logger::log(Logger::LOG_INFO, "Example4",
+                    "Async write initiated, waiting...");
 
-        if (writeFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
+        if (writeFuture.wait_for(std::chrono::seconds(5)) ==
+            std::future_status::ready) {
             auto [response, bytesWritten] = writeFuture.get();
             Logger::log(Logger::LOG_INFO, "Example4",
                         "Async write completed: " + responseToString(response) +
-                        " (" + std::to_string(bytesWritten) + " bytes)");
+                            " (" + std::to_string(bytesWritten) + " bytes)");
         } else {
-            Logger::log(Logger::LOG_WARNING, "Example4", "Async write timed out");
+            Logger::log(Logger::LOG_WARNING, "Example4",
+                        "Async write timed out");
         }
 
         // Async read
@@ -369,15 +384,18 @@ void asyncOperationsExample() {
         std::vector<uint8_t> readBuffer(128);
         auto readFuture = device.readAsync(std::span<uint8_t>(readBuffer), 2);
 
-        Logger::log(Logger::LOG_INFO, "Example4", "Async read initiated, waiting...");
+        Logger::log(Logger::LOG_INFO, "Example4",
+                    "Async read initiated, waiting...");
 
-        if (readFuture.wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
+        if (readFuture.wait_for(std::chrono::seconds(5)) ==
+            std::future_status::ready) {
             auto [response, bytesRead] = readFuture.get();
             Logger::log(Logger::LOG_INFO, "Example4",
                         "Async read completed: " + responseToString(response) +
-                        " (" + std::to_string(bytesRead) + " bytes)");
+                            " (" + std::to_string(bytesRead) + " bytes)");
         } else {
-            Logger::log(Logger::LOG_WARNING, "Example4", "Async read timed out");
+            Logger::log(Logger::LOG_WARNING, "Example4",
+                        "Async read timed out");
         }
 
         if (device.isConnected()) {
@@ -389,12 +407,14 @@ void asyncOperationsExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example4", "Async operations example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "Async operations example completed\n");
 }
 
 // Example 5: Read until stop byte
 void readSectionExample() {
-    Logger::log(Logger::LOG_INFO, "Example5", "=== Read Section (Until Stop Byte) ===");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "=== Read Section (Until Stop Byte) ===");
 
     try {
         SerialDevice device("SectionReadDriver");
@@ -403,17 +423,19 @@ void readSectionExample() {
         device.connect(devicePath, 9600, 8, 0, 1);
 
         // Read until newline character
-        Logger::log(Logger::LOG_INFO, "Example5", "Reading until newline (0x0A)...");
+        Logger::log(Logger::LOG_INFO, "Example5",
+                    "Reading until newline (0x0A)...");
 
         std::vector<uint8_t> buffer(256);
         uint32_t bytesRead = 0;
         uint8_t stopByte = '\n';  // 0x0A
 
-        auto response = device.readSection(std::span<uint8_t>(buffer), stopByte, 5, bytesRead);
+        auto response = device.readSection(std::span<uint8_t>(buffer), stopByte,
+                                           5, bytesRead);
 
         Logger::log(Logger::LOG_INFO, "Example5",
                     "Read section result: " + responseToString(response) +
-                    " (" + std::to_string(bytesRead) + " bytes)");
+                        " (" + std::to_string(bytesRead) + " bytes)");
 
         if (bytesRead > 0) {
             std::string data(buffer.begin(), buffer.begin() + bytesRead);
@@ -424,16 +446,19 @@ void readSectionExample() {
         Logger::log(Logger::LOG_INFO, "Example5", "Reading until CR (0x0D)...");
 
         stopByte = '\r';  // 0x0D
-        response = device.readSection(std::span<uint8_t>(buffer), stopByte, 5, bytesRead);
+        response = device.readSection(std::span<uint8_t>(buffer), stopByte, 5,
+                                      bytesRead);
 
         Logger::log(Logger::LOG_INFO, "Example5",
                     "Read section result: " + responseToString(response));
 
         // Read until custom delimiter
-        Logger::log(Logger::LOG_INFO, "Example5", "Reading until ETX (0x03)...");
+        Logger::log(Logger::LOG_INFO, "Example5",
+                    "Reading until ETX (0x03)...");
 
         stopByte = 0x03;  // ETX (End of Text)
-        response = device.readSection(std::span<uint8_t>(buffer), stopByte, 5, bytesRead);
+        response = device.readSection(std::span<uint8_t>(buffer), stopByte, 5,
+                                      bytesRead);
 
         Logger::log(Logger::LOG_INFO, "Example5",
                     "Read section result: " + responseToString(response));
@@ -447,7 +472,8 @@ void readSectionExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example5", "Read section example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "Read section example completed\n");
 }
 
 // Example 6: Error handling
@@ -458,19 +484,15 @@ void errorHandlingExample() {
         SerialDevice device("ErrorTestDriver");
 
         // Get error messages for all response types
-        Logger::log(Logger::LOG_INFO, "Example6", "Error messages for all response types:");
+        Logger::log(Logger::LOG_INFO, "Example6",
+                    "Error messages for all response types:");
 
         std::vector<TTYBase::TTYResponse> responses = {
-            TTYBase::TTYResponse::OK,
-            TTYBase::TTYResponse::ReadError,
-            TTYBase::TTYResponse::WriteError,
-            TTYBase::TTYResponse::SelectError,
-            TTYBase::TTYResponse::Timeout,
-            TTYBase::TTYResponse::PortFailure,
-            TTYBase::TTYResponse::ParamError,
-            TTYBase::TTYResponse::Errno,
-            TTYBase::TTYResponse::Overflow
-        };
+            TTYBase::TTYResponse::OK,         TTYBase::TTYResponse::ReadError,
+            TTYBase::TTYResponse::WriteError, TTYBase::TTYResponse::SelectError,
+            TTYBase::TTYResponse::Timeout,    TTYBase::TTYResponse::PortFailure,
+            TTYBase::TTYResponse::ParamError, TTYBase::TTYResponse::Errno,
+            TTYBase::TTYResponse::Overflow};
 
         for (auto response : responses) {
             std::string errorMsg = device.getErrorMessage(response);
@@ -482,10 +504,11 @@ void errorHandlingExample() {
         Logger::log(Logger::LOG_INFO, "Example6", "\n--- Error Scenarios ---");
 
         // Invalid device path
-        auto response = device.connect("/dev/nonexistent_device", 9600, 8, 0, 1);
+        auto response =
+            device.connect("/dev/nonexistent_device", 9600, 8, 0, 1);
         Logger::log(Logger::LOG_INFO, "Example6",
-                    "Invalid device: " + responseToString(response) +
-                    " - " + device.getErrorMessage(response));
+                    "Invalid device: " + responseToString(response) + " - " +
+                        device.getErrorMessage(response));
 
         // Operations on disconnected device
         std::vector<uint8_t> buffer(64);
@@ -504,7 +527,8 @@ void errorHandlingExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example6", "Error handling example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example6",
+                "Error handling example completed\n");
 }
 
 // Example 7: Debug mode
@@ -553,33 +577,40 @@ void byteSpanHelperExample() {
         SerialDevice device("ByteSpanDriver");
 
         // Using makeByteSpan with different container types
-        Logger::log(Logger::LOG_INFO, "Example8", "Creating byte spans from containers:");
+        Logger::log(Logger::LOG_INFO, "Example8",
+                    "Creating byte spans from containers:");
 
         // From vector<char>
         std::vector<char> charVec = {'H', 'e', 'l', 'l', 'o'};
         auto charSpan = makeByteSpan(charVec);
-        Logger::log(Logger::LOG_INFO, "Example8",
-                    "vector<char> span size: " + std::to_string(charSpan.size()));
+        Logger::log(
+            Logger::LOG_INFO, "Example8",
+            "vector<char> span size: " + std::to_string(charSpan.size()));
 
         // From vector<uint8_t>
         std::vector<uint8_t> byteVec = {0x01, 0x02, 0x03, 0x04};
         auto byteSpan = makeByteSpan(byteVec);
-        Logger::log(Logger::LOG_INFO, "Example8",
-                    "vector<uint8_t> span size: " + std::to_string(byteSpan.size()));
+        Logger::log(
+            Logger::LOG_INFO, "Example8",
+            "vector<uint8_t> span size: " + std::to_string(byteSpan.size()));
 
         // From array
-        std::array<uint8_t, 8> byteArray = {0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF, 0x00, 0x11};
+        std::array<uint8_t, 8> byteArray = {0xAA, 0xBB, 0xCC, 0xDD,
+                                            0xEE, 0xFF, 0x00, 0x11};
         auto arraySpan = makeByteSpan(byteArray);
-        Logger::log(Logger::LOG_INFO, "Example8",
-                    "array<uint8_t, 8> span size: " + std::to_string(arraySpan.size()));
+        Logger::log(
+            Logger::LOG_INFO, "Example8",
+            "array<uint8_t, 8> span size: " + std::to_string(arraySpan.size()));
 
         // Use spans for read/write operations
         std::string devicePath = getDefaultDevice();
-        if (device.connect(devicePath, 9600, 8, 0, 1) == TTYBase::TTYResponse::OK) {
+        if (device.connect(devicePath, 9600, 8, 0, 1) ==
+            TTYBase::TTYResponse::OK) {
             uint32_t bytesWritten = 0;
             device.write(byteSpan, bytesWritten);
             Logger::log(Logger::LOG_INFO, "Example8",
-                        "Wrote using makeByteSpan: " + std::to_string(bytesWritten) + " bytes");
+                        "Wrote using makeByteSpan: " +
+                            std::to_string(bytesWritten) + " bytes");
 
             device.disconnect();
         }
@@ -589,7 +620,8 @@ void byteSpanHelperExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example8", "Byte span helper example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example8",
+                "Byte span helper example completed\n");
 }
 
 // Example 9: Move semantics
@@ -604,7 +636,8 @@ void moveSemanticsExample() {
         device1.connect(devicePath, 9600, 8, 0, 1);
 
         Logger::log(Logger::LOG_INFO, "Example9",
-                    "device1 connected: " + std::string(device1.isConnected() ? "yes" : "no"));
+                    "device1 connected: " +
+                        std::string(device1.isConnected() ? "yes" : "no"));
         Logger::log(Logger::LOG_INFO, "Example9",
                     "device1 FD: " + std::to_string(device1.getPortFD()));
 
@@ -613,7 +646,8 @@ void moveSemanticsExample() {
 
         Logger::log(Logger::LOG_INFO, "Example9", "After move:");
         Logger::log(Logger::LOG_INFO, "Example9",
-                    "device2 connected: " + std::string(device2.isConnected() ? "yes" : "no"));
+                    "device2 connected: " +
+                        std::string(device2.isConnected() ? "yes" : "no"));
         Logger::log(Logger::LOG_INFO, "Example9",
                     "device2 FD: " + std::to_string(device2.getPortFD()));
 
@@ -623,7 +657,8 @@ void moveSemanticsExample() {
 
         Logger::log(Logger::LOG_INFO, "Example9", "After move assignment:");
         Logger::log(Logger::LOG_INFO, "Example9",
-                    "device3 connected: " + std::string(device3.isConnected() ? "yes" : "no"));
+                    "device3 connected: " +
+                        std::string(device3.isConnected() ? "yes" : "no"));
 
         if (device3.isConnected()) {
             device3.disconnect();
@@ -634,12 +669,14 @@ void moveSemanticsExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example9", "Move semantics example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example9",
+                "Move semantics example completed\n");
 }
 
 // Example 10: Complete serial communication workflow
 void completeWorkflowExample() {
-    Logger::log(Logger::LOG_INFO, "Example10", "=== Complete Serial Communication Workflow ===");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "=== Complete Serial Communication Workflow ===");
 
     try {
         SerialDevice device("WorkflowDriver");
@@ -654,31 +691,38 @@ void completeWorkflowExample() {
         }
 
         // Step 2: Enable debug for troubleshooting
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 2: Enabling debug mode...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 2: Enabling debug mode...");
         device.setDebug(true);
 
         // Step 3: Send initialization command
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 3: Sending init command...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 3: Sending init command...");
         device.sendData("AT\r\n");
 
         // Step 4: Wait for response
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 4: Waiting for response...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 4: Waiting for response...");
         std::string response = device.receiveData(256, 5);
 
         if (!response.empty()) {
-            Logger::log(Logger::LOG_SUCCESS, "Example10", "Received: " + response);
+            Logger::log(Logger::LOG_SUCCESS, "Example10",
+                        "Received: " + response);
         }
 
         // Step 5: Send data command
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 5: Sending data command...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 5: Sending data command...");
         device.sendData("ATI\r\n");
 
         // Step 6: Read response
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 6: Reading response...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 6: Reading response...");
         response = device.receiveData(1024, 5);
 
         // Step 7: Disable debug
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 7: Disabling debug mode...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 7: Disabling debug mode...");
         device.setDebug(false);
 
         // Step 8: Disconnect
@@ -687,23 +731,28 @@ void completeWorkflowExample() {
             device.disconnect();
         }
 
-        Logger::log(Logger::LOG_SUCCESS, "Example10", "Workflow completed successfully");
+        Logger::log(Logger::LOG_SUCCESS, "Example10",
+                    "Workflow completed successfully");
 
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_ERR, "Example10",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example10", "Complete workflow example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "Complete workflow example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_INFO, "Main", "  TTYBase Comprehensive Examples");
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_WARNING, "Main",
                 "Note: Most examples require actual serial hardware");
-    Logger::log(Logger::LOG_INFO, "Main", "Default device: " + getDefaultDevice());
+    Logger::log(Logger::LOG_INFO, "Main",
+                "Default device: " + getDefaultDevice());
     Logger::log(Logger::LOG_INFO, "Main", "");
 
     // Run all examples
@@ -718,9 +767,12 @@ int main() {
     moveSemanticsExample();
     completeWorkflowExample();
 
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "  All TTYBase examples completed!");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "  All TTYBase examples completed!");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
 
     return 0;
 }

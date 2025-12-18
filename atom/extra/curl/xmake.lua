@@ -10,7 +10,8 @@ set_license("GPL-3.0")
 set_languages("c++20")
 
 -- Add required packages
-add_requires("libcurl", {optional = true})
+local use_system_packages = has_config("use_system_packages")
+add_requires("libcurl", {optional = true, system = use_system_packages})
 
 -- Source files
 local sources = {

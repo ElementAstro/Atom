@@ -42,7 +42,8 @@ public:
     MatcherWrapper() = default;
 
     template <typename M>
-    MatcherWrapper(M matcher) : impl_(std::make_shared<Model<M>>(std::move(matcher))) {}
+    MatcherWrapper(M matcher)
+        : impl_(std::make_shared<Model<M>>(std::move(matcher))) {}
 
     [[nodiscard]] bool matches(const T& value) const {
         return impl_ ? impl_->matches(value) : true;
@@ -69,9 +70,7 @@ private:
             return matcher.matches(value);
         }
 
-        std::string describe() const override {
-            return matcher.describe();
-        }
+        std::string describe() const override { return matcher.describe(); }
 
         M matcher;
     };
@@ -101,7 +100,7 @@ inline constexpr struct AnyArg {
     operator MatcherWrapper<T>() const {
         return MatcherWrapper<T>(AnyMatcher<T>{});
     }
-} _ {};
+} _{};
 
 template <typename T = void>
 auto Any() {
@@ -271,7 +270,8 @@ auto Ge(T bound) {
  */
 class StrEqMatcher {
 public:
-    explicit StrEqMatcher(std::string expected) : expected_(std::move(expected)) {}
+    explicit StrEqMatcher(std::string expected)
+        : expected_(std::move(expected)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
         return value == expected_;
@@ -294,7 +294,8 @@ inline auto StrEq(std::string expected) {
  */
 class StrNeMatcher {
 public:
-    explicit StrNeMatcher(std::string expected) : expected_(std::move(expected)) {}
+    explicit StrNeMatcher(std::string expected)
+        : expected_(std::move(expected)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
         return value != expected_;
@@ -321,7 +322,8 @@ public:
         : expected_(std::move(expected)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.size() != expected_.size()) return false;
+        if (value.size() != expected_.size())
+            return false;
         for (size_t i = 0; i < value.size(); ++i) {
             if (std::tolower(static_cast<unsigned char>(value[i])) !=
                 std::tolower(static_cast<unsigned char>(expected_[i]))) {
@@ -348,7 +350,8 @@ inline auto StrCaseEq(std::string expected) {
  */
 class HasSubstrMatcher {
 public:
-    explicit HasSubstrMatcher(std::string substr) : substr_(std::move(substr)) {}
+    explicit HasSubstrMatcher(std::string substr)
+        : substr_(std::move(substr)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
         return value.find(substr_) != std::string::npos;
@@ -371,7 +374,8 @@ inline auto HasSubstr(std::string substr) {
  */
 class StartsWithMatcher {
 public:
-    explicit StartsWithMatcher(std::string prefix) : prefix_(std::move(prefix)) {}
+    explicit StartsWithMatcher(std::string prefix)
+        : prefix_(std::move(prefix)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
         return value.size() >= prefix_.size() &&
@@ -450,7 +454,9 @@ inline auto MatchesRegex(std::string pattern) {
 template <typename T>
 class IsNullMatcher {
 public:
-    [[nodiscard]] bool matches(const T& value) const { return value == nullptr; }
+    [[nodiscard]] bool matches(const T& value) const {
+        return value == nullptr;
+    }
     [[nodiscard]] std::string describe() const { return "IsNull()"; }
 };
 
@@ -465,7 +471,9 @@ auto IsNull() {
 template <typename T>
 class NotNullMatcher {
 public:
-    [[nodiscard]] bool matches(const T& value) const { return value != nullptr; }
+    [[nodiscard]] bool matches(const T& value) const {
+        return value != nullptr;
+    }
     [[nodiscard]] std::string describe() const { return "NotNull()"; }
 };
 
@@ -571,10 +579,10 @@ private:
 
 template <typename Element>
 auto Contains(Element element) {
-    return [element = std::move(element)]<typename Container>(
-               const Container& c) {
-        return std::find(c.begin(), c.end(), element) != c.end();
-    };
+    return
+        [element = std::move(element)]<typename Container>(const Container& c) {
+            return std::find(c.begin(), c.end(), element) != c.end();
+        };
 }
 
 // ============================================================================
@@ -753,7 +761,8 @@ private:
 
 template <typename FieldType, typename Class, typename InnerMatcher>
 auto Field(FieldType Class::*field, InnerMatcher inner) {
-    return FieldMatcher<FieldType, Class, InnerMatcher>(field, std::move(inner));
+    return FieldMatcher<FieldType, Class, InnerMatcher>(field,
+                                                        std::move(inner));
 }
 
 /**

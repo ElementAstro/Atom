@@ -233,8 +233,49 @@ endif()
 # SQLite3 - Core database functionality
 atom_find_dependency(SQLite3 QUIET)
 
-# fmt - String formatting
-atom_find_dependency(fmt QUIET PKG_CONFIG_NAME fmt)
+# fmt - String formatting (required by spdlog)
+find_package(fmt CONFIG QUIET)
+if(NOT fmt_FOUND)
+  atom_find_dependency(fmt QUIET PKG_CONFIG_NAME fmt)
+endif()
+if(fmt_FOUND)
+  message(STATUS "fmt found: ${fmt_VERSION}")
+endif()
+
+# spdlog - Logging library (use compiled version to avoid ODR violations)
+find_package(spdlog CONFIG QUIET)
+if(NOT spdlog_FOUND)
+  # Try pkg-config fallback
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(SPDLOG QUIET spdlog)
+    if(SPDLOG_FOUND AND NOT TARGET spdlog::spdlog)
+      add_library(spdlog::spdlog INTERFACE IMPORTED)
+      target_include_directories(spdlog::spdlog
+                                 INTERFACE ${SPDLOG_INCLUDE_DIRS})
+      target_link_libraries(spdlog::spdlog INTERFACE ${SPDLOG_LIBRARIES})
+      set(spdlog_FOUND TRUE)
+    endif()
+  endif()
+endif()
+if(spdlog_FOUND)
+  message(STATUS "spdlog found: ${spdlog_VERSION}")
+endif()
+
+# CURL - HTTP client library (optional, for atom-web)
+find_package(CURL QUIET)
+if(CURL_FOUND)
+  message(STATUS "CURL found: ${CURL_VERSION_STRING}")
+else()
+  # Try pkg-config fallback
+  find_package(PkgConfig QUIET)
+  if(PkgConfig_FOUND)
+    pkg_check_modules(CURL QUIET libcurl)
+    if(CURL_FOUND)
+      message(STATUS "CURL found via pkg-config: ${CURL_VERSION}")
+    endif()
+  endif()
+endif()
 
 # =============================================================================
 # Header-only Dependencies
@@ -356,6 +397,8 @@ message(STATUS "OpenSSL: ${OpenSSL_FOUND}")
 message(STATUS "ZLIB: ${ZLIB_FOUND}")
 message(STATUS "SQLite3: ${SQLite3_FOUND}")
 message(STATUS "fmt: ${fmt_FOUND}")
+message(STATUS "spdlog: ${spdlog_FOUND}")
+message(STATUS "CURL: ${CURL_FOUND}")
 message(STATUS "Asio: ${ASIO_FOUND}")
 
 if(ATOM_USE_SSH)

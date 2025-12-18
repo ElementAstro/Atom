@@ -72,8 +72,8 @@ void demonstrateLiteralParsing() {
 
     // Integer literals
     std::cout << "--- Integer Literals ---" << std::endl;
-    std::vector<std::string> intLiterals = {"0", "42", "-100", "1000000",
-                                             "0x1F", "0b1010", "0777"};
+    std::vector<std::string> intLiterals = {"0",    "42",     "-100", "1000000",
+                                            "0x1F", "0b1010", "0777"};
 
     for (const auto& literal : intLiterals) {
         auto result = parser.parseLiteral(literal);
@@ -89,7 +89,7 @@ void demonstrateLiteralParsing() {
     // Floating point literals
     std::cout << "\n--- Floating Point Literals ---" << std::endl;
     std::vector<std::string> floatLiterals = {"3.14",   "-2.718", "1e10",
-                                               "1.5e-3", "0.0",    ".5"};
+                                              "1.5e-3", "0.0",    ".5"};
 
     for (const auto& literal : floatLiterals) {
         auto result = parser.parseLiteral(literal);
@@ -104,8 +104,8 @@ void demonstrateLiteralParsing() {
 
     // Boolean literals
     std::cout << "\n--- Boolean Literals ---" << std::endl;
-    std::vector<std::string> boolLiterals = {"true", "false", "True", "False",
-                                              "TRUE", "FALSE"};
+    std::vector<std::string> boolLiterals = {"true",  "false", "True",
+                                             "False", "TRUE",  "FALSE"};
 
     for (const auto& literal : boolLiterals) {
         auto result = parser.parseLiteral(literal);
@@ -120,9 +120,8 @@ void demonstrateLiteralParsing() {
 
     // String literals
     std::cout << "\n--- String Literals ---" << std::endl;
-    std::vector<std::string> stringLiterals = {"\"hello\"", "'world'",
-                                                "\"with spaces\"",
-                                                "\"escaped\\\"quote\""};
+    std::vector<std::string> stringLiterals = {
+        "\"hello\"", "'world'", "\"with spaces\"", "\"escaped\\\"quote\""};
 
     for (const auto& literal : stringLiterals) {
         auto result = parser.parseLiteral(literal);
@@ -158,7 +157,8 @@ void demonstrateParseWithDefault() {
 
     // Invalid inputs - should return default
     std::cout << "\n--- Invalid Inputs (returns default) ---" << std::endl;
-    auto result3 = parser.parseLiteralWithDefault("not_a_number", std::any(999));
+    auto result3 =
+        parser.parseLiteralWithDefault("not_a_number", std::any(999));
     std::cout << "\"not_a_number\" with default 999 -> ";
     printAnyValue(result3);
     std::cout << std::endl;
@@ -266,7 +266,8 @@ void demonstrateCsvParsing() {
 
     // Semicolon-separated (European format)
     std::cout << "\n--- Semicolon-Separated (European format) ---" << std::endl;
-    std::string ssv = "name;value;unit\ntemperature;25,5;celsius\npressure;1013,25;hPa";
+    std::string ssv =
+        "name;value;unit\ntemperature;25,5;celsius\npressure;1013,25;hPa";
     std::cout << "SSV data:" << std::endl;
     std::cout << ssv << std::endl;
     std::cout << "\nParsing with semicolon delimiter..." << std::endl;
@@ -317,7 +318,8 @@ void demonstrateCustomParsers() {
             // Simple IP validation (just check for dots)
             int dotCount = 0;
             for (char c : input) {
-                if (c == '.') dotCount++;
+                if (c == '.')
+                    dotCount++;
             }
             if (dotCount == 3) {
                 return std::any(std::string(input));
@@ -341,10 +343,8 @@ void demonstrateParallelParsing() {
 
     // Create a batch of inputs to parse
     std::vector<std::string> inputs = {
-        "42",    "3.14",   "true",  "100",   "-50",
-        "2.718", "false",  "999",   "1.5",   "0",
-        "1000",  "0.001",  "true",  "-100",  "42.5"
-    };
+        "42",  "3.14", "true", "100",   "-50",  "2.718", "false", "999",
+        "1.5", "0",    "1000", "0.001", "true", "-100",  "42.5"};
 
     std::cout << "Inputs to parse:" << std::endl;
     for (size_t i = 0; i < inputs.size(); ++i) {
@@ -380,8 +380,7 @@ void demonstrateComplexUseCases() {
         {"server.timeout", "30.5"},
         {"debug.enabled", "true"},
         {"app.name", "\"MyApplication\""},
-        {"max.connections", "100"}
-    };
+        {"max.connections", "100"}};
 
     std::cout << "Configuration:" << std::endl;
     for (const auto& [key, value] : configLines) {
@@ -397,10 +396,9 @@ void demonstrateComplexUseCases() {
 
     // Use case 2: Command-line argument parsing
     std::cout << "\n--- Command-Line Argument Parsing ---" << std::endl;
-    std::vector<std::string> args = {"--verbose", "true",
-                                      "--count", "10",
-                                      "--ratio", "0.75",
-                                      "--name", "\"test\""};
+    std::vector<std::string> args = {"--verbose", "true",    "--count",
+                                     "10",        "--ratio", "0.75",
+                                     "--name",    "\"test\""};
 
     std::cout << "Arguments:" << std::endl;
     for (size_t i = 0; i < args.size(); i += 2) {
@@ -418,8 +416,8 @@ void demonstrateComplexUseCases() {
 
     // Use case 3: Data validation
     std::cout << "\n--- Data Validation ---" << std::endl;
-    std::vector<std::string> userInputs = {"42", "hello", "3.14", "true",
-                                            "not_valid", "100"};
+    std::vector<std::string> userInputs = {"42",   "hello",     "3.14",
+                                           "true", "not_valid", "100"};
 
     std::cout << "Validating user inputs:" << std::endl;
     for (const auto& input : userInputs) {

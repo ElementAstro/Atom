@@ -115,7 +115,8 @@ void demonstrateJsonSerialization() {
     std::cout << "Integer 42: " << toJson(42) << std::endl;
     std::cout << "Double 3.14: " << toJson(3.14) << std::endl;
     std::cout << "Bool true: " << toJson(true) << std::endl;
-    std::cout << "String \"hello\": " << toJson(std::string("hello")) << std::endl;
+    std::cout << "String \"hello\": " << toJson(std::string("hello"))
+              << std::endl;
 
     // Vector to JSON
     std::cout << "\n--- Vector to JSON ---" << std::endl;
@@ -144,7 +145,8 @@ void demonstrateXmlSerialization() {
     std::cout << "--- Simple Values to XML ---" << std::endl;
     std::cout << "Integer: " << toXml(42, "value") << std::endl;
     std::cout << "Double: " << toXml(3.14, "pi") << std::endl;
-    std::cout << "String: " << toXml(std::string("hello"), "greeting") << std::endl;
+    std::cout << "String: " << toXml(std::string("hello"), "greeting")
+              << std::endl;
     std::cout << "Bool: " << toXml(true, "enabled") << std::endl;
 
     // Vector to XML
@@ -268,11 +270,7 @@ void demonstrateComplexUseCases() {
     // Use case 3: Debug output
     std::cout << "\n--- Debug Output ---" << std::endl;
 
-    std::vector<std::vector<int>> matrix = {
-        {1, 2, 3},
-        {4, 5, 6},
-        {7, 8, 9}
-    };
+    std::vector<std::vector<int>> matrix = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
 
     std::cout << "Matrix (compact): " << toString(matrix, false) << std::endl;
     std::cout << "Matrix (pretty):" << std::endl;
@@ -288,7 +286,8 @@ void demonstrateComplexUseCases() {
     apiResponse["total_pages"] = 5;
 
     std::cout << "JSON Response: " << toJson(apiResponse) << std::endl;
-    std::cout << "XML Response: " << toXml(apiResponse, "response") << std::endl;
+    std::cout << "XML Response: " << toXml(apiResponse, "response")
+              << std::endl;
 }
 
 int main() {

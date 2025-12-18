@@ -69,14 +69,15 @@ void demonstrateStringConversions() {
             int val = std::stoi(str);
             std::cout << "\"" << str << "\" -> " << val << std::endl;
         } catch (const std::exception& e) {
-            std::cout << "\"" << str << "\" -> Error: " << e.what() << std::endl;
+            std::cout << "\"" << str << "\" -> Error: " << e.what()
+                      << std::endl;
         }
     }
 
     // String to double
     std::cout << "\n--- String to Double ---" << std::endl;
     std::vector<std::string> doubleStrings = {"3.14", "-2.718", "0.0", "1e10",
-                                               "1.5e-3"};
+                                              "1.5e-3"};
 
     std::cout << std::fixed << std::setprecision(6);
     for (const auto& str : doubleStrings) {
@@ -84,7 +85,8 @@ void demonstrateStringConversions() {
             double val = std::stod(str);
             std::cout << "\"" << str << "\" -> " << val << std::endl;
         } catch (const std::exception& e) {
-            std::cout << "\"" << str << "\" -> Error: " << e.what() << std::endl;
+            std::cout << "\"" << str << "\" -> Error: " << e.what()
+                      << std::endl;
         }
     }
 
@@ -125,8 +127,8 @@ void demonstrateHexConversions() {
     // Hex string to integer
     std::cout << std::dec;  // Reset to decimal
     std::cout << "\n--- Hex to Integer ---" << std::endl;
-    std::vector<std::string> hexStrings = {"0", "F", "10", "FF", "100", "1000",
-                                            "FFFF"};
+    std::vector<std::string> hexStrings = {"0",   "F",    "10",  "FF",
+                                           "100", "1000", "FFFF"};
 
     for (const auto& hexStr : hexStrings) {
         try {
@@ -165,9 +167,8 @@ void demonstrateBinaryConversions() {
 
     // Binary string to integer
     std::cout << "\n--- Binary to Integer ---" << std::endl;
-    std::vector<std::string> binaryStrings = {"0",    "1",    "10",
-                                               "101",  "1010", "1111",
-                                               "11111111"};
+    std::vector<std::string> binaryStrings = {"0",    "1",    "10",      "101",
+                                              "1010", "1111", "11111111"};
 
     for (const auto& binStr : binaryStrings) {
         try {
@@ -188,8 +189,8 @@ void demonstrateBooleanConversions() {
 
     // String to bool
     std::cout << "--- String to Boolean ---" << std::endl;
-    std::vector<std::string> boolStrings = {"true", "false", "1", "0", "yes",
-                                             "no",   "TRUE",  "FALSE"};
+    std::vector<std::string> boolStrings = {"true", "false", "1",    "0",
+                                            "yes",  "no",    "TRUE", "FALSE"};
 
     for (const auto& str : boolStrings) {
         bool val = (str == "true" || str == "TRUE" || str == "1" ||
@@ -223,7 +224,7 @@ void demonstrateSafeConversions() {
     // Safe string to int
     std::cout << "--- Safe String to Int ---" << std::endl;
     std::vector<std::string> testStrings = {"123",  "-456", "abc",
-                                             "12.5", "",     "999999999999"};
+                                            "12.5", "",     "999999999999"};
 
     for (const auto& str : testStrings) {
         try {
@@ -246,8 +247,8 @@ void demonstrateSafeConversions() {
 
     // Safe string to double
     std::cout << "\n--- Safe String to Double ---" << std::endl;
-    std::vector<std::string> doubleTestStrings = {"3.14",  "abc",  "1e1000",
-                                                   "-inf",  "nan",  "1.5abc"};
+    std::vector<std::string> doubleTestStrings = {"3.14", "abc", "1e1000",
+                                                  "-inf", "nan", "1.5abc"};
 
     std::cout << std::fixed << std::setprecision(6);
     for (const auto& str : doubleTestStrings) {
@@ -283,9 +284,9 @@ void demonstrateComplexUseCases() {
     };
 
     std::vector<ConfigValue> config = {{"port", "8080"},
-                                        {"timeout", "30.5"},
-                                        {"debug", "true"},
-                                        {"max_connections", "100"}};
+                                       {"timeout", "30.5"},
+                                       {"debug", "true"},
+                                       {"max_connections", "100"}};
 
     for (const auto& [key, value] : config) {
         std::cout << key << " = " << value;
@@ -318,7 +319,8 @@ void demonstrateComplexUseCases() {
 
     std::cout << "Value: " << value << std::endl;
     std::cout << "  Decimal: " << std::dec << value << std::endl;
-    std::cout << "  Hex: 0x" << std::hex << std::uppercase << value << std::endl;
+    std::cout << "  Hex: 0x" << std::hex << std::uppercase << value
+              << std::endl;
     std::cout << "  Octal: 0" << std::oct << value << std::endl;
 
     // Binary representation

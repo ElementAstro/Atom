@@ -517,7 +517,8 @@ private:
                 std::cout << "SKIP: " << testCase.name << " (disabled)"
                           << std::endl;
             }
-            recordTestResult(testCase.name, false, true, "Test is disabled", 0.0);
+            recordTestResult(testCase.name, false, true, "Test is disabled",
+                             0.0);
             return;
         }
 
@@ -529,8 +530,8 @@ private:
         // Determine timeout: use test-specific or global timeout
         auto timeout = config_.globalTimeout;
         if (testCase.timeLimit > 0) {
-            timeout = std::chrono::milliseconds(
-                static_cast<int>(testCase.timeLimit));
+            timeout =
+                std::chrono::milliseconds(static_cast<int>(testCase.timeLimit));
         }
 
         for (int attempt = 0; attempt <= maxRetries && !shouldStop_.load();
@@ -573,8 +574,8 @@ private:
                         std::cout << "SKIP: " << testCase.name << " - "
                                   << what.substr(9) << std::endl;
                     }
-                    recordTestResult(testCase.name, false, true,
-                                     what.substr(9), 0.0);
+                    recordTestResult(testCase.name, false, true, what.substr(9),
+                                     0.0);
                     return;
                 }
                 errorMessage = what;

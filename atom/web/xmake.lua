@@ -117,7 +117,7 @@ target("atom-web")
     add_includedirs(".", {public = true})
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("wsock32", "ws2_32")
     end
 

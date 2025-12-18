@@ -22,7 +22,7 @@ add_rules("mode.debug", "mode.release")
 -- add_requires("pybind11")
 
 -- Helper function to check if directory should be excluded
-function is_excluded_dir(dirname)
+local function is_excluded_dir(dirname)
     -- Exclude build directories
     if dirname:startswith("build") then return true end
     if dirname:startswith("Release") then return true end
@@ -43,13 +43,15 @@ function is_excluded_dir(dirname)
 end
 
 -- Helper function to get all module directories
-function get_module_dirs()
+local function get_module_dirs()
     local dirs = {}
+    local seen = {}
     local entries = os.dirs("*")
 
     for _, entry in ipairs(entries) do
         local dirname = path.basename(entry)
-        if not is_excluded_dir(dirname) then
+        if dirname ~= "" and dirname ~= "." and dirname ~= ".." and not is_excluded_dir(dirname) and not seen[dirname] then
+            seen[dirname] = true
             table.insert(dirs, dirname)
         end
     end
@@ -58,8 +60,11 @@ function get_module_dirs()
 end
 
 -- Helper function to collect source files recursively
-function collect_sources(module_dir)
+local function collect_sources(module_dir)
     local sources = {}
+    if not module_dir or module_dir == "" then
+        return sources
+    end
     local patterns = {
         module_dir .. "/*.cpp",
         module_dir .. "/**/*.cpp"
@@ -77,7 +82,7 @@ end
 
 -- Helper function to add module-specific dependencies
 -- This should be called within a target() context
-function setup_module_dependencies(module_type)
+local function setup_module_dependencies(module_type)
     -- Link to corresponding C++ library if it exists
     add_deps("atom-" .. module_type, {optional = true})
 
@@ -88,7 +93,7 @@ function setup_module_dependencies(module_type)
         add_deps("atom-utils", {optional = true})
     elseif module_type == "connection" then
         -- Connection module: Windows-specific socket library
-        if is_plat("windows") then
+        if is_plat("windows", "mingw") then
             add_syslinks("mswsock")
         end
     elseif module_type == "algorithm" then
@@ -102,7 +107,7 @@ function setup_module_dependencies(module_type)
         add_deps("atom-utils", {optional = true})
     elseif module_type == "system" or module_type == "sysinfo" then
         -- System/Sysinfo modules: Windows-specific libraries
-        if is_plat("windows") then
+        if is_plat("windows", "mingw") then
             add_syslinks("pdh")
         end
     end
@@ -136,7 +141,7 @@ for _, module_type in ipairs(module_dirs) do
             set_prefixname("")  -- Remove 'lib' prefix
 
             -- Set extension based on platform
-            if is_plat("windows") then
+            if is_plat("windows", "mingw") then
                 set_extension(".pyd")
             else
                 set_extension(".so")
@@ -162,8 +167,10 @@ for _, module_type in ipairs(module_dirs) do
             set_languages("cxx20")
 
             -- Platform-specific flags
-            if is_plat("windows") then
-                add_cxxflags("/bigobj")
+            if is_plat("windows", "mingw") then
+                if is_plat("windows") then
+                    add_cxxflags("/bigobj")
+                end
                 add_defines("NOMINMAX", "WIN32_LEAN_AND_MEAN")
             else
                 add_cxxflags("-fvisibility=hidden")

@@ -176,13 +176,9 @@ protected:
     int derivedValue = 0;
 };
 
-TEST_F(DerivedFixture, BaseSetUpIsCalled) {
-    EXPECT_EQ(baseValue, 10);
-}
+TEST_F(DerivedFixture, BaseSetUpIsCalled) { EXPECT_EQ(baseValue, 10); }
 
-TEST_F(DerivedFixture, DerivedSetUpIsCalled) {
-    EXPECT_EQ(derivedValue, 20);
-}
+TEST_F(DerivedFixture, DerivedSetUpIsCalled) { EXPECT_EQ(derivedValue, 20); }
 
 // ============================================================================
 // TestFixture with Exception Handling Tests
@@ -223,9 +219,7 @@ protected:
     void TearDown() override {}
 };
 
-TEST_F(TestMacroTest, SimpleTest) {
-    EXPECT_TRUE(true);
-}
+TEST_F(TestMacroTest, SimpleTest) { EXPECT_TRUE(true); }
 
 TEST_F(TestMacroTest, TestWithAssertion) {
     int value = 42;
@@ -293,7 +287,7 @@ protected:
 TEST_F(SkipTest, ConditionalSkip) {
     bool condition = false;
     if (condition) {
-        GTEST_SKIP() << "Skipping due to condition";
+        GTEST_SKIP_MESSAGE("Skipping due to condition");
     }
     EXPECT_TRUE(true);
 }

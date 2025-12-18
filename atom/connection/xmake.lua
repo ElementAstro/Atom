@@ -21,11 +21,13 @@ set_languages("c11", "cxx20")
 add_rules("mode.debug", "mode.release")
 
 -- Add required packages
-add_requires("loguru", "openssl")
+local use_system_packages = has_config("use_system_packages")
+add_requires("loguru", {system = use_system_packages})
+add_requires("openssl", {system = use_system_packages})
 
 -- Add optional packages
 if has_config("enable-libssh") then
-    add_requires("libssh")
+    add_requires("libssh", {system = use_system_packages})
 end
 
 -- Define configuration options
@@ -122,10 +124,12 @@ target("atom-connection")
     end
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Windows-specific libraries
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("ws2_32", "mswsock")
     end
 
@@ -188,9 +192,11 @@ target("atom-connection-object")
         add_packages("libssh")
     end
 
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("ws2_32", "mswsock")
     end
 

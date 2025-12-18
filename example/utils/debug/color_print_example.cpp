@@ -3,9 +3,9 @@
  * @brief Examples for atom::utils ColorPrinter
  */
 
-#include "atom/utils/debug/color_print.hpp"
 #include <iostream>
 #include <string>
+#include "atom/utils/debug/color_print.hpp"
 
 using namespace atom::utils;
 
@@ -32,10 +32,14 @@ void demonstrateTextStyles() {
     printSection("2. Text Styles");
 
     std::cout << "--- Text Styles ---" << std::endl;
-    ColorPrinter::printColoredLine("Bold text", ColorCode::White, TextStyle::Bold);
-    ColorPrinter::printColoredLine("Underlined text", ColorCode::White, TextStyle::Underline);
-    ColorPrinter::printColoredLine("Bold + Colored", ColorCode::Cyan, TextStyle::Bold);
-    ColorPrinter::printColoredLine("Underlined + Colored", ColorCode::Green, TextStyle::Underline);
+    ColorPrinter::printColoredLine("Bold text", ColorCode::White,
+                                   TextStyle::Bold);
+    ColorPrinter::printColoredLine("Underlined text", ColorCode::White,
+                                   TextStyle::Underline);
+    ColorPrinter::printColoredLine("Bold + Colored", ColorCode::Cyan,
+                                   TextStyle::Bold);
+    ColorPrinter::printColoredLine("Underlined + Colored", ColorCode::Green,
+                                   TextStyle::Underline);
 }
 
 void demonstrateLogLevels() {
@@ -80,21 +84,23 @@ void demonstrateStatusDisplay() {
         int connections;
     };
 
-    std::vector<ServiceStatus> services = std::vector<ServiceStatus>{
-        {"Web Server", true, 150},
-        {"Database", true, 45},
-        {"Cache", false, 0},
-        {"Queue", true, 1200}
-    };
+    std::vector<ServiceStatus> services =
+        std::vector<ServiceStatus>{{"Web Server", true, 150},
+                                   {"Database", true, 45},
+                                   {"Cache", false, 0},
+                                   {"Queue", true, 1200}};
 
     std::cout << "--- Service Status Dashboard ---" << std::endl;
     for (const auto& svc : services) {
         std::cout << "  " << svc.name << ": ";
         if (svc.running) {
-            ColorPrinter::printColored("RUNNING", ColorCode::Green, TextStyle::Bold);
-            std::cout << " (" << svc.connections << " connections)" << std::endl;
+            ColorPrinter::printColored("RUNNING", ColorCode::Green,
+                                       TextStyle::Bold);
+            std::cout << " (" << svc.connections << " connections)"
+                      << std::endl;
         } else {
-            ColorPrinter::printColored("STOPPED", ColorCode::Red, TextStyle::Bold);
+            ColorPrinter::printColored("STOPPED", ColorCode::Red,
+                                       TextStyle::Bold);
             std::cout << std::endl;
         }
     }

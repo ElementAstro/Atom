@@ -3,11 +3,11 @@
  * @brief Examples for atom::utils memory utilities
  */
 
-#include "atom/utils/memory/aligned.hpp"
 #include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
+#include "atom/utils/memory/aligned.hpp"
 
 void printSection(const std::string& title) {
     std::cout << "\n========================================" << std::endl;
@@ -162,7 +162,8 @@ void demonstrateSmartPointers() {
         shared1 = shared2;
         std::cout << "  Reference count: " << shared1.use_count() << std::endl;
     }
-    std::cout << "  After inner scope, count: " << shared1.use_count() << std::endl;
+    std::cout << "  After inner scope, count: " << shared1.use_count()
+              << std::endl;
 
     std::cout << "\n--- weak_ptr ---" << std::endl;
     std::cout << "  Used to break circular references" << std::endl;
@@ -182,10 +183,12 @@ void demonstrateMemoryBenchmark() {
     std::cout << "  Cache-friendly: prefetcher works well" << std::endl;
 
     std::cout << "\n--- Random Access ---" << std::endl;
-    std::cout << "  for (int i = 0; i < N; ++i) sum += data[random[i]];" << std::endl;
+    std::cout << "  for (int i = 0; i < N; ++i) sum += data[random[i]];"
+              << std::endl;
     std::cout << "  Cache-unfriendly: many cache misses" << std::endl;
 
-    std::cout << "\nPerformance difference: 10-100x slower for random access" << std::endl;
+    std::cout << "\nPerformance difference: 10-100x slower for random access"
+              << std::endl;
 }
 
 int main() {

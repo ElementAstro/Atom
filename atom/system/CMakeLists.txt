@@ -154,6 +154,7 @@ endif()
 
 # Create library target
 add_library(atom-system STATIC ${SOURCES} ${HEADERS})
+add_library(atom::system ALIAS atom-system)
 
 # Configure module using standardized function
 atom_configure_module(atom-system)

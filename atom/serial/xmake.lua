@@ -65,7 +65,7 @@ target("atom-serial-object")
     add_includedirs("..", {public = true})
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_defines("WIN32_LEAN_AND_MEAN")
         add_syslinks("setupapi")
     elseif is_plat("linux") then
@@ -88,7 +88,7 @@ target("atom-serial")
     add_packages("loguru")
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("setupapi")
     elseif is_plat("linux") then
         add_syslinks("pthread")

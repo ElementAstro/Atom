@@ -3,10 +3,10 @@
  * @brief Examples for atom::utils difflib utilities
  */
 
-#include "atom/utils/format/difflib.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
+#include "atom/utils/format/difflib.hpp"
 
 using namespace atom::utils;
 
@@ -41,15 +41,15 @@ void demonstrateSimilarityRatio() {
         {"programming", "programmer"},
         {"algorithm", "logarithm"},
         {"", "test"},
-        {"same", "same"}
-    };
+        {"same", "same"}};
 
     std::cout << "Comparing string pairs:" << std::endl;
     for (const auto& [s1, s2] : pairs) {
         SequenceMatcher matcher(s1, s2);
         double ratio = matcher.ratio();
-        std::cout << "  \"" << s1 << "\" vs \"" << s2 << "\": "
-                  << static_cast<int>(ratio * 100) << "%" << std::endl;
+        std::cout << "  \"" << s1 << "\" vs \"" << s2
+                  << "\": " << static_cast<int>(ratio * 100) << "%"
+                  << std::endl;
     }
 }
 
@@ -108,7 +108,8 @@ void demonstrateDiffStats() {
     std::cout << "  Insertions: " << stats.insertions << std::endl;
     std::cout << "  Deletions: " << stats.deletions << std::endl;
     std::cout << "  Modifications: " << stats.modifications << std::endl;
-    std::cout << "  Similarity: " << (stats.similarity * 100) << "%" << std::endl;
+    std::cout << "  Similarity: " << (stats.similarity * 100) << "%"
+              << std::endl;
 }
 
 void demonstrateDiffAlgorithms() {
@@ -123,31 +124,25 @@ void demonstrateDiffAlgorithms() {
     DiffOptions defaultOpts;
     defaultOpts.algorithm = DiffAlgorithm::Default;
     SequenceMatcher matcher1(str1, str2, defaultOpts);
-    std::cout << "\nDefault algorithm ratio: " << (matcher1.ratio() * 100) << "%" << std::endl;
+    std::cout << "\nDefault algorithm ratio: " << (matcher1.ratio() * 100)
+              << "%" << std::endl;
 
     DiffOptions myersOpts;
     myersOpts.algorithm = DiffAlgorithm::Myers;
     SequenceMatcher matcher2(str1, str2, myersOpts);
-    std::cout << "Myers algorithm ratio: " << (matcher2.ratio() * 100) << "%" << std::endl;
+    std::cout << "Myers algorithm ratio: " << (matcher2.ratio() * 100) << "%"
+              << std::endl;
 }
 
 void demonstrateTextDiff() {
     printSection("7. Text File Diff Example");
 
-    std::vector<std::string> file1 = {
-        "line 1: hello",
-        "line 2: world",
-        "line 3: foo",
-        "line 4: bar"
-    };
+    std::vector<std::string> file1 = {"line 1: hello", "line 2: world",
+                                      "line 3: foo", "line 4: bar"};
 
-    std::vector<std::string> file2 = {
-        "line 1: hello",
-        "line 2: universe",
-        "line 3: foo",
-        "line 4: baz",
-        "line 5: new line"
-    };
+    std::vector<std::string> file2 = {"line 1: hello", "line 2: universe",
+                                      "line 3: foo", "line 4: baz",
+                                      "line 5: new line"};
 
     std::cout << "File 1 contents:" << std::endl;
     for (const auto& line : file1) {
@@ -179,9 +174,8 @@ void demonstrateFuzzyMatching() {
 
     std::string query = "progamming";
     std::vector<std::string> candidates = {
-        "programming", "program", "programmer", "processing",
-        "profiling", "prompting", "printing"
-    };
+        "programming", "program",   "programmer", "processing",
+        "profiling",   "prompting", "printing"};
 
     std::cout << "Query: \"" << query << "\"" << std::endl;
     std::cout << "\nFinding best matches:" << std::endl;
@@ -196,7 +190,8 @@ void demonstrateFuzzyMatching() {
               [](const auto& a, const auto& b) { return a.second > b.second; });
 
     for (const auto& [word, score] : scores) {
-        std::cout << "  \"" << word << "\": " << static_cast<int>(score * 100) << "%" << std::endl;
+        std::cout << "  \"" << word << "\": " << static_cast<int>(score * 100)
+                  << "%" << std::endl;
     }
 }
 

@@ -1,4 +1,3 @@
-
 #include "detector_impl.h"
 #include "win32_utils.h"
 

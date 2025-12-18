@@ -3,12 +3,12 @@
  * @brief Examples for atom::utils Random class
  */
 
-#include "atom/utils/random/random.hpp"
 #include <iomanip>
 #include <iostream>
 #include <map>
 #include <string>
 #include <vector>
+#include "atom/utils/random/random.hpp"
 
 using namespace atom::utils;
 
@@ -52,7 +52,8 @@ void demonstrateFloatRandom() {
     }
     std::cout << std::endl;
 
-    Random<std::mt19937, std::uniform_real_distribution<double>> rng2(-10.0, 10.0);
+    Random<std::mt19937, std::uniform_real_distribution<double>> rng2(-10.0,
+                                                                      10.0);
     std::cout << "\nRandom doubles [-10.0, 10.0):" << std::endl;
     std::cout << "  ";
     for (int i = 0; i < 5; ++i) {
@@ -165,9 +166,9 @@ void demonstrateDiceSimulation() {
     }
 
     for (int i = 1; i <= 6; ++i) {
-        std::cout << "  " << i << ": " << counts[i] << " ("
-                  << std::fixed << std::setprecision(1)
-                  << (counts[i] / 60.0) << "%)" << std::endl;
+        std::cout << "  " << i << ": " << counts[i] << " (" << std::fixed
+                  << std::setprecision(1) << (counts[i] / 60.0) << "%)"
+                  << std::endl;
     }
 }
 
@@ -176,7 +177,8 @@ void demonstrateCardShuffle() {
 
     std::vector<std::string> deck;
     const char* suits[] = {"♠", "♥", "♦", "♣"};
-    const char* ranks[] = {"A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"};
+    const char* ranks[] = {"A", "2", "3",  "4", "5", "6", "7",
+                           "8", "9", "10", "J", "Q", "K"};
 
     for (const char* suit : suits) {
         for (const char* rank : ranks) {
@@ -191,7 +193,8 @@ void demonstrateCardShuffle() {
     }
     std::cout << std::endl;
 
-    Random<std::mt19937, std::uniform_int_distribution<size_t>> rng(0, deck.size() - 1);
+    Random<std::mt19937, std::uniform_int_distribution<size_t>> rng(
+        0, deck.size() - 1);
 
     for (size_t i = deck.size() - 1; i > 0; --i) {
         size_t j = rng() % (i + 1);

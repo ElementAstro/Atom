@@ -81,9 +81,7 @@ public:
      * @brief Get the environment name for logging
      * @return Human-readable name
      */
-    [[nodiscard]] virtual std::string name() const {
-        return "Environment";
-    }
+    [[nodiscard]] virtual std::string name() const { return "Environment"; }
 };
 
 /**
@@ -333,9 +331,11 @@ public:
     /**
      * @brief Get as integer
      */
-    [[nodiscard]] int getInt(const std::string& key, int defaultValue = 0) const {
+    [[nodiscard]] int getInt(const std::string& key,
+                             int defaultValue = 0) const {
         std::string value = get(key);
-        if (value.empty()) return defaultValue;
+        if (value.empty())
+            return defaultValue;
         try {
             return std::stoi(value);
         } catch (...) {
@@ -349,7 +349,8 @@ public:
     [[nodiscard]] bool getBool(const std::string& key,
                                bool defaultValue = false) const {
         std::string value = get(key);
-        if (value.empty()) return defaultValue;
+        if (value.empty())
+            return defaultValue;
         return value == "true" || value == "1" || value == "yes";
     }
 
@@ -411,7 +412,8 @@ public:
 
 private:
     void release(Resource* ptr) {
-        if (!ptr) return;
+        if (!ptr)
+            return;
 
         std::lock_guard lock(mutex_);
         if (available_.size() < maxSize_) {
@@ -511,13 +513,13 @@ private:
 /**
  * @brief Define a test environment class
  */
-#define TEST_ENVIRONMENT(class_name)                                          \
+#define TEST_ENVIRONMENT(class_name) \
     class class_name : public atom::test::Environment
 
 /**
  * @brief Register environment in main
  */
-#define REGISTER_TEST_ENVIRONMENT(class_name)                                 \
+#define REGISTER_TEST_ENVIRONMENT(class_name) \
     atom::test::AddGlobalTestEnvironment(new class_name())
 
 #endif  // ATOM_TEST_UTILITIES_TEST_ENVIRONMENT_HPP

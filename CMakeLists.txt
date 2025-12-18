@@ -258,6 +258,10 @@ if(ATOM_AUTO_RESOLVE_DEPS)
   message(STATUS "Automatic dependency resolution enabled")
   include(cmake/ScanModule.cmake)
   atom_resolve_all_dependencies()
+  # Process module dependencies to enable required modules
+  if(COMMAND atom_process_module_dependencies)
+    atom_process_module_dependencies()
+  endif()
 endif()
 
 # -----------------------------------------------------------------------------
@@ -307,16 +311,20 @@ endif()
 
 # Register all Atom components for modular installation (if function exists)
 if(COMMAND atom_register_component)
-  foreach(MODULE ${ATOM_MODULES})
-    string(TOLOWER ${MODULE} MODULE_LOWER)
+  # Include module dependencies data to get ATOM_ALL_MODULES
+  include(cmake/module_dependencies.cmake)
+  foreach(MODULE ${ATOM_ALL_MODULES})
+    # Extract module name without atom- prefix
+    string(REPLACE "atom-" "" MODULE_NAME ${MODULE})
+    string(TOUPPER ${MODULE_NAME} MODULE_UPPER)
     atom_register_component(
-      ${MODULE_LOWER}
+      ${MODULE_NAME}
       DESCRIPTION
-      "Atom ${MODULE} module"
+      "Atom ${MODULE_NAME} module"
       VERSION
       ${PROJECT_VERSION}
       DEPENDS
-      ${ATOM_MODULE_DEPS_${MODULE}})
+      ${ATOM_COMPONENT_DEPS_${MODULE_NAME}})
   endforeach()
 
   # Setup modular installation system

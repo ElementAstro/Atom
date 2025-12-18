@@ -203,13 +203,9 @@ TEST_F(ContainerAssertionsTest, ExpectEmpty) {
     EXPECT_TRUE(emptyVec.empty());
 }
 
-TEST_F(ContainerAssertionsTest, ExpectNotEmpty) {
-    EXPECT_FALSE(vec.empty());
-}
+TEST_F(ContainerAssertionsTest, ExpectNotEmpty) { EXPECT_FALSE(vec.empty()); }
 
-TEST_F(ContainerAssertionsTest, ExpectSize) {
-    EXPECT_EQ(vec.size(), 5);
-}
+TEST_F(ContainerAssertionsTest, ExpectSize) { EXPECT_EQ(vec.size(), 5); }
 
 TEST_F(ContainerAssertionsTest, ExpectContainsElement) {
     auto it = std::find(vec.begin(), vec.end(), 3);

@@ -12,6 +12,8 @@
 
 #include <algorithm>
 #include <cctype>
+#include <concepts>
+#include <functional>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -27,7 +29,8 @@ namespace string_matchers {
  * @brief Case-insensitive string comparison helper
  */
 inline bool caseInsensitiveEquals(std::string_view a, std::string_view b) {
-    if (a.size() != b.size()) return false;
+    if (a.size() != b.size())
+        return false;
     for (size_t i = 0; i < a.size(); ++i) {
         if (std::tolower(static_cast<unsigned char>(a[i])) !=
             std::tolower(static_cast<unsigned char>(b[i]))) {
@@ -43,9 +46,8 @@ inline bool caseInsensitiveEquals(std::string_view a, std::string_view b) {
 class IsBlankMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        return std::all_of(value.begin(), value.end(), [](unsigned char c) {
-            return std::isspace(c);
-        });
+        return std::all_of(value.begin(), value.end(),
+                           [](unsigned char c) { return std::isspace(c); });
     }
 
     [[nodiscard]] std::string describe() const {
@@ -61,9 +63,8 @@ inline auto IsBlank() { return IsBlankMatcher{}; }
 class IsNotBlankMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        return !std::all_of(value.begin(), value.end(), [](unsigned char c) {
-            return std::isspace(c);
-        });
+        return !std::all_of(value.begin(), value.end(),
+                            [](unsigned char c) { return std::isspace(c); });
     }
 
     [[nodiscard]] std::string describe() const { return "is not blank"; }
@@ -161,7 +162,8 @@ public:
         : prefix_(std::move(prefix)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.size() < prefix_.size()) return false;
+        if (value.size() < prefix_.size())
+            return false;
         return caseInsensitiveEquals(value.substr(0, prefix_.size()), prefix_);
     }
 
@@ -186,7 +188,8 @@ public:
         : suffix_(std::move(suffix)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.size() < suffix_.size()) return false;
+        if (value.size() < suffix_.size())
+            return false;
         return caseInsensitiveEquals(
             value.substr(value.size() - suffix_.size()), suffix_);
     }
@@ -212,18 +215,18 @@ public:
         : substrs_(substrs) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
-        return std::all_of(
-            substrs_.begin(), substrs_.end(),
-            [&value](const std::string& s) {
-                return value.find(s) != std::string::npos;
-            });
+        return std::all_of(substrs_.begin(), substrs_.end(),
+                           [&value](const std::string& s) {
+                               return value.find(s) != std::string::npos;
+                           });
     }
 
     [[nodiscard]] std::string describe() const {
         std::ostringstream oss;
         oss << "contains all of [";
         for (size_t i = 0; i < substrs_.size(); ++i) {
-            if (i > 0) oss << ", ";
+            if (i > 0)
+                oss << ", ";
             oss << "\"" << substrs_[i] << "\"";
         }
         oss << "]";
@@ -247,18 +250,18 @@ public:
         : substrs_(substrs) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
-        return std::any_of(
-            substrs_.begin(), substrs_.end(),
-            [&value](const std::string& s) {
-                return value.find(s) != std::string::npos;
-            });
+        return std::any_of(substrs_.begin(), substrs_.end(),
+                           [&value](const std::string& s) {
+                               return value.find(s) != std::string::npos;
+                           });
     }
 
     [[nodiscard]] std::string describe() const {
         std::ostringstream oss;
         oss << "contains any of [";
         for (size_t i = 0; i < substrs_.size(); ++i) {
-            if (i > 0) oss << ", ";
+            if (i > 0)
+                oss << ", ";
             oss << "\"" << substrs_[i] << "\"";
         }
         oss << "]";
@@ -282,18 +285,18 @@ public:
         : substrs_(substrs) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
-        return std::none_of(
-            substrs_.begin(), substrs_.end(),
-            [&value](const std::string& s) {
-                return value.find(s) != std::string::npos;
-            });
+        return std::none_of(substrs_.begin(), substrs_.end(),
+                            [&value](const std::string& s) {
+                                return value.find(s) != std::string::npos;
+                            });
     }
 
     [[nodiscard]] std::string describe() const {
         std::ostringstream oss;
         oss << "contains none of [";
         for (size_t i = 0; i < substrs_.size(); ++i) {
-            if (i > 0) oss << ", ";
+            if (i > 0)
+                oss << ", ";
             oss << "\"" << substrs_[i] << "\"";
         }
         oss << "]";
@@ -314,15 +317,19 @@ inline auto ContainsNone(std::initializer_list<std::string> substrs) {
 class IsNumericMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.empty()) return false;
+        if (value.empty())
+            return false;
         size_t start = 0;
-        if (value[0] == '-' || value[0] == '+') start = 1;
-        if (start >= value.size()) return false;
+        if (value[0] == '-' || value[0] == '+')
+            start = 1;
+        if (start >= value.size())
+            return false;
 
         bool hasDecimal = false;
         for (size_t i = start; i < value.size(); ++i) {
             if (value[i] == '.') {
-                if (hasDecimal) return false;
+                if (hasDecimal)
+                    return false;
                 hasDecimal = true;
             } else if (!std::isdigit(static_cast<unsigned char>(value[i]))) {
                 return false;
@@ -342,15 +349,17 @@ inline auto IsNumeric() { return IsNumericMatcher{}; }
 class IsIntegerMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.empty()) return false;
+        if (value.empty())
+            return false;
         size_t start = 0;
-        if (value[0] == '-' || value[0] == '+') start = 1;
-        if (start >= value.size()) return false;
+        if (value[0] == '-' || value[0] == '+')
+            start = 1;
+        if (start >= value.size())
+            return false;
 
         return std::all_of(value.begin() + static_cast<long>(start),
-                           value.end(), [](unsigned char c) {
-                               return std::isdigit(c);
-                           });
+                           value.end(),
+                           [](unsigned char c) { return std::isdigit(c); });
     }
 
     [[nodiscard]] std::string describe() const { return "is integer"; }
@@ -364,10 +373,10 @@ inline auto IsInteger() { return IsIntegerMatcher{}; }
 class IsAlphanumericMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.empty()) return false;
-        return std::all_of(value.begin(), value.end(), [](unsigned char c) {
-            return std::isalnum(c);
-        });
+        if (value.empty())
+            return false;
+        return std::all_of(value.begin(), value.end(),
+                           [](unsigned char c) { return std::isalnum(c); });
     }
 
     [[nodiscard]] std::string describe() const { return "is alphanumeric"; }
@@ -381,10 +390,10 @@ inline auto IsAlphanumeric() { return IsAlphanumericMatcher{}; }
 class IsAlphabeticMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.empty()) return false;
-        return std::all_of(value.begin(), value.end(), [](unsigned char c) {
-            return std::isalpha(c);
-        });
+        if (value.empty())
+            return false;
+        return std::all_of(value.begin(), value.end(),
+                           [](unsigned char c) { return std::isalpha(c); });
     }
 
     [[nodiscard]] std::string describe() const { return "is alphabetic"; }
@@ -430,8 +439,7 @@ inline auto IsLowercase() { return IsLowercaseMatcher{}; }
 class ContainsWordMatcher {
 public:
     explicit ContainsWordMatcher(std::string word)
-        : word_(std::move(word)),
-          pattern_("\\b" + word_ + "\\b") {}
+        : word_(std::move(word)), pattern_("\\b" + word_ + "\\b") {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
         return std::regex_search(value, pattern_);
@@ -458,10 +466,12 @@ public:
     explicit HasLineCountMatcher(size_t expected) : expected_(expected) {}
 
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.empty()) return expected_ == 0;
+        if (value.empty())
+            return expected_ == 0;
         size_t count = std::count(value.begin(), value.end(), '\n');
         // Add 1 if string doesn't end with newline
-        if (!value.empty() && value.back() != '\n') count++;
+        if (!value.empty() && value.back() != '\n')
+            count++;
         return count == expected_;
     }
 
@@ -483,33 +493,47 @@ inline auto HasLineCount(size_t expected) {
 class WhenTrimmedMatcher {
 public:
     template <typename InnerMatcher>
-    explicit WhenTrimmedMatcher(InnerMatcher inner) : inner_(inner) {}
+    explicit WhenTrimmedMatcher(InnerMatcher inner) {
+        if constexpr (requires(const InnerMatcher& m, const std::string& s) {
+                          { m.matches(s) } -> std::convertible_to<bool>;
+                          { m.describe() } -> std::convertible_to<std::string>;
+                      }) {
+            matchFn_ = [inner](const std::string& s) {
+                return inner.matches(s);
+            };
+            describeFn_ = [inner]() { return std::string(inner.describe()); };
+        } else {
+            matchFn_ = [inner](const std::string& s) {
+                return static_cast<bool>(inner(s));
+            };
+            describeFn_ = []() { return std::string("(custom predicate)"); };
+        }
+    }
 
     [[nodiscard]] bool matches(const std::string& value) const {
         std::string trimmed = value;
         // Trim left
-        trimmed.erase(trimmed.begin(),
-                      std::find_if(trimmed.begin(), trimmed.end(),
-                                   [](unsigned char ch) {
-                                       return !std::isspace(ch);
-                                   }));
+        trimmed.erase(
+            trimmed.begin(),
+            std::find_if(trimmed.begin(), trimmed.end(),
+                         [](unsigned char ch) { return !std::isspace(ch); }));
         // Trim right
-        trimmed.erase(std::find_if(trimmed.rbegin(), trimmed.rend(),
-                                   [](unsigned char ch) {
-                                       return !std::isspace(ch);
-                                   })
-                          .base(),
-                      trimmed.end());
+        trimmed.erase(
+            std::find_if(trimmed.rbegin(), trimmed.rend(),
+                         [](unsigned char ch) { return !std::isspace(ch); })
+                .base(),
+            trimmed.end());
 
-        return inner_.matches(trimmed);
+        return matchFn_(trimmed);
     }
 
     [[nodiscard]] std::string describe() const {
-        return "when trimmed, " + inner_.describe();
+        return "when trimmed, " + describeFn_();
     }
 
 private:
-    std::function<bool(const std::string&)> inner_;
+    std::function<bool(const std::string&)> matchFn_;
+    std::function<std::string()> describeFn_;
 };
 
 /**
@@ -569,16 +593,15 @@ inline auto IsUuid() { return IsUuidMatcher{}; }
 class IsJsonMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        if (value.empty()) return false;
+        if (value.empty())
+            return false;
         // Very basic check - starts with { or [ and ends with } or ]
         char first = value.front();
         char last = value.back();
         return (first == '{' && last == '}') || (first == '[' && last == ']');
     }
 
-    [[nodiscard]] std::string describe() const {
-        return "appears to be JSON";
-    }
+    [[nodiscard]] std::string describe() const { return "appears to be JSON"; }
 };
 
 inline auto IsJson() { return IsJsonMatcher{}; }
@@ -605,6 +628,46 @@ public:
 };
 
 inline auto IsPalindrome() { return IsPalindromeMatcher{}; }
+
+class IsPalindromeIgnoreCaseMatcher {
+public:
+    [[nodiscard]] bool matches(const std::string& value) const {
+        std::string cleaned;
+        cleaned.reserve(value.size());
+        for (char c : value) {
+            if (std::isalnum(static_cast<unsigned char>(c))) {
+                cleaned += static_cast<char>(
+                    std::tolower(static_cast<unsigned char>(c)));
+            }
+        }
+        std::string reversed = cleaned;
+        std::reverse(reversed.begin(), reversed.end());
+        return cleaned == reversed;
+    }
+
+    [[nodiscard]] std::string describe() const {
+        return "is a palindrome (ignoring case)";
+    }
+};
+
+inline auto IsPalindromeIgnoreCase() { return IsPalindromeIgnoreCaseMatcher{}; }
+
+class IsTrimmedMatcher {
+public:
+    [[nodiscard]] bool matches(const std::string& value) const {
+        if (value.empty())
+            return true;
+        if (std::isspace(static_cast<unsigned char>(value.front())))
+            return false;
+        if (std::isspace(static_cast<unsigned char>(value.back())))
+            return false;
+        return true;
+    }
+
+    [[nodiscard]] std::string describe() const { return "is trimmed"; }
+};
+
+inline auto IsTrimmed() { return IsTrimmedMatcher{}; }
 
 }  // namespace string_matchers
 

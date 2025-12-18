@@ -106,7 +106,7 @@ auto HttpHeaderParser::parseRequest(std::string_view rawRequest) -> bool {
     impl_->cookies.clear();
     impl_->body.clear();
 
-    std::istringstream iss(std::string(rawRequest));
+    std::istringstream iss{std::string(rawRequest)};
     std::string line;
 
     // Parse request line
@@ -209,7 +209,7 @@ auto HttpHeaderParser::parseResponse(std::string_view rawResponse) -> bool {
     impl_->cookies.clear();
     impl_->body.clear();
 
-    std::istringstream iss(std::string(rawResponse));
+    std::istringstream iss{std::string(rawResponse)};
     std::string line;
 
     // Parse status line
@@ -356,12 +356,14 @@ auto HttpHeaderParser::parseResponse(std::string_view rawResponse) -> bool {
 
                             if (!ss.fail()) {
                                 std::time_t tt = std::mktime(&tm);
-                                cookie.expires =
+                                cookie.expires = attrValue;
+                                cookie.expiresTime =
                                     std::chrono::system_clock::from_time_t(tt);
                             }
                         } else if (attrName == "max-age") {
                             try {
-                                cookie.maxAge = std::stoi(attrValue);
+                                cookie.maxAge =
+                                    std::chrono::seconds{std::stoi(attrValue)};
                             } catch (...) {
                                 spdlog::warn("Invalid max-age value: {}",
                                              attrValue);
@@ -411,12 +413,14 @@ auto HttpHeaderParser::parseResponse(std::string_view rawResponse) -> bool {
 
                             if (!ss.fail()) {
                                 std::time_t tt = std::mktime(&tm);
-                                cookie.expires =
+                                cookie.expires = attrValue;
+                                cookie.expiresTime =
                                     std::chrono::system_clock::from_time_t(tt);
                             }
                         } else if (attrName == "max-age") {
                             try {
-                                cookie.maxAge = std::stoi(attrValue);
+                                cookie.maxAge =
+                                    std::chrono::seconds{std::stoi(attrValue)};
                             } catch (...) {
                                 spdlog::warn("Invalid max-age value: {}",
                                              attrValue);
@@ -547,8 +551,9 @@ auto HttpHeaderParser::addCookie(const Cookie& cookie) -> HttpHeaderParser& {
     // Add to Set-Cookie header
     std::string cookieStr = cookie.name + "=" + cookie.value;
 
-    if (cookie.expires) {
-        std::time_t tt = std::chrono::system_clock::to_time_t(*cookie.expires);
+    if (cookie.expiresTime) {
+        std::time_t tt =
+            std::chrono::system_clock::to_time_t(*cookie.expiresTime);
         std::tm tm = *std::gmtime(&tt);
         char buffer[100];
         std::strftime(buffer, sizeof(buffer),
@@ -557,15 +562,15 @@ auto HttpHeaderParser::addCookie(const Cookie& cookie) -> HttpHeaderParser& {
     }
 
     if (cookie.maxAge) {
-        cookieStr += "; Max-Age=" + std::to_string(*cookie.maxAge);
+        cookieStr += "; Max-Age=" + std::to_string(cookie.maxAge->count());
     }
 
-    if (cookie.domain) {
-        cookieStr += "; Domain=" + *cookie.domain;
+    if (!cookie.domain.empty()) {
+        cookieStr += "; Domain=" + cookie.domain;
     }
 
-    if (cookie.path) {
-        cookieStr += "; Path=" + *cookie.path;
+    if (!cookie.path.empty()) {
+        cookieStr += "; Path=" + cookie.path;
     }
 
     if (cookie.secure) {
@@ -576,8 +581,8 @@ auto HttpHeaderParser::addCookie(const Cookie& cookie) -> HttpHeaderParser& {
         cookieStr += "; HttpOnly";
     }
 
-    if (cookie.sameSite) {
-        cookieStr += "; SameSite=" + *cookie.sameSite;
+    if (!cookie.sameSite.empty()) {
+        cookieStr += "; SameSite=" + cookie.sameSite;
     }
 
     addHeaderValue("Set-Cookie", cookieStr);

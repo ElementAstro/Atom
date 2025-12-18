@@ -133,6 +133,7 @@ endif()
 
 # Create library target
 add_library(atom-algorithm STATIC ${SOURCES} ${HEADERS})
+add_library(atom::algorithm ALIAS atom-algorithm)
 
 # Configure module using standardized function
 atom_configure_module(atom-algorithm)

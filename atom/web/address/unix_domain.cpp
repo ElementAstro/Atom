@@ -132,11 +132,12 @@ auto UnixDomain::isInRange(std::string_view start,
                            std::string_view end) -> bool {
     try {
         if (start.empty() || end.empty()) {
-            throw AddressRangeError("Empty range boundaries");
+            throw AddressRangeError(std::string_view{"Empty range boundaries"});
         }
 
         if (start > end) {
-            throw AddressRangeError("Invalid range: start path > end path");
+            throw AddressRangeError(
+                std::string_view{"Invalid range: start path > end path"});
         }
 
         bool inRange = (addressStr >= start) && (addressStr <= end);

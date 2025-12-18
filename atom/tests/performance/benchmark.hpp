@@ -774,8 +774,10 @@ private:
      * @param level Log level for this message
      * @param message Message to log.
      */
+public:
     static void staticLog(LogLevel level, const std::string& message);
 
+private:
     /**
      * @brief Validate input parameters for the benchmark.
      *
@@ -1572,22 +1574,21 @@ inline void Benchmark::exportResults(const std::string& filename,
  * @param suiteName Name of the benchmark suite
  * @param ... Pairs of (name, func) to compare
  */
-#define BENCHMARK_COMPARE(suiteName, ...)                                     \
-    do {                                                                      \
-        Benchmark::Config config;                                             \
-        config.minIterations = 100;                                           \
-        std::vector<std::pair<std::string, std::function<void()>>> impls = {  \
-            __VA_ARGS__};                                                     \
-        for (const auto& [name, func] : impls) {                              \
-            BENCHMARK(                                                        \
-                suiteName, name,                                              \
-                []() -> int { return 0; },                                    \
-                [&func]([[maybe_unused]] int& _) -> size_t {                  \
-                    func();                                                   \
-                    return 1;                                                 \
-                },                                                            \
-                []([[maybe_unused]] int& _) {}, config);                      \
-        }                                                                     \
+#define BENCHMARK_COMPARE(suiteName, ...)                                    \
+    do {                                                                     \
+        Benchmark::Config config;                                            \
+        config.minIterations = 100;                                          \
+        std::vector<std::pair<std::string, std::function<void()>>> impls = { \
+            __VA_ARGS__};                                                    \
+        for (const auto& [name, func] : impls) {                             \
+            BENCHMARK(                                                       \
+                suiteName, name, []() -> int { return 0; },                  \
+                [&func]([[maybe_unused]] int& _) -> size_t {                 \
+                    func();                                                  \
+                    return 1;                                                \
+                },                                                           \
+                []([[maybe_unused]] int& _) {}, config);                     \
+        }                                                                    \
     } while (false)
 
 /**
@@ -1597,18 +1598,17 @@ inline void Benchmark::exportResults(const std::string& filename,
  * @param iterations Number of iterations
  * @param func Function to benchmark
  */
-#define BENCHMARK_N(suiteName, name, iterations, func)                        \
-    do {                                                                      \
-        Benchmark::Config config;                                             \
-        config.minIterations = iterations;                                    \
-        BENCHMARK(                                                            \
-            suiteName, name,                                                  \
-            []() -> int { return 0; },                                        \
-            [&]([[maybe_unused]] int& _) -> size_t {                          \
-                func();                                                       \
-                return 1;                                                     \
-            },                                                                \
-            []([[maybe_unused]] int& _) {}, config);                          \
+#define BENCHMARK_N(suiteName, name, iterations, func)  \
+    do {                                                \
+        Benchmark::Config config;                       \
+        config.minIterations = iterations;              \
+        BENCHMARK(                                      \
+            suiteName, name, []() -> int { return 0; }, \
+            [&]([[maybe_unused]] int& _) -> size_t {    \
+                func();                                 \
+                return 1;                               \
+            },                                          \
+            []([[maybe_unused]] int& _) {}, config);    \
     } while (false)
 
 /**
@@ -1628,8 +1628,8 @@ public:
     template <typename Func>
     auto add(std::string benchName, Func&& func,
              Benchmark::Config config = {}) -> BenchmarkSuite& {
-        benchmarks_.emplace_back(std::move(benchName),
-                                 std::forward<Func>(func), std::move(config));
+        benchmarks_.emplace_back(std::move(benchName), std::forward<Func>(func),
+                                 std::move(config));
         return *this;
     }
 
@@ -1641,18 +1641,16 @@ public:
             try {
                 Benchmark bench(name_, benchName, config,
                                 std::source_location::current());
-                bench.run(
-                    []() -> int { return 0; },
-                    [&func]([[maybe_unused]] int& _) -> size_t {
-                        func();
-                        return 1;
-                    },
-                    []([[maybe_unused]] int& _) {});
+                bench.run([]() -> int { return 0; },
+                          [&func]([[maybe_unused]] int& _) -> size_t {
+                              func();
+                              return 1;
+                          },
+                          []([[maybe_unused]] int& _) {});
             } catch (const std::exception& e) {
-                Benchmark::staticLog(
-                    Benchmark::LogLevel::Minimal,
-                    "Exception in benchmark [" + name_ + "/" + benchName +
-                        "]: " + e.what());
+                Benchmark::staticLog(Benchmark::LogLevel::Minimal,
+                                     "Exception in benchmark [" + name_ + "/" +
+                                         benchName + "]: " + e.what());
             }
         }
     }
@@ -1667,8 +1665,8 @@ public:
 
 private:
     std::string name_;
-    std::vector<std::tuple<std::string, std::function<void()>,
-                           Benchmark::Config>>
+    std::vector<
+        std::tuple<std::string, std::function<void()>, Benchmark::Config>>
         benchmarks_;
 };
 

@@ -104,7 +104,7 @@ void basicAsyncTcpClientExample() {
 
         Logger::log(Logger::LOG_INFO, "Example1",
                     "Created async TcpClient, state: " +
-                    stateToString(client.getState()));
+                        stateToString(client.getState()));
 
         // Connect
         client.connect("httpbin.org", 80);
@@ -112,11 +112,13 @@ void basicAsyncTcpClientExample() {
         // Wait for connection
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
-        Logger::log(Logger::LOG_INFO, "Example1",
-                    "After connect, state: " + stateToString(client.getState()));
+        Logger::log(
+            Logger::LOG_INFO, "Example1",
+            "After connect, state: " + stateToString(client.getState()));
 
         if (client.isConnected()) {
-            Logger::log(Logger::LOG_SUCCESS, "Example1", "Connected successfully");
+            Logger::log(Logger::LOG_SUCCESS, "Example1",
+                        "Connected successfully");
             client.disconnect();
         }
 
@@ -125,7 +127,8 @@ void basicAsyncTcpClientExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1", "Basic async TcpClient example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Basic async TcpClient example completed\n");
 }
 
 // Example 2: Custom configuration
@@ -149,21 +152,23 @@ void customConfigExample() {
         config.enable_heartbeat = false;
 
         Logger::log(Logger::LOG_INFO, "Example2", "Configuration:");
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Host: " + config.host);
+        Logger::log(Logger::LOG_INFO, "Example2", "  - Host: " + config.host);
         Logger::log(Logger::LOG_INFO, "Example2",
                     "  - Port: " + std::to_string(config.port));
         Logger::log(Logger::LOG_INFO, "Example2",
                     "  - SSL: " + std::string(config.use_ssl ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example2",
+            "  - Keep alive: " + std::string(config.keep_alive ? "yes" : "no"));
         Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Keep alive: " + std::string(config.keep_alive ? "yes" : "no"));
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Auto reconnect: " + std::string(config.auto_reconnect ? "yes" : "no"));
+                    "  - Auto reconnect: " +
+                        std::string(config.auto_reconnect ? "yes" : "no"));
 
         // Create client with config
         atom::async::connection::TcpClient client(config);
 
-        Logger::log(Logger::LOG_SUCCESS, "Example2", "Client created with custom config");
+        Logger::log(Logger::LOG_SUCCESS, "Example2",
+                    "Client created with custom config");
 
         // Connect using config
         client.connect();
@@ -180,7 +185,8 @@ void customConfigExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2", "Custom configuration example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "Custom configuration example completed\n");
 }
 
 // Example 3: SSL/TLS connection
@@ -198,10 +204,12 @@ void sslConnectionExample() {
         // config.ssl_ca_file = "/path/to/ca.pem";
 
         Logger::log(Logger::LOG_INFO, "Example3", "SSL Configuration:");
-        Logger::log(Logger::LOG_INFO, "Example3",
-                    "  - SSL enabled: " + std::string(config.use_ssl ? "yes" : "no"));
-        Logger::log(Logger::LOG_INFO, "Example3",
-                    "  - Verify SSL: " + std::string(config.verify_ssl ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example3",
+            "  - SSL enabled: " + std::string(config.use_ssl ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example3",
+            "  - Verify SSL: " + std::string(config.verify_ssl ? "yes" : "no"));
 
         atom::async::connection::TcpClient client(config);
 
@@ -209,7 +217,8 @@ void sslConnectionExample() {
         std::this_thread::sleep_for(std::chrono::seconds(3));
 
         if (client.isConnected()) {
-            Logger::log(Logger::LOG_SUCCESS, "Example3", "SSL connection established");
+            Logger::log(Logger::LOG_SUCCESS, "Example3",
+                        "SSL connection established");
 
             // Send HTTPS request
             std::string request =
@@ -223,7 +232,8 @@ void sslConnectionExample() {
 
             client.disconnect();
         } else {
-            Logger::log(Logger::LOG_WARNING, "Example3", "SSL connection failed");
+            Logger::log(Logger::LOG_WARNING, "Example3",
+                        "SSL connection failed");
         }
 
     } catch (const std::exception& e) {
@@ -231,7 +241,8 @@ void sslConnectionExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3", "SSL connection example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "SSL connection example completed\n");
 }
 
 // Example 4: Proxy support
@@ -255,8 +266,9 @@ void proxyExample() {
         config.proxy = proxyConfig;
 
         Logger::log(Logger::LOG_INFO, "Example4", "Proxy Configuration:");
-        Logger::log(Logger::LOG_INFO, "Example4",
-                    "  - Enabled: " + std::string(proxyConfig.enabled ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example4",
+            "  - Enabled: " + std::string(proxyConfig.enabled ? "yes" : "no"));
         Logger::log(Logger::LOG_INFO, "Example4",
                     "  - Host: " + proxyConfig.host);
         Logger::log(Logger::LOG_INFO, "Example4",
@@ -293,16 +305,16 @@ void callbacksExample() {
         atom::async::connection::TcpClient client;
 
         // Set state change callback
-        client.setStateCallback([](atom::async::connection::ConnectionState state) {
-            Logger::log(Logger::LOG_INFO, "StateCB",
-                        "State changed to: " + stateToString(state));
-        });
+        client.setStateCallback(
+            [](atom::async::connection::ConnectionState state) {
+                Logger::log(Logger::LOG_INFO, "StateCB",
+                            "State changed to: " + stateToString(state));
+            });
 
         // Set connect callback
         client.setConnectCallback([](bool success, const std::string& message) {
             Logger::log(success ? Logger::LOG_SUCCESS : Logger::LOG_WARNING,
-                        "ConnectCB",
-                        message);
+                        "ConnectCB", message);
         });
 
         // Set disconnect callback
@@ -365,13 +377,16 @@ void autoReconnectExample() {
 
         std::atomic<int> reconnectCount{0};
 
-        client.setStateCallback([&reconnectCount](atom::async::connection::ConnectionState state) {
-            if (state == atom::async::connection::ConnectionState::Reconnecting) {
-                reconnectCount++;
-                Logger::log(Logger::LOG_INFO, "Reconnect",
-                            "Reconnection attempt #" + std::to_string(reconnectCount.load()));
-            }
-        });
+        client.setStateCallback(
+            [&reconnectCount](atom::async::connection::ConnectionState state) {
+                if (state ==
+                    atom::async::connection::ConnectionState::Reconnecting) {
+                    reconnectCount++;
+                    Logger::log(Logger::LOG_INFO, "Reconnect",
+                                "Reconnection attempt #" +
+                                    std::to_string(reconnectCount.load()));
+                }
+            });
 
         client.connect();
         std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -379,10 +394,12 @@ void autoReconnectExample() {
         if (client.isConnected()) {
             Logger::log(Logger::LOG_SUCCESS, "Example6", "Connected");
 
-            // Simulate disconnect (in real scenario, this would be network issue)
+            // Simulate disconnect (in real scenario, this would be network
+            // issue)
             Logger::log(Logger::LOG_INFO, "Example6",
                         "Auto-reconnect is configured with " +
-                        std::to_string(config.max_reconnect_attempts) + " max attempts");
+                            std::to_string(config.max_reconnect_attempts) +
+                            " max attempts");
 
             client.disconnect();
         }
@@ -392,7 +409,8 @@ void autoReconnectExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example6", "Auto reconnection example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example6",
+                "Auto reconnection example completed\n");
 }
 
 // Example 7: Heartbeat mechanism
@@ -409,11 +427,10 @@ void heartbeatExample() {
 
         Logger::log(Logger::LOG_INFO, "Example7", "Heartbeat Configuration:");
         Logger::log(Logger::LOG_INFO, "Example7",
-                    "  - Enabled: " + std::string(config.enable_heartbeat ? "yes" : "no"));
-        Logger::log(Logger::LOG_INFO, "Example7",
-                    "  - Interval: 5 seconds");
-        Logger::log(Logger::LOG_INFO, "Example7",
-                    "  - Timeout: 15 seconds");
+                    "  - Enabled: " +
+                        std::string(config.enable_heartbeat ? "yes" : "no"));
+        Logger::log(Logger::LOG_INFO, "Example7", "  - Interval: 5 seconds");
+        Logger::log(Logger::LOG_INFO, "Example7", "  - Timeout: 15 seconds");
 
         atom::async::connection::TcpClient client(config);
 
@@ -428,10 +445,12 @@ void heartbeatExample() {
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
         if (client.isConnected()) {
-            Logger::log(Logger::LOG_SUCCESS, "Example7", "Connected with heartbeat enabled");
+            Logger::log(Logger::LOG_SUCCESS, "Example7",
+                        "Connected with heartbeat enabled");
 
             // Let heartbeat run for a while
-            Logger::log(Logger::LOG_INFO, "Example7", "Running for 10 seconds...");
+            Logger::log(Logger::LOG_INFO, "Example7",
+                        "Running for 10 seconds...");
             std::this_thread::sleep_for(std::chrono::seconds(10));
 
             client.disconnect();
@@ -447,7 +466,8 @@ void heartbeatExample() {
 
 // Example 8: Request-response pattern
 void requestResponseExample() {
-    Logger::log(Logger::LOG_INFO, "Example8", "=== Request-Response Pattern ===");
+    Logger::log(Logger::LOG_INFO, "Example8",
+                "=== Request-Response Pattern ===");
 
     try {
         atom::async::connection::TcpClient client;
@@ -468,11 +488,13 @@ void requestResponseExample() {
             Logger::log(Logger::LOG_INFO, "Example8", "Sending request...");
 
             // Use sendAndReceive for request-response pattern
-            auto response = client.sendAndReceive(request, std::chrono::seconds(10));
+            auto response =
+                client.sendAndReceive(request, std::chrono::seconds(10));
 
             if (response.has_value()) {
                 Logger::log(Logger::LOG_SUCCESS, "Example8",
-                            "Received response: " + std::to_string(response->size()) + " bytes");
+                            "Received response: " +
+                                std::to_string(response->size()) + " bytes");
 
                 // Show first line
                 size_t lineEnd = response->find('\n');
@@ -481,7 +503,8 @@ void requestResponseExample() {
                                 "First line: " + response->substr(0, lineEnd));
                 }
             } else {
-                Logger::log(Logger::LOG_WARNING, "Example8", "No response received");
+                Logger::log(Logger::LOG_WARNING, "Example8",
+                            "No response received");
             }
 
             client.disconnect();
@@ -492,7 +515,8 @@ void requestResponseExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example8", "Request-response example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example8",
+                "Request-response example completed\n");
 }
 
 // Example 9: Statistics tracking
@@ -522,22 +546,30 @@ void statisticsExample() {
             // Get statistics
             auto stats = client.getStatistics();
 
-            Logger::log(Logger::LOG_INFO, "Example9", "=== Connection Statistics ===");
+            Logger::log(Logger::LOG_INFO, "Example9",
+                        "=== Connection Statistics ===");
             Logger::log(Logger::LOG_INFO, "Example9",
                         "Bytes sent: " + std::to_string(stats.bytes_sent));
+            Logger::log(
+                Logger::LOG_INFO, "Example9",
+                "Bytes received: " + std::to_string(stats.bytes_received));
+            Logger::log(
+                Logger::LOG_INFO, "Example9",
+                "Messages sent: " + std::to_string(stats.messages_sent));
             Logger::log(Logger::LOG_INFO, "Example9",
-                        "Bytes received: " + std::to_string(stats.bytes_received));
-            Logger::log(Logger::LOG_INFO, "Example9",
-                        "Messages sent: " + std::to_string(stats.messages_sent));
-            Logger::log(Logger::LOG_INFO, "Example9",
-                        "Messages received: " + std::to_string(stats.messages_received));
-            Logger::log(Logger::LOG_INFO, "Example9",
-                        "Reconnect count: " + std::to_string(stats.reconnect_count));
+                        "Messages received: " +
+                            std::to_string(stats.messages_received));
+            Logger::log(
+                Logger::LOG_INFO, "Example9",
+                "Reconnect count: " + std::to_string(stats.reconnect_count));
 
-            auto connectedDuration = std::chrono::duration_cast<std::chrono::seconds>(
-                std::chrono::steady_clock::now() - stats.connected_since);
-            Logger::log(Logger::LOG_INFO, "Example9",
-                        "Connected for: " + std::to_string(connectedDuration.count()) + " seconds");
+            auto connectedDuration =
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    std::chrono::steady_clock::now() - stats.connected_since);
+            Logger::log(
+                Logger::LOG_INFO, "Example9",
+                "Connected for: " + std::to_string(connectedDuration.count()) +
+                    " seconds");
 
             // Reset statistics
             client.resetStatistics();
@@ -556,7 +588,8 @@ void statisticsExample() {
 
 // Example 10: Complete async workflow
 void completeWorkflowExample() {
-    Logger::log(Logger::LOG_INFO, "Example10", "=== Complete Async Workflow ===");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "=== Complete Async Workflow ===");
 
     try {
         // Configure client
@@ -574,14 +607,16 @@ void completeWorkflowExample() {
         // Setup callbacks
         std::atomic<bool> dataReceived{false};
 
-        client.setStateCallback([](atom::async::connection::ConnectionState state) {
-            Logger::log(Logger::LOG_DEBUG, "Workflow",
-                        "State: " + stateToString(state));
-        });
+        client.setStateCallback(
+            [](atom::async::connection::ConnectionState state) {
+                Logger::log(Logger::LOG_DEBUG, "Workflow",
+                            "State: " + stateToString(state));
+            });
 
         client.setDataCallback([&dataReceived](const std::string& data) {
-            Logger::log(Logger::LOG_INFO, "Workflow",
-                        "Data received: " + std::to_string(data.size()) + " bytes");
+            Logger::log(
+                Logger::LOG_INFO, "Workflow",
+                "Data received: " + std::to_string(data.size()) + " bytes");
             dataReceived = true;
         });
 
@@ -607,7 +642,8 @@ void completeWorkflowExample() {
         Logger::log(Logger::LOG_SUCCESS, "Example10", "Connected");
 
         // Send request
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 2: Sending request...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 2: Sending request...");
         std::string request =
             "GET /json HTTP/1.1\r\n"
             "Host: httpbin.org\r\n"
@@ -619,7 +655,8 @@ void completeWorkflowExample() {
         Logger::log(Logger::LOG_SUCCESS, "Example10", "Request sent");
 
         // Wait for response
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 3: Waiting for response...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 3: Waiting for response...");
         waitCount = 0;
         while (!dataReceived && waitCount < 50) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -631,12 +668,14 @@ void completeWorkflowExample() {
         }
 
         // Get final statistics
-        Logger::log(Logger::LOG_INFO, "Example10", "Step 4: Final statistics...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Step 4: Final statistics...");
         auto stats = client.getStatistics();
         Logger::log(Logger::LOG_INFO, "Example10",
                     "Total bytes sent: " + std::to_string(stats.bytes_sent));
-        Logger::log(Logger::LOG_INFO, "Example10",
-                    "Total bytes received: " + std::to_string(stats.bytes_received));
+        Logger::log(
+            Logger::LOG_INFO, "Example10",
+            "Total bytes received: " + std::to_string(stats.bytes_received));
 
         // Disconnect
         Logger::log(Logger::LOG_INFO, "Example10", "Step 5: Disconnecting...");
@@ -648,13 +687,17 @@ void completeWorkflowExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example10", "Complete workflow example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "Complete workflow example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::LOG_INFO, "Main", "============================================");
-    Logger::log(Logger::LOG_INFO, "Main", "  Async TcpClient Comprehensive Examples");
-    Logger::log(Logger::LOG_INFO, "Main", "============================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "============================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "  Async TcpClient Comprehensive Examples");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "============================================");
     Logger::log(Logger::LOG_WARNING, "Main",
                 "Note: Examples connect to httpbin.org (requires internet)");
     Logger::log(Logger::LOG_INFO, "Main", "");
@@ -671,9 +714,12 @@ int main() {
     statisticsExample();
     completeWorkflowExample();
 
-    Logger::log(Logger::LOG_SUCCESS, "Main", "============================================");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "  All async TcpClient examples completed!");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "============================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "============================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "  All async TcpClient examples completed!");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "============================================");
 
     return 0;
 }

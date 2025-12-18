@@ -12,7 +12,8 @@ set_languages("c11", "cxx17")
 add_rules("mode.debug", "mode.release")
 
 -- Add required packages
-add_requires("loguru")
+local use_system_packages = has_config("use_system_packages")
+add_requires("loguru", {system = use_system_packages})
 
 -- Define the main target
 target("atom-async")
@@ -44,7 +45,9 @@ target("atom-async")
     add_deps("atom-utils")
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Enable position independent code for static library
     add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
@@ -85,4 +88,18 @@ target("atom-async-object")
         "messaging/*.hpp",
         "execution/*.hpp",
         "sync/*.hpp",
-        "utils/*.hpp"
+        "utils/*.hpp")
+
+    add_includedirs(".", {public = true})
+    add_packages("loguru")
+    add_deps("atom-utils")
+
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
+
+    add_cxflags("-fPIC", {tools = {"gcc", "clang"}})
+    add_cflags("-fPIC", {tools = {"gcc", "clang"}})
+
+    set_objectdir("$(buildir)/obj")
+target_end()

@@ -120,6 +120,7 @@ endif()
 
 # Create library target
 add_library(atom-io STATIC ${SOURCES} ${HEADERS})
+add_library(atom::io ALIAS atom-io)
 
 # Configure module using standardized function
 atom_configure_module(atom-io)

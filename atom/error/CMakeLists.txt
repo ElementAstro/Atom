@@ -72,15 +72,11 @@ if(WIN32 AND CMAKE_CXX_COMPILER_ID MATCHES "GNU")
                                                    ON)
 endif()
 
-# Include directories
-target_include_directories(
-  ${PROJECT_NAME}
-  PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/..>
-         $<INSTALL_INTERFACE:include>
-  PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+# Include standardized module configuration
+include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-# C++ standard
-target_compile_features(${PROJECT_NAME} PUBLIC cxx_std_20)
+# Configure module using standardized function (as base module, no dependencies)
+atom_configure_module(${PROJECT_NAME})
 
 # Platform-specific settings
 if(WIN32)

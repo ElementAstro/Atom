@@ -96,7 +96,8 @@ std::string logLevelToString(atom::async::connection::LogLevel level) {
 
 // Example 1: Basic async SocketHub usage
 void basicAsyncSocketHubExample() {
-    Logger::log(Logger::LOG_INFO, "Example1", "=== Basic Async SocketHub Usage ===");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "=== Basic Async SocketHub Usage ===");
 
     try {
         // Create with default config
@@ -104,7 +105,7 @@ void basicAsyncSocketHubExample() {
 
         Logger::log(Logger::LOG_INFO, "Example1",
                     "Created async SocketHub, isRunning: " +
-                    std::string(hub.isRunning() ? "yes" : "no"));
+                        std::string(hub.isRunning() ? "yes" : "no"));
 
         // Start the hub
         hub.start(9080);
@@ -112,8 +113,9 @@ void basicAsyncSocketHubExample() {
                     "Async SocketHub started on port 9080");
 
         // Check status
-        Logger::log(Logger::LOG_INFO, "Example1",
-                    "isRunning: " + std::string(hub.isRunning() ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example1",
+            "isRunning: " + std::string(hub.isRunning() ? "yes" : "no"));
 
         // Let it run briefly
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -127,7 +129,8 @@ void basicAsyncSocketHubExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1", "Basic async SocketHub example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Basic async SocketHub example completed\n");
 }
 
 // Example 2: Custom configuration
@@ -147,16 +150,21 @@ void customConfigExample() {
         config.log_level = atom::async::connection::LogLevel::DEBUG_LEVEL;
 
         Logger::log(Logger::LOG_INFO, "Example2", "Configuration:");
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - SSL: " + std::string(config.use_ssl ? "enabled" : "disabled"));
+        Logger::log(
+            Logger::LOG_INFO, "Example2",
+            "  - SSL: " + std::string(config.use_ssl ? "enabled" : "disabled"));
         Logger::log(Logger::LOG_INFO, "Example2",
                     "  - Backlog size: " + std::to_string(config.backlog_size));
+        Logger::log(
+            Logger::LOG_INFO, "Example2",
+            "  - Keep alive: " + std::string(config.keep_alive ? "yes" : "no"));
+        Logger::log(
+            Logger::LOG_INFO, "Example2",
+            "  - Rate limiting: " +
+                std::string(config.enable_rate_limiting ? "yes" : "no"));
         Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Keep alive: " + std::string(config.keep_alive ? "yes" : "no"));
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Rate limiting: " + std::string(config.enable_rate_limiting ? "yes" : "no"));
-        Logger::log(Logger::LOG_INFO, "Example2",
-                    "  - Max connections/IP: " + std::to_string(config.max_connections_per_ip));
+                    "  - Max connections/IP: " +
+                        std::to_string(config.max_connections_per_ip));
         Logger::log(Logger::LOG_INFO, "Example2",
                     "  - Log level: " + logLevelToString(config.log_level));
 
@@ -175,43 +183,51 @@ void customConfigExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2", "Custom configuration example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "Custom configuration example completed\n");
 }
 
 // Example 3: Message and event handlers
 void handlersExample() {
-    Logger::log(Logger::LOG_INFO, "Example3", "=== Message and Event Handlers ===");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "=== Message and Event Handlers ===");
 
     try {
         atom::async::connection::SocketHub hub;
 
         // Add message handler
-        hub.addMessageHandler([](const atom::async::connection::Message& msg, size_t clientId) {
-            Logger::log(Logger::LOG_INFO, "MsgHandler",
-                        "Message from client " + std::to_string(clientId) +
-                        ": " + msg.asString());
-        });
+        hub.addMessageHandler(
+            [](const atom::async::connection::Message& msg, size_t clientId) {
+                Logger::log(Logger::LOG_INFO, "MsgHandler",
+                            "Message from client " + std::to_string(clientId) +
+                                ": " + msg.asString());
+            });
 
         // Add connect handler
         hub.addConnectHandler([](size_t clientId, const std::string& addr) {
             Logger::log(Logger::LOG_SUCCESS, "Connect",
-                        "Client " + std::to_string(clientId) + " connected from " + addr);
+                        "Client " + std::to_string(clientId) +
+                            " connected from " + addr);
         });
 
         // Add disconnect handler
-        hub.addDisconnectHandler([](size_t clientId, const std::string& reason) {
-            Logger::log(Logger::LOG_WARNING, "Disconnect",
-                        "Client " + std::to_string(clientId) + " disconnected: " + reason);
-        });
+        hub.addDisconnectHandler(
+            [](size_t clientId, const std::string& reason) {
+                Logger::log(Logger::LOG_WARNING, "Disconnect",
+                            "Client " + std::to_string(clientId) +
+                                " disconnected: " + reason);
+            });
 
         // Add error handler
         hub.addErrorHandler([](const std::string& error, size_t clientId) {
-            Logger::log(Logger::LOG_ERR, "Error",
-                        "Error for client " + std::to_string(clientId) + ": " + error);
+            Logger::log(
+                Logger::LOG_ERR, "Error",
+                "Error for client " + std::to_string(clientId) + ": " + error);
         });
 
         hub.start(9082);
-        Logger::log(Logger::LOG_SUCCESS, "Example3", "SocketHub started with handlers");
+        Logger::log(Logger::LOG_SUCCESS, "Example3",
+                    "SocketHub started with handlers");
 
         std::this_thread::sleep_for(std::chrono::seconds(2));
         hub.stop();
@@ -238,7 +254,8 @@ void groupManagementExample() {
         hub.createGroup("admins");
         hub.createGroup("users");
         hub.createGroup("guests");
-        Logger::log(Logger::LOG_INFO, "Example4", "Created groups: admins, users, guests");
+        Logger::log(Logger::LOG_INFO, "Example4",
+                    "Created groups: admins, users, guests");
 
         // List groups
         auto groups = hub.getGroups();
@@ -253,14 +270,17 @@ void groupManagementExample() {
         // hub.removeClientFromGroup(clientId, "admins");
 
         // Broadcast to group
-        auto msg = atom::async::connection::Message::createText("Admin announcement!");
+        auto msg =
+            atom::async::connection::Message::createText("Admin announcement!");
         hub.broadcastToGroup("admins", msg);
-        Logger::log(Logger::LOG_INFO, "Example4", "Broadcasted to admins group");
+        Logger::log(Logger::LOG_INFO, "Example4",
+                    "Broadcasted to admins group");
 
         // Get clients in group
         auto admins = hub.getClientsInGroup("admins");
-        Logger::log(Logger::LOG_INFO, "Example4",
-                    "Clients in admins group: " + std::to_string(admins.size()));
+        Logger::log(
+            Logger::LOG_INFO, "Example4",
+            "Clients in admins group: " + std::to_string(admins.size()));
 
         hub.stop();
 
@@ -269,7 +289,8 @@ void groupManagementExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example4", "Group management example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "Group management example completed\n");
 }
 
 // Example 5: Authentication
@@ -280,7 +301,8 @@ void authenticationExample() {
         atom::async::connection::SocketHub hub;
 
         // Set authenticator
-        hub.setAuthenticator([](const std::string& username, const std::string& password) -> bool {
+        hub.setAuthenticator([](const std::string& username,
+                                const std::string& password) -> bool {
             Logger::log(Logger::LOG_INFO, "Auth",
                         "Authenticating user: " + username);
 
@@ -319,7 +341,8 @@ void authenticationExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example5", "Authentication example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "Authentication example completed\n");
 }
 
 // Example 6: Client metadata
@@ -332,8 +355,11 @@ void clientMetadataExample() {
         hub.addConnectHandler([&hub](size_t clientId, const std::string& addr) {
             // Set metadata for new client
             hub.setClientMetadata(clientId, "role", "guest");
-            hub.setClientMetadata(clientId, "connected_at",
-                std::to_string(std::chrono::system_clock::now().time_since_epoch().count()));
+            hub.setClientMetadata(
+                clientId, "connected_at",
+                std::to_string(std::chrono::system_clock::now()
+                                   .time_since_epoch()
+                                   .count()));
             hub.setClientMetadata(clientId, "ip_address", addr);
 
             Logger::log(Logger::LOG_INFO, "Metadata",
@@ -353,7 +379,7 @@ void clientMetadataExample() {
 
             Logger::log(Logger::LOG_INFO, "Example6",
                         "Client " + std::to_string(clientId) +
-                        " - Role: " + role + ", IP: " + ip);
+                            " - Role: " + role + ", IP: " + ip);
         }
 
         hub.stop();
@@ -363,12 +389,14 @@ void clientMetadataExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example6", "Client metadata example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example6",
+                "Client metadata example completed\n");
 }
 
 // Example 7: Statistics and monitoring
 void statisticsExample() {
-    Logger::log(Logger::LOG_INFO, "Example7", "=== Statistics and Monitoring ===");
+    Logger::log(Logger::LOG_INFO, "Example7",
+                "=== Statistics and Monitoring ===");
 
     try {
         atom::async::connection::SocketHub hub;
@@ -383,12 +411,15 @@ void statisticsExample() {
         auto stats = hub.getStatistics();
 
         Logger::log(Logger::LOG_INFO, "Example7", "=== Server Statistics ===");
-        Logger::log(Logger::LOG_INFO, "Example7",
-                    "Total connections: " + std::to_string(stats.total_connections));
-        Logger::log(Logger::LOG_INFO, "Example7",
-                    "Active connections: " + std::to_string(stats.active_connections));
-        Logger::log(Logger::LOG_INFO, "Example7",
-                    "Messages received: " + std::to_string(stats.messages_received));
+        Logger::log(
+            Logger::LOG_INFO, "Example7",
+            "Total connections: " + std::to_string(stats.total_connections));
+        Logger::log(
+            Logger::LOG_INFO, "Example7",
+            "Active connections: " + std::to_string(stats.active_connections));
+        Logger::log(
+            Logger::LOG_INFO, "Example7",
+            "Messages received: " + std::to_string(stats.messages_received));
         Logger::log(Logger::LOG_INFO, "Example7",
                     "Messages sent: " + std::to_string(stats.messages_sent));
         Logger::log(Logger::LOG_INFO, "Example7",
@@ -420,22 +451,27 @@ void loggingExample() {
 
         // Enable logging with custom level
         hub.enableLogging(true, atom::async::connection::LogLevel::DEBUG_LEVEL);
-        Logger::log(Logger::LOG_INFO, "Example8", "Logging enabled at DEBUG level");
+        Logger::log(Logger::LOG_INFO, "Example8",
+                    "Logging enabled at DEBUG level");
 
         // Set custom log handler
-        hub.setLogHandler([](atom::async::connection::LogLevel level, const std::string& message) {
+        hub.setLogHandler([](atom::async::connection::LogLevel level,
+                             const std::string& message) {
             Logger::log(Logger::LOG_DEBUG, "HubLog",
                         "[" + logLevelToString(level) + "] " + message);
         });
 
         hub.start(9087);
-        Logger::log(Logger::LOG_SUCCESS, "Example8", "SocketHub started with logging");
+        Logger::log(Logger::LOG_SUCCESS, "Example8",
+                    "SocketHub started with logging");
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         // Change log level
-        hub.enableLogging(true, atom::async::connection::LogLevel::WARNING_LEVEL);
-        Logger::log(Logger::LOG_INFO, "Example8", "Changed log level to WARNING");
+        hub.enableLogging(true,
+                          atom::async::connection::LogLevel::WARNING_LEVEL);
+        Logger::log(Logger::LOG_INFO, "Example8",
+                    "Changed log level to WARNING");
 
         // Disable logging
         hub.enableLogging(false);
@@ -458,41 +494,46 @@ void messageTypesExample() {
     try {
         atom::async::connection::SocketHub hub;
 
-        hub.addMessageHandler([](const atom::async::connection::Message& msg, size_t clientId) {
-            std::string typeStr;
-            switch (msg.type) {
-                case atom::async::connection::Message::Type::TEXT:
-                    typeStr = "TEXT";
-                    break;
-                case atom::async::connection::Message::Type::BINARY:
-                    typeStr = "BINARY";
-                    break;
-                case atom::async::connection::Message::Type::PING:
-                    typeStr = "PING";
-                    break;
-                case atom::async::connection::Message::Type::PONG:
-                    typeStr = "PONG";
-                    break;
-                case atom::async::connection::Message::Type::CLOSE:
-                    typeStr = "CLOSE";
-                    break;
-            }
-            Logger::log(Logger::LOG_INFO, "Message",
-                        "Type: " + typeStr + ", Size: " + std::to_string(msg.data.size()));
-        });
+        hub.addMessageHandler(
+            [](const atom::async::connection::Message& msg, size_t clientId) {
+                std::string typeStr;
+                switch (msg.type) {
+                    case atom::async::connection::Message::Type::TEXT:
+                        typeStr = "TEXT";
+                        break;
+                    case atom::async::connection::Message::Type::BINARY:
+                        typeStr = "BINARY";
+                        break;
+                    case atom::async::connection::Message::Type::PING:
+                        typeStr = "PING";
+                        break;
+                    case atom::async::connection::Message::Type::PONG:
+                        typeStr = "PONG";
+                        break;
+                    case atom::async::connection::Message::Type::CLOSE:
+                        typeStr = "CLOSE";
+                        break;
+                }
+                Logger::log(Logger::LOG_INFO, "Message",
+                            "Type: " + typeStr +
+                                ", Size: " + std::to_string(msg.data.size()));
+            });
 
         hub.start(9088);
         Logger::log(Logger::LOG_SUCCESS, "Example9", "SocketHub started");
 
         // Create different message types
-        auto textMsg = atom::async::connection::Message::createText("Hello World!");
+        auto textMsg =
+            atom::async::connection::Message::createText("Hello World!");
         Logger::log(Logger::LOG_INFO, "Example9",
                     "Created text message: " + textMsg.asString());
 
         std::vector<char> binaryData = {0x01, 0x02, 0x03, 0x04};
-        auto binaryMsg = atom::async::connection::Message::createBinary(binaryData);
+        auto binaryMsg =
+            atom::async::connection::Message::createBinary(binaryData);
         Logger::log(Logger::LOG_INFO, "Example9",
-                    "Created binary message, size: " + std::to_string(binaryMsg.data.size()));
+                    "Created binary message, size: " +
+                        std::to_string(binaryMsg.data.size()));
 
         // Broadcast messages
         hub.broadcastMessage(textMsg);
@@ -506,7 +547,8 @@ void messageTypesExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example9", "Message types example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example9",
+                "Message types example completed\n");
 }
 
 // Example 10: Client management
@@ -536,7 +578,7 @@ void clientManagementExample() {
             bool connected = hub.isClientConnected(clientId);
             Logger::log(Logger::LOG_INFO, "Example10",
                         "Client " + std::to_string(clientId) +
-                        " connected: " + (connected ? "yes" : "no"));
+                            " connected: " + (connected ? "yes" : "no"));
 
             // Send message to client
             auto msg = atom::async::connection::Message::createText("Welcome!");
@@ -553,7 +595,8 @@ void clientManagementExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example10", "Client management example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "Client management example completed\n");
 }
 
 // Example 11: Server restart
@@ -565,14 +608,16 @@ void serverRestartExample() {
 
         hub.start(9090);
         Logger::log(Logger::LOG_SUCCESS, "Example11",
-                    "Server started, isRunning: " + std::string(hub.isRunning() ? "yes" : "no"));
+                    "Server started, isRunning: " +
+                        std::string(hub.isRunning() ? "yes" : "no"));
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
         // Restart server
         hub.restart();
         Logger::log(Logger::LOG_INFO, "Example11",
-                    "Server restarted, isRunning: " + std::string(hub.isRunning() ? "yes" : "no"));
+                    "Server restarted, isRunning: " +
+                        std::string(hub.isRunning() ? "yes" : "no"));
 
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
@@ -584,13 +629,17 @@ void serverRestartExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example11", "Server restart example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example11",
+                "Server restart example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::LOG_INFO, "Main", "============================================");
-    Logger::log(Logger::LOG_INFO, "Main", "  Async SocketHub Comprehensive Examples");
-    Logger::log(Logger::LOG_INFO, "Main", "============================================\n");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "============================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "  Async SocketHub Comprehensive Examples");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "============================================\n");
 
     // Run all examples
     basicAsyncSocketHubExample();
@@ -605,9 +654,12 @@ int main() {
     clientManagementExample();
     serverRestartExample();
 
-    Logger::log(Logger::LOG_SUCCESS, "Main", "============================================");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "  All async SocketHub examples completed!");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "============================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "============================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "  All async SocketHub examples completed!");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "============================================");
 
     return 0;
 }

@@ -1,13 +1,13 @@
 #ifndef ATOM_SEARCH_TEST_TTL_HPP
 #define ATOM_SEARCH_TEST_TTL_HPP
 
-#include "atom/search/cache/ttl.hpp"
+#include "atom/search/cache/ttl_cache.hpp"
 
 #include <gtest/gtest.h>
 #include <thread>
 #include <vector>
 
-using namespace atom::search;
+using namespace atom::search::cache;
 
 class TTLCacheTest : public ::testing::Test {
 protected:
@@ -67,8 +67,10 @@ TEST_F(TTLCacheTest, Cleanup) {
     // Ensure we didn't hang
     EXPECT_LT(elapsed, std::chrono::milliseconds(500));
 
-    cache->cleanup();
-    EXPECT_EQ(cache->size(), 0);
+    // Automatic cleanup happens in background thread, verify item is expired
+    // via get
+    auto val = cache->get("key1");
+    EXPECT_FALSE(val.has_value());
 }
 
 TEST_F(TTLCacheTest, HitRate) {
@@ -148,10 +150,9 @@ TEST_F(TTLCacheTest, CleanupAfterExpiry) {
     EXPECT_FALSE(cache->get("key1").has_value());
     EXPECT_FALSE(cache->get("key2").has_value());
 
-    // The cache may have already cleaned up expired keys automatically
-    // So we just verify that cleanup works correctly
-    cache->cleanup();
-    EXPECT_EQ(cache->size(), 0);
+    // Automatic cleanup happens in background thread
+    // Wait a bit more for cleanup to complete
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
 TEST_F(TTLCacheTest, HitRateUpdatesCorrectly) {

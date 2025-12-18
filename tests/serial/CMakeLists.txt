@@ -16,9 +16,18 @@ project(
 find_package(GTest REQUIRED)
 find_package(Threads REQUIRED)
 
-# Check for libusb on non-Windows platforms (USB tests require it)
+# Check for libusb (USB tests require it)
 set(LIBUSB_FOUND FALSE)
-if(NOT WIN32)
+if(WIN32)
+  # On Windows, check for libusb via vcpkg or manual installation
+  find_path(LIBUSB_INCLUDE_DIR libusb-1.0/libusb.h)
+  find_library(LIBUSB_LIBRARY NAMES libusb-1.0 usb-1.0)
+  if(LIBUSB_INCLUDE_DIR AND LIBUSB_LIBRARY)
+    set(LIBUSB_FOUND TRUE)
+    set(LIBUSB_INCLUDE_DIRS ${LIBUSB_INCLUDE_DIR})
+    set(LIBUSB_LIBRARIES ${LIBUSB_LIBRARY})
+  endif()
+else()
   find_package(PkgConfig QUIET)
   if(PkgConfig_FOUND)
     pkg_check_modules(LIBUSB QUIET libusb-1.0)
@@ -47,13 +56,19 @@ endif()
 # =============================================================================
 # Test Source Configuration
 # =============================================================================
-# Core test files (always included)
-set(TEST_SOURCES ${PROJECT_SOURCE_DIR}/test_scanner.cpp
-                 ${PROJECT_SOURCE_DIR}/test_serial.cpp)
+# Core test files - organized by subdirectory matching implementation structure
+set(TEST_SOURCES
+    # Core module tests
+    ${PROJECT_SOURCE_DIR}/core/test_scanner.cpp
+    ${PROJECT_SOURCE_DIR}/core/test_serial_port.cpp
+    # Bluetooth module tests
+    ${PROJECT_SOURCE_DIR}/bluetooth/test_bluetooth_serial.cpp
+    # Platform-specific tests
+    ${PROJECT_SOURCE_DIR}/platform/test_serial_port_platform.cpp)
 
 # Add USB tests only if libusb is available
 if(LIBUSB_FOUND)
-  list(APPEND TEST_SOURCES ${PROJECT_SOURCE_DIR}/test_usb.cpp)
+  list(APPEND TEST_SOURCES ${PROJECT_SOURCE_DIR}/usb/test_usb.cpp)
   message(STATUS "USB tests enabled (libusb found)")
 else()
   message(STATUS "USB tests disabled (libusb not found)")

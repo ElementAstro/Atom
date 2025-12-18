@@ -9,6 +9,9 @@
 #include <spdlog/spdlog.h>
 #include <cstring>
 
+using atom::search::database::QueryValidator;
+using atom::search::database::RetryExecutor;
+
 namespace atom {
 namespace database {
 
@@ -554,58 +557,106 @@ bool MysqlDB::isConnected() {
 }
 
 bool MysqlDB::executeQuery(const std::string& query) {
-    std::lock_guard<std::mutex> lock(mutex);
+    try {
+        QueryValidator::validate(query);
 
-    if (!db && !reconnect()) {
+        RetryExecutor executor(retryPolicy_);
+        auto shouldRetry = [this](const std::exception&) {
+            std::lock_guard<std::mutex> lock(mutex);
+            unsigned int code = db ? mysql_errno(db) : 0;
+            // 2006: MySQL server has gone away, 2013: lost connection
+            return code == 2006 || code == 2013 || code == 0;
+        };
+
+        auto result = executor.execute(
+            [this, &query]() {
+                if (!isConnected() && !connect()) {
+                    throw MySQLException("Not connected to database");
+                }
+
+                std::lock_guard<std::mutex> lock(mutex);
+                if (mysql_query(db, query.c_str()) != 0) {
+                    throw MySQLException(
+                        std::string("Failed to execute query: ") +
+                        mysql_error(db));
+                }
+
+                spdlog::debug("Query executed successfully: {}",
+                              query.length() > 100
+                                  ? query.substr(0, 100) + "..."
+                                  : query);
+                return true;
+            },
+            std::move(shouldRetry));
+
+        return result.success;
+    } catch (const std::exception& e) {
+        spdlog::error("executeQuery failed: {}", e.what());
         return false;
     }
-
-    if (mysql_query(db, query.c_str()) != 0) {
-        return !handleError("Failed to execute query: " + query, false);
-    }
-
-    spdlog::debug("Query executed successfully: {}",
-                  query.length() > 100 ? query.substr(0, 100) + "..." : query);
-    return true;
 }
 
 std::unique_ptr<ResultSet> MysqlDB::executeQueryWithResults(
     const std::string& query) {
-    std::lock_guard<std::mutex> lock(mutex);
+    QueryValidator::validate(query);
 
-    if (!db && !reconnect()) {
-        throw MySQLException("Not connected to database");
-    }
+    RetryExecutor executor(retryPolicy_);
+    auto shouldRetry = [this](const std::exception&) {
+        std::lock_guard<std::mutex> lock(mutex);
+        unsigned int code = db ? mysql_errno(db) : 0;
+        return code == 2006 || code == 2013 || code == 0;
+    };
 
-    if (mysql_query(db, query.c_str()) != 0) {
-        handleError("Failed to execute query: " + query, true);
-        return nullptr;
-    }
+    return executor.executeOrThrow(
+        [this, &query]() -> std::unique_ptr<ResultSet> {
+            if (!isConnected() && !connect()) {
+                throw MySQLException("Not connected to database");
+            }
 
-    MYSQL_RES* result = mysql_store_result(db);
-    if (!result && mysql_field_count(db) > 0) {
-        handleError("Failed to store result for query: " + query, true);
-        return nullptr;
-    }
+            std::lock_guard<std::mutex> lock(mutex);
+            if (mysql_query(db, query.c_str()) != 0) {
+                throw MySQLException(std::string("Failed to execute query: ") +
+                                     mysql_error(db));
+            }
 
-    return std::make_unique<ResultSet>(result);
+            MYSQL_RES* result = mysql_store_result(db);
+            if (!result && mysql_field_count(db) > 0) {
+                throw MySQLException(std::string("Failed to store result: ") +
+                                     mysql_error(db));
+            }
+
+            return std::make_unique<ResultSet>(result);
+        },
+        std::move(shouldRetry));
 }
 
 int MysqlDB::executeUpdate(const std::string& query) {
-    std::lock_guard<std::mutex> lock(mutex);
+    QueryValidator::validate(query);
 
-    if (!db && !reconnect()) {
-        throw MySQLException("Not connected to database");
-    }
+    RetryExecutor executor(retryPolicy_);
+    auto shouldRetry = [this](const std::exception&) {
+        std::lock_guard<std::mutex> lock(mutex);
+        unsigned int code = db ? mysql_errno(db) : 0;
+        return code == 2006 || code == 2013 || code == 0;
+    };
 
-    if (mysql_query(db, query.c_str()) != 0) {
-        handleError("Failed to execute update: " + query, true);
-        return -1;
-    }
+    return executor.executeOrThrow(
+        [this, &query]() -> int {
+            if (!isConnected() && !connect()) {
+                throw MySQLException("Not connected to database");
+            }
 
-    int affected = static_cast<int>(mysql_affected_rows(db));
-    spdlog::debug("Update query affected {} rows", affected);
-    return affected;
+            std::lock_guard<std::mutex> lock(mutex);
+            if (mysql_query(db, query.c_str()) != 0) {
+                throw MySQLException(std::string("Failed to execute update: ") +
+                                     mysql_error(db));
+            }
+
+            int affected = static_cast<int>(mysql_affected_rows(db));
+            spdlog::debug("Update query affected {} rows", affected);
+            return affected;
+        },
+        std::move(shouldRetry));
 }
 
 std::optional<int> MysqlDB::getIntValue(const std::string& query) {

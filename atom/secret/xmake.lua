@@ -49,7 +49,7 @@ target("atom-secret-object")
     add_includedirs("..", {public = true})
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("crypt32", "advapi32")
     elseif is_plat("linux") then
         add_syslinks("pthread")
@@ -71,7 +71,7 @@ target("atom-secret")
     add_packages("loguru", "openssl")
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("crypt32", "advapi32")
     elseif is_plat("linux") then
         add_syslinks("pthread")

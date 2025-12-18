@@ -142,6 +142,7 @@ endif()
 # Create library target (shared library for components)
 add_library(atom-component SHARED ${SOURCES} ${HEADERS} ${OPTIONAL_SOURCES}
                                   ${OPTIONAL_HEADERS})
+add_library(atom::component ALIAS atom-component)
 
 # Configure module using standardized function
 atom_configure_module(atom-component)

@@ -31,7 +31,8 @@ void printVector(const std::string& label, const std::vector<T>& vec) {
     std::cout << label << ": [";
     bool first = true;
     for (const auto& item : vec) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << item;
         first = false;
     }
@@ -50,12 +51,12 @@ void demonstrateBasicOperations() {
     // filterAndTransform - Filter and transform in one operation
     std::cout << "\n--- filterAndTransform ---" << std::endl;
     auto evenSquared = filterAndTransform(
-        numbers, [](int x) { return x % 2 == 0; },
-        [](int x) { return x * x; });
+        numbers, [](int x) { return x % 2 == 0; }, [](int x) { return x * x; });
     std::cout << "Even numbers squared: [";
     bool first = true;
     for (auto val : evenSquared) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -79,7 +80,8 @@ void demonstrateBasicOperations() {
     std::cout << "After dropping first 3: [";
     first = true;
     for (auto val : dropped) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -91,7 +93,8 @@ void demonstrateBasicOperations() {
     std::cout << "First 5 elements: [";
     first = true;
     for (auto val : taken) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -103,7 +106,8 @@ void demonstrateBasicOperations() {
     std::cout << "Reversed: [";
     first = true;
     for (auto val : reversed) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -125,7 +129,8 @@ void demonstrateConditionalOperations() {
     std::cout << "Take while < 6: [";
     bool first = true;
     for (auto val : takenWhile) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -137,7 +142,8 @@ void demonstrateConditionalOperations() {
     std::cout << "Drop while < 6: [";
     first = true;
     for (auto val : droppedWhile) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -150,7 +156,8 @@ void demonstrateConditionalOperations() {
     std::cout << "Drop while < 4, then take while < 8: [";
     first = true;
     for (auto val : combined) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -250,7 +257,8 @@ void demonstrateGenerators() {
     std::cout << "Merged: [";
     bool first = true;
     for (auto val : merge(sorted1, sorted2)) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -279,7 +287,8 @@ void demonstrateGenerators() {
         std::cout << "  Chunk " << chunkNum++ << ": [";
         first = true;
         for (auto val : chunkVec) {
-            if (!first) std::cout << ", ";
+            if (!first)
+                std::cout << ", ";
             std::cout << val;
             first = false;
         }
@@ -291,7 +300,8 @@ void demonstrateGenerators() {
     std::cout << "Even numbers (lazy): [";
     first = true;
     for (auto val : filter(data, [](int x) { return x % 2 == 0; })) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -302,7 +312,8 @@ void demonstrateGenerators() {
     std::cout << "Squared values (lazy): [";
     first = true;
     for (auto val : transform(data, [](int x) { return x * x; })) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -323,7 +334,8 @@ void demonstrateAdvancedOperations() {
     std::cout << "Adjacent pairs: [";
     bool first = true;
     for (auto [a, b] : adjacent(numbers)) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << "(" << a << ", " << b << ")";
         first = false;
     }
@@ -344,7 +356,8 @@ void demonstrateAdvancedOperations() {
     std::cout << "Flattened: [";
     first = true;
     for (auto val : flatten(nested)) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val;
         first = false;
     }
@@ -370,7 +383,8 @@ void demonstrateComplexUseCases() {
     std::cout << "Result: [";
     bool first = true;
     for (auto val : firstFive) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << val * val;
         first = false;
     }
@@ -398,7 +412,8 @@ void demonstrateComplexUseCases() {
     std::cout << "Measurements: [";
     first = true;
     for (auto m : measurements) {
-        if (!first) std::cout << ", ";
+        if (!first)
+            std::cout << ", ";
         std::cout << m;
         first = false;
     }

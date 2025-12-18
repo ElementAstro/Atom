@@ -163,7 +163,8 @@ public:
             fixture->TearDown();
         };
 
-        atom::test::registerTest(suiteName + "." + testName, std::move(testFunc));
+        atom::test::registerTest(suiteName + "." + testName,
+                                 std::move(testFunc));
     }
 
     /**
@@ -263,11 +264,11 @@ public:
     }
 
     FixtureTestSuiteBuilder(const FixtureTestSuiteBuilder&) = delete;
-    auto operator=(const FixtureTestSuiteBuilder&)
-        -> FixtureTestSuiteBuilder& = delete;
+    auto operator=(const FixtureTestSuiteBuilder&) -> FixtureTestSuiteBuilder& =
+                                                          delete;
     FixtureTestSuiteBuilder(FixtureTestSuiteBuilder&&) = delete;
-    auto operator=(FixtureTestSuiteBuilder&&)
-        -> FixtureTestSuiteBuilder& = delete;
+    auto operator=(FixtureTestSuiteBuilder&&) -> FixtureTestSuiteBuilder& =
+                                                     delete;
 
     /**
      * @brief Add a test to this fixture suite
@@ -276,8 +277,8 @@ public:
      * @return Reference for method chaining
      */
     template <typename Func>
-    auto addTest(std::string testName, Func&& testFunc)
-        -> FixtureTestSuiteBuilder& {
+    auto addTest(std::string testName,
+                 Func&& testFunc) -> FixtureTestSuiteBuilder& {
         auto wrappedFunc = [func = std::forward<Func>(testFunc)]() {
             auto fixture = std::make_unique<FixtureType>();
             fixture->SetUp();
@@ -361,9 +362,13 @@ public:
         return instance;
     }
 
-    static void SetUpTestSuite() { GetSharedInstance().SetUp(); }
+    static void SetUpTestSuite() {
+        static_cast<atom::test::TestFixture&>(GetSharedInstance()).SetUp();
+    }
 
-    static void TearDownTestSuite() { GetSharedInstance().TearDown(); }
+    static void TearDownTestSuite() {
+        static_cast<atom::test::TestFixture&>(GetSharedInstance()).TearDown();
+    }
 };
 
 }  // namespace atom::test
@@ -373,27 +378,28 @@ public:
  * @param fixture_class The fixture class name
  * @param test_name The test case name
  */
-#define TEST_F(fixture_class, test_name)                                      \
-    class fixture_class##_##test_name##_Test : public fixture_class {         \
-    public:                                                                   \
-        void TestBody();                                                      \
-    };                                                                        \
-    static struct fixture_class##_##test_name##_Registrar {                   \
-        fixture_class##_##test_name##_Registrar() {                           \
-            atom::test::registerTest(                                         \
-                #fixture_class "." #test_name, []() {                         \
-                    fixture_class##_##test_name##_Test fixture;               \
-                    fixture.SetUp();                                          \
-                    try {                                                     \
-                        fixture.TestBody();                                   \
-                    } catch (...) {                                           \
-                        fixture.TearDown();                                   \
-                        throw;                                                \
-                    }                                                         \
-                    fixture.TearDown();                                       \
-                });                                                           \
-        }                                                                     \
-    } fixture_class##_##test_name##_registrar_instance;                       \
+#define TEST_F(fixture_class, test_name)                                   \
+    class fixture_class##_##test_name##_Test : public fixture_class {      \
+    public:                                                                \
+        void RunSetUp() { this->SetUp(); }                                 \
+        void RunTearDown() { this->TearDown(); }                           \
+        void TestBody();                                                   \
+    };                                                                     \
+    static struct fixture_class##_##test_name##_Registrar {                \
+        fixture_class##_##test_name##_Registrar() {                        \
+            atom::test::registerTest(#fixture_class "." #test_name, []() { \
+                fixture_class##_##test_name##_Test fixture;                \
+                fixture.RunSetUp();                                        \
+                try {                                                      \
+                    fixture.TestBody();                                    \
+                } catch (...) {                                            \
+                    fixture.RunTearDown();                                 \
+                    throw;                                                 \
+                }                                                          \
+                fixture.RunTearDown();                                     \
+            });                                                            \
+        }                                                                  \
+    } fixture_class##_##test_name##_registrar_instance;                    \
     void fixture_class##_##test_name##_Test::TestBody()
 
 /**
@@ -401,14 +407,14 @@ public:
  * @param suite_name The test suite name
  * @param test_name The test case name
  */
-#define TEST(suite_name, test_name)                                           \
-    static void suite_name##_##test_name##_TestBody();                        \
-    static struct suite_name##_##test_name##_Registrar {                      \
-        suite_name##_##test_name##_Registrar() {                              \
-            atom::test::registerTest(#suite_name "." #test_name,              \
-                                     suite_name##_##test_name##_TestBody);    \
-        }                                                                     \
-    } suite_name##_##test_name##_registrar_instance;                          \
+#define TEST(suite_name, test_name)                                        \
+    static void suite_name##_##test_name##_TestBody();                     \
+    static struct suite_name##_##test_name##_Registrar {                   \
+        suite_name##_##test_name##_Registrar() {                           \
+            atom::test::registerTest(#suite_name "." #test_name,           \
+                                     suite_name##_##test_name##_TestBody); \
+        }                                                                  \
+    } suite_name##_##test_name##_registrar_instance;                       \
     static void suite_name##_##test_name##_TestBody()
 
 /**
@@ -416,15 +422,15 @@ public:
  * @param suite_name The test suite name
  * @param test_name The test case name
  */
-#define TEST_DISABLED(suite_name, test_name)                                  \
-    static void suite_name##_##test_name##_TestBody();                        \
-    static struct suite_name##_##test_name##_Registrar {                      \
-        suite_name##_##test_name##_Registrar() {                              \
-            atom::test::registerTest(                                         \
-                #suite_name "." #test_name,                                   \
-                suite_name##_##test_name##_TestBody, false, 0.0, true);       \
-        }                                                                     \
-    } suite_name##_##test_name##_registrar_instance;                          \
+#define TEST_DISABLED(suite_name, test_name)                              \
+    static void suite_name##_##test_name##_TestBody();                    \
+    static struct suite_name##_##test_name##_Registrar {                  \
+        suite_name##_##test_name##_Registrar() {                          \
+            atom::test::registerTest(#suite_name "." #test_name,          \
+                                     suite_name##_##test_name##_TestBody, \
+                                     false, 0.0, true);                   \
+        }                                                                 \
+    } suite_name##_##test_name##_registrar_instance;                      \
     static void suite_name##_##test_name##_TestBody()
 
 /**
@@ -432,28 +438,31 @@ public:
  * @param fixture_class The fixture class name
  * @param test_name The test case name
  */
-#define TEST_F_DISABLED(fixture_class, test_name)                             \
-    class fixture_class##_##test_name##_Test : public fixture_class {         \
-    public:                                                                   \
-        void TestBody();                                                      \
-    };                                                                        \
-    static struct fixture_class##_##test_name##_Registrar {                   \
-        fixture_class##_##test_name##_Registrar() {                           \
-            atom::test::registerTest(                                         \
-                #fixture_class "." #test_name, []() {                         \
-                    fixture_class##_##test_name##_Test fixture;               \
-                    fixture.SetUp();                                          \
-                    try {                                                     \
-                        fixture.TestBody();                                   \
-                    } catch (...) {                                           \
-                        fixture.TearDown();                                   \
-                        throw;                                                \
-                    }                                                         \
-                    fixture.TearDown();                                       \
-                },                                                            \
-                false, 0.0, true);                                            \
-        }                                                                     \
-    } fixture_class##_##test_name##_registrar_instance;                       \
+#define TEST_F_DISABLED(fixture_class, test_name)                     \
+    class fixture_class##_##test_name##_Test : public fixture_class { \
+    public:                                                           \
+        void RunSetUp() { this->SetUp(); }                            \
+        void RunTearDown() { this->TearDown(); }                      \
+        void TestBody();                                              \
+    };                                                                \
+    static struct fixture_class##_##test_name##_Registrar {           \
+        fixture_class##_##test_name##_Registrar() {                   \
+            atom::test::registerTest(                                 \
+                #fixture_class "." #test_name,                        \
+                []() {                                                \
+                    fixture_class##_##test_name##_Test fixture;       \
+                    fixture.RunSetUp();                               \
+                    try {                                             \
+                        fixture.TestBody();                           \
+                    } catch (...) {                                   \
+                        fixture.RunTearDown();                        \
+                        throw;                                        \
+                    }                                                 \
+                    fixture.RunTearDown();                            \
+                },                                                    \
+                false, 0.0, true);                                    \
+        }                                                             \
+    } fixture_class##_##test_name##_registrar_instance;               \
     void fixture_class##_##test_name##_Test::TestBody()
 
 /**
@@ -462,15 +471,15 @@ public:
  * @param test_name The test case name
  * @param timeout_ms Timeout in milliseconds
  */
-#define TEST_TIMEOUT(suite_name, test_name, timeout_ms)                       \
-    static void suite_name##_##test_name##_TestBody();                        \
-    static struct suite_name##_##test_name##_Registrar {                      \
-        suite_name##_##test_name##_Registrar() {                              \
-            atom::test::registerTest(#suite_name "." #test_name,              \
-                                     suite_name##_##test_name##_TestBody,     \
-                                     true, static_cast<double>(timeout_ms));  \
-        }                                                                     \
-    } suite_name##_##test_name##_registrar_instance;                          \
+#define TEST_TIMEOUT(suite_name, test_name, timeout_ms)                      \
+    static void suite_name##_##test_name##_TestBody();                       \
+    static struct suite_name##_##test_name##_Registrar {                     \
+        suite_name##_##test_name##_Registrar() {                             \
+            atom::test::registerTest(#suite_name "." #test_name,             \
+                                     suite_name##_##test_name##_TestBody,    \
+                                     true, static_cast<double>(timeout_ms)); \
+        }                                                                    \
+    } suite_name##_##test_name##_registrar_instance;                         \
     static void suite_name##_##test_name##_TestBody()
 
 /**
@@ -479,28 +488,31 @@ public:
  * @param test_name The test case name
  * @param timeout_ms Timeout in milliseconds
  */
-#define TEST_F_TIMEOUT(fixture_class, test_name, timeout_ms)                  \
-    class fixture_class##_##test_name##_Test : public fixture_class {         \
-    public:                                                                   \
-        void TestBody();                                                      \
-    };                                                                        \
-    static struct fixture_class##_##test_name##_Registrar {                   \
-        fixture_class##_##test_name##_Registrar() {                           \
-            atom::test::registerTest(                                         \
-                #fixture_class "." #test_name, []() {                         \
-                    fixture_class##_##test_name##_Test fixture;               \
-                    fixture.SetUp();                                          \
-                    try {                                                     \
-                        fixture.TestBody();                                   \
-                    } catch (...) {                                           \
-                        fixture.TearDown();                                   \
-                        throw;                                                \
-                    }                                                         \
-                    fixture.TearDown();                                       \
-                },                                                            \
-                true, static_cast<double>(timeout_ms));                       \
-        }                                                                     \
-    } fixture_class##_##test_name##_registrar_instance;                       \
+#define TEST_F_TIMEOUT(fixture_class, test_name, timeout_ms)          \
+    class fixture_class##_##test_name##_Test : public fixture_class { \
+    public:                                                           \
+        void RunSetUp() { fixture_class::SetUp(); }                   \
+        void RunTearDown() { fixture_class::TearDown(); }             \
+        void TestBody();                                              \
+    };                                                                \
+    static struct fixture_class##_##test_name##_Registrar {           \
+        fixture_class##_##test_name##_Registrar() {                   \
+            atom::test::registerTest(                                 \
+                #fixture_class "." #test_name,                        \
+                []() {                                                \
+                    fixture_class##_##test_name##_Test fixture;       \
+                    fixture.RunSetUp();                               \
+                    try {                                             \
+                        fixture.TestBody();                           \
+                    } catch (...) {                                   \
+                        fixture.RunTearDown();                        \
+                        throw;                                        \
+                    }                                                 \
+                    fixture.RunTearDown();                            \
+                },                                                    \
+                true, static_cast<double>(timeout_ms));               \
+        }                                                             \
+    } fixture_class##_##test_name##_registrar_instance;               \
     void fixture_class##_##test_name##_Test::TestBody()
 
 /**
@@ -509,64 +521,64 @@ public:
  * @param test_name The test case name
  * @param ... Tags (comma-separated strings)
  */
-#define TEST_TAGGED(suite_name, test_name, ...)                               \
-    static void suite_name##_##test_name##_TestBody();                        \
-    static struct suite_name##_##test_name##_Registrar {                      \
-        suite_name##_##test_name##_Registrar() {                              \
-            atom::test::registerTest(#suite_name "." #test_name,              \
-                                     suite_name##_##test_name##_TestBody,     \
-                                     false, 0.0, false, {},                   \
-                                     std::vector<std::string>{__VA_ARGS__});  \
-        }                                                                     \
-    } suite_name##_##test_name##_registrar_instance;                          \
+#define TEST_TAGGED(suite_name, test_name, ...)                              \
+    static void suite_name##_##test_name##_TestBody();                       \
+    static struct suite_name##_##test_name##_Registrar {                     \
+        suite_name##_##test_name##_Registrar() {                             \
+            atom::test::registerTest(#suite_name "." #test_name,             \
+                                     suite_name##_##test_name##_TestBody,    \
+                                     false, 0.0, false, {},                  \
+                                     std::vector<std::string>{__VA_ARGS__}); \
+        }                                                                    \
+    } suite_name##_##test_name##_registrar_instance;                         \
     static void suite_name##_##test_name##_TestBody()
 
 /**
  * @brief GTest-style ASSERT macros (fatal - stops test on failure)
  */
-#define ASSERT_TRUE(expr)                                                     \
-    do {                                                                      \
-        if (!(expr)) {                                                        \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_TRUE failed: " #expr);         \
-        }                                                                     \
+#define ASSERT_TRUE(expr)                                             \
+    do {                                                              \
+        if (!(expr)) {                                                \
+            throw std::runtime_error(std::string(__FILE__) + ":" +    \
+                                     std::to_string(__LINE__) +       \
+                                     ": ASSERT_TRUE failed: " #expr); \
+        }                                                             \
     } while (0)
 
-#define ASSERT_FALSE(expr)                                                    \
-    do {                                                                      \
-        if (expr) {                                                           \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_FALSE failed: " #expr);        \
-        }                                                                     \
+#define ASSERT_FALSE(expr)                                             \
+    do {                                                               \
+        if (expr) {                                                    \
+            throw std::runtime_error(std::string(__FILE__) + ":" +     \
+                                     std::to_string(__LINE__) +        \
+                                     ": ASSERT_FALSE failed: " #expr); \
+        }                                                              \
     } while (0)
 
-#define ASSERT_EQ(lhs, rhs)                                                   \
-    do {                                                                      \
-        if (!((lhs) == (rhs))) {                                              \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_EQ failed: " #lhs " != " #rhs);\
-        }                                                                     \
+#define ASSERT_EQ(lhs, rhs)                                                    \
+    do {                                                                       \
+        if (!((lhs) == (rhs))) {                                               \
+            throw std::runtime_error(std::string(__FILE__) + ":" +             \
+                                     std::to_string(__LINE__) +                \
+                                     ": ASSERT_EQ failed: " #lhs " != " #rhs); \
+        }                                                                      \
     } while (0)
 
-#define ASSERT_NE(lhs, rhs)                                                   \
-    do {                                                                      \
-        if ((lhs) == (rhs)) {                                                 \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_NE failed: " #lhs " == " #rhs);\
-        }                                                                     \
+#define ASSERT_NE(lhs, rhs)                                                    \
+    do {                                                                       \
+        if ((lhs) == (rhs)) {                                                  \
+            throw std::runtime_error(std::string(__FILE__) + ":" +             \
+                                     std::to_string(__LINE__) +                \
+                                     ": ASSERT_NE failed: " #lhs " == " #rhs); \
+        }                                                                      \
     } while (0)
 
-#define ASSERT_LT(lhs, rhs)                                                   \
-    do {                                                                      \
-        if (!((lhs) < (rhs))) {                                               \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_LT failed: " #lhs " >= " #rhs);\
-        }                                                                     \
+#define ASSERT_LT(lhs, rhs)                                                    \
+    do {                                                                       \
+        if (!((lhs) < (rhs))) {                                                \
+            throw std::runtime_error(std::string(__FILE__) + ":" +             \
+                                     std::to_string(__LINE__) +                \
+                                     ": ASSERT_LT failed: " #lhs " >= " #rhs); \
+        }                                                                      \
     } while (0)
 
 #define ASSERT_LE(lhs, rhs)                                                   \
@@ -578,13 +590,13 @@ public:
         }                                                                     \
     } while (0)
 
-#define ASSERT_GT(lhs, rhs)                                                   \
-    do {                                                                      \
-        if (!((lhs) > (rhs))) {                                               \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_GT failed: " #lhs " <= " #rhs);\
-        }                                                                     \
+#define ASSERT_GT(lhs, rhs)                                                    \
+    do {                                                                       \
+        if (!((lhs) > (rhs))) {                                                \
+            throw std::runtime_error(std::string(__FILE__) + ":" +             \
+                                     std::to_string(__LINE__) +                \
+                                     ": ASSERT_GT failed: " #lhs " <= " #rhs); \
+        }                                                                      \
     } while (0)
 
 #define ASSERT_GE(lhs, rhs)                                                   \
@@ -601,8 +613,8 @@ public:
         if (std::string(lhs) != std::string(rhs)) {                           \
             throw std::runtime_error(                                         \
                 std::string(__FILE__) + ":" + std::to_string(__LINE__) +      \
-                ": ASSERT_STREQ failed: \"" + std::string(lhs) +              \
-                "\" != \"" + std::string(rhs) + "\"");                        \
+                ": ASSERT_STREQ failed: \"" + std::string(lhs) + "\" != \"" + \
+                std::string(rhs) + "\"");                                     \
         }                                                                     \
     } while (0)
 
@@ -611,45 +623,45 @@ public:
         if (std::string(lhs) == std::string(rhs)) {                           \
             throw std::runtime_error(                                         \
                 std::string(__FILE__) + ":" + std::to_string(__LINE__) +      \
-                ": ASSERT_STRNE failed: \"" + std::string(lhs) +              \
-                "\" == \"" + std::string(rhs) + "\"");                        \
+                ": ASSERT_STRNE failed: \"" + std::string(lhs) + "\" == \"" + \
+                std::string(rhs) + "\"");                                     \
         }                                                                     \
     } while (0)
 
-#define ASSERT_NEAR(val1, val2, abs_error)                                    \
-    do {                                                                      \
-        if (std::abs((val1) - (val2)) > (abs_error)) {                        \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_NEAR failed");                 \
-        }                                                                     \
+#define ASSERT_NEAR(val1, val2, abs_error)                         \
+    do {                                                           \
+        if (std::abs((val1) - (val2)) > (abs_error)) {             \
+            throw std::runtime_error(std::string(__FILE__) + ":" + \
+                                     std::to_string(__LINE__) +    \
+                                     ": ASSERT_NEAR failed");      \
+        }                                                          \
     } while (0)
 
-#define ASSERT_THROW(statement, exception_type)                               \
-    do {                                                                      \
-        bool caught = false;                                                  \
-        try {                                                                 \
-            statement;                                                        \
-        } catch (const exception_type&) {                                     \
-            caught = true;                                                    \
-        } catch (...) {                                                       \
-        }                                                                     \
-        if (!caught) {                                                        \
-            throw std::runtime_error(                                         \
-                std::string(__FILE__) + ":" + std::to_string(__LINE__) +      \
-                ": ASSERT_THROW failed: expected " #exception_type);          \
-        }                                                                     \
+#define ASSERT_THROW(statement, exception_type)                          \
+    do {                                                                 \
+        bool caught = false;                                             \
+        try {                                                            \
+            statement;                                                   \
+        } catch (const exception_type&) {                                \
+            caught = true;                                               \
+        } catch (...) {                                                  \
+        }                                                                \
+        if (!caught) {                                                   \
+            throw std::runtime_error(                                    \
+                std::string(__FILE__) + ":" + std::to_string(__LINE__) + \
+                ": ASSERT_THROW failed: expected " #exception_type);     \
+        }                                                                \
     } while (0)
 
-#define ASSERT_NO_THROW(statement)                                            \
-    do {                                                                      \
-        try {                                                                 \
-            statement;                                                        \
-        } catch (...) {                                                       \
-            throw std::runtime_error(std::string(__FILE__) + ":" +            \
-                                     std::to_string(__LINE__) +               \
-                                     ": ASSERT_NO_THROW failed");             \
-        }                                                                     \
+#define ASSERT_NO_THROW(statement)                                 \
+    do {                                                           \
+        try {                                                      \
+            statement;                                             \
+        } catch (...) {                                            \
+            throw std::runtime_error(std::string(__FILE__) + ":" + \
+                                     std::to_string(__LINE__) +    \
+                                     ": ASSERT_NO_THROW failed");  \
+        }                                                          \
     } while (0)
 
 /**

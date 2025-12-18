@@ -65,57 +65,30 @@ set(ATOM_PACKAGE_BASENAME
 # Component Configuration
 # =============================================================================
 
-# Define available components with their dependencies
-set(ATOM_COMPONENTS
-    algorithm
-    async
-    components
-    connection
-    containers
-    error
-    image
-    io
-    log
-    memory
-    meta
-    search
-    secret
-    serial
-    sysinfo
-    system
-    type
-    utils
-    web)
+# Include module dependencies data for consistent dependency definitions
+include(${CMAKE_CURRENT_LIST_DIR}/module_dependencies.cmake)
 
-# Component dependencies mapping (aligned with module_dependencies.cmake) Core
-# modules (no dependencies)
-set(ATOM_COMPONENT_DEPS_error "")
-set(ATOM_COMPONENT_DEPS_type "")
-set(ATOM_COMPONENT_DEPS_containers "")
+# Define available components (extract names from ATOM_ALL_MODULES)
+set(ATOM_COMPONENTS)
+foreach(MODULE ${ATOM_ALL_MODULES})
+  string(REPLACE "atom-" "" MODULE_NAME ${MODULE})
+  list(APPEND ATOM_COMPONENTS ${MODULE_NAME})
+endforeach()
 
-# Low-level modules
-set(ATOM_COMPONENT_DEPS_log "error")
-set(ATOM_COMPONENT_DEPS_meta "error")
-set(ATOM_COMPONENT_DEPS_memory "error;meta;type")
-
-# Mid-level modules
-set(ATOM_COMPONENT_DEPS_utils "error;type")
-set(ATOM_COMPONENT_DEPS_algorithm "error;utils")
-set(ATOM_COMPONENT_DEPS_async "error;utils")
-set(ATOM_COMPONENT_DEPS_io "error;async")
-
-# High-level modules
-set(ATOM_COMPONENT_DEPS_sysinfo "error")
-set(ATOM_COMPONENT_DEPS_system "error;sysinfo;meta;utils")
-set(ATOM_COMPONENT_DEPS_serial "error;log")
-set(ATOM_COMPONENT_DEPS_secret "error")
-set(ATOM_COMPONENT_DEPS_search "error")
-set(ATOM_COMPONENT_DEPS_image "error;utils;io")
-
-# Application-level modules
-set(ATOM_COMPONENT_DEPS_connection "error;async")
-set(ATOM_COMPONENT_DEPS_components "error;type")
-set(ATOM_COMPONENT_DEPS_web "error;utils;io;system;type")
+# Component dependencies mapping - derive from module_dependencies.cmake Convert
+# ATOM_ATOM_xxx_DEPENDS format to ATOM_COMPONENT_DEPS_xxx format
+foreach(COMPONENT ${ATOM_COMPONENTS})
+  string(TOUPPER ${COMPONENT} COMPONENT_UPPER)
+  # Get deps from module_dependencies.cmake (ATOM_ATOM_XXX_DEPENDS)
+  set(RAW_DEPS ${ATOM_ATOM_${COMPONENT_UPPER}_DEPENDS})
+  # Convert atom-xxx to xxx
+  set(CONVERTED_DEPS "")
+  foreach(DEP ${RAW_DEPS})
+    string(REPLACE "atom-" "" DEP_NAME ${DEP})
+    list(APPEND CONVERTED_DEPS ${DEP_NAME})
+  endforeach()
+  set(ATOM_COMPONENT_DEPS_${COMPONENT} "${CONVERTED_DEPS}")
+endforeach()
 
 # Component descriptions
 set(ATOM_COMPONENT_DESC_algorithm "Algorithm utilities and data structures")

@@ -3,10 +3,10 @@
  * @brief Examples for atom::utils string utilities
  */
 
-#include "atom/utils/text/string.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
+#include "atom/utils/text/string.hpp"
 
 using namespace atom::utils;
 
@@ -19,9 +19,8 @@ void printSection(const std::string& title) {
 void demonstrateCaseConversion() {
     printSection("1. Case Conversion");
 
-    std::vector<std::string> testStrings = {
-        "HelloWorld", "myVariableName", "XMLParser", "getHTTPResponse"
-    };
+    std::vector<std::string> testStrings = {"HelloWorld", "myVariableName",
+                                            "XMLParser", "getHTTPResponse"};
 
     std::cout << "--- toUnderscore (snake_case) ---" << std::endl;
     for (const auto& str : testStrings) {
@@ -29,9 +28,8 @@ void demonstrateCaseConversion() {
     }
 
     std::cout << "\n--- toCamelCase ---" << std::endl;
-    std::vector<std::string> snakeStrings = {
-        "hello_world", "my_variable_name", "xml_parser", "get_http_response"
-    };
+    std::vector<std::string> snakeStrings = {"hello_world", "my_variable_name",
+                                             "xml_parser", "get_http_response"};
     for (const auto& str : snakeStrings) {
         std::cout << "  " << str << " -> " << toCamelCase(str) << std::endl;
     }
@@ -39,7 +37,8 @@ void demonstrateCaseConversion() {
     std::cout << "\n--- hasUppercase ---" << std::endl;
     std::vector<std::string> caseTests = {"hello", "Hello", "HELLO", "heLLo"};
     for (const auto& str : caseTests) {
-        std::cout << "  \"" << str << "\": " << (hasUppercase(str) ? "Yes" : "No") << std::endl;
+        std::cout << "  \"" << str
+                  << "\": " << (hasUppercase(str) ? "Yes" : "No") << std::endl;
     }
 }
 
@@ -47,12 +46,8 @@ void demonstrateURLEncoding() {
     printSection("2. URL Encoding/Decoding");
 
     std::vector<std::string> testStrings = {
-        "Hello World",
-        "name=John&age=30",
-        "path/to/file.txt",
-        "special chars: @#$%",
-        "unicode: 你好"
-    };
+        "Hello World", "name=John&age=30", "path/to/file.txt",
+        "special chars: @#$%", "unicode: 你好"};
 
     std::cout << "--- urlEncode ---" << std::endl;
     for (const auto& str : testStrings) {
@@ -63,10 +58,7 @@ void demonstrateURLEncoding() {
 
     std::cout << "\n--- urlDecode ---" << std::endl;
     std::vector<std::string> encodedStrings = {
-        "Hello%20World",
-        "name%3DJohn%26age%3D30",
-        "path%2Fto%2Ffile.txt"
-    };
+        "Hello%20World", "name%3DJohn%26age%3D30", "path%2Fto%2Ffile.txt"};
     for (const auto& str : encodedStrings) {
         std::string decoded = urlDecode(str);
         std::cout << "  \"" << str << "\"" << std::endl;
@@ -83,15 +75,17 @@ void demonstrateStringChecks() {
     std::cout << "\n--- startsWith ---" << std::endl;
     std::vector<std::string> prefixes = {"Hello", "World", "He", "hello"};
     for (const auto& prefix : prefixes) {
-        std::cout << "  startsWith(\"" << prefix << "\"): "
-                  << (startsWith(testStr, prefix) ? "Yes" : "No") << std::endl;
+        std::cout << "  startsWith(\"" << prefix
+                  << "\"): " << (startsWith(testStr, prefix) ? "Yes" : "No")
+                  << std::endl;
     }
 
     std::cout << "\n--- endsWith ---" << std::endl;
     std::vector<std::string> suffixes = {"World!", "!", "world!", "Hello"};
     for (const auto& suffix : suffixes) {
-        std::cout << "  endsWith(\"" << suffix << "\"): "
-                  << (endsWith(testStr, suffix) ? "Yes" : "No") << std::endl;
+        std::cout << "  endsWith(\"" << suffix
+                  << "\"): " << (endsWith(testStr, suffix) ? "Yes" : "No")
+                  << std::endl;
     }
 }
 
@@ -104,7 +98,8 @@ void demonstrateSplitJoin() {
     auto parts = splitString(csv, ',');
     std::cout << "  Split by ',': [";
     for (size_t i = 0; i < parts.size(); ++i) {
-        if (i > 0) std::cout << ", ";
+        if (i > 0)
+            std::cout << ", ";
         std::cout << "\"" << parts[i] << "\"";
     }
     std::cout << "]" << std::endl;
@@ -114,7 +109,8 @@ void demonstrateSplitJoin() {
     auto pathParts = splitString(path, '/');
     std::cout << "  Split by '/': [";
     for (size_t i = 0; i < pathParts.size(); ++i) {
-        if (i > 0) std::cout << ", ";
+        if (i > 0)
+            std::cout << ", ";
         std::cout << "\"" << pathParts[i] << "\"";
     }
     std::cout << "]" << std::endl;
@@ -139,42 +135,40 @@ void demonstrateReplace() {
     std::cout << "  Original: \"" << text << "\"" << std::endl;
 
     std::string replaced = replaceString(text, "Hello", "Hi");
-    std::cout << "  Replace 'Hello' with 'Hi': \"" << replaced << "\"" << std::endl;
+    std::cout << "  Replace 'Hello' with 'Hi': \"" << replaced << "\""
+              << std::endl;
 
     replaced = replaceString(text, "World", "Earth");
-    std::cout << "  Replace 'World' with 'Earth': \"" << replaced << "\"" << std::endl;
+    std::cout << "  Replace 'World' with 'Earth': \"" << replaced << "\""
+              << std::endl;
 
     std::cout << "\n--- replaceStrings (multiple) ---" << std::endl;
     std::vector<std::pair<std::string_view, std::string_view>> replacements = {
-        {"Hello", "Hi"},
-        {"World", "Earth"},
-        {"Universe", "Galaxy"}
-    };
+        {"Hello", "Hi"}, {"World", "Earth"}, {"Universe", "Galaxy"}};
     std::string multiReplaced = replaceStrings(text, replacements);
-    std::cout << "  Multiple replacements: \"" << multiReplaced << "\"" << std::endl;
+    std::cout << "  Multiple replacements: \"" << multiReplaced << "\""
+              << std::endl;
 }
 
 void demonstrateTrim() {
     printSection("6. Trimming");
 
-    std::vector<std::string> testStrings = {
-        "  hello  ",
-        "\t\ttabbed\t\t",
-        "\n\nnewlines\n\n",
-        "  mixed \t\n ",
-        "no_whitespace"
-    };
+    std::vector<std::string> testStrings = {"  hello  ", "\t\ttabbed\t\t",
+                                            "\n\nnewlines\n\n", "  mixed \t\n ",
+                                            "no_whitespace"};
 
     std::cout << "--- trim ---" << std::endl;
     for (const auto& str : testStrings) {
         std::string trimmed = trim(str);
-        std::cout << "  \"" << str << "\" -> \"" << trimmed << "\"" << std::endl;
+        std::cout << "  \"" << str << "\" -> \"" << trimmed << "\""
+                  << std::endl;
     }
 
     std::cout << "\n--- Custom trim symbols ---" << std::endl;
     std::string custom = "###hello###";
     std::string trimmedCustom = trim(custom, "#");
-    std::cout << "  \"" << custom << "\" (trim '#') -> \"" << trimmedCustom << "\"" << std::endl;
+    std::cout << "  \"" << custom << "\" (trim '#') -> \"" << trimmedCustom
+              << "\"" << std::endl;
 }
 
 void demonstrateExplode() {
@@ -187,7 +181,8 @@ void demonstrateExplode() {
     auto parts = explode(data, ':');
     std::cout << "  Explode by ':': [";
     for (size_t i = 0; i < parts.size(); ++i) {
-        if (i > 0) std::cout << ", ";
+        if (i > 0)
+            std::cout << ", ";
         std::cout << "\"" << parts[i] << "\"";
     }
     std::cout << "]" << std::endl;

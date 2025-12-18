@@ -11,6 +11,11 @@ set_project("atom-log")
 set_version("1.0.0")
 set_license("GPL3")
 
+local use_system_packages = has_config("use_system_packages")
+
+add_requires("spdlog", {system = use_system_packages})
+add_requires("fmt", {system = use_system_packages})
+
 -- Define source files
 local sources = {
     "logger.cpp",
@@ -56,10 +61,13 @@ target("atom-log")
     add_packages("spdlog", "fmt")
 
     -- Platform-specific settings
-    if is_plat("windows") then
+    if is_plat("windows", "mingw") then
         add_syslinks("dbghelp")
     else
-        add_syslinks("dl", "pthread")
+        add_syslinks("dl")
+        if is_plat("linux") then
+            add_syslinks("pthread")
+        end
     end
 
     -- Set output directories

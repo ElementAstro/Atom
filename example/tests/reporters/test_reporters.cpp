@@ -31,10 +31,15 @@ TEST(ReporterTests, ConsoleReporterGeneratesOutput) {
 
     stats.results.push_back({"Test1", true, false, "", 10.5, false});
     stats.results.push_back({"Test2", true, false, "", 20.3, false});
-    stats.results.push_back({"Test3", false, false, "Assertion failed", 5.0, false});
+    stats.results.push_back(
+        {"Test3", false, false, "Assertion failed", 5.0, false});
 
-    std::string report = reporter->generateReport(stats);
-    expect_not_empty(report);
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, "");
 }
 
 // ============================================================================
@@ -58,11 +63,26 @@ TEST(ReporterTests, JsonReporterGeneratesValidJson) {
     stats.results.push_back({"JsonTest1", true, false, "", 15.0, false});
     stats.results.push_back({"JsonTest2", false, false, "Error", 10.0, false});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
 
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
+
+    auto outFile = outDir / "test_report.json";
+    expect_true(std::filesystem::exists(outFile));
+
+    std::ifstream file(outFile);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string report = buffer.str();
     expect_not_empty(report);
-    expect_contains(report, "totalTests");
-    expect_contains(report, "passedAsserts");
+    expect_contains(report, "total_tests");
+    expect_contains(report, "passed_asserts");
     expect_contains(report, "results");
 }
 
@@ -88,8 +108,23 @@ TEST(ReporterTests, XmlReporterGeneratesValidXml) {
     stats.results.push_back({"XmlTest2", true, false, "", 8.0, false});
     stats.results.push_back({"XmlTest3", false, false, "Failed", 3.0, false});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
 
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
+
+    auto outFile = outDir / "test_report.xml";
+    expect_true(std::filesystem::exists(outFile));
+
+    std::ifstream file(outFile);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string report = buffer.str();
     expect_not_empty(report);
     expect_contains(report, "<?xml");
     expect_contains(report, "<testsuites>");
@@ -119,11 +154,26 @@ TEST(ReporterTests, HtmlReporterGeneratesValidHtml) {
     stats.results.push_back({"HtmlTest3", true, false, "", 15.0, false});
     stats.results.push_back({"HtmlTest4", false, false, "Error", 5.0, false});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
 
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
+
+    auto outFile = outDir / "test_report.html";
+    expect_true(std::filesystem::exists(outFile));
+
+    std::ifstream file(outFile);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string report = buffer.str();
     expect_not_empty(report);
     expect_contains(report, "<!DOCTYPE html>");
-    expect_contains(report, "<html>");
+    expect_contains(report, "<html");
     expect_contains(report, "</html>");
 }
 
@@ -152,14 +202,30 @@ TEST(ReporterTests, MarkdownReporterGeneratesValidMarkdown) {
     stats.results.push_back({"MdTest2", true, false, "", 20.0, false});
     stats.results.push_back({"MdTest3", true, false, "", 15.0, false});
     stats.results.push_back({"MdTest4", true, false, "", 8.0, false});
-    stats.results.push_back({"MdTest5", false, false, "Assertion failed", 5.0, false});
+    stats.results.push_back(
+        {"MdTest5", false, false, "Assertion failed", 5.0, false});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
 
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
+
+    auto outFile = outDir / "test_report.md";
+    expect_true(std::filesystem::exists(outFile));
+
+    std::ifstream file(outFile);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string report = buffer.str();
     expect_not_empty(report);
-    expect_contains(report, "# Test Report");
+    expect_contains(report, "# Atom Test Report");
     expect_contains(report, "## Summary");
-    expect_contains(report, "|");  // Table format
+    expect_contains(report, "|");
 }
 
 // ============================================================================
@@ -202,11 +268,24 @@ TEST(ReporterTests, ReporterHandlesSkippedTests) {
     stats.results.push_back({"Test2", true, false, "", 15.0, false});
     stats.results.push_back({"Test3", false, false, "Failed", 5.0, false});
     stats.results.push_back({"Test4", false, true, "Skipped", 0.0, false});
-    stats.results.push_back({"Test5", false, true, "Platform not supported", 0.0, false});
+    stats.results.push_back(
+        {"Test5", false, true, "Platform not supported", 0.0, false});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
 
-    expect_contains(report, "skippedTests");
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
+
+    std::ifstream file(outDir / "test_report.json");
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string report = buffer.str();
+    expect_contains(report, "skipped_tests");
 }
 
 // ============================================================================
@@ -226,8 +305,20 @@ TEST(ReporterTests, ReporterHandlesTimedOutTests) {
     stats.results.push_back({"Test2", false, false, "Timed out", 5000.0, true});
     stats.results.push_back({"Test3", false, false, "Timed out", 3000.0, true});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
 
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
+
+    std::ifstream file(outDir / "test_report.json");
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string report = buffer.str();
     expect_not_empty(report);
 }
 
@@ -244,18 +335,20 @@ TEST(ReporterTests, ReporterLifecycle) {
     stats.failedAsserts = 0;
     stats.skippedTests = 0;
 
-    reporter->onTestRunStart();
+    reporter->onTestRunStart(stats.totalTests);
 
-    reporter->onTestStart("Test1");
-    reporter->onTestEnd("Test1", true, 10.0);
+    TestCase test1{"Test1", []() {}, false, false, 0.0, {}, {}};
+    TestResult result1{"Test1", true, false, "", 10.0, false};
+    reporter->onTestStart(test1);
+    reporter->onTestEnd(result1);
 
-    reporter->onTestStart("Test2");
-    reporter->onTestEnd("Test2", true, 15.0);
+    TestCase test2{"Test2", []() {}, false, false, 0.0, {}, {}};
+    TestResult result2{"Test2", true, false, "", 15.0, false};
+    reporter->onTestStart(test2);
+    reporter->onTestEnd(result2);
 
     reporter->onTestRunEnd(stats);
-
-    std::string report = reporter->generateReport(stats);
-    expect_not_empty(report);
+    reporter->generateReport(stats, "");
 }
 
 // ============================================================================
@@ -274,23 +367,19 @@ TEST(ReporterTests, WriteReportToFile) {
     stats.results.push_back({"FileTest1", true, false, "", 10.0, false});
     stats.results.push_back({"FileTest2", true, false, "", 15.0, false});
 
-    std::string report = reporter->generateReport(stats);
+    auto outDir = std::filesystem::temp_directory_path() / "atom_test_reports";
+    std::filesystem::create_directories(outDir);
 
-    // Write to temp file
-    std::filesystem::path tempPath =
-        std::filesystem::temp_directory_path() / "test_report.json";
+    reporter->onTestRunStart(stats.totalTests);
+    for (const auto& result : stats.results) {
+        reporter->onTestEnd(result);
+    }
+    reporter->onTestRunEnd(stats);
+    reporter->generateReport(stats, outDir.string());
 
-    std::ofstream file(tempPath);
-    expect_true(file.is_open());
-    file << report;
-    file.close();
-
-    // Verify file exists and has content
-    expect_true(std::filesystem::exists(tempPath));
-    expect_gt(std::filesystem::file_size(tempPath), 0);
-
-    // Cleanup
-    std::filesystem::remove(tempPath);
+    auto outFile = outDir / "test_report.json";
+    expect_true(std::filesystem::exists(outFile));
+    expect_gt(std::filesystem::file_size(outFile), 0);
 }
 
 // ============================================================================
@@ -308,12 +397,22 @@ TEST(ReporterTests, GenerateMultipleFormats) {
     stats.results.push_back({"MultiTest2", true, false, "", 15.0, false});
     stats.results.push_back({"MultiTest3", false, false, "Error", 5.0, false});
 
-    std::vector<std::string> formats = {"console", "json", "xml", "html", "markdown"};
+    std::vector<std::string> formats = {"console", "json", "xml", "html",
+                                        "markdown"};
 
     for (const auto& format : formats) {
         auto reporter = createReporter(format);
-        std::string report = reporter->generateReport(stats);
-        expect_not_empty(report);
+
+        auto outDir =
+            std::filesystem::temp_directory_path() / "atom_test_reports_multi";
+        std::filesystem::create_directories(outDir);
+
+        reporter->onTestRunStart(stats.totalTests);
+        for (const auto& result : stats.results) {
+            reporter->onTestEnd(result);
+        }
+        reporter->onTestRunEnd(stats);
+        reporter->generateReport(stats, outDir.string());
     }
 }
 
@@ -321,6 +420,4 @@ TEST(ReporterTests, GenerateMultipleFormats) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

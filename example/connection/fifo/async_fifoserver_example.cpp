@@ -86,8 +86,7 @@ void ensureFifoExists(const std::string& path) {
 #ifndef _WIN32
     unlink(path.c_str());
     if (mkfifo(path.c_str(), 0666) != 0) {
-        Logger::log(Logger::WARNING, "Setup",
-                    "Could not create FIFO: " + path);
+        Logger::log(Logger::WARNING, "Setup", "Could not create FIFO: " + path);
     }
 #endif
 }
@@ -96,7 +95,8 @@ void ensureFifoExists(const std::string& path) {
 
 // Example 1: Basic async server usage
 void basicAsyncServerExample() {
-    Logger::log(Logger::INFO, "Example1", "=== Basic Async FifoServer Usage ===");
+    Logger::log(Logger::INFO, "Example1",
+                "=== Basic Async FifoServer Usage ===");
 
     const std::string fifoPath = createPipePath("async_server_basic");
     ensureFifoExists(fifoPath);
@@ -107,35 +107,38 @@ void basicAsyncServerExample() {
 
         Logger::log(Logger::INFO, "Example1",
                     "Created async FifoServer, isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
         // Start the server
         server.start();
         Logger::log(Logger::SUCCESS, "Example1",
                     "Server started, isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
         // Let server run for a while
-        Logger::log(Logger::INFO, "Example1", "Server running for 2 seconds...");
+        Logger::log(Logger::INFO, "Example1",
+                    "Server running for 2 seconds...");
         std::this_thread::sleep_for(std::chrono::seconds(2));
 
         // Stop the server
         server.stop();
         Logger::log(Logger::INFO, "Example1",
                     "Server stopped, isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
     } catch (const std::exception& e) {
         Logger::log(Logger::ERR, "Example1",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example1", "Basic async server example completed\n");
+    Logger::log(Logger::INFO, "Example1",
+                "Basic async server example completed\n");
 }
 
 // Example 2: Server lifecycle management
 void lifecycleManagementExample() {
-    Logger::log(Logger::INFO, "Example2", "=== Server Lifecycle Management ===");
+    Logger::log(Logger::INFO, "Example2",
+                "=== Server Lifecycle Management ===");
 
     const std::string fifoPath = createPipePath("async_server_lifecycle");
     ensureFifoExists(fifoPath);
@@ -152,7 +155,7 @@ void lifecycleManagementExample() {
             server.start();
             Logger::log(Logger::SUCCESS, "Example2",
                         "Started - isRunning: " +
-                        std::string(server.isRunning() ? "yes" : "no"));
+                            std::string(server.isRunning() ? "yes" : "no"));
 
             // Run for a short time
             std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -161,7 +164,7 @@ void lifecycleManagementExample() {
             server.stop();
             Logger::log(Logger::INFO, "Example2",
                         "Stopped - isRunning: " +
-                        std::string(server.isRunning() ? "yes" : "no"));
+                            std::string(server.isRunning() ? "yes" : "no"));
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
         }
@@ -171,7 +174,8 @@ void lifecycleManagementExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example2", "Lifecycle management example completed\n");
+    Logger::log(Logger::INFO, "Example2",
+                "Lifecycle management example completed\n");
 }
 
 // Example 3: Running state checks
@@ -187,7 +191,7 @@ void runningStateExample() {
         // Check state before start
         Logger::log(Logger::INFO, "Example3",
                     "Before start - isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
         server.start();
 
@@ -195,7 +199,7 @@ void runningStateExample() {
         for (int i = 0; i < 5; ++i) {
             Logger::log(Logger::INFO, "Example3",
                         "Check " + std::to_string(i + 1) + " - isRunning: " +
-                        std::string(server.isRunning() ? "yes" : "no"));
+                            std::string(server.isRunning() ? "yes" : "no"));
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
         }
 
@@ -204,7 +208,7 @@ void runningStateExample() {
         // Check state after stop
         Logger::log(Logger::INFO, "Example3",
                     "After stop - isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
     } catch (const std::exception& e) {
         Logger::log(Logger::ERR, "Example3",
@@ -219,15 +223,18 @@ void multipleServersExample() {
     Logger::log(Logger::INFO, "Example4", "=== Multiple Servers ===");
 
     try {
-        std::vector<std::unique_ptr<atom::async::connection::FifoServer>> servers;
+        std::vector<std::unique_ptr<atom::async::connection::FifoServer>>
+            servers;
         std::vector<std::string> paths;
 
         // Create multiple servers
         for (int i = 0; i < 3; ++i) {
-            std::string path = createPipePath("async_server_multi_" + std::to_string(i));
+            std::string path =
+                createPipePath("async_server_multi_" + std::to_string(i));
             ensureFifoExists(path);
             paths.push_back(path);
-            servers.push_back(std::make_unique<atom::async::connection::FifoServer>(path));
+            servers.push_back(
+                std::make_unique<atom::async::connection::FifoServer>(path));
         }
 
         // Start all servers
@@ -241,9 +248,10 @@ void multipleServersExample() {
         // Check all running
         Logger::log(Logger::INFO, "Example4", "Checking server states...");
         for (size_t i = 0; i < servers.size(); ++i) {
-            Logger::log(Logger::INFO, "Example4",
-                        "Server " + std::to_string(i) + " isRunning: " +
-                        std::string(servers[i]->isRunning() ? "yes" : "no"));
+            Logger::log(
+                Logger::INFO, "Example4",
+                "Server " + std::to_string(i) + " isRunning: " +
+                    std::string(servers[i]->isRunning() ? "yes" : "no"));
         }
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -261,12 +269,14 @@ void multipleServersExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example4", "Multiple servers example completed\n");
+    Logger::log(Logger::INFO, "Example4",
+                "Multiple servers example completed\n");
 }
 
 // Example 5: Long-running server simulation
 void longRunningServerExample() {
-    Logger::log(Logger::INFO, "Example5", "=== Long-Running Server Simulation ===");
+    Logger::log(Logger::INFO, "Example5",
+                "=== Long-Running Server Simulation ===");
 
     const std::string fifoPath = createPipePath("async_server_longrun");
     ensureFifoExists(fifoPath);
@@ -281,14 +291,17 @@ void longRunningServerExample() {
         auto startTime = std::chrono::steady_clock::now();
         int checkCount = 0;
 
-        while (std::chrono::steady_clock::now() - startTime < std::chrono::seconds(3)) {
+        while (std::chrono::steady_clock::now() - startTime <
+               std::chrono::seconds(3)) {
             if (server.isRunning()) {
                 checkCount++;
                 if (checkCount % 5 == 0) {
-                    auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-                        std::chrono::steady_clock::now() - startTime);
+                    auto elapsed =
+                        std::chrono::duration_cast<std::chrono::milliseconds>(
+                            std::chrono::steady_clock::now() - startTime);
                     Logger::log(Logger::DEBUG, "Example5",
-                                "Server healthy at " + std::to_string(elapsed.count()) + "ms");
+                                "Server healthy at " +
+                                    std::to_string(elapsed.count()) + "ms");
                 }
             }
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -296,20 +309,25 @@ void longRunningServerExample() {
 
         server.stop();
         Logger::log(Logger::INFO, "Example5",
-                    "Server stopped after " + std::to_string(checkCount) + " health checks");
+                    "Server stopped after " + std::to_string(checkCount) +
+                        " health checks");
 
     } catch (const std::exception& e) {
         Logger::log(Logger::ERR, "Example5",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example5", "Long-running server example completed\n");
+    Logger::log(Logger::INFO, "Example5",
+                "Long-running server example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::INFO, "Main", "==========================================");
-    Logger::log(Logger::INFO, "Main", "  Async FifoServer Comprehensive Examples");
-    Logger::log(Logger::INFO, "Main", "==========================================\n");
+    Logger::log(Logger::INFO, "Main",
+                "==========================================");
+    Logger::log(Logger::INFO, "Main",
+                "  Async FifoServer Comprehensive Examples");
+    Logger::log(Logger::INFO, "Main",
+                "==========================================\n");
 
     // Run all examples
     basicAsyncServerExample();
@@ -318,9 +336,12 @@ int main() {
     multipleServersExample();
     longRunningServerExample();
 
-    Logger::log(Logger::SUCCESS, "Main", "==========================================");
-    Logger::log(Logger::SUCCESS, "Main", "  All async FifoServer examples completed!");
-    Logger::log(Logger::SUCCESS, "Main", "==========================================");
+    Logger::log(Logger::SUCCESS, "Main",
+                "==========================================");
+    Logger::log(Logger::SUCCESS, "Main",
+                "  All async FifoServer examples completed!");
+    Logger::log(Logger::SUCCESS, "Main",
+                "==========================================");
 
     return 0;
 }

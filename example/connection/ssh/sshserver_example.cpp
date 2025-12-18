@@ -101,7 +101,7 @@ void basicServerExample() {
         server.start();
         Logger::log(Logger::LOG_SUCCESS, "Example1",
                     "Server started, isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
         // Let it run briefly
         std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -115,7 +115,8 @@ void basicServerExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1", "Basic server example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Basic server example completed\n");
 }
 
 // Example 2: Host key configuration
@@ -144,7 +145,8 @@ void hostKeyExample() {
 
         server.setPort(2223);
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example2", "Server started with custom host key");
+        Logger::log(Logger::LOG_SUCCESS, "Example2",
+                    "Server started with custom host key");
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
         server.stop();
@@ -163,7 +165,8 @@ void hostKeyExample() {
 
 // Example 3: Authentication configuration
 void authenticationExample() {
-    Logger::log(Logger::LOG_INFO, "Example3", "=== Authentication Configuration ===");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "=== Authentication Configuration ===");
 
     try {
         std::filesystem::path configPath = "/etc/ssh/sshd_config";
@@ -171,15 +174,18 @@ void authenticationExample() {
 
         // Password authentication
         server.setPasswordAuthentication(true);
-        Logger::log(Logger::LOG_INFO, "Example3", "Password authentication: enabled");
+        Logger::log(Logger::LOG_INFO, "Example3",
+                    "Password authentication: enabled");
 
         // Public key authentication
         server.setPublicKeyAuthentication(true);
-        Logger::log(Logger::LOG_INFO, "Example3", "Public key authentication: enabled");
+        Logger::log(Logger::LOG_INFO, "Example3",
+                    "Public key authentication: enabled");
 
         // Keyboard-interactive authentication
         server.setKeyboardInteractiveAuthentication(false);
-        Logger::log(Logger::LOG_INFO, "Example3", "Keyboard-interactive: disabled");
+        Logger::log(Logger::LOG_INFO, "Example3",
+                    "Keyboard-interactive: disabled");
 
         // Root login
         server.allowRootLogin(false);
@@ -196,11 +202,13 @@ void authenticationExample() {
 
         // Login grace time
         server.setLoginGraceTime(std::chrono::seconds(60));
-        Logger::log(Logger::LOG_INFO, "Example3", "Login grace time: 60 seconds");
+        Logger::log(Logger::LOG_INFO, "Example3",
+                    "Login grace time: 60 seconds");
 
         server.setPort(2224);
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example3", "Server started with auth config");
+        Logger::log(Logger::LOG_SUCCESS, "Example3",
+                    "Server started with auth config");
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
         server.stop();
@@ -210,7 +218,8 @@ void authenticationExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3", "Authentication example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "Authentication example completed\n");
 }
 
 // Example 4: IP filtering
@@ -233,12 +242,8 @@ void ipFilteringExample() {
         Logger::log(Logger::LOG_INFO, "Example4", "Added IPs to blacklist");
 
         // Check if IP is allowed
-        std::vector<std::string> testIPs = {
-            "192.168.1.50",
-            "192.168.1.100",
-            "10.0.0.1",
-            "172.16.0.1"
-        };
+        std::vector<std::string> testIPs = {"192.168.1.50", "192.168.1.100",
+                                            "10.0.0.1", "172.16.0.1"};
 
         for (const auto& ip : testIPs) {
             bool allowed = server.isIpAllowed(ip);
@@ -249,24 +254,28 @@ void ipFilteringExample() {
 
         // Remove from blacklist
         server.removeFromBlacklist("192.168.1.100");
-        Logger::log(Logger::LOG_INFO, "Example4", "Removed 192.168.1.100 from blacklist");
+        Logger::log(Logger::LOG_INFO, "Example4",
+                    "Removed 192.168.1.100 from blacklist");
 
         // Clear lists
         server.clearWhitelist();
         server.clearBlacklist();
-        Logger::log(Logger::LOG_INFO, "Example4", "Cleared whitelist and blacklist");
+        Logger::log(Logger::LOG_INFO, "Example4",
+                    "Cleared whitelist and blacklist");
 
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_ERR, "Example4",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example4", "IP filtering example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "IP filtering example completed\n");
 }
 
 // Example 5: Subsystem configuration
 void subsystemExample() {
-    Logger::log(Logger::LOG_INFO, "Example5", "=== Subsystem Configuration ===");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "=== Subsystem Configuration ===");
 
     try {
         std::filesystem::path configPath = "/etc/ssh/sshd_config";
@@ -286,7 +295,8 @@ void subsystemExample() {
 
         server.setPort(2225);
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example5", "Server started with subsystems");
+        Logger::log(Logger::LOG_SUCCESS, "Example5",
+                    "Server started with subsystems");
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
         server.stop();
@@ -308,15 +318,16 @@ void callbacksExample() {
         atom::connection::SshServer server(configPath);
 
         // Set connection callback
-        server.setConnectionCallback([](const std::string& clientIp, bool connected) {
-            if (connected) {
-                Logger::log(Logger::LOG_SUCCESS, "Callback",
-                            "Client connected: " + clientIp);
-            } else {
-                Logger::log(Logger::LOG_INFO, "Callback",
-                            "Client disconnected: " + clientIp);
-            }
-        });
+        server.setConnectionCallback(
+            [](const std::string& clientIp, bool connected) {
+                if (connected) {
+                    Logger::log(Logger::LOG_SUCCESS, "Callback",
+                                "Client connected: " + clientIp);
+                } else {
+                    Logger::log(Logger::LOG_INFO, "Callback",
+                                "Client disconnected: " + clientIp);
+                }
+            });
 
         // Set authentication failure callback
         server.setAuthFailureCallback([](const std::string& username,
@@ -324,15 +335,15 @@ void callbacksExample() {
                                          const std::string& method) {
             Logger::log(Logger::LOG_WARNING, "AuthFail",
                         "Auth failed - User: " + username +
-                        ", IP: " + clientIp +
-                        ", Method: " + method);
+                            ", IP: " + clientIp + ", Method: " + method);
         });
 
         Logger::log(Logger::LOG_INFO, "Example6", "Callbacks registered");
 
         server.setPort(2226);
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example6", "Server started with callbacks");
+        Logger::log(Logger::LOG_SUCCESS, "Example6",
+                    "Server started with callbacks");
 
         std::this_thread::sleep_for(std::chrono::seconds(2));
         server.stop();
@@ -355,38 +366,28 @@ void securitySettingsExample() {
 
         // Set ciphers
         std::vector<std::string> ciphers = {
-            "aes256-gcm@openssh.com",
-            "aes128-gcm@openssh.com",
-            "aes256-ctr",
-            "aes192-ctr",
-            "aes128-ctr"
-        };
+            "aes256-gcm@openssh.com", "aes128-gcm@openssh.com", "aes256-ctr",
+            "aes192-ctr", "aes128-ctr"};
         server.setCiphers(ciphers);
         Logger::log(Logger::LOG_INFO, "Example7",
                     "Set " + std::to_string(ciphers.size()) + " ciphers");
 
         // Set MACs
-        std::vector<std::string> macs = {
-            "hmac-sha2-512-etm@openssh.com",
-            "hmac-sha2-256-etm@openssh.com",
-            "hmac-sha2-512",
-            "hmac-sha2-256"
-        };
+        std::vector<std::string> macs = {"hmac-sha2-512-etm@openssh.com",
+                                         "hmac-sha2-256-etm@openssh.com",
+                                         "hmac-sha2-512", "hmac-sha2-256"};
         server.setMACs(macs);
         Logger::log(Logger::LOG_INFO, "Example7",
                     "Set " + std::to_string(macs.size()) + " MACs");
 
         // Set key exchange algorithms
         std::vector<std::string> kexAlgorithms = {
-            "curve25519-sha256",
-            "curve25519-sha256@libssh.org",
-            "ecdh-sha2-nistp521",
-            "ecdh-sha2-nistp384",
-            "ecdh-sha2-nistp256"
-        };
+            "curve25519-sha256", "curve25519-sha256@libssh.org",
+            "ecdh-sha2-nistp521", "ecdh-sha2-nistp384", "ecdh-sha2-nistp256"};
         server.setKexAlgorithms(kexAlgorithms);
-        Logger::log(Logger::LOG_INFO, "Example7",
-                    "Set " + std::to_string(kexAlgorithms.size()) + " KEX algorithms");
+        Logger::log(
+            Logger::LOG_INFO, "Example7",
+            "Set " + std::to_string(kexAlgorithms.size()) + " KEX algorithms");
 
         // Strict modes
         server.setStrictModes(true);
@@ -406,7 +407,8 @@ void securitySettingsExample() {
 
         server.setPort(2227);
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example7", "Server started with security settings");
+        Logger::log(Logger::LOG_SUCCESS, "Example7",
+                    "Server started with security settings");
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
         server.stop();
@@ -416,7 +418,8 @@ void securitySettingsExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example7", "Security settings example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example7",
+                "Security settings example completed\n");
 }
 
 // Example 8: Logging configuration
@@ -437,21 +440,25 @@ void loggingExample() {
 
         // Set log file
         server.setLogFile("/tmp/ssh_server_example.log");
-        Logger::log(Logger::LOG_INFO, "Example8", "Log file: /tmp/ssh_server_example.log");
+        Logger::log(Logger::LOG_INFO, "Example8",
+                    "Log file: /tmp/ssh_server_example.log");
 
         server.setPort(2228);
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example8", "Server started with logging");
+        Logger::log(Logger::LOG_SUCCESS, "Example8",
+                    "Server started with logging");
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         // Get statistics
         auto stats = server.getStatistics();
         Logger::log(Logger::LOG_INFO, "Example8", "=== Server Statistics ===");
-        Logger::log(Logger::LOG_INFO, "Example8",
-                    "Total connections: " + std::to_string(stats.total_connections));
-        Logger::log(Logger::LOG_INFO, "Example8",
-                    "Active connections: " + std::to_string(stats.active_connections));
+        Logger::log(
+            Logger::LOG_INFO, "Example8",
+            "Total connections: " + std::to_string(stats.total_connections));
+        Logger::log(
+            Logger::LOG_INFO, "Example8",
+            "Active connections: " + std::to_string(stats.active_connections));
         Logger::log(Logger::LOG_INFO, "Example8",
                     "Auth failures: " + std::to_string(stats.auth_failures));
         Logger::log(Logger::LOG_INFO, "Example8",
@@ -496,7 +503,8 @@ void bannerExample() {
 
         server.setPort(2229);
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example9", "Server started with banner");
+        Logger::log(Logger::LOG_SUCCESS, "Example9",
+                    "Server started with banner");
 
         std::this_thread::sleep_for(std::chrono::seconds(1));
         server.stop();
@@ -511,7 +519,8 @@ void bannerExample() {
 
 // Example 10: Complete server configuration
 void completeConfigExample() {
-    Logger::log(Logger::LOG_INFO, "Example10", "=== Complete Server Configuration ===");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "=== Complete Server Configuration ===");
 
     try {
         std::filesystem::path configPath = "/etc/ssh/sshd_config";
@@ -546,15 +555,18 @@ void completeConfigExample() {
         // Banner
         server.setBanner("Welcome to the secure SSH server!\n");
 
-        Logger::log(Logger::LOG_INFO, "Example10", "Complete configuration applied");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Complete configuration applied");
 
         // Start server
         server.start();
-        Logger::log(Logger::LOG_SUCCESS, "Example10",
-                    "Server started on port " + std::to_string(server.getPort()));
+        Logger::log(
+            Logger::LOG_SUCCESS, "Example10",
+            "Server started on port " + std::to_string(server.getPort()));
 
         // Run for a while
-        Logger::log(Logger::LOG_INFO, "Example10", "Server running for 5 seconds...");
+        Logger::log(Logger::LOG_INFO, "Example10",
+                    "Server running for 5 seconds...");
         for (int i = 0; i < 5; ++i) {
             std::this_thread::sleep_for(std::chrono::seconds(1));
             Logger::log(Logger::LOG_DEBUG, "Example10",
@@ -564,24 +576,29 @@ void completeConfigExample() {
         // Get final statistics
         auto stats = server.getStatistics();
         Logger::log(Logger::LOG_INFO, "Example10", "Final stats:");
-        Logger::log(Logger::LOG_INFO, "Example10",
-                    "  Total connections: " + std::to_string(stats.total_connections));
+        Logger::log(
+            Logger::LOG_INFO, "Example10",
+            "  Total connections: " + std::to_string(stats.total_connections));
 
         server.stop();
-        Logger::log(Logger::LOG_SUCCESS, "Example10", "Server stopped gracefully");
+        Logger::log(Logger::LOG_SUCCESS, "Example10",
+                    "Server stopped gracefully");
 
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_ERR, "Example10",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example10", "Complete config example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example10",
+                "Complete config example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_INFO, "Main", "  SshServer Comprehensive Examples");
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_WARNING, "Main",
                 "Note: Requires root/admin privileges and libssh library");
     Logger::log(Logger::LOG_INFO, "Main", "");
@@ -598,9 +615,12 @@ int main() {
     bannerExample();
     completeConfigExample();
 
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "  All SshServer examples completed!");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "  All SshServer examples completed!");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
 
     return 0;
 }
@@ -611,8 +631,10 @@ int main() {
     std::cout << "  SshServer Example" << std::endl;
     std::cout << "========================================" << std::endl;
     std::cout << std::endl;
-    std::cout << "This example requires libssh library to be available." << std::endl;
-    std::cout << "Please install libssh and rebuild with SSH support enabled." << std::endl;
+    std::cout << "This example requires libssh library to be available."
+              << std::endl;
+    std::cout << "Please install libssh and rebuild with SSH support enabled."
+              << std::endl;
     std::cout << std::endl;
     std::cout << "Installation:" << std::endl;
     std::cout << "  Ubuntu/Debian: sudo apt install libssh-dev" << std::endl;
@@ -620,7 +642,8 @@ int main() {
     std::cout << "  macOS:         brew install libssh" << std::endl;
     std::cout << "  Windows:       vcpkg install libssh" << std::endl;
     std::cout << std::endl;
-    std::cout << "Note: Running an SSH server requires root/admin privileges." << std::endl;
+    std::cout << "Note: Running an SSH server requires root/admin privileges."
+              << std::endl;
     return 0;
 }
 #endif

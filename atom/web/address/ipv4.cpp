@@ -197,7 +197,8 @@ auto IPv4::isInRange(std::string_view start, std::string_view end) -> bool {
         uint32_t currentIp = ntohl(ipValue);
 
         if (startIp > endIp) {
-            throw AddressRangeError("Invalid range: start IP > end IP");
+            throw AddressRangeError(
+                std::string_view{"Invalid range: start IP > end IP"});
         }
 
         bool inRange = currentIp >= startIp && currentIp <= endIp;

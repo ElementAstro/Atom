@@ -83,6 +83,7 @@ endif()
 
 # Create library target
 add_library(atom-async STATIC ${SOURCES} ${HEADERS})
+add_library(atom::async ALIAS atom-async)
 
 # Configure module using standardized function
 atom_configure_module(atom-async)

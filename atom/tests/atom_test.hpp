@@ -262,7 +262,8 @@ inline void listTests(const std::string& filter = "") {
                 if (!test.tags.empty()) {
                     std::cout << " [";
                     for (size_t i = 0; i < test.tags.size(); ++i) {
-                        if (i > 0) std::cout << ", ";
+                        if (i > 0)
+                            std::cout << ", ";
                         std::cout << test.tags[i];
                     }
                     std::cout << "]";
@@ -301,12 +302,14 @@ inline auto runTestsByTag(const std::string& tag,
  * @return Lambda for adding tests
  */
 inline auto suite(const std::string& suiteName) {
-    return [suiteName](std::initializer_list<
-                       std::pair<std::string, std::function<void()>>> tests) {
-        for (const auto& [name, func] : tests) {
-            registerTest(suiteName + "." + name, func);
-        }
-    };
+    return
+        [suiteName](
+            std::initializer_list<std::pair<std::string, std::function<void()>>>
+                tests) {
+            for (const auto& [name, func] : tests) {
+                registerTest(suiteName + "." + name, func);
+            }
+        };
 }
 
 /**

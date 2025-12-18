@@ -22,7 +22,12 @@ Description: Enhanced MySQL/MariaDB wrapper
 #include <mutex>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
+
+#include "base.hpp"
+#include "retry.hpp"
+#include "types.hpp"
 
 namespace atom {
 namespace database {
@@ -457,6 +462,15 @@ private:
  * including connection management, query execution, transaction handling,
  * prepared statements, and error management. It is thread-safe and supports
  * automatic reconnection.
+ *
+ * Features:
+ * - Thread-safe operations with mutex protection
+ * - Automatic reconnection on connection loss
+ * - Prepared statement support for SQL injection prevention
+ * - Transaction management with savepoints
+ * - Batch query execution
+ * - Stored procedure calls
+ * - Connection pool integration ready
  */
 class MysqlDB {
 public:
@@ -809,6 +823,57 @@ public:
      */
     bool setConnectionTimeout(unsigned int timeout);
 
+    /**
+     * @brief Execute operations within a transaction with automatic rollback
+     *
+     * @tparam Func Callable type
+     * @param operations Function containing database operations
+     * @return Result of the operations
+     */
+    template <typename Func>
+    auto withTransactionResult(Func&& operations) -> decltype(operations()) {
+        if (!beginTransaction()) {
+            throw MySQLException("Failed to begin transaction");
+        }
+        try {
+            auto result = operations();
+            if (!commitTransaction()) {
+                throw MySQLException("Failed to commit transaction");
+            }
+            return result;
+        } catch (...) {
+            rollbackTransaction();
+            throw;
+        }
+    }
+
+    /**
+     * @brief Execute with retry logic using the retry policy.
+     * @tparam Func Callable type.
+     * @param operation The operation to execute.
+     * @return Result of the operation.
+     */
+    template <typename Func>
+    auto executeWithRetry(Func&& operation) {
+        atom::search::database::RetryExecutor executor(retryPolicy_);
+        return executor.executeOrThrow(std::forward<Func>(operation));
+    }
+
+    /**
+     * @brief Set retry policy for operations.
+     */
+    void setRetryPolicy(atom::search::database::RetryPolicy policy) {
+        retryPolicy_ = std::move(policy);
+    }
+
+    /**
+     * @brief Get current retry policy.
+     */
+    [[nodiscard]] const atom::search::database::RetryPolicy& getRetryPolicy()
+        const {
+        return retryPolicy_;
+    }
+
 private:
     MYSQL* db;                 ///< MySQL connection handle
     ConnectionParams params;   ///< Connection parameters
@@ -816,6 +881,8 @@ private:
     std::function<void(const std::string&, unsigned int)>
         errorCallback;          ///< Error callback function
     bool autoReconnect = true;  ///< Auto-reconnect flag
+    atom::search::database::RetryPolicy
+        retryPolicy_;  ///< Retry policy for operations
 
     /**
      * @brief Handle database errors

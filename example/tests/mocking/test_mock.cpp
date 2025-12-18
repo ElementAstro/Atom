@@ -228,9 +228,7 @@ public:
     Calculator(AddFunc add, MultiplyFunc multiply)
         : add_(std::move(add)), multiply_(std::move(multiply)) {}
 
-    int compute(int a, int b, int c) {
-        return multiply_(add_(a, b), c);
-    }
+    int compute(int a, int b, int c) { return multiply_(add_(a, b), c); }
 
 private:
     AddFunc add_;
@@ -272,6 +270,4 @@ TEST(MockTests, MockVerificationMacro) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

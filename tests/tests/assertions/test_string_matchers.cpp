@@ -8,7 +8,8 @@
 
 Date: 2024-12-22
 
-Description: Tests for string matchers in atom/tests/assertions/string_matchers.hpp
+Description: Tests for string matchers in
+atom/tests/assertions/string_matchers.hpp
 
 **************************************************/
 

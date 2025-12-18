@@ -125,7 +125,7 @@ TEST(Assertions, ExpectMatches) {
 TEST(Assertions, ExpectEmpty) {
     std::vector<int> emptyVec;
     expect_empty(emptyVec);
-    
+
     std::string emptyStr;
     expect_empty(emptyStr);
 }
@@ -133,7 +133,7 @@ TEST(Assertions, ExpectEmpty) {
 TEST(Assertions, ExpectNotEmpty) {
     std::vector<int> vec = {1, 2, 3};
     expect_not_empty(vec);
-    
+
     std::string str = "hello";
     expect_not_empty(str);
 }
@@ -141,7 +141,7 @@ TEST(Assertions, ExpectNotEmpty) {
 TEST(Assertions, ExpectSize) {
     std::vector<int> vec = {1, 2, 3, 4, 5};
     expect_size(vec, 5);
-    
+
     std::string str = "hello";
     expect_size(str, 5);
 }
@@ -213,22 +213,19 @@ TEST(Assertions, ExpectSetEq) {
 
 TEST(Assertions, ExpectThat) {
     int value = 42;
-    expect_that(value, [](int x) { return x > 0 && x < 100; },
-                "Value should be between 0 and 100");
+    expect_that(
+        value, [](int x) { return x > 0 && x < 100; },
+        "Value should be between 0 and 100");
 }
 
 // ============================================================================
 // FAIL and SUCCEED
 // ============================================================================
 
-TEST(Assertions, SucceedMacro) {
-    SUCCEED();
-}
+TEST(Assertions, SucceedMacro) { SUCCEED(); }
 
 // ============================================================================
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

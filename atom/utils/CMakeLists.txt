@@ -123,6 +123,7 @@ set_property(TARGET ${PROJECT_NAME}_object PROPERTY POSITION_INDEPENDENT_CODE 1)
 
 # Build Static Library
 add_library(${PROJECT_NAME} STATIC $<TARGET_OBJECTS:${PROJECT_NAME}_object>)
+add_library(atom::utils ALIAS ${PROJECT_NAME})
 
 # Configure module with standard dependencies
 atom_configure_module(${PROJECT_NAME} DEPENDENCIES atom-type atom-error)

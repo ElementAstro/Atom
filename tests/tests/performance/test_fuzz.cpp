@@ -93,17 +93,17 @@ TEST_F(RandomDataGeneratorConstructionTest, ConstructionWithSeed) {
     RandomDataGenerator gen(42);
     // Should produce deterministic results
     int first = gen.generateInteger(0, 100);
-    
+
     RandomDataGenerator gen2(42);
     int second = gen2.generateInteger(0, 100);
-    
+
     EXPECT_EQ(first, second);
 }
 
 TEST_F(RandomDataGeneratorConstructionTest, ConstructionWithConfig) {
     RandomConfig config;
     config.setDefaultIntMax(50);
-    
+
     RandomDataGenerator gen(config);
     EXPECT_TRUE(true);
 }
@@ -111,7 +111,7 @@ TEST_F(RandomDataGeneratorConstructionTest, ConstructionWithConfig) {
 TEST_F(RandomDataGeneratorConstructionTest, ConstructionWithConfigAndSeed) {
     RandomConfig config;
     config.setDefaultIntMax(50);
-    
+
     RandomDataGenerator gen(config, 42);
     EXPECT_TRUE(true);
 }
@@ -145,7 +145,7 @@ TEST_F(IntegerGenerationTest, GenerateIntegersInRange) {
 TEST_F(IntegerGenerationTest, GenerateMultipleIntegers) {
     auto values = gen->generateIntegers(50, 0, 100);
     EXPECT_EQ(values.size(), 50);
-    
+
     for (int value : values) {
         EXPECT_GE(value, 0);
         EXPECT_LE(value, 100);
@@ -187,7 +187,7 @@ TEST_F(RealGenerationTest, GenerateRealsInRange) {
 TEST_F(RealGenerationTest, GenerateMultipleReals) {
     auto values = gen->generateReals(50, 0.0, 10.0);
     EXPECT_EQ(values.size(), 50);
-    
+
     for (double value : values) {
         EXPECT_GE(value, 0.0);
         EXPECT_LE(value, 10.0);
@@ -214,7 +214,7 @@ TEST_F(StringGenerationTest, GenerateString) {
 TEST_F(StringGenerationTest, GenerateAlphanumericString) {
     auto str = gen->generateString(20, true);
     EXPECT_EQ(str.length(), 20);
-    
+
     for (char c : str) {
         EXPECT_TRUE(std::isalnum(c));
     }
@@ -223,7 +223,7 @@ TEST_F(StringGenerationTest, GenerateAlphanumericString) {
 TEST_F(StringGenerationTest, GenerateStringWithCustomCharset) {
     auto str = gen->generateString(10, false, "ABC");
     EXPECT_EQ(str.length(), 10);
-    
+
     for (char c : str) {
         EXPECT_TRUE(c == 'A' || c == 'B' || c == 'C');
     }
@@ -254,7 +254,7 @@ TEST_F(BooleanGenerationTest, GenerateSingleBoolean) {
 TEST_F(BooleanGenerationTest, GenerateMultipleBooleans) {
     auto values = gen->generateBooleans(100, 0.5);
     EXPECT_EQ(values.size(), 100);
-    
+
     int trueCount = std::count(values.begin(), values.end(), true);
     // With 50% probability, expect roughly 50 true values (with tolerance)
     EXPECT_GT(trueCount, 20);
@@ -287,9 +287,9 @@ protected:
 TEST_F(DateTimeGenerationTest, GenerateDateTimeInRange) {
     auto start = std::chrono::system_clock::now();
     auto end = start + std::chrono::hours(24);
-    
+
     auto dt = gen->generateDateTime(start, end);
-    
+
     EXPECT_GE(dt, start);
     EXPECT_LE(dt, end);
 }
@@ -308,7 +308,7 @@ protected:
 
 TEST_F(IPAddressGenerationTest, GenerateIPv4) {
     auto ip = gen->generateIPv4Address();
-    
+
     // Should have 3 dots
     int dotCount = std::count(ip.begin(), ip.end(), '.');
     EXPECT_EQ(dotCount, 3);
@@ -328,7 +328,7 @@ protected:
 
 TEST_F(MACAddressGenerationTest, GenerateMACAddress) {
     auto mac = gen->generateMACAddress();
-    
+
     // Should have 5 colons (6 segments)
     int colonCount = std::count(mac.begin(), mac.end(), ':');
     EXPECT_EQ(colonCount, 5);
@@ -336,7 +336,7 @@ TEST_F(MACAddressGenerationTest, GenerateMACAddress) {
 
 TEST_F(MACAddressGenerationTest, GenerateMACAddressUppercase) {
     auto mac = gen->generateMACAddress(true);
-    
+
     // Check for uppercase hex digits
     for (char c : mac) {
         if (std::isalpha(c)) {
@@ -359,14 +359,14 @@ protected:
 
 TEST_F(URLGenerationTest, GenerateURL) {
     auto url = gen->generateURL();
-    
+
     // Should start with http:// or https://
     EXPECT_TRUE(url.find("http://") == 0 || url.find("https://") == 0);
 }
 
 TEST_F(URLGenerationTest, GenerateURLWithProtocol) {
     auto url = gen->generateURL("https");
-    
+
     EXPECT_TRUE(url.find("https://") == 0);
 }
 
@@ -385,14 +385,14 @@ protected:
 TEST_F(DistributionGenerationTest, NormalDistribution) {
     auto values = gen->generateNormalDistribution(1000, 50.0, 10.0);
     EXPECT_EQ(values.size(), 1000);
-    
+
     // Calculate mean
     double sum = 0.0;
     for (double v : values) {
         sum += v;
     }
     double mean = sum / values.size();
-    
+
     // Mean should be close to 50
     EXPECT_NEAR(mean, 50.0, 2.0);
 }
@@ -400,7 +400,7 @@ TEST_F(DistributionGenerationTest, NormalDistribution) {
 TEST_F(DistributionGenerationTest, ExponentialDistribution) {
     auto values = gen->generateExponentialDistribution(1000, 1.0);
     EXPECT_EQ(values.size(), 1000);
-    
+
     // All values should be positive
     for (double v : values) {
         EXPECT_GE(v, 0.0);
@@ -421,7 +421,7 @@ protected:
 
 TEST_F(JSONGenerationTest, GenerateRandomJSON) {
     auto json = gen->generateRandomJSON(2, 3);
-    
+
     EXPECT_FALSE(json.empty());
     // Should start with { or [
     EXPECT_TRUE(json[0] == '{' || json[0] == '[');
@@ -441,7 +441,7 @@ protected:
 
 TEST_F(XMLGenerationTest, GenerateRandomXML) {
     auto xml = gen->generateRandomXML(2, 3);
-    
+
     EXPECT_FALSE(xml.empty());
     // Should start with <
     EXPECT_EQ(xml[0], '<');
@@ -461,7 +461,7 @@ protected:
 
 TEST_F(TreeGenerationTest, GenerateTree) {
     auto tree = gen->generateTree(3, 2);
-    
+
     // Tree should have a value
     EXPECT_TRUE(true);  // Just verify it doesn't throw
 }
@@ -480,7 +480,7 @@ protected:
 
 TEST_F(GraphGenerationTest, GenerateGraph) {
     auto graph = gen->generateGraph(10, 0.5);
-    
+
     EXPECT_EQ(graph.size(), 10);
 }
 
@@ -496,7 +496,7 @@ protected:
 
 TEST_F(ThreadLocalGeneratorTest, GetThreadLocalGenerator) {
     auto& gen = RandomDataGenerator::threadLocal();
-    
+
     int value = gen.generateInteger(0, 100);
     EXPECT_GE(value, 0);
     EXPECT_LE(value, 100);
@@ -517,10 +517,10 @@ protected:
 TEST_F(ReseedTest, ReseedProducesDeterministicResults) {
     gen->reseed(123);
     int first = gen->generateInteger(0, 1000);
-    
+
     gen->reseed(123);
     int second = gen->generateInteger(0, 1000);
-    
+
     EXPECT_EQ(first, second);
 }
 

@@ -8,7 +8,8 @@
 
 Date: 2024-12-22
 
-Description: Tests for mock argument matchers in atom/tests/mocking/mock_matchers.hpp
+Description: Tests for mock argument matchers in
+atom/tests/mocking/mock_matchers.hpp
 
 **************************************************/
 
@@ -46,7 +47,8 @@ TEST_F(WildcardMatcherTest, MatchesAnyString) {
 }
 
 TEST_F(WildcardMatcherTest, UnderscoreShorthand) {
-    auto matcher = _<int>();
+    // The _ constant can be implicitly converted to MatcherWrapper<T>
+    MatcherWrapper<int> matcher = _;
     EXPECT_TRUE(matcher.matches(123));
 }
 
@@ -61,19 +63,19 @@ protected:
 };
 
 TEST_F(EqualityMatcherTest, EqMatcherInteger) {
-    auto matcher = ArgEq(42);
+    auto matcher = Eq(42);
     EXPECT_TRUE(matcher.matches(42));
     EXPECT_FALSE(matcher.matches(43));
 }
 
 TEST_F(EqualityMatcherTest, EqMatcherString) {
-    auto matcher = ArgEq(std::string("hello"));
+    auto matcher = Eq(std::string("hello"));
     EXPECT_TRUE(matcher.matches("hello"));
     EXPECT_FALSE(matcher.matches("world"));
 }
 
 TEST_F(EqualityMatcherTest, NeMatcherInteger) {
-    auto matcher = ArgNe(42);
+    auto matcher = Ne(42);
     EXPECT_FALSE(matcher.matches(42));
     EXPECT_TRUE(matcher.matches(43));
 }
@@ -89,28 +91,28 @@ protected:
 };
 
 TEST_F(ComparisonMatcherTest, LtMatcher) {
-    auto matcher = ArgLt(10);
+    auto matcher = Lt(10);
     EXPECT_TRUE(matcher.matches(5));
     EXPECT_FALSE(matcher.matches(10));
     EXPECT_FALSE(matcher.matches(15));
 }
 
 TEST_F(ComparisonMatcherTest, LeMatcher) {
-    auto matcher = ArgLe(10);
+    auto matcher = Le(10);
     EXPECT_TRUE(matcher.matches(5));
     EXPECT_TRUE(matcher.matches(10));
     EXPECT_FALSE(matcher.matches(15));
 }
 
 TEST_F(ComparisonMatcherTest, GtMatcher) {
-    auto matcher = ArgGt(10);
+    auto matcher = Gt(10);
     EXPECT_FALSE(matcher.matches(5));
     EXPECT_FALSE(matcher.matches(10));
     EXPECT_TRUE(matcher.matches(15));
 }
 
 TEST_F(ComparisonMatcherTest, GeMatcher) {
-    auto matcher = ArgGe(10);
+    auto matcher = Ge(10);
     EXPECT_FALSE(matcher.matches(5));
     EXPECT_TRUE(matcher.matches(10));
     EXPECT_TRUE(matcher.matches(15));
@@ -140,21 +142,21 @@ TEST_F(StringMatcherTest, StrNeMatcher) {
 }
 
 TEST_F(StringMatcherTest, StrContainsMatcher) {
-    auto matcher = StrContains("world");
+    auto matcher = HasSubstr("world");
     EXPECT_TRUE(matcher.matches("hello world"));
     EXPECT_TRUE(matcher.matches("world"));
     EXPECT_FALSE(matcher.matches("hello"));
 }
 
 TEST_F(StringMatcherTest, StrStartsWithMatcher) {
-    auto matcher = StrStartsWith("hello");
+    auto matcher = StartsWith("hello");
     EXPECT_TRUE(matcher.matches("hello world"));
     EXPECT_TRUE(matcher.matches("hello"));
     EXPECT_FALSE(matcher.matches("world hello"));
 }
 
 TEST_F(StringMatcherTest, StrEndsWithMatcher) {
-    auto matcher = StrEndsWith("world");
+    auto matcher = EndsWith("world");
     EXPECT_TRUE(matcher.matches("hello world"));
     EXPECT_TRUE(matcher.matches("world"));
     EXPECT_FALSE(matcher.matches("world hello"));
@@ -179,7 +181,7 @@ protected:
 };
 
 TEST_F(PointerMatcherTest, IsNullMatcher) {
-    auto matcher = ArgIsNull<int*>();
+    auto matcher = IsNull<int*>();
     int* nullPtr = nullptr;
     int value = 42;
     int* validPtr = &value;
@@ -189,7 +191,7 @@ TEST_F(PointerMatcherTest, IsNullMatcher) {
 }
 
 TEST_F(PointerMatcherTest, NotNullMatcher) {
-    auto matcher = ArgNotNull<int*>();
+    auto matcher = NotNull<int*>();
     int* nullPtr = nullptr;
     int value = 42;
     int* validPtr = &value;
@@ -199,7 +201,7 @@ TEST_F(PointerMatcherTest, NotNullMatcher) {
 }
 
 TEST_F(PointerMatcherTest, PointeeMatcher) {
-    auto matcher = ArgPointee(ArgEq(42));
+    auto matcher = Pointee(Eq(42));
     int value = 42;
     int* ptr = &value;
 
@@ -222,7 +224,7 @@ protected:
 };
 
 TEST_F(ContainerMatcherTest, IsEmptyMatcher) {
-    auto matcher = ArgIsEmpty<std::vector<int>>();
+    auto matcher = IsEmpty<std::vector<int>>();
     std::vector<int> emptyVec;
 
     EXPECT_TRUE(matcher.matches(emptyVec));
@@ -230,7 +232,7 @@ TEST_F(ContainerMatcherTest, IsEmptyMatcher) {
 }
 
 TEST_F(ContainerMatcherTest, SizeIsMatcher) {
-    auto matcher = ArgSizeIs<std::vector<int>>(5);
+    auto matcher = SizeIs<std::vector<int>>(5);
     EXPECT_TRUE(matcher.matches(vec));
 
     vec.push_back(6);
@@ -238,11 +240,12 @@ TEST_F(ContainerMatcherTest, SizeIsMatcher) {
 }
 
 TEST_F(ContainerMatcherTest, ContainsElementMatcher) {
-    auto matcher = ArgContains<std::vector<int>>(3);
-    EXPECT_TRUE(matcher.matches(vec));
+    // Contains returns a lambda, test it directly
+    auto containsThree = Contains(3);
+    EXPECT_TRUE(containsThree(vec));
 
-    auto matcher2 = ArgContains<std::vector<int>>(10);
-    EXPECT_FALSE(matcher2.matches(vec));
+    auto containsTen = Contains(10);
+    EXPECT_FALSE(containsTen(vec));
 }
 
 // ============================================================================
@@ -280,20 +283,20 @@ protected:
 };
 
 TEST_F(LogicalMatcherTest, NotMatcher) {
-    auto matcher = ArgNot(ArgEq(5));
+    auto matcher = Not(Eq(5));
     EXPECT_TRUE(matcher.matches(6));
     EXPECT_FALSE(matcher.matches(5));
 }
 
 TEST_F(LogicalMatcherTest, AllOfMatcher) {
-    auto matcher = ArgAllOf(ArgGt(0), ArgLt(10));
+    auto matcher = AllOf(Gt(0), Lt(10));
     EXPECT_TRUE(matcher.matches(5));
     EXPECT_FALSE(matcher.matches(0));
     EXPECT_FALSE(matcher.matches(10));
 }
 
 TEST_F(LogicalMatcherTest, AnyOfMatcher) {
-    auto matcher = ArgAnyOf(ArgEq(1), ArgEq(5), ArgEq(10));
+    auto matcher = AnyOf(Eq(1), Eq(5), Eq(10));
     EXPECT_TRUE(matcher.matches(1));
     EXPECT_TRUE(matcher.matches(5));
     EXPECT_TRUE(matcher.matches(10));
@@ -316,7 +319,7 @@ protected:
 };
 
 TEST_F(FieldMatcherTest, FieldMatcher) {
-    auto matcher = Field(&TestStruct::id, ArgEq(42));
+    auto matcher = Field(&TestStruct::id, Eq(42));
     TestStruct obj{42, "test"};
 
     EXPECT_TRUE(matcher.matches(obj));
@@ -326,7 +329,7 @@ TEST_F(FieldMatcherTest, FieldMatcher) {
 }
 
 TEST_F(FieldMatcherTest, MultipleFieldMatchers) {
-    auto idMatcher = Field(&TestStruct::id, ArgEq(42));
+    auto idMatcher = Field(&TestStruct::id, Eq(42));
     auto nameMatcher = Field(&TestStruct::name, StrEq("test"));
 
     TestStruct obj{42, "test"};
@@ -355,7 +358,7 @@ protected:
 };
 
 TEST_F(PropertyMatcherTest, PropertyMatcher) {
-    auto matcher = Property(&TestClass::getValue, ArgEq(42));
+    auto matcher = Property(&TestClass::getValue, Eq(42));
     TestClass obj;
     obj.setValue(42);
 
@@ -366,24 +369,24 @@ TEST_F(PropertyMatcherTest, PropertyMatcher) {
 }
 
 // ============================================================================
-// Result Of Matcher Tests
+// Truly (Predicate) Matcher Tests - Additional
 // ============================================================================
 
-class ResultOfMatcherTest : public ::testing::Test {
+class TrulyMatcherAdditionalTest : public ::testing::Test {
 protected:
     void SetUp() override {}
     void TearDown() override {}
 };
 
-TEST_F(ResultOfMatcherTest, ResultOfMatcher) {
-    auto matcher = ResultOf([](int x) { return x * 2; }, ArgEq(10));
+TEST_F(TrulyMatcherAdditionalTest, TrulyWithTransformation) {
+    // Use Truly to test a transformation result
+    auto matcher = Truly([](int x) { return x * 2 == 10; });
     EXPECT_TRUE(matcher.matches(5));
     EXPECT_FALSE(matcher.matches(6));
 }
 
-TEST_F(ResultOfMatcherTest, ResultOfStringLength) {
-    auto matcher =
-        ResultOf([](const std::string& s) { return s.length(); }, ArgEq(5ul));
+TEST_F(TrulyMatcherAdditionalTest, TrulyWithStringLength) {
+    auto matcher = Truly([](const std::string& s) { return s.length() == 5; });
     EXPECT_TRUE(matcher.matches("hello"));
     EXPECT_FALSE(matcher.matches("hi"));
 }
@@ -399,13 +402,13 @@ protected:
 };
 
 TEST_F(MatcherDescriptionTest, EqDescription) {
-    auto matcher = ArgEq(42);
+    auto matcher = Eq(42);
     std::string desc = matcher.describe();
     EXPECT_FALSE(desc.empty());
 }
 
 TEST_F(MatcherDescriptionTest, AllOfDescription) {
-    auto matcher = ArgAllOf(ArgGt(0), ArgLt(10));
+    auto matcher = AllOf(Gt(0), Lt(10));
     std::string desc = matcher.describe();
     EXPECT_FALSE(desc.empty());
 }

@@ -71,6 +71,7 @@ endif()
 
 # Create static library from object library
 add_library(atom-meta STATIC $<TARGET_OBJECTS:atom-meta_object>)
+add_library(atom::meta ALIAS atom-meta)
 
 # Configure module with standardized settings
 atom_configure_module(atom-meta)

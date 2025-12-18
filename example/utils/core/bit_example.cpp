@@ -32,10 +32,9 @@ void printSection(const std::string& title) {
 template <typename T>
 void printBinary(const std::string& label, T value) {
     constexpr int bits = sizeof(T) * 8;
-    std::cout << label << ": " << std::bitset<bits>(value) << " (0x"
-              << std::hex << std::uppercase << static_cast<uint64_t>(value)
-              << std::dec << ", " << static_cast<uint64_t>(value) << ")"
-              << std::endl;
+    std::cout << label << ": " << std::bitset<bits>(value) << " (0x" << std::hex
+              << std::uppercase << static_cast<uint64_t>(value) << std::dec
+              << ", " << static_cast<uint64_t>(value) << ")" << std::endl;
 }
 
 // ============================================
@@ -63,9 +62,9 @@ void demonstrateMaskCreation() {
     std::cout << "\n--- 32-bit masks ---" << std::endl;
     for (int bits : {0, 8, 16, 24, 32}) {
         auto mask = createMask<uint32_t>(bits);
-        std::cout << "  createMask<uint32_t>(" << bits << "): 0x"
-                  << std::hex << std::setw(8) << std::setfill('0') << mask
-                  << std::dec << std::endl;
+        std::cout << "  createMask<uint32_t>(" << bits << "): 0x" << std::hex
+                  << std::setw(8) << std::setfill('0') << mask << std::dec
+                  << std::endl;
     }
 }
 
@@ -80,15 +79,15 @@ void demonstrateBitCounting() {
 
     std::vector<uint8_t> values8 = {0, 1, 0b01010101, 0b11110000, 0xFF};
     for (auto val : values8) {
-        std::cout << "  countBytes(" << std::bitset<8>(val) << "): "
-                  << countBytes(val) << std::endl;
+        std::cout << "  countBytes(" << std::bitset<8>(val)
+                  << "): " << countBytes(val) << std::endl;
     }
 
     std::cout << "\n--- 32-bit values ---" << std::endl;
     std::vector<uint32_t> values32 = {0, 1, 0xFFFF, 0xFFFFFFFF, 0xAAAAAAAA};
     for (auto val : values32) {
-        std::cout << "  countBytes(0x" << std::hex << val << std::dec << "): "
-                  << countBytes(val) << std::endl;
+        std::cout << "  countBytes(0x" << std::hex << val << std::dec
+                  << "): " << countBytes(val) << std::endl;
     }
 }
 
@@ -102,7 +101,7 @@ void demonstrateBitReversal() {
     std::cout << "Reverses the order of bits in a value" << std::endl;
 
     std::vector<uint8_t> values = {0b00000001, 0b10000000, 0b11110000,
-                                    0b10101010, 0b11001100};
+                                   0b10101010, 0b11001100};
 
     for (auto val : values) {
         auto reversed = reverseBits(val);
@@ -129,15 +128,15 @@ void demonstrateBitRotation() {
     std::cout << "\n--- rotateLeft ---" << std::endl;
     for (int shift = 1; shift <= 8; ++shift) {
         auto rotated = rotateLeft(value, shift);
-        std::cout << "  rotateLeft(" << shift << "): " << std::bitset<8>(rotated)
-                  << std::endl;
+        std::cout << "  rotateLeft(" << shift
+                  << "): " << std::bitset<8>(rotated) << std::endl;
     }
 
     std::cout << "\n--- rotateRight ---" << std::endl;
     for (int shift = 1; shift <= 8; ++shift) {
         auto rotated = rotateRight(value, shift);
-        std::cout << "  rotateRight(" << shift << "): "
-                  << std::bitset<8>(rotated) << std::endl;
+        std::cout << "  rotateRight(" << shift
+                  << "): " << std::bitset<8>(rotated) << std::endl;
     }
 
     std::cout << "\n--- 32-bit rotation ---" << std::endl;
@@ -238,7 +237,7 @@ void demonstrateBitSearching() {
               << std::endl;
 
     std::vector<uint8_t> values = {0b00000001, 0b00000010, 0b00001000,
-                                    0b10000000, 0b01010100, 0b00000000};
+                                   0b10000000, 0b01010100, 0b00000000};
 
     for (auto val : values) {
         int pos = findFirstSetBit(val);
@@ -275,17 +274,19 @@ void demonstrateParallelBitOps() {
     std::cout << "Applies a bit operation to all elements in parallel"
               << std::endl;
 
-    std::vector<uint8_t> input = {0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
+    std::vector<uint8_t> input = {0x01, 0x02, 0x04, 0x08,
+                                  0x10, 0x20, 0x40, 0x80};
 
     std::cout << "\nInput values:" << std::endl;
     for (size_t i = 0; i < input.size(); ++i) {
-        std::cout << "  [" << i << "] " << std::bitset<8>(input[i]) << std::endl;
+        std::cout << "  [" << i << "] " << std::bitset<8>(input[i])
+                  << std::endl;
     }
 
     // Apply NOT operation
     std::cout << "\n--- NOT operation ---" << std::endl;
-    auto notResult = parallelBitOp<uint8_t>(
-        std::span<const uint8_t>(input), [](uint8_t x) { return ~x; });
+    auto notResult = parallelBitOp<uint8_t>(std::span<const uint8_t>(input),
+                                            [](uint8_t x) { return ~x; });
 
     for (size_t i = 0; i < notResult.size(); ++i) {
         std::cout << "  [" << i << "] " << std::bitset<8>(input[i]) << " -> "

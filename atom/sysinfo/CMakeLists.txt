@@ -121,6 +121,7 @@ add_library(
   ${INFO_HEADERS}
   ${UTILS_HEADERS}
   ${COMPAT_HEADERS})
+add_library(atom::sysinfo ALIAS atom-sysinfo)
 
 # Configure module using standardized function
 atom_configure_module(atom-sysinfo)

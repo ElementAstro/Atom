@@ -3,11 +3,11 @@
  * @brief Examples for atom::utils time utilities
  */
 
-#include "atom/utils/time/time.hpp"
+#include <chrono>
 #include <iostream>
 #include <string>
 #include <thread>
-#include <chrono>
+#include "atom/utils/time/time.hpp"
 
 using namespace atom::utils;
 
@@ -46,7 +46,8 @@ void demonstrateTimeDifference() {
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     auto end = std::chrono::system_clock::now();
 
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+    auto diff =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
     std::cout << "Elapsed: " << diff.count() << " ms" << std::endl;
 }
 
@@ -54,7 +55,8 @@ void demonstrateLogging() {
     printSection("4. Logging with Timestamps");
 
     auto logEntry = [](const std::string& level, const std::string& msg) {
-        std::cout << "[" << getTimestampString() << "] [" << level << "] " << msg << std::endl;
+        std::cout << "[" << getTimestampString() << "] [" << level << "] "
+                  << msg << std::endl;
     };
 
     logEntry("INFO", "Application started");

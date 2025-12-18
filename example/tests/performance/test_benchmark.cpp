@@ -80,7 +80,8 @@ TEST(BenchmarkTests, BenchmarkWithConfig) {
 
 TEST(BenchmarkTests, ResultStatistics) {
     // Test that we can compute statistics on timing data
-    std::vector<double> timings = {10.0, 12.0, 11.0, 13.0, 10.5, 11.5, 12.5, 11.0};
+    std::vector<double> timings = {10.0, 12.0, 11.0, 13.0,
+                                   10.5, 11.5, 12.5, 11.0};
 
     // Mean
     double sum = std::accumulate(timings.begin(), timings.end(), 0.0);
@@ -240,6 +241,4 @@ TEST(BenchmarkTests, TimingAccuracy) {
 // Main
 // ============================================================================
 
-int main(int argc, char** argv) {
-    return runAllTests(argc, argv);
-}
+int main(int argc, char** argv) { return runAllTests(argc, argv); }

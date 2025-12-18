@@ -98,6 +98,7 @@ endif()
 add_library(
   atom-web STATIC ${SOURCES} ${HEADERS} $<TARGET_OBJECTS:atom-web-time>
                   $<TARGET_OBJECTS:atom-web-address>)
+add_library(atom::web ALIAS atom-web)
 
 # Configure module using standardized function and declare inter-module deps
 # atom-web consumes atom-utils (net/socket helpers), atom-io (potential reuse),

@@ -122,9 +122,7 @@ protected:
     std::unique_ptr<ConsoleReporter> reporter;
 };
 
-TEST_F(ConsoleReporterTest, Construction) {
-    EXPECT_NE(reporter, nullptr);
-}
+TEST_F(ConsoleReporterTest, Construction) { EXPECT_NE(reporter, nullptr); }
 
 TEST_F(ConsoleReporterTest, GenerateReport) {
     TestStats stats;
@@ -161,9 +159,7 @@ protected:
     std::unique_ptr<JsonReporter> reporter;
 };
 
-TEST_F(JsonReporterTest, Construction) {
-    EXPECT_NE(reporter, nullptr);
-}
+TEST_F(JsonReporterTest, Construction) { EXPECT_NE(reporter, nullptr); }
 
 TEST_F(JsonReporterTest, GenerateReport) {
     TestStats stats;
@@ -220,9 +216,7 @@ protected:
     std::unique_ptr<XmlReporter> reporter;
 };
 
-TEST_F(XmlReporterTest, Construction) {
-    EXPECT_NE(reporter, nullptr);
-}
+TEST_F(XmlReporterTest, Construction) { EXPECT_NE(reporter, nullptr); }
 
 TEST_F(XmlReporterTest, GenerateReport) {
     TestStats stats;
@@ -232,8 +226,7 @@ TEST_F(XmlReporterTest, GenerateReport) {
 
     EXPECT_FALSE(report.empty());
     // XML should contain declaration or start with <
-    EXPECT_TRUE(report.find("<?xml") != std::string::npos ||
-                report[0] == '<');
+    EXPECT_TRUE(report.find("<?xml") != std::string::npos || report[0] == '<');
 }
 
 TEST_F(XmlReporterTest, ReportContainsTestsuites) {
@@ -257,9 +250,7 @@ protected:
     std::unique_ptr<HtmlReporter> reporter;
 };
 
-TEST_F(HtmlReporterTest, Construction) {
-    EXPECT_NE(reporter, nullptr);
-}
+TEST_F(HtmlReporterTest, Construction) { EXPECT_NE(reporter, nullptr); }
 
 TEST_F(HtmlReporterTest, GenerateReport) {
     TestStats stats;
@@ -302,9 +293,7 @@ protected:
     std::unique_ptr<MarkdownReporter> reporter;
 };
 
-TEST_F(MarkdownReporterTest, Construction) {
-    EXPECT_NE(reporter, nullptr);
-}
+TEST_F(MarkdownReporterTest, Construction) { EXPECT_NE(reporter, nullptr); }
 
 TEST_F(MarkdownReporterTest, GenerateReport) {
     TestStats stats;

@@ -342,21 +342,15 @@ protected:
 };
 
 #ifdef _WIN32
-TEST_F(PlatformSpecificSkipTest, WindowsOnlyTest) {
-    EXPECT_TRUE(isWindows());
-}
+TEST_F(PlatformSpecificSkipTest, WindowsOnlyTest) { EXPECT_TRUE(isWindows()); }
 #endif
 
 #ifdef __linux__
-TEST_F(PlatformSpecificSkipTest, LinuxOnlyTest) {
-    EXPECT_TRUE(isLinux());
-}
+TEST_F(PlatformSpecificSkipTest, LinuxOnlyTest) { EXPECT_TRUE(isLinux()); }
 #endif
 
 #ifdef __APPLE__
-TEST_F(PlatformSpecificSkipTest, MacOSOnlyTest) {
-    EXPECT_TRUE(isMacOS());
-}
+TEST_F(PlatformSpecificSkipTest, MacOSOnlyTest) { EXPECT_TRUE(isMacOS()); }
 #endif
 
 // ============================================================================

@@ -19,6 +19,12 @@
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
 
+// --- Static Member Variable Definitions ---
+thread_local Perf::PerfThreadLocal Perf::perthread;
+Perf::PerfAsyncLogger Perf::asyncLogger;
+Perf::PerfGather Perf::gathered;
+Perf::Config Perf::config_;
+
 // --- Static Logger Initialization ---
 std::shared_ptr<spdlog::logger> Perf::logger = []() {
     try {

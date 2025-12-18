@@ -26,8 +26,7 @@
 #include <vector>
 
 // Include the Atom test framework
-#include "atom/tests/test.hpp"
-#include "atom/tests/test_runner.hpp"
+#include "atom/tests/atom_test.hpp"
 
 namespace fs = std::filesystem;
 

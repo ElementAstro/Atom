@@ -66,7 +66,7 @@ TEST_F(PerfRAIITest, NestedMeasurement) {
     {
         Perf outer({"OuterTest", __FILE__, __LINE__, "outer"});
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        
+
         {
             Perf inner({"InnerTest", __FILE__, __LINE__, "inner"});
             std::this_thread::sleep_for(std::chrono::milliseconds(5));
@@ -87,16 +87,16 @@ protected:
 
 TEST_F(PerfLocationTest, LocationConstruction) {
     Perf::Location loc{__func__, __FILE__, __LINE__, "tag"};
-    
-    EXPECT_EQ(std::string(loc.function), __func__);
+
+    EXPECT_EQ(std::string(loc.func), __func__);
     EXPECT_NE(loc.file, nullptr);
     EXPECT_GT(loc.line, 0);
 }
 
 TEST_F(PerfLocationTest, LocationWithTag) {
     Perf::Location loc{"MyFunc", "myfile.cpp", 42, "mytag"};
-    
-    EXPECT_EQ(std::string(loc.function), "MyFunc");
+
+    EXPECT_EQ(std::string(loc.func), "MyFunc");
     EXPECT_EQ(std::string(loc.file), "myfile.cpp");
     EXPECT_EQ(loc.line, 42);
     EXPECT_EQ(std::string(loc.tag), "mytag");
@@ -114,7 +114,7 @@ protected:
 
 TEST_F(PerfThreadSafetyTest, ConcurrentMeasurements) {
     std::vector<std::thread> threads;
-    
+
     for (int i = 0; i < 4; ++i) {
         threads.emplace_back([i]() {
             std::string tag = "Thread_" + std::to_string(i);
@@ -122,11 +122,11 @@ TEST_F(PerfThreadSafetyTest, ConcurrentMeasurements) {
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         });
     }
-    
+
     for (auto& t : threads) {
         t.join();
     }
-    
+
     EXPECT_TRUE(true);
 }
 
@@ -141,27 +141,22 @@ protected:
 };
 
 TEST_F(MeasureWithTagTest, MeasureFunctionCall) {
-    auto result = measureWithTag("Addition", []() {
-        return 1 + 1;
-    });
-    
+    auto result = measureWithTag("Addition", []() { return 1 + 1; });
+
     EXPECT_EQ(result, 2);
 }
 
 TEST_F(MeasureWithTagTest, MeasureFunctionWithArgs) {
-    auto result = measureWithTag("Multiply", [](int a, int b) {
-        return a * b;
-    }, 3, 4);
-    
+    auto result =
+        measureWithTag("Multiply", [](int a, int b) { return a * b; }, 3, 4);
+
     EXPECT_EQ(result, 12);
 }
 
 TEST_F(MeasureWithTagTest, MeasureVoidFunction) {
     int counter = 0;
-    measureWithTag("Increment", [&counter]() {
-        counter++;
-    });
-    
+    measureWithTag("Increment", [&counter]() { counter++; });
+
     EXPECT_EQ(counter, 1);
 }
 
@@ -177,15 +172,16 @@ protected:
 
 TEST_F(PerfTimingTest, MeasuresApproximateTime) {
     auto start = std::chrono::high_resolution_clock::now();
-    
+
     {
         Perf p({"TimingTest", __FILE__, __LINE__, "timing"});
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
-    
+
     auto end = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    
+    auto duration =
+        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
     EXPECT_GE(duration.count(), 45);
     EXPECT_LE(duration.count(), 100);
 }

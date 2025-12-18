@@ -218,8 +218,7 @@ inline auto skipIfEnvSet(const std::string& envVar,
  */
 inline auto skipIfEnvNotSet(const std::string& envVar) -> SkipInfo {
     const char* value = std::getenv(envVar.c_str());
-    return {value == nullptr,
-            "Environment variable " + envVar + " is not set"};
+    return {value == nullptr, "Environment variable " + envVar + " is not set"};
 }
 
 /**
@@ -405,11 +404,9 @@ inline auto conditionalTest(std::string name) -> ConditionalTest {
 template <typename Func>
 auto expectCompletesWithin(Func&& func, std::chrono::milliseconds timeout,
                            const char* file, int line) -> Expect {
-    auto [success, message] =
-        runWithTimeout(std::forward<Func>(func), timeout);
+    auto [success, message] = runWithTimeout(std::forward<Func>(func), timeout);
     return {success, file, line,
-            success ? "Completed within timeout"
-                    : "Timeout: " + message};
+            success ? "Completed within timeout" : "Timeout: " + message};
 }
 
 /**
@@ -418,8 +415,7 @@ auto expectCompletesWithin(Func&& func, std::chrono::milliseconds timeout,
 template <typename Func>
 auto expectTimeout(Func&& func, std::chrono::milliseconds timeout,
                    const char* file, int line) -> Expect {
-    auto [success, message] =
-        runWithTimeout(std::forward<Func>(func), timeout);
+    auto [success, message] = runWithTimeout(std::forward<Func>(func), timeout);
     // We expect it to timeout, so success means failure
     return {!success, file, line,
             !success ? "Timed out as expected"
@@ -472,11 +468,11 @@ void flakyTest(Func&& func, size_t maxRetries = 3) {
 
 }  // namespace atom::test
 
-#define SKIP_IF(condition, reason)                                            \
-    do {                                                                      \
-        if (condition) {                                                      \
-            throw std::runtime_error(std::string("SKIPPED: ") + (reason));    \
-        }                                                                     \
+#define SKIP_IF(condition, reason)                                         \
+    do {                                                                   \
+        if (condition) {                                                   \
+            throw std::runtime_error(std::string("SKIPPED: ") + (reason)); \
+        }                                                                  \
     } while (0)
 
 #define SKIP_UNLESS(condition, reason) SKIP_IF(!(condition), reason)
@@ -498,72 +494,69 @@ void flakyTest(Func&& func, size_t maxRetries = 3) {
 #define SKIP_IN_CI() \
     SKIP_IF(std::getenv("CI") != nullptr, "Skipped in CI environment")
 
-#define expect_completes_within(func, timeout_ms)                             \
-    atom::test::expectCompletesWithin(                                        \
+#define expect_completes_within(func, timeout_ms) \
+    atom::test::expectCompletesWithin(            \
         func, std::chrono::milliseconds(timeout_ms), __FILE__, __LINE__)
 
-#define expect_times_out(func, timeout_ms)                                    \
-    atom::test::expectTimeout(func, std::chrono::milliseconds(timeout_ms),    \
+#define expect_times_out(func, timeout_ms)                                 \
+    atom::test::expectTimeout(func, std::chrono::milliseconds(timeout_ms), \
                               __FILE__, __LINE__)
 
 /**
  * @brief Define a test with timeout
  */
-#define TEST_WITH_TIMEOUT(suite_name, test_name, timeout_ms)                  \
-    static void suite_name##_##test_name##_TestBody();                        \
-    static struct suite_name##_##test_name##_Registrar {                      \
-        suite_name##_##test_name##_Registrar() {                              \
-            atom::test::registerTest(                                         \
-                #suite_name "." #test_name, []() {                            \
-                    auto [success, message] = atom::test::runWithTimeout(     \
-                        suite_name##_##test_name##_TestBody,                  \
-                        std::chrono::milliseconds(timeout_ms));               \
-                    if (!success) {                                           \
-                        throw std::runtime_error(message);                    \
-                    }                                                         \
-                });                                                           \
-        }                                                                     \
-    } suite_name##_##test_name##_registrar_instance;                          \
+#define TEST_WITH_TIMEOUT(suite_name, test_name, timeout_ms)            \
+    static void suite_name##_##test_name##_TestBody();                  \
+    static struct suite_name##_##test_name##_Registrar {                \
+        suite_name##_##test_name##_Registrar() {                        \
+            atom::test::registerTest(#suite_name "." #test_name, []() { \
+                auto [success, message] = atom::test::runWithTimeout(   \
+                    suite_name##_##test_name##_TestBody,                \
+                    std::chrono::milliseconds(timeout_ms));             \
+                if (!success) {                                         \
+                    throw std::runtime_error(message);                  \
+                }                                                       \
+            });                                                         \
+        }                                                               \
+    } suite_name##_##test_name##_registrar_instance;                    \
     static void suite_name##_##test_name##_TestBody()
 
 /**
  * @brief Define a conditional test that may be skipped
  */
-#define TEST_CONDITIONAL(suite_name, test_name, skip_condition, skip_reason)  \
-    static void suite_name##_##test_name##_TestBody();                        \
-    static struct suite_name##_##test_name##_Registrar {                      \
-        suite_name##_##test_name##_Registrar() {                              \
-            if (skip_condition) {                                             \
-                atom::test::registerTest(                                     \
-                    #suite_name "." #test_name,                               \
-                    []() {                                                    \
-                        throw std::runtime_error(                             \
-                            std::string("SKIPPED: ") + skip_reason);          \
-                    },                                                        \
-                    false, 0.0, true);                                        \
-            } else {                                                          \
-                atom::test::registerTest(                                     \
-                    #suite_name "." #test_name,                               \
-                    suite_name##_##test_name##_TestBody);                     \
-            }                                                                 \
-        }                                                                     \
-    } suite_name##_##test_name##_registrar_instance;                          \
+#define TEST_CONDITIONAL(suite_name, test_name, skip_condition, skip_reason)   \
+    static void suite_name##_##test_name##_TestBody();                         \
+    static struct suite_name##_##test_name##_Registrar {                       \
+        suite_name##_##test_name##_Registrar() {                               \
+            if (skip_condition) {                                              \
+                atom::test::registerTest(                                      \
+                    #suite_name "." #test_name,                                \
+                    []() {                                                     \
+                        throw std::runtime_error(std::string("SKIPPED: ") +    \
+                                                 skip_reason);                 \
+                    },                                                         \
+                    false, 0.0, true);                                         \
+            } else {                                                           \
+                atom::test::registerTest(#suite_name "." #test_name,           \
+                                         suite_name##_##test_name##_TestBody); \
+            }                                                                  \
+        }                                                                      \
+    } suite_name##_##test_name##_registrar_instance;                           \
     static void suite_name##_##test_name##_TestBody()
 
 /**
  * @brief Define a flaky test that retries on failure
  */
-#define TEST_FLAKY(suite_name, test_name, max_retries)                        \
-    static void suite_name##_##test_name##_TestBody();                        \
-    static struct suite_name##_##test_name##_Registrar {                      \
-        suite_name##_##test_name##_Registrar() {                              \
-            atom::test::registerTest(                                         \
-                #suite_name "." #test_name, []() {                            \
-                    atom::test::flakyTest(                                    \
-                        suite_name##_##test_name##_TestBody, max_retries);    \
-                });                                                           \
-        }                                                                     \
-    } suite_name##_##test_name##_registrar_instance;                          \
+#define TEST_FLAKY(suite_name, test_name, max_retries)                     \
+    static void suite_name##_##test_name##_TestBody();                     \
+    static struct suite_name##_##test_name##_Registrar {                   \
+        suite_name##_##test_name##_Registrar() {                           \
+            atom::test::registerTest(#suite_name "." #test_name, []() {    \
+                atom::test::flakyTest(suite_name##_##test_name##_TestBody, \
+                                      max_retries);                        \
+            });                                                            \
+        }                                                                  \
+    } suite_name##_##test_name##_registrar_instance;                       \
     static void suite_name##_##test_name##_TestBody()
 
 #endif  // ATOM_TEST_UTILITIES_TEST_SKIP_HPP

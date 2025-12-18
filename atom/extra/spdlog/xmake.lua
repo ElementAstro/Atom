@@ -10,8 +10,9 @@ set_license("GPL-3.0")
 set_languages("c++23")  -- C++23 required
 
 -- Add required packages
-add_requires("spdlog", {optional = true})
-add_requires("fmt", {optional = true})
+local use_system_packages = has_config("use_system_packages")
+add_requires("spdlog", {optional = true, system = use_system_packages})
+add_requires("fmt", {optional = true, system = use_system_packages})
 
 -- Source files
 local sources = {

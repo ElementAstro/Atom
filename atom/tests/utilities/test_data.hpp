@@ -199,8 +199,7 @@ public:
     }
 
     template <typename T>
-    void registerFactory(const std::string& name,
-                         std::function<T()> factory) {
+    void registerFactory(const std::string& name, std::function<T()> factory) {
         factories_[std::type_index(typeid(T))][name] =
             [f = std::move(factory)]() -> std::any { return f(); };
     }
@@ -270,11 +269,10 @@ public:
     /**
      * @brief Generate random string
      */
-    auto randomString(size_t length,
-                      const std::string& charset =
-                          "abcdefghijklmnopqrstuvwxyz"
-                          "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                          "0123456789") -> std::string {
+    auto randomString(size_t length, const std::string& charset =
+                                         "abcdefghijklmnopqrstuvwxyz"
+                                         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                                         "0123456789") -> std::string {
         std::string result;
         result.reserve(length);
         std::uniform_int_distribution<size_t> dist(0, charset.size() - 1);
@@ -539,8 +537,7 @@ public:
                     std::numeric_limits<T>::max() - 1,
                     std::numeric_limits<T>::max()};
         } else {
-            return {static_cast<T>(0),
-                    static_cast<T>(1),
+            return {static_cast<T>(0), static_cast<T>(1),
                     std::numeric_limits<T>::max() - 1,
                     std::numeric_limits<T>::max()};
         }
@@ -587,7 +584,8 @@ public:
      * @brief Get boundary values for array index
      */
     static auto forArrayIndex(size_t arraySize) -> std::vector<size_t> {
-        if (arraySize == 0) return {0};
+        if (arraySize == 0)
+            return {0};
         return {0, 1, arraySize / 2, arraySize - 1};
     }
 
@@ -596,21 +594,21 @@ public:
      */
     static auto specialStrings() -> std::vector<std::string> {
         return {
-            "",                    // Empty string
-            " ",                   // Single space
-            "  ",                  // Multiple spaces
-            "\t",                  // Tab
-            "\n",                  // Newline
-            "\r\n",                // Windows newline
-            "null",                // Null keyword
-            "undefined",           // Undefined keyword
-            "true",                // Boolean
-            "false",               // Boolean
-            "0",                   // Zero
-            "-1",                  // Negative
-            "1.5",                 // Float
-            "NaN",                 // Not a number
-            "Infinity",            // Infinity
+            "",                           // Empty string
+            " ",                          // Single space
+            "  ",                         // Multiple spaces
+            "\t",                         // Tab
+            "\n",                         // Newline
+            "\r\n",                       // Windows newline
+            "null",                       // Null keyword
+            "undefined",                  // Undefined keyword
+            "true",                       // Boolean
+            "false",                      // Boolean
+            "0",                          // Zero
+            "-1",                         // Negative
+            "1.5",                        // Float
+            "NaN",                        // Not a number
+            "Infinity",                   // Infinity
             "<script>alert(1)</script>",  // XSS
             "'; DROP TABLE users; --",    // SQL injection
             "../../../etc/passwd",        // Path traversal
@@ -652,8 +650,7 @@ public:
     /**
      * @brief Get all data
      */
-    [[nodiscard]] auto getAllData() const
-        -> const std::map<std::string, T>& {
+    [[nodiscard]] auto getAllData() const -> const std::map<std::string, T>& {
         return data_;
     }
 
@@ -666,12 +663,12 @@ private:
 /**
  * @brief Macro to define a test data factory
  */
-#define DEFINE_TEST_FACTORY(Type, Name, ...)                                  \
-    static struct Name##_Factory_Registrar {                                  \
-        Name##_Factory_Registrar() {                                          \
-            atom::test::FactoryRegistry::instance().registerFactory<Type>(    \
-                #Name, []() -> Type { return __VA_ARGS__; });                 \
-        }                                                                     \
+#define DEFINE_TEST_FACTORY(Type, Name, ...)                               \
+    static struct Name##_Factory_Registrar {                               \
+        Name##_Factory_Registrar() {                                       \
+            atom::test::FactoryRegistry::instance().registerFactory<Type>( \
+                #Name, []() -> Type { return __VA_ARGS__; });              \
+        }                                                                  \
     } Name##_factory_registrar_instance
 
 /**

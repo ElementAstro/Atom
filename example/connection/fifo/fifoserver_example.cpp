@@ -94,8 +94,7 @@ void ensureFifoExists(const std::string& path) {
 #ifndef _WIN32
     unlink(path.c_str());
     if (mkfifo(path.c_str(), 0666) != 0) {
-        Logger::log(Logger::WARNING, "Setup",
-                    "Could not create FIFO: " + path);
+        Logger::log(Logger::WARNING, "Setup", "Could not create FIFO: " + path);
     }
 #endif
 }
@@ -152,7 +151,7 @@ void basicServerExample() {
         server.start();
         Logger::log(Logger::SUCCESS, "Example1",
                     "Server started, isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
         // Send some messages
         for (int i = 1; i <= 5; ++i) {
@@ -170,7 +169,7 @@ void basicServerExample() {
         server.stop();
         Logger::log(Logger::INFO, "Example1",
                     "Server stopped, isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
     } catch (const std::exception& e) {
         Logger::log(Logger::ERR, "Example1",
@@ -182,7 +181,8 @@ void basicServerExample() {
 
 // Example 2: Custom server configuration
 void customConfigExample() {
-    Logger::log(Logger::INFO, "Example2", "=== Custom Server Configuration ===");
+    Logger::log(Logger::INFO, "Example2",
+                "=== Custom Server Configuration ===");
 
     const std::string fifoPath = createPipePath("config_server_fifo");
     ensureFifoExists(fifoPath);
@@ -202,16 +202,20 @@ void customConfigExample() {
         config.message_ttl = std::chrono::milliseconds(30000);
 
         Logger::log(Logger::INFO, "Example2", "Configuration:");
+        Logger::log(
+            Logger::INFO, "Example2",
+            "  - Max queue size: " + std::to_string(config.max_queue_size));
+        Logger::log(
+            Logger::INFO, "Example2",
+            "  - Max message size: " + std::to_string(config.max_message_size));
         Logger::log(Logger::INFO, "Example2",
-                    "  - Max queue size: " + std::to_string(config.max_queue_size));
-        Logger::log(Logger::INFO, "Example2",
-                    "  - Max message size: " + std::to_string(config.max_message_size));
-        Logger::log(Logger::INFO, "Example2",
-                    "  - Auto reconnect: " + std::string(config.auto_reconnect ? "yes" : "no"));
+                    "  - Auto reconnect: " +
+                        std::string(config.auto_reconnect ? "yes" : "no"));
         Logger::log(Logger::INFO, "Example2",
                     "  - Log level: " + logLevelToString(config.log_level));
         Logger::log(Logger::INFO, "Example2",
-                    "  - Flush on stop: " + std::string(config.flush_on_stop ? "yes" : "no"));
+                    "  - Flush on stop: " +
+                        std::string(config.flush_on_stop ? "yes" : "no"));
 
         // Create server with custom config
         atom::connection::FIFOServer server(fifoPath, config);
@@ -242,7 +246,8 @@ void customConfigExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example2", "Custom configuration example completed\n");
+    Logger::log(Logger::INFO, "Example2",
+                "Custom configuration example completed\n");
 }
 
 // Example 3: Message priorities
@@ -257,26 +262,31 @@ void messagePriorityExample() {
         server.start();
 
         // Send messages with different priorities
-        std::vector<std::pair<std::string, atom::connection::MessagePriority>> messages = {
-            {"Low priority task", atom::connection::MessagePriority::Low},
-            {"Normal priority task", atom::connection::MessagePriority::Normal},
-            {"High priority task", atom::connection::MessagePriority::High},
-            {"Critical alert!", atom::connection::MessagePriority::Critical}
-        };
+        std::vector<std::pair<std::string, atom::connection::MessagePriority>>
+            messages = {
+                {"Low priority task", atom::connection::MessagePriority::Low},
+                {"Normal priority task",
+                 atom::connection::MessagePriority::Normal},
+                {"High priority task", atom::connection::MessagePriority::High},
+                {"Critical alert!",
+                 atom::connection::MessagePriority::Critical}};
 
         for (const auto& [msg, priority] : messages) {
             if (server.sendMessage(msg, priority)) {
-                Logger::log(Logger::SUCCESS, "Example3",
-                            "Sent [" + priorityToString(priority) + "]: " + msg);
+                Logger::log(
+                    Logger::SUCCESS, "Example3",
+                    "Sent [" + priorityToString(priority) + "]: " + msg);
             } else {
                 Logger::log(Logger::WARNING, "Example3",
-                            "Failed to send [" + priorityToString(priority) + "]: " + msg);
+                            "Failed to send [" + priorityToString(priority) +
+                                "]: " + msg);
             }
         }
 
         // Display queue size
-        Logger::log(Logger::INFO, "Example3",
-                    "Current queue size: " + std::to_string(server.getQueueSize()));
+        Logger::log(
+            Logger::INFO, "Example3",
+            "Current queue size: " + std::to_string(server.getQueueSize()));
 
         server.stop();
 
@@ -285,7 +295,8 @@ void messagePriorityExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example3", "Message priority example completed\n");
+    Logger::log(Logger::INFO, "Example3",
+                "Message priority example completed\n");
 }
 
 // Example 4: Async message sending
@@ -318,7 +329,8 @@ void asyncMessageExample() {
         // Wait for all futures
         int successCount = 0;
         for (size_t i = 0; i < futures.size(); ++i) {
-            if (futures[i].wait_for(std::chrono::seconds(5)) == std::future_status::ready) {
+            if (futures[i].wait_for(std::chrono::seconds(5)) ==
+                std::future_status::ready) {
                 if (futures[i].get()) {
                     successCount++;
                 }
@@ -327,7 +339,7 @@ void asyncMessageExample() {
 
         Logger::log(Logger::SUCCESS, "Example4",
                     "Async messages sent: " + std::to_string(successCount) +
-                    "/" + std::to_string(futures.size()));
+                        "/" + std::to_string(futures.size()));
 
         server.stop();
 
@@ -352,15 +364,12 @@ void batchMessageExample() {
 
         // Prepare batch of messages
         std::vector<std::string> messages = {
-            "Batch message 1",
-            "Batch message 2",
-            "Batch message 3",
-            "Batch message 4",
-            "Batch message 5"
-        };
+            "Batch message 1", "Batch message 2", "Batch message 3",
+            "Batch message 4", "Batch message 5"};
 
         Logger::log(Logger::INFO, "Example5",
-                    "Sending batch of " + std::to_string(messages.size()) + " messages");
+                    "Sending batch of " + std::to_string(messages.size()) +
+                        " messages");
 
         // Send all messages at once
         size_t sentCount = server.sendMessages(messages);
@@ -369,15 +378,13 @@ void batchMessageExample() {
 
         // Send batch with priority
         std::vector<std::string> urgentMessages = {
-            "Urgent batch 1",
-            "Urgent batch 2",
-            "Urgent batch 3"
-        };
+            "Urgent batch 1", "Urgent batch 2", "Urgent batch 3"};
 
         size_t urgentSent = server.sendMessages(
             urgentMessages, atom::connection::MessagePriority::High);
-        Logger::log(Logger::SUCCESS, "Example5",
-                    "Sent " + std::to_string(urgentSent) + " high-priority messages");
+        Logger::log(
+            Logger::SUCCESS, "Example5",
+            "Sent " + std::to_string(urgentSent) + " high-priority messages");
 
         server.stop();
 
@@ -429,12 +436,14 @@ void messageableTypesExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example6", "Messageable types example completed\n");
+    Logger::log(Logger::INFO, "Example6",
+                "Messageable types example completed\n");
 }
 
 // Example 7: Message and status callbacks
 void callbacksExample() {
-    Logger::log(Logger::INFO, "Example7", "=== Message and Status Callbacks ===");
+    Logger::log(Logger::INFO, "Example7",
+                "=== Message and Status Callbacks ===");
 
     const std::string fifoPath = createPipePath("callback_server_fifo");
     ensureFifoExists(fifoPath);
@@ -446,27 +455,30 @@ void callbacksExample() {
         int msgCallbackId = server.registerMessageCallback(
             [](const std::string& message, bool success) {
                 if (success) {
-                    Logger::log(Logger::SUCCESS, "MsgCallback",
-                                "Message delivered: " + message.substr(0, 30) + "...");
+                    Logger::log(
+                        Logger::SUCCESS, "MsgCallback",
+                        "Message delivered: " + message.substr(0, 30) + "...");
                 } else {
-                    Logger::log(Logger::WARNING, "MsgCallback",
-                                "Message failed: " + message.substr(0, 30) + "...");
+                    Logger::log(
+                        Logger::WARNING, "MsgCallback",
+                        "Message failed: " + message.substr(0, 30) + "...");
                 }
             });
 
-        Logger::log(Logger::INFO, "Example7",
-                    "Registered message callback ID: " + std::to_string(msgCallbackId));
+        Logger::log(
+            Logger::INFO, "Example7",
+            "Registered message callback ID: " + std::to_string(msgCallbackId));
 
         // Register status callback
-        int statusCallbackId = server.registerStatusCallback(
-            [](bool running) {
-                Logger::log(Logger::INFO, "StatusCallback",
-                            "Server status changed: " +
+        int statusCallbackId = server.registerStatusCallback([](bool running) {
+            Logger::log(Logger::INFO, "StatusCallback",
+                        "Server status changed: " +
                             std::string(running ? "RUNNING" : "STOPPED"));
-            });
+        });
 
         Logger::log(Logger::INFO, "Example7",
-                    "Registered status callback ID: " + std::to_string(statusCallbackId));
+                    "Registered status callback ID: " +
+                        std::to_string(statusCallbackId));
 
         // Start server (triggers status callback)
         server.start();
@@ -479,11 +491,13 @@ void callbacksExample() {
 
         // Unregister callbacks
         if (server.unregisterMessageCallback(msgCallbackId)) {
-            Logger::log(Logger::INFO, "Example7", "Message callback unregistered");
+            Logger::log(Logger::INFO, "Example7",
+                        "Message callback unregistered");
         }
 
         if (server.unregisterStatusCallback(statusCallbackId)) {
-            Logger::log(Logger::INFO, "Example7", "Status callback unregistered");
+            Logger::log(Logger::INFO, "Example7",
+                        "Status callback unregistered");
         }
 
         // Stop server
@@ -520,18 +534,23 @@ void statisticsExample() {
         Logger::log(Logger::INFO, "Example8", "=== Server Statistics ===");
         Logger::log(Logger::INFO, "Example8",
                     "Messages sent: " + std::to_string(stats.messages_sent));
-        Logger::log(Logger::INFO, "Example8",
-                    "Messages failed: " + std::to_string(stats.messages_failed));
+        Logger::log(
+            Logger::INFO, "Example8",
+            "Messages failed: " + std::to_string(stats.messages_failed));
         Logger::log(Logger::INFO, "Example8",
                     "Bytes sent: " + std::to_string(stats.bytes_sent));
         Logger::log(Logger::INFO, "Example8",
-                    "Avg message size: " + std::to_string(stats.avg_message_size) + " bytes");
+                    "Avg message size: " +
+                        std::to_string(stats.avg_message_size) + " bytes");
+        Logger::log(
+            Logger::INFO, "Example8",
+            "Avg latency: " + std::to_string(stats.avg_latency_ms) + " ms");
         Logger::log(Logger::INFO, "Example8",
-                    "Avg latency: " + std::to_string(stats.avg_latency_ms) + " ms");
-        Logger::log(Logger::INFO, "Example8",
-                    "Queue high watermark: " + std::to_string(stats.queue_high_watermark));
-        Logger::log(Logger::INFO, "Example8",
-                    "Current queue size: " + std::to_string(stats.current_queue_size));
+                    "Queue high watermark: " +
+                        std::to_string(stats.queue_high_watermark));
+        Logger::log(
+            Logger::INFO, "Example8",
+            "Current queue size: " + std::to_string(stats.current_queue_size));
 
         // Reset statistics
         server.resetStatistics();
@@ -540,7 +559,8 @@ void statisticsExample() {
         // Verify reset
         auto resetStats = server.getStatistics();
         Logger::log(Logger::INFO, "Example8",
-                    "After reset - Messages sent: " + std::to_string(resetStats.messages_sent));
+                    "After reset - Messages sent: " +
+                        std::to_string(resetStats.messages_sent));
 
         server.stop();
 
@@ -574,26 +594,31 @@ void queueManagementExample() {
         }
 
         Logger::log(Logger::INFO, "Example9",
-                    "Queue size after filling: " + std::to_string(server.getQueueSize()));
+                    "Queue size after filling: " +
+                        std::to_string(server.getQueueSize()));
 
         // Clear the queue
         size_t cleared = server.clearQueue();
-        Logger::log(Logger::SUCCESS, "Example9",
-                    "Cleared " + std::to_string(cleared) + " messages from queue");
+        Logger::log(
+            Logger::SUCCESS, "Example9",
+            "Cleared " + std::to_string(cleared) + " messages from queue");
 
         Logger::log(Logger::INFO, "Example9",
-                    "Queue size after clearing: " + std::to_string(server.getQueueSize()));
+                    "Queue size after clearing: " +
+                        std::to_string(server.getQueueSize()));
 
         // Stop without flushing (config.flush_on_stop = false)
         server.stop(false);
-        Logger::log(Logger::INFO, "Example9", "Server stopped without flushing");
+        Logger::log(Logger::INFO, "Example9",
+                    "Server stopped without flushing");
 
     } catch (const std::exception& e) {
         Logger::log(Logger::ERR, "Example9",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example9", "Queue management example completed\n");
+    Logger::log(Logger::INFO, "Example9",
+                "Queue management example completed\n");
 }
 
 // Example 10: Log level configuration
@@ -608,12 +633,10 @@ void logLevelExample() {
 
         // Demonstrate different log levels
         std::vector<atom::connection::LogLevel> levels = {
-            atom::connection::LogLevel::Debug,
-            atom::connection::LogLevel::Info,
+            atom::connection::LogLevel::Debug, atom::connection::LogLevel::Info,
             atom::connection::LogLevel::Warning,
             atom::connection::LogLevel::Error,
-            atom::connection::LogLevel::None
-        };
+            atom::connection::LogLevel::None};
 
         for (auto level : levels) {
             server.setLogLevel(level);
@@ -650,14 +673,15 @@ void moveSemanticsExample() {
         server1.sendMessage("Message from server1");
 
         Logger::log(Logger::INFO, "Example11",
-                    "server1 running: " + std::string(server1.isRunning() ? "yes" : "no"));
+                    "server1 running: " +
+                        std::string(server1.isRunning() ? "yes" : "no"));
 
         // Move to new server
         atom::connection::FIFOServer server2 = std::move(server1);
 
         Logger::log(Logger::INFO, "Example11",
                     "After move - server2 running: " +
-                    std::string(server2.isRunning() ? "yes" : "no"));
+                        std::string(server2.isRunning() ? "yes" : "no"));
 
         // Continue using moved server
         server2.sendMessage("Message from server2 (moved)");
@@ -669,13 +693,16 @@ void moveSemanticsExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example11", "Move semantics example completed\n");
+    Logger::log(Logger::INFO, "Example11",
+                "Move semantics example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::INFO, "Main", "========================================");
+    Logger::log(Logger::INFO, "Main",
+                "========================================");
     Logger::log(Logger::INFO, "Main", "  FIFOServer Comprehensive Examples");
-    Logger::log(Logger::INFO, "Main", "========================================\n");
+    Logger::log(Logger::INFO, "Main",
+                "========================================\n");
 
     // Run all examples
     basicServerExample();
@@ -690,9 +717,12 @@ int main() {
     logLevelExample();
     moveSemanticsExample();
 
-    Logger::log(Logger::SUCCESS, "Main", "========================================");
-    Logger::log(Logger::SUCCESS, "Main", "  All FIFOServer examples completed!");
-    Logger::log(Logger::SUCCESS, "Main", "========================================");
+    Logger::log(Logger::SUCCESS, "Main",
+                "========================================");
+    Logger::log(Logger::SUCCESS, "Main",
+                "  All FIFOServer examples completed!");
+    Logger::log(Logger::SUCCESS, "Main",
+                "========================================");
 
     return 0;
 }

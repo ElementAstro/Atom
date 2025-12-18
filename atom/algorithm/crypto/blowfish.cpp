@@ -470,17 +470,20 @@ void Blowfish::encrypt_file(std::string_view input_file,
     std::streamsize size = infile.tellg();
     infile.seekg(0, std::ios::beg);
 
-    // Calculate buffer size including padding
-    usize buffer_size = size + (BLOCK_SIZE - (size % BLOCK_SIZE));
-    if (size % BLOCK_SIZE == 0) {
-        buffer_size += BLOCK_SIZE;  // Add full block of padding when size is
-                                    // multiple of BLOCK_SIZE
-    }
+    // Calculate padding length (PKCS7)
+    usize padding_len = BLOCK_SIZE - (size % BLOCK_SIZE);
+    usize buffer_size = size + padding_len;
 
     std::vector<std::byte> buffer(buffer_size);
     if (!infile.read(reinterpret_cast<char*>(buffer.data()), size)) {
         spdlog::error("Failed to read input file: {}", input_file);
         THROW_RUNTIME_ERROR("Failed to read input file");
+    }
+
+    // Fill PKCS7 padding bytes
+    std::byte padding_byte = static_cast<std::byte>(padding_len);
+    for (usize i = size; i < buffer_size; ++i) {
+        buffer[i] = padding_byte;
     }
 
     encrypt_data(std::span<std::byte>(buffer));
@@ -517,6 +520,26 @@ void Blowfish::decrypt_file(std::string_view input_file,
 
     usize length = buffer.size();
     decrypt_data(std::span<std::byte>(buffer), length);
+
+    // Remove PKCS7 padding
+    if (!buffer.empty()) {
+        auto padding_byte = buffer.back();
+        auto padding_len = static_cast<usize>(padding_byte);
+        if (padding_len > 0 && padding_len <= BLOCK_SIZE &&
+            padding_len <= length) {
+            // Verify padding is valid
+            bool valid_padding = true;
+            for (usize i = 0; i < padding_len; ++i) {
+                if (buffer[length - 1 - i] != padding_byte) {
+                    valid_padding = false;
+                    break;
+                }
+            }
+            if (valid_padding) {
+                length -= padding_len;
+            }
+        }
+    }
 
     std::ofstream outfile(std::string(output_file), std::ios::binary);
     if (!outfile) {

@@ -17,6 +17,7 @@ set(ATOM_LOG_HEADERS async_logger.hpp atomlog.hpp log_manager.hpp logger.hpp
 
 # Create atom-log library
 add_library(atom-log SHARED ${ATOM_LOG_SOURCES} ${ATOM_LOG_HEADERS})
+add_library(atom::log ALIAS atom-log)
 
 # Find and link spdlog (required)
 find_package(spdlog REQUIRED)

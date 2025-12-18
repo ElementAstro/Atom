@@ -117,15 +117,24 @@ void demonstrateArgumentTypes() {
                        std::any(std::string("")), "Auto-detected type");
 
     Vector<String> args = {"types_example",
-                           "--string",   "hello",
-                           "--integer",  "42",
-                           "--unsigned", "100",
-                           "--long",     "1000000",
-                           "--float",    "3.14",
-                           "--double",   "2.71828",
-                           "--bool",     "true",
-                           "--file",     "/path/to/file.txt",
-                           "--auto",     "auto_value"};
+                           "--string",
+                           "hello",
+                           "--integer",
+                           "42",
+                           "--unsigned",
+                           "100",
+                           "--long",
+                           "1000000",
+                           "--float",
+                           "3.14",
+                           "--double",
+                           "2.71828",
+                           "--bool",
+                           "true",
+                           "--file",
+                           "/path/to/file.txt",
+                           "--auto",
+                           "auto_value"};
 
     std::cout << "Simulated command with various types..." << std::endl;
 
@@ -218,8 +227,9 @@ void demonstrateRequiredAndDefaults() {
     parser2.addArgument("--threads", ArgumentParser::ArgType::INTEGER, false,
                         std::any(4), "Number of threads");
 
-    Vector<String> args2 = {"required_example", "--input",   "data.csv",
-                            "--output",         "result.txt", "--threads", "8"};
+    Vector<String> args2 = {
+        "required_example", "--input",   "data.csv", "--output",
+        "result.txt",       "--threads", "8"};
 
     try {
         parser2.parse(static_cast<int>(args2.size()), args2);
@@ -285,8 +295,7 @@ void demonstrateAliases() {
 
     // Arguments with aliases
     parser.addArgument("--output", ArgumentParser::ArgType::STRING, false,
-                       std::any(std::string("out.txt")), "Output file",
-                       {"-o"});
+                       std::any(std::string("out.txt")), "Output file", {"-o"});
 
     parser.addArgument("--verbose-level", ArgumentParser::ArgType::INTEGER,
                        false, std::any(0), "Verbosity level", {"-V", "--verb"});
@@ -296,11 +305,12 @@ void demonstrateAliases() {
                        {"-c", "--cfg"});
 
     // Test with aliases
-    Vector<String> args = {"alias_example", "-o", "result.txt", "-V", "2",
-                           "--cfg", "app.conf"};
+    Vector<String> args = {"alias_example", "-o",      "result.txt", "-V", "2",
+                           "--cfg",         "app.conf"};
 
-    std::cout << "Simulated command: alias_example -o result.txt -V 2 --cfg app.conf"
-              << std::endl;
+    std::cout
+        << "Simulated command: alias_example -o result.txt -V 2 --cfg app.conf"
+        << std::endl;
 
     try {
         parser.parse(static_cast<int>(args.size()), args);
@@ -339,16 +349,16 @@ void demonstrateSubcommands() {
     if (auto cloneParser = parser.getSubcommandParser("clone")) {
         cloneParser->get().addArgument("--url", ArgumentParser::ArgType::STRING,
                                        true, std::any(), "Repository URL");
-        cloneParser->get().addArgument(
-            "--depth", ArgumentParser::ArgType::INTEGER, false, std::any(0),
-            "Create a shallow clone");
+        cloneParser->get().addArgument("--depth",
+                                       ArgumentParser::ArgType::INTEGER, false,
+                                       std::any(0), "Create a shallow clone");
     }
 
     // Configure commit subcommand
     if (auto commitParser = parser.getSubcommandParser("commit")) {
-        commitParser->get().addArgument(
-            "--message", ArgumentParser::ArgType::STRING, true, std::any(),
-            "Commit message", {"-m"});
+        commitParser->get().addArgument("--message",
+                                        ArgumentParser::ArgType::STRING, true,
+                                        std::any(), "Commit message", {"-m"});
         commitParser->get().addFlag("--amend", "Amend previous commit");
     }
 
@@ -469,14 +479,14 @@ void demonstrateComplexUseCase() {
     parser.addFlag("--dry-run", "Show what would be done");
 
     // Simulate a build command
-    Vector<String> args = {"buildtool",  "-s",       "./src",
-                           "-o",         "./dist",   "-c",
-                           "debug",      "-j",       "8",
-                           "--clean",    "--verbose"};
+    Vector<String> args = {"buildtool", "-s",      "./src",    "-o",
+                           "./dist",    "-c",      "debug",    "-j",
+                           "8",         "--clean", "--verbose"};
 
     std::cout << "Simulated command:" << std::endl;
-    std::cout << "  buildtool -s ./src -o ./dist -c debug -j 8 --clean --verbose"
-              << std::endl;
+    std::cout
+        << "  buildtool -s ./src -o ./dist -c debug -j 8 --clean --verbose"
+        << std::endl;
 
     try {
         parser.parse(static_cast<int>(args.size()), args);

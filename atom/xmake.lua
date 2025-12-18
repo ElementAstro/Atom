@@ -57,7 +57,9 @@ option_end()
 -- =============================================================================
 
 if has_config("python") then
-    add_requires("python3", "pybind11")
+    local use_system_packages = has_config("use_system_packages")
+    add_requires("python3", {system = use_system_packages})
+    add_requires("pybind11", {system = use_system_packages})
     print("Python support enabled")
 end
 
@@ -67,7 +69,8 @@ end
 
 if is_plat("linux") then
     -- Linux-specific dependencies
-    add_requires("pkgconfig::libsystemd", {optional = true})
+    local use_system_packages = has_config("use_system_packages")
+    add_requires("pkgconfig::libsystemd", {optional = true, system = use_system_packages})
 end
 
 -- =============================================================================
@@ -99,9 +102,10 @@ local atom_modules = {}
 -- =============================================================================
 
 local valid_modules = {}
+local build_all = has_config("build_all")
 
 for _, module in ipairs(modules) do
-    if has_config("build_" .. module) then
+    if build_all or has_config("build_" .. module) then
         if check_module_directory(module, module) then
             table.insert(valid_modules, module)
             table.insert(atom_modules, "atom-" .. module)
@@ -114,7 +118,7 @@ end
 
 -- Add tests if enabled
 if has_config("build_tests") then
-    if os.isdir("tests") then
+    if os.isdir("tests") and os.isfile(path.join(os.scriptdir(), "tests", "xmake.lua")) then
         table.insert(valid_modules, "tests")
         print("Building tests")
     end
@@ -132,7 +136,7 @@ for _, module in ipairs(valid_modules) do
 end
 
 -- Include tests separately if needed
-if has_config("build_tests") and os.isdir("tests") then
+if has_config("build_tests") and os.isdir("tests") and os.isfile(path.join(os.scriptdir(), "tests", "xmake.lua")) then
     includes("tests")
 end
 

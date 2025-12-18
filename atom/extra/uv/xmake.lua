@@ -10,7 +10,8 @@ set_license("GPL-3.0")
 set_languages("c++23")  -- C++23 required for std::expected
 
 -- Add required packages
-add_requires("libuv", {optional = true})
+local use_system_packages = has_config("use_system_packages")
+add_requires("libuv", {optional = true, system = use_system_packages})
 
 -- Source files
 local sources = {
@@ -44,7 +45,9 @@ target("atom-extra-uv")
     add_packages("libuv")
 
     -- Add system libraries
-    add_syslinks("pthread")
+    if is_plat("linux") then
+        add_syslinks("pthread")
+    end
 
     -- Set C++ standard
     set_languages("c++23")

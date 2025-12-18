@@ -3,10 +3,10 @@
  * @brief Examples for atom::utils StringSwitch
  */
 
-#include "atom/utils/core/switch.hpp"
 #include <iostream>
 #include <string>
 #include <vector>
+#include "atom/utils/core/switch.hpp"
 
 using namespace atom::utils;
 
@@ -29,28 +29,30 @@ void demonstrateBasicUsage() {
         return String("Goodbye!");
     });
 
-    sw.registerCase("count", []() -> StringSwitch<false>::ReturnType {
-        return 42;
-    });
+    sw.registerCase("count",
+                    []() -> StringSwitch<false>::ReturnType { return 42; });
 
     sw.setDefault([]() -> StringSwitch<false>::ReturnType {
         return String("Unknown command");
     });
 
-    std::vector<std::string> commands = {"hello", "goodbye", "count", "unknown"};
+    std::vector<std::string> commands = {"hello", "goodbye", "count",
+                                         "unknown"};
     for (const auto& cmd : commands) {
         std::cout << "  match(\"" << cmd << "\"): ";
         auto result = sw.match(cmd);
-        std::visit([](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, std::monostate>) {
-                std::cout << "(no result)";
-            } else if constexpr (std::is_same_v<T, int>) {
-                std::cout << "int: " << arg;
-            } else if constexpr (std::is_same_v<T, String>) {
-                std::cout << "string: \"" << arg << "\"";
-            }
-        }, result);
+        std::visit(
+            [](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, std::monostate>) {
+                    std::cout << "(no result)";
+                } else if constexpr (std::is_same_v<T, int>) {
+                    std::cout << "int: " << arg;
+                } else if constexpr (std::is_same_v<T, String>) {
+                    std::cout << "string: \"" << arg << "\"";
+                }
+            },
+            result);
         std::cout << std::endl;
     }
 }
@@ -60,21 +62,28 @@ void demonstrateCaseManagement() {
 
     StringSwitch<false> sw;
 
-    sw.registerCase("add", []() -> StringSwitch<false>::ReturnType { return 1; });
-    sw.registerCase("sub", []() -> StringSwitch<false>::ReturnType { return 2; });
-    sw.registerCase("mul", []() -> StringSwitch<false>::ReturnType { return 3; });
+    sw.registerCase("add",
+                    []() -> StringSwitch<false>::ReturnType { return 1; });
+    sw.registerCase("sub",
+                    []() -> StringSwitch<false>::ReturnType { return 2; });
+    sw.registerCase("mul",
+                    []() -> StringSwitch<false>::ReturnType { return 3; });
 
     std::cout << "Registered cases: add, sub, mul" << std::endl;
-    std::cout << "Has 'add': " << (sw.hasCase("add") ? "Yes" : "No") << std::endl;
-    std::cout << "Has 'div': " << (sw.hasCase("div") ? "Yes" : "No") << std::endl;
+    std::cout << "Has 'add': " << (sw.hasCase("add") ? "Yes" : "No")
+              << std::endl;
+    std::cout << "Has 'div': " << (sw.hasCase("div") ? "Yes" : "No")
+              << std::endl;
 
     sw.unregisterCase("sub");
     std::cout << "\nAfter unregistering 'sub':" << std::endl;
-    std::cout << "Has 'sub': " << (sw.hasCase("sub") ? "Yes" : "No") << std::endl;
+    std::cout << "Has 'sub': " << (sw.hasCase("sub") ? "Yes" : "No")
+              << std::endl;
 
     sw.clearCases();
     std::cout << "\nAfter clearing all cases:" << std::endl;
-    std::cout << "Has 'add': " << (sw.hasCase("add") ? "Yes" : "No") << std::endl;
+    std::cout << "Has 'add': " << (sw.hasCase("add") ? "Yes" : "No")
+              << std::endl;
 }
 
 void demonstrateStatistics() {
@@ -82,8 +91,10 @@ void demonstrateStatistics() {
 
     StringSwitch<false> sw;
 
-    sw.registerCase("op1", []() -> StringSwitch<false>::ReturnType { return 1; });
-    sw.registerCase("op2", []() -> StringSwitch<false>::ReturnType { return 2; });
+    sw.registerCase("op1",
+                    []() -> StringSwitch<false>::ReturnType { return 1; });
+    sw.registerCase("op2",
+                    []() -> StringSwitch<false>::ReturnType { return 2; });
 
     for (int i = 0; i < 100; ++i) {
         sw.match("op1");
@@ -112,12 +123,14 @@ void demonstrateThreadSafe() {
     std::cout << "Multiple threads can safely access this switch" << std::endl;
 
     auto result = sw.match("task");
-    std::visit([](auto&& arg) {
-        using T = std::decay_t<decltype(arg)>;
-        if constexpr (std::is_same_v<T, String>) {
-            std::cout << "Result: " << arg << std::endl;
-        }
-    }, result);
+    std::visit(
+        [](auto&& arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, String>) {
+                std::cout << "Result: " << arg << std::endl;
+            }
+        },
+        result);
 }
 
 void demonstrateCommandProcessor() {
@@ -133,9 +146,8 @@ void demonstrateCommandProcessor() {
         return String("Version 1.0.0");
     });
 
-    processor.registerCase("quit", []() -> StringSwitch<false>::ReturnType {
-        return 0;
-    });
+    processor.registerCase(
+        "quit", []() -> StringSwitch<false>::ReturnType { return 0; });
 
     processor.setDefault([]() -> StringSwitch<false>::ReturnType {
         return String("Unknown command. Type 'help' for available commands.");
@@ -145,14 +157,16 @@ void demonstrateCommandProcessor() {
     for (const auto& input : inputs) {
         std::cout << "> " << input << std::endl;
         auto result = processor.match(input);
-        std::visit([](auto&& arg) {
-            using T = std::decay_t<decltype(arg)>;
-            if constexpr (std::is_same_v<T, int>) {
-                std::cout << "  Exit code: " << arg << std::endl;
-            } else if constexpr (std::is_same_v<T, String>) {
-                std::cout << "  " << arg << std::endl;
-            }
-        }, result);
+        std::visit(
+            [](auto&& arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, int>) {
+                    std::cout << "  Exit code: " << arg << std::endl;
+                } else if constexpr (std::is_same_v<T, String>) {
+                    std::cout << "  " << arg << std::endl;
+                }
+            },
+            result);
     }
 }
 

@@ -77,7 +77,8 @@ public:
 
 // Example 1: Basic UDP server
 void basicUdpServerExample() {
-    Logger::log(Logger::LOG_INFO, "Example1", "=== Basic UdpSocketHub Usage ===");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "=== Basic UdpSocketHub Usage ===");
 
     try {
         // Create UDP server
@@ -85,7 +86,7 @@ void basicUdpServerExample() {
 
         Logger::log(Logger::LOG_INFO, "Example1",
                     "Created UdpSocketHub, isRunning: " +
-                    std::string(server.isRunning() ? "yes" : "no"));
+                        std::string(server.isRunning() ? "yes" : "no"));
 
         // Start server on port
         uint16_t port = 12345;
@@ -94,8 +95,9 @@ void basicUdpServerExample() {
         if (result) {
             Logger::log(Logger::LOG_SUCCESS, "Example1",
                         "Server started on port " + std::to_string(port));
-            Logger::log(Logger::LOG_INFO, "Example1",
-                        "isRunning: " + std::string(server.isRunning() ? "yes" : "no"));
+            Logger::log(
+                Logger::LOG_INFO, "Example1",
+                "isRunning: " + std::string(server.isRunning() ? "yes" : "no"));
 
             // Let it run briefly
             std::this_thread::sleep_for(std::chrono::seconds(2));
@@ -113,7 +115,8 @@ void basicUdpServerExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example1", "Basic server example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Basic server example completed\n");
 }
 
 // Example 2: Message handlers
@@ -132,16 +135,16 @@ void messageHandlerExample() {
             messageCount++;
             Logger::log(Logger::LOG_INFO, "Handler",
                         "Message #" + std::to_string(messageCount.load()) +
-                        " from " + senderIp + ":" + std::to_string(senderPort) +
-                        ": " + message);
+                            " from " + senderIp + ":" +
+                            std::to_string(senderPort) + ": " + message);
         });
 
         // Add another handler for logging
         server.addHandler([](const std::string& message,
-                            const std::string& senderIp,
-                            uint16_t senderPort) {
-            Logger::log(Logger::LOG_DEBUG, "LogHandler",
-                        "Received " + std::to_string(message.size()) + " bytes");
+                             const std::string& senderIp, uint16_t senderPort) {
+            Logger::log(
+                Logger::LOG_DEBUG, "LogHandler",
+                "Received " + std::to_string(message.size()) + " bytes");
         });
 
         auto result = server.start(12346);
@@ -153,7 +156,8 @@ void messageHandlerExample() {
             std::this_thread::sleep_for(std::chrono::seconds(3));
 
             Logger::log(Logger::LOG_INFO, "Example2",
-                        "Total messages received: " + std::to_string(messageCount.load()));
+                        "Total messages received: " +
+                            std::to_string(messageCount.load()));
 
             server.stop();
         }
@@ -163,12 +167,14 @@ void messageHandlerExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example2", "Message handler example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "Message handler example completed\n");
 }
 
 // Example 3: Sending to specific clients
 void sendToClientExample() {
-    Logger::log(Logger::LOG_INFO, "Example3", "=== Sending to Specific Clients ===");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "=== Sending to Specific Clients ===");
 
     try {
         atom::connection::UdpSocketHub server;
@@ -178,19 +184,20 @@ void sendToClientExample() {
         std::mutex clientsMutex;
 
         server.addHandler([&](const std::string& message,
-                             const std::string& senderIp,
-                             uint16_t senderPort) {
+                              const std::string& senderIp,
+                              uint16_t senderPort) {
             {
                 std::lock_guard<std::mutex> lock(clientsMutex);
                 // Add client if not already tracked
-                auto it = std::find_if(clients.begin(), clients.end(),
-                    [&](const auto& c) {
+                auto it = std::find_if(
+                    clients.begin(), clients.end(), [&](const auto& c) {
                         return c.first == senderIp && c.second == senderPort;
                     });
                 if (it == clients.end()) {
                     clients.emplace_back(senderIp, senderPort);
                     Logger::log(Logger::LOG_INFO, "Example3",
-                                "New client: " + senderIp + ":" + std::to_string(senderPort));
+                                "New client: " + senderIp + ":" +
+                                    std::to_string(senderPort));
                 }
             }
         });
@@ -206,19 +213,22 @@ void sendToClientExample() {
             {
                 std::lock_guard<std::mutex> lock(clientsMutex);
                 for (const auto& [ip, port] : clients) {
-                    auto sendResult = server.sendTo(ip, port, "Hello from server!");
+                    auto sendResult =
+                        server.sendTo(ip, port, "Hello from server!");
                     if (sendResult) {
-                        Logger::log(Logger::LOG_SUCCESS, "Example3",
-                                    "Sent to " + ip + ":" + std::to_string(port));
+                        Logger::log(
+                            Logger::LOG_SUCCESS, "Example3",
+                            "Sent to " + ip + ":" + std::to_string(port));
                     }
                 }
             }
 
             // Send to specific address
-            auto sendResult = server.sendTo("127.0.0.1", 54321, "Direct message");
+            auto sendResult =
+                server.sendTo("127.0.0.1", 54321, "Direct message");
             Logger::log(Logger::LOG_INFO, "Example3",
                         "Send to 127.0.0.1:54321: " +
-                        std::string(sendResult ? "success" : "failed"));
+                            std::string(sendResult ? "success" : "failed"));
 
             server.stop();
         }
@@ -228,12 +238,14 @@ void sendToClientExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example3", "Send to client example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "Send to client example completed\n");
 }
 
 // Example 4: Buffer size configuration
 void bufferSizeExample() {
-    Logger::log(Logger::LOG_INFO, "Example4", "=== Buffer Size Configuration ===");
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "=== Buffer Size Configuration ===");
 
     try {
         atom::connection::UdpSocketHub server;
@@ -241,8 +253,9 @@ void bufferSizeExample() {
         // Set buffer size before starting
         size_t bufferSize = 8192;
         server.setBufferSize(bufferSize);
-        Logger::log(Logger::LOG_INFO, "Example4",
-                    "Set buffer size to " + std::to_string(bufferSize) + " bytes");
+        Logger::log(
+            Logger::LOG_INFO, "Example4",
+            "Set buffer size to " + std::to_string(bufferSize) + " bytes");
 
         auto result = server.start(12348);
         if (result) {
@@ -252,7 +265,8 @@ void bufferSizeExample() {
             // Get current buffer size
             size_t currentSize = server.getBufferSize();
             Logger::log(Logger::LOG_INFO, "Example4",
-                        "Current buffer size: " + std::to_string(currentSize) + " bytes");
+                        "Current buffer size: " + std::to_string(currentSize) +
+                            " bytes");
 
             // Change buffer size while running
             server.setBufferSize(16384);
@@ -268,7 +282,8 @@ void bufferSizeExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example4", "Buffer size example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "Buffer size example completed\n");
 }
 
 // Example 5: Remove handlers
@@ -282,8 +297,7 @@ void removeHandlerExample() {
         int handlerId = server.addHandler([](const std::string& message,
                                              const std::string& senderIp,
                                              uint16_t senderPort) {
-            Logger::log(Logger::LOG_INFO, "Handler",
-                        "Received: " + message);
+            Logger::log(Logger::LOG_INFO, "Handler", "Received: " + message);
         });
 
         Logger::log(Logger::LOG_INFO, "Example5",
@@ -297,13 +311,15 @@ void removeHandlerExample() {
 
             // Remove handler
             bool removed = server.removeHandler(handlerId);
-            Logger::log(Logger::LOG_INFO, "Example5",
-                        "Handler removed: " + std::string(removed ? "yes" : "no"));
+            Logger::log(
+                Logger::LOG_INFO, "Example5",
+                "Handler removed: " + std::string(removed ? "yes" : "no"));
 
             // Try to remove non-existent handler
             removed = server.removeHandler(99999);
             Logger::log(Logger::LOG_INFO, "Example5",
-                        "Remove non-existent handler: " + std::string(removed ? "yes" : "no (expected)"));
+                        "Remove non-existent handler: " +
+                            std::string(removed ? "yes" : "no (expected)"));
 
             server.stop();
         }
@@ -313,7 +329,8 @@ void removeHandlerExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example5", "Remove handler example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example5",
+                "Remove handler example completed\n");
 }
 
 // Example 6: Server lifecycle
@@ -332,14 +349,14 @@ void serverLifecycleExample() {
             if (result) {
                 Logger::log(Logger::LOG_SUCCESS, "Example6",
                             "Started - isRunning: " +
-                            std::string(server.isRunning() ? "yes" : "no"));
+                                std::string(server.isRunning() ? "yes" : "no"));
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(500));
 
                 server.stop();
                 Logger::log(Logger::LOG_INFO, "Example6",
                             "Stopped - isRunning: " +
-                            std::string(server.isRunning() ? "yes" : "no"));
+                                std::string(server.isRunning() ? "yes" : "no"));
             }
 
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -350,7 +367,8 @@ void serverLifecycleExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example6", "Server lifecycle example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example6",
+                "Server lifecycle example completed\n");
 }
 
 // Example 7: Echo server
@@ -364,8 +382,9 @@ void echoServerExample() {
         server.addHandler([&server](const std::string& message,
                                     const std::string& senderIp,
                                     uint16_t senderPort) {
-            Logger::log(Logger::LOG_INFO, "Echo",
-                        "Echoing to " + senderIp + ":" + std::to_string(senderPort));
+            Logger::log(
+                Logger::LOG_INFO, "Echo",
+                "Echoing to " + senderIp + ":" + std::to_string(senderPort));
             server.sendTo(senderIp, senderPort, "ECHO: " + message);
         });
 
@@ -388,7 +407,8 @@ void echoServerExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example7", "Echo server example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example7",
+                "Echo server example completed\n");
 }
 
 // Example 8: Move semantics
@@ -401,14 +421,16 @@ void moveSemanticsExample() {
         server1.start(12352);
 
         Logger::log(Logger::LOG_INFO, "Example8",
-                    "server1 running: " + std::string(server1.isRunning() ? "yes" : "no"));
+                    "server1 running: " +
+                        std::string(server1.isRunning() ? "yes" : "no"));
 
         // Move to new server
         atom::connection::UdpSocketHub server2 = std::move(server1);
 
         Logger::log(Logger::LOG_INFO, "Example8", "After move:");
         Logger::log(Logger::LOG_INFO, "Example8",
-                    "server2 running: " + std::string(server2.isRunning() ? "yes" : "no"));
+                    "server2 running: " +
+                        std::string(server2.isRunning() ? "yes" : "no"));
 
         // Use moved server
         server2.sendTo("127.0.0.1", 54321, "Message from moved server");
@@ -420,12 +442,14 @@ void moveSemanticsExample() {
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example8", "Move semantics example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example8",
+                "Move semantics example completed\n");
 }
 
 // Example 9: Complete server workflow
 void completeWorkflowExample() {
-    Logger::log(Logger::LOG_INFO, "Example9", "=== Complete Server Workflow ===");
+    Logger::log(Logger::LOG_INFO, "Example9",
+                "=== Complete Server Workflow ===");
 
     try {
         atom::connection::UdpSocketHub server;
@@ -436,13 +460,14 @@ void completeWorkflowExample() {
 
         // Setup handler
         server.addHandler([&](const std::string& message,
-                             const std::string& senderIp,
-                             uint16_t senderPort) {
+                              const std::string& senderIp,
+                              uint16_t senderPort) {
             totalMessages++;
             totalBytes += message.size();
 
-            Logger::log(Logger::LOG_DEBUG, "Workflow",
-                        "Message from " + senderIp + ":" + std::to_string(senderPort));
+            Logger::log(
+                Logger::LOG_DEBUG, "Workflow",
+                "Message from " + senderIp + ":" + std::to_string(senderPort));
 
             // Send acknowledgment
             server.sendTo(senderIp, senderPort, "ACK");
@@ -469,7 +494,8 @@ void completeWorkflowExample() {
 
             Logger::log(Logger::LOG_INFO, "Example9",
                         "Status: " + std::to_string(totalMessages.load()) +
-                        " messages, " + std::to_string(totalBytes.load()) + " bytes");
+                            " messages, " + std::to_string(totalBytes.load()) +
+                            " bytes");
         }
 
         // Final stats
@@ -480,20 +506,25 @@ void completeWorkflowExample() {
                     "Total bytes: " + std::to_string(totalBytes.load()));
 
         server.stop();
-        Logger::log(Logger::LOG_SUCCESS, "Example9", "Server stopped gracefully");
+        Logger::log(Logger::LOG_SUCCESS, "Example9",
+                    "Server stopped gracefully");
 
     } catch (const std::exception& e) {
         Logger::log(Logger::LOG_ERR, "Example9",
                     "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::LOG_INFO, "Example9", "Complete workflow example completed\n");
+    Logger::log(Logger::LOG_INFO, "Example9",
+                "Complete workflow example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
-    Logger::log(Logger::LOG_INFO, "Main", "  UdpSocketHub Comprehensive Examples");
-    Logger::log(Logger::LOG_INFO, "Main", "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "  UdpSocketHub Comprehensive Examples");
+    Logger::log(Logger::LOG_INFO, "Main",
+                "========================================");
     Logger::log(Logger::LOG_WARNING, "Main",
                 "Note: Some examples require UDP clients to send data");
     Logger::log(Logger::LOG_INFO, "Main", "");
@@ -509,9 +540,12 @@ int main() {
     moveSemanticsExample();
     completeWorkflowExample();
 
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "  All UdpSocketHub examples completed!");
-    Logger::log(Logger::LOG_SUCCESS, "Main", "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "  All UdpSocketHub examples completed!");
+    Logger::log(Logger::LOG_SUCCESS, "Main",
+                "========================================");
 
     return 0;
 }

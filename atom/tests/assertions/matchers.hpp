@@ -11,13 +11,19 @@
 #define ATOM_TEST_ASSERTIONS_MATCHERS_HPP
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <concepts>
 #include <functional>
+#include <iterator>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <regex>
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <type_traits>
 #include <vector>
 
@@ -25,6 +31,16 @@
 
 namespace atom::test {
 namespace matchers {
+
+template <typename T>
+concept StreamInsertable = requires(std::ostream& os, const T& v) {
+    { os << v } -> std::same_as<std::ostream&>;
+};
+
+template <typename T>
+concept HasMatches = requires(const T& m, const int& v) {
+    { m.matches(v) } -> std::convertible_to<bool>;
+};
 
 /**
  * @brief Base interface for all matchers
@@ -55,7 +71,12 @@ public:
      */
     [[nodiscard]] virtual std::string describeMismatch(const T& value) const {
         std::ostringstream oss;
-        oss << "was: " << value;
+        oss << "was: ";
+        if constexpr (StreamInsertable<T>) {
+            oss << value;
+        } else {
+            oss << "<unprintable>";
+        }
         return oss.str();
     }
 };
@@ -89,7 +110,12 @@ public:
 
     [[nodiscard]] std::string describe() const override {
         std::ostringstream oss;
-        oss << "is equal to " << expected_;
+        oss << "is equal to ";
+        if constexpr (StreamInsertable<T>) {
+            oss << expected_;
+        } else {
+            oss << "<unprintable>";
+        }
         return oss.str();
     }
 
@@ -102,9 +128,10 @@ auto Eq(T expected) {
     return EqMatcher<T>(std::move(expected));
 }
 
-/**
- * @brief Not equal matcher
- */
+inline auto FloatEq(float expected) { return Eq(expected); }
+
+inline auto DoubleEq(double expected) { return Eq(expected); }
+
 template <typename T>
 class NeMatcher : public Matcher<T> {
 public:
@@ -116,7 +143,12 @@ public:
 
     [[nodiscard]] std::string describe() const override {
         std::ostringstream oss;
-        oss << "is not equal to " << expected_;
+        oss << "is not equal to ";
+        if constexpr (StreamInsertable<T>) {
+            oss << expected_;
+        } else {
+            oss << "<unprintable>";
+        }
         return oss.str();
     }
 
@@ -129,9 +161,6 @@ auto Ne(T expected) {
     return NeMatcher<T>(std::move(expected));
 }
 
-/**
- * @brief Less than matcher
- */
 template <typename T>
 class LtMatcher : public Matcher<T> {
 public:
@@ -156,36 +185,6 @@ auto Lt(T bound) {
     return LtMatcher<T>(std::move(bound));
 }
 
-/**
- * @brief Greater than matcher
- */
-template <typename T>
-class GtMatcher : public Matcher<T> {
-public:
-    explicit GtMatcher(T bound) : bound_(std::move(bound)) {}
-
-    [[nodiscard]] bool matches(const T& value) const override {
-        return value > bound_;
-    }
-
-    [[nodiscard]] std::string describe() const override {
-        std::ostringstream oss;
-        oss << "is greater than " << bound_;
-        return oss.str();
-    }
-
-private:
-    T bound_;
-};
-
-template <typename T>
-auto Gt(T bound) {
-    return GtMatcher<T>(std::move(bound));
-}
-
-/**
- * @brief Less than or equal matcher
- */
 template <typename T>
 class LeMatcher : public Matcher<T> {
 public:
@@ -210,9 +209,30 @@ auto Le(T bound) {
     return LeMatcher<T>(std::move(bound));
 }
 
-/**
- * @brief Greater than or equal matcher
- */
+template <typename T>
+class GtMatcher : public Matcher<T> {
+public:
+    explicit GtMatcher(T bound) : bound_(std::move(bound)) {}
+
+    [[nodiscard]] bool matches(const T& value) const override {
+        return value > bound_;
+    }
+
+    [[nodiscard]] std::string describe() const override {
+        std::ostringstream oss;
+        oss << "is greater than " << bound_;
+        return oss.str();
+    }
+
+private:
+    T bound_;
+};
+
+template <typename T>
+auto Gt(T bound) {
+    return GtMatcher<T>(std::move(bound));
+}
+
 template <typename T>
 class GeMatcher : public Matcher<T> {
 public:
@@ -262,8 +282,13 @@ public:
 
     [[nodiscard]] std::string describeMismatch(const T& value) const override {
         std::ostringstream oss;
-        oss << "was " << value << " (difference: "
-            << std::abs(value - expected_) << ")";
+        oss << "was ";
+        if constexpr (StreamInsertable<T>) {
+            oss << value;
+        } else {
+            oss << "<unprintable>";
+        }
+        oss << " (difference: " << std::abs(value - expected_) << ")";
         return oss.str();
     }
 
@@ -282,9 +307,6 @@ auto FloatNear(T expected, T tolerance) {
     return NearMatcher<T>(expected, tolerance);
 }
 
-/**
- * @brief NaN matcher
- */
 template <typename T>
 class IsNanMatcher : public Matcher<T> {
 public:
@@ -300,9 +322,6 @@ auto IsNan() {
     return IsNanMatcher<T>();
 }
 
-/**
- * @brief Infinity matcher
- */
 template <typename T>
 class IsInfMatcher : public Matcher<T> {
 public:
@@ -320,9 +339,6 @@ auto IsInf() {
     return IsInfMatcher<T>();
 }
 
-/**
- * @brief Finite number matcher
- */
 template <typename T>
 class IsFiniteMatcher : public Matcher<T> {
 public:
@@ -338,13 +354,6 @@ auto IsFinite() {
     return IsFiniteMatcher<T>();
 }
 
-// ============================================================================
-// Pointer Matchers
-// ============================================================================
-
-/**
- * @brief Null pointer matcher
- */
 template <typename T>
 class IsNullMatcher : public Matcher<T> {
 public:
@@ -360,9 +369,6 @@ auto IsNull() {
     return IsNullMatcher<T>();
 }
 
-/**
- * @brief Not null matcher
- */
 template <typename T>
 class NotNullMatcher : public Matcher<T> {
 public:
@@ -380,9 +386,6 @@ auto NotNull() {
     return NotNullMatcher<T>();
 }
 
-/**
- * @brief Pointee matcher - matches the value pointed to
- */
 template <typename InnerMatcher>
 class PointeeMatcher {
 public:
@@ -406,13 +409,6 @@ auto Pointee(InnerMatcher inner) {
     return PointeeMatcher<InnerMatcher>(std::move(inner));
 }
 
-// ============================================================================
-// String Matchers
-// ============================================================================
-
-/**
- * @brief String equality matcher (case-sensitive)
- */
 class StrEqMatcher : public Matcher<std::string> {
 public:
     explicit StrEqMatcher(std::string expected)
@@ -434,9 +430,6 @@ inline auto StrEq(std::string expected) {
     return StrEqMatcher(std::move(expected));
 }
 
-/**
- * @brief String inequality matcher
- */
 class StrNeMatcher : public Matcher<std::string> {
 public:
     explicit StrNeMatcher(std::string expected)
@@ -458,19 +451,19 @@ inline auto StrNe(std::string expected) {
     return StrNeMatcher(std::move(expected));
 }
 
-/**
- * @brief Case-insensitive string equality matcher
- */
 class StrCaseEqMatcher : public Matcher<std::string> {
 public:
     explicit StrCaseEqMatcher(std::string expected)
         : expected_(std::move(expected)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const override {
-        if (value.size() != expected_.size()) return false;
+        if (value.size() != expected_.size())
+            return false;
         for (size_t i = 0; i < value.size(); ++i) {
-            if (std::tolower(static_cast<unsigned char>(value[i])) !=
-                std::tolower(static_cast<unsigned char>(expected_[i]))) {
+            if (static_cast<char>(
+                    std::tolower(static_cast<unsigned char>(value[i]))) !=
+                static_cast<char>(
+                    std::tolower(static_cast<unsigned char>(expected_[i])))) {
                 return false;
             }
         }
@@ -489,9 +482,6 @@ inline auto StrCaseEq(std::string expected) {
     return StrCaseEqMatcher(std::move(expected));
 }
 
-/**
- * @brief Substring matcher
- */
 class HasSubstrMatcher : public Matcher<std::string> {
 public:
     explicit HasSubstrMatcher(std::string substr)
@@ -513,9 +503,6 @@ inline auto HasSubstr(std::string substr) {
     return HasSubstrMatcher(std::move(substr));
 }
 
-/**
- * @brief Starts with matcher
- */
 class StartsWithMatcher : public Matcher<std::string> {
 public:
     explicit StartsWithMatcher(std::string prefix)
@@ -538,13 +525,9 @@ inline auto StartsWith(std::string prefix) {
     return StartsWithMatcher(std::move(prefix));
 }
 
-/**
- * @brief Ends with matcher
- */
 class EndsWithMatcher : public Matcher<std::string> {
 public:
-    explicit EndsWithMatcher(std::string suffix)
-        : suffix_(std::move(suffix)) {}
+    explicit EndsWithMatcher(std::string suffix) : suffix_(std::move(suffix)) {}
 
     [[nodiscard]] bool matches(const std::string& value) const override {
         return value.size() >= suffix_.size() &&
@@ -564,9 +547,6 @@ inline auto EndsWith(std::string suffix) {
     return EndsWithMatcher(std::move(suffix));
 }
 
-/**
- * @brief Regex matcher
- */
 class MatchesRegexMatcher : public Matcher<std::string> {
 public:
     explicit MatchesRegexMatcher(std::string pattern)
@@ -589,9 +569,6 @@ inline auto MatchesRegex(std::string pattern) {
     return MatchesRegexMatcher(std::move(pattern));
 }
 
-/**
- * @brief Full regex match matcher
- */
 class ContainsRegexMatcher : public Matcher<std::string> {
 public:
     explicit ContainsRegexMatcher(std::string pattern)
@@ -614,13 +591,6 @@ inline auto ContainsRegex(std::string pattern) {
     return ContainsRegexMatcher(std::move(pattern));
 }
 
-// ============================================================================
-// Container Matchers
-// ============================================================================
-
-/**
- * @brief Empty container matcher
- */
 template <typename Container>
 class IsEmptyMatcher : public Matcher<Container> {
 public:
@@ -629,13 +599,6 @@ public:
     }
 
     [[nodiscard]] std::string describe() const override { return "is empty"; }
-
-    [[nodiscard]] std::string describeMismatch(
-        const Container& value) const override {
-        std::ostringstream oss;
-        oss << "has size " << value.size();
-        return oss.str();
-    }
 };
 
 template <typename Container = std::vector<int>>
@@ -643,9 +606,6 @@ auto IsEmpty() {
     return IsEmptyMatcher<Container>();
 }
 
-/**
- * @brief Size matcher
- */
 template <typename Container>
 class SizeIsMatcher : public Matcher<Container> {
 public:
@@ -661,13 +621,6 @@ public:
         return oss.str();
     }
 
-    [[nodiscard]] std::string describeMismatch(
-        const Container& value) const override {
-        std::ostringstream oss;
-        oss << "has size " << value.size();
-        return oss.str();
-    }
-
 private:
     size_t expected_;
 };
@@ -677,39 +630,6 @@ auto SizeIs(size_t expected) {
     return SizeIsMatcher<Container>(expected);
 }
 
-/**
- * @brief Contains element matcher
- */
-template <typename Container, typename Element>
-class ContainsMatcher : public Matcher<Container> {
-public:
-    explicit ContainsMatcher(Element element) : element_(std::move(element)) {}
-
-    [[nodiscard]] bool matches(const Container& value) const override {
-        return std::find(value.begin(), value.end(), element_) != value.end();
-    }
-
-    [[nodiscard]] std::string describe() const override {
-        std::ostringstream oss;
-        oss << "contains " << element_;
-        return oss.str();
-    }
-
-private:
-    Element element_;
-};
-
-template <typename Element>
-auto Contains(Element element) {
-    return [element = std::move(element)]<typename Container>(
-               const Container& c) {
-        return std::find(c.begin(), c.end(), element) != c.end();
-    };
-}
-
-/**
- * @brief Each element matches matcher
- */
 template <typename InnerMatcher>
 class EachMatcher {
 public:
@@ -717,10 +637,9 @@ public:
 
     template <typename Container>
     [[nodiscard]] bool matches(const Container& value) const {
-        return std::all_of(value.begin(), value.end(),
-                           [this](const auto& elem) {
-                               return inner_.matches(elem);
-                           });
+        return std::all_of(
+            value.begin(), value.end(),
+            [this](const auto& elem) { return inner_.matches(elem); });
     }
 
     [[nodiscard]] std::string describe() const {
@@ -736,9 +655,6 @@ auto Each(InnerMatcher inner) {
     return EachMatcher<InnerMatcher>(std::move(inner));
 }
 
-/**
- * @brief Elements are matcher (exact match in order)
- */
 template <typename... Matchers>
 class ElementsAreMatcher {
 public:
@@ -747,7 +663,8 @@ public:
 
     template <typename Container>
     [[nodiscard]] bool matches(const Container& value) const {
-        if (value.size() != sizeof...(Matchers)) return false;
+        if (value.size() != sizeof...(Matchers))
+            return false;
         return matchImpl(value, std::index_sequence_for<Matchers...>{});
     }
 
@@ -766,14 +683,24 @@ private:
     std::tuple<Matchers...> matchers_;
 };
 
-template <typename... Matchers>
-auto ElementsAre(Matchers... matchers) {
-    return ElementsAreMatcher<Matchers...>(std::move(matchers)...);
+template <typename M>
+auto asMatcher(M m) {
+    if constexpr (requires(const M& mm, const int& v) {
+                      { mm.matches(v) } -> std::convertible_to<bool>;
+                      { mm.describe() } -> std::convertible_to<std::string>;
+                  }) {
+        return m;
+    } else {
+        return Eq(std::move(m));
+    }
 }
 
-/**
- * @brief Unordered elements matcher
- */
+template <typename... Ms>
+auto ElementsAre(Ms... ms) {
+    return ElementsAreMatcher<decltype(asMatcher(ms))...>(
+        asMatcher(std::move(ms))...);
+}
+
 template <typename... Matchers>
 class UnorderedElementsAreMatcher {
 public:
@@ -782,9 +709,11 @@ public:
 
     template <typename Container>
     [[nodiscard]] bool matches(const Container& value) const {
-        if (value.size() != sizeof...(Matchers)) return false;
+        if (value.size() != sizeof...(Matchers))
+            return false;
         std::vector<bool> matched(value.size(), false);
-        return matchImpl(value, matched, std::index_sequence_for<Matchers...>{});
+        return matchImpl(value, matched,
+                         std::index_sequence_for<Matchers...>{});
     }
 
     [[nodiscard]] std::string describe() const {
@@ -816,18 +745,12 @@ private:
     std::tuple<Matchers...> matchers_;
 };
 
-template <typename... Matchers>
-auto UnorderedElementsAre(Matchers... matchers) {
-    return UnorderedElementsAreMatcher<Matchers...>(std::move(matchers)...);
+template <typename... Ms>
+auto UnorderedElementsAre(Ms... ms) {
+    return UnorderedElementsAreMatcher<decltype(asMatcher(ms))...>(
+        asMatcher(std::move(ms))...);
 }
 
-// ============================================================================
-// Logical Matchers
-// ============================================================================
-
-/**
- * @brief Not matcher (negation)
- */
 template <typename InnerMatcher>
 class NotMatcher {
 public:
@@ -851,9 +774,6 @@ auto Not(InnerMatcher inner) {
     return NotMatcher<InnerMatcher>(std::move(inner));
 }
 
-/**
- * @brief AllOf matcher (conjunction)
- */
 template <typename... Matchers>
 class AllOfMatcher {
 public:
@@ -867,33 +787,18 @@ public:
             matchers_);
     }
 
-    [[nodiscard]] std::string describe() const {
-        std::ostringstream oss;
-        oss << "(";
-        describeImpl(oss, std::index_sequence_for<Matchers...>{});
-        oss << ")";
-        return oss.str();
-    }
+    [[nodiscard]] std::string describe() const { return "all conditions"; }
 
 private:
-    template <size_t... Is>
-    void describeImpl(std::ostringstream& oss,
-                      std::index_sequence<Is...>) const {
-        ((oss << (Is > 0 ? " and " : "") << std::get<Is>(matchers_).describe()),
-         ...);
-    }
-
     std::tuple<Matchers...> matchers_;
 };
 
-template <typename... Matchers>
-auto AllOf(Matchers... matchers) {
-    return AllOfMatcher<Matchers...>(std::move(matchers)...);
+template <typename... Ms>
+auto AllOf(Ms... ms) {
+    return AllOfMatcher<decltype(asMatcher(ms))...>(
+        asMatcher(std::move(ms))...);
 }
 
-/**
- * @brief AnyOf matcher (disjunction)
- */
 template <typename... Matchers>
 class AnyOfMatcher {
 public:
@@ -907,37 +812,18 @@ public:
             matchers_);
     }
 
-    [[nodiscard]] std::string describe() const {
-        std::ostringstream oss;
-        oss << "(";
-        describeImpl(oss, std::index_sequence_for<Matchers...>{});
-        oss << ")";
-        return oss.str();
-    }
+    [[nodiscard]] std::string describe() const { return "any condition"; }
 
 private:
-    template <size_t... Is>
-    void describeImpl(std::ostringstream& oss,
-                      std::index_sequence<Is...>) const {
-        ((oss << (Is > 0 ? " or " : "") << std::get<Is>(matchers_).describe()),
-         ...);
-    }
-
     std::tuple<Matchers...> matchers_;
 };
 
-template <typename... Matchers>
-auto AnyOf(Matchers... matchers) {
-    return AnyOfMatcher<Matchers...>(std::move(matchers)...);
+template <typename... Ms>
+auto AnyOf(Ms... ms) {
+    return AnyOfMatcher<decltype(asMatcher(ms))...>(
+        asMatcher(std::move(ms))...);
 }
 
-// ============================================================================
-// Wildcard Matcher
-// ============================================================================
-
-/**
- * @brief Wildcard matcher (matches anything)
- */
 template <typename T = void>
 class AnyMatcher {
 public:
@@ -949,9 +835,6 @@ public:
     [[nodiscard]] std::string describe() const { return "is anything"; }
 };
 
-/**
- * @brief Underscore wildcard (matches any value)
- */
 inline constexpr struct {
     template <typename T>
     bool matches(const T&) const {
@@ -959,32 +842,15 @@ inline constexpr struct {
     }
 
     std::string describe() const { return "is anything"; }
-} _ {};
+} _{};
 
-template <typename T = void>
-auto A() {
-    return AnyMatcher<T>();
-}
-
-template <typename T = void>
-auto An() {
-    return AnyMatcher<T>();
-}
-
-// ============================================================================
-// Optional Matchers
-// ============================================================================
-
-/**
- * @brief Has value matcher for optional types
- */
 template <typename InnerMatcher>
 class HasValueMatcher {
 public:
     explicit HasValueMatcher(InnerMatcher inner) : inner_(std::move(inner)) {}
 
-    template <typename Optional>
-    [[nodiscard]] bool matches(const Optional& opt) const {
+    template <typename Opt>
+    [[nodiscard]] bool matches(const Opt& opt) const {
         return opt.has_value() && inner_.matches(*opt);
     }
 
@@ -1001,144 +867,77 @@ auto HasValue(InnerMatcher inner) {
     return HasValueMatcher<InnerMatcher>(std::move(inner));
 }
 
-/**
- * @brief Optional is nullopt matcher
- */
-struct IsNulloptMatcher {
-    template <typename Optional>
-    [[nodiscard]] bool matches(const Optional& opt) const {
-        return !opt.has_value();
-    }
-
-    [[nodiscard]] std::string describe() const { return "is nullopt"; }
-};
-
-inline auto IsNullopt() { return IsNulloptMatcher{}; }
-
-// ============================================================================
-// Property/Field Matchers
-// ============================================================================
-
-/**
- * @brief Field matcher
- */
-template <typename FieldType, typename Class, typename InnerMatcher>
-class FieldMatcher {
-public:
-    FieldMatcher(FieldType Class::*field, InnerMatcher inner)
-        : field_(field), inner_(std::move(inner)) {}
-
-    [[nodiscard]] bool matches(const Class& obj) const {
-        return inner_.matches(obj.*field_);
-    }
-
-    [[nodiscard]] std::string describe() const {
-        return "field " + inner_.describe();
-    }
-
-private:
-    FieldType Class::*field_;
-    InnerMatcher inner_;
-};
-
-template <typename FieldType, typename Class, typename InnerMatcher>
-auto Field(FieldType Class::*field, InnerMatcher inner) {
-    return FieldMatcher<FieldType, Class, InnerMatcher>(field, std::move(inner));
-}
-
-/**
- * @brief Property matcher (via getter)
- */
-template <typename GetterResult, typename Class, typename InnerMatcher>
-class PropertyMatcher {
-public:
-    PropertyMatcher(GetterResult (Class::*getter)() const, InnerMatcher inner)
-        : getter_(getter), inner_(std::move(inner)) {}
-
-    [[nodiscard]] bool matches(const Class& obj) const {
-        return inner_.matches((obj.*getter_)());
-    }
-
-    [[nodiscard]] std::string describe() const {
-        return "property " + inner_.describe();
-    }
-
-private:
-    GetterResult (Class::*getter_)() const;
-    InnerMatcher inner_;
-};
-
-template <typename GetterResult, typename Class, typename InnerMatcher>
-auto Property(GetterResult (Class::*getter)() const, InnerMatcher inner) {
-    return PropertyMatcher<GetterResult, Class, InnerMatcher>(getter,
-                                                              std::move(inner));
-}
-
-/**
- * @brief Result of matcher
- */
-template <typename Func, typename InnerMatcher>
-class ResultOfMatcher {
-public:
-    ResultOfMatcher(Func func, InnerMatcher inner)
-        : func_(std::move(func)), inner_(std::move(inner)) {}
-
-    template <typename T>
-    [[nodiscard]] bool matches(const T& value) const {
-        return inner_.matches(func_(value));
-    }
-
-    [[nodiscard]] std::string describe() const {
-        return "result of function " + inner_.describe();
-    }
-
-private:
-    Func func_;
-    InnerMatcher inner_;
-};
-
-template <typename Func, typename InnerMatcher>
-auto ResultOf(Func func, InnerMatcher inner) {
-    return ResultOfMatcher<Func, InnerMatcher>(std::move(func),
-                                               std::move(inner));
+template <typename InnerMatcher>
+auto Optional(InnerMatcher inner) {
+    return HasValue(std::move(inner));
 }
 
 // ============================================================================
-// Truly/Predicate Matcher
+// Container Matchers
 // ============================================================================
 
 /**
- * @brief Predicate matcher
+ * @brief Contains element matcher
  */
-template <typename Predicate>
-class TrulyMatcher {
+template <typename Container, typename Element>
+class ContainsMatcher : public Matcher<Container> {
 public:
-    explicit TrulyMatcher(Predicate pred, std::string description = "")
-        : pred_(std::move(pred)), description_(std::move(description)) {}
+    explicit ContainsMatcher(Element element) : element_(std::move(element)) {}
 
-    template <typename T>
-    [[nodiscard]] bool matches(const T& value) const {
-        return pred_(value);
+    [[nodiscard]] bool matches(const Container& value) const override {
+        return std::find(value.begin(), value.end(), element_) != value.end();
     }
 
-    [[nodiscard]] std::string describe() const {
-        return description_.empty() ? "satisfies predicate" : description_;
+    [[nodiscard]] std::string describe() const override {
+        std::ostringstream oss;
+        oss << "contains ";
+        if constexpr (StreamInsertable<Element>) {
+            oss << element_;
+        } else {
+            oss << "<unprintable>";
+        }
+        return oss.str();
     }
 
 private:
-    Predicate pred_;
-    std::string description_;
+    Element element_;
 };
 
-template <typename Predicate>
-auto Truly(Predicate pred, std::string description = "") {
-    return TrulyMatcher<Predicate>(std::move(pred), std::move(description));
+template <typename Element>
+struct ContainsValueMatcher {
+    Element element;
+
+    template <typename Container>
+    [[nodiscard]] bool matches(const Container& c) const {
+        return std::find(c.begin(), c.end(), element) != c.end();
+    }
+
+    [[nodiscard]] std::string describe() const { return "contains element"; }
+};
+
+template <typename Element>
+auto Contains(Element element) {
+    return ContainsValueMatcher<Element>{std::move(element)};
 }
 
-}  // namespace matchers
+template <typename Container>
+struct ContainerEqMatcher {
+    Container expected;
+
+    [[nodiscard]] bool matches(const Container& value) const {
+        return value == expected;
+    }
+
+    [[nodiscard]] std::string describe() const { return "is equal"; }
+};
+
+template <typename Container>
+auto ContainerEq(Container expected) {
+    return ContainerEqMatcher<Container>{std::move(expected)};
+}
 
 // ============================================================================
-// EXPECT_THAT macro support
+// Logical Matchers
 // ============================================================================
 
 /**
@@ -1152,10 +951,24 @@ auto expectThatMatcher(const T& value, const MatcherType& matcher,
     std::ostringstream oss;
     if (!result) {
         oss << "Value of: " << valueExpr << "\n"
-            << "  Expected: " << matcher.describe() << "\n"
-            << "  Actual: " << value;
+            << "  Expected: " << matcher.describe() << "\n";
+        oss << "  Actual: ";
+        if constexpr (StreamInsertable<T>) {
+            oss << value;
+        } else {
+            oss << "<unprintable>";
+        }
     }
     return Expect(result, file, line, oss.str());
+}
+
+}  // namespace matchers
+
+template <typename T, typename MatcherType>
+auto expectThatMatcher(const T& value, const MatcherType& matcher,
+                       const char* file, int line,
+                       const char* valueExpr) -> Expect {
+    return matchers::expectThatMatcher(value, matcher, file, line, valueExpr);
 }
 
 }  // namespace atom::test

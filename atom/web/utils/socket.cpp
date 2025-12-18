@@ -604,7 +604,7 @@ auto Socket::accept(std::chrono::milliseconds timeout)
     if (timeout.count() > 0) {
         auto readable = waitReadable(timeout);
         if (!readable) {
-            return unexpected(readable.error());
+            return unexpected(readable.error().error());
         }
         if (!*readable) {
             return unexpected(SocketError::Timeout);
@@ -687,7 +687,7 @@ auto Socket::connect(std::string_view host, uint16_t port,
 
     auto writable = waitWritable(timeout);
     if (!writable) {
-        return unexpected(writable.error());
+        return unexpected(writable.error().error());
     }
     if (!*writable) {
         return unexpected(SocketError::Timeout);
@@ -751,7 +751,7 @@ auto Socket::sendAll(std::span<const std::byte> data,
 
         auto result = send(data.subspan(totalSent));
         if (!result) {
-            return unexpected(result.error());
+            return unexpected(result.error().error());
         }
         totalSent += *result;
     }
@@ -785,7 +785,7 @@ auto Socket::receive(std::span<std::byte> buffer,
     -> expected<size_t, SocketError> {
     auto readable = waitReadable(timeout);
     if (!readable) {
-        return unexpected(readable.error());
+        return unexpected(readable.error().error());
     }
     if (!*readable) {
         return unexpected(SocketError::Timeout);
@@ -808,7 +808,7 @@ auto Socket::receiveExact(std::span<std::byte> buffer,
 
         auto result = receive(buffer.subspan(totalReceived), remaining);
         if (!result) {
-            return unexpected(result.error());
+            return unexpected(result.error().error());
         }
         if (*result == 0) {
             return unexpected(SocketError::ConnectionReset);
@@ -835,7 +835,7 @@ auto Socket::receiveLine(size_t maxLength, std::chrono::milliseconds timeout)
         std::byte ch;
         auto result = receive(std::span<std::byte>(&ch, 1), remaining);
         if (!result) {
-            return unexpected(result.error());
+            return unexpected(result.error().error());
         }
         if (*result == 0) {
             break;

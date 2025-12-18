@@ -8,7 +8,8 @@
 
 Date: 2024-12-22
 
-Description: Tests for GTest-style matchers in atom/tests/assertions/matchers.hpp
+Description: Tests for GTest-style matchers in
+atom/tests/assertions/matchers.hpp
 
 **************************************************/
 
