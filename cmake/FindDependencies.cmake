@@ -1,6 +1,22 @@
-# FindDependencies.cmake Standardized dependency finding for the Atom project
+# FindDependencies.cmake - Standardized dependency finding for the Atom project
 # This module provides consistent dependency finding across all modules
+#
+# Main functions: atom_find_dependency()         - Find a dependency with
+# multiple fallback methods atom_setup_dependency_target() - Setup an imported
+# target for a dependency atom_find_vcpkg_package()      - Find a package via
+# vcpkg paths atom_print_dependency_summary() - Print summary of found
+# dependencies
+#
+# Dependencies found: Core: OpenSSL, ZLIB, SQLite3, fmt, spdlog, Asio, CURL
+# Optional: TBB, OpenCV, minizip-ng, libuv, Boost, Python, pybind11, GTest
+#
+# vcpkg Integration: When ATOM_VCPKG_AVAILABLE is TRUE, vcpkg paths are
+# automatically added to the search paths for all dependencies.
+#
+# Author: Max Qian License: GPL3
+# =============================================================================
 
+include_guard(GLOBAL)
 include(FindPackageHandleStandardArgs)
 
 # Set policy for consistent behavior
@@ -9,8 +25,68 @@ if(POLICY CMP0167)
 endif()
 
 # =============================================================================
+# vcpkg Integration
+# =============================================================================
+
+# Set up vcpkg paths if available
+if(ATOM_VCPKG_AVAILABLE AND DEFINED ATOM_VCPKG_INSTALLED_DIR)
+  # Add vcpkg to CMAKE_PREFIX_PATH for find_package
+  list(APPEND CMAKE_PREFIX_PATH "${ATOM_VCPKG_INSTALLED_DIR}")
+  list(APPEND CMAKE_PREFIX_PATH "${ATOM_VCPKG_INSTALLED_DIR}/share")
+
+  # Set vcpkg-specific search hints
+  set(ATOM_VCPKG_INCLUDE_DIR "${ATOM_VCPKG_INSTALLED_DIR}/include")
+  set(ATOM_VCPKG_LIB_DIR "${ATOM_VCPKG_INSTALLED_DIR}/lib")
+  set(ATOM_VCPKG_BIN_DIR "${ATOM_VCPKG_INSTALLED_DIR}/bin")
+  set(ATOM_VCPKG_SHARE_DIR "${ATOM_VCPKG_INSTALLED_DIR}/share")
+
+  message(
+    STATUS "vcpkg paths added to dependency search: ${ATOM_VCPKG_INSTALLED_DIR}"
+  )
+endif()
+
+# =============================================================================
 # Utility Functions
 # =============================================================================
+
+# Function to find a package via vcpkg paths specifically
+function(atom_find_vcpkg_package PACKAGE_NAME)
+  set(options REQUIRED QUIET)
+  set(oneValueArgs VERSION)
+  set(multiValueArgs COMPONENTS)
+  cmake_parse_arguments(AFVP "${options}" "${oneValueArgs}" "${multiValueArgs}"
+                        ${ARGN})
+
+  if(NOT ATOM_VCPKG_AVAILABLE)
+    if(AFVP_REQUIRED)
+      message(
+        FATAL_ERROR
+          "vcpkg is not available but ${PACKAGE_NAME} is required via vcpkg")
+    endif()
+    return()
+  endif()
+
+  # Try to find via vcpkg share directory (CONFIG mode)
+  set(_config_dir "${ATOM_VCPKG_SHARE_DIR}/${PACKAGE_NAME}")
+  if(EXISTS "${_config_dir}")
+    if(AFVP_COMPONENTS)
+      find_package(${PACKAGE_NAME} ${AFVP_VERSION} CONFIG PATHS "${_config_dir}"
+                   NO_DEFAULT_PATH COMPONENTS ${AFVP_COMPONENTS})
+    else()
+      find_package(${PACKAGE_NAME} ${AFVP_VERSION} CONFIG PATHS
+                   "${_config_dir}" NO_DEFAULT_PATH)
+    endif()
+  endif()
+
+  string(TOUPPER ${PACKAGE_NAME} PKG_UPPER)
+  if(${PACKAGE_NAME}_FOUND OR ${PKG_UPPER}_FOUND)
+    if(NOT AFVP_QUIET)
+      message(STATUS "Found ${PACKAGE_NAME} via vcpkg")
+    endif()
+  elseif(AFVP_REQUIRED)
+    message(FATAL_ERROR "${PACKAGE_NAME} not found in vcpkg installation")
+  endif()
+endfunction()
 
 # Function to find a dependency with multiple fallback methods
 function(atom_find_dependency dep_name)
@@ -369,6 +445,74 @@ if(ATOM_USE_BOOST)
 endif()
 
 # =============================================================================
+# Optional Feature Dependencies (only loaded when features are enabled)
+# =============================================================================
+
+# Image processing (OpenCV) - only when ATOM_BUILD_IMAGE is ON
+if(ATOM_BUILD_IMAGE AND ATOM_USE_OPENCV)
+  find_package(OpenCV QUIET)
+  if(OpenCV_FOUND)
+    message(STATUS "OpenCV found: ${OpenCV_VERSION}")
+    set(ATOM_HAS_OPENCV
+        TRUE
+        CACHE BOOL "OpenCV available" FORCE)
+  else()
+    message(STATUS "OpenCV not found - image features will be limited")
+    set(ATOM_HAS_OPENCV
+        FALSE
+        CACHE BOOL "OpenCV not available" FORCE)
+  endif()
+endif()
+
+# Parallel algorithms (TBB) - only when explicitly requested
+if(ATOM_USE_TBB)
+  find_package(TBB QUIET)
+  if(TBB_FOUND)
+    message(STATUS "TBB found for parallel algorithms")
+    set(ATOM_HAS_TBB
+        TRUE
+        CACHE BOOL "TBB available" FORCE)
+  else()
+    message(STATUS "TBB not found - parallel algorithms will use std::thread")
+    set(ATOM_HAS_TBB
+        FALSE
+        CACHE BOOL "TBB not available" FORCE)
+  endif()
+endif()
+
+# Advanced compression (minizip-ng) - only when explicitly requested
+if(ATOM_USE_MINIZIP)
+  find_package(minizip-ng QUIET)
+  if(minizip-ng_FOUND)
+    message(STATUS "minizip-ng found for advanced compression")
+    set(ATOM_HAS_MINIZIP
+        TRUE
+        CACHE BOOL "minizip-ng available" FORCE)
+  else()
+    message(STATUS "minizip-ng not found - using basic zlib compression")
+    set(ATOM_HAS_MINIZIP
+        FALSE
+        CACHE BOOL "minizip-ng not available" FORCE)
+  endif()
+endif()
+
+# Advanced networking (libuv) - only when explicitly requested
+if(ATOM_USE_LIBUV)
+  find_package(libuv CONFIG QUIET)
+  if(libuv_FOUND)
+    message(STATUS "libuv found for advanced async I/O")
+    set(ATOM_HAS_LIBUV
+        TRUE
+        CACHE BOOL "libuv available" FORCE)
+  else()
+    message(STATUS "libuv not found - using asio for async I/O")
+    set(ATOM_HAS_LIBUV
+        FALSE
+        CACHE BOOL "libuv not available" FORCE)
+  endif()
+endif()
+
+# =============================================================================
 # Platform-specific Dependencies
 # =============================================================================
 
@@ -389,33 +533,77 @@ if(UNIX AND NOT APPLE)
 endif()
 
 # =============================================================================
-# Summary
+# Dependency Summary Function
 # =============================================================================
 
-message(STATUS "=== Dependency Summary ===")
-message(STATUS "OpenSSL: ${OpenSSL_FOUND}")
-message(STATUS "ZLIB: ${ZLIB_FOUND}")
-message(STATUS "SQLite3: ${SQLite3_FOUND}")
-message(STATUS "fmt: ${fmt_FOUND}")
-message(STATUS "spdlog: ${spdlog_FOUND}")
-message(STATUS "CURL: ${CURL_FOUND}")
-message(STATUS "Asio: ${ASIO_FOUND}")
+# Function to print dependency summary (can be called on demand)
+function(atom_print_dependency_summary)
+  message(STATUS "")
+  message(STATUS "======================================")
+  message(STATUS "       DEPENDENCY SUMMARY")
+  message(STATUS "======================================")
 
-if(ATOM_USE_SSH)
-  message(STATUS "LibSSH: ${LIBSSH_FOUND}")
-endif()
+  # vcpkg info
+  if(ATOM_VCPKG_AVAILABLE)
+    message(STATUS "vcpkg:        ENABLED (${ATOM_VCPKG_TRIPLET})")
+  else()
+    message(STATUS "vcpkg:        DISABLED")
+  endif()
 
-if(ATOM_BUILD_PYTHON_BINDINGS)
-  message(STATUS "Python: ${Python_FOUND}")
-  message(STATUS "pybind11: ${pybind11_FOUND}")
-endif()
+  message(STATUS "")
+  message(STATUS "--- Core Dependencies ---")
+  _atom_dep_status("OpenSSL" OpenSSL_FOUND)
+  _atom_dep_status("ZLIB" ZLIB_FOUND)
+  _atom_dep_status("SQLite3" SQLite3_FOUND)
+  _atom_dep_status("fmt" fmt_FOUND)
+  _atom_dep_status("spdlog" spdlog_FOUND)
+  _atom_dep_status("Asio" ASIO_FOUND)
 
-if(ATOM_BUILD_TESTS)
-  message(STATUS "GTest: ${GTEST_FOUND}")
-endif()
+  message(STATUS "")
+  message(STATUS "--- Optional Dependencies ---")
+  _atom_dep_status("CURL" CURL_FOUND)
+  _atom_dep_status("OpenCV" ATOM_HAS_OPENCV)
+  _atom_dep_status("TBB" ATOM_HAS_TBB)
+  _atom_dep_status("minizip-ng" ATOM_HAS_MINIZIP)
+  _atom_dep_status("libuv" ATOM_HAS_LIBUV)
 
-if(ATOM_USE_BOOST)
-  message(STATUS "Boost: ${Boost_FOUND}")
-endif()
+  if(ATOM_USE_SSH)
+    _atom_dep_status("LibSSH" LIBSSH_FOUND)
+  endif()
 
-message(STATUS "==========================")
+  if(ATOM_BUILD_PYTHON_BINDINGS)
+    message(STATUS "")
+    message(STATUS "--- Python Bindings ---")
+    _atom_dep_status("Python" Python_FOUND)
+    _atom_dep_status("pybind11" pybind11_FOUND)
+  endif()
+
+  if(ATOM_BUILD_TESTS)
+    message(STATUS "")
+    message(STATUS "--- Testing ---")
+    _atom_dep_status("GTest" GTEST_FOUND)
+  endif()
+
+  if(ATOM_USE_BOOST)
+    message(STATUS "")
+    message(STATUS "--- Boost ---")
+    _atom_dep_status("Boost" Boost_FOUND)
+  endif()
+
+  message(STATUS "======================================")
+  message(STATUS "")
+endfunction()
+
+# Helper function for dependency status display
+function(_atom_dep_status name found_var)
+  if(${found_var})
+    message(STATUS "  [x] ${name}")
+  else()
+    message(STATUS "  [ ] ${name}")
+  endif()
+endfunction()
+
+# =============================================================================
+# Auto-print Summary
+# =============================================================================
+atom_print_dependency_summary()

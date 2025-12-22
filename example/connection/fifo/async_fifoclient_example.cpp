@@ -33,319 +33,309 @@ Demonstrates all features including:
 
 namespace {
 
-// Utility class for formatted logging
-class Logger {
+// Utility class for formatted loggingclass Logger {
 public:
-    enum Level { INFO, SUCCESS, WARNING, ERR, DEBUG };
+enum Level { LOG_INFO, LOG_SUCCESS, LOG_WARNING, LOG_ERR, LOG_DEBUG };
 
-    static void log(Level level, const std::string& component,
-                    const std::string& message) {
-        auto now = std::chrono::system_clock::now();
-        auto time_t = std::chrono::system_clock::to_time_t(now);
-        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                      now.time_since_epoch()) %
-                  1000;
+static void log(Level level, const std::string& component,
+                const std::string& message) {
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                  now.time_since_epoch()) %
+              1000;
 
-        std::cout << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S")
-                  << "." << std::setfill('0') << std::setw(3) << ms.count()
-                  << "] ";
+    std::cout << "[" << std::put_time(std::localtime(&time_t), "%H:%M:%S")
+              << "." << std::setfill('0') << std::setw(3) << ms.count() << "] ";
 
-        switch (level) {
-            case INFO:
-                std::cout << "[INFO]    ";
-                break;
-            case SUCCESS:
-                std::cout << "[SUCCESS] ";
-                break;
-            case WARNING:
-                std::cout << "[WARN]    ";
-                break;
-            case ERR:
-                std::cout << "[ERROR]   ";
-                break;
-            case DEBUG:
-                std::cout << "[DEBUG]   ";
-                break;
-        }
-
-        std::cout << "[" << component << "] " << message << std::endl;
+    switch (level) {
+        case LOG_INFO:
+            std::cout << "[INFO]    ";
+            break;
+        case LOG_SUCCESS:
+            std::cout << "[SUCCESS] ";
+            break;
+        case LOG_WARNING:
+            std::cout << "[WARN]    ";
+            break;
+        case LOG_ERR:
+            std::cout << "[ERROR]   ";
+            break;
+        case LOG_DEBUG:
+            std::cout << "[DEBUG]   ";
+            break;
     }
+
+    std::cout << "[" << component << "] " << message << std::endl;
+}
 };
 
-// Helper function to create platform-specific pipe path
-std::string createPipePath(const std::string& name) {
+// Helper function to create platform-specific pipe pathstd::string
+// createPipePath(const std::string& name) {
 #ifdef _WIN32
-    return "\\\\.\\pipe\\" + name;
+return "\\\\.\\pipe\\" + name;
 #else
-    return "/tmp/" + name;
+return "/tmp/" + name;
 #endif
 }
 
-// Helper to ensure FIFO exists on POSIX systems
-void ensureFifoExists(const std::string& path) {
+// Helper to ensure FIFO exists on POSIX systemsvoid ensureFifoExists(const
+// std::string& path) {
 #ifndef _WIN32
-    unlink(path.c_str());
-    if (mkfifo(path.c_str(), 0666) != 0) {
-        Logger::log(Logger::WARNING, "Setup", "Could not create FIFO: " + path);
-    }
+unlink(path.c_str());
+if (mkfifo(path.c_str(), 0666) != 0) {
+    Logger::log(Logger::LOG_WARNING, "Setup", "Could not create FIFO: " + path);
+}
 #endif
 }
 
 }  // namespace
 
-// Example 1: Basic async client usage
-void basicAsyncClientExample() {
-    Logger::log(Logger::INFO, "Example1",
-                "=== Basic Async FifoClient Usage ===");
+// Example 1: Basic async client usagevoid basicAsyncClientExample() {
+Logger::log(Logger::LOG_INFO, "Example1",
+            "=== Basic Async FifoClient Usage ===");
 
-    const std::string fifoPath = createPipePath("async_basic_fifo");
-    ensureFifoExists(fifoPath);
+const std::string fifoPath = createPipePath("async_basic_fifo");
+ensureFifoExists(fifoPath);
 
-    try {
-        // Create async client
-        atom::async::connection::FifoClient client(fifoPath);
+try {
+    // Create async client
+    atom::async::connection::FifoClient client(fifoPath);
 
-        Logger::log(Logger::INFO, "Example1",
-                    "Created async FifoClient, isOpen: " +
-                        std::string(client.isOpen() ? "yes" : "no"));
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Created async FifoClient, isOpen: " +
+                    std::string(client.isOpen() ? "yes" : "no"));
 
-        // Write data
-        std::string message = "Hello from async FifoClient!";
-        bool writeSuccess =
-            client.write(message, std::chrono::milliseconds(1000));
+    // Write data
+    std::string message = "Hello from async FifoClient!";
+    bool writeSuccess = client.write(message, std::chrono::milliseconds(1000));
 
-        if (writeSuccess) {
-            Logger::log(Logger::SUCCESS, "Example1",
-                        "Write successful: " + message);
-        } else {
-            Logger::log(Logger::WARNING, "Example1",
-                        "Write failed or timed out");
-        }
-
-        // Read data
-        auto readResult = client.read(std::chrono::milliseconds(1000));
-
-        if (readResult.has_value()) {
-            Logger::log(Logger::SUCCESS, "Example1",
-                        "Read successful: " + *readResult);
-        } else {
-            Logger::log(Logger::WARNING, "Example1",
-                        "Read returned no data (timeout expected in demo)");
-        }
-
-        // Close client
-        client.close();
-        Logger::log(Logger::INFO, "Example1",
-                    "Client closed, isOpen: " +
-                        std::string(client.isOpen() ? "yes" : "no"));
-
-    } catch (const std::exception& e) {
-        Logger::log(Logger::ERR, "Example1",
-                    "Exception: " + std::string(e.what()));
+    if (writeSuccess) {
+        Logger::log(Logger::LOG_SUCCESS, "Example1",
+                    "Write successful: " + message);
+    } else {
+        Logger::log(Logger::LOG_WARNING, "Example1",
+                    "Write failed or timed out");
     }
 
-    Logger::log(Logger::INFO, "Example1",
-                "Basic async client example completed\n");
+    // Read data
+    auto readResult = client.read(std::chrono::milliseconds(1000));
+
+    if (readResult.has_value()) {
+        Logger::log(Logger::LOG_SUCCESS, "Example1",
+                    "Read successful: " + readResult.value());
+    } else {
+        Logger::log(Logger::LOG_WARNING, "Example1",
+                    "Read returned no data (timeout expected in demo)");
+    }
+
+    // Close client
+    client.close();
+    Logger::log(Logger::LOG_INFO, "Example1",
+                "Client closed, isOpen: " +
+                    std::string(client.isOpen() ? "yes" : "no"));
+
+} catch (const std::exception& e) {
+    Logger::log(Logger::LOG_ERR, "Example1",
+                "Exception: " + std::string(e.what()));
 }
 
-// Example 2: Timeout handling
-void timeoutHandlingExample() {
-    Logger::log(Logger::INFO, "Example2", "=== Timeout Handling ===");
+Logger::log(Logger::LOG_INFO, "Example1",
+            "Basic async client example completed\n");
+}
 
-    const std::string fifoPath = createPipePath("async_timeout_fifo");
-    ensureFifoExists(fifoPath);
+// Example 2: Timeout handlingvoid timeoutHandlingExample() {
+Logger::log(Logger::LOG_INFO, "Example2", "=== Timeout Handling ===");
 
-    try {
-        atom::async::connection::FifoClient client(fifoPath);
+const std::string fifoPath = createPipePath("async_timeout_fifo");
+ensureFifoExists(fifoPath);
 
-        // Test different timeout values
-        std::vector<std::chrono::milliseconds> timeouts = {
-            std::chrono::milliseconds(100), std::chrono::milliseconds(500),
-            std::chrono::milliseconds(1000), std::chrono::milliseconds(2000)};
+try {
+    atom::async::connection::FifoClient client(fifoPath);
 
-        for (const auto& timeout : timeouts) {
-            Logger::log(Logger::INFO, "Example2",
-                        "Testing write with timeout: " +
-                            std::to_string(timeout.count()) + "ms");
+    // Test different timeout values
+    std::vector<std::chrono::milliseconds> timeouts = {
+        std::chrono::milliseconds(100), std::chrono::milliseconds(500),
+        std::chrono::milliseconds(1000), std::chrono::milliseconds(2000)};
 
-            auto start = std::chrono::steady_clock::now();
-            bool success = client.write("Test message", timeout);
-            auto elapsed =
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    std::chrono::steady_clock::now() - start);
+    for (const auto& timeout : timeouts) {
+        Logger::log(Logger::LOG_INFO, "Example2",
+                    "Testing write with timeout: " +
+                        std::to_string(timeout.count()) + "ms");
 
-            Logger::log(
-                success ? Logger::SUCCESS : Logger::WARNING, "Example2",
-                "Result: " + std::string(success ? "success" : "timeout/fail") +
-                    " (elapsed: " + std::to_string(elapsed.count()) + "ms)");
+        auto start = std::chrono::steady_clock::now();
+        bool success = client.write("Test message", timeout);
+        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - start);
+
+        Logger::log(
+            success ? Logger::LOG_SUCCESS : Logger::LOG_WARNING, "Example2",
+            "Result: " + std::string(success ? "success" : "timeout/fail") +
+                " (elapsed: " + std::to_string(elapsed.count()) + "ms)");
+    }
+
+    // Test read with no timeout (nullopt)
+    Logger::log(Logger::LOG_INFO, "Example2",
+                "Testing read with no timeout...");
+    auto readResult = client.read(std::nullopt);
+    Logger::log(
+        Logger::LOG_INFO, "Example2",
+        "Read result: " +
+            std::string(readResult.has_value() ? "data received" : "no data"));
+
+    client.close();
+
+} catch (const std::exception& e) {
+    Logger::log(Logger::LOG_ERR, "Example2",
+                "Exception: " + std::string(e.what()));
+}
+
+Logger::log(Logger::LOG_INFO, "Example2",
+            "Timeout handling example completed\n");
+}
+
+// Example 3: Multiple operationsvoid multipleOperationsExample() {
+Logger::log(Logger::LOG_INFO, "Example3", "=== Multiple Operations ===");
+
+const std::string fifoPath = createPipePath("async_multi_fifo");
+ensureFifoExists(fifoPath);
+
+try {
+    atom::async::connection::FifoClient client(fifoPath);
+
+    // Perform multiple write operations
+    int successCount = 0;
+    int totalOperations = 10;
+
+    Logger::log(Logger::LOG_INFO, "Example3",
+                "Performing " + std::to_string(totalOperations) +
+                    " write operations...");
+
+    for (int i = 0; i < totalOperations; ++i) {
+        std::string msg = "Message " + std::to_string(i + 1);
+        if (client.write(msg, std::chrono::milliseconds(500))) {
+            successCount++;
         }
-
-        // Test read with no timeout (nullopt)
-        Logger::log(Logger::INFO, "Example2",
-                    "Testing read with no timeout...");
-        auto readResult = client.read(std::nullopt);
-        Logger::log(Logger::INFO, "Example2",
-                    "Read result: " + std::string(readResult.has_value()
-                                                      ? "data received"
-                                                      : "no data"));
-
-        client.close();
-
-    } catch (const std::exception& e) {
-        Logger::log(Logger::ERR, "Example2",
-                    "Exception: " + std::string(e.what()));
     }
 
-    Logger::log(Logger::INFO, "Example2",
-                "Timeout handling example completed\n");
+    Logger::log(Logger::LOG_SUCCESS, "Example3",
+                "Completed " + std::to_string(successCount) + "/" +
+                    std::to_string(totalOperations) + " write operations");
+
+    client.close();
+
+} catch (const std::exception& e) {
+    Logger::log(Logger::LOG_ERR, "Example3",
+                "Exception: " + std::string(e.what()));
 }
 
-// Example 3: Multiple operations
-void multipleOperationsExample() {
-    Logger::log(Logger::INFO, "Example3", "=== Multiple Operations ===");
-
-    const std::string fifoPath = createPipePath("async_multi_fifo");
-    ensureFifoExists(fifoPath);
-
-    try {
-        atom::async::connection::FifoClient client(fifoPath);
-
-        // Perform multiple write operations
-        int successCount = 0;
-        int totalOperations = 10;
-
-        Logger::log(Logger::INFO, "Example3",
-                    "Performing " + std::to_string(totalOperations) +
-                        " write operations...");
-
-        for (int i = 0; i < totalOperations; ++i) {
-            std::string msg = "Message " + std::to_string(i + 1);
-            if (client.write(msg, std::chrono::milliseconds(500))) {
-                successCount++;
-            }
-        }
-
-        Logger::log(Logger::SUCCESS, "Example3",
-                    "Completed " + std::to_string(successCount) + "/" +
-                        std::to_string(totalOperations) + " write operations");
-
-        client.close();
-
-    } catch (const std::exception& e) {
-        Logger::log(Logger::ERR, "Example3",
-                    "Exception: " + std::string(e.what()));
-    }
-
-    Logger::log(Logger::INFO, "Example3",
-                "Multiple operations example completed\n");
+Logger::log(Logger::LOG_INFO, "Example3",
+            "Multiple operations example completed\n");
 }
 
-// Example 4: Connection state management
-void connectionStateExample() {
-    Logger::log(Logger::INFO, "Example4",
-                "=== Connection State Management ===");
+// Example 4: Connection state managementvoid connectionStateExample() {
+Logger::log(Logger::LOG_INFO, "Example4",
+            "=== Connection State Management ===");
 
-    const std::string fifoPath = createPipePath("async_state_fifo");
-    ensureFifoExists(fifoPath);
+const std::string fifoPath = createPipePath("async_state_fifo");
+ensureFifoExists(fifoPath);
 
-    try {
-        atom::async::connection::FifoClient client(fifoPath);
+try {
+    atom::async::connection::FifoClient client(fifoPath);
 
-        // Check initial state
-        Logger::log(Logger::INFO, "Example4",
-                    "Initial state - isOpen: " +
-                        std::string(client.isOpen() ? "yes" : "no"));
+    // Check initial state
+    Logger::log(Logger::LOG_INFO, "Example4",
+                "Initial state - isOpen: " +
+                    std::string(client.isOpen() ? "yes" : "no"));
 
-        // Perform operation
-        client.write("Test", std::chrono::milliseconds(500));
-        Logger::log(Logger::INFO, "Example4",
-                    "After write - isOpen: " +
-                        std::string(client.isOpen() ? "yes" : "no"));
+    // Perform operation
+    client.write("Test", std::chrono::milliseconds(500));
+    Logger::log(
+        Logger::LOG_INFO, "Example4",
+        "After write - isOpen: " + std::string(client.isOpen() ? "yes" : "no"));
 
-        // Close
-        client.close();
-        Logger::log(Logger::INFO, "Example4",
-                    "After close - isOpen: " +
-                        std::string(client.isOpen() ? "yes" : "no"));
+    // Close
+    client.close();
+    Logger::log(
+        Logger::LOG_INFO, "Example4",
+        "After close - isOpen: " + std::string(client.isOpen() ? "yes" : "no"));
 
-        // Try operation after close
-        bool writeAfterClose =
-            client.write("After close", std::chrono::milliseconds(500));
-        Logger::log(Logger::INFO, "Example4",
-                    "Write after close: " +
-                        std::string(writeAfterClose ? "succeeded"
-                                                    : "failed (expected)"));
+    // Try operation after close
+    bool writeAfterClose =
+        client.write("After close", std::chrono::milliseconds(500));
+    Logger::log(
+        Logger::LOG_INFO, "Example4",
+        "Write after close: " +
+            std::string(writeAfterClose ? "succeeded" : "failed (expected)"));
 
-    } catch (const std::exception& e) {
-        Logger::log(Logger::ERR, "Example4",
-                    "Exception: " + std::string(e.what()));
-    }
-
-    Logger::log(Logger::INFO, "Example4",
-                "Connection state example completed\n");
+} catch (const std::exception& e) {
+    Logger::log(Logger::LOG_ERR, "Example4",
+                "Exception: " + std::string(e.what()));
 }
 
-// Example 5: Concurrent client simulation
-void concurrentClientsExample() {
-    Logger::log(Logger::INFO, "Example5",
-                "=== Concurrent Clients Simulation ===");
+Logger::log(Logger::LOG_INFO, "Example4",
+            "Connection state example completed\n");
+}
 
-    const std::string fifoPath = createPipePath("async_concurrent_fifo");
-    ensureFifoExists(fifoPath);
+// Example 5: Concurrent client simulationvoid concurrentClientsExample() {
+Logger::log(Logger::LOG_INFO, "Example5",
+            "=== Concurrent Clients Simulation ===");
 
-    try {
-        std::vector<std::thread> threads;
-        std::atomic<int> successfulWrites{0};
+const std::string fifoPath = createPipePath("async_concurrent_fifo");
+ensureFifoExists(fifoPath);
 
-        // Create multiple client threads
-        for (int i = 0; i < 3; ++i) {
-            threads.emplace_back([&, clientId = i]() {
-                try {
-                    atom::async::connection::FifoClient client(fifoPath);
+try {
+    std::vector<std::thread> threads;
+    std::atomic<int> successfulWrites{0};
 
-                    for (int j = 0; j < 5; ++j) {
-                        std::string msg = "Client" + std::to_string(clientId) +
-                                          "_Msg" + std::to_string(j);
-                        if (client.write(msg, std::chrono::milliseconds(500))) {
-                            successfulWrites++;
-                        }
-                        std::this_thread::sleep_for(
-                            std::chrono::milliseconds(50));
+    // Create multiple client threads
+    for (int i = 0; i < 3; ++i) {
+        threads.emplace_back([&, clientId = i]() {
+            try {
+                atom::async::connection::FifoClient client(fifoPath);
+
+                for (int j = 0; j < 5; ++j) {
+                    std::string msg = "Client" + std::to_string(clientId) +
+                                      "_Msg" + std::to_string(j);
+                    if (client.write(msg, std::chrono::milliseconds(500))) {
+                        successfulWrites++;
                     }
-
-                    client.close();
-                } catch (const std::exception& e) {
-                    Logger::log(Logger::ERR, "Example5",
-                                "Client " + std::to_string(clientId) +
-                                    " error: " + e.what());
+                    std::this_thread::sleep_for(std::chrono::milliseconds(50));
                 }
-            });
-        }
 
-        // Wait for all threads
-        for (auto& t : threads) {
-            t.join();
-        }
-
-        Logger::log(Logger::SUCCESS, "Example5",
-                    "Total successful writes: " +
-                        std::to_string(successfulWrites.load()));
-
-    } catch (const std::exception& e) {
-        Logger::log(Logger::ERR, "Example5",
-                    "Exception: " + std::string(e.what()));
+                client.close();
+            } catch (const std::exception& e) {
+                Logger::log(Logger::LOG_ERR, "Example5",
+                            "Client " + std::to_string(clientId) +
+                                " error: " + e.what());
+            }
+        });
     }
 
-    Logger::log(Logger::INFO, "Example5",
-                "Concurrent clients example completed\n");
+    // Wait for all threads
+    for (auto& t : threads) {
+        t.join();
+    }
+
+    Logger::log(
+        Logger::LOG_SUCCESS, "Example5",
+        "Total successful writes: " + std::to_string(successfulWrites.load()));
+
+} catch (const std::exception& e) {
+    Logger::log(Logger::LOG_ERR, "Example5",
+                "Exception: " + std::string(e.what()));
+}
+
+Logger::log(Logger::LOG_INFO, "Example5",
+            "Concurrent clients example completed\n");
 }
 
 int main() {
-    Logger::log(Logger::INFO, "Main",
+    Logger::log(Logger::LOG_INFO, "Main",
                 "==========================================");
-    Logger::log(Logger::INFO, "Main",
+    Logger::log(Logger::LOG_INFO, "Main",
                 "  Async FifoClient Comprehensive Examples");
-    Logger::log(Logger::INFO, "Main",
+    Logger::log(Logger::LOG_INFO, "Main",
                 "==========================================\n");
 
     // Run all examples
@@ -355,11 +345,11 @@ int main() {
     connectionStateExample();
     concurrentClientsExample();
 
-    Logger::log(Logger::SUCCESS, "Main",
+    Logger::log(Logger::LOG_SUCCESS, "Main",
                 "==========================================");
-    Logger::log(Logger::SUCCESS, "Main",
+    Logger::log(Logger::LOG_SUCCESS, "Main",
                 "  All async FifoClient examples completed!");
-    Logger::log(Logger::SUCCESS, "Main",
+    Logger::log(Logger::LOG_SUCCESS, "Main",
                 "==========================================");
 
     return 0;

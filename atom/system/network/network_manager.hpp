@@ -18,8 +18,8 @@ struct NetworkConnection {
     std::string protocol;       ///< Protocol (TCP or UDP).
     std::string localAddress;   ///< Local IP address.
     std::string remoteAddress;  ///< Remote IP address.
-    int localPort;              ///< Local port number.
-    int remotePort;             ///< Remote port number.
+    int localPort{0};           ///< Local port number.
+    int remotePort{0};          ///< Remote port number.
 } ATOM_ALIGNAS(128);
 
 /**

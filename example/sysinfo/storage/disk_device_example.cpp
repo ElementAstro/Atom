@@ -71,14 +71,15 @@ void demonstrateStorageDevices() {
             const auto& device = devices[i];
 
             std::cout << "Device " << (i + 1) << ":\n";
-            std::cout << "  Path:                 " << device.path << "\n";
+            std::cout << "  Path:                 " << device.devicePath
+                      << "\n";
             std::cout << "  Model:                " << device.model << "\n";
             std::cout << "  Type:                 "
                       << (device.isRemovable ? "Removable" : "Fixed") << "\n";
 
             // Get serial number if available
             try {
-                auto serial = getDeviceSerialNumber(device.path);
+                auto serial = getDeviceSerialNumber(device.devicePath);
                 if (serial.has_value()) {
                     std::cout << "  Serial Number:        " << serial.value()
                               << "\n";
@@ -92,7 +93,7 @@ void demonstrateStorageDevices() {
 
             // Get disk health if available
             try {
-                auto health = getDiskHealth(device.path);
+                auto health = getDiskHealth(device.devicePath);
                 if (std::holds_alternative<int>(health)) {
                     int healthPercent = std::get<int>(health);
                     std::cout << "  Health:               " << healthPercent

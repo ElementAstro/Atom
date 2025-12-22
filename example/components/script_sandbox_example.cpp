@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Script Sandbox Security Example
-Demonstrates security features, resource limits, permission system,
-and safe script execution with the component system.
+Description: Script Sandbox Security ExampleDemonstrates security features,
+resource limits, permission system, and safe script execution with the component
+system.
 
 **************************************************/
 
@@ -35,8 +35,8 @@ and safe script execution with the component system.
 #include "atom/components/scripting/python_engine.hpp"
 #endif
 
-// Note: Component and Registry are in global namespace, not atom::components
-using namespace atom::components::scripting;
+// Note: Component and Registry are in global namespace, not
+// atom::componentsusing namespace atom::components::scripting;
 
 /**
  * @brief Secure component that demonstrates sandbox protection

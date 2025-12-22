@@ -9,8 +9,8 @@
 Date: 2024-12-25
 
 Description: Beast WebSocket Example (Minimal Stub Implementation)
-This is a stub implementation since the atom-extra-beast library has
-complex template/concept compatibility issues.
+This is a stub implementation since the atom-extra-beast library hascomplex
+template/concept compatibility issues.
 
 **************************************************/
 
@@ -38,67 +38,64 @@ struct error_code {
 };
 }  // namespace boost::beast
 
-// Stub WSClient class
-class WSClient {
+// Stub WSClient classclass WSClient {
 public:
-    WSClient() {
-        std::cout << "WebSocket Client created (stub implementation)"
+WSClient() {
+    std::cout << "WebSocket Client created (stub implementation)" << std::endl;
+}
+
+template <typename ConnectHandler>
+void asyncConnect(std::string_view host, std::string_view port,
+                  ConnectHandler&& handler) {
+    std::cout << "Async connecting to " << host << ":" << port << " (stub)"
+              << std::endl;
+
+    // Simulate async connection
+    std::thread([handler = std::forward<ConnectHandler>(handler)]() mutable {
+        std::this_thread::sleep_for(100ms);
+        boost::beast::error_code ec(0);  // Success
+        handler(ec);
+    }).detach();
+}
+
+void connect(std::string_view host, std::string_view port) {
+    std::cout << "Connecting to " << host << ":" << port << " (stub)"
+              << std::endl;
+    connected_ = true;
+}
+
+void send(std::string_view message) {
+    if (connected_) {
+        std::cout << "Sending message (stub): " << message << std::endl;
+    } else {
+        std::cout << "Cannot send message: not connected (stub)" << std::endl;
+    }
+}
+
+std::string receive() {
+    if (connected_) {
+        std::string response =
+            "Echo from WebSocket server (stub): Hello World!";
+        std::cout << "Received message (stub): " << response << std::endl;
+        return response;
+    } else {
+        std::cout << "Cannot receive message: not connected (stub)"
                   << std::endl;
+        return "";
     }
+}
 
-    template <typename ConnectHandler>
-    void asyncConnect(std::string_view host, std::string_view port,
-                      ConnectHandler&& handler) {
-        std::cout << "Async connecting to " << host << ":" << port << " (stub)"
-                  << std::endl;
+void close() {
+    std::cout << "Closing WebSocket connection (stub)" << std::endl;
+    connected_ = false;
+}
 
-        // Simulate async connection
-        std::thread([handler =
-                         std::forward<ConnectHandler>(handler)]() mutable {
-            std::this_thread::sleep_for(100ms);
-            boost::beast::error_code ec(0);  // Success
-            handler(ec);
-        }).detach();
-    }
-
-    void connect(std::string_view host, std::string_view port) {
-        std::cout << "Connecting to " << host << ":" << port << " (stub)"
-                  << std::endl;
-        connected_ = true;
-    }
-
-    void send(std::string_view message) {
-        if (connected_) {
-            std::cout << "Sending message (stub): " << message << std::endl;
-        } else {
-            std::cout << "Cannot send message: not connected (stub)"
-                      << std::endl;
-        }
-    }
-
-    std::string receive() {
-        if (connected_) {
-            std::string response =
-                "Echo from WebSocket server (stub): Hello World!";
-            std::cout << "Received message (stub): " << response << std::endl;
-            return response;
-        } else {
-            std::cout << "Cannot receive message: not connected (stub)"
-                      << std::endl;
-            return "";
-        }
-    }
-
-    void close() {
-        std::cout << "Closing WebSocket connection (stub)" << std::endl;
-        connected_ = false;
-    }
-
-    bool isConnected() const { return connected_; }
+bool isConnected() const { return connected_; }
 
 private:
-    std::atomic<bool> connected_{false};
-};
+std::atomic<bool> connected_{false};
+}
+;
 
 int main() {
     std::cout << "=== Beast WebSocket Example (Stub Implementation) ==="

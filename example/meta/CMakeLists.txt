@@ -18,24 +18,7 @@ foreach(CPP_FILE ${CPP_FILES})
   # 构造可执行文件名称（子目录名_文件名）
   set(EXECUTABLE_NAME ${SUBDIR_NAME}_${EXAMPLE_NAME})
 
-  # 暂时跳过不通过的示例以解锁主构建
-  if(EXAMPLE_NAME STREQUAL "anymeta"
-     OR EXAMPLE_NAME STREQUAL "any"
-     OR EXAMPLE_NAME STREQUAL "decorate"
-     OR EXAMPLE_NAME STREQUAL "bind_first"
-     OR EXAMPLE_NAME STREQUAL "constructor"
-     OR EXAMPLE_NAME STREQUAL "concept"
-     OR EXAMPLE_NAME STREQUAL "container_traits"
-     OR EXAMPLE_NAME STREQUAL "enum"
-     OR EXAMPLE_NAME STREQUAL "facade"
-     OR EXAMPLE_NAME STREQUAL "facade_any"
-     OR EXAMPLE_NAME STREQUAL "ffi"
-     OR EXAMPLE_NAME STREQUAL "property"
-     OR EXAMPLE_NAME STREQUAL "invoke"
-     OR EXAMPLE_NAME STREQUAL "refl")
-    message(STATUS "Skipping meta example: ${EXAMPLE_NAME}")
-    continue()
-  endif()
+  # All meta examples should be built - no skipping
 
   # 配置选项，允许单独控制每个示例的构建
   string(TOUPPER ${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)

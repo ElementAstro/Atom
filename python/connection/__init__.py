@@ -51,10 +51,13 @@ TTY/Serial Communication:
 For detailed documentation and examples, see individual module documentation.
 """
 
-# Import all connection modules and their key classes
+# Import submodule packages
+from . import fifo, shared, ssh, tcp, udp
+
+# Import all connection modules and their key classes from new structure
 try:
     # TCP Client modules (async and sync)
-    from .tcpclient import (
+    from .tcp.tcpclient import (
         ConnectionConfig,
         ConnectionState,
         ConnectionStats,
@@ -69,7 +72,7 @@ except ImportError as e:
     print(f"Warning: Could not import tcpclient module: {e}")
 
 try:
-    from .sync_tcpclient import (
+    from .tcp.sync_tcpclient import (
         SyncConnectionConfig,
         SyncConnectionStats,
         SyncTcpClient,
@@ -81,55 +84,55 @@ except ImportError as e:
 
 try:
     # UDP modules
-    from .udp import UdpClient, UdpClientConfig, UdpClientStats, create_udp_client
+    from .udp.udp import UdpClient, UdpClientConfig, UdpClientStats, create_udp_client
 except ImportError as e:
     print(f"Warning: Could not import udp module: {e}")
 
 try:
-    from .udpsockethub import UdpError, UdpSocketHub
+    from .udp.udpsockethub import UdpError, UdpSocketHub
 except ImportError as e:
     print(f"Warning: Could not import udpsockethub module: {e}")
 
 try:
-    from .async_udpclient import SocketOption as AsyncUdpSocketOption
-    from .async_udpclient import Statistics as AsyncUdpStatistics
-    from .async_udpclient import UdpClient as AsyncUdpClient
-    from .async_udpclient import create_udp_client as create_async_udp_client
+    from .udp.async_udpclient import SocketOption as AsyncUdpSocketOption
+    from .udp.async_udpclient import Statistics as AsyncUdpStatistics
+    from .udp.async_udpclient import UdpClient as AsyncUdpClient
+    from .udp.async_udpclient import create_udp_client as create_async_udp_client
 except ImportError as e:
     print(f"Warning: Could not import async_udpclient module: {e}")
 
 try:
     # Socket Hub module (async)
-    from .sockethub import LogLevel as AsyncLogLevel
-    from .sockethub import Message, MessageType
-    from .sockethub import SocketHub as AsyncSocketHub
-    from .sockethub import SocketHubConfig as AsyncSocketHubConfig
-    from .sockethub import SocketHubStats as AsyncSocketHubStats
-    from .sockethub import create_socket_hub as create_async_socket_hub
+    from .shared.sockethub import LogLevel as AsyncLogLevel
+    from .shared.sockethub import Message, MessageType
+    from .shared.sockethub import SocketHub as AsyncSocketHub
+    from .shared.sockethub import SocketHubConfig as AsyncSocketHubConfig
+    from .shared.sockethub import SocketHubStats as AsyncSocketHubStats
+    from .shared.sockethub import create_socket_hub as create_async_socket_hub
 except ImportError as e:
     print(f"Warning: Could not import sockethub module: {e}")
 
 try:
     # Socket Hub module (sync)
-    from .sync_sockethub import ClientInfo as SyncClientInfo
-    from .sync_sockethub import SocketHub as SyncSocketHub
-    from .sync_sockethub import create_socket_hub as create_sync_socket_hub
+    from .shared.sync_sockethub import ClientInfo as SyncClientInfo
+    from .shared.sync_sockethub import SocketHub as SyncSocketHub
+    from .shared.sync_sockethub import create_socket_hub as create_sync_socket_hub
 except ImportError as e:
     print(f"Warning: Could not import sync_sockethub module: {e}")
 
 try:
     # FIFO modules
-    from .fifo import AsyncFifoClient
+    from .fifo.fifo import AsyncFifoClient
 except ImportError as e:
     print(f"Warning: Could not import fifo module: {e}")
 
 try:
-    from .fifoserver import AsyncFifoServer
+    from .fifo.fifoserver import AsyncFifoServer
 except ImportError as e:
     print(f"Warning: Could not import fifoserver module: {e}")
 
 try:
-    from .sync_fifoserver import (
+    from .fifo.sync_fifoserver import (
         FIFOServer,
         LogLevel,
         MessagePriority,
@@ -140,7 +143,7 @@ except ImportError as e:
     print(f"Warning: Could not import sync_fifoserver module: {e}")
 
 try:
-    from .sync_fifoclient import (
+    from .fifo.sync_fifoclient import (
         ClientConfig,
         ClientStats,
         FifoClient,
@@ -151,7 +154,7 @@ except ImportError as e:
 
 try:
     # SSH Client module (conditional)
-    from .sshclient import (
+    from .ssh.sshclient import (
         SSHClient,
         get_default_mode,
         get_default_ssh_port,
@@ -164,13 +167,13 @@ except ImportError as e:
 
 try:
     # SSH Server module
-    from .sshserver import SshConnection, SshServer
+    from .ssh.sshserver import SshConnection, SshServer
 except ImportError as e:
     print(f"Warning: Could not import sshserver module: {e}")
 
 try:
     # TTY module
-    from .ttybase import TTYBase, TTYResponse, response_to_string
+    from .shared.ttybase import TTYBase, TTYResponse, response_to_string
 except ImportError as e:
     print(f"Warning: Could not import ttybase module: {e}")
 

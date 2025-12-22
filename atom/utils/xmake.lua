@@ -3,8 +3,17 @@
 -- Author: Max Qian
 -- License: GPL3
 
--- Add standard build modes
-add_rules("mode.debug", "mode.release")
+-- Add standard build modes (including minsizerel for size optimization)
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
+
+-- Set languages (match CMake C++20)
+set_languages("c11", "cxx20")
+
+-- Add required packages (use spdlog instead of loguru to match CMake)
+local use_system_packages = has_config("use_system_packages")
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
+add_requires("tinyxml2", {system = use_system_packages})
 
 -- Project configuration
 set_project("atom-utils")
@@ -83,7 +92,7 @@ target("atom-utils-object")
     end
 
     -- Add dependencies
-    add_packages("loguru", "tinyxml2")
+    add_packages("spdlog", "fmt", "tinyxml2")
 
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -100,7 +109,7 @@ target("atom-utils")
 
     -- Add dependencies
     add_deps("atom-utils-object")
-    add_packages("loguru", "tinyxml2")
+    add_packages("spdlog", "fmt", "tinyxml2")
 
     -- Add include directories
     add_includedirs(".", {public = true})

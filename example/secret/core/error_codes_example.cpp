@@ -16,39 +16,37 @@
 
 using namespace atom::secret;
 
-// Example function that returns a Result
-Result<int> divide(int a, int b) {
-    if (b == 0) {
-        return Result<int>::error(ErrorCode::InvalidArgument,
-                                  "Division by zero");
-    }
-    return Result<int>::success(a / b);
+// Example function that returns a ResultResult<int> divide(int a, int b) {
+if (b == 0) {
+    return Result<int>::error(ErrorCode::InvalidArgument, "Division by zero");
+}
+return Result<int>::success(a / b);
 }
 
-// Example function that returns a Result with string
-Result<std::string> processData(const std::string& input) {
-    if (input.empty()) {
-        return Result<std::string>::error(ErrorCode::InvalidArgument,
-                                          "Input cannot be empty");
-    }
-    if (input.length() < 3) {
-        return Result<std::string>::error(ErrorCode::InvalidArgument,
-                                          "Input too short");
-    }
-    return Result<std::string>::success("Processed: " + input);
+// Example function that returns a Result with stringResult<std::string>
+// processData(const std::string& input) {
+if (input.empty()) {
+    return Result<std::string>::error(ErrorCode::InvalidArgument,
+                                      "Input cannot be empty");
+}
+if (input.length() < 3) {
+    return Result<std::string>::error(ErrorCode::InvalidArgument,
+                                      "Input too short");
+}
+return Result<std::string>::success("Processed: " + input);
 }
 
-// Example function that returns void Result
-Result<void> validatePassword(const std::string& password) {
-    if (password.empty()) {
-        return Result<void>::error(ErrorCode::PasswordEmpty,
-                                   "Password cannot be empty");
-    }
-    if (password.length() < 8) {
-        return Result<void>::error(ErrorCode::PasswordTooShort,
-                                   "Password must be at least 8 characters");
-    }
-    return Result<void>::success();
+// Example function that returns void ResultResult<void> validatePassword(const
+// std::string& password) {
+if (password.empty()) {
+    return Result<void>::error(ErrorCode::PasswordEmpty,
+                               "Password cannot be empty");
+}
+if (password.length() < 8) {
+    return Result<void>::error(ErrorCode::PasswordTooShort,
+                               "Password must be at least 8 characters");
+}
+return Result<void>::success();
 }
 
 int main() {

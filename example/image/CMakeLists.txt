@@ -73,30 +73,46 @@ function(add_image_example EXAMPLE_NAME SOURCE_FILE CATEGORY)
   endif()
 endfunction()
 
-# Add subdirectory examples
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/core)
-  add_subdirectory(core)
-endif()
+# Function to add examples from a subdirectory
+function(add_image_examples_from_dir SUBDIR FOLDER_NAME)
+  if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR})
+    file(GLOB SUBDIR_CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/${SUBDIR}/*.cpp)
+    foreach(CPP_FILE ${SUBDIR_CPP_FILES})
+      get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
+      set(EXECUTABLE_NAME ${SUBDIR_NAME}_${SUBDIR}_${EXAMPLE_NAME})
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/io)
-  add_subdirectory(io)
-endif()
+      string(TOUPPER ${SUBDIR}_${EXAMPLE_NAME} EXAMPLE_NAME_UPPER)
+      option(ATOM_EXAMPLE_IMAGE_${EXAMPLE_NAME_UPPER}
+             "Build image example: ${SUBDIR}/${EXAMPLE_NAME}"
+             ${ATOM_EXAMPLE_IMAGE_BUILD_ALL})
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/processing)
-  add_subdirectory(processing)
-endif()
+      if(ATOM_EXAMPLE_IMAGE_${EXAMPLE_NAME_UPPER})
+        add_executable(${EXECUTABLE_NAME} ${CPP_FILE})
+        target_link_libraries(${EXECUTABLE_NAME} atom)
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/formats)
-  add_subdirectory(formats)
-endif()
+        if(ATOM_IMAGE_HAS_OPENCV)
+          target_compile_definitions(${EXECUTABLE_NAME}
+                                     PRIVATE ATOM_IMAGE_HAS_OPENCV)
+        endif()
+        if(ATOM_IMAGE_HAS_CFITSIO)
+          target_compile_definitions(${EXECUTABLE_NAME}
+                                     PRIVATE ATOM_IMAGE_HAS_CFITSIO)
+        endif()
+        if(ATOM_IMAGE_HAS_OCR)
+          target_compile_definitions(${EXECUTABLE_NAME}
+                                     PRIVATE ATOM_IMAGE_HAS_OCR)
+        endif()
 
-if(EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/metadata)
-  add_subdirectory(metadata)
-endif()
+        set_property(TARGET ${EXECUTABLE_NAME}
+                     PROPERTY FOLDER "Examples/Image/${FOLDER_NAME}")
+      endif()
+    endforeach()
+  endif()
+endfunction()
 
-# Add root-level examples
-file(GLOB ROOT_CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
-foreach(CPP_FILE ${ROOT_CPP_FILES})
-  get_filename_component(EXAMPLE_NAME ${CPP_FILE} NAME_WE)
-  add_image_example(${EXAMPLE_NAME} ${CPP_FILE} "ROOT")
-endforeach()
+# Add examples from subdirectories
+add_image_examples_from_dir("core" "Core")
+add_image_examples_from_dir("io" "IO")
+add_image_examples_from_dir("processing" "Processing")
+add_image_examples_from_dir("formats" "Formats")
+add_image_examples_from_dir("metadata" "Metadata")

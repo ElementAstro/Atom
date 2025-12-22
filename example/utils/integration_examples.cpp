@@ -33,20 +33,19 @@
 
 using namespace atom::utils;
 
-// Helper function to print section headers
-void printSection(const std::string& title) {
-    ColorPrinter::printColoredLine("==========================================",
-                                   ColorCode::Cyan, TextStyle::Bold);
-    ColorPrinter::printColoredLine("  " + title, ColorCode::Cyan,
-                                   TextStyle::Bold);
-    ColorPrinter::printColoredLine("==========================================",
-                                   ColorCode::Cyan, TextStyle::Bold);
+// Helper function to print section headersvoid printSection(const std::string&
+// title) {
+ColorPrinter::printColoredLine("==========================================",
+                               ColorCode::Cyan, TextStyle::Bold);
+ColorPrinter::printColoredLine("  " + title, ColorCode::Cyan, TextStyle::Bold);
+ColorPrinter::printColoredLine("==========================================",
+                               ColorCode::Cyan, TextStyle::Bold);
 }
 
-// Helper function to print subsection headers
-void printSubsection(const std::string& title) {
-    ColorPrinter::printColoredLine("--- " + title + " ---", ColorCode::Yellow,
-                                   TextStyle::Bold);
+// Helper function to print subsection headersvoid printSubsection(const
+// std::string& title) {
+ColorPrinter::printColoredLine("--- " + title + " ---", ColorCode::Yellow,
+                               TextStyle::Bold);
 }
 
 // ============================

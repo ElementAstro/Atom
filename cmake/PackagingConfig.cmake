@@ -66,7 +66,7 @@ set(ATOM_PACKAGE_BASENAME
 # =============================================================================
 
 # Include module dependencies data for consistent dependency definitions
-include(${CMAKE_CURRENT_LIST_DIR}/module_dependencies.cmake)
+include(${CMAKE_CURRENT_LIST_DIR}/ModuleDependenciesData.cmake)
 
 # Define available components (extract names from ATOM_ALL_MODULES)
 set(ATOM_COMPONENTS)
@@ -75,11 +75,11 @@ foreach(MODULE ${ATOM_ALL_MODULES})
   list(APPEND ATOM_COMPONENTS ${MODULE_NAME})
 endforeach()
 
-# Component dependencies mapping - derive from module_dependencies.cmake Convert
-# ATOM_ATOM_xxx_DEPENDS format to ATOM_COMPONENT_DEPS_xxx format
+# Component dependencies mapping - derive from ModuleDependenciesData.cmake
+# Convert ATOM_ATOM_xxx_DEPENDS format to ATOM_COMPONENT_DEPS_xxx format
 foreach(COMPONENT ${ATOM_COMPONENTS})
   string(TOUPPER ${COMPONENT} COMPONENT_UPPER)
-  # Get deps from module_dependencies.cmake (ATOM_ATOM_XXX_DEPENDS)
+  # Get deps from ModuleDependenciesData.cmake (ATOM_ATOM_XXX_DEPENDS)
   set(RAW_DEPS ${ATOM_ATOM_${COMPONENT_UPPER}_DEPENDS})
   # Convert atom-xxx to xxx
   set(CONVERTED_DEPS "")

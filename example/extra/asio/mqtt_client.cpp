@@ -9,8 +9,8 @@
 Date: 2024-12-25
 
 Description: ASIO MQTT Client Example (Minimal Stub Implementation)
-This is a stub implementation since the atom-extra-asio library linking
-is not configured in the current build system.
+This is a stub implementation since the atom-extra-asio library linkingis not
+configured in the current build system.
 
 **************************************************/
 
@@ -29,100 +29,94 @@ using namespace std::chrono_literals;
 
 namespace atom::extra::asio::mqtt {
 
-// Stub ErrorCode enum
-enum class ErrorCode {
-    SUCCESS = 0,
-    CONNECTION_FAILED,
-    TIMEOUT,
-    INVALID_PACKET
+// Stub ErrorCode enumenum class ErrorCode {
+SUCCESS = 0, CONNECTION_FAILED, TIMEOUT, INVALID_PACKET
 };
 
-// Stub QoS enum
-enum class QoS : uint8_t {
-    AT_MOST_ONCE = 0,
-    AT_LEAST_ONCE = 1,
-    EXACTLY_ONCE = 2
-};
+// Stub QoS enumenum class QoS : uint8_t {
+AT_MOST_ONCE = 0, AT_LEAST_ONCE = 1, EXACTLY_ONCE = 2
+}
+;
 
-// Stub Message struct
-struct Message {
-    std::string topic;
-    std::string payload;
-    QoS qos = QoS::AT_MOST_ONCE;
-    bool retain = false;
-};
+// Stub Message structstruct Message {
+std::string topic;
+std::string payload;
+QoS qos = QoS::AT_MOST_ONCE;
+bool retain = false;
+}
+;
 
-// Stub ConnectionOptions struct
-struct ConnectionOptions {
-    std::string client_id = "atom_mqtt_client";
-    std::string username;
-    std::string password;
-    uint16_t keep_alive = 60;
-    bool clean_session = true;
-};
+// Stub ConnectionOptions structstruct ConnectionOptions {
+std::string client_id = "atom_mqtt_client";
+std::string username;
+std::string password;
+uint16_t keep_alive = 60;
+bool clean_session = true;
+}
+;
 
-// Stub Client class
-class Client {
+// Stub Client classclass Client {
 public:
-    Client() {
-        std::cout << "MQTT Client created (stub implementation)" << std::endl;
-    }
+Client() {
+    std::cout << "MQTT Client created (stub implementation)" << std::endl;
+}
 
-    void set_connection_handler(std::function<void(ErrorCode)> handler) {
-        connection_handler_ = std::move(handler);
-    }
+void set_connection_handler(std::function<void(ErrorCode)> handler) {
+    connection_handler_ = std::move(handler);
+}
 
-    void set_message_handler(std::function<void(const Message&)> handler) {
-        message_handler_ = std::move(handler);
-    }
+void set_message_handler(std::function<void(const Message&)> handler) {
+    message_handler_ = std::move(handler);
+}
 
-    void async_connect(const std::string& host, uint16_t port,
-                       const ConnectionOptions& options) {
-        std::cout << "Connecting to " << host << ":" << port << " (stub)"
-                  << std::endl;
-        std::cout << "  Client ID: " << options.client_id << std::endl;
+void async_connect(const std::string& host, uint16_t port,
+                   const ConnectionOptions& options) {
+    std::cout << "Connecting to " << host << ":" << port << " (stub)"
+              << std::endl;
+    std::cout << "  Client ID: " << options.client_id << std::endl;
 
-        // Simulate connection
-        std::thread([this]() {
-            std::this_thread::sleep_for(100ms);
-            if (connection_handler_) {
-                connection_handler_(ErrorCode::SUCCESS);
-            }
-        }).detach();
-    }
+    // Simulate connection
+    std::thread([this]() {
+        std::this_thread::sleep_for(100ms);
+        if (connection_handler_) {
+            connection_handler_(ErrorCode::SUCCESS);
+        }
+    }).detach();
+}
 
-    void async_subscribe(const std::string& topic, QoS qos) {
-        std::cout << "Subscribing to topic: " << topic << " with QoS "
-                  << static_cast<int>(qos) << " (stub)" << std::endl;
+void async_subscribe(const std::string& topic, QoS qos) {
+    std::cout << "Subscribing to topic: " << topic << " with QoS "
+              << static_cast<int>(qos) << " (stub)" << std::endl;
 
-        // Simulate receiving messages
-        std::thread([this, topic]() {
-            std::this_thread::sleep_for(200ms);
-            if (message_handler_) {
-                Message msg;
-                msg.topic = topic;
-                msg.payload = "Hello from MQTT stub for topic: " + topic;
-                msg.qos = QoS::AT_LEAST_ONCE;
-                message_handler_(msg);
-            }
-        }).detach();
-    }
+    // Simulate receiving messages
+    std::thread([this, topic]() {
+        std::this_thread::sleep_for(200ms);
+        if (message_handler_) {
+            Message msg;
+            msg.topic = topic;
+            msg.payload = "Hello from MQTT stub for topic: " + topic;
+            msg.qos = QoS::AT_LEAST_ONCE;
+            message_handler_(msg);
+        }
+    }).detach();
+}
 
-    void async_publish(const Message& message) {
-        std::cout << "Publishing to topic: " << message.topic << " (stub)"
-                  << std::endl;
-        std::cout << "  Payload: " << message.payload.substr(0, 50) << "..."
-                  << std::endl;
-    }
+void async_publish(const Message& message) {
+    std::cout << "Publishing to topic: " << message.topic << " (stub)"
+              << std::endl;
+    std::cout << "  Payload: " << message.payload.substr(0, 50) << "..."
+              << std::endl;
+}
 
-    void disconnect() {
-        std::cout << "Disconnecting MQTT client (stub)..." << std::endl;
-    }
+void disconnect() {
+    std::cout << "Disconnecting MQTT client (stub)..." << std::endl;
+}
 
 private:
-    std::function<void(ErrorCode)> connection_handler_;
-    std::function<void(const Message&)> message_handler_;
-};
+std::function<void(ErrorCode)> connection_handler_;
+std::function<void(const Message&)> message_handler_;
+}
+;
 
 }  // namespace atom::extra::asio::mqtt
 

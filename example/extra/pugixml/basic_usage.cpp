@@ -11,41 +11,40 @@
 
 namespace atom::extra::pugixml {
 
-// Stub XML classes
-class Node {
+// Stub XML classesclass Node {
 public:
-    Node() = default;
+Node() = default;
 
-    std::string text() const { return "Sample text content (stub)"; }
+std::string text() const { return "Sample text content (stub)"; }
 
-    std::string attribute(const std::string& name) const {
-        std::cout << "Getting attribute: " << name << " (stub)" << std::endl;
-        return "sample_value";
-    }
+std::string attribute(const std::string& name) const {
+    std::cout << "Getting attribute: " << name << " (stub)" << std::endl;
+    return "sample_value";
+}
 
-    Node child(const std::string& name) const {
-        std::cout << "Getting child: " << name << " (stub)" << std::endl;
-        return Node{};
-    }
+Node child(const std::string& name) const {
+    std::cout << "Getting child: " << name << " (stub)" << std::endl;
+    return Node{};
+}
 
-    std::vector<Node> children() const {
-        std::cout << "Getting all children (stub)" << std::endl;
-        return {Node{}, Node{}, Node{}};
-    }
+std::vector<Node> children() const {
+    std::cout << "Getting all children (stub)" << std::endl;
+    return {Node{}, Node{}, Node{}};
+}
 
-    void set_text(const std::string& text) {
-        std::cout << "Setting text: " << text << " (stub)" << std::endl;
-    }
+void set_text(const std::string& text) {
+    std::cout << "Setting text: " << text << " (stub)" << std::endl;
+}
 
-    void set_attribute(const std::string& name, const std::string& value) {
-        std::cout << "Setting attribute " << name << " = " << value << " (stub)"
-                  << std::endl;
-    }
+void set_attribute(const std::string& name, const std::string& value) {
+    std::cout << "Setting attribute " << name << " = " << value << " (stub)"
+              << std::endl;
+}
 
-    Node append_child(const std::string& name) {
-        std::cout << "Appending child: " << name << " (stub)" << std::endl;
-        return Node{};
-    }
+Node append_child(const std::string& name) {
+    std::cout << "Appending child: " << name << " (stub)" << std::endl;
+    return Node{};
+}
 };
 
 class Document {

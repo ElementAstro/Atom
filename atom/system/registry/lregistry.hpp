@@ -52,8 +52,8 @@ enum class RegistryResult {
 struct RegistryValueInfo {
     std::string name;
     std::string type;
-    std::time_t lastModified;
-    size_t size;
+    std::time_t lastModified{0};
+    size_t size{0};
 };
 
 /**

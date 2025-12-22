@@ -5,12 +5,12 @@
 
 using namespace atom::algorithm;
 
-// Helper function to separate and label each example
-void printHeader(const std::string& header) {
-    std::cout << "\n";
-    std::cout << "=================================================\n";
-    std::cout << header << "\n";
-    std::cout << "=================================================\n";
+// Helper function to separate and label each examplevoid printHeader(const
+// std::string& header) {
+std::cout << "\n";
+std::cout << "=================================================\n";
+std::cout << header << "\n";
+std::cout << "=================================================\n";
 }
 
 int main() {

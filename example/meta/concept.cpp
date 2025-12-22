@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Comprehensive examples for atom::meta::concept utilities
  *
  * This file demonstrates all concept categories from atom/meta/concept.hpp:
@@ -37,8 +37,7 @@
 #include <variant>
 #include <vector>
 
-// Helper function to print concept check results
-template <bool Result>
+// Helper function to print concept check resultstemplate <bool Result>
 void printConceptCheck(const std::string& conceptName,
                        const std::string& typeName) {
     std::cout << ""
@@ -588,18 +587,15 @@ void testTypeConstraintHelpers() {
 // Practical Usage Examples
 // -----------------------------------------------------------------------------
 
-// Generic function that works only on arithmetic types
-template <typename T>
-    requires Arithmetic<T>
-T average(const std::vector<T>& values) {
+// Generic function that works only on arithmetic typestemplate <typename T>
+requires Arithmetic<T> T average(const std::vector<T>& values) {
     if (values.empty())
         return T{};
     return std::accumulate(values.begin(), values.end(), T{}) /
            static_cast<T>(values.size());
 }
 
-// Function that requires a container
-template <Container T>
+// Function that requires a containertemplate <Container T>
 auto findMax(const T& container) {
     if (container.begin() == container.end()) {
         throw std::runtime_error("" Empty container "");
@@ -607,10 +603,8 @@ auto findMax(const T& container) {
     return *std::max_element(container.begin(), container.end());
 }
 
-// Function that works only on smart pointers
-template <typename T>
-    requires SmartPointer<T>
-void useResource(T ptr) {
+// Function that works only on smart pointerstemplate <typename T>
+requires SmartPointer<T> void useResource(T ptr) {
     std::cout << "" Resource is "" << (ptr ? "" valid "" : "" invalid "")
               << std::endl;
 }
@@ -634,33 +628,32 @@ void testPracticalExamples() {
     useResource(sharedPtr);
 }
 
-// Main function
-int main() {
-    std::cout << std::string(60, '=') << std::endl;
-    std::cout << "" Concept Utilities Comprehensive Examples "" << std::endl;
-    std::cout << ""(Including C++ 23 Enhanced Concepts) "" << std::endl;
-    std::cout << std::string(60, '=') << std::endl;
+// Main functionint main() {
+std::cout << std::string(60, '=') << std::endl;
+std::cout << "" Concept Utilities Comprehensive Examples "" << std::endl;
+std::cout << ""(Including C++ 23 Enhanced Concepts) "" << std::endl;
+std::cout << std::string(60, '=') << std::endl;
 
-    testFunctionConcepts();
-    testObjectConcepts();
-    testTypeConcepts();
-    testContainerConcepts();
-    testMultiThreadingConcepts();
-    testAsynchronousConcepts();
-    testCpp23EnhancedConcepts();
-    testTypeRelationshipConcepts();
-    testEnhancedNumericConcepts();
-    testOptionalExpectedConcepts();
-    testTupleVariantConcepts();
-    testMetaModuleConcepts();
-    testAdvancedContainerConcepts();
-    testThreadSafetyAtomicConcepts();
-    testTypeConstraintHelpers();
-    testPracticalExamples();
+testFunctionConcepts();
+testObjectConcepts();
+testTypeConcepts();
+testContainerConcepts();
+testMultiThreadingConcepts();
+testAsynchronousConcepts();
+testCpp23EnhancedConcepts();
+testTypeRelationshipConcepts();
+testEnhancedNumericConcepts();
+testOptionalExpectedConcepts();
+testTupleVariantConcepts();
+testMetaModuleConcepts();
+testAdvancedContainerConcepts();
+testThreadSafetyAtomicConcepts();
+testTypeConstraintHelpers();
+testPracticalExamples();
 
-    std::cout << ""\n "" << std::string(60, '=') << std::endl;
-    std::cout << "" All examples completed successfully !"" << std::endl;
-    std::cout << std::string(60, '=') << std::endl;
+std::cout << ""\n "" << std::string(60, '=') << std::endl;
+std::cout << "" All examples completed successfully !"" << std::endl;
+std::cout << std::string(60, '=') << std::endl;
 
-    return 0;
+return 0;
 }

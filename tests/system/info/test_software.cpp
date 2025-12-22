@@ -21,7 +21,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/system/software.hpp"
+#include "atom/system/info/software.hpp"
 
 namespace atom::system::test {
 
@@ -321,7 +321,7 @@ TEST_F(SoftwareTest, MonitorSoftwareUsage_BasicMonitoring) {
         std::this_thread::sleep_for(200ms);
 
         // Stop monitoring
-        bool stopped = stopMonitoring(monitorId);
+        bool stopped = stopSoftwareMonitoring(monitorId);
         EXPECT_TRUE(stopped ||
                     !stopped);  // Either succeeds or fails gracefully
     }
@@ -331,7 +331,7 @@ TEST_F(SoftwareTest, MonitorSoftwareUsage_BasicMonitoring) {
  * @brief Test stopping non-existent monitor
  */
 TEST_F(SoftwareTest, StopMonitoring_InvalidId) {
-    bool result = stopMonitoring(-1);
+    bool result = stopSoftwareMonitoring(-1);
     EXPECT_FALSE(result);
 }
 
@@ -343,8 +343,8 @@ TEST_F(SoftwareTest, StopMonitoring_AlreadyStopped) {
     int monitorId = monitorSoftwareUsage(existingSoftware, callback, 100);
 
     if (monitorId >= 0) {
-        stopMonitoring(monitorId);
-        bool result = stopMonitoring(monitorId);  // Try to stop again
+        stopSoftwareMonitoring(monitorId);
+        bool result = stopSoftwareMonitoring(monitorId);  // Try to stop again
         EXPECT_FALSE(result);
     }
 }

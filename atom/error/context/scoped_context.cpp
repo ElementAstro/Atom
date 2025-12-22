@@ -25,16 +25,11 @@ ScopedErrorContext::ScopedErrorContext(std::shared_ptr<ErrorContext> context)
 
 ScopedErrorContext::~ScopedErrorContext() = default;
 
-ScopedErrorContext::ScopedErrorContext(ScopedErrorContext&& other) noexcept
-    : context_(std::move(other.context_)) {}
+ScopedErrorContext::ScopedErrorContext(ScopedErrorContext&& other) noexcept =
+    default;
 
 ScopedErrorContext& ScopedErrorContext::operator=(
-    ScopedErrorContext&& other) noexcept {
-    if (this != &other) {
-        context_ = std::move(other.context_);
-    }
-    return *this;
-}
+    ScopedErrorContext&& other) noexcept = default;
 
 auto ScopedErrorContext::getContext() const -> std::shared_ptr<ErrorContext> {
     return context_;
@@ -44,18 +39,20 @@ auto ScopedErrorContext::operator->() const -> ErrorContext* {
     return context_.get();
 }
 
-ScopedErrorContext::operator bool() const { return context_ != nullptr; }
+ScopedErrorContext::operator bool() const noexcept {
+    return context_ != nullptr;
+}
 
 ScopedErrorContext& ScopedErrorContext::setUserData(const std::string& key,
                                                     std::any value) {
-    if (context_) {
+    if (context_) [[likely]] {
         context_->setUserData(key, std::move(value));
     }
     return *this;
 }
 
 ScopedErrorContext& ScopedErrorContext::addTag(const std::string& tag) {
-    if (context_) {
+    if (context_) [[likely]] {
         context_->addTag(tag);
     }
     return *this;
@@ -63,7 +60,7 @@ ScopedErrorContext& ScopedErrorContext::addTag(const std::string& tag) {
 
 ScopedErrorContext& ScopedErrorContext::setCorrelationId(
     const std::string& correlationId) {
-    if (context_) {
+    if (context_) [[likely]] {
         context_->setCorrelationId(correlationId);
     }
     return *this;

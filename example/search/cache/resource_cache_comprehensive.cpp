@@ -26,57 +26,57 @@
 
 #include "atom/search/cache.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// A simple resource class that can be cached
-class Resource {
+// A simple resource class that can be cachedclass Resource {
 public:
-    Resource() : id_(-1), name_(""), data_("") {}
+Resource() : id_(-1), name_(""), data_("") {}
 
-    Resource(int id, const std::string& name, const std::string& data)
-        : id_(id), name_(name), data_(data) {}
+Resource(int id, const std::string& name, const std::string& data)
+    : id_(id), name_(name), data_(data) {}
 
-    // Getters
-    int getId() const { return id_; }
-    std::string getName() const { return name_; }
-    std::string getData() const { return data_; }
+// Getters
+int getId() const { return id_; }
+std::string getName() const { return name_; }
+std::string getData() const { return data_; }
 
-    // Setters
-    void setId(int id) { id_ = id; }
-    void setName(const std::string& name) { name_ = name; }
-    void setData(const std::string& data) { data_ = data; }
+// Setters
+void setId(int id) { id_ = id; }
+void setName(const std::string& name) { name_ = name; }
+void setData(const std::string& data) { data_ = data; }
 
-    // Operators for comparison
-    bool operator==(const Resource& other) const {
-        return id_ == other.id_ && name_ == other.name_ && data_ == other.data_;
-    }
+// Operators for comparison
+bool operator==(const Resource& other) const {
+    return id_ == other.id_ && name_ == other.name_ && data_ == other.data_;
+}
 
-    // ToString method for display
-    std::string toString() const {
-        std::stringstream ss;
-        ss << "Resource[id=" << id_ << ", name=" << name_ << ", data=" << data_
-           << "]";
-        return ss.str();
-    }
+// ToString method for display
+std::string toString() const {
+    std::stringstream ss;
+    ss << "Resource[id=" << id_ << ", name=" << name_ << ", data=" << data_
+       << "]";
+    return ss.str();
+}
 
 private:
-    int id_;
-    std::string name_;
-    std::string data_;
-};
+int id_;
+std::string name_;
+std::string data_;
+}
+;
 
-// Implement to/from JSON conversion for Resource
-nlohmann::json resourceToJson(const Resource& resource) {
-    nlohmann::json j;
-    j["id"] = resource.getId();
-    j["name"] = resource.getName();
-    j["data"] = resource.getData();
-    return j;
+// Implement to/from JSON conversion for Resourcenlohmann::json
+// resourceToJson(const Resource& resource) {
+nlohmann::json j;
+j["id"] = resource.getId();
+j["name"] = resource.getName();
+j["data"] = resource.getData();
+return j;
 }
 
 Resource resourceFromJson(const nlohmann::json& j) {
@@ -86,10 +86,10 @@ Resource resourceFromJson(const nlohmann::json& j) {
     return Resource(id, name, data);
 }
 
-// Implement string serialization/deserialization for Resource
-std::string resourceToString(const Resource& resource) {
-    return std::to_string(resource.getId()) + "|" + resource.getName() + "|" +
-           resource.getData();
+// Implement string serialization/deserialization for Resourcestd::string
+// resourceToString(const Resource& resource) {
+return std::to_string(resource.getId()) + "|" + resource.getName() + "|" +
+       resource.getData();
 }
 
 Resource resourceFromString(const std::string& str) {
@@ -104,18 +104,17 @@ Resource resourceFromString(const std::string& str) {
     return Resource(id, name, data);
 }
 
-// Helper function to create sample resources
-Resource createSampleResource(int index) {
-    return Resource(index, "Resource-" + std::to_string(index),
-                    "Sample data for resource " + std::to_string(index));
+// Helper function to create sample resourcesResource createSampleResource(int
+// index) {
+return Resource(index, "Resource-" + std::to_string(index),
+                "Sample data for resource " + std::to_string(index));
 }
 
-// Long-running operation for async examples
-Resource loadResourceSlowly(int id) {
-    // Simulate a time-consuming operation
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    return Resource(id, "Async-Resource-" + std::to_string(id),
-                    "Data loaded asynchronously for " + std::to_string(id));
+// Long-running operation for async examplesResource loadResourceSlowly(int id)
+// { Simulate a time-consuming operation
+std::this_thread::sleep_for(std::chrono::milliseconds(500));
+return Resource(id, "Async-Resource-" + std::to_string(id),
+                "Data loaded asynchronously for " + std::to_string(id));
 }
 
 int main() {

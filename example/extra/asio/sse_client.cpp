@@ -9,8 +9,8 @@
 Date: 2024-12-25
 
 Description: ASIO SSE Client Example (Minimal Stub Implementation)
-This is a stub implementation since the atom-extra-asio library linking
-is not configured in the current build system.
+This is a stub implementation since the atom-extra-asio library linkingis not
+configured in the current build system.
 
 **************************************************/
 
@@ -29,101 +29,98 @@ using namespace std::chrono_literals;
 
 namespace atom::extra::asio::sse {
 
-// Stub Event class
-class Event {
+// Stub Event classclass Event {
 public:
-    Event(std::string id, std::string event_type, std::string data)
-        : id_(std::move(id)),
-          event_type_(std::move(event_type)),
-          data_(std::move(data)) {}
+Event(std::string id, std::string event_type, std::string data)
+    : id_(std::move(id)),
+      event_type_(std::move(event_type)),
+      data_(std::move(data)) {}
 
-    const std::string& id() const noexcept { return id_; }
-    const std::string& event_type() const noexcept { return event_type_; }
-    const std::string& data() const noexcept { return data_; }
+const std::string& id() const noexcept { return id_; }
+const std::string& event_type() const noexcept { return event_type_; }
+const std::string& data() const noexcept { return data_; }
 
 private:
-    std::string id_;
-    std::string event_type_;
-    std::string data_;
+std::string id_;
+std::string event_type_;
+std::string data_;
 };
 
-// Stub ClientConfig struct
-struct ClientConfig {
-    std::string host = "localhost";
-    std::string port = "8080";
-    std::string path = "/events";
-    bool use_ssl = false;
-    bool verify_ssl = true;
-    std::string ca_cert_file;
-    std::string api_key;
-    std::string username;
-    std::string password;
-    bool reconnect = true;
-    int max_reconnect_attempts = 10;
-    int reconnect_base_delay_ms = 1000;
-    bool store_events = true;
-    std::string event_store_path = "client_events";
-    std::string last_event_id;
-    std::vector<std::string> event_types_filter;
-};
+// Stub ClientConfig structstruct ClientConfig {
+std::string host = "localhost";
+std::string port = "8080";
+std::string path = "/events";
+bool use_ssl = false;
+bool verify_ssl = true;
+std::string ca_cert_file;
+std::string api_key;
+std::string username;
+std::string password;
+bool reconnect = true;
+int max_reconnect_attempts = 10;
+int reconnect_base_delay_ms = 1000;
+bool store_events = true;
+std::string event_store_path = "client_events";
+std::string last_event_id;
+std::vector<std::string> event_types_filter;
+}
+;
 
-// Stub Client class
-class Client {
+// Stub Client classclass Client {
 public:
-    Client(auto& io_context, const ClientConfig& config) {
-        std::cout << "SSE Client created (stub implementation)" << std::endl;
-        std::cout << "  Host: " << config.host << ":" << config.port
-                  << std::endl;
-        std::cout << "  Path: " << config.path << std::endl;
+Client(auto& io_context, const ClientConfig& config) {
+    std::cout << "SSE Client created (stub implementation)" << std::endl;
+    std::cout << "  Host: " << config.host << ":" << config.port << std::endl;
+    std::cout << "  Path: " << config.path << std::endl;
+}
+
+void set_event_handler(std::function<void(const Event&)> handler) {
+    event_handler_ = std::move(handler);
+}
+
+void set_connection_handler(
+    std::function<void(bool, const std::string&)> handler) {
+    connection_handler_ = std::move(handler);
+}
+
+void add_event_filter(const std::string& event_type) {
+    std::cout << "Added event filter: " << event_type << std::endl;
+}
+
+void start() {
+    std::cout << "Starting SSE client (stub)..." << std::endl;
+    if (connection_handler_) {
+        connection_handler_(true, "Connected to stub server");
     }
 
-    void set_event_handler(std::function<void(const Event&)> handler) {
-        event_handler_ = std::move(handler);
+    // Simulate some events
+    if (event_handler_) {
+        std::thread([this]() {
+            std::this_thread::sleep_for(100ms);
+            event_handler_(Event("1", "message", "Hello from SSE stub"));
+            std::this_thread::sleep_for(100ms);
+            event_handler_(Event("2", "update", "Update from SSE stub"));
+            std::this_thread::sleep_for(100ms);
+            event_handler_(Event("3", "alert", "Alert from SSE stub"));
+        }).detach();
     }
+}
 
-    void set_connection_handler(
-        std::function<void(bool, const std::string&)> handler) {
-        connection_handler_ = std::move(handler);
-    }
+void stop() { std::cout << "Stopping SSE client (stub)..." << std::endl; }
 
-    void add_event_filter(const std::string& event_type) {
-        std::cout << "Added event filter: " << event_type << std::endl;
-    }
-
-    void start() {
-        std::cout << "Starting SSE client (stub)..." << std::endl;
-        if (connection_handler_) {
-            connection_handler_(true, "Connected to stub server");
-        }
-
-        // Simulate some events
-        if (event_handler_) {
-            std::thread([this]() {
-                std::this_thread::sleep_for(100ms);
-                event_handler_(Event("1", "message", "Hello from SSE stub"));
-                std::this_thread::sleep_for(100ms);
-                event_handler_(Event("2", "update", "Update from SSE stub"));
-                std::this_thread::sleep_for(100ms);
-                event_handler_(Event("3", "alert", "Alert from SSE stub"));
-            }).detach();
-        }
-    }
-
-    void stop() { std::cout << "Stopping SSE client (stub)..." << std::endl; }
-
-    void reconnect() {
-        std::cout << "Reconnecting SSE client (stub)..." << std::endl;
-    }
+void reconnect() {
+    std::cout << "Reconnecting SSE client (stub)..." << std::endl;
+}
 
 private:
-    std::function<void(const Event&)> event_handler_;
-    std::function<void(bool, const std::string&)> connection_handler_;
-};
+std::function<void(const Event&)> event_handler_;
+std::function<void(bool, const std::string&)> connection_handler_;
+}
+;
 
 }  // namespace atom::extra::asio::sse
 
-// Stub io_context
-namespace asio {
+// Stub io_contextnamespace asio {
 class io_context {
 public:
     void run() {

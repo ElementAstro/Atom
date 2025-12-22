@@ -14,18 +14,25 @@ set_project("atom-io")
 set_version("1.0.0", {build = "%Y%m%d%H%M"})
 set_license("GPL-3.0")
 
--- Set languages
-set_languages("c11", "cxx17")
+-- Set languages (match CMake C++20)
+set_languages("c11", "cxx20")
 
--- Add build modes
-add_rules("mode.debug", "mode.release")
+-- Add build modes (including minsizerel for size optimization)
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
 
--- Add required packages
+-- Add required packages (use spdlog instead of loguru to match CMake)
 local use_system_packages = has_config("use_system_packages")
-add_requires("loguru", {system = use_system_packages})
-add_requires("minizip", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
 add_requires("zlib", {system = use_system_packages})
-add_requires("tbb", {system = use_system_packages})
+
+-- Optional dependencies
+if has_config("use_minizip") then
+    add_requires("minizip-ng", {system = use_system_packages, optional = true})
+end
+if has_config("use_tbb") then
+    add_requires("tbb", {system = use_system_packages, optional = true})
+end
 
 -- Define sources and headers from new structure
 local sources = {
@@ -88,7 +95,13 @@ target("atom-io")
     add_includedirs(".", {public = true})
 
     -- Add packages
-    add_packages("loguru", "minizip", "zlib", "tbb")
+    add_packages("spdlog", "fmt", "zlib")
+    if has_config("use_minizip") then
+        add_packages("minizip-ng")
+    end
+    if has_config("use_tbb") then
+        add_packages("tbb")
+    end
 
     -- Add system libraries
     if is_plat("linux") then
@@ -141,7 +154,13 @@ target("atom-io-object")
 
     -- Configuration
     add_includedirs(".")
-    add_packages("loguru", "minizip", "zlib", "tbb")
+    add_packages("spdlog", "fmt", "zlib")
+    if has_config("use_minizip") then
+        add_packages("minizip-ng")
+    end
+    if has_config("use_tbb") then
+        add_packages("tbb")
+    end
     if is_plat("linux") then
         add_syslinks("pthread")
     end

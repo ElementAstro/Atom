@@ -22,7 +22,8 @@ add_rules("mode.debug", "mode.release")
 
 -- Add required packages
 local use_system_packages = has_config("use_system_packages")
-add_requires("loguru", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
 add_requires("openssl", {system = use_system_packages})
 
 -- Add optional packages
@@ -116,7 +117,7 @@ target("atom-connection")
     add_includedirs(".", {public = true})
 
     -- Add packages
-    add_packages("loguru", "openssl")
+    add_packages("spdlog", "fmt", "openssl")
 
     -- Add SSH package conditionally
     if has_config("enable-ssh") then
@@ -186,7 +187,7 @@ target("atom-connection-object")
 
     -- Configuration
     add_includedirs(".")
-    add_packages("loguru", "openssl")
+    add_packages("spdlog", "fmt", "openssl")
 
     if has_config("enable-ssh") then
         add_packages("libssh")

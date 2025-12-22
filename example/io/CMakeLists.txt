@@ -61,14 +61,6 @@ function(create_subdir_examples SUBDIR_PATH CATEGORY_NAME BUILD_OPTION)
   endif()
 endfunction()
 
-# Create examples for each category
-create_subdir_examples("core" "core" ATOM_EXAMPLE_IO_BUILD_CORE)
-create_subdir_examples("async" "async" ATOM_EXAMPLE_IO_BUILD_ASYNC)
-create_subdir_examples("compression" "compression"
-                       ATOM_EXAMPLE_IO_BUILD_COMPRESSION)
-create_subdir_examples("filesystem" "filesystem"
-                       ATOM_EXAMPLE_IO_BUILD_FILESYSTEM)
-
 # Handle root-level integration examples
 if(ATOM_EXAMPLE_IO_BUILD_INTEGRATION)
   file(GLOB INTEGRATION_CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*_examples.cpp)

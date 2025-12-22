@@ -11,69 +11,68 @@
 
 namespace atom::extra::curl {
 
-// Stub Response class
-class Response {
+// Stub Response classclass Response {
 public:
-    int status_code = 200;
-    std::string body = "Response body (stub)";
-    std::unordered_map<std::string, std::string> headers;
+int status_code = 200;
+std::string body = "Response body (stub)";
+std::unordered_map<std::string, std::string> headers;
 
-    Response() {
-        headers["Content-Type"] = "application/json";
-        headers["Cache-Control"] = "max-age=3600";
-        headers["ETag"] = "\"stub-etag-12345\"";
-    }
+Response() {
+    headers["Content-Type"] = "application/json";
+    headers["Cache-Control"] = "max-age=3600";
+    headers["ETag"] = "\"stub-etag-12345\"";
+}
 
-    // Note: API compatibility - examples expect header() method but actual API
-    // has headers map
-    std::string header(const std::string& name) const {
-        auto it = headers.find(name);
-        return it != headers.end() ? it->second : "";
-    }
+// Note: API compatibility - examples expect header() method but actual API
+// has headers map
+std::string header(const std::string& name) const {
+    auto it = headers.find(name);
+    return it != headers.end() ? it->second : "";
+}
 
-    std::string text() const { return body; }
+std::string text() const { return body; }
 
-    std::string url() const { return "https://httpbin.org/get (stub)"; }
+std::string url() const { return "https://httpbin.org/get (stub)"; }
 };
 
-// Stub Session class
-class Session {
+// Stub Session classclass Session {
 public:
-    Session() {
-        std::cout << "CURL Session created (stub implementation)" << std::endl;
-    }
+Session() {
+    std::cout << "CURL Session created (stub implementation)" << std::endl;
+}
 
-    Response get(const std::string& url) {
-        std::cout << "GET request (stub): " << url << std::endl;
-        Response response;
-        response.body = "GET response from " + url + " (stub)";
-        return response;
-    }
+Response get(const std::string& url) {
+    std::cout << "GET request (stub): " << url << std::endl;
+    Response response;
+    response.body = "GET response from " + url + " (stub)";
+    return response;
+}
 
-    Response post(const std::string& url, const std::string& body,
-                  const std::string& content_type = "") {
-        std::cout << "POST request (stub): " << url << std::endl;
-        std::cout << "  Body: " << body.substr(0, 50) << "..." << std::endl;
-        Response response;
-        response.body = "POST response from " + url + " (stub)";
-        return response;
-    }
+Response post(const std::string& url, const std::string& body,
+              const std::string& content_type = "") {
+    std::cout << "POST request (stub): " << url << std::endl;
+    std::cout << "  Body: " << body.substr(0, 50) << "..." << std::endl;
+    Response response;
+    response.body = "POST response from " + url + " (stub)";
+    return response;
+}
 
-    void set_header(const std::string& name, const std::string& value) {
-        std::cout << "Setting header (stub): " << name << " = " << value
-                  << std::endl;
-        headers_[name] = value;
-    }
+void set_header(const std::string& name, const std::string& value) {
+    std::cout << "Setting header (stub): " << name << " = " << value
+              << std::endl;
+    headers_[name] = value;
+}
 
-    void set_cookie_jar(const std::string& jar_file) {
-        std::cout << "Setting cookie jar (stub): " << jar_file << std::endl;
-        cookie_jar_ = jar_file;
-    }
+void set_cookie_jar(const std::string& jar_file) {
+    std::cout << "Setting cookie jar (stub): " << jar_file << std::endl;
+    cookie_jar_ = jar_file;
+}
 
 private:
-    std::unordered_map<std::string, std::string> headers_;
-    std::string cookie_jar_;
-};
+std::unordered_map<std::string, std::string> headers_;
+std::string cookie_jar_;
+}
+;
 
 }  // namespace atom::extra::curl
 

@@ -12,35 +12,82 @@
         "sqlite3",
         "fmt",
         "spdlog",
-        { "name": "readline", "platform": "!windows" },
-        "pybind11",
-        "tbb",
-        "minizip-ng",
-        {
-            "name": "opencv",
-            "default-features": true,
-            "features": ["contrib"]
-        },
-        "curl",
-        "libuv",
         "pugixml",
-        "tinyxml2",
-        {
-            "name": "boost",
-            "default-features": true
-        }
+        "tinyxml2"
     ],
     "features": {
+        "full": {
+            "description": "Enable all optional dependencies",
+            "dependencies": [
+                { "name": "atom", "features": ["image", "boost-full", "python", "parallel"] }
+            ]
+        },
+        "image": {
+            "description": "Enable image processing with OpenCV",
+            "dependencies": [
+                {
+                    "name": "opencv",
+                    "default-features": true,
+                    "features": ["contrib"]
+                }
+            ]
+        },
+        "python": {
+            "description": "Enable Python bindings",
+            "dependencies": [
+                "pybind11"
+            ]
+        },
+        "parallel": {
+            "description": "Enable Intel TBB for parallel algorithms",
+            "dependencies": [
+                "tbb"
+            ]
+        },
+        "compression": {
+            "description": "Enable advanced compression support",
+            "dependencies": [
+                "minizip-ng"
+            ]
+        },
+        "network": {
+            "description": "Enable advanced networking with curl and libuv",
+            "dependencies": [
+                "curl",
+                "libuv"
+            ]
+        },
+        "readline": {
+            "description": "Enable readline support (non-Windows only)",
+            "dependencies": [
+                { "name": "readline", "platform": "!windows" }
+            ]
+        },
+        "boost-minimal": {
+            "description": "Enable minimal Boost (headers only)",
+            "dependencies": [
+                {
+                    "name": "boost",
+                    "default-features": false
+                }
+            ]
+        },
+        "boost-full": {
+            "description": "Enable full Boost library",
+            "dependencies": [
+                {
+                    "name": "boost",
+                    "default-features": true
+                }
+            ]
+        },
         "boost-lockfree": {
             "description": "Enable Boost lockfree data structures",
             "dependencies": [
                 {
                     "name": "boost",
                     "default-features": false,
-                    "features": [
-                        "atomic",
-                        "thread"
-                    ]
+                    "features": ["atomic", "thread"]
                 }
             ]
         },
@@ -50,9 +97,7 @@
                 {
                     "name": "boost",
                     "default-features": false,
-                    "features": [
-                        "graph"
-                    ]
+                    "features": ["graph"]
                 }
             ]
         },

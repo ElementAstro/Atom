@@ -26,15 +26,15 @@
 
 using namespace atom::meta;
 
-// Example classes for demonstration
-class Calculator {
+// Example classes for demonstrationclass Calculator {
 public:
-    int add(int a, int b) const { return a + b; }
-    double multiply(double x, double y) const { return x * y; }
-    std::string describe() const { return "Simple Calculator"; }
+int add(int a, int b) const { return a + b; }
+double multiply(double x, double y) const { return x * y; }
+std::string describe() const { return "Simple Calculator"; }
 
-    void print(std::ostream& os) const { os << "Calculator: " << describe(); }
-};
+void print(std::ostream& os) const { os << "Calculator: " << describe(); }
+}
+;
 
 class StringProcessor {
 public:
@@ -49,10 +49,10 @@ public:
     }
 };
 
-// Custom dispatch types for our facade
-struct printable_dispatch {
-    using dispatch_type = void(std::ostream&) const;
-};
+// Custom dispatch types for our facadestruct printable_dispatch {
+using dispatch_type = void(std::ostream&) const;
+}
+;
 
 struct describable_dispatch {
     using dispatch_type = std::string() const;

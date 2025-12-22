@@ -132,7 +132,7 @@ target("atom-sysinfo-object")
     add_headerfiles(table.unpack(compat_header_files))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -161,7 +161,7 @@ target("atom-sysinfo")
 
     -- Add dependencies
     add_deps("atom-sysinfo-object")
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Platform-specific settings
     if is_plat("linux") then

@@ -23,7 +23,8 @@ add_rules("mode.debug", "mode.release")
 
 -- Add required packages
 local use_system_packages = has_config("use_system_packages")
-add_requires("loguru", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
 
 -- Define sources and headers from new structure
 local sources = {
@@ -116,7 +117,7 @@ target("atom-component")
     add_includedirs(".", {public = true})
 
     -- Add packages
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add dependencies (assuming these are other xmake targets)
     add_deps("atom-error", "atom-utils")
@@ -189,7 +190,7 @@ target("atom-component-object")
 
     -- Configuration
     add_includedirs(".")
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
     add_deps("atom-error", "atom-utils")
     if is_plat("linux") then
         add_syslinks("pthread")

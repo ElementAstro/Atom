@@ -7,27 +7,27 @@
 #include <type_traits>
 #include <vector>
 
-// Enum for testing raw_name_of_enum
-enum class Color { Red, Green, Blue, Yellow };
+// Enum for testing raw_name_of_enumenum class Color { Red, Green, Blue, Yellow
+// };
 
-// Class for testing raw_name_of
-class TestClass {
+// Class for testing raw_name_ofclass TestClass {
 public:
-    void testMethod() {}
+void testMethod() {}
 
-    struct NestedStruct {
-        int value;
-    };
-
-    template <typename T>
-    class NestedTemplate {
-    public:
-        T data;
-    };
+struct NestedStruct {
+    int value;
 };
 
-// Function for testing raw_name_of with function types
-template <typename Ret, typename... Args>
+template <typename T>
+class NestedTemplate {
+public:
+    T data;
+};
+}
+;
+
+// Function for testing raw_name_of with function typestemplate <typename Ret,
+// typename... Args>
 void printFunctionType() {
     std::cout << "Function return type: " << atom::meta::raw_name_of<Ret>()
               << std::endl;
@@ -42,8 +42,7 @@ void printFunctionType() {
     }
 }
 
-// Template for testing raw_name_of_template
-template <typename T, typename U>
+// Template for testing raw_name_of_templatetemplate <typename T, typename U>
 class TemplateTest {
 public:
     T first;
@@ -51,25 +50,23 @@ public:
 };
 
 // For C++20 member name test
-#ifdef ATOM_CPP_20_SUPPORT
-struct Person {
-    int age;
-    std::string name;
-    double height;
+#ifdef ATOM_CPP_20_SUPPORTstruct Person {
+int age;
+std::string name;
+double height;
 
-    void sayHello() {}
-};
+void sayHello() {}
+}
+;
 #endif
 
-// Helper function to print raw names with labels
-template <typename T>
+// Helper function to print raw names with labelstemplate <typename T>
 void printRawName(const std::string& description) {
     std::cout << std::setw(40) << std::left << description << ": "
               << atom::meta::raw_name_of<T>() << std::endl;
 }
 
-// Helper function to print raw names of enum values
-template <auto EnumValue>
+// Helper function to print raw names of enum valuestemplate <auto EnumValue>
 void printEnumName(const std::string& description) {
     std::cout << std::setw(40) << std::left << description << ": "
               << atom::meta::raw_name_of_enum<EnumValue>() << std::endl;

@@ -46,11 +46,9 @@ using namespace atom::async;
 // UTILITY FUNCTIONS AND HELPERS
 // ============================================================================
 
-// Print mutex for thread-safe output
-std::mutex print_mutex;
+// Print mutex for thread-safe outputstd::mutex print_mutex;
 
-// Thread-safe print function with timestamp
-template <typename... Args>
+// Thread-safe print function with timestamptemplate <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(print_mutex);
     auto now = std::chrono::system_clock::now();
@@ -64,96 +62,93 @@ void print_safe(Args&&... args) {
     (std::cout << ... << args) << std::endl;
 }
 
-// Enhanced section separator
-void print_section(const std::string& title) {
-    std::lock_guard<std::mutex> lock(print_mutex);
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n" << std::endl;
+// Enhanced section separatorvoid print_section(const std::string& title) {
+std::lock_guard<std::mutex> lock(print_mutex);
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n" << std::endl;
 }
 
-// Helper function to get thread ID as string
-std::string get_thread_id() {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
+// Helper function to get thread ID as stringstd::string get_thread_id() {
+std::stringstream ss;
+ss << std::this_thread::get_id();
+return ss.str();
 }
 
-// Performance timer
-class PerformanceTimer {
+// Performance timerclass PerformanceTimer {
 public:
-    void start(const std::string& operation) {
-        current_operation_ = operation;
-        start_time_ = std::chrono::high_resolution_clock::now();
-        print_safe("⏱️  Starting: ", operation);
-    }
+void start(const std::string& operation) {
+    current_operation_ = operation;
+    start_time_ = std::chrono::high_resolution_clock::now();
+    print_safe("⏱️  Starting: ", operation);
+}
 
-    void stop() {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                            end_time - start_time_)
-                            .count();
+void stop() {
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                        end_time - start_time_)
+                        .count();
 
-        print_safe("⏱️  Completed: ", current_operation_, " in ", duration,
-                   " μs");
-    }
+    print_safe("⏱️  Completed: ", current_operation_, " in ", duration, " μs");
+}
 
 private:
-    std::string current_operation_;
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
+std::string current_operation_;
+std::chrono::high_resolution_clock::time_point start_time_;
+}
+;
 
 // ============================================================================
 // MESSAGE TYPES FOR EXAMPLES
 // ============================================================================
 
-// Priority message type
-struct PriorityMessage {
-    enum class Priority { LOW = 1, NORMAL = 2, HIGH = 3, CRITICAL = 4 };
+// Priority message typestruct PriorityMessage {
+enum class Priority { LOW = 1, NORMAL = 2, HIGH = 3, CRITICAL = 4 };
 
-    std::string content;
-    Priority priority;
-    int id;
-    std::chrono::system_clock::time_point timestamp;
+std::string content;
+Priority priority;
+int id;
+std::chrono::system_clock::time_point timestamp;
 
-    PriorityMessage(std::string content, Priority priority, int id)
-        : content(std::move(content)),
-          priority(priority),
-          id(id),
-          timestamp(std::chrono::system_clock::now()) {}
-};
+PriorityMessage(std::string content, Priority priority, int id)
+    : content(std::move(content)),
+      priority(priority),
+      id(id),
+      timestamp(std::chrono::system_clock::now()) {}
+}
+;
 
-// Task message for processing
-struct TaskMessage {
-    std::string task_type;
-    std::vector<int> data;
-    int batch_id;
-    std::chrono::milliseconds processing_time;
+// Task message for processingstruct TaskMessage {
+std::string task_type;
+std::vector<int> data;
+int batch_id;
+std::chrono::milliseconds processing_time;
 
-    TaskMessage(std::string task_type, std::vector<int> data, int batch_id,
-                std::chrono::milliseconds processing_time)
-        : task_type(std::move(task_type)),
-          data(std::move(data)),
-          batch_id(batch_id),
-          processing_time(processing_time) {}
-};
+TaskMessage(std::string task_type, std::vector<int> data, int batch_id,
+            std::chrono::milliseconds processing_time)
+    : task_type(std::move(task_type)),
+      data(std::move(data)),
+      batch_id(batch_id),
+      processing_time(processing_time) {}
+}
+;
 
-// Notification message
-struct NotificationMessage {
-    enum class Type { INFO, WARNING, ERROR_TYPE, ALERT };
+// Notification messagestruct NotificationMessage {
+enum class Type { INFO, WARNING, ERROR_TYPE, ALERT };
 
-    Type type;
-    std::string message;
-    std::string source;
-    bool urgent;
+Type type;
+std::string message;
+std::string source;
+bool urgent;
 
-    NotificationMessage(Type type, std::string message, std::string source,
-                        bool urgent = false)
-        : type(type),
-          message(std::move(message)),
-          source(std::move(source)),
-          urgent(urgent) {}
-};
+NotificationMessage(Type type, std::string message, std::string source,
+                    bool urgent = false)
+    : type(type),
+      message(std::move(message)),
+      source(std::move(source)),
+      urgent(urgent) {}
+}
+;
 
 // ============================================================================
 // SECTION 1: BASIC MESSAGE QUEUE OPERATIONS
@@ -505,24 +500,23 @@ void advanced_queue_management() {
 #endif
 }
 
-// Main function
-int main() {
-    try {
-        std::cout << "====== MessageQueue Usage Examples ======" << std::endl;
+// Main functionint main() {
+try {
+    std::cout << "====== MessageQueue Usage Examples ======" << std::endl;
 
-        basic_queue_operations();
-        priority_processing_examples();
-        advanced_queue_management();
+    basic_queue_operations();
+    priority_processing_examples();
+    advanced_queue_management();
 
-        std::cout << "\n====== All MessageQueue Examples Completed ======"
-                  << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "Unknown unhandled exception in main" << std::endl;
-        return 1;
-    }
+    std::cout << "\n====== All MessageQueue Examples Completed ======"
+              << std::endl;
+} catch (const std::exception& e) {
+    std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
+    return 1;
+} catch (...) {
+    std::cerr << "Unknown unhandled exception in main" << std::endl;
+    return 1;
+}
 
-    return 0;
+return 0;
 }

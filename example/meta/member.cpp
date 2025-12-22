@@ -3,14 +3,14 @@
 #include <string>
 #include <vector>
 
-// Sample structures for demonstration
-struct Point {
-    bool operator==(const Point& other) const {
-        return x == other.x && y == other.y;
-    }
-    int x;
-    int y;
-};
+// Sample structures for demonstrationstruct Point {
+bool operator==(const Point& other) const {
+    return x == other.x && y == other.y;
+}
+int x;
+int y;
+}
+;
 
 struct Rectangle {
     Point topLeft;
@@ -30,26 +30,25 @@ struct ComplexObject {
     Point position;
 };
 
-// Base class for inheritance example
-struct Base {
-    int baseValue;
-    virtual ~Base() = default;
-};
+// Base class for inheritance examplestruct Base {
+int baseValue;
+virtual ~Base() = default;
+}
+;
 
 struct Derived : public Base {
     int derivedValue;
     Point position;
 };
 
-// Simple tuple-like structure for get_member_by_index example
-struct TupleLike {
-    int first;
-    double second;
-    std::string third;
-};
+// Simple tuple-like structure for get_member_by_index examplestruct TupleLike {
+int first;
+double second;
+std::string third;
+}
+;
 
-// 为TupleLike提供正确的tuple-like接口
-namespace std {
+// 为TupleLike提供正确的tuple-like接口namespace std {
 template <>
 struct tuple_size<TupleLike> : std::integral_constant<std::size_t, 3> {};
 

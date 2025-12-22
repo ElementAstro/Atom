@@ -8,10 +8,10 @@
 
 Date: 2024-12-25
 
-Description: Comprehensive Integration Example
-Demonstrates integration of multiple component system features including
-registry management, lifecycle hooks, variable management, command dispatch,
-serialization, and optional scripting support.
+Description: Comprehensive Integration ExampleDemonstrates integration of
+multiple component system features includingregistry management, lifecycle
+hooks, variable management, command dispatch, serialization, and optional
+scripting support.
 
 **************************************************/
 
@@ -34,8 +34,7 @@ serialization, and optional scripting support.
 #endif
 
 // Note: Registry and Component are in the global namespace, not
-// atom::components
-using atom::components::LifecycleManager;
+// atom::componentsusing atom::components::LifecycleManager;
 using atom::components::LifecyclePhase;
 
 /**

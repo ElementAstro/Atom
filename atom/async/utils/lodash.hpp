@@ -127,10 +127,9 @@ public:
                     }
                 }
 
-                // 修复：正确调�?wait_until，不传�?st 作为第二个参�? bool
-                // stop_requested_during_wait =
-                cv_.wait_until(timer_lock, deadline,
-                               [&st] { return st.stop_requested(); });
+                bool stop_requested_during_wait =
+                    cv_.wait_until(timer_lock, deadline,
+                                   [&st] { return st.stop_requested(); });
 
                 if (st.stop_requested() || stop_requested_during_wait) {
                     if (last_call_time_ != timer_start_call_time &&
@@ -309,8 +308,8 @@ private:
         last_attempt_time_;  ///< Timestamp of the last attempt to call
                              ///< operator().
 
-    // 添加缺失的成员变�?    std::function<void()>
-    current_task_payload_;  ///< Stores the current task to execute
+    std::function<void()>
+        current_task_payload_;  ///< Stores the current task to execute
     std::condition_variable_any
         trailing_cv_;  ///< For efficient waiting in trailing thread
 };
@@ -459,29 +458,14 @@ void Throttle<F>::operator()(CallArgs&&... args) noexcept {
                 std::unique_lock trailing_lock(this->mutex_);
 
                 if (this->interval_.count() > 0) {
-                    // 修复: 正确调用 wait_for 方法
-                    // �?st 作为谓词函数的参数传递，而不是方法的第二个参�? if
-                    // (this->trailing_cv_.wait_for(
-                            trailing_lock, this->interval_,
-                            [&st] {
-                        return st.stop_requested(); })) {
-                                // Predicate met (stop requested) or spurious
-                                // wakeup + stop_requested
-                                this->trailing_call_pending_.store(
-                                    false, std::memory_order_relaxed);
-                                return;
-                            }
-                            // Timeout occurred if wait_for returned false and
-                            // st not requested
-                            if (st.stop_requested()) {  // Double check after
-                                                        // wait_for if it
-                                                        // returned due to
-                                                        // timeout but st became
-                                                        // true
-                                this->trailing_call_pending_.store(
-                                    false, std::memory_order_relaxed);
-                                return;
-                            }
+                    bool stop_requested = this->trailing_cv_.wait_for(
+                        trailing_lock, this->interval_,
+                        [&st] { return st.stop_requested(); });
+                    if (stop_requested || st.stop_requested()) {
+                        this->trailing_call_pending_.store(
+                            false, std::memory_order_relaxed);
+                        return;
+                    }
                 } else {  // Interval is zero or negative, check stop token once
                     if (st.stop_requested()) {
                         this->trailing_call_pending_.store(

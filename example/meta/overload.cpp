@@ -5,9 +5,9 @@
 #include <string>
 #include <type_traits>
 
-// Example free functions with the same name but different parameters
-void print(int value) {
-    std::cout << "Free function print(int): " << value << std::endl;
+// Example free functions with the same name but different parametersvoid
+// print(int value) {
+std::cout << "Free function print(int): " << value << std::endl;
 }
 
 void print(double value) {
@@ -18,74 +18,74 @@ void print(const std::string& value) noexcept {
     std::cout << "Free function print(string) noexcept: " << value << std::endl;
 }
 
-// Class with various overloaded methods
-class Calculator {
+// Class with various overloaded methodsclass Calculator {
 public:
-    // Regular member functions
-    int add(int a, int b) {
-        std::cout << "Regular add(int, int)" << std::endl;
-        return a + b;
-    }
+// Regular member functions
+int add(int a, int b) {
+    std::cout << "Regular add(int, int)" << std::endl;
+    return a + b;
+}
 
-    double add(double a, double b) {
-        std::cout << "Regular add(double, double)" << std::endl;
-        return a + b;
-    }
+double add(double a, double b) {
+    std::cout << "Regular add(double, double)" << std::endl;
+    return a + b;
+}
 
-    // Const member functions
-    int multiply(int a, int b) const {
-        std::cout << "Const multiply(int, int)" << std::endl;
-        return a * b;
-    }
+// Const member functions
+int multiply(int a, int b) const {
+    std::cout << "Const multiply(int, int)" << std::endl;
+    return a * b;
+}
 
-    double multiply(double a, double b) const {
-        std::cout << "Const multiply(double, double)" << std::endl;
-        return a * b;
-    }
+double multiply(double a, double b) const {
+    std::cout << "Const multiply(double, double)" << std::endl;
+    return a * b;
+}
 
-    // Volatile member functions
-    int subtract(int a, int b) volatile {
-        std::cout << "Volatile subtract(int, int)" << std::endl;
-        return a - b;
-    }
+// Volatile member functions
+int subtract(int a, int b) volatile {
+    std::cout << "Volatile subtract(int, int)" << std::endl;
+    return a - b;
+}
 
-    // Const volatile member functions
-    int divide(int a, int b) const volatile {
-        std::cout << "Const volatile divide(int, int)" << std::endl;
-        return a / b;
-    }
+// Const volatile member functions
+int divide(int a, int b) const volatile {
+    std::cout << "Const volatile divide(int, int)" << std::endl;
+    return a / b;
+}
 
-    // Noexcept member functions
-    int mod(int a, int b) noexcept {
-        std::cout << "Noexcept mod(int, int)" << std::endl;
-        return a % b;
-    }
+// Noexcept member functions
+int mod(int a, int b) noexcept {
+    std::cout << "Noexcept mod(int, int)" << std::endl;
+    return a % b;
+}
 
-    // Const noexcept member functions
-    double power(double base, int exponent) const noexcept {
-        std::cout << "Const noexcept power(double, int)" << std::endl;
-        double result = 1.0;
-        for (int i = 0; i < exponent; ++i) {
-            result *= base;
-        }
-        return result;
+// Const noexcept member functions
+double power(double base, int exponent) const noexcept {
+    std::cout << "Const noexcept power(double, int)" << std::endl;
+    double result = 1.0;
+    for (int i = 0; i < exponent; ++i) {
+        result *= base;
     }
+    return result;
+}
 
-    // Volatile noexcept member functions
-    int negate(int value) volatile noexcept {
-        std::cout << "Volatile noexcept negate(int)" << std::endl;
-        return -value;
-    }
+// Volatile noexcept member functions
+int negate(int value) volatile noexcept {
+    std::cout << "Volatile noexcept negate(int)" << std::endl;
+    return -value;
+}
 
-    // Const volatile noexcept member functions
-    int abs(int value) const volatile noexcept {
-        std::cout << "Const volatile noexcept abs(int)" << std::endl;
-        return value < 0 ? -value : value;
-    }
-};
+// Const volatile noexcept member functions
+int abs(int value) const volatile noexcept {
+    std::cout << "Const volatile noexcept abs(int)" << std::endl;
+    return value < 0 ? -value : value;
+}
+}
+;
 
-// Template function to demonstrate function pointer type
-template <typename FuncPtr>
+// Template function to demonstrate function pointer typetemplate <typename
+// FuncPtr>
 void showFunctionType(const std::string& name, FuncPtr) {
     std::cout << name << " is"
               << (std::is_nothrow_invocable_v<FuncPtr> ? " noexcept"

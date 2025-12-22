@@ -15,7 +15,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Find required packages
 find_package(Threads REQUIRED)
-find_package(CURL REQUIRED)
+find_package(CURL QUIET)
 
 # Find spdlog for logging
 find_package(spdlog QUIET)
@@ -90,6 +90,7 @@ set(ADDRESS_EXAMPLES
     address/ipv4_example address/ipv6_example address/unix_domain_example
     address/address_factory_example)
 
+# HTTP examples
 set(HTTP_EXAMPLES http/curl_comprehensive_example http/downloader_example
                   http/httpparser_comprehensive_example)
 
@@ -99,6 +100,7 @@ set(TIME_EXAMPLES) # No time examples exist yet
 
 set(UTILS_EXAMPLES) # No utils examples exist yet
 
+# Integration examples
 set(INTEGRATION_EXAMPLES integration_example)
 
 # Create examples

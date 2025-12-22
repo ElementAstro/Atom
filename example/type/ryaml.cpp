@@ -4,80 +4,80 @@
 
 #include "atom/type/ryaml.hpp"
 
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
 }
 
-// Helper function to print YAML type
-std::string type_to_string(atom::type::YamlValue::Type type) {
-    switch (type) {
-        case atom::type::YamlValue::Type::Null:
-            return "Null";
-        case atom::type::YamlValue::Type::String:
-            return "String";
-        case atom::type::YamlValue::Type::Number:
-            return "Number";
-        case atom::type::YamlValue::Type::Bool:
-            return "Bool";
-        case atom::type::YamlValue::Type::Object:
-            return "Object";
-        case atom::type::YamlValue::Type::Array:
-            return "Array";
-        default:
-            return "Unknown";
-    }
+// Helper function to print YAML typestd::string
+// type_to_string(atom::type::YamlValue::Type type) {
+switch (type) {
+    case atom::type::YamlValue::Type::Null:
+        return "Null";
+    case atom::type::YamlValue::Type::String:
+        return "String";
+    case atom::type::YamlValue::Type::Number:
+        return "Number";
+    case atom::type::YamlValue::Type::Bool:
+        return "Bool";
+    case atom::type::YamlValue::Type::Object:
+        return "Object";
+    case atom::type::YamlValue::Type::Array:
+        return "Array";
+    default:
+        return "Unknown";
+}
 }
 
-// Helper function to print YamlValue recursively
-void print_yaml_value(const atom::type::YamlValue& value, int indent = 0) {
-    std::string spaces(indent * 2, ' ');
+// Helper function to print YamlValue recursivelyvoid print_yaml_value(const
+// atom::type::YamlValue& value, int indent = 0) {
+std::string spaces(indent * 2, ' ');
 
-    switch (value.type()) {
-        case atom::type::YamlValue::Type::Null:
-            std::cout << spaces << "null";
-            break;
-        case atom::type::YamlValue::Type::String:
-            std::cout << spaces << "\"" << value.asString() << "\"";
-            break;
-        case atom::type::YamlValue::Type::Number:
-            std::cout << spaces << value.asNumber();
-            break;
-        case atom::type::YamlValue::Type::Bool:
-            std::cout << spaces << (value.asBool() ? "true" : "false");
-            break;
-        case atom::type::YamlValue::Type::Object: {
-            const auto& obj = value.asObject();
-            for (const auto& [key, val] : obj) {
-                std::cout << spaces << key << ": ";
-                if (val.type() == atom::type::YamlValue::Type::Object ||
-                    val.type() == atom::type::YamlValue::Type::Array) {
-                    std::cout << std::endl;
-                    print_yaml_value(val, indent + 1);
-                } else {
-                    print_yaml_value(val, 0);
-                    std::cout << std::endl;
-                }
+switch (value.type()) {
+    case atom::type::YamlValue::Type::Null:
+        std::cout << spaces << "null";
+        break;
+    case atom::type::YamlValue::Type::String:
+        std::cout << spaces << "\"" << value.asString() << "\"";
+        break;
+    case atom::type::YamlValue::Type::Number:
+        std::cout << spaces << value.asNumber();
+        break;
+    case atom::type::YamlValue::Type::Bool:
+        std::cout << spaces << (value.asBool() ? "true" : "false");
+        break;
+    case atom::type::YamlValue::Type::Object: {
+        const auto& obj = value.asObject();
+        for (const auto& [key, val] : obj) {
+            std::cout << spaces << key << ": ";
+            if (val.type() == atom::type::YamlValue::Type::Object ||
+                val.type() == atom::type::YamlValue::Type::Array) {
+                std::cout << std::endl;
+                print_yaml_value(val, indent + 1);
+            } else {
+                print_yaml_value(val, 0);
+                std::cout << std::endl;
             }
-            break;
         }
-        case atom::type::YamlValue::Type::Array: {
-            const auto& arr = value.asArray();
-            for (const auto& item : arr) {
-                std::cout << spaces << "- ";
-                if (item.type() == atom::type::YamlValue::Type::Object ||
-                    item.type() == atom::type::YamlValue::Type::Array) {
-                    std::cout << std::endl;
-                    print_yaml_value(item, indent + 1);
-                } else {
-                    print_yaml_value(item, 0);
-                    std::cout << std::endl;
-                }
-            }
-            break;
-        }
+        break;
     }
+    case atom::type::YamlValue::Type::Array: {
+        const auto& arr = value.asArray();
+        for (const auto& item : arr) {
+            std::cout << spaces << "- ";
+            if (item.type() == atom::type::YamlValue::Type::Object ||
+                item.type() == atom::type::YamlValue::Type::Array) {
+                std::cout << std::endl;
+                print_yaml_value(item, indent + 1);
+            } else {
+                print_yaml_value(item, 0);
+                std::cout << std::endl;
+            }
+        }
+        break;
+    }
+}
 }
 
 int main() {
@@ -202,9 +202,7 @@ int main() {
 
     // Simple YAML strings
     std::string simple_yaml = R"(
-name: Bob
-age: 25
-active: true
+name: Bobage: 25active: true
 )";
 
     std::string array_yaml = R"(

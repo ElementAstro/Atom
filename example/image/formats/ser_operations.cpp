@@ -32,8 +32,7 @@
 
 using namespace std;
 
-#ifdef ATOM_IMAGE_HAS_OPENCV
-using namespace serastro;
+#ifdef ATOM_IMAGE_HAS_OPENCVusing namespace serastro;
 
 /**
  * @brief Create a sample SER header for testing

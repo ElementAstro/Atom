@@ -757,7 +757,7 @@ auto monitorSoftwareUsage(
     return monitor_id;
 }
 
-auto stopMonitoring(int monitor_id) -> bool {
+auto stopSoftwareMonitoring(int monitor_id) -> bool {
     spdlog::info("Stopping monitoring for ID: {}", monitor_id);
 
     std::lock_guard<std::mutex> lock(g_monitors_mutex);

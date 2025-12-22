@@ -12,8 +12,7 @@
 // 假设下面的头文件已经包含了ThreadLocal类定义
 #include "atom/async/threadlocal.hpp"
 
-// 用于同步输出的互斥锁
-std::mutex g_outputMutex;
+// 用于同步输出的互斥锁std::mutex g_outputMutex;
 
 // 辅助宏，用于格式化输出
 #define SECTION(name) std::cout << "\n=== " << name << " ===\n"
@@ -24,68 +23,65 @@ std::mutex g_outputMutex;
                   << "] " << msg << std::endl;                                \
     }
 
-// 简单数据结构，用于ThreadLocal示例
-struct Counter {
-    int value = 0;
-    std::string name = "未命名";
+// 简单数据结构，用于ThreadLocal示例struct Counter {
+int value = 0;
+std::string name = "未命名";
 
-    Counter() = default;
-    Counter(int val, std::string n) : value(val), name(std::move(n)) {}
+Counter() = default;
+Counter(int val, std::string n) : value(val), name(std::move(n)) {}
 
-    void increment() { value++; }
-    void reset() { value = 0; }
+void increment() { value++; }
+void reset() { value = 0; }
 
-    std::string toString() const {
-        return "Counter{name='" + name + "', value=" + std::to_string(value) +
-               "}";
-    }
-};
+std::string toString() const {
+    return "Counter{name='" + name + "', value=" + std::to_string(value) + "}";
+}
+}
+;
 
-// 用于测试的复杂对象类型
-class Resource : public ::NonCopyable {
+// 用于测试的复杂对象类型class Resource : public ::NonCopyable {
 public:
-    Resource() : id_(next_id_++) {
-        LOG("创建Resource #" + std::to_string(id_));
-    }
+Resource() : id_(next_id_++) { LOG("创建Resource #" + std::to_string(id_)); }
 
-    explicit Resource(int value) : id_(next_id_++), value_(value) {
-        LOG("创建Resource #" + std::to_string(id_) +
-            " 值=" + std::to_string(value_));
-    }
+explicit Resource(int value) : id_(next_id_++), value_(value) {
+    LOG("创建Resource #" + std::to_string(id_) +
+        " 值=" + std::to_string(value_));
+}
 
-    ~Resource() { LOG("销毁Resource #" + std::to_string(id_)); }
+~Resource() { LOG("销毁Resource #" + std::to_string(id_)); }
 
-    // 移动构造函数
-    Resource(Resource&& other) noexcept : id_(other.id_), value_(other.value_) {
+// 移动构造函数
+Resource(Resource&& other) noexcept : id_(other.id_), value_(other.value_) {
+    other.id_ = -1;
+    LOG("移动Resource #" + std::to_string(id_));
+}
+
+// 移动赋值运算符
+Resource& operator=(Resource&& other) noexcept {
+    if (this != &other) {
+        id_ = other.id_;
+        value_ = other.value_;
         other.id_ = -1;
-        LOG("移动Resource #" + std::to_string(id_));
+        LOG("移动赋值Resource #" + std::to_string(id_));
     }
+    return *this;
+}
 
-    // 移动赋值运算符
-    Resource& operator=(Resource&& other) noexcept {
-        if (this != &other) {
-            id_ = other.id_;
-            value_ = other.value_;
-            other.id_ = -1;
-            LOG("移动赋值Resource #" + std::to_string(id_));
-        }
-        return *this;
-    }
+int getValue() const { return value_; }
+void setValue(int value) { value_ = value; }
+int getId() const { return id_; }
 
-    int getValue() const { return value_; }
-    void setValue(int value) { value_ = value; }
-    int getId() const { return id_; }
-
-    std::string toString() const {
-        return "Resource{id=" + std::to_string(id_) +
-               ", value=" + std::to_string(value_) + "}";
-    }
+std::string toString() const {
+    return "Resource{id=" + std::to_string(id_) +
+           ", value=" + std::to_string(value_) + "}";
+}
 
 private:
-    int id_;
-    int value_ = 0;
-    static std::atomic<int> next_id_;
-};
+int id_;
+int value_ = 0;
+static std::atomic<int> next_id_;
+}
+;
 
 std::atomic<int> Resource::next_id_(1);
 

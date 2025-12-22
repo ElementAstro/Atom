@@ -328,10 +328,23 @@ function(apply_build_preset PRESET_NAME)
     add_definitions(-DNDEBUG)
 
   elseif(PRESET_NAME STREQUAL "MINSIZEREL")
-    configure_compiler_options(
-      ENABLE_UTF8 ENABLE_EXCEPTION_HANDLING ENABLE_OPTIMIZATIONS
-      OPTIMIZATION_LEVEL "size" ENABLE_LTO)
+    configure_compiler_options(ENABLE_UTF8 ENABLE_EXCEPTION_HANDLING
+                               ENABLE_OPTIMIZATIONS OPTIMIZATION_LEVEL "size")
     add_definitions(-DNDEBUG)
+
+    # Additional size optimization flags
+    if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      # Enable function and data sections for dead code elimination
+      add_compile_options(-ffunction-sections -fdata-sections)
+      # Strip symbols
+      add_link_options(-Wl,--gc-sections -s)
+      # Disable RTTI if possible (reduces binary size)
+      # add_compile_options(-fno-rtti)  # Uncomment if RTTI not needed
+    elseif(MSVC)
+      # MSVC size optimizations
+      add_compile_options(/Gy) # Enable function-level linking
+      add_link_options(/OPT:REF /OPT:ICF) # Remove unreferenced code/data
+    endif()
 
   elseif(PRESET_NAME STREQUAL "RELWITHDEBINFO")
     configure_compiler_options(ENABLE_UTF8 ENABLE_EXCEPTION_HANDLING
@@ -356,28 +369,66 @@ function(apply_build_preset PRESET_NAME)
           PARENT_SCOPE)
     endif()
     add_definitions(-DDEBUG -D_DEBUG)
+
+  elseif(PRESET_NAME STREQUAL "RELEASE_LTO")
+    # Release with Link Time Optimization (for supported compilers)
+    configure_compiler_options(
+      ENABLE_UTF8
+      ENABLE_EXCEPTION_HANDLING
+      ENABLE_WARNINGS
+      WARNING_LEVEL
+      "normal"
+      ENABLE_OPTIMIZATIONS
+      OPTIMIZATION_LEVEL
+      "full")
+    add_definitions(-DNDEBUG)
+
+    # Enable LTO based on compiler
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+      add_compile_options(-flto=thin)
+      add_link_options(-flto=thin)
+      message(STATUS "Enabled ThinLTO for Clang")
+    elseif(CMAKE_COMPILER_IS_GNUCXX)
+      # Check GCC version for LTO compatibility
+      if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL "10.0")
+        add_compile_options(-flto=auto -fno-fat-lto-objects)
+        add_link_options(-flto=auto)
+        message(STATUS "Enabled LTO for GCC ${CMAKE_CXX_COMPILER_VERSION}")
+      else()
+        message(
+          WARNING "LTO disabled for GCC < 10.0 due to compatibility issues")
+      endif()
+    elseif(MSVC)
+      add_compile_options(/GL)
+      add_link_options(/LTCG)
+      message(STATUS "Enabled LTCG for MSVC")
+    endif()
   endif()
 endfunction()
 
-# Platform detection and configuration function
+# Platform detection and configuration function NOTE: This is a wrapper for
+# backwards compatibility. The actual implementation is in
+# PlatformSpecifics.cmake (atom_apply_platform_definitions)
 function(configure_platform_options)
-  # Check platform type
-  if(WIN32)
-    add_definitions(-DPLATFORM_WINDOWS)
-    if(MSVC)
-      add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-    endif()
-  elseif(APPLE)
-    add_definitions(-DPLATFORM_MACOS)
-  elseif(UNIX AND NOT APPLE)
-    add_definitions(-DPLATFORM_LINUX)
-  endif()
-
-  # Check architecture
-  if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-    add_definitions(-DARCH_X64)
+  if(COMMAND atom_apply_platform_definitions)
+    atom_apply_platform_definitions()
   else()
-    add_definitions(-DARCH_X86)
+    # Fallback if PlatformSpecifics not loaded
+    if(WIN32)
+      add_definitions(-DPLATFORM_WINDOWS)
+      if(MSVC)
+        add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+      endif()
+    elseif(APPLE)
+      add_definitions(-DPLATFORM_MACOS)
+    elseif(UNIX)
+      add_definitions(-DPLATFORM_LINUX)
+    endif()
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+      add_definitions(-DARCH_X64)
+    else()
+      add_definitions(-DARCH_X86)
+    endif()
   endif()
 endfunction()
 
@@ -454,23 +505,15 @@ macro(setup_project_defaults)
     endif()
   endif()
 
-  # Configure precompiled headers
+  # Configure precompiled headers NOTE: PCH is now handled by
+  # BuildOptimization.cmake (atom_target_precompile_headers) This is kept for
+  # backwards compatibility only
   if(SETUP_ENABLE_PCH AND DEFINED SETUP_PCH_HEADERS)
-    if(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16)
-      # Use new precompiled header features
-      if(TARGET ${PROJECT_NAME})
-        target_precompile_headers(${PROJECT_NAME} PRIVATE ${SETUP_PCH_HEADERS})
-      else()
-        message(
-          WARNING
-            "Project target '${PROJECT_NAME}' not found for precompiled header configuration"
-        )
-      endif()
-    else()
-      message(
-        WARNING
-          "Precompiled header functionality requested, but CMake version does not support it (3.16+ required)"
-      )
+    if(COMMAND atom_target_precompile_headers AND TARGET ${PROJECT_NAME})
+      atom_target_precompile_headers(${PROJECT_NAME} HEADERS
+                                     ${SETUP_PCH_HEADERS})
+    elseif(CMAKE_VERSION VERSION_GREATER_EQUAL 3.16 AND TARGET ${PROJECT_NAME})
+      target_precompile_headers(${PROJECT_NAME} PRIVATE ${SETUP_PCH_HEADERS})
     endif()
   endif()
 endmacro()

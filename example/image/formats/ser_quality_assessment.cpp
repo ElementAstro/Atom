@@ -32,8 +32,7 @@
 
 using namespace std;
 
-#ifdef ATOM_IMAGE_HAS_OPENCV
-using namespace serastro;
+#ifdef ATOM_IMAGE_HAS_OPENCVusing namespace serastro;
 
 /**
  * @brief Generate test frames with varying quality

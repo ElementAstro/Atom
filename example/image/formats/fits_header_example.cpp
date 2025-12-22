@@ -202,10 +202,9 @@ int main() {
     return 0;
 }
 
-#else
-int main() {
-    std::cout << "CFITSIO support not enabled. Rebuild with "
-                 "ATOM_IMAGE_HAS_CFITSIO=ON\n";
-    return 0;
+#elseint main() {
+std::cout << "CFITSIO support not enabled. Rebuild with "
+             "ATOM_IMAGE_HAS_CFITSIO=ON\n";
+return 0;
 }
 #endif

@@ -307,13 +307,13 @@ void ErrorCodeMapper::initializeErrorMetadata() {
 
 ErrorMetadata ErrorCodeMapper::getMetadata(int errorCode) {
     initializeErrorMetadata();
-    auto it = errorMetadataMap_.find(errorCode);
-    if (it != errorMetadataMap_.end()) {
+    if (auto it = errorMetadataMap_.find(errorCode);
+        it != errorMetadataMap_.end()) {
         return it->second;
     }
-    return ErrorMetadata(ErrorSeverity::Error, ErrorCategory::Unknown,
-                         ErrorRecoveryStrategy::None, "Unknown error",
-                         "Contact support for assistance");
+    return {ErrorSeverity::Error, ErrorCategory::Unknown,
+            ErrorRecoveryStrategy::None, "Unknown error",
+            "Contact support for assistance"};
 }
 
 std::string ErrorCodeMapper::getDescription(int errorCode) {
@@ -333,19 +333,19 @@ ErrorRecoveryStrategy ErrorCodeMapper::getRecoveryStrategy(int errorCode) {
 }
 
 bool ErrorCodeMapper::isRecoverable(int errorCode) {
-    auto strategy = getRecoveryStrategy(errorCode);
+    const auto strategy = getRecoveryStrategy(errorCode);
     return strategy != ErrorRecoveryStrategy::None;
 }
 
 bool ErrorCodeMapper::isRetryable(int errorCode) {
-    auto strategy = getRecoveryStrategy(errorCode);
+    const auto strategy = getRecoveryStrategy(errorCode);
     return strategy == ErrorRecoveryStrategy::Retry;
 }
 
 void ErrorCodeMapper::registerMetadata(int errorCode,
                                        const ErrorMetadata& metadata) {
     initializeErrorMetadata();
-    errorMetadataMap_[errorCode] = metadata;
+    errorMetadataMap_.insert_or_assign(errorCode, metadata);
 }
 
 void ErrorCodeMapper::clearMetadata() { errorMetadataMap_.clear(); }

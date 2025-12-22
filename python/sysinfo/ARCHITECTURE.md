@@ -216,10 +216,12 @@ os_info = sysinfo.os.get_operating_system_info()
 
 ## Notes
 
-1. **Old binding files**: The original `.cpp` files in the root `python/sysinfo/` directory can be removed after verifying compilation works with the new structure.
+1. **Structure cleanup**: Duplicate `.cpp` files from the root `python/sysinfo/` directory have been removed. All bindings now reside in their proper subdirectories.
 
-2. **Build system**: The build configuration (CMakeLists.txt or setup.py) needs to be updated to reflect the new file locations.
+2. **Build system**: The CMakeLists.txt uses `GLOB_RECURSE` to automatically discover all `.cpp` files in subdirectories, so no build configuration changes are needed.
 
 3. **Lint warnings**: Minor lint warnings about import formatting and star imports are expected and do not affect functionality.
 
 4. **Documentation**: All bindings include comprehensive docstrings with usage examples.
+
+5. **API Consistency**: The wm.cpp binding has been corrected to match the actual C++ `SystemInfo` struct (6 fields: `desktopEnvironment`, `windowManager`, `wmTheme`, `icons`, `font`, `cursor`).

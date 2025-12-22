@@ -28,43 +28,43 @@
 using namespace atom::search;
 using namespace std::chrono_literals;
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Custom data structure to demonstrate storing complex objects
-struct UserProfile {
-    int id;
-    std::string name;
-    std::string email;
+// Custom data structure to demonstrate storing complex objectsstruct
+// UserProfile {
+int id;
+std::string name;
+std::string email;
 
-    // For comparison in output
-    bool operator==(const UserProfile& other) const {
-        return id == other.id && name == other.name && email == other.email;
+// For comparison in output
+bool operator==(const UserProfile& other) const {
+    return id == other.id && name == other.name && email == other.email;
+}
+
+std::string toString() const {
+    return "UserProfile{id=" + std::to_string(id) + ", name='" + name +
+           "', email='" + email + "'}";
+}
+}
+;
+
+// Example struct with move semanticsstruct LargeObject {
+std::vector<int> data;
+
+LargeObject(size_t size) : data(size) {
+    for (size_t i = 0; i < size; ++i) {
+        data[i] = static_cast<int>(i);
     }
+}
+}
+;
 
-    std::string toString() const {
-        return "UserProfile{id=" + std::to_string(id) + ", name='" + name +
-               "', email='" + email + "'}";
-    }
-};
-
-// Example struct with move semantics
-struct LargeObject {
-    std::vector<int> data;
-
-    LargeObject(size_t size) : data(size) {
-        for (size_t i = 0; i < size; ++i) {
-            data[i] = static_cast<int>(i);
-        }
-    }
-};
-
-// Print cache statistics helper function
-template <typename Key, typename Value>
+// Print cache statistics helper functiontemplate <typename Key, typename Value>
 void print_stats(const TTLCache<Key, Value>& cache) {
     auto stats = cache.get_statistics();
     std::cout << "Cache Statistics:" << std::endl;

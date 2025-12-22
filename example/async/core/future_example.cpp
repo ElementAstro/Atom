@@ -42,11 +42,9 @@ using namespace std::chrono_literals;
 // UTILITY FUNCTIONS AND HELPERS
 // ============================================================================
 
-// Print mutex for thread-safe output
-std::mutex print_mutex;
+// Print mutex for thread-safe outputstd::mutex print_mutex;
 
-// Thread-safe print function with timestamp
-template <typename... Args>
+// Thread-safe print function with timestamptemplate <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(print_mutex);
     auto now = std::chrono::system_clock::now();
@@ -60,44 +58,42 @@ void print_safe(Args&&... args) {
     (std::cout << ... << args) << std::endl;
 }
 
-// Enhanced section separator with better formatting
-void printSeparator(const std::string& title) {
-    std::lock_guard<std::mutex> lock(print_mutex);
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n" << std::endl;
+// Enhanced section separator with better formattingvoid printSeparator(const
+// std::string& title) {
+std::lock_guard<std::mutex> lock(print_mutex);
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n" << std::endl;
 }
 
-// Helper function to get thread ID as string
-std::string get_thread_id() {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
+// Helper function to get thread ID as stringstd::string get_thread_id() {
+std::stringstream ss;
+ss << std::this_thread::get_id();
+return ss.str();
 }
 
-// Performance timer for measuring operations
-class PerformanceTimer {
+// Performance timer for measuring operationsclass PerformanceTimer {
 public:
-    void start(const std::string& operation) {
-        current_operation_ = operation;
-        start_time_ = std::chrono::high_resolution_clock::now();
-        print_safe("⏱️  Starting: ", operation);
-    }
+void start(const std::string& operation) {
+    current_operation_ = operation;
+    start_time_ = std::chrono::high_resolution_clock::now();
+    print_safe("⏱️  Starting: ", operation);
+}
 
-    void stop() {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                            end_time - start_time_)
-                            .count();
+void stop() {
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                        end_time - start_time_)
+                        .count();
 
-        print_safe("⏱️  Completed: ", current_operation_, " in ", duration,
-                   " μs");
-    }
+    print_safe("⏱️  Completed: ", current_operation_, " in ", duration, " μs");
+}
 
 private:
-    std::string current_operation_;
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
+std::string current_operation_;
+std::chrono::high_resolution_clock::time_point start_time_;
+}
+;
 
 // ============================================================================
 // SECTION 1: BASIC ENHANCEDFUTURE USAGE
@@ -394,31 +390,30 @@ void errorHandlingExamples() {
     }
 }
 
-// 4. Coroutine support examples
-EnhancedFuture<int> coroutineFunctionExample() {
-    std::cout << "Starting coroutine..." << std::endl;
+// 4. Coroutine support examplesEnhancedFuture<int> coroutineFunctionExample() {
+std::cout << "Starting coroutine..." << std::endl;
 
-    // Simulate some async work
-    auto future1 = makeEnhancedFuture([]() {
-        std::this_thread::sleep_for(300ms);
-        return 10;
-    });
+// Simulate some async work
+auto future1 = makeEnhancedFuture([]() {
+    std::this_thread::sleep_for(300ms);
+    return 10;
+});
 
-    // Wait for first future
-    int result1 = co_await future1;
-    std::cout << "In coroutine: got first result " << result1 << std::endl;
+// Wait for first future
+int result1 = co_await future1;
+std::cout << "In coroutine: got first result " << result1 << std::endl;
 
-    // Simulate more async work
-    auto future2 = makeEnhancedFuture([result1]() {
-        std::this_thread::sleep_for(200ms);
-        return result1 * 5;
-    });
+// Simulate more async work
+auto future2 = makeEnhancedFuture([result1]() {
+    std::this_thread::sleep_for(200ms);
+    return result1 * 5;
+});
 
-    // Wait for second future
-    int result2 = co_await future2;
-    std::cout << "In coroutine: got second result " << result2 << std::endl;
+// Wait for second future
+int result2 = co_await future2;
+std::cout << "In coroutine: got second result " << result2 << std::endl;
 
-    co_return result1 + result2;
+co_return result1 + result2;
 }
 
 void coroutineExamples() {
@@ -430,165 +425,162 @@ void coroutineExamples() {
     std::cout << "Coroutine final result: " << finalResult << std::endl;
 }
 
-// 5. Parallel processing examples
-void parallelProcessingExamples() {
-    printSeparator("Parallel Processing Examples");
+// 5. Parallel processing examplesvoid parallelProcessingExamples() {
+printSeparator("Parallel Processing Examples");
 
-    // 5.1 Using parallelProcess
-    std::vector<int> numbers = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+// 5.1 Using parallelProcess
+std::vector<int> numbers = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 
-    std::cout << "Processing vector in parallel..." << std::endl;
-    auto futures = parallelProcess(
-        numbers,
-        [](int num) {
-            std::this_thread::sleep_for(100ms);  // Simulate work
-            return num * num;
-        },
-        3);  // Each task processes 3 items
+std::cout << "Processing vector in parallel..." << std::endl;
+auto futures = parallelProcess(
+    numbers,
+    [](int num) {
+        std::this_thread::sleep_for(100ms);  // Simulate work
+        return num * num;
+    },
+    3);  // Each task processes 3 items
 
-    std::cout << "Number of tasks in processing: " << futures.size()
-              << std::endl;
+std::cout << "Number of tasks in processing: " << futures.size() << std::endl;
 
-    // Collect results (flatten chunks)
-    std::vector<int> results;
-    for (auto& future : futures) {
-        auto chunk = future.wait();
-        results.insert(results.end(), chunk.begin(), chunk.end());
-    }
+// Collect results (flatten chunks)
+std::vector<int> results;
+for (auto& future : futures) {
+    auto chunk = future.wait();
+    results.insert(results.end(), chunk.begin(), chunk.end());
+}
 
-    std::cout << "Results: ";
-    for (size_t i = 0; i < results.size(); ++i) {
-        std::cout << results[i];
-        if (i < results.size() - 1)
+std::cout << "Results: ";
+for (size_t i = 0; i < results.size(); ++i) {
+    std::cout << results[i];
+    if (i < results.size() - 1)
+        std::cout << ", ";
+}
+std::cout << std::endl;
+
+// 5.2 Using whenAll
+std::cout << "\nUsing whenAll to wait for multiple futures..." << std::endl;
+
+std::vector<EnhancedFuture<int>> multipleFutures;
+for (int i = 1; i <= 5; ++i) {
+    multipleFutures.push_back(makeEnhancedFuture([i]() {
+        std::this_thread::sleep_for(std::chrono::milliseconds(i * 100));
+        return i * 10;
+    }));
+}
+
+try {
+    auto combinedFuture =
+        whenAll(multipleFutures.begin(), multipleFutures.end());
+    auto allResults = combinedFuture.get();
+
+    std::cout << "whenAll results: ";
+    for (size_t i = 0; i < allResults.size(); ++i) {
+        std::cout << allResults[i];
+        if (i < allResults.size() - 1)
             std::cout << ", ";
     }
     std::cout << std::endl;
-
-    // 5.2 Using whenAll
-    std::cout << "\nUsing whenAll to wait for multiple futures..." << std::endl;
-
-    std::vector<EnhancedFuture<int>> multipleFutures;
-    for (int i = 1; i <= 5; ++i) {
-        multipleFutures.push_back(makeEnhancedFuture([i]() {
-            std::this_thread::sleep_for(std::chrono::milliseconds(i * 100));
-            return i * 10;
-        }));
-    }
-
-    try {
-        auto combinedFuture =
-            whenAll(multipleFutures.begin(), multipleFutures.end());
-        auto allResults = combinedFuture.get();
-
-        std::cout << "whenAll results: ";
-        for (size_t i = 0; i < allResults.size(); ++i) {
-            std::cout << allResults[i];
-            if (i < allResults.size() - 1)
-                std::cout << ", ";
-        }
-        std::cout << std::endl;
-    } catch (const std::exception& e) {
-        std::cout << "whenAll error: " << e.what() << std::endl;
-    }
+} catch (const std::exception& e) {
+    std::cout << "whenAll error: " << e.what() << std::endl;
+}
 }
 
-// 6. Edge cases and special values
-void edgeCasesExamples() {
-    printSeparator("Edge Cases and Special Values");
+// 6. Edge cases and special valuesvoid edgeCasesExamples() {
+printSeparator("Edge Cases and Special Values");
 
-    // 6.1 Handling empty values
-    std::cout << "Handling potentially empty values..." << std::endl;
-    auto optionalFuture = makeEnhancedFuture([]() -> std::optional<int> {
-        if (rand() % 2 == 0) {
-            return 42;
-        } else {
-            return std::nullopt;
-        }
-    });
-
-    auto optionalResult = optionalFuture.wait();
-    if (optionalResult.has_value()) {
-        std::cout << "Result exists: " << optionalResult.value() << std::endl;
+// 6.1 Handling empty values
+std::cout << "Handling potentially empty values..." << std::endl;
+auto optionalFuture = makeEnhancedFuture([]() -> std::optional<int> {
+    if (rand() % 2 == 0) {
+        return 42;
     } else {
-        std::cout << "Result is empty" << std::endl;
+        return std::nullopt;
     }
+});
 
-    // 6.2 Zero retry count
-    std::cout << "\nUsing zero retry count..." << std::endl;
-    auto zeroRetryFuture = makeEnhancedFuture([]() { return 5; })
-                               .retry(
-                                   [](int value) {
-                                       std::cout << "This should not be called"
-                                                 << std::endl;
-                                       return value * 2;
-                                   },
-                                   0);
-
-    try {
-        int result = zeroRetryFuture.wait();
-        std::cout << "Zero retry result: " << result << std::endl;
-    } catch (const std::exception& e) {
-        std::cout << "Zero retry exception: " << e.what() << std::endl;
-    }
-
-    // 6.3 void return type
-    std::cout << "\nHandling void return type..." << std::endl;
-    auto voidFuture = makeEnhancedFuture([]() {
-        std::cout << "Executing void function" << std::endl;
-        // No return value
-    });
-
-    voidFuture.wait();
-    std::cout << "Void future completed" << std::endl;
-
-    // Chaining a void future
-    auto chainedVoidFuture = voidFuture.then([]() {
-        std::cout << "Void future's chained call executed" << std::endl;
-        return 100;
-    });
-
-    int chainedVoidResult = chainedVoidFuture.wait();
-    std::cout << "Chained call result: " << chainedVoidResult << std::endl;
+auto optionalResult = optionalFuture.wait();
+if (optionalResult.has_value()) {
+    std::cout << "Result exists: " << optionalResult.value() << std::endl;
+} else {
+    std::cout << "Result is empty" << std::endl;
 }
 
-// 7. Platform-specific optimization examples
-void platformOptimizationExamples() {
-    printSeparator("Platform-Specific Optimization Examples");
+// 6.2 Zero retry count
+std::cout << "\nUsing zero retry count..." << std::endl;
+auto zeroRetryFuture = makeEnhancedFuture([]() { return 5; })
+                           .retry(
+                               [](int value) {
+                                   std::cout << "This should not be called"
+                                             << std::endl;
+                                   return value * 2;
+                               },
+                               0);
 
-    // Using platform-optimized future
-    std::cout << "Using platform-optimized Future..." << std::endl;
-    auto optimizedFuture = makeOptimizedFuture([]() {
-        std::this_thread::sleep_for(300ms);
-        return std::string("Result from optimized thread pool");
-    });
+try {
+    int result = zeroRetryFuture.wait();
+    std::cout << "Zero retry result: " << result << std::endl;
+} catch (const std::exception& e) {
+    std::cout << "Zero retry exception: " << e.what() << std::endl;
+}
 
-    std::string optimizedResult = optimizedFuture.wait();
-    std::cout << "Optimized Future result: " << optimizedResult << std::endl;
+// 6.3 void return type
+std::cout << "\nHandling void return type..." << std::endl;
+auto voidFuture = makeEnhancedFuture([]() {
+    std::cout << "Executing void function" << std::endl;
+    // No return value
+});
 
-    // Comparing with regular futures
-    auto start = std::chrono::high_resolution_clock::now();
+voidFuture.wait();
+std::cout << "Void future completed" << std::endl;
 
-    const int taskCount = 100;
-    std::vector<EnhancedFuture<int>> optimizedFutures;
+// Chaining a void future
+auto chainedVoidFuture = voidFuture.then([]() {
+    std::cout << "Void future's chained call executed" << std::endl;
+    return 100;
+});
 
-    for (int i = 0; i < taskCount; i++) {
-        optimizedFutures.push_back(makeOptimizedFuture([i]() {
-            std::this_thread::sleep_for(1ms);
-            return i;
-        }));
-    }
+int chainedVoidResult = chainedVoidFuture.wait();
+std::cout << "Chained call result: " << chainedVoidResult << std::endl;
+}
 
-    // Wait for all futures to complete
-    for (auto& future : optimizedFutures) {
-        future.wait();
-    }
+// 7. Platform-specific optimization examplesvoid platformOptimizationExamples()
+// {
+printSeparator("Platform-Specific Optimization Examples");
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+// Using platform-optimized future
+std::cout << "Using platform-optimized Future..." << std::endl;
+auto optimizedFuture = makeOptimizedFuture([]() {
+    std::this_thread::sleep_for(300ms);
+    return std::string("Result from optimized thread pool");
+});
 
-    std::cout << "Time taken to execute " << taskCount
-              << " optimized tasks: " << duration.count() << "ms" << std::endl;
+std::string optimizedResult = optimizedFuture.wait();
+std::cout << "Optimized Future result: " << optimizedResult << std::endl;
+
+// Comparing with regular futures
+auto start = std::chrono::high_resolution_clock::now();
+
+const int taskCount = 100;
+std::vector<EnhancedFuture<int>> optimizedFutures;
+
+for (int i = 0; i < taskCount; i++) {
+    optimizedFutures.push_back(makeOptimizedFuture([i]() {
+        std::this_thread::sleep_for(1ms);
+        return i;
+    }));
+}
+
+// Wait for all futures to complete
+for (auto& future : optimizedFutures) {
+    future.wait();
+}
+
+auto end = std::chrono::high_resolution_clock::now();
+auto duration =
+    std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+std::cout << "Time taken to execute " << taskCount
+          << " optimized tasks: " << duration.count() << "ms" << std::endl;
 }
 
 int main() {

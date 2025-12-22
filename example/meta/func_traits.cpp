@@ -26,17 +26,16 @@
 
 using namespace atom::meta;
 
-// Helper function to print section headers
-void printHeader(const std::string& title) {
-    std::cout << "\n=========================================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "=========================================================="
-              << std::endl;
+// Helper function to print section headersvoid printHeader(const std::string&
+// title) {
+std::cout << "\n=========================================================="
+          << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "=========================================================="
+          << std::endl;
 }
 
-// Helper template for printing function trait information
-template <typename F>
+// Helper template for printing function trait informationtemplate <typename F>
 void printTraits(const std::string& funcName) {
     using Traits = FunctionTraits<std::decay_t<F>>;
 
@@ -98,23 +97,20 @@ void printTraits(const std::string& funcName) {
 // 1. Example free functions with different signatures
 //===========================================================================
 
-// Basic free function
-int add(int a, int b) { return a + b; }
+// Basic free functionint add(int a, int b) { return a + b; }
 
-// Function with multiple arguments
-double calculate(int a, double b, float c, const std::string& d) {
-    return a + b + c + d.size();
+// Function with multiple argumentsdouble calculate(int a, double b, float c,
+// const std::string& d) {
+return a + b + c + d.size();
 }
 
-// Function with no arguments
-void noArgs() { std::cout << "No arguments function" << std::endl; }
+// Function with no argumentsvoid noArgs() { std::cout << "No arguments
+// function" << std::endl; }
 
-// Variadic function
-int sum(int first, ...) { return first; }
+// Variadic functionint sum(int first, ...) { return first; }
 
-// Noexcept function
-void safeFunction() noexcept {
-    // This never throws
+// Noexcept functionvoid safeFunction() noexcept {
+// This never throws
 }
 
 //===========================================================================
@@ -164,37 +160,37 @@ public:
 // 3. Example functors and lambdas
 //===========================================================================
 
-// Functor example
-struct Multiplier {
-    double factor;
+// Functor examplestruct Multiplier {
+double factor;
 
-    Multiplier(double f) : factor(f) {}
+Multiplier(double f) : factor(f) {}
 
-    double operator()(double x) const { return x * factor; }
-};
+double operator()(double x) const { return x * factor; }
+}
+;
 
 //===========================================================================
 // Function pipe example
 //===========================================================================
 
-// Simple function to use with the function pipe
-int multiply(int a, int b) { return a * b; }
+// Simple function to use with the function pipeint multiply(int a, int b) {
+// return a * b; }
 
 //===========================================================================
 // Method detection examples
 //===========================================================================
 
-// Classes for method detection
-class HasPrintMethod {
+// Classes for method detectionclass HasPrintMethod {
 public:
-    void print(const std::string& message) const {
-        std::cout << "Message: " << message << std::endl;
-    }
+void print(const std::string& message) const {
+    std::cout << "Message: " << message << std::endl;
+}
 
-    static void staticPrint(const std::string& message) {
-        std::cout << "Static message: " << message << std::endl;
-    }
-};
+static void staticPrint(const std::string& message) {
+    std::cout << "Static message: " << message << std::endl;
+}
+}
+;
 
 class NoPrintMethod {
 public:
@@ -203,8 +199,7 @@ public:
     }
 };
 
-// Define method detectors
-DEFINE_HAS_METHOD(print);
+// Define method detectorsDEFINE_HAS_METHOD(print);
 DEFINE_HAS_STATIC_METHOD(staticPrint);
 DEFINE_HAS_CONST_METHOD(print);
 

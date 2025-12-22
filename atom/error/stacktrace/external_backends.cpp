@@ -80,14 +80,12 @@ std::vector<StackFrame> CpptraceBackend::capture(
         frames.reserve(trace.frames.size());
 
         for (const auto& cppFrame : trace.frames) {
-            StackFrame frame;
-            frame.address = reinterpret_cast<void*>(cppFrame.address);
-            frame.function = cppFrame.symbol;
-            frame.sourceFile = cppFrame.filename;
-            frame.sourceLine = cppFrame.line.value_or(0);
-            frame.module = cppFrame.object_path;
-
-            frames.push_back(std::move(frame));
+            frames.emplace_back(
+                StackFrame{.address = reinterpret_cast<void*>(cppFrame.address),
+                           .function = cppFrame.symbol,
+                           .module = cppFrame.object_path,
+                           .sourceFile = cppFrame.filename,
+                           .sourceLine = cppFrame.line.value_or(0)});
         }
     } catch (const std::exception&) {
         // Fall back to empty trace on error
@@ -117,15 +115,14 @@ std::vector<StackFrame> BackwardBackend::capture(
         resolver.load_stacktrace(st);
 
         // Skip frames as requested
-        size_t startIdx =
+        const auto startIdx =
             std::min(static_cast<size_t>(config.skipFrames), st.size());
         frames.reserve(st.size() - startIdx);
 
         for (size_t i = startIdx; i < st.size(); ++i) {
-            StackFrame frame;
-            frame.address = reinterpret_cast<void*>(st[i].addr);
+            StackFrame frame{.address = reinterpret_cast<void*>(st[i].addr)};
 
-            backward::ResolvedTrace trace = resolver.resolve(st[i]);
+            const auto trace = resolver.resolve(st[i]);
 
             if (!trace.source.function.empty()) {
                 frame.function = trace.source.function;
@@ -138,7 +135,7 @@ std::vector<StackFrame> BackwardBackend::capture(
                 frame.module = trace.object_filename;
             }
 
-            frames.push_back(std::move(frame));
+            frames.emplace_back(std::move(frame));
         }
     } catch (const std::exception&) {
         // Fall back to empty trace on error
@@ -160,20 +157,16 @@ std::vector<StackFrame> BoostBackend::capture(const StackTraceConfig& config) {
     std::vector<StackFrame> frames;
 
     try {
-        auto st =
+        const auto st =
             boost::stacktrace::stacktrace(config.skipFrames, config.maxDepth);
         frames.reserve(st.size());
 
-        for (size_t i = 0; i < st.size(); ++i) {
-            const auto& boostFrame = st[i];
-            StackFrame frame;
-
-            frame.address = const_cast<void*>(boostFrame.address());
-            frame.function = boostFrame.name();
-            frame.sourceFile = boostFrame.source_file();
-            frame.sourceLine = static_cast<int>(boostFrame.source_line());
-
-            frames.push_back(std::move(frame));
+        for (const auto& boostFrame : st) {
+            frames.emplace_back(StackFrame{
+                .address = const_cast<void*>(boostFrame.address()),
+                .function = boostFrame.name(),
+                .sourceFile = boostFrame.source_file(),
+                .sourceLine = static_cast<int>(boostFrame.source_line())});
         }
     } catch (const std::exception&) {
         // Fall back to empty trace on error
@@ -199,11 +192,11 @@ std::vector<StackFrame> LibunwindBackend::capture(
     unw_context_t context;
 
     // Initialize cursor to current frame
-    if (unw_getcontext(&context) != 0) {
+    if (unw_getcontext(&context) != 0) [[unlikely]] {
         return frames;
     }
 
-    if (unw_init_local(&cursor, &context) != 0) {
+    if (unw_init_local(&cursor, &context) != 0) [[unlikely]] {
         return frames;
     }
 
@@ -213,7 +206,7 @@ std::vector<StackFrame> LibunwindBackend::capture(
     while (unw_step(&cursor) > 0) {
         // Skip requested frames
         if (skipped < config.skipFrames) {
-            skipped++;
+            ++skipped;
             continue;
         }
 
@@ -225,22 +218,21 @@ std::vector<StackFrame> LibunwindBackend::capture(
         StackFrame frame;
 
         // Get instruction pointer
-        unw_word_t ip;
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) == 0) {
+        if (unw_word_t ip; unw_get_reg(&cursor, UNW_REG_IP, &ip) == 0) {
             frame.address = reinterpret_cast<void*>(ip);
         }
 
         // Get function name
-        char funcName[512];
-        unw_word_t offset;
-        if (unw_get_proc_name(&cursor, funcName, sizeof(funcName), &offset) ==
-            0) {
-            frame.function = StackTraceUtils::demangle(funcName);
+        std::array<char, 512> funcName{};
+        if (unw_word_t offset;
+            unw_get_proc_name(&cursor, funcName.data(), funcName.size(),
+                              &offset) == 0) {
+            frame.function = StackTraceUtils::demangle(funcName.data());
             frame.offset = static_cast<size_t>(offset);
         }
 
-        frames.push_back(std::move(frame));
-        frameCount++;
+        frames.emplace_back(std::move(frame));
+        ++frameCount;
     }
 
     return frames;
@@ -260,60 +252,60 @@ std::vector<StackFrame> ExecinfoBackend::capture(
     std::vector<StackFrame> frames;
 
     constexpr int MAX_FRAMES = 128;
-    void* buffer[MAX_FRAMES];
+    std::array<void*, MAX_FRAMES> buffer{};
 
-    int totalFrames = backtrace(buffer, MAX_FRAMES);
-    if (totalFrames <= 0) {
+    const int totalFrames = backtrace(buffer.data(), MAX_FRAMES);
+    if (totalFrames <= 0) [[unlikely]] {
         return frames;
     }
 
-    char** symbols = backtrace_symbols(buffer, totalFrames);
-    if (symbols == nullptr) {
+    char** symbols = backtrace_symbols(buffer.data(), totalFrames);
+    if (symbols == nullptr) [[unlikely]] {
         return frames;
     }
 
-    int startIdx = config.skipFrames;
-    int endIdx = std::min(totalFrames, startIdx + config.maxDepth);
+    const int startIdx = config.skipFrames;
+    const int endIdx = std::min(totalFrames, startIdx + config.maxDepth);
 
-    frames.reserve(endIdx - startIdx);
+    frames.reserve(static_cast<size_t>(endIdx - startIdx));
 
     for (int i = startIdx; i < endIdx; ++i) {
-        StackFrame frame;
-        frame.address = buffer[i];
+        StackFrame frame{.address = buffer[static_cast<size_t>(i)]};
 
         // Parse symbol string: "module(function+offset) [address]"
-        std::string symbolStr(symbols[i]);
+        const std::string_view symbolView(symbols[i]);
 
         // Try to extract function name
-        size_t parenOpen = symbolStr.find('(');
-        size_t parenClose = symbolStr.find(')');
-        size_t plusSign = symbolStr.find('+');
+        const auto parenOpen = symbolView.find('(');
+        const auto parenClose = symbolView.find(')');
+        const auto plusSign = symbolView.find('+');
 
-        if (parenOpen != std::string::npos) {
-            frame.module = symbolStr.substr(0, parenOpen);
+        if (parenOpen != std::string_view::npos) {
+            frame.module = std::string(symbolView.substr(0, parenOpen));
         }
 
-        if (parenOpen != std::string::npos && plusSign != std::string::npos &&
-            plusSign > parenOpen) {
-            std::string mangledName =
-                symbolStr.substr(parenOpen + 1, plusSign - parenOpen - 1);
+        if (parenOpen != std::string_view::npos &&
+            plusSign != std::string_view::npos && plusSign > parenOpen) {
+            const auto mangledName =
+                symbolView.substr(parenOpen + 1, plusSign - parenOpen - 1);
             if (!mangledName.empty()) {
-                frame.function = StackTraceUtils::demangle(mangledName);
+                frame.function =
+                    StackTraceUtils::demangle(std::string(mangledName));
             }
         }
 
-        if (plusSign != std::string::npos && parenClose != std::string::npos &&
-            parenClose > plusSign) {
-            std::string offsetStr =
-                symbolStr.substr(plusSign + 1, parenClose - plusSign - 1);
+        if (plusSign != std::string_view::npos &&
+            parenClose != std::string_view::npos && parenClose > plusSign) {
+            const auto offsetStr =
+                symbolView.substr(plusSign + 1, parenClose - plusSign - 1);
             try {
-                frame.offset = std::stoull(offsetStr, nullptr, 16);
+                frame.offset = std::stoull(std::string(offsetStr), nullptr, 16);
             } catch (...) {
                 frame.offset = 0;
             }
         }
 
-        frames.push_back(std::move(frame));
+        frames.emplace_back(std::move(frame));
     }
 
     free(symbols);
@@ -331,19 +323,16 @@ bool ExecinfoBackend::isAvailable() const { return true; }
 #ifdef ATOM_USE_LIBBACKTRACE
 namespace {
 struct BacktraceData {
-    std::vector<StackFrame>* frames;
-    int skipFrames;
-    int maxDepth;
-    int currentFrame;
+    std::vector<StackFrame>* frames = nullptr;
+    int skipFrames = 0;
+    int maxDepth = 0;
+    int currentFrame = 0;
 };
 }  // namespace
 
-void LibbacktraceBackend::errorCallback(void* data, const char* msg,
-                                        int errnum) {
+void LibbacktraceBackend::errorCallback(void* /*data*/, const char* /*msg*/,
+                                        int /*errnum*/) {
     // Silently ignore errors
-    (void)data;
-    (void)msg;
-    (void)errnum;
 }
 
 int LibbacktraceBackend::fullCallback(void* data, uintptr_t pc,
@@ -353,7 +342,7 @@ int LibbacktraceBackend::fullCallback(void* data, uintptr_t pc,
 
     // Skip frames
     if (btData->currentFrame < btData->skipFrames) {
-        btData->currentFrame++;
+        ++btData->currentFrame;
         return 0;
     }
 
@@ -362,8 +351,7 @@ int LibbacktraceBackend::fullCallback(void* data, uintptr_t pc,
         return 1;  // Stop iteration
     }
 
-    StackFrame frame;
-    frame.address = reinterpret_cast<void*>(pc);
+    StackFrame frame{.address = reinterpret_cast<void*>(pc)};
 
     if (function != nullptr) {
         frame.function = StackTraceUtils::demangle(function);
@@ -374,8 +362,8 @@ int LibbacktraceBackend::fullCallback(void* data, uintptr_t pc,
         frame.sourceLine = lineno;
     }
 
-    btData->frames->push_back(std::move(frame));
-    btData->currentFrame++;
+    btData->frames->emplace_back(std::move(frame));
+    ++btData->currentFrame;
 
     return 0;
 }
@@ -387,15 +375,14 @@ std::vector<StackFrame> LibbacktraceBackend::capture(
     static backtrace_state* state = backtrace_create_state(
         nullptr, 1 /* threaded */, errorCallback, nullptr);
 
-    if (state == nullptr) {
+    if (state == nullptr) [[unlikely]] {
         return frames;
     }
 
-    BacktraceData data;
-    data.frames = &frames;
-    data.skipFrames = config.skipFrames;
-    data.maxDepth = config.maxDepth;
-    data.currentFrame = 0;
+    BacktraceData data{.frames = &frames,
+                       .skipFrames = config.skipFrames,
+                       .maxDepth = config.maxDepth,
+                       .currentFrame = 0};
 
     backtrace_full(state, 0, fullCallback, errorCallback, &data);
 
@@ -416,21 +403,16 @@ std::vector<StackFrame> StdStacktraceBackend::capture(
     std::vector<StackFrame> frames;
 
     try {
-        auto st = std::stacktrace::current(config.skipFrames, config.maxDepth);
+        const auto st =
+            std::stacktrace::current(config.skipFrames, config.maxDepth);
         frames.reserve(st.size());
 
         for (const auto& entry : st) {
-            StackFrame frame;
-
-            // std::stacktrace_entry provides description and source_file/line
-            frame.function = entry.description();
-            frame.sourceFile = entry.source_file();
-            frame.sourceLine = static_cast<int>(entry.source_line());
-
-            // Native handle gives us the address
-            frame.address = reinterpret_cast<void*>(entry.native_handle());
-
-            frames.push_back(std::move(frame));
+            frames.emplace_back(StackFrame{
+                .address = reinterpret_cast<void*>(entry.native_handle()),
+                .function = entry.description(),
+                .sourceFile = entry.source_file(),
+                .sourceLine = static_cast<int>(entry.source_line())});
         }
     } catch (const std::exception&) {
         // Fall back to empty trace on error
@@ -452,30 +434,31 @@ std::vector<StackFrame> AbseilBackend::capture(const StackTraceConfig& config) {
     std::vector<StackFrame> frames;
 
     constexpr int MAX_FRAMES = 128;
-    void* buffer[MAX_FRAMES];
-    int sizes[MAX_FRAMES];
+    std::array<void*, MAX_FRAMES> buffer{};
+    std::array<int, MAX_FRAMES> sizes{};
 
-    int totalFrames = absl::GetStackTraceWithContext(
-        buffer, sizes, MAX_FRAMES, config.skipFrames, nullptr, nullptr);
+    const int totalFrames =
+        absl::GetStackTraceWithContext(buffer.data(), sizes.data(), MAX_FRAMES,
+                                       config.skipFrames, nullptr, nullptr);
 
-    if (totalFrames <= 0) {
+    if (totalFrames <= 0) [[unlikely]] {
         return frames;
     }
 
-    int endIdx = std::min(totalFrames, config.maxDepth);
-    frames.reserve(endIdx);
+    const int endIdx = std::min(totalFrames, config.maxDepth);
+    frames.reserve(static_cast<size_t>(endIdx));
 
     for (int i = 0; i < endIdx; ++i) {
-        StackFrame frame;
-        frame.address = buffer[i];
+        StackFrame frame{.address = buffer[static_cast<size_t>(i)]};
 
         // Try to symbolize
-        char symbolBuffer[1024];
-        if (absl::Symbolize(buffer[i], symbolBuffer, sizeof(symbolBuffer))) {
-            frame.function = StackTraceUtils::demangle(symbolBuffer);
+        std::array<char, 1024> symbolBuffer{};
+        if (absl::Symbolize(buffer[static_cast<size_t>(i)], symbolBuffer.data(),
+                            symbolBuffer.size())) {
+            frame.function = StackTraceUtils::demangle(symbolBuffer.data());
         }
 
-        frames.push_back(std::move(frame));
+        frames.emplace_back(std::move(frame));
     }
 
     return frames;

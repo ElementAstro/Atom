@@ -35,10 +35,7 @@ if(NOT TARGET atom-system)
       "atom-system target not found. Make sure ATOM_BUILD_SYSTEM is enabled.")
 endif()
 
-message(
-  WARNING
-    "Skipping atom-system tests in this configuration (pending API alignment)")
-return()
+# Tests are now enabled after API alignment work
 
 # =============================================================================
 # Test Source Configuration
@@ -83,7 +80,8 @@ list(REMOVE_ITEM TEST_SOURCES "")
 # =============================================================================
 # Create Test Executable
 # =============================================================================
-add_executable(atom_system_tests ${TEST_SOURCES})
+# Use unique name to avoid file lock issues during development
+add_executable(atom_sys_test ${TEST_SOURCES})
 
 # =============================================================================
 # Source Grouping for IDE Organization
@@ -108,7 +106,7 @@ source_group("Tests/System/Storage" FILES ${SYSTEM_STORAGE_TEST_SOURCES})
 # Link Libraries
 # =============================================================================
 target_link_libraries(
-  atom_system_tests
+  atom_sys_test
   PRIVATE # Test infrastructure
           atom-test-common
           # Module under test and its dependencies
@@ -121,20 +119,25 @@ target_link_libraries(
 
 # Platform-specific libraries
 if(WIN32)
-  target_link_libraries(atom_system_tests PRIVATE ws2_32 wsock32)
+  target_link_libraries(atom_sys_test PRIVATE ws2_32 wsock32 bthprops wtsapi32
+                                              netapi32)
+  # Link shortcut detector for shortcut tests
+  if(TARGET shortcut_detector_static)
+    target_link_libraries(atom_sys_test PRIVATE shortcut_detector_static)
+  endif()
 endif()
 
 # =============================================================================
 # Target Configuration
 # =============================================================================
 # Set C++ standard
-target_compile_features(atom_system_tests PRIVATE cxx_std_20)
+target_compile_features(atom_sys_test PRIVATE cxx_std_20)
 
 # Add compiler flags
 if(MSVC)
-  target_compile_options(atom_system_tests PRIVATE /W4)
+  target_compile_options(atom_sys_test PRIVATE /W4)
 else()
-  target_compile_options(atom_system_tests PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(atom_sys_test PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # =============================================================================
@@ -144,15 +147,15 @@ enable_testing()
 
 include(GoogleTest)
 # Temporarily disabled due to DLL dependency issues during test discovery
-# gtest_discover_tests(atom_system_tests WORKING_DIRECTORY
+# gtest_discover_tests(atom_sys_test WORKING_DIRECTORY
 # ${CMAKE_CURRENT_SOURCE_DIR} PROPERTIES LABELS "system" TIMEOUT 300 )
 
 # Manual test registration as workaround
 add_test(
-  NAME atom_system_tests
-  COMMAND atom_system_tests
+  NAME atom_sys_test
+  COMMAND atom_sys_test
   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-set_tests_properties(atom_system_tests PROPERTIES LABELS "system" TIMEOUT 300)
+set_tests_properties(atom_sys_test PROPERTIES LABELS "system" TIMEOUT 300)
 
 # =============================================================================
 # Custom Test Targets
@@ -161,19 +164,19 @@ set_tests_properties(atom_system_tests PROPERTIES LABELS "system" TIMEOUT 300)
 add_custom_target(
   test_system
   COMMAND ${CMAKE_CTEST_COMMAND} -L system --output-on-failure
-  DEPENDS atom_system_tests
+  DEPENDS atom_sys_test
   COMMENT "Running system module tests")
 
 # Add performance test target (if applicable)
 add_custom_target(
   test_system_performance
-  COMMAND atom_system_tests --gtest_filter="*Performance*:*Benchmark*"
-  DEPENDS atom_system_tests
+  COMMAND atom_sys_test --gtest_filter="*Performance*:*Benchmark*"
+  DEPENDS atom_sys_test
   COMMENT "Running system performance tests")
 
 # =============================================================================
 # IDE Organization
 # =============================================================================
-set_property(TARGET atom_system_tests PROPERTY FOLDER "Tests/System")
+set_property(TARGET atom_sys_test PROPERTY FOLDER "Tests/System")
 set_property(TARGET test_system PROPERTY FOLDER "Tests/System")
 set_property(TARGET test_system_performance PROPERTY FOLDER "Tests/System")

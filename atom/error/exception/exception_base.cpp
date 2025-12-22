@@ -14,6 +14,8 @@ Description: Base exception class implementation
 
 #include "exception_base.hpp"
 
+#include <format>
+
 #ifdef ATOM_USE_CPPTRACE
 #include <cpptrace/cpptrace.hpp>
 #endif
@@ -25,21 +27,28 @@ namespace atom::error {
 
 auto Exception::what() const noexcept -> const char* {
     if (full_message_.empty()) {
-        std::ostringstream oss;
-        oss << "Exception occurred:\n";
-        oss << "  File: " << file_ << "\n";
-        oss << "  Line: " << line_ << "\n";
-        oss << "  Function: " << func_ << "()\n";
-        oss << "  Thread ID: " << thread_id_ << "\n";
-        oss << "  Message: " << message_ << "\n";
+        std::ostringstream tidOss;
+        tidOss << thread_id_;
+
 #ifdef ATOM_USE_CPPTRACE
-        oss << "  Stack trace:\n" << cpptrace::generate();
+        std::ostringstream stOss;
+        stOss << cpptrace::generate();
+        const auto stackStr = stOss.str();
 #elif defined(ATOM_USE_BOOST_STACKTRACE)
-        oss << "  Stack trace:\n" << boost::stacktrace::to_string(stack_trace_);
+        const auto stackStr = boost::stacktrace::to_string(stack_trace_);
 #else
-        oss << "  Stack trace:\n" << stack_trace_.toString();
+        const auto stackStr = stack_trace_.toString();
 #endif
-        full_message_ = oss.str();
+
+        full_message_ = std::format(
+            "Exception occurred:\n"
+            "  File: {}\n"
+            "  Line: {}\n"
+            "  Function: {}()\n"
+            "  Thread ID: {}\n"
+            "  Message: {}\n"
+            "  Stack trace:\n{}",
+            file_, line_, func_, tidOss.str(), message_, stackStr);
     }
     return full_message_.c_str();
 }

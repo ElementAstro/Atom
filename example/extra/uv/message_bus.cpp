@@ -11,17 +11,16 @@
 using namespace msgbus;
 using namespace std::chrono_literals;
 
-// Example message types
-struct UserLoginMessage {
-    std::string user_id;
-    std::string session_id;
-    std::chrono::system_clock::time_point timestamp;
+// Example message typesstruct UserLoginMessage {
+std::string user_id;
+std::string session_id;
+std::chrono::system_clock::time_point timestamp;
 
-    std::string to_string() const {
-        return "UserLogin{user_id=" + user_id + ", session_id=" + session_id +
-               "}";
-    }
-};
+std::string to_string() const {
+    return "UserLogin{user_id=" + user_id + ", session_id=" + session_id + "}";
+}
+}
+;
 
 struct OrderCreatedMessage {
     std::string order_id;
@@ -47,34 +46,33 @@ struct SystemStatusMessage {
     }
 };
 
-// Example subscribers
-class UserService {
+// Example subscribersclass UserService {
 private:
-    std::string name_;
-    std::atomic<int> messages_received_{0};
+std::string name_;
+std::atomic<int> messages_received_{0};
 
 public:
-    explicit UserService(const std::string& name) : name_(name) {}
+explicit UserService(const std::string& name) : name_(name) {}
 
-    void on_user_login(const UserLoginMessage& msg) {
-        messages_received_++;
-        std::cout << "[" << name_ << "] Received: " << msg.to_string()
-                  << std::endl;
+void on_user_login(const UserLoginMessage& msg) {
+    messages_received_++;
+    std::cout << "[" << name_ << "] Received: " << msg.to_string() << std::endl;
 
-        // Simulate processing
-        std::this_thread::sleep_for(10ms);
-        std::cout << "[" << name_
-                  << "] Processed user login for: " << msg.user_id << std::endl;
-    }
+    // Simulate processing
+    std::this_thread::sleep_for(10ms);
+    std::cout << "[" << name_ << "] Processed user login for: " << msg.user_id
+              << std::endl;
+}
 
-    void on_system_status(const SystemStatusMessage& msg) {
-        messages_received_++;
-        std::cout << "[" << name_
-                  << "] System status update: " << msg.to_string() << std::endl;
-    }
+void on_system_status(const SystemStatusMessage& msg) {
+    messages_received_++;
+    std::cout << "[" << name_ << "] System status update: " << msg.to_string()
+              << std::endl;
+}
 
-    int get_messages_received() const { return messages_received_.load(); }
-};
+int get_messages_received() const { return messages_received_.load(); }
+}
+;
 
 class OrderService {
 private:

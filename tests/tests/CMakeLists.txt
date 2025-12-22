@@ -21,6 +21,12 @@ endif()
 if(TARGET GTest::gtest_main AND NOT TARGET GTest::Main)
   add_library(GTest::Main ALIAS GTest::gtest_main)
 endif()
+if(TARGET GTest::gmock AND NOT TARGET GTest::GMock)
+  add_library(GTest::GMock ALIAS GTest::gmock)
+endif()
+if(TARGET GTest::gmock_main AND NOT TARGET GTest::GMockMain)
+  add_library(GTest::GMockMain ALIAS GTest::gmock_main)
+endif()
 
 # Create interface library for test infrastructure (with guard)
 if(NOT TARGET atom-test-common)
@@ -32,9 +38,10 @@ target_include_directories(
   atom-test-common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}
                              ${CMAKE_CURRENT_SOURCE_DIR}/..)
 
-# Link required libraries
-target_link_libraries(atom-test-common INTERFACE GTest::GTest GTest::Main
-                                                 Threads::Threads)
+# Link required libraries (include GMock for mocking support)
+target_link_libraries(
+  atom-test-common INTERFACE GTest::GTest GTest::Main GTest::gmock
+                             GTest::gmock_main Threads::Threads)
 
 # Set C++ standard
 target_compile_features(atom-test-common INTERFACE cxx_std_20)

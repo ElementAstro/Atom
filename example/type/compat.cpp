@@ -4,10 +4,10 @@
 
 #include "atom/type/compat.hpp"
 
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
 }
 
 // Function that returns expected<int, std::string>

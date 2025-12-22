@@ -52,11 +52,9 @@ using namespace atom::async;
 // UTILITY FUNCTIONS AND HELPERS
 // ============================================================================
 
-// Print mutex for thread-safe output
-std::mutex print_mutex;
+// Print mutex for thread-safe outputstd::mutex print_mutex;
 
-// Thread-safe print function with timestamp
-template <typename... Args>
+// Thread-safe print function with timestamptemplate <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(print_mutex);
     auto now = std::chrono::system_clock::now();
@@ -70,117 +68,115 @@ void print_safe(Args&&... args) {
     (std::cout << ... << args) << std::endl;
 }
 
-// Enhanced section separator
-void print_section(const std::string& title) {
-    std::lock_guard<std::mutex> lock(print_mutex);
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n" << std::endl;
+// Enhanced section separatorvoid print_section(const std::string& title) {
+std::lock_guard<std::mutex> lock(print_mutex);
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n" << std::endl;
 }
 
-// Performance timer
-class PerformanceTimer {
+// Performance timerclass PerformanceTimer {
 public:
-    void start(const std::string& operation) {
-        current_operation_ = operation;
-        start_time_ = std::chrono::high_resolution_clock::now();
-        print_safe("⏱️  Starting: ", operation);
-    }
+void start(const std::string& operation) {
+    current_operation_ = operation;
+    start_time_ = std::chrono::high_resolution_clock::now();
+    print_safe("⏱️  Starting: ", operation);
+}
 
-    void stop() {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                            end_time - start_time_)
-                            .count();
+void stop() {
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                        end_time - start_time_)
+                        .count();
 
-        print_safe("⏱️  Completed: ", current_operation_, " in ", duration,
-                   " μs");
-    }
+    print_safe("⏱️  Completed: ", current_operation_, " in ", duration, " μs");
+}
 
 private:
-    std::string current_operation_;
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
+std::string current_operation_;
+std::chrono::high_resolution_clock::time_point start_time_;
+}
+;
 
 // ============================================================================
 // WEB SERVER DATA STRUCTURES
 // ============================================================================
 
-// HTTP Request representation
-struct HttpRequest {
-    enum class Method { GET, POST, PUT, DELETE_METHOD, PATCH };
+// HTTP Request representationstruct HttpRequest {
+enum class Method { GET, POST, PUT, DELETE_METHOD, PATCH };
 
-    Method method;
-    std::string path;
-    std::unordered_map<std::string, std::string> headers;
-    std::unordered_map<std::string, std::string> query_params;
-    std::string body;
-    std::string client_ip;
-    std::chrono::system_clock::time_point timestamp;
+Method method;
+std::string path;
+std::unordered_map<std::string, std::string> headers;
+std::unordered_map<std::string, std::string> query_params;
+std::string body;
+std::string client_ip;
+std::chrono::system_clock::time_point timestamp;
 
-    HttpRequest(Method method, std::string path, std::string client_ip)
-        : method(method),
-          path(std::move(path)),
-          client_ip(std::move(client_ip)),
-          timestamp(std::chrono::system_clock::now()) {}
-};
+HttpRequest(Method method, std::string path, std::string client_ip)
+    : method(method),
+      path(std::move(path)),
+      client_ip(std::move(client_ip)),
+      timestamp(std::chrono::system_clock::now()) {}
+}
+;
 
-// HTTP Response representation
-struct HttpResponse {
-    int status_code;
-    std::unordered_map<std::string, std::string> headers;
-    std::string body;
-    std::chrono::system_clock::time_point timestamp;
+// HTTP Response representationstruct HttpResponse {
+int status_code;
+std::unordered_map<std::string, std::string> headers;
+std::string body;
+std::chrono::system_clock::time_point timestamp;
 
-    HttpResponse(int status_code, std::string body)
-        : status_code(status_code),
-          body(std::move(body)),
-          timestamp(std::chrono::system_clock::now()) {}
-};
+HttpResponse(int status_code, std::string body)
+    : status_code(status_code),
+      body(std::move(body)),
+      timestamp(std::chrono::system_clock::now()) {}
+}
+;
 
-// Database Query representation
-struct DatabaseQuery {
-    enum class Type { SELECT_QUERY, INSERT_QUERY, UPDATE_QUERY, DELETE_QUERY };
+// Database Query representationstruct DatabaseQuery {
+enum class Type { SELECT_QUERY, INSERT_QUERY, UPDATE_QUERY, DELETE_QUERY };
 
-    Type type;
-    std::string table;
-    std::string query;
-    std::unordered_map<std::string, std::string> parameters;
-    int connection_id;
+Type type;
+std::string table;
+std::string query;
+std::unordered_map<std::string, std::string> parameters;
+int connection_id;
 
-    DatabaseQuery(Type type, std::string table, std::string query,
-                  int connection_id)
-        : type(type),
-          table(std::move(table)),
-          query(std::move(query)),
-          connection_id(connection_id) {}
-};
+DatabaseQuery(Type type, std::string table, std::string query,
+              int connection_id)
+    : type(type),
+      table(std::move(table)),
+      query(std::move(query)),
+      connection_id(connection_id) {}
+}
+;
 
-// Database Result representation
-struct DatabaseResult {
-    bool success;
-    std::vector<std::unordered_map<std::string, std::string>> rows;
-    std::string error_message;
-    int affected_rows;
+// Database Result representationstruct DatabaseResult {
+bool success;
+std::vector<std::unordered_map<std::string, std::string>> rows;
+std::string error_message;
+int affected_rows;
 
-    DatabaseResult(bool success, int affected_rows = 0)
-        : success(success), affected_rows(affected_rows) {}
-};
+DatabaseResult(bool success, int affected_rows = 0)
+    : success(success), affected_rows(affected_rows) {}
+}
+;
 
-// Session data
-struct Session {
-    std::string session_id;
-    std::string user_id;
-    std::unordered_map<std::string, std::string> data;
-    std::chrono::system_clock::time_point created_at;
-    std::chrono::system_clock::time_point last_accessed;
+// Session datastruct Session {
+std::string session_id;
+std::string user_id;
+std::unordered_map<std::string, std::string> data;
+std::chrono::system_clock::time_point created_at;
+std::chrono::system_clock::time_point last_accessed;
 
-    Session(std::string session_id, std::string user_id)
-        : session_id(std::move(session_id)),
-          user_id(std::move(user_id)),
-          created_at(std::chrono::system_clock::now()),
-          last_accessed(std::chrono::system_clock::now()) {}
-};
+Session(std::string session_id, std::string user_id)
+    : session_id(std::move(session_id)),
+      user_id(std::move(user_id)),
+      created_at(std::chrono::system_clock::now()),
+      last_accessed(std::chrono::system_clock::now()) {}
+}
+;
 
 // ============================================================================
 // ASYNC WEB SERVER COMPONENTS
@@ -693,23 +689,21 @@ void web_server_demonstration() {
     timer.stop();
 }
 
-// Main function
-int main() {
-    try {
-        std::cout << "====== Real-World Async Web Server Example ======"
-                  << std::endl;
+// Main functionint main() {
+try {
+    std::cout << "====== Real-World Async Web Server Example ======"
+              << std::endl;
 
-        web_server_demonstration();
+    web_server_demonstration();
 
-        std::cout << "\n====== Web Server Example Completed ======"
-                  << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "Unknown unhandled exception in main" << std::endl;
-        return 1;
-    }
+    std::cout << "\n====== Web Server Example Completed ======" << std::endl;
+} catch (const std::exception& e) {
+    std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
+    return 1;
+} catch (...) {
+    std::cerr << "Unknown unhandled exception in main" << std::endl;
+    return 1;
+}
 
-    return 0;
+return 0;
 }

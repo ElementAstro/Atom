@@ -3,8 +3,17 @@
 -- Author: Max Qian
 -- License: GPL3
 
--- Add standard build modes
-add_rules("mode.debug", "mode.release")
+-- Add standard build modes (including minsizerel for size optimization)
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
+
+-- Set languages (match CMake C++20)
+set_languages("c11", "cxx20")
+
+-- Add required packages (use spdlog instead of loguru to match CMake)
+local use_system_packages = has_config("use_system_packages")
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
+add_requires("cpp-httplib", {system = use_system_packages, optional = true})
 
 -- Project configuration
 set_project("atom-web")
@@ -94,7 +103,7 @@ target("atom-web-object")
     add_files(table.unpack(sources))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -111,7 +120,7 @@ target("atom-web")
 
     -- Add dependencies
     add_deps("atom-web-object")
-    add_packages("loguru", "cpp-httplib")
+    add_packages("spdlog", "fmt", "cpp-httplib")
 
     -- Add include directories
     add_includedirs(".", {public = true})

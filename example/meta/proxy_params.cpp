@@ -5,23 +5,22 @@
 #include <string>
 #include <vector>
 
-// Custom struct to demonstrate handling user types
-struct Point {
-    int x;
-    int y;
+// Custom struct to demonstrate handling user typesstruct Point {
+int x;
+int y;
 
-    bool operator==(const Point& other) const {
-        return x == other.x && y == other.y;
-    }
-};
+bool operator==(const Point& other) const {
+    return x == other.x && y == other.y;
+}
+}
+;
 
-// Helper function to print JSON with indentation
-void printJson(const nlohmann::json& j) {
-    std::cout << std::setw(4) << j << std::endl;
+// Helper function to print JSON with indentationvoid printJson(const
+// nlohmann::json& j) {
+std::cout << std::setw(4) << j << std::endl;
 }
 
-// Helper function to demonstrate error handling
-template <typename Func>
+// Helper function to demonstrate error handlingtemplate <typename Func>
 void tryOperation(const std::string& description, Func operation) {
     std::cout << "Attempting: " << description << std::endl;
     try {

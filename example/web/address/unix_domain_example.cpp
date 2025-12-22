@@ -7,7 +7,7 @@
  * class
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/address.hpp"
 
 #include <filesystem>
@@ -277,12 +277,7 @@ void demonstrateUnixDomainPlatformDifferences() {
 #endif
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("unix_domain_example.log", loguru::Append,
-                     loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
 #ifdef _WIN32
     std::cout << "     ATOM WINDOWS NAMED PIPE DEMO          \n";

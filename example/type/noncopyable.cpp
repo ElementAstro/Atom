@@ -5,139 +5,138 @@
 
 #include "atom/type/noncopyable.hpp"
 
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
 }
 
-// Example 1: Resource manager that should not be copied
-class FileManager : public NonCopyable {
+// Example 1: Resource manager that should not be copiedclass FileManager :
+// public NonCopyable {
 private:
-    std::string filename_;
-    bool is_open_;
+std::string filename_;
+bool is_open_;
 
 public:
-    explicit FileManager(const std::string& filename)
-        : filename_(filename), is_open_(false) {
-        std::cout << "FileManager created for: " << filename_ << std::endl;
+explicit FileManager(const std::string& filename)
+    : filename_(filename), is_open_(false) {
+    std::cout << "FileManager created for: " << filename_ << std::endl;
+}
+
+~FileManager() {
+    if (is_open_) {
+        close();
     }
+    std::cout << "FileManager destroyed for: " << filename_ << std::endl;
+}
 
-    ~FileManager() {
-        if (is_open_) {
-            close();
-        }
-        std::cout << "FileManager destroyed for: " << filename_ << std::endl;
+void open() {
+    if (!is_open_) {
+        is_open_ = true;
+        std::cout << "File opened: " << filename_ << std::endl;
     }
+}
 
-    void open() {
-        if (!is_open_) {
-            is_open_ = true;
-            std::cout << "File opened: " << filename_ << std::endl;
-        }
+void close() {
+    if (is_open_) {
+        is_open_ = false;
+        std::cout << "File closed: " << filename_ << std::endl;
     }
+}
 
-    void close() {
-        if (is_open_) {
-            is_open_ = false;
-            std::cout << "File closed: " << filename_ << std::endl;
-        }
-    }
+bool isOpen() const { return is_open_; }
+const std::string& getFilename() const { return filename_; }
+}
+;
 
-    bool isOpen() const { return is_open_; }
-    const std::string& getFilename() const { return filename_; }
-};
-
-// Example 2: Singleton pattern using NonCopyable
-class DatabaseConnection : public NonCopyable {
+// Example 2: Singleton pattern using NonCopyableclass DatabaseConnection :
+// public NonCopyable {
 private:
-    std::string connection_string_;
-    bool connected_;
-    static std::unique_ptr<DatabaseConnection> instance_;
+std::string connection_string_;
+bool connected_;
+static std::unique_ptr<DatabaseConnection> instance_;
 
-    explicit DatabaseConnection(const std::string& conn_str)
-        : connection_string_(conn_str), connected_(false) {
-        std::cout << "DatabaseConnection created with: " << conn_str
-                  << std::endl;
-    }
+explicit DatabaseConnection(const std::string& conn_str)
+    : connection_string_(conn_str), connected_(false) {
+    std::cout << "DatabaseConnection created with: " << conn_str << std::endl;
+}
 
 public:
-    static DatabaseConnection& getInstance(
-        const std::string& conn_str = "default://localhost") {
-        if (!instance_) {
-            instance_ = std::unique_ptr<DatabaseConnection>(
-                new DatabaseConnection(conn_str));
-        }
-        return *instance_;
+static DatabaseConnection& getInstance(
+    const std::string& conn_str = "default://localhost") {
+    if (!instance_) {
+        instance_ = std::unique_ptr<DatabaseConnection>(
+            new DatabaseConnection(conn_str));
     }
+    return *instance_;
+}
 
-    void connect() {
-        if (!connected_) {
-            connected_ = true;
-            std::cout << "Connected to database: " << connection_string_
-                      << std::endl;
-        }
+void connect() {
+    if (!connected_) {
+        connected_ = true;
+        std::cout << "Connected to database: " << connection_string_
+                  << std::endl;
     }
+}
 
-    void disconnect() {
-        if (connected_) {
-            connected_ = false;
-            std::cout << "Disconnected from database" << std::endl;
-        }
+void disconnect() {
+    if (connected_) {
+        connected_ = false;
+        std::cout << "Disconnected from database" << std::endl;
     }
+}
 
-    bool isConnected() const { return connected_; }
-    const std::string& getConnectionString() const {
-        return connection_string_;
-    }
-};
+bool isConnected() const { return connected_; }
+const std::string& getConnectionString() const { return connection_string_; }
+}
+;
 
-// Static member definition
-std::unique_ptr<DatabaseConnection> DatabaseConnection::instance_ = nullptr;
+// Static member definitionstd::unique_ptr<DatabaseConnection>
+// DatabaseConnection::instance_ = nullptr;
 
-// Example 3: Thread-safe counter that should not be copied
-class ThreadSafeCounter : public NonCopyable {
+// Example 3: Thread-safe counter that should not be copiedclass
+// ThreadSafeCounter : public NonCopyable {
 private:
-    mutable std::mutex mutex_;
-    int count_;
-    std::string name_;
+mutable std::mutex mutex_;
+int count_;
+std::string name_;
 
 public:
-    explicit ThreadSafeCounter(const std::string& name, int initial_value = 0)
-        : count_(initial_value), name_(name) {
-        std::cout << "ThreadSafeCounter '" << name_
-                  << "' created with value: " << initial_value << std::endl;
-    }
+explicit ThreadSafeCounter(const std::string& name, int initial_value = 0)
+    : count_(initial_value), name_(name) {
+    std::cout << "ThreadSafeCounter '" << name_
+              << "' created with value: " << initial_value << std::endl;
+}
 
-    ~ThreadSafeCounter() {
-        std::cout << "ThreadSafeCounter '" << name_
-                  << "' destroyed with final value: " << count_ << std::endl;
-    }
+~ThreadSafeCounter() {
+    std::cout << "ThreadSafeCounter '" << name_
+              << "' destroyed with final value: " << count_ << std::endl;
+}
 
-    void increment() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        ++count_;
-        std::cout << "Counter '" << name_ << "' incremented to: " << count_
-                  << std::endl;
-    }
+void increment() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    ++count_;
+    std::cout << "Counter '" << name_ << "' incremented to: " << count_
+              << std::endl;
+}
 
-    void decrement() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        --count_;
-        std::cout << "Counter '" << name_ << "' decremented to: " << count_
-                  << std::endl;
-    }
+void decrement() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    --count_;
+    std::cout << "Counter '" << name_ << "' decremented to: " << count_
+              << std::endl;
+}
 
-    int getValue() const {
-        std::lock_guard<std::mutex> lock(mutex_);
-        return count_;
-    }
+int getValue() const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return count_;
+}
 
-    const std::string& getName() const { return name_; }
-};
+const std::string& getName() const { return name_; }
+}
+;
 
-// Example 4: RAII wrapper that should not be copied
-template <typename T>
+// Example 4: RAII wrapper that should not be copiedtemplate <typename T>
 class RAIIWrapper : public NonCopyable {
 private:
     T* resource_;
@@ -183,9 +182,9 @@ public:
     }
 };
 
-// Function to demonstrate move semantics
-RAIIWrapper<std::string> createStringWrapper(const std::string& value) {
-    return RAIIWrapper<std::string>(new std::string(value), "String: " + value);
+// Function to demonstrate move semanticsRAIIWrapper<std::string>
+// createStringWrapper(const std::string& value) {
+return RAIIWrapper<std::string>(new std::string(value), "String: " + value);
 }
 
 int main() {

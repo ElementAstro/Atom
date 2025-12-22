@@ -86,6 +86,7 @@ if(MINGW OR MSYS)
   list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/proxy/test_facade\\.cpp$")
   list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_property\\.cpp$")
   list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/utils/test_stepper\\.cpp$")
+  list(FILTER TEST_SOURCES EXCLUDE REGEX ".*/core/test_func_traits\\.cpp$")
   message(
     STATUS
       "MinGW/MSYS2 detected: Excluding some meta tests with template macro issues"

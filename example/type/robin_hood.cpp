@@ -7,25 +7,24 @@
 
 #include "atom/type/robin_hood.hpp"
 
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
 }
 
-// Custom hash function for demonstration
-struct CustomStringHash {
-    size_t operator()(const std::string& str) const {
-        size_t hash = 0;
-        for (char c : str) {
-            hash = hash * 31 + static_cast<size_t>(c);
-        }
-        return hash;
+// Custom hash function for demonstrationstruct CustomStringHash {
+size_t operator()(const std::string& str) const {
+    size_t hash = 0;
+    for (char c : str) {
+        hash = hash * 31 + static_cast<size_t>(c);
     }
-};
+    return hash;
+}
+}
+;
 
-// Performance measurement helper
-template <typename Func>
+// Performance measurement helpertemplate <typename Func>
 double measure_time(Func&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();

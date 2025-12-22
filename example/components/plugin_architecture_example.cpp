@@ -8,10 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Plugin Architecture Example
-Demonstrates dynamic component loading and management using the Atom component
-framework. Shows how to create a plugin system where components can be loaded,
-unloaded, and managed at runtime.
+Description: Plugin Architecture ExampleDemonstrates dynamic component loading
+and management using the Atom componentframework. Shows how to create a plugin
+system where components can be loaded, unloaded, and managed at runtime.
 
 **************************************************/
 
@@ -27,8 +26,8 @@ unloaded, and managed at runtime.
 #include "atom/components/core/registry.hpp"
 #include "atom/components/lifecycle/lifecycle.hpp"
 
-// Note: Component and Registry are in global namespace, not atom::components
-namespace ac = atom::components;
+// Note: Component and Registry are in global namespace, not
+// atom::componentsnamespace ac = atom::components;
 
 /**
  * @brief Plugin interface for loadable components

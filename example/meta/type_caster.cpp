@@ -1,4 +1,4 @@
-﻿/**
+/**
  * @file type_caster.cpp
  * @brief Comprehensive examples of using the TypeCaster library
  * @author Max Qian
@@ -15,39 +15,38 @@
 
 #include "" atom / meta / type_caster.hpp ""
 
-// Example of a custom user-defined type
-struct Point {
-    double x, y;
+// Example of a custom user-defined typestruct Point {
+double x, y;
 
-    Point(double x_val = 0.0, double y_val = 0.0) : x(x_val), y(y_val) {}
+Point(double x_val = 0.0, double y_val = 0.0) : x(x_val), y(y_val) {}
 
-    std::string toString() const {
-        return "" Point("" + std::to_string(x) + "",
-                        "" + std::to_string(y) + "") "";
-    }
-};
+std::string toString() const {
+    return "" Point("" + std::to_string(x) + "",
+                    "" + std::to_string(y) + "") "";
+}
+}
+;
 
-// Example of a complex user-defined type
-struct Rectangle {
-    Point topLeft;
-    Point bottomRight;
+// Example of a complex user-defined typestruct Rectangle {
+Point topLeft;
+Point bottomRight;
 
-    Rectangle() = default;
-    Rectangle(const Point& tl, const Point& br)
-        : topLeft(tl), bottomRight(br) {}
+Rectangle() = default;
+Rectangle(const Point& tl, const Point& br) : topLeft(tl), bottomRight(br) {}
 
-    std::string toString() const {
-        return "" Rectangle("" + topLeft.toString() + "",
-                            "" + bottomRight.toString() + "") "";
-    }
+std::string toString() const {
+    return "" Rectangle("" + topLeft.toString() + "",
+                        "" + bottomRight.toString() + "") "";
+}
 
-    double area() const {
-        return (bottomRight.x - topLeft.x) * (bottomRight.y - topLeft.y);
-    }
-};
+double area() const {
+    return (bottomRight.x - topLeft.x) * (bottomRight.y - topLeft.y);
+}
+}
+;
 
-// Example of a custom enum type
-enum class Color { Red, Green, Blue, Yellow, Black, White };
+// Example of a custom enum typeenum class Color { Red, Green, Blue, Yellow,
+// Black, White };
 
 void printSection(const std::string& title) {
     std::cout << ""\n "" << std::string(60, '=') << std::endl;

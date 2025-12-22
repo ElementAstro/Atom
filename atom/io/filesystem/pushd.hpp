@@ -17,6 +17,7 @@ namespace asio = boost::asio;
 #endif
 
 #include "atom/containers/high_performance.hpp"
+#include "atom/io/core/io.hpp"
 
 using atom::containers::String;
 using atom::containers::Vector;
@@ -25,8 +26,7 @@ namespace atom::io {
 
 class DirectoryStackImpl;
 
-template <typename T>
-concept PathLike = std::convertible_to<T, std::filesystem::path>;
+// PathLike concept is defined in atom/io/core/io.hpp
 
 class DirectoryStack {
 public:

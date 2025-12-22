@@ -19,8 +19,7 @@
 
 using namespace atom::utils;
 
-// Helper function to print vectors
-template <typename Container>
+// Helper function to print vectorstemplate <typename Container>
 void printVector(const std::string& label, const Container& vec) {
     std::cout << label << ": [";
     bool first = true;
@@ -33,8 +32,7 @@ void printVector(const std::string& label, const Container& vec) {
     std::cout << "]" << std::endl;
 }
 
-// Helper function to print pairs
-template <typename T1, typename T2>
+// Helper function to print pairstemplate <typename T1, typename T2>
 void printPairs(const std::string& label,
                 const std::vector<std::pair<T1, T2>>& pairs) {
     std::cout << label << ": [";

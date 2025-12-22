@@ -38,13 +38,13 @@ void log(const std::string& tag, const std::string& msg) {
     std::cout << "[" << tag << "] " << msg << std::endl;
 }
 
-// The worker callback used by DaemonGuard::startDaemon
-static int worker_main(int /*argc*/, char** /*argv*/) {
-    log("worker", "running main task in foreground mode");
-    // Simulate short work
-    std::this_thread::sleep_for(50ms);
-    log("worker", "work complete");
-    return 0;
+// The worker callback used by DaemonGuard::startDaemonstatic int
+// worker_main(int /*argc*/, char** /*argv*/) {
+log("worker", "running main task in foreground mode");
+// Simulate short work
+std::this_thread::sleep_for(50ms);
+log("worker", "work complete");
+return 0;
 }
 
 int main(int argc, char** argv) {

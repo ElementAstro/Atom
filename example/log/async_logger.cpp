@@ -30,7 +30,7 @@ void basicUsageExample() {
         logger.error(
             std::format("Error occurred: {}", std::string("disk space low")));
         logger.critical("Critical error: database connection failed");
-        logger.flush();
+        (void)logger.flush();
         std::cout
             << "Basic usage example completed. Check logs/basic_usage.log\n";
     } catch (const std::exception& e) {
@@ -41,15 +41,17 @@ void basicUsageExample() {
 void parameterCombinationsExample() {
     printSection("Parameter Combinations Example");
     try {
-        MmapLogger logger1("logs/params1.log", LogLevel::INFO, 2 * 1024 * 1024);
+        MmapLogger logger1("logs/params1.log", LogLevel::INFO_LEVEL,
+                           2 * 1024 * 1024);
         logger1.info("Logger with custom buffer size (2MB) and INFO level");
 
-        MmapLogger logger2("logs/params2.log", LogLevel::DEBUG, 512 * 1024, 5);
+        MmapLogger logger2("logs/params2.log", LogLevel::DEBUG_LEVEL,
+                           512 * 1024, 5);
         logger2.debug(
             std::format("Logger with custom buffer size (512KB), DEBUG level, "
                         "and 5 max files"));
 
-        MmapLogger logger3("logs/params3.log", LogLevel::WARN);
+        MmapLogger logger3("logs/params3.log", LogLevel::WARN_LEVEL);
         logger3.trace("This trace message will be ignored");
         logger3.debug("This debug message will be ignored");
         logger3.info("This info message will be ignored");
@@ -79,7 +81,7 @@ void threadSafetyExample() {
         }
         for (auto& t : threads)
             t.join();
-        logger->flush();
+        (void)logger->flush();
         std::cout
             << "Thread safety example completed. Check logs/threaded.log\n";
     } catch (const std::exception& e) {
@@ -107,14 +109,14 @@ void systemLoggingExample() {
 void logRotationExample() {
     printSection("Log Rotation Example");
     try {
-        MmapLogger logger("logs/rotation.log", LogLevel::INFO, 4096, 3);
+        MmapLogger logger("logs/rotation.log", LogLevel::INFO_LEVEL, 4096, 3);
         for (int i = 0; i < 2000; ++i) {
             logger.info(
                 std::format("Log message {}: This is a somewhat long message "
                             "to fill up the buffer quickly",
                             i));
         }
-        logger.flush();
+        (void)logger.flush();
         std::cout << "Log rotation example completed.\n";
         std::cout << "Check for multiple files: rotation.log, rotation.1.log, "
                      "rotation.2.log, rotation.3.log\n";
@@ -135,7 +137,7 @@ void errorHandlingExample() {
 
     try {
         std::cout << "Attempting to create logger with tiny buffer...\n";
-        MmapLogger tiny_logger("logs/tiny.log", LogLevel::INFO, 10);
+        MmapLogger tiny_logger("logs/tiny.log", LogLevel::INFO_LEVEL, 10);
         std::cout << "Writing a message that exceeds buffer size...\n";
         tiny_logger.info(
             "This message is likely larger than the tiny buffer we allocated");
@@ -148,13 +150,13 @@ void performanceBenchmark() {
     printSection("Performance Benchmark");
     try {
         const int NUM_MESSAGES = 100000;
-        MmapLogger logger("logs/benchmark.log", LogLevel::INFO,
+        MmapLogger logger("logs/benchmark.log", LogLevel::INFO_LEVEL,
                           10 * 1024 * 1024);
         auto start = std::chrono::high_resolution_clock::now();
         for (int i = 0; i < NUM_MESSAGES; ++i) {
             logger.info(std::format("Benchmark message {}", i));
         }
-        logger.flush();
+        (void)logger.flush();
         auto end = std::chrono::high_resolution_clock::now();
         auto duration =
             std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
@@ -176,12 +178,12 @@ void edgeCasesExample() {
         logger.info(std::format("Long message: {}", long_message));
         logger.info("Special chars: \n\t\r\b\\\"'{}%");
         logger.info("Unicode: 你好, 世界! Привет, мир! こんにちは世界!");
-        logger.setLevel(LogLevel::ERROR);
+        logger.setLevel(LogLevel::ERROR_LEVEL);
         logger.info("This info message should not appear");
         logger.error("This error message should appear");
         logger.setLevel(LogLevel::TRACE);
         logger.trace("Trace is now enabled again");
-        logger.flush();
+        (void)logger.flush();
         std::cout
             << "Edge cases example completed. Check logs/edge_cases.log\n";
     } catch (const std::exception& e) {

@@ -11,88 +11,80 @@
 
 namespace atom::extra::curl {
 
-// Stub Response class
-class Response {
+// Stub Response classclass Response {
 public:
-    int status_code = 200;
-    std::string body = "Response body (stub)";
-    std::unordered_map<std::string, std::string> headers;
+int status_code = 200;
+std::string body = "Response body (stub)";
+std::unordered_map<std::string, std::string> headers;
 
-    Response() {
-        headers["Content-Type"] = "application/json";
-        headers["Server"] = "Stub-Server/1.0";
-    }
+Response() {
+    headers["Content-Type"] = "application/json";
+    headers["Server"] = "Stub-Server/1.0";
+}
 
-    std::string header(const std::string& name) const {
-        auto it = headers.find(name);
-        return it != headers.end() ? it->second : "";
-    }
+std::string header(const std::string& name) const {
+    auto it = headers.find(name);
+    return it != headers.end() ? it->second : "";
+}
 
-    std::string text() const { return body; }
+std::string text() const { return body; }
 };
 
-// Stub RestClient class
-class RestClient {
+// Stub RestClient classclass RestClient {
 public:
-    RestClient(const std::string& base_url) : base_url_(base_url) {
-        std::cout << "REST Client created (stub implementation): " << base_url
-                  << std::endl;
-    }
+RestClient(const std::string& base_url) : base_url_(base_url) {
+    std::cout << "REST Client created (stub implementation): " << base_url
+              << std::endl;
+}
 
-    Response get(const std::string& endpoint) {
-        std::cout << "GET request (stub): " << base_url_ << endpoint
-                  << std::endl;
-        Response response;
-        response.body = "GET response from " + base_url_ + endpoint + " (stub)";
-        return response;
-    }
+Response get(const std::string& endpoint) {
+    std::cout << "GET request (stub): " << base_url_ << endpoint << std::endl;
+    Response response;
+    response.body = "GET response from " + base_url_ + endpoint + " (stub)";
+    return response;
+}
 
-    Response post(const std::string& endpoint, const std::string& data) {
-        std::cout << "POST request (stub): " << base_url_ << endpoint
-                  << std::endl;
-        std::cout << "  Data: " << data.substr(0, 50) << "..." << std::endl;
-        Response response;
-        response.body =
-            "POST response from " + base_url_ + endpoint + " (stub)";
-        return response;
-    }
+Response post(const std::string& endpoint, const std::string& data) {
+    std::cout << "POST request (stub): " << base_url_ << endpoint << std::endl;
+    std::cout << "  Data: " << data.substr(0, 50) << "..." << std::endl;
+    Response response;
+    response.body = "POST response from " + base_url_ + endpoint + " (stub)";
+    return response;
+}
 
-    Response put(const std::string& endpoint, const std::string& data) {
-        std::cout << "PUT request (stub): " << base_url_ << endpoint
-                  << std::endl;
-        Response response;
-        response.body = "PUT response from " + base_url_ + endpoint + " (stub)";
-        return response;
-    }
+Response put(const std::string& endpoint, const std::string& data) {
+    std::cout << "PUT request (stub): " << base_url_ << endpoint << std::endl;
+    Response response;
+    response.body = "PUT response from " + base_url_ + endpoint + " (stub)";
+    return response;
+}
 
-    Response patch(const std::string& endpoint, const std::string& data) {
-        std::cout << "PATCH request (stub): " << base_url_ << endpoint
-                  << std::endl;
-        Response response;
-        response.body =
-            "PATCH response from " + base_url_ + endpoint + " (stub)";
-        return response;
-    }
+Response patch(const std::string& endpoint, const std::string& data) {
+    std::cout << "PATCH request (stub): " << base_url_ << endpoint << std::endl;
+    Response response;
+    response.body = "PATCH response from " + base_url_ + endpoint + " (stub)";
+    return response;
+}
 
-    Response delete_(const std::string& endpoint) {
-        std::cout << "DELETE request (stub): " << base_url_ << endpoint
-                  << std::endl;
-        Response response;
-        response.body =
-            "DELETE response from " + base_url_ + endpoint + " (stub)";
-        return response;
-    }
+Response delete_(const std::string& endpoint) {
+    std::cout << "DELETE request (stub): " << base_url_ << endpoint
+              << std::endl;
+    Response response;
+    response.body = "DELETE response from " + base_url_ + endpoint + " (stub)";
+    return response;
+}
 
-    void set_default_header(const std::string& name, const std::string& value) {
-        std::cout << "Setting default header (stub): " << name << " = " << value
-                  << std::endl;
-        default_headers_[name] = value;
-    }
+void set_default_header(const std::string& name, const std::string& value) {
+    std::cout << "Setting default header (stub): " << name << " = " << value
+              << std::endl;
+    default_headers_[name] = value;
+}
 
 private:
-    std::string base_url_;
-    std::unordered_map<std::string, std::string> default_headers_;
-};
+std::string base_url_;
+std::unordered_map<std::string, std::string> default_headers_;
+}
+;
 
 }  // namespace atom::extra::curl
 

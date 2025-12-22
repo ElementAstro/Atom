@@ -17,20 +17,19 @@
 #define SECTION(name) std::cout << "\n=== " << name << " ===\n"
 #define LOG(msg) std::cout << "[" << __LINE__ << "] " << msg << std::endl
 
-// Simple event data structure
-struct EventData {
-    std::string message;
-    int value;
+// Simple event data structurestruct EventData {
+std::string message;
+int value;
 
-    // Support copy construction and assignment
-    EventData(const std::string& msg = "", int val = 0)
-        : message(msg), value(val) {}
-};
+// Support copy construction and assignment
+EventData(const std::string& msg = "", int val = 0)
+    : message(msg), value(val) {}
+}
+;
 
-// Print event data
-void printEventData(const EventData& data) {
-    std::cout << "  Message: \"" << data.message << "\", Value: " << data.value
-              << std::endl;
+// Print event datavoid printEventData(const EventData& data) {
+std::cout << "  Message: \"" << data.message << "\", Value: " << data.value
+          << std::endl;
 }
 
 int main() {

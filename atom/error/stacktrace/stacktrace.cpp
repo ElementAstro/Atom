@@ -15,7 +15,8 @@ Description: StackTrace class implementation
 #include "stacktrace.hpp"
 #include "stacktrace_utils.hpp"
 
-#include <sstream>
+#include <format>
+#include <utility>
 
 namespace atom::error {
 
@@ -29,47 +30,26 @@ StackTrace::StackTrace(const StackTraceConfig& config) : config_(config) {
     capture();
 }
 
-StackTrace::StackTrace(const StackTrace& other)
-    : frames_(other.frames_),
-      backendName_(other.backendName_),
-      config_(other.config_) {}
+StackTrace::StackTrace(const StackTrace& other) = default;
 
-StackTrace::StackTrace(StackTrace&& other) noexcept
-    : frames_(std::move(other.frames_)),
-      backendName_(std::move(other.backendName_)),
-      config_(std::move(other.config_)) {}
+StackTrace::StackTrace(StackTrace&& other) noexcept = default;
 
-StackTrace& StackTrace::operator=(const StackTrace& other) {
-    if (this != &other) {
-        frames_ = other.frames_;
-        backendName_ = other.backendName_;
-        config_ = other.config_;
-    }
-    return *this;
-}
+StackTrace& StackTrace::operator=(const StackTrace& other) = default;
 
-StackTrace& StackTrace::operator=(StackTrace&& other) noexcept {
-    if (this != &other) {
-        frames_ = std::move(other.frames_);
-        backendName_ = std::move(other.backendName_);
-        config_ = std::move(other.config_);
-    }
-    return *this;
-}
+StackTrace& StackTrace::operator=(StackTrace&& other) noexcept = default;
 
 std::string StackTrace::toString() const { return toString(config_); }
 
 std::string StackTrace::toString(const StackTraceConfig& config) const {
-    if (frames_.empty()) {
+    if (frames_.empty()) [[unlikely]] {
         return "Stack trace: <empty>\n";
     }
 
-    std::ostringstream oss;
-    oss << "Stack trace:\n";
+    std::string result = "Stack trace:\n";
 
     for (size_t i = 0; i < frames_.size(); ++i) {
         const auto& frame = frames_[i];
-        std::string frameStr = frame.toString(config);
+        const auto frameStr = frame.toString(config);
 
         // Apply frame filter if provided
         if (config.frameFilter &&
@@ -77,10 +57,9 @@ std::string StackTrace::toString(const StackTraceConfig& config) const {
             continue;
         }
 
-        oss << config.framePrefix << "[" << i << "] " << frameStr << "\n";
+        result += std::format("{}[{}] {}\n", config.framePrefix, i, frameStr);
     }
 
-    std::string result = oss.str();
     return config.prettify ? stacktrace_utils::prettify(result) : result;
 }
 
@@ -109,8 +88,7 @@ void StackTrace::setPreferredBackend(const std::string& backendName) {
 }
 
 void StackTrace::capture() {
-    auto backend = getBestBackend();
-    if (backend) {
+    if (auto backend = getBestBackend()) [[likely]] {
         backendName_ = backend->getName();
         frames_ = backend->capture(config_);
     } else {
@@ -121,8 +99,8 @@ void StackTrace::capture() {
 
 std::unique_ptr<StackTraceBackend> StackTrace::getBestBackend() {
     if (preferredBackend_ != "auto") {
-        auto backend = StackTraceBackendFactory::create(preferredBackend_);
-        if (backend && backend->isAvailable()) {
+        if (auto backend = StackTraceBackendFactory::create(preferredBackend_);
+            backend && backend->isAvailable()) {
             return backend;
         }
     }

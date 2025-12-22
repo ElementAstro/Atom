@@ -2,6 +2,110 @@
 # configurations and compiler settings It detects the build environment and
 # applies appropriate settings
 
+include_guard(GLOBAL)
+
+# =============================================================================
+# Unified Platform Detection
+# =============================================================================
+# This is the single source of truth for platform detection in the Atom project.
+# Other cmake files should use these variables instead of duplicating detection.
+
+# Detect platform type
+if(WIN32)
+  set(ATOM_PLATFORM
+      "windows"
+      CACHE STRING "Detected platform")
+  set(ATOM_PLATFORM_WINDOWS
+      TRUE
+      CACHE BOOL "Windows platform")
+  set(ATOM_PLATFORM_UNIX
+      FALSE
+      CACHE BOOL "Unix platform")
+  set(ATOM_PLATFORM_APPLE
+      FALSE
+      CACHE BOOL "Apple platform")
+elseif(APPLE)
+  set(ATOM_PLATFORM
+      "macos"
+      CACHE STRING "Detected platform")
+  set(ATOM_PLATFORM_WINDOWS
+      FALSE
+      CACHE BOOL "Windows platform")
+  set(ATOM_PLATFORM_UNIX
+      TRUE
+      CACHE BOOL "Unix platform")
+  set(ATOM_PLATFORM_APPLE
+      TRUE
+      CACHE BOOL "Apple platform")
+elseif(UNIX)
+  set(ATOM_PLATFORM
+      "linux"
+      CACHE STRING "Detected platform")
+  set(ATOM_PLATFORM_WINDOWS
+      FALSE
+      CACHE BOOL "Windows platform")
+  set(ATOM_PLATFORM_UNIX
+      TRUE
+      CACHE BOOL "Unix platform")
+  set(ATOM_PLATFORM_APPLE
+      FALSE
+      CACHE BOOL "Apple platform")
+else()
+  set(ATOM_PLATFORM
+      "unknown"
+      CACHE STRING "Detected platform")
+  set(ATOM_PLATFORM_WINDOWS
+      FALSE
+      CACHE BOOL "Windows platform")
+  set(ATOM_PLATFORM_UNIX
+      FALSE
+      CACHE BOOL "Unix platform")
+  set(ATOM_PLATFORM_APPLE
+      FALSE
+      CACHE BOOL "Apple platform")
+endif()
+
+# Detect architecture
+if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+  set(ATOM_ARCH
+      "x64"
+      CACHE STRING "Detected architecture")
+  set(ATOM_ARCH_64BIT
+      TRUE
+      CACHE BOOL "64-bit architecture")
+else()
+  set(ATOM_ARCH
+      "x86"
+      CACHE STRING "Detected architecture")
+  set(ATOM_ARCH_64BIT
+      FALSE
+      CACHE BOOL "64-bit architecture")
+endif()
+
+# Function to apply platform-specific compile definitions
+function(atom_apply_platform_definitions)
+  if(ATOM_PLATFORM_WINDOWS)
+    add_definitions(-DPLATFORM_WINDOWS)
+    if(MSVC)
+      add_definitions(-D_CRT_SECURE_NO_WARNINGS)
+    endif()
+  elseif(ATOM_PLATFORM_APPLE)
+    add_definitions(-DPLATFORM_MACOS)
+  elseif(ATOM_PLATFORM_UNIX)
+    add_definitions(-DPLATFORM_LINUX)
+  endif()
+
+  if(ATOM_ARCH_64BIT)
+    add_definitions(-DARCH_X64)
+  else()
+    add_definitions(-DARCH_X86)
+  endif()
+endfunction()
+
+# =============================================================================
+# MSYS2/MinGW Detection
+# =============================================================================
+
 # ATOM_MSYS2_ENV is set by VcpkgSetup.cmake if USE_VCPKG is ON. If USE_VCPKG is
 # OFF, VcpkgSetup might not run, so check ENV{MSYSTEM} again.
 if(NOT DEFINED ATOM_MSYS2_ENV)
@@ -171,35 +275,5 @@ if(MINGW OR LOCAL_MSYS2_ENV)
   endif()
 endif()
 
-if(UNIX AND NOT APPLE)
-  # Enable ccache if available, with enhanced error handling and user guidance
-  find_program(CCACHE_PROGRAM ccache)
-  if(CCACHE_PROGRAM)
-    message(
-      STATUS
-        "ccache found: enabling compiler cache support at ${CCACHE_PROGRAM}")
-    set(CMAKE_C_COMPILER_LAUNCHER
-        ${CCACHE_PROGRAM}
-        CACHE STRING "C compiler launcher" FORCE)
-    if(NOT CMAKE_C_COMPILER_LAUNCHER STREQUAL CCACHE_PROGRAM)
-      message(
-        WARNING
-          "Failed to set CMAKE_C_COMPILER_LAUNCHER to ccache. Please check your CMake version and permissions."
-      )
-    endif()
-    set(CMAKE_CXX_COMPILER_LAUNCHER
-        ${CCACHE_PROGRAM}
-        CACHE STRING "CXX compiler launcher" FORCE)
-    if(NOT CMAKE_CXX_COMPILER_LAUNCHER STREQUAL CCACHE_PROGRAM)
-      message(
-        WARNING
-          "Failed to set CMAKE_CXX_COMPILER_LAUNCHER to ccache. Please check your CMake version and permissions."
-      )
-    endif()
-  else()
-    message(
-      WARNING
-        "ccache not found: compiler cache support disabled.\nRecommendation: On Linux, you can install ccache via package manager, e.g.: sudo apt install ccache or sudo yum install ccache"
-    )
-  endif()
-endif()
+# NOTE: ccache/sccache support has been moved to BuildOptimization.cmake for
+# cross-platform support. See atom_setup_compiler_cache() function.

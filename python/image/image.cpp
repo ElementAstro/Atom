@@ -16,14 +16,26 @@
 
 namespace py = pybind11;
 
-// Forward declarations for binding functions defined in other files
+// Forward declarations for binding functions defined in submodule files
+// Core module (core/)
 void bind_core(py::module& m);
+
+// I/O module (io/)
 void bind_io(py::module& m);
-void bind_processing(py::module& m);
+
+// Formats module (formats/)
 void bind_formats(py::module& m);
+
+// Metadata module (metadata/)
 void bind_metadata(py::module& m);
+
+// Processing modules (processing/)
+void bind_filters(py::module& m);
+void bind_transforms(py::module& m);
+void bind_enhancement(py::module& m);
 void bind_computer_vision(py::module& m);
 void bind_gpu_ml(py::module& m);
+void bind_realtime(py::module& m);
 void bind_ocr(py::module& m);
 
 /**
@@ -119,14 +131,26 @@ PYBIND11_MODULE(atom_image, m) {
     m.def("get_features", &atom::image::getFeatures,
           "Get available features and capabilities");
 
-    // Bind submodules
+    // Bind submodules - organized by category
+    // Core functionality
     bind_core(m);
+
+    // I/O operations
     bind_io(m);
-    bind_processing(m);
+
+    // Format support
     bind_formats(m);
+
+    // Metadata handling
     bind_metadata(m);
+
+    // Processing modules
+    bind_filters(m);
+    bind_transforms(m);
+    bind_enhancement(m);
     bind_computer_vision(m);
     bind_gpu_ml(m);
+    bind_realtime(m);
     bind_ocr(m);
 
     // Module attributes

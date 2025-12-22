@@ -21,92 +21,88 @@ void printSeparator(const std::string& title) {
 
 // ===== Basic Usage Examples =====
 
-// Simple integer generator
-Generator<int> simpleNumberGenerator(int start, int end) {
-    std::cout << "Generator started with range " << start << " to " << end
-              << std::endl;
-    for (int i = start; i <= end; ++i) {
-        std::cout << "Yielding: " << i << std::endl;
-        co_yield i;
-    }
-    std::cout << "Generator completed" << std::endl;
+// Simple integer generatorGenerator<int> simpleNumberGenerator(int start, int
+// end) {
+std::cout << "Generator started with range " << start << " to " << end
+          << std::endl;
+for (int i = start; i <= end; ++i) {
+    std::cout << "Yielding: " << i << std::endl;
+    co_yield i;
+}
+std::cout << "Generator completed" << std::endl;
 }
 
-// Demonstrates basic usage of a generator
-void basicUsageExample() {
-    printSeparator("Basic Generator Usage");
+// Demonstrates basic usage of a generatorvoid basicUsageExample() {
+printSeparator("Basic Generator Usage");
 
-    std::cout << "Creating generator for numbers 1 to 5..." << std::endl;
-    Generator<int> gen = simpleNumberGenerator(1, 5);
+std::cout << "Creating generator for numbers 1 to 5..." << std::endl;
+Generator<int> gen = simpleNumberGenerator(1, 5);
 
-    std::cout << "Consuming values using range-based for loop:" << std::endl;
-    for (const auto& value : gen) {
-        std::cout << "Received: " << value << std::endl;
-    }
+std::cout << "Consuming values using range-based for loop:" << std::endl;
+for (const auto& value : gen) {
+    std::cout << "Received: " << value << std::endl;
+}
 }
 
-// Generator with complex type
-Generator<std::string> stringGenerator() {
-    co_yield "Hello";
-    co_yield "World";
-    co_yield "C++20";
-    co_yield "Coroutines";
+// Generator with complex typeGenerator<std::string> stringGenerator() {
+co_yield "Hello";
+co_yield "World";
+co_yield "C++20";
+co_yield "Coroutines";
 }
 
-// Demonstrates using generators with different types
-void differentTypesExample() {
-    printSeparator("Different Return Types");
+// Demonstrates using generators with different typesvoid
+// differentTypesExample() {
+printSeparator("Different Return Types");
 
-    // String generator
-    std::cout << "String generator example:" << std::endl;
-    Generator<std::string> strGen = stringGenerator();
-    for (const auto& str : strGen) {
-        std::cout << "String: " << str << std::endl;
-    }
+// String generator
+std::cout << "String generator example:" << std::endl;
+Generator<std::string> strGen = stringGenerator();
+for (const auto& str : strGen) {
+    std::cout << "String: " << str << std::endl;
+}
 
-    // From range helper function
-    std::cout << "\nFrom range example:" << std::endl;
-    std::vector<double> values = {3.14, 2.71, 1.618, 1.414};
-    auto rangeGen = from_range(values);
-    for (const auto& val : rangeGen) {
-        std::cout << "Value: " << val << std::endl;
-    }
+// From range helper function
+std::cout << "\nFrom range example:" << std::endl;
+std::vector<double> values = {3.14, 2.71, 1.618, 1.414};
+auto rangeGen = from_range(values);
+for (const auto& val : rangeGen) {
+    std::cout << "Value: " << val << std::endl;
+}
 
-    // Range generator helper
-    std::cout << "\nRange helper example (0 to 4 step 1):" << std::endl;
-    for (const auto& num : range(0, 5)) {
-        std::cout << num << " ";
-    }
-    std::cout << std::endl;
+// Range generator helper
+std::cout << "\nRange helper example (0 to 4 step 1):" << std::endl;
+for (const auto& num : range(0, 5)) {
+    std::cout << num << " ";
+}
+std::cout << std::endl;
 
-    // Range with custom step
-    std::cout << "\nRange with step example (0 to 10 step 2):" << std::endl;
-    for (const auto& num : range(0, 11, 2)) {
-        std::cout << num << " ";
-    }
-    std::cout << std::endl;
+// Range with custom step
+std::cout << "\nRange with step example (0 to 10 step 2):" << std::endl;
+for (const auto& num : range(0, 11, 2)) {
+    std::cout << num << " ";
+}
+std::cout << std::endl;
 }
 
 // ===== Edge Cases and Boundary Values =====
 
-// Empty generator
-Generator<int> emptyGenerator() {
-    if (false) {
-        co_yield 42;  // Never reached
-    }
+// Empty generatorGenerator<int> emptyGenerator() {
+if (false) {
+    co_yield 42;  // Never reached
+}
 }
 
-// Infinite generator
-Generator<int> infiniteGenerator(int start = 0) {
-    int current = start;
-    while (true) {
-        co_yield current++;
-    }
-    // Note: This line is never reached
+// Infinite generatorGenerator<int> infiniteGenerator(int start = 0) {
+int current = start;
+while (true) {
+    co_yield current++;
+}
+// Note: This line is never reached
 }
 
-// Generator with a single value
-Generator<int> singleValueGenerator(int value) { co_yield value; }
+// Generator with a single valueGenerator<int> singleValueGenerator(int value) {
+// co_yield value; }
 
 void edgeCasesExample() {
     printSeparator("Edge Cases");
@@ -157,13 +153,12 @@ void edgeCasesExample() {
 
 // ===== Error Handling Examples =====
 
-// Generator that throws an exception
-Generator<int> exceptionGenerator() {
-    std::cout << "Starting exception generator" << std::endl;
-    co_yield 1;
-    co_yield 2;
-    throw std::runtime_error("Generator error occurred!");
-    co_yield 3;  // Never reached
+// Generator that throws an exceptionGenerator<int> exceptionGenerator() {
+std::cout << "Starting exception generator" << std::endl;
+co_yield 1;
+co_yield 2;
+throw std::runtime_error("Generator error occurred!");
+co_yield 3;  // Never reached
 }
 
 void errorHandlingExample() {
@@ -198,20 +193,20 @@ void errorHandlingExample() {
 
 // ===== Two-Way Generator Examples =====
 
-// Simple two-way generator that echoes with modification
-TwoWayGenerator<int, int> echoGenerator() {
-    int received = 0;
-    while (true) {
-        received = co_yield received * 2;
-    }
+// Simple two-way generator that echoes with modificationTwoWayGenerator<int,
+// int> echoGenerator() {
+int received = 0;
+while (true) {
+    received = co_yield received * 2;
+}
 }
 
-// Two-way generator with void receive
-TwoWayGenerator<std::string, void> messageGenerator() {
-    co_yield "Hello";
-    co_yield "World";
-    co_yield "C++20";
-    co_yield "Coroutines";
+// Two-way generator with void receiveTwoWayGenerator<std::string, void>
+// messageGenerator() {
+co_yield "Hello";
+co_yield "World";
+co_yield "C++20";
+co_yield "Coroutines";
 }
 
 void twoWayGeneratorExample() {
@@ -242,79 +237,78 @@ void twoWayGeneratorExample() {
 
 // ===== Advanced Examples =====
 
-// Generator that produces a Fibonacci sequence
-Generator<unsigned long long> fibonacciGenerator(int limit) {
-    if (limit <= 0) {
-        co_return;
-    }
-
-    unsigned long long a = 0, b = 1;
-    co_yield a;
-
-    if (limit == 1) {
-        co_return;
-    }
-
-    co_yield b;
-    int count = 2;
-
-    while (count < limit) {
-        unsigned long long next = a + b;
-        co_yield next;
-        a = b;
-        b = next;
-        ++count;
-    }
+// Generator that produces a Fibonacci sequenceGenerator<unsigned long long>
+// fibonacciGenerator(int limit) {
+if (limit <= 0) {
+    co_return;
 }
 
-// Generator that lazily processes data
-Generator<std::string> lazyTransform(
+unsigned long long a = 0, b = 1;
+co_yield a;
+
+if (limit == 1) {
+    co_return;
+}
+
+co_yield b;
+int count = 2;
+
+while (count < limit) {
+    unsigned long long next = a + b;
+    co_yield next;
+    a = b;
+    b = next;
+    ++count;
+}
+}
+
+// Generator that lazily processes dataGenerator<std::string> lazyTransform(
     const std::vector<int>& data, std::function<std::string(int)> transformer) {
-    for (const auto& item : data) {
-        // Simulate expensive operation
-        std::this_thread::sleep_for(50ms);
-        co_yield transformer(item);
-    }
-}
-
-void advancedExamples() {
-    printSeparator("Advanced Generator Examples");
-
-    // Fibonacci sequence
-    std::cout << "Fibonacci sequence (first 10 numbers):" << std::endl;
-    auto fib = fibonacciGenerator(10);
-    for (const auto& num : fib) {
-        std::cout << num << " ";
-    }
-    std::cout << std::endl;
-
-    // Lazy transformation pipeline
-    std::cout << "\nLazy transformation example:" << std::endl;
-    std::vector<int> data = {1, 2, 3, 4, 5};
-
-    auto start = std::chrono::high_resolution_clock::now();
-
-    auto transformed = lazyTransform(data, [](int n) {
-        return "Processed item: " + std::to_string(n * 10);
-    });
-
-    std::cout << "Generator created (lazy, no processing done yet)"
-              << std::endl;
-
-    // Consuming the transformed data (this is where the actual work happens)
-    for (const auto& result : transformed) {
-        std::cout << result << std::endl;
+        for (const auto& item : data) {
+            // Simulate expensive operation
+            std::this_thread::sleep_for(50ms);
+            co_yield transformer(item);
+        }
     }
 
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-    std::cout << "Transformation took " << duration.count() << "ms"
-              << std::endl;
-}
+    void advancedExamples() {
+        printSeparator("Advanced Generator Examples");
 
-#ifdef ATOM_USE_BOOST_LOCKS
-void threadSafeGeneratorExample() {
+        // Fibonacci sequence
+        std::cout << "Fibonacci sequence (first 10 numbers):" << std::endl;
+        auto fib = fibonacciGenerator(10);
+        for (const auto& num : fib) {
+            std::cout << num << " ";
+        }
+        std::cout << std::endl;
+
+        // Lazy transformation pipeline
+        std::cout << "\nLazy transformation example:" << std::endl;
+        std::vector<int> data = {1, 2, 3, 4, 5};
+
+        auto start = std::chrono::high_resolution_clock::now();
+
+        auto transformed = lazyTransform(data, [](int n) {
+            return "Processed item: " + std::to_string(n * 10);
+        });
+
+        std::cout << "Generator created (lazy, no processing done yet)"
+                  << std::endl;
+
+        // Consuming the transformed data (this is where the actual work
+        // happens)
+        for (const auto& result : transformed) {
+            std::cout << result << std::endl;
+        }
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration =
+            std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        std::cout << "Transformation took " << duration.count() << "ms"
+                  << std::endl;
+    }
+
+#ifdef ATOM_USE_BOOST_LOCKSvoid threadSafeGeneratorExample() {
     printSeparator("Thread-Safe Generator Example");
 
     // Create a thread-safe generator function
@@ -354,11 +348,10 @@ void threadSafeGeneratorExample() {
     for (auto& thread : threads) {
         thread.join();
     }
-}
+    }
 #endif
 
-#ifdef ATOM_USE_BOOST_LOCKFREE
-void concurrentGeneratorExample() {
+#ifdef ATOM_USE_BOOST_LOCKFREEvoid concurrentGeneratorExample() {
     printSeparator("Concurrent Generator Example");
 
     // Create a concurrent generator from a regular generator function
@@ -411,43 +404,42 @@ void concurrentGeneratorExample() {
     }
 
     std::cout << "All consumers finished" << std::endl;
-}
+    }
 
-void lockFreeTwoWayGeneratorExample() {
-    printSeparator("Lock-Free Two-Way Generator Example");
+    void lockFreeTwoWayGeneratorExample() {
+        printSeparator("Lock-Free Two-Way Generator Example");
 
-    // Create a two-way generator that echoes input with transformation
-    auto twoWayFunc = []() -> TwoWayGenerator<std::string, int> {
-        int value = 0;
-        while (true) {
-            value = co_yield "Received: " + std::to_string(value) +
-                    ", squared: " + std::to_string(value * value);
-        }
-    };
-
-    LockFreeTwoWayGenerator<std::string, int> twoWayGen(twoWayFunc);
-
-    // Producer thread sending values
-    std::thread producerThread([&twoWayGen]() {
-        for (int i = 1; i <= 10; ++i) {
-            try {
-                std::string response = twoWayGen.send(i);
-                std::cout << "Producer sent: " << i << ", got: " << response
-                          << std::endl;
-                std::this_thread::sleep_for(50ms);
-            } catch (const std::exception& e) {
-                std::cout << "Producer error: " << e.what() << std::endl;
-                break;
+        // Create a two-way generator that echoes input with transformation
+        auto twoWayFunc = []() -> TwoWayGenerator<std::string, int> {
+            int value = 0;
+            while (true) {
+                value = co_yield "Received: " + std::to_string(value) +
+                        ", squared: " + std::to_string(value * value);
             }
-        }
-    });
+        };
 
-    producerThread.join();
-}
+        LockFreeTwoWayGenerator<std::string, int> twoWayGen(twoWayFunc);
+
+        // Producer thread sending values
+        std::thread producerThread([&twoWayGen]() {
+            for (int i = 1; i <= 10; ++i) {
+                try {
+                    std::string response = twoWayGen.send(i);
+                    std::cout << "Producer sent: " << i << ", got: " << response
+                              << std::endl;
+                    std::this_thread::sleep_for(50ms);
+                } catch (const std::exception& e) {
+                    std::cout << "Producer error: " << e.what() << std::endl;
+                    break;
+                }
+            }
+        });
+
+        producerThread.join();
+    }
 #endif
 
-// Main function running all examples
-int main() {
+    // Main function running all examplesint main() {
     try {
         std::cout << "C++20 Generator Examples" << std::endl;
 
@@ -494,4 +486,4 @@ int main() {
     }
 
     return 0;
-}
+    }

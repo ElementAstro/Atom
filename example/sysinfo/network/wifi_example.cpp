@@ -46,11 +46,11 @@ using namespace atom::system;
 
 namespace {
 constexpr int DISPLAY_WIDTH = 80;
-constexpr double GOOD_SIGNAL_THRESHOLD = -50.0;   // dBm
-constexpr double FAIR_SIGNAL_THRESHOLD = -70.0;   // dBm
-constexpr double POOR_SIGNAL_THRESHOLD = -80.0;   // dBm
-constexpr double HIGH_LATENCY_THRESHOLD = 100.0;  // ms
-constexpr double POOR_LATENCY_THRESHOLD = 200.0;  // ms
+constexpr double GOOD_SIGNAL_THRESHOLD =
+    -50.0;  // dBmconstexpr double FAIR_SIGNAL_THRESHOLD = -70.0;   //
+            // dBmconstexpr double POOR_SIGNAL_THRESHOLD = -80.0;   //
+            // dBmconstexpr double HIGH_LATENCY_THRESHOLD = 100.0;  //
+            // msconstexpr double POOR_LATENCY_THRESHOLD = 200.0;  // ms
 }  // namespace
 
 /**

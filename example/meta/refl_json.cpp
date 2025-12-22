@@ -24,13 +24,13 @@
 
 using namespace atom::meta;
 
-// Example structures for demonstration
-struct Address {
-    std::string street;
-    std::string city;
-    std::string zipCode;
-    std::string country;
-};
+// Example structures for demonstrationstruct Address {
+std::string street;
+std::string city;
+std::string zipCode;
+std::string country;
+}
+;
 
 struct Person {
     std::string name;
@@ -49,10 +49,10 @@ struct Company {
     Address headquarters;
 };
 
-// Custom validators
-auto validateAge = [](const int& age) -> bool {
-    return age >= 0 && age <= 150;
-};
+// Custom validatorsauto validateAge = [](const int& age) -> bool {
+return age >= 0 && age <= 150;
+}
+;
 
 auto validateEmail = [](const std::string& email) -> bool {
     return email.find('@') != std::string::npos &&

@@ -29,437 +29,446 @@
 
 #include "atom/search/search.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Helper function to print document information
-void printDocument(const atom::search::Document& doc) {
-    std::cout << "Document ID: " << doc.getId() << std::endl;
-    std::cout << "Content: " << doc.getContent() << std::endl;
+// Helper function to print document informationvoid printDocument(const
+// atom::search::Document& doc) {
+std::cout << "Document ID: " << doc.getId() << std::endl;
+std::cout << "Content: " << doc.getContent() << std::endl;
 
-    std::cout << "Tags: ";
-    const auto& tags = doc.getTags();
-    if (tags.empty()) {
-        std::cout << "[none]";
-    } else {
-        std::cout << "[ ";
-        for (const auto& tag : tags) {
-            std::cout << tag << " ";
-        }
-        std::cout << "]";
+std::cout << "Tags: ";
+const auto& tags = doc.getTags();
+if (tags.empty()) {
+    std::cout << "[none]";
+} else {
+    std::cout << "[ ";
+    for (const auto& tag : tags) {
+        std::cout << tag << " ";
     }
-    std::cout << std::endl;
+    std::cout << "]";
+}
+std::cout << std::endl;
 
-    std::cout << "Click Count: " << doc.getClickCount() << std::endl;
+std::cout << "Click Count: " << doc.getClickCount() << std::endl;
 }
 
-// Helper function to print search results
-void printSearchResults(
+// Helper function to print search resultsvoid printSearchResults(
     const std::vector<std::shared_ptr<atom::search::Document>>& results) {
-    if (results.empty()) {
-        std::cout << "No documents found." << std::endl;
-        return;
-    }
-
-    std::cout << "Found " << results.size() << " document(s):" << std::endl;
-    for (size_t i = 0; i < results.size(); ++i) {
-        std::cout << "\n--- Result " << (i + 1) << " ---" << std::endl;
-        printDocument(*results[i]);
-    }
-}
-
-// Helper function to handle exceptions
-template <typename Func>
-void tryOperation(const std::string& operationName, Func&& operation) {
-    try {
-        operation();
-    } catch (const atom::search::DocumentNotFoundException& e) {
-        std::cout << "Document not found error: " << e.what() << std::endl;
-    } catch (const atom::search::DocumentValidationException& e) {
-        std::cout << "Document validation error: " << e.what() << std::endl;
-    } catch (const atom::search::SearchOperationException& e) {
-        std::cout << "Search operation error: " << e.what() << std::endl;
-    } catch (const atom::search::SearchEngineException& e) {
-        std::cout << "General search engine error: " << e.what() << std::endl;
-    } catch (const std::exception& e) {
-        std::cout << "Standard exception: " << e.what() << std::endl;
-    } catch (...) {
-        std::cout << "Unknown error" << std::endl;
-    }
-}
-
-int main() {
-    std::cout << "ATOM SEARCH ENGINE COMPREHENSIVE EXAMPLES\n";
-    std::cout << "========================================\n";
-
-    //--------------------------------------------------------------------------
-    // 1. Creating Documents and Basic Validation
-    //--------------------------------------------------------------------------
-    printSection("1. Creating Documents and Basic Validation");
-
-    // Creating a valid document
-    std::cout << "Creating a valid document..." << std::endl;
-    atom::search::Document validDoc(
-        "doc1", "This is a sample document about search engines",
-        {"search", "engine", "example"});
-    printDocument(validDoc);
-
-    // Demonstrating validation
-    std::cout << "\nTrying to create documents with invalid parameters..."
-              << std::endl;
-
-    // Empty ID
-    tryOperation("Create document with empty ID", []() {
-        atom::search::Document invalidDoc("", "Content", {"tag"});
-    });
-
-    // Empty content
-    tryOperation("Create document with empty content", []() {
-        atom::search::Document invalidDoc("id", "", {"tag"});
-    });
-
-    // Modifying document content
-    std::cout << "\nModifying document content..." << std::endl;
-    tryOperation("Update content", [&validDoc]() {
-        validDoc.setContent(
-            "Updated content about search engines and indexing");
-        std::cout << "Content updated successfully" << std::endl;
-        std::cout << "New content: " << validDoc.getContent() << std::endl;
-    });
-
-    // Modifying document tags
-    std::cout << "\nModifying document tags..." << std::endl;
-    tryOperation("Add tag", [&validDoc]() {
-        validDoc.addTag("indexing");
-        std::cout << "Tag added successfully" << std::endl;
-    });
-
-    tryOperation("Remove tag", [&validDoc]() {
-        validDoc.removeTag("example");
-        std::cout << "Tag removed successfully" << std::endl;
-    });
-
-    std::cout << "\nUpdated document:" << std::endl;
-    printDocument(validDoc);
-
-    // Incrementing click count
-    std::cout << "\nIncrementing click count..." << std::endl;
-    validDoc.incrementClickCount();
-    validDoc.incrementClickCount();
-    std::cout << "New click count: " << validDoc.getClickCount() << std::endl;
-
-    //--------------------------------------------------------------------------
-    // 2. Basic Search Engine Operations
-    //--------------------------------------------------------------------------
-    printSection("2. Basic Search Engine Operations");
-
-    // Create a search engine
-    std::cout << "Creating a search engine with default thread settings..."
-              << std::endl;
-    atom::search::SearchEngine searchEngine;
-
-    // Adding documents to the search engine
-    std::cout << "\nAdding documents to the search engine..." << std::endl;
-
-    // Create several documents
-    atom::search::Document doc1("doc1",
-                                "The quick brown fox jumps over the lazy dog",
-                                {"animals", "fox", "dog"});
-
-    atom::search::Document doc2(
-        "doc2",
-        "Machine learning algorithms can process large datasets efficiently",
-        {"technology", "machine learning", "algorithms"});
-
-    atom::search::Document doc3(
-        "doc3", "Artificial intelligence is transforming many industries",
-        {"technology", "ai", "transformation"});
-
-    atom::search::Document doc4("doc4",
-                                "The lazy cat sleeps all day in the sun",
-                                {"animals", "cat", "lazy"});
-
-    atom::search::Document doc5(
-        "doc5", "Deep learning is a subset of machine learning",
-        {"technology", "deep learning", "machine learning"});
-
-    // Add documents to the search engine
-    tryOperation("Add document 1", [&searchEngine, &doc1]() {
-        searchEngine.addDocument(doc1);
-        std::cout << "Document 1 added successfully" << std::endl;
-    });
-
-    tryOperation("Add document 2", [&searchEngine, &doc2]() {
-        searchEngine.addDocument(doc2);
-        std::cout << "Document 2 added successfully" << std::endl;
-    });
-
-    tryOperation("Add document 3", [&searchEngine, &doc3]() {
-        searchEngine.addDocument(doc3);
-        std::cout << "Document 3 added successfully" << std::endl;
-    });
-
-    tryOperation("Add document 4", [&searchEngine, &doc4]() {
-        // Using move semantics
-        searchEngine.addDocument(std::move(doc4));
-        std::cout << "Document 4 added successfully" << std::endl;
-    });
-
-    tryOperation("Add document 5", [&searchEngine, &doc5]() {
-        searchEngine.addDocument(doc5);
-        std::cout << "Document 5 added successfully" << std::endl;
-    });
-
-    // Trying to add a document with an existing ID
-    std::cout << "\nTrying to add a document with an existing ID..."
-              << std::endl;
-    tryOperation("Add duplicate document", [&searchEngine]() {
-        atom::search::Document duplicateDoc("doc1", "Duplicate content",
-                                            {"duplicate"});
-        searchEngine.addDocument(duplicateDoc);
-    });
-
-    // Updating a document
-    std::cout << "\nUpdating a document..." << std::endl;
-    tryOperation("Update document", [&searchEngine]() {
-        atom::search::Document updatedDoc(
-            "doc2", "Updated content about machine learning and deep learning",
-            {"technology", "machine learning", "updated"});
-        searchEngine.updateDocument(updatedDoc);
-        std::cout << "Document updated successfully" << std::endl;
-    });
-
-    // Removing a document
-    std::cout << "\nRemoving a document..." << std::endl;
-    tryOperation("Remove document", [&searchEngine]() {
-        searchEngine.removeDocument("doc3");
-        std::cout << "Document removed successfully" << std::endl;
-    });
-
-    // Trying to remove a non-existent document
-    std::cout << "\nTrying to remove a non-existent document..." << std::endl;
-    tryOperation("Remove non-existent document", [&searchEngine]() {
-        searchEngine.removeDocument("nonexistent");
-    });
-
-    //--------------------------------------------------------------------------
-    // 3. Basic Search Operations
-    //--------------------------------------------------------------------------
-    printSection("3. Basic Search Operations");
-
-    // Searching by tag
-    std::cout << "Searching documents by tag 'animals'..." << std::endl;
-    tryOperation("Search by tag", [&searchEngine]() {
-        auto results = searchEngine.searchByTag("animals");
-        printSearchResults(results);
-    });
-
-    // Searching by content
-    std::cout << "\nSearching documents by content 'machine learning'..."
-              << std::endl;
-    tryOperation("Search by content", [&searchEngine]() {
-        auto results = searchEngine.searchByContent("machine learning");
-        printSearchResults(results);
-    });
-
-    // Searching by multiple tags
-    std::cout << "\nSearching documents by multiple tags ['technology', "
-                 "'machine learning']..."
-              << std::endl;
-    tryOperation("Search by multiple tags", [&searchEngine]() {
-        auto results =
-            searchEngine.searchByTags({"technology", "machine learning"});
-        printSearchResults(results);
-    });
-
-    // Boolean search
-    std::cout << "\nPerforming boolean search 'machine AND learning'..."
-              << std::endl;
-    tryOperation("Boolean search", [&searchEngine]() {
-        auto results = searchEngine.booleanSearch("machine AND learning");
-        printSearchResults(results);
-    });
-
-    //--------------------------------------------------------------------------
-    // 4. Advanced Search Features
-    //--------------------------------------------------------------------------
-    printSection("4. Advanced Search Features");
-
-    // Add more documents for advanced search demonstrations
-    std::cout << "Adding more documents for advanced search demonstrations..."
-              << std::endl;
-
-    atom::search::Document doc6(
-        "doc6",
-        "Natural language processing helps computers understand human language",
-        {"technology", "nlp", "language"});
-
-    atom::search::Document doc7(
-        "doc7", "Computer vision systems can identify objects in images",
-        {"technology", "computer vision", "images"});
-
-    atom::search::Document doc8(
-        "doc8",
-        "Reinforcement learning enables agents to learn from their environment",
-        {"technology", "reinforcement learning", "agents"});
-
-    tryOperation("Add documents 6-8", [&searchEngine, &doc6, &doc7, &doc8]() {
-        searchEngine.addDocument(doc6);
-        searchEngine.addDocument(doc7);
-        searchEngine.addDocument(doc8);
-        std::cout << "Documents 6-8 added successfully" << std::endl;
-    });
-
-    // Fuzzy search by tag
-    std::cout
-        << "\nPerforming fuzzy search by tag 'vishion' with tolerance 2..."
-        << std::endl;
-    tryOperation("Fuzzy search by tag", [&searchEngine]() {
-        auto results = searchEngine.fuzzySearchByTag(
-            "vishion", 2);  // Should match "vision"
-        printSearchResults(results);
-    });
-
-    // Autocomplete
-    std::cout << "\nGetting autocomplete suggestions for prefix 'mach'..."
-              << std::endl;
-    tryOperation("Autocomplete", [&searchEngine]() {
-        auto suggestions = searchEngine.autoComplete("mach", 5);
-
-        std::cout << "Autocomplete suggestions:" << std::endl;
-        for (const auto& suggestion : suggestions) {
-            std::cout << "  - " << suggestion << std::endl;
+        if (results.empty()) {
+            std::cout << "No documents found." << std::endl;
+            return;
         }
-    });
 
-    // Boolean search with more complex query
-    std::cout << "\nPerforming complex boolean search 'technology AND "
-                 "(learning OR language)'..."
-              << std::endl;
-    tryOperation("Complex boolean search", [&searchEngine]() {
-        auto results =
-            searchEngine.booleanSearch("technology AND (learning OR language)");
-        printSearchResults(results);
-    });
-
-    //--------------------------------------------------------------------------
-    // 5. Persistence - Save and Load Index
-    //--------------------------------------------------------------------------
-    printSection("5. Persistence - Save and Load Index");
-
-    const std::string indexFile = "search_index.dat";
-
-    // Save the search index
-    std::cout << "Saving search index to file: " << indexFile << std::endl;
-    tryOperation("Save index", [&searchEngine, &indexFile]() {
-        searchEngine.saveIndex(indexFile);
-        std::cout << "Search index saved successfully" << std::endl;
-    });
-
-    // Create a new search engine and load the index
-    std::cout << "\nCreating a new search engine and loading the saved index..."
-              << std::endl;
-    atom::search::SearchEngine loadedEngine;
-
-    tryOperation("Load index", [&loadedEngine, &indexFile]() {
-        loadedEngine.loadIndex(indexFile);
-        std::cout << "Search index loaded successfully" << std::endl;
-    });
-
-    // Verify the loaded index
-    std::cout
-        << "\nVerifying the loaded index by searching for 'machine learning'..."
-        << std::endl;
-    tryOperation("Search in loaded engine", [&loadedEngine]() {
-        auto results = loadedEngine.searchByContent("machine learning");
-        printSearchResults(results);
-    });
-
-    // Clean up the index file
-    std::remove(indexFile.c_str());
-    std::cout << "Cleaned up the index file" << std::endl;
-
-    //--------------------------------------------------------------------------
-
-    //--------------------------------------------------------------------------
-    // 6. Utility Methods
-    //--------------------------------------------------------------------------
-    printSection("6. Utility Methods");
-    {
-        std::cout << "Document count: " << searchEngine.getDocumentCount()
-                  << std::endl;
-        std::cout << "Has 'doc1'? "
-                  << (searchEngine.hasDocument("doc1") ? "yes" : "no")
-                  << std::endl;
-        auto ids = searchEngine.getAllDocumentIds();
-        std::cout << "All document IDs (" << ids.size() << ")" << std::endl;
-    }
-
-    //--------------------------------------------------------------------------
-    // 7. Click Tracking and Ranking Influence
-    //--------------------------------------------------------------------------
-    printSection("7. Click Tracking and Ranking Influence");
-    {
-        auto before = searchEngine.searchByContent("machine learning");
-        if (!before.empty()) {
-            std::cout << "Top before clicks: " << before.front()->getId()
-                      << std::endl;
-            // Simulate user clicks on the top result
-            for (int i = 0; i < 10; ++i)
-                before.front()->incrementClickCount();
-            auto after = searchEngine.searchByContent("machine learning");
-            std::cout << "Top after clicks:  "
-                      << (after.empty() ? std::string("<none>")
-                                        : after.front()->getId())
-                      << std::endl;
-            std::cout << "Click count now:   "
-                      << before.front()->getClickCount() << std::endl;
+        std::cout << "Found " << results.size() << " document(s):" << std::endl;
+        for (size_t i = 0; i < results.size(); ++i) {
+            std::cout << "\n--- Result " << (i + 1) << " ---" << std::endl;
+            printDocument(*results[i]);
         }
     }
 
-    //--------------------------------------------------------------------------
-    // 8. Multithreaded Search
-    //--------------------------------------------------------------------------
-    printSection("8. Multithreaded Search");
-    {
-        auto fut1 = std::async(std::launch::async, [&searchEngine]() {
-            return searchEngine.searchByContent("learning");
-        });
-        auto fut2 = std::async(std::launch::async, [&searchEngine]() {
-            return searchEngine.booleanSearch("technology AND learning");
-        });
-        auto r1 = fut1.get();
-        auto r2 = fut2.get();
-        std::cout << "Concurrent search results: content='learning' -> "
-                  << r1.size() << ", boolean='technology AND learning' -> "
-                  << r2.size() << std::endl;
+    // Helper function to handle exceptionstemplate <typename Func>
+    void tryOperation(const std::string& operationName, Func&& operation) {
+        try {
+            operation();
+        } catch (const atom::search::DocumentNotFoundException& e) {
+            std::cout << "Document not found error: " << e.what() << std::endl;
+        } catch (const atom::search::DocumentValidationException& e) {
+            std::cout << "Document validation error: " << e.what() << std::endl;
+        } catch (const atom::search::SearchOperationException& e) {
+            std::cout << "Search operation error: " << e.what() << std::endl;
+        } catch (const atom::search::SearchEngineException& e) {
+            std::cout << "General search engine error: " << e.what()
+                      << std::endl;
+        } catch (const std::exception& e) {
+            std::cout << "Standard exception: " << e.what() << std::endl;
+        } catch (...) {
+            std::cout << "Unknown error" << std::endl;
+        }
     }
 
-    //--------------------------------------------------------------------------
-    // Summary (updated)
-    //--------------------------------------------------------------------------
+    int main() {
+        std::cout << "ATOM SEARCH ENGINE COMPREHENSIVE EXAMPLES\n";
+        std::cout << "========================================\n";
 
-    // Summary
-    //--------------------------------------------------------------------------
-    printSection("Summary");
+        //--------------------------------------------------------------------------
+        // 1. Creating Documents and Basic Validation
+        //--------------------------------------------------------------------------
+        printSection("1. Creating Documents and Basic Validation");
 
-    std::cout
-        << "This example demonstrated the following Search Engine features:"
-        << std::endl;
-    std::cout << "  1. Creating and validating documents" << std::endl;
-    std::cout
-        << "  2. Basic search engine operations (add, update, remove documents)"
-        << std::endl;
-    std::cout << "  3. Basic search operations (by tag, content, multiple "
-                 "tags, boolean)"
-              << std::endl;
-    std::cout << "  4. Advanced search features (fuzzy search, autocomplete)"
-              << std::endl;
-    std::cout << "  5. Persistence with save and load operations" << std::endl;
+        // Creating a valid document
+        std::cout << "Creating a valid document..." << std::endl;
+        atom::search::Document validDoc(
+            "doc1", "This is a sample document about search engines",
+            {"search", "engine", "example"});
+        printDocument(validDoc);
 
-    return 0;
-}
+        // Demonstrating validation
+        std::cout << "\nTrying to create documents with invalid parameters..."
+                  << std::endl;
+
+        // Empty ID
+        tryOperation("Create document with empty ID", []() {
+            atom::search::Document invalidDoc("", "Content", {"tag"});
+        });
+
+        // Empty content
+        tryOperation("Create document with empty content", []() {
+            atom::search::Document invalidDoc("id", "", {"tag"});
+        });
+
+        // Modifying document content
+        std::cout << "\nModifying document content..." << std::endl;
+        tryOperation("Update content", [&validDoc]() {
+            validDoc.setContent(
+                "Updated content about search engines and indexing");
+            std::cout << "Content updated successfully" << std::endl;
+            std::cout << "New content: " << validDoc.getContent() << std::endl;
+        });
+
+        // Modifying document tags
+        std::cout << "\nModifying document tags..." << std::endl;
+        tryOperation("Add tag", [&validDoc]() {
+            validDoc.addTag("indexing");
+            std::cout << "Tag added successfully" << std::endl;
+        });
+
+        tryOperation("Remove tag", [&validDoc]() {
+            validDoc.removeTag("example");
+            std::cout << "Tag removed successfully" << std::endl;
+        });
+
+        std::cout << "\nUpdated document:" << std::endl;
+        printDocument(validDoc);
+
+        // Incrementing click count
+        std::cout << "\nIncrementing click count..." << std::endl;
+        validDoc.incrementClickCount();
+        validDoc.incrementClickCount();
+        std::cout << "New click count: " << validDoc.getClickCount()
+                  << std::endl;
+
+        //--------------------------------------------------------------------------
+        // 2. Basic Search Engine Operations
+        //--------------------------------------------------------------------------
+        printSection("2. Basic Search Engine Operations");
+
+        // Create a search engine
+        std::cout << "Creating a search engine with default thread settings..."
+                  << std::endl;
+        atom::search::SearchEngine searchEngine;
+
+        // Adding documents to the search engine
+        std::cout << "\nAdding documents to the search engine..." << std::endl;
+
+        // Create several documents
+        atom::search::Document doc1(
+            "doc1", "The quick brown fox jumps over the lazy dog",
+            {"animals", "fox", "dog"});
+
+        atom::search::Document doc2(
+            "doc2",
+            "Machine learning algorithms can process large datasets "
+            "efficiently",
+            {"technology", "machine learning", "algorithms"});
+
+        atom::search::Document doc3(
+            "doc3", "Artificial intelligence is transforming many industries",
+            {"technology", "ai", "transformation"});
+
+        atom::search::Document doc4("doc4",
+                                    "The lazy cat sleeps all day in the sun",
+                                    {"animals", "cat", "lazy"});
+
+        atom::search::Document doc5(
+            "doc5", "Deep learning is a subset of machine learning",
+            {"technology", "deep learning", "machine learning"});
+
+        // Add documents to the search engine
+        tryOperation("Add document 1", [&searchEngine, &doc1]() {
+            searchEngine.addDocument(doc1);
+            std::cout << "Document 1 added successfully" << std::endl;
+        });
+
+        tryOperation("Add document 2", [&searchEngine, &doc2]() {
+            searchEngine.addDocument(doc2);
+            std::cout << "Document 2 added successfully" << std::endl;
+        });
+
+        tryOperation("Add document 3", [&searchEngine, &doc3]() {
+            searchEngine.addDocument(doc3);
+            std::cout << "Document 3 added successfully" << std::endl;
+        });
+
+        tryOperation("Add document 4", [&searchEngine, &doc4]() {
+            // Using move semantics
+            searchEngine.addDocument(std::move(doc4));
+            std::cout << "Document 4 added successfully" << std::endl;
+        });
+
+        tryOperation("Add document 5", [&searchEngine, &doc5]() {
+            searchEngine.addDocument(doc5);
+            std::cout << "Document 5 added successfully" << std::endl;
+        });
+
+        // Trying to add a document with an existing ID
+        std::cout << "\nTrying to add a document with an existing ID..."
+                  << std::endl;
+        tryOperation("Add duplicate document", [&searchEngine]() {
+            atom::search::Document duplicateDoc("doc1", "Duplicate content",
+                                                {"duplicate"});
+            searchEngine.addDocument(duplicateDoc);
+        });
+
+        // Updating a document
+        std::cout << "\nUpdating a document..." << std::endl;
+        tryOperation("Update document", [&searchEngine]() {
+            atom::search::Document updatedDoc(
+                "doc2",
+                "Updated content about machine learning and deep learning",
+                {"technology", "machine learning", "updated"});
+            searchEngine.updateDocument(updatedDoc);
+            std::cout << "Document updated successfully" << std::endl;
+        });
+
+        // Removing a document
+        std::cout << "\nRemoving a document..." << std::endl;
+        tryOperation("Remove document", [&searchEngine]() {
+            searchEngine.removeDocument("doc3");
+            std::cout << "Document removed successfully" << std::endl;
+        });
+
+        // Trying to remove a non-existent document
+        std::cout << "\nTrying to remove a non-existent document..."
+                  << std::endl;
+        tryOperation("Remove non-existent document", [&searchEngine]() {
+            searchEngine.removeDocument("nonexistent");
+        });
+
+        //--------------------------------------------------------------------------
+        // 3. Basic Search Operations
+        //--------------------------------------------------------------------------
+        printSection("3. Basic Search Operations");
+
+        // Searching by tag
+        std::cout << "Searching documents by tag 'animals'..." << std::endl;
+        tryOperation("Search by tag", [&searchEngine]() {
+            auto results = searchEngine.searchByTag("animals");
+            printSearchResults(results);
+        });
+
+        // Searching by content
+        std::cout << "\nSearching documents by content 'machine learning'..."
+                  << std::endl;
+        tryOperation("Search by content", [&searchEngine]() {
+            auto results = searchEngine.searchByContent("machine learning");
+            printSearchResults(results);
+        });
+
+        // Searching by multiple tags
+        std::cout << "\nSearching documents by multiple tags ['technology', "
+                     "'machine learning']..."
+                  << std::endl;
+        tryOperation("Search by multiple tags", [&searchEngine]() {
+            auto results =
+                searchEngine.searchByTags({"technology", "machine learning"});
+            printSearchResults(results);
+        });
+
+        // Boolean search
+        std::cout << "\nPerforming boolean search 'machine AND learning'..."
+                  << std::endl;
+        tryOperation("Boolean search", [&searchEngine]() {
+            auto results = searchEngine.booleanSearch("machine AND learning");
+            printSearchResults(results);
+        });
+
+        //--------------------------------------------------------------------------
+        // 4. Advanced Search Features
+        //--------------------------------------------------------------------------
+        printSection("4. Advanced Search Features");
+
+        // Add more documents for advanced search demonstrations
+        std::cout
+            << "Adding more documents for advanced search demonstrations..."
+            << std::endl;
+
+        atom::search::Document doc6("doc6",
+                                    "Natural language processing helps "
+                                    "computers understand human language",
+                                    {"technology", "nlp", "language"});
+
+        atom::search::Document doc7(
+            "doc7", "Computer vision systems can identify objects in images",
+            {"technology", "computer vision", "images"});
+
+        atom::search::Document doc8(
+            "doc8",
+            "Reinforcement learning enables agents to learn from their "
+            "environment",
+            {"technology", "reinforcement learning", "agents"});
+
+        tryOperation(
+            "Add documents 6-8", [&searchEngine, &doc6, &doc7, &doc8]() {
+                searchEngine.addDocument(doc6);
+                searchEngine.addDocument(doc7);
+                searchEngine.addDocument(doc8);
+                std::cout << "Documents 6-8 added successfully" << std::endl;
+            });
+
+        // Fuzzy search by tag
+        std::cout
+            << "\nPerforming fuzzy search by tag 'vishion' with tolerance 2..."
+            << std::endl;
+        tryOperation("Fuzzy search by tag", [&searchEngine]() {
+            auto results = searchEngine.fuzzySearchByTag(
+                "vishion", 2);  // Should match "vision"
+            printSearchResults(results);
+        });
+
+        // Autocomplete
+        std::cout << "\nGetting autocomplete suggestions for prefix 'mach'..."
+                  << std::endl;
+        tryOperation("Autocomplete", [&searchEngine]() {
+            auto suggestions = searchEngine.autoComplete("mach", 5);
+
+            std::cout << "Autocomplete suggestions:" << std::endl;
+            for (const auto& suggestion : suggestions) {
+                std::cout << "  - " << suggestion << std::endl;
+            }
+        });
+
+        // Boolean search with more complex query
+        std::cout << "\nPerforming complex boolean search 'technology AND "
+                     "(learning OR language)'..."
+                  << std::endl;
+        tryOperation("Complex boolean search", [&searchEngine]() {
+            auto results = searchEngine.booleanSearch(
+                "technology AND (learning OR language)");
+            printSearchResults(results);
+        });
+
+        //--------------------------------------------------------------------------
+        // 5. Persistence - Save and Load Index
+        //--------------------------------------------------------------------------
+        printSection("5. Persistence - Save and Load Index");
+
+        const std::string indexFile = "search_index.dat";
+
+        // Save the search index
+        std::cout << "Saving search index to file: " << indexFile << std::endl;
+        tryOperation("Save index", [&searchEngine, &indexFile]() {
+            searchEngine.saveIndex(indexFile);
+            std::cout << "Search index saved successfully" << std::endl;
+        });
+
+        // Create a new search engine and load the index
+        std::cout
+            << "\nCreating a new search engine and loading the saved index..."
+            << std::endl;
+        atom::search::SearchEngine loadedEngine;
+
+        tryOperation("Load index", [&loadedEngine, &indexFile]() {
+            loadedEngine.loadIndex(indexFile);
+            std::cout << "Search index loaded successfully" << std::endl;
+        });
+
+        // Verify the loaded index
+        std::cout << "\nVerifying the loaded index by searching for 'machine "
+                     "learning'..."
+                  << std::endl;
+        tryOperation("Search in loaded engine", [&loadedEngine]() {
+            auto results = loadedEngine.searchByContent("machine learning");
+            printSearchResults(results);
+        });
+
+        // Clean up the index file
+        std::remove(indexFile.c_str());
+        std::cout << "Cleaned up the index file" << std::endl;
+
+        //--------------------------------------------------------------------------
+
+        //--------------------------------------------------------------------------
+        // 6. Utility Methods
+        //--------------------------------------------------------------------------
+        printSection("6. Utility Methods");
+        {
+            std::cout << "Document count: " << searchEngine.getDocumentCount()
+                      << std::endl;
+            std::cout << "Has 'doc1'? "
+                      << (searchEngine.hasDocument("doc1") ? "yes" : "no")
+                      << std::endl;
+            auto ids = searchEngine.getAllDocumentIds();
+            std::cout << "All document IDs (" << ids.size() << ")" << std::endl;
+        }
+
+        //--------------------------------------------------------------------------
+        // 7. Click Tracking and Ranking Influence
+        //--------------------------------------------------------------------------
+        printSection("7. Click Tracking and Ranking Influence");
+        {
+            auto before = searchEngine.searchByContent("machine learning");
+            if (!before.empty()) {
+                std::cout << "Top before clicks: " << before.front()->getId()
+                          << std::endl;
+                // Simulate user clicks on the top result
+                for (int i = 0; i < 10; ++i)
+                    before.front()->incrementClickCount();
+                auto after = searchEngine.searchByContent("machine learning");
+                std::cout << "Top after clicks:  "
+                          << (after.empty() ? std::string("<none>")
+                                            : after.front()->getId())
+                          << std::endl;
+                std::cout << "Click count now:   "
+                          << before.front()->getClickCount() << std::endl;
+            }
+        }
+
+        //--------------------------------------------------------------------------
+        // 8. Multithreaded Search
+        //--------------------------------------------------------------------------
+        printSection("8. Multithreaded Search");
+        {
+            auto fut1 = std::async(std::launch::async, [&searchEngine]() {
+                return searchEngine.searchByContent("learning");
+            });
+            auto fut2 = std::async(std::launch::async, [&searchEngine]() {
+                return searchEngine.booleanSearch("technology AND learning");
+            });
+            auto r1 = fut1.get();
+            auto r2 = fut2.get();
+            std::cout << "Concurrent search results: content='learning' -> "
+                      << r1.size() << ", boolean='technology AND learning' -> "
+                      << r2.size() << std::endl;
+        }
+
+        //--------------------------------------------------------------------------
+        // Summary (updated)
+        //--------------------------------------------------------------------------
+
+        // Summary
+        //--------------------------------------------------------------------------
+        printSection("Summary");
+
+        std::cout
+            << "This example demonstrated the following Search Engine features:"
+            << std::endl;
+        std::cout << "  1. Creating and validating documents" << std::endl;
+        std::cout << "  2. Basic search engine operations (add, update, remove "
+                     "documents)"
+                  << std::endl;
+        std::cout << "  3. Basic search operations (by tag, content, multiple "
+                     "tags, boolean)"
+                  << std::endl;
+        std::cout
+            << "  4. Advanced search features (fuzzy search, autocomplete)"
+            << std::endl;
+        std::cout << "  5. Persistence with save and load operations"
+                  << std::endl;
+
+        return 0;
+    }

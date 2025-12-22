@@ -8,33 +8,34 @@
 using namespace atom::search;
 using namespace std::chrono_literals;
 
-// Custom data structure to demonstrate storing complex objects
-struct UserProfile {
-    int id;
-    std::string name;
-    std::string email;
+// Custom data structure to demonstrate storing complex objectsstruct
+// UserProfile {
+int id;
+std::string name;
+std::string email;
 
-    // For comparison in output
-    bool operator==(const UserProfile& other) const {
-        return id == other.id && name == other.name && email == other.email;
+// For comparison in output
+bool operator==(const UserProfile& other) const {
+    return id == other.id && name == other.name && email == other.email;
+}
+}
+;
+
+// Example struct with move semanticsstruct LargeObject {
+std::vector<int> data;
+
+LargeObject(size_t size) : data(size) {
+    for (size_t i = 0; i < size; ++i) {
+        data[i] = static_cast<int>(i);
     }
-};
+}
+}
+;
 
-// Example struct with move semantics
-struct LargeObject {
-    std::vector<int> data;
-
-    LargeObject(size_t size) : data(size) {
-        for (size_t i = 0; i < size; ++i) {
-            data[i] = static_cast<int>(i);
-        }
-    }
-};
-
-// Print cache statistics helper function
-void print_stats(const TTLCache<std::string, std::string>& cache) {
-    std::cout << "Cache size: " << cache.size() << "/" << cache.capacity()
-              << ", Hit rate: " << cache.hit_rate() * 100 << "%" << std::endl;
+// Print cache statistics helper functionvoid print_stats(const
+// TTLCache<std::string, std::string>& cache) {
+std::cout << "Cache size: " << cache.size() << "/" << cache.capacity()
+          << ", Hit rate: " << cache.hit_rate() * 100 << "%" << std::endl;
 }
 
 int main() {

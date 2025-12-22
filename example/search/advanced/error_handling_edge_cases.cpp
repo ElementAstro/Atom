@@ -31,316 +31,309 @@
 #include "atom/search/search.hpp"
 #include "atom/search/sqlite.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Custom error logger
-class ErrorLogger {
+// Custom error loggerclass ErrorLogger {
 private:
-    std::ofstream log_file_;
-    std::mutex log_mutex_;
+std::ofstream log_file_;
+std::mutex log_mutex_;
 
 public:
-    ErrorLogger(const std::string& filename = "error_log.txt")
-        : log_file_(filename, std::ios::app) {}
+ErrorLogger(const std::string& filename = "error_log.txt")
+    : log_file_(filename, std::ios::app) {}
 
-    void logError(const std::string& operation, const std::string& error,
-                  const std::string& context = "") {
-        std::lock_guard<std::mutex> lock(log_mutex_);
+void logError(const std::string& operation, const std::string& error,
+              const std::string& context = "") {
+    std::lock_guard<std::mutex> lock(log_mutex_);
 
+    auto now = std::chrono::system_clock::now();
+    auto time_t = std::chrono::system_clock::to_time_t(now);
+
+    std::cout << "[ERROR] " << operation << ": " << error;
+    if (!context.empty()) {
+        std::cout << " (Context: " << context << ")";
+    }
+    std::cout << std::endl;
+
+    if (log_file_.is_open()) {
+        log_file_ << std::ctime(&time_t) << " [ERROR] " << operation << ": "
+                  << error;
+        if (!context.empty()) {
+            log_file_ << " (Context: " << context << ")";
+        }
+        log_file_ << std::endl;
+        log_file_.flush();
+    }
+}
+
+void logWarning(const std::string& operation, const std::string& warning) {
+    std::lock_guard<std::mutex> lock(log_mutex_);
+    std::cout << "[WARNING] " << operation << ": " << warning << std::endl;
+
+    if (log_file_.is_open()) {
         auto now = std::chrono::system_clock::now();
         auto time_t = std::chrono::system_clock::to_time_t(now);
-
-        std::cout << "[ERROR] " << operation << ": " << error;
-        if (!context.empty()) {
-            std::cout << " (Context: " << context << ")";
-        }
-        std::cout << std::endl;
-
-        if (log_file_.is_open()) {
-            log_file_ << std::ctime(&time_t) << " [ERROR] " << operation << ": "
-                      << error;
-            if (!context.empty()) {
-                log_file_ << " (Context: " << context << ")";
-            }
-            log_file_ << std::endl;
-            log_file_.flush();
-        }
+        log_file_ << std::ctime(&time_t) << " [WARNING] " << operation << ": "
+                  << warning << std::endl;
+        log_file_.flush();
     }
+}
+}
+;
 
-    void logWarning(const std::string& operation, const std::string& warning) {
-        std::lock_guard<std::mutex> lock(log_mutex_);
-        std::cout << "[WARNING] " << operation << ": " << warning << std::endl;
-
-        if (log_file_.is_open()) {
-            auto now = std::chrono::system_clock::now();
-            auto time_t = std::chrono::system_clock::to_time_t(now);
-            log_file_ << std::ctime(&time_t) << " [WARNING] " << operation
-                      << ": " << warning << std::endl;
-            log_file_.flush();
-        }
-    }
-};
-
-// Robust search engine wrapper with error handling
-class RobustSearchEngine {
+// Robust search engine wrapper with error handlingclass RobustSearchEngine {
 private:
-    std::unique_ptr<atom::search::SearchEngine> engine_;
-    ErrorLogger& logger_;
-    std::atomic<size_t> error_count_{0};
-    std::atomic<size_t> operation_count_{0};
+std::unique_ptr<atom::search::SearchEngine> engine_;
+ErrorLogger & logger_;
+std::atomic<size_t> error_count_{0};
+std::atomic<size_t> operation_count_{0};
 
 public:
-    explicit RobustSearchEngine(ErrorLogger& logger, unsigned int threads = 4)
-        : engine_(std::make_unique<atom::search::SearchEngine>(threads)),
-          logger_(logger) {}
+explicit RobustSearchEngine(ErrorLogger& logger, unsigned int threads = 4)
+    : engine_(std::make_unique<atom::search::SearchEngine>(threads)),
+      logger_(logger) {}
 
-    bool addDocumentSafely(const atom::search::Document& doc) {
-        operation_count_++;
+bool addDocumentSafely(const atom::search::Document& doc) {
+    operation_count_++;
 
-        try {
-            // Input validation
-            if (doc.getId().empty()) {
-                logger_.logError("addDocument", "Document ID cannot be empty",
-                                 doc.getId());
-                error_count_++;
-                return false;
-            }
-
-            if (doc.getContent().empty()) {
-                logger_.logError("addDocument",
-                                 "Document content cannot be empty",
-                                 doc.getId());
-                error_count_++;
-                return false;
-            }
-
-            // Check for extremely large content
-            if (doc.getContent().size() > 1000000) {  // 1MB limit
-                logger_.logWarning("addDocument",
-                                   "Document content is very large",
-                                   doc.getId());
-            }
-
-            engine_->addDocument(doc);
-            return true;
-
-        } catch (const atom::search::DocumentValidationException& e) {
-            logger_.logError("addDocument", e.what(), doc.getId());
-            error_count_++;
-            return false;
-        } catch (const atom::search::SearchEngineException& e) {
-            logger_.logError("addDocument", e.what(), doc.getId());
-            error_count_++;
-            return false;
-        } catch (const std::exception& e) {
-            logger_.logError("addDocument", e.what(), doc.getId());
-            error_count_++;
-            return false;
-        } catch (...) {
-            logger_.logError("addDocument", "Unknown error occurred",
+    try {
+        // Input validation
+        if (doc.getId().empty()) {
+            logger_.logError("addDocument", "Document ID cannot be empty",
                              doc.getId());
             error_count_++;
             return false;
         }
-    }
 
-    std::vector<std::shared_ptr<atom::search::Document>> searchSafely(
-        const std::string& query, const std::string& search_type = "content") {
-        operation_count_++;
-
-        try {
-            // Input validation
-            if (query.empty()) {
-                logger_.logError("search", "Query cannot be empty");
-                error_count_++;
-                return {};
-            }
-
-            // Check for extremely long queries
-            if (query.size() > 10000) {
-                logger_.logWarning("search", "Query is very long: " +
-                                                 std::to_string(query.size()) +
-                                                 " characters");
-            }
-
-            // Sanitize query (remove potential problematic characters)
-            std::string sanitized_query = sanitizeQuery(query);
-            if (sanitized_query != query) {
-                logger_.logWarning("search", "Query was sanitized");
-            }
-
-            if (search_type == "content") {
-                return engine_->searchByContent(sanitized_query);
-            } else if (search_type == "tag") {
-                return engine_->searchByTag(sanitized_query);
-            } else if (search_type == "boolean") {
-                return engine_->booleanSearch(sanitized_query);
-            } else {
-                logger_.logError("search",
-                                 "Unknown search type: " + search_type);
-                error_count_++;
-                return {};
-            }
-
-        } catch (const atom::search::SearchOperationException& e) {
-            logger_.logError("search", e.what(), query);
-            error_count_++;
-            return {};
-        } catch (const atom::search::SearchEngineException& e) {
-            logger_.logError("search", e.what(), query);
-            error_count_++;
-            return {};
-        } catch (const std::exception& e) {
-            logger_.logError("search", e.what(), query);
-            error_count_++;
-            return {};
-        } catch (...) {
-            logger_.logError("search", "Unknown error occurred", query);
-            error_count_++;
-            return {};
-        }
-    }
-
-    bool saveIndexSafely(const std::string& filename) {
-        operation_count_++;
-
-        try {
-            // Validate filename
-            if (filename.empty()) {
-                logger_.logError("saveIndex", "Filename cannot be empty");
-                error_count_++;
-                return false;
-            }
-
-            // Check if directory exists and is writable
-            std::ofstream test_file(filename, std::ios::app);
-            if (!test_file.is_open()) {
-                logger_.logError("saveIndex", "Cannot write to file", filename);
-                error_count_++;
-                return false;
-            }
-            test_file.close();
-
-            engine_->saveIndex(filename);
-            return true;
-
-        } catch (const std::exception& e) {
-            logger_.logError("saveIndex", e.what(), filename);
-            error_count_++;
-            return false;
-        } catch (...) {
-            logger_.logError("saveIndex", "Unknown error occurred", filename);
+        if (doc.getContent().empty()) {
+            logger_.logError("addDocument", "Document content cannot be empty",
+                             doc.getId());
             error_count_++;
             return false;
         }
-    }
 
-    double getErrorRate() const {
-        size_t total_ops = operation_count_.load();
-        if (total_ops == 0)
-            return 0.0;
-        return static_cast<double>(error_count_.load()) / total_ops;
-    }
+        // Check for extremely large content
+        if (doc.getContent().size() > 1000000) {  // 1MB limit
+            logger_.logWarning("addDocument", "Document content is very large",
+                               doc.getId());
+        }
 
-    void printStatistics() const {
-        std::cout << "\n=== Robust Search Engine Statistics ===" << std::endl;
-        std::cout << "Total operations: " << operation_count_.load()
-                  << std::endl;
-        std::cout << "Total errors: " << error_count_.load() << std::endl;
-        std::cout << "Error rate: " << (getErrorRate() * 100) << "%"
-                  << std::endl;
+        engine_->addDocument(doc);
+        return true;
+
+    } catch (const atom::search::DocumentValidationException& e) {
+        logger_.logError("addDocument", e.what(), doc.getId());
+        error_count_++;
+        return false;
+    } catch (const atom::search::SearchEngineException& e) {
+        logger_.logError("addDocument", e.what(), doc.getId());
+        error_count_++;
+        return false;
+    } catch (const std::exception& e) {
+        logger_.logError("addDocument", e.what(), doc.getId());
+        error_count_++;
+        return false;
+    } catch (...) {
+        logger_.logError("addDocument", "Unknown error occurred", doc.getId());
+        error_count_++;
+        return false;
     }
+}
+
+std::vector<std::shared_ptr<atom::search::Document>> searchSafely(
+    const std::string& query, const std::string& search_type = "content") {
+    operation_count_++;
+
+    try {
+        // Input validation
+        if (query.empty()) {
+            logger_.logError("search", "Query cannot be empty");
+            error_count_++;
+            return {};
+        }
+
+        // Check for extremely long queries
+        if (query.size() > 10000) {
+            logger_.logWarning("search", "Query is very long: " +
+                                             std::to_string(query.size()) +
+                                             " characters");
+        }
+
+        // Sanitize query (remove potential problematic characters)
+        std::string sanitized_query = sanitizeQuery(query);
+        if (sanitized_query != query) {
+            logger_.logWarning("search", "Query was sanitized");
+        }
+
+        if (search_type == "content") {
+            return engine_->searchByContent(sanitized_query);
+        } else if (search_type == "tag") {
+            return engine_->searchByTag(sanitized_query);
+        } else if (search_type == "boolean") {
+            return engine_->booleanSearch(sanitized_query);
+        } else {
+            logger_.logError("search", "Unknown search type: " + search_type);
+            error_count_++;
+            return {};
+        }
+
+    } catch (const atom::search::SearchOperationException& e) {
+        logger_.logError("search", e.what(), query);
+        error_count_++;
+        return {};
+    } catch (const atom::search::SearchEngineException& e) {
+        logger_.logError("search", e.what(), query);
+        error_count_++;
+        return {};
+    } catch (const std::exception& e) {
+        logger_.logError("search", e.what(), query);
+        error_count_++;
+        return {};
+    } catch (...) {
+        logger_.logError("search", "Unknown error occurred", query);
+        error_count_++;
+        return {};
+    }
+}
+
+bool saveIndexSafely(const std::string& filename) {
+    operation_count_++;
+
+    try {
+        // Validate filename
+        if (filename.empty()) {
+            logger_.logError("saveIndex", "Filename cannot be empty");
+            error_count_++;
+            return false;
+        }
+
+        // Check if directory exists and is writable
+        std::ofstream test_file(filename, std::ios::app);
+        if (!test_file.is_open()) {
+            logger_.logError("saveIndex", "Cannot write to file", filename);
+            error_count_++;
+            return false;
+        }
+        test_file.close();
+
+        engine_->saveIndex(filename);
+        return true;
+
+    } catch (const std::exception& e) {
+        logger_.logError("saveIndex", e.what(), filename);
+        error_count_++;
+        return false;
+    } catch (...) {
+        logger_.logError("saveIndex", "Unknown error occurred", filename);
+        error_count_++;
+        return false;
+    }
+}
+
+double getErrorRate() const {
+    size_t total_ops = operation_count_.load();
+    if (total_ops == 0)
+        return 0.0;
+    return static_cast<double>(error_count_.load()) / total_ops;
+}
+
+void printStatistics() const {
+    std::cout << "\n=== Robust Search Engine Statistics ===" << std::endl;
+    std::cout << "Total operations: " << operation_count_.load() << std::endl;
+    std::cout << "Total errors: " << error_count_.load() << std::endl;
+    std::cout << "Error rate: " << (getErrorRate() * 100) << "%" << std::endl;
+}
 
 private:
-    std::string sanitizeQuery(const std::string& query) {
-        std::string sanitized = query;
+std::string sanitizeQuery(const std::string& query) {
+    std::string sanitized = query;
 
-        // Remove null characters
-        sanitized.erase(std::remove(sanitized.begin(), sanitized.end(), '\0'),
-                        sanitized.end());
+    // Remove null characters
+    sanitized.erase(std::remove(sanitized.begin(), sanitized.end(), '\0'),
+                    sanitized.end());
 
-        // Replace control characters with spaces
-        for (char& c : sanitized) {
-            if (std::iscntrl(c) && c != '\t' && c != '\n' && c != '\r') {
-                c = ' ';
-            }
+    // Replace control characters with spaces
+    for (char& c : sanitized) {
+        if (std::iscntrl(c) && c != '\t' && c != '\n' && c != '\r') {
+            c = ' ';
         }
-
-        return sanitized;
-    }
-};
-
-// Test various edge cases
-void testEdgeCases(RobustSearchEngine& engine, ErrorLogger& logger) {
-    std::cout << "Testing edge cases..." << std::endl;
-
-    // Test 1: Empty document ID
-    try {
-        atom::search::Document empty_id_doc("", "Some content", {"tag"});
-        engine.addDocumentSafely(empty_id_doc);
-    } catch (...) {
-        logger.logError("testEdgeCases", "Exception during empty ID test");
     }
 
-    // Test 2: Empty content
-    try {
-        atom::search::Document empty_content_doc("doc1", "", {"tag"});
-        engine.addDocumentSafely(empty_content_doc);
-    } catch (...) {
-        logger.logError("testEdgeCases", "Exception during empty content test");
-    }
+    return sanitized;
+}
+}
+;
 
-    // Test 3: Very long content
-    try {
-        std::string long_content(2000000, 'a');  // 2MB of 'a' characters
-        atom::search::Document long_doc("long_doc", long_content, {"long"});
-        engine.addDocumentSafely(long_doc);
-    } catch (...) {
-        logger.logError("testEdgeCases", "Exception during long content test");
-    }
+// Test various edge casesvoid testEdgeCases(RobustSearchEngine& engine,
+// ErrorLogger& logger) {
+std::cout << "Testing edge cases..." << std::endl;
 
-    // Test 4: Special characters in content
-    try {
-        std::string special_content =
-            "Content with special chars: \x01\x02\x03\x7F\xFF";
-        atom::search::Document special_doc("special_doc", special_content,
-                                           {"special"});
-        engine.addDocumentSafely(special_doc);
-    } catch (...) {
-        logger.logError("testEdgeCases",
-                        "Exception during special characters test");
-    }
+// Test 1: Empty document ID
+try {
+    atom::search::Document empty_id_doc("", "Some content", {"tag"});
+    engine.addDocumentSafely(empty_id_doc);
+} catch (...) {
+    logger.logError("testEdgeCases", "Exception during empty ID test");
+}
 
-    // Test 5: Unicode content
-    try {
-        std::string unicode_content =
-            "Unicode content: 你好世界 🌍 Здравствуй мир";
-        atom::search::Document unicode_doc("unicode_doc", unicode_content,
-                                           {"unicode"});
-        engine.addDocumentSafely(unicode_doc);
-    } catch (...) {
-        logger.logError("testEdgeCases", "Exception during unicode test");
-    }
+// Test 2: Empty content
+try {
+    atom::search::Document empty_content_doc("doc1", "", {"tag"});
+    engine.addDocumentSafely(empty_content_doc);
+} catch (...) {
+    logger.logError("testEdgeCases", "Exception during empty content test");
+}
 
-    // Test 6: Empty search query
-    auto results = engine.searchSafely("");
+// Test 3: Very long content
+try {
+    std::string long_content(2000000, 'a');  // 2MB of 'a' characters
+    atom::search::Document long_doc("long_doc", long_content, {"long"});
+    engine.addDocumentSafely(long_doc);
+} catch (...) {
+    logger.logError("testEdgeCases", "Exception during long content test");
+}
 
-    // Test 7: Very long search query
-    std::string long_query(50000, 'x');
-    results = engine.searchSafely(long_query);
+// Test 4: Special characters in content
+try {
+    std::string special_content =
+        "Content with special chars: \x01\x02\x03\x7F\xFF";
+    atom::search::Document special_doc("special_doc", special_content,
+                                       {"special"});
+    engine.addDocumentSafely(special_doc);
+} catch (...) {
+    logger.logError("testEdgeCases",
+                    "Exception during special characters test");
+}
 
-    // Test 8: Search with special characters
-    results = engine.searchSafely("query with \x01\x02 special chars");
+// Test 5: Unicode content
+try {
+    std::string unicode_content = "Unicode content: 你好世界 🌍 Здравствуй мир";
+    atom::search::Document unicode_doc("unicode_doc", unicode_content,
+                                       {"unicode"});
+    engine.addDocumentSafely(unicode_doc);
+} catch (...) {
+    logger.logError("testEdgeCases", "Exception during unicode test");
+}
 
-    // Test 9: Invalid search type
-    results = engine.searchSafely("test query", "invalid_type");
+// Test 6: Empty search query
+auto results = engine.searchSafely("");
 
-    std::cout << "Edge case testing completed." << std::endl;
+// Test 7: Very long search query
+std::string long_query(50000, 'x');
+results = engine.searchSafely(long_query);
+
+// Test 8: Search with special characters
+results = engine.searchSafely("query with \x01\x02 special chars");
+
+// Test 9: Invalid search type
+results = engine.searchSafely("test query", "invalid_type");
+
+std::cout << "Edge case testing completed." << std::endl;
 }
 
 int main() {

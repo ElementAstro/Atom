@@ -1,13 +1,28 @@
+# =============================================================================
 # ModularInstall.cmake - Advanced modular installation system for Atom library
+# =============================================================================
 # This module provides comprehensive modular installation capabilities
-# including: - Component-based installation - Dependency resolution - Conflict
-# detection - Package validation
+# including: - Component-based installation - Dependency resolution with
+# topological sorting - Conflict detection - Package validation - Metadata
+# generation (JSON)
+#
+# Main functions: atom_register_component()           - Register a component
+# with metadata atom_resolve_component_dependencies() - Resolve all dependencies
+# atom_validate_component_dependencies() - Validate dependency graph
+# atom_install_component()            - Install a component
+# atom_setup_modular_installation()   - Setup the installation system
+# atom_print_installation_summary()   - Print installation status
+#
+# Options: ATOM_INSTALL_MODULAR              - Enable modular installation
+# ATOM_INSTALL_COMPONENT_PACKAGES   - Create separate packages
+# ATOM_INSTALL_DEVELOPMENT_FILES    - Install headers and CMake configs
+# ATOM_INSTALL_DOCUMENTATION        - Install documentation
+# ATOM_INSTALL_EXAMPLES             - Install examples
+#
+# Author: Max Qian License: GPL3
+# =============================================================================
 
-# Avoid repeated inclusion
-if(DEFINED MODULAR_INSTALL_INCLUDED)
-  return()
-endif()
-set(MODULAR_INSTALL_INCLUDED TRUE)
+include_guard(GLOBAL)
 
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
@@ -472,4 +487,67 @@ function(atom_create_main_config)
     FILES ${MAIN_CONFIG_FILE}
     DESTINATION ${ATOM_INSTALL_CMAKEDIR}
     COMPONENT core)
+endfunction()
+
+# =============================================================================
+# Utility Functions
+# =============================================================================
+
+# Function to print installation summary
+function(atom_print_installation_summary)
+  get_property(REGISTERED_COMPONENTS GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS)
+  list(LENGTH REGISTERED_COMPONENTS COMPONENT_COUNT)
+
+  message(STATUS "")
+  message(STATUS "=== Modular Installation Summary ===")
+  message(STATUS "Registered components: ${COMPONENT_COUNT}")
+  message(STATUS "Install prefix: ${CMAKE_INSTALL_PREFIX}")
+  message(STATUS "")
+  message(STATUS "Options:")
+  message(STATUS "  Modular install:     ${ATOM_INSTALL_MODULAR}")
+  message(STATUS "  Component packages:  ${ATOM_INSTALL_COMPONENT_PACKAGES}")
+  message(STATUS "  Development files:   ${ATOM_INSTALL_DEVELOPMENT_FILES}")
+  message(STATUS "  Documentation:       ${ATOM_INSTALL_DOCUMENTATION}")
+  message(STATUS "  Examples:            ${ATOM_INSTALL_EXAMPLES}")
+  message(STATUS "")
+
+  if(REGISTERED_COMPONENTS)
+    message(STATUS "Components:")
+    foreach(COMPONENT ${REGISTERED_COMPONENTS})
+      get_property(COMP_DESC GLOBAL
+                   PROPERTY ATOM_COMPONENT_${COMPONENT}_DESCRIPTION)
+      get_property(COMP_DEPS GLOBAL
+                   PROPERTY ATOM_COMPONENT_${COMPONENT}_DEPENDS)
+      if(COMP_DEPS)
+        message(STATUS "  - ${COMPONENT}: ${COMP_DESC} [deps: ${COMP_DEPS}]")
+      else()
+        message(STATUS "  - ${COMPONENT}: ${COMP_DESC}")
+      endif()
+    endforeach()
+  endif()
+
+  message(STATUS "====================================")
+  message(STATUS "")
+endfunction()
+
+# Function to get list of registered components
+function(atom_get_registered_components OUTPUT_VAR)
+  get_property(_components GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS)
+  set(${OUTPUT_VAR}
+      "${_components}"
+      PARENT_SCOPE)
+endfunction()
+
+# Function to check if a component is registered
+function(atom_is_component_registered COMPONENT_NAME OUTPUT_VAR)
+  get_property(_components GLOBAL PROPERTY ATOM_REGISTERED_COMPONENTS)
+  if(COMPONENT_NAME IN_LIST _components)
+    set(${OUTPUT_VAR}
+        TRUE
+        PARENT_SCOPE)
+  else()
+    set(${OUTPUT_VAR}
+        FALSE
+        PARENT_SCOPE)
+  endif()
 endfunction()

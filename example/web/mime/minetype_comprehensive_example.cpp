@@ -7,7 +7,7 @@
  * class
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/minetype.hpp"
 
 #include <filesystem>
@@ -367,12 +367,7 @@ void demonstrateAllTypesListing() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("minetype_comprehensive_example.log", loguru::Append,
-                     loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "    ATOM MIME TYPES COMPREHENSIVE DEMO     \n";
     std::cout << "============================================\n";

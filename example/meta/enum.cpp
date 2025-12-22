@@ -22,43 +22,25 @@
 
 using namespace atom::meta;
 
-// Define some example enums to work with
-enum class Color {
-    Red = 0,
-    Green = 1,
-    Blue = 2,
-    Yellow = 3,
-    Magenta = 4,
-    Cyan = 5,
-    Black = 6,
-    White = 7
-};
+// Define some example enums to work withenum class Color {
+Red = 0, Green = 1, Blue = 2, Yellow = 3, Magenta = 4, Cyan = 5, Black = 6,
+         White = 7
+}
+;
 
-// Define flags enum for bitwise operations
-enum class Permission : uint8_t {
-    None = 0x00,
-    Read = 0x01,
-    Write = 0x02,
-    Execute = 0x04,
-    Admin = 0x08,
-    All = Read | Write | Execute | Admin
-};
+// Define flags enum for bitwise operationsenum class Permission : uint8_t {
+None = 0x00, Read = 0x01, Write = 0x02, Execute = 0x04, Admin = 0x08,
+             All = Read | Write | Execute | Admin
+}
+;
 
-// Define an enum with descriptions
-enum class HttpStatus {
-    OK = 200,
-    Created = 201,
-    Accepted = 202,
-    NoContent = 204,
-    BadRequest = 400,
-    Unauthorized = 401,
-    Forbidden = 403,
-    NotFound = 404,
-    ServerError = 500
-};
+// Define an enum with descriptionsenum class HttpStatus {
+OK = 200, Created = 201, Accepted = 202, NoContent = 204, BadRequest = 400,
+          Unauthorized = 401, Forbidden = 403, NotFound = 404, ServerError = 500
+}
+;
 
-// Implement EnumTraits specialization for Color
-template <>
+// Implement EnumTraits specialization for Colortemplate <>
 struct atom::meta::EnumTraits<Color> {
     static constexpr std::array values = {
         Color::Red,     Color::Green, Color::Blue,  Color::Yellow,
@@ -74,8 +56,7 @@ struct atom::meta::EnumTraits<Color> {
     static constexpr bool empty() noexcept { return values.size() == 0; }
 };
 
-// Implement EnumTraits specialization for Permission with aliases
-template <>
+// Implement EnumTraits specialization for Permission with aliasestemplate <>
 struct atom::meta::EnumTraits<Permission> {
     static constexpr std::array values = {
         Permission::None,    Permission::Read,  Permission::Write,
@@ -91,8 +72,8 @@ struct atom::meta::EnumTraits<Permission> {
         std::string_view{"X"}, std::string_view{"A"}, std::string_view{"RWX"}};
 };
 
-// Implement EnumTraits specialization for HttpStatus with descriptions
-template <>
+// Implement EnumTraits specialization for HttpStatus with descriptionstemplate
+// <>
 struct atom::meta::EnumTraits<HttpStatus> {
     static constexpr std::array values = {
         HttpStatus::OK,        HttpStatus::Created,    HttpStatus::Accepted,
@@ -118,19 +99,18 @@ struct atom::meta::EnumTraits<HttpStatus> {
         std::string_view{"Server encountered an error"}};
 };
 
-// Helper function to print section headers
-void printHeader(const std::string& title) {
-    std::cout << "\n==========================================================="
-              << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "==========================================================="
-              << std::endl;
+// Helper function to print section headersvoid printHeader(const std::string&
+// title) {
+std::cout << "\n==========================================================="
+          << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "==========================================================="
+          << std::endl;
 }
 
-// Helper function for formatting
-void printValue(const std::string& label, const std::string& value) {
-    std::cout << std::left << std::setw(30) << label << ": " << value
-              << std::endl;
+// Helper function for formattingvoid printValue(const std::string& label, const
+// std::string& value) {
+std::cout << std::left << std::setw(30) << label << ": " << value << std::endl;
 }
 
 void printValue(const std::string& label, int value) {
@@ -143,8 +123,8 @@ void printValue(const std::string& label, bool value) {
               << (value ? "true" : "false") << std::endl;
 }
 
-// 修复: 将默认参数改为适当的类型，并修复const引用无法接受nullptr的问题
-template <typename T>
+// 修复: 将默认参数改为适当的类型，并修复const引用无法接受nullptr的问题template
+// <typename T>
 void printOptional(
     const std::string& label, const std::optional<T>& value,
     std::function<std::string(const T&)> formatter = [](const T& v) {

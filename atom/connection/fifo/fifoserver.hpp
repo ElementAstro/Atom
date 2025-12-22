@@ -196,7 +196,15 @@ public:
      */
     template <std::ranges::input_range R>
         requires std::convertible_to<std::ranges::range_value_t<R>, std::string>
-    size_t sendMessages(R&& messages);
+    size_t sendMessages(R&& messages) {
+        size_t count = 0;
+        for (auto&& msg : messages) {
+            if (sendMessage(std::string(msg))) {
+                ++count;
+            }
+        }
+        return count;
+    }
 
     /**
      * @brief Sends multiple messages with the same priority
@@ -208,7 +216,15 @@ public:
      */
     template <std::ranges::input_range R>
         requires std::convertible_to<std::ranges::range_value_t<R>, std::string>
-    size_t sendMessages(R&& messages, MessagePriority priority);
+    size_t sendMessages(R&& messages, MessagePriority priority) {
+        size_t count = 0;
+        for (auto&& msg : messages) {
+            if (sendMessage(std::string(msg), priority)) {
+                ++count;
+            }
+        }
+        return count;
+    }
 
     /**
      * @brief Registers a callback for message delivery status

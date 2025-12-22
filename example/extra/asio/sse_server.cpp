@@ -9,8 +9,8 @@
 Date: 2024-12-25
 
 Description: ASIO SSE Server Example (Minimal Stub Implementation)
-This is a stub implementation since the atom-extra-asio library linking
-is not configured in the current build system.
+This is a stub implementation since the atom-extra-asio library linkingis not
+configured in the current build system.
 
 **************************************************/
 
@@ -30,86 +30,83 @@ using namespace std::chrono_literals;
 
 namespace atom::extra::asio::sse {
 
-// Stub Event class
-class Event {
+// Stub Event classclass Event {
 public:
-    Event(std::string id, std::string event_type, std::string data)
-        : id_(std::move(id)),
-          event_type_(std::move(event_type)),
-          data_(std::move(data)) {}
+Event(std::string id, std::string event_type, std::string data)
+    : id_(std::move(id)),
+      event_type_(std::move(event_type)),
+      data_(std::move(data)) {}
 
-    const std::string& id() const noexcept { return id_; }
-    const std::string& event_type() const noexcept { return event_type_; }
-    const std::string& data() const noexcept { return data_; }
+const std::string& id() const noexcept { return id_; }
+const std::string& event_type() const noexcept { return event_type_; }
+const std::string& data() const noexcept { return data_; }
 
 private:
-    std::string id_;
-    std::string event_type_;
-    std::string data_;
+std::string id_;
+std::string event_type_;
+std::string data_;
 };
 
-// Stub ServerConfig struct
-struct ServerConfig {
-    std::string host = "0.0.0.0";
-    uint16_t port = 8080;
-    std::string path = "/events";
-    bool use_ssl = false;
-    std::string ssl_cert_file;
-    std::string ssl_key_file;
-    int heartbeat_interval_seconds = 30;
-    int max_connections = 1000;
-    bool store_events = false;
-    std::string event_store_path = "server_events";
-    std::vector<std::string> allowed_origins;
-};
+// Stub ServerConfig structstruct ServerConfig {
+std::string host = "0.0.0.0";
+uint16_t port = 8080;
+std::string path = "/events";
+bool use_ssl = false;
+std::string ssl_cert_file;
+std::string ssl_key_file;
+int heartbeat_interval_seconds = 30;
+int max_connections = 1000;
+bool store_events = false;
+std::string event_store_path = "server_events";
+std::vector<std::string> allowed_origins;
+}
+;
 
-// Stub SSEServer class
-class SSEServer {
+// Stub SSEServer classclass SSEServer {
 public:
-    SSEServer(auto& io_context, const ServerConfig& config) : config_(config) {
-        std::cout << "SSE Server created (stub implementation)" << std::endl;
-        std::cout << "  Host: " << config.host << ":" << config.port
-                  << std::endl;
-        std::cout << "  Path: " << config.path << std::endl;
-    }
+SSEServer(auto& io_context, const ServerConfig& config) : config_(config) {
+    std::cout << "SSE Server created (stub implementation)" << std::endl;
+    std::cout << "  Host: " << config.host << ":" << config.port << std::endl;
+    std::cout << "  Path: " << config.path << std::endl;
+}
 
-    void broadcast_event(const Event& event) {
-        std::cout << "Broadcasting event (stub): " << event.data() << std::endl;
-        events_sent_++;
-    }
+void broadcast_event(const Event& event) {
+    std::cout << "Broadcasting event (stub): " << event.data() << std::endl;
+    events_sent_++;
+}
 
-    void broadcast_to_channel(const std::string& channel, const Event& event) {
-        std::cout << "Broadcasted to channel '" << channel
-                  << "': " << event.data() << std::endl;
-        events_sent_++;
-    }
+void broadcast_to_channel(const std::string& channel, const Event& event) {
+    std::cout << "Broadcasted to channel '" << channel << "': " << event.data()
+              << std::endl;
+    events_sent_++;
+}
 
-    auto get_metrics() {
-        // Return a simple map that can be accessed like JSON
-        std::map<std::string, int> metrics;
-        metrics["total_events_sent"] = events_sent_;
-        metrics["current_connections"] = current_connections_;
-        return metrics;
-    }
+auto get_metrics() {
+    // Return a simple map that can be accessed like JSON
+    std::map<std::string, int> metrics;
+    metrics["total_events_sent"] = events_sent_;
+    metrics["current_connections"] = current_connections_;
+    return metrics;
+}
 
-    void run() {
-        std::cout << "Running SSE server (stub)..." << std::endl;
-        current_connections_ = 5;  // Simulate some connections
+void run() {
+    std::cout << "Running SSE server (stub)..." << std::endl;
+    current_connections_ = 5;  // Simulate some connections
 
-        // Simulate server running
-        std::this_thread::sleep_for(100ms);
-    }
+    // Simulate server running
+    std::this_thread::sleep_for(100ms);
+}
 
 private:
-    ServerConfig config_;
-    std::atomic<int> events_sent_{0};
-    std::atomic<int> current_connections_{0};
-};
+ServerConfig config_;
+std::atomic<int> events_sent_{0};
+std::atomic<int> current_connections_{0};
+}
+;
 
 }  // namespace atom::extra::asio::sse
 
-// Stub io_context
-namespace asio {
+// Stub io_contextnamespace asio {
 class io_context {
 public:
     void run() {

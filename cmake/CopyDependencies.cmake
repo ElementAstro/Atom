@@ -3,9 +3,21 @@
 # This module provides functions to copy runtime dependencies (DLLs) to
 # executable directories on Windows, ensuring tests and examples can run.
 #
+# Main functions: atom_find_runtime_dlls()        - Find all runtime DLLs from
+# linked targets atom_copy_runtime_dlls()        - Add post-build commands to
+# copy DLLs atom_setup_runtime_dependencies() - Setup runtime dependencies for a
+# target atom_copy_vcpkg_dlls()          - Copy vcpkg-installed DLLs
+# atom_create_dll_copy_target()   - Create a custom target to copy all DLLs
+# atom_add_test_with_dlls()       - Add a test executable with automatic DLL
+# copying atom_add_example_with_dlls()    - Add an example executable with
+# automatic DLL copying
+#
 # Author: Max Qian License: GPL3
 
 include_guard(GLOBAL)
+
+# Include module dependencies data for ATOM_ALL_MODULES
+include(${CMAKE_CURRENT_LIST_DIR}/ModuleDependenciesData.cmake)
 
 # =============================================================================
 # Global DLL tracking
@@ -105,32 +117,11 @@ function(atom_setup_runtime_dependencies TARGET_NAME)
   # Parse arguments
   cmake_parse_arguments(SETUP "" "" "EXTRA_DLLS" ${ARGN})
 
-  # List of atom library targets that might be shared
-  set(ATOM_SHARED_TARGETS
-      atom-algorithm
-      atom-async
-      atom-components
-      atom-connection
-      atom-containers
-      atom-error
-      atom-image
-      atom-io
-      atom-log
-      atom-memory
-      atom-meta
-      atom-search
-      atom-secret
-      atom-serial
-      atom-sysinfo
-      atom-system
-      atom-type
-      atom-utils
-      atom-web)
-
+  # Use ATOM_ALL_MODULES from ModuleDependenciesData.cmake (dynamic list)
   # Collect all shared library DLLs
   set(dlls_to_copy "")
 
-  foreach(atom_target ${ATOM_SHARED_TARGETS})
+  foreach(atom_target ${ATOM_ALL_MODULES})
     if(TARGET ${atom_target})
       get_target_property(target_type ${atom_target} TYPE)
       if(target_type STREQUAL "SHARED_LIBRARY")
@@ -280,29 +271,8 @@ function(atom_create_dll_copy_target TARGET_NAME DESTINATION_DIR)
     COMMAND ${CMAKE_COMMAND} -E make_directory "${DESTINATION_DIR}"
     COMMENT "Creating DLL destination directory: ${DESTINATION_DIR}")
 
-  # List of atom library targets
-  set(ATOM_SHARED_TARGETS
-      atom-algorithm
-      atom-async
-      atom-components
-      atom-connection
-      atom-containers
-      atom-error
-      atom-image
-      atom-io
-      atom-log
-      atom-memory
-      atom-meta
-      atom-search
-      atom-secret
-      atom-serial
-      atom-sysinfo
-      atom-system
-      atom-type
-      atom-utils
-      atom-web)
-
-  foreach(atom_target ${ATOM_SHARED_TARGETS})
+  # Use ATOM_ALL_MODULES from ModuleDependenciesData.cmake (dynamic list)
+  foreach(atom_target ${ATOM_ALL_MODULES})
     if(TARGET ${atom_target})
       get_target_property(target_type ${atom_target} TYPE)
       if(target_type STREQUAL "SHARED_LIBRARY")

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * basic_usage.cpp - Injection Basic Usage Example (Minimal Stub Implementation)
  */
 

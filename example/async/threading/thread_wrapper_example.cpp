@@ -14,120 +14,113 @@
 
 #include "atom/async/thread_wrapper.hpp"  // Include the Thread wrapper header
 
-// Mutex for thread-safe console output
-std::mutex cout_mutex;
+// Mutex for thread-safe console outputstd::mutex cout_mutex;
 
-// Helper function for thread-safe printing
-template <typename... Args>
+// Helper function for thread-safe printingtemplate <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(cout_mutex);
     (std::cout << ... << std::forward<Args>(args)) << std::endl;
 }
 
-// Helper function to print section headers
-void print_section(const std::string& title) {
-    std::lock_guard<std::mutex> lock(cout_mutex);
-    std::cout << "\n========== " << title << " ==========\n" << std::endl;
+// Helper function to print section headersvoid print_section(const std::string&
+// title) {
+std::lock_guard<std::mutex> lock(cout_mutex);
+std::cout << "\n========== " << title << " ==========\n" << std::endl;
 }
 
-// Helper function to get current thread ID as string
-std::string thread_id_string() {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
+// Helper function to get current thread ID as stringstd::string
+// thread_id_string() {
+std::stringstream ss;
+ss << std::this_thread::get_id();
+return ss.str();
 }
 
-// Simple task that can be interrupted
-void interruptible_task(std::stop_token stop_token, int id, int duration_ms) {
-    print_safe("Task ", id, " started on thread ", thread_id_string());
+// Simple task that can be interruptedvoid interruptible_task(std::stop_token
+// stop_token, int id, int duration_ms) {
+print_safe("Task ", id, " started on thread ", thread_id_string());
 
-    int elapsed = 0;
-    while (elapsed < duration_ms && !stop_token.stop_requested()) {
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        elapsed += 100;
-        print_safe("Task ", id, " progress: ", elapsed, "/", duration_ms,
-                   " ms");
-    }
+int elapsed = 0;
+while (elapsed < duration_ms && !stop_token.stop_requested()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    elapsed += 100;
+    print_safe("Task ", id, " progress: ", elapsed, "/", duration_ms, " ms");
+}
 
+if (stop_token.stop_requested()) {
+    print_safe("Task ", id, " was interrupted at ", elapsed, " ms");
+} else {
+    print_safe("Task ", id, " completed normally");
+}
+}
+
+// Task that returns a valueint compute_task(int value) {
+print_safe("Compute task started with value ", value, " on thread ",
+           thread_id_string());
+// Simulate computation
+std::this_thread::sleep_for(std::chrono::milliseconds(500));
+return value * value;
+}
+
+// Task that might throw an exceptionvoid error_prone_task(bool should_throw) {
+print_safe("Error-prone task started on thread ", thread_id_string());
+std::this_thread::sleep_for(std::chrono::milliseconds(200));
+
+if (should_throw) {
+    print_safe("Task is about to throw an exception!");
+    throw std::runtime_error("Deliberate exception from error-prone task");
+}
+
+print_safe("Error-prone task completed without errors");
+}
+
+// Long-running task that checks for stop requestsvoid
+// long_running_task(std::stop_token stop_token) {
+print_safe("Long-running task started on thread ", thread_id_string());
+
+for (int i = 1; i <= 10; ++i) {
     if (stop_token.stop_requested()) {
-        print_safe("Task ", id, " was interrupted at ", elapsed, " ms");
-    } else {
-        print_safe("Task ", id, " completed normally");
-    }
-}
-
-// Task that returns a value
-int compute_task(int value) {
-    print_safe("Compute task started with value ", value, " on thread ",
-               thread_id_string());
-    // Simulate computation
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
-    return value * value;
-}
-
-// Task that might throw an exception
-void error_prone_task(bool should_throw) {
-    print_safe("Error-prone task started on thread ", thread_id_string());
-    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-    if (should_throw) {
-        print_safe("Task is about to throw an exception!");
-        throw std::runtime_error("Deliberate exception from error-prone task");
+        print_safe("Long-running task received stop request at iteration ", i);
+        return;
     }
 
-    print_safe("Error-prone task completed without errors");
+    print_safe("Long-running task iteration ", i);
+    std::this_thread::sleep_for(std::chrono::milliseconds(300));
 }
 
-// Long-running task that checks for stop requests
-void long_running_task(std::stop_token stop_token) {
-    print_safe("Long-running task started on thread ", thread_id_string());
+print_safe("Long-running task completed all iterations");
+}
 
-    for (int i = 1; i <= 10; ++i) {
-        if (stop_token.stop_requested()) {
-            print_safe("Long-running task received stop request at iteration ",
-                       i);
-            return;
-        }
+// Task that simulates a CPU-bound operationvoid cpu_bound_task(int iterations)
+// {
+print_safe("CPU-bound task started on thread ", thread_id_string());
 
-        print_safe("Long-running task iteration ", i);
-        std::this_thread::sleep_for(std::chrono::milliseconds(300));
+// Simulate CPU-intensive work
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_int_distribution<> distrib(1, 1000);
+
+std::vector<int> data(10000);
+
+for (int i = 0; i < iterations && i < 10; ++i) {
+    print_safe("CPU-bound task iteration ", i + 1);
+
+    // Fill vector with random numbers
+    for (auto& item : data) {
+        item = distrib(gen);
     }
 
-    print_safe("Long-running task completed all iterations");
+    // Sort the vector (CPU-intensive)
+    std::sort(data.begin(), data.end());
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
 }
 
-// Task that simulates a CPU-bound operation
-void cpu_bound_task(int iterations) {
-    print_safe("CPU-bound task started on thread ", thread_id_string());
-
-    // Simulate CPU-intensive work
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> distrib(1, 1000);
-
-    std::vector<int> data(10000);
-
-    for (int i = 0; i < iterations && i < 10; ++i) {
-        print_safe("CPU-bound task iteration ", i + 1);
-
-        // Fill vector with random numbers
-        for (auto& item : data) {
-            item = distrib(gen);
-        }
-
-        // Sort the vector (CPU-intensive)
-        std::sort(data.begin(), data.end());
-
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    }
-
-    print_safe("CPU-bound task completed after ", iterations, " iterations");
+print_safe("CPU-bound task completed after ", iterations, " iterations");
 }
 
-// Function that always throws an exception
-void always_throws() {
-    print_safe("This function will throw immediately");
-    throw std::runtime_error("Immediate exception");
+// Function that always throws an exceptionvoid always_throws() {
+print_safe("This function will throw immediately");
+throw std::runtime_error("Immediate exception");
 }
 
 // C++20 coroutine-based task example (if supported)

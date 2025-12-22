@@ -62,7 +62,7 @@ target("atom-image-object")
     add_headerfiles(table.unpack(header_files))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add optional dependency on cfitsio if available
     if has_package("cfitsio") then
@@ -85,7 +85,7 @@ target("atom-image")
 
     -- Add dependencies
     add_deps("atom-image-object")
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add optional dependency on cfitsio if available
     if has_package("cfitsio") then

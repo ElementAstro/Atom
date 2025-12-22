@@ -4,159 +4,39 @@
 # This script helps scan and process module dependencies. When a module is
 # enabled, its dependencies will be automatically enabled.
 #
+# Main functions: atom_scan_module_dependencies()    - Scan and collect enabled
+# modules atom_process_module_dependencies() - Process and resolve dependencies
+# atom_module_exists()               - Check if a module directory exists
+# atom_resolve_all_dependencies()    - Resolve all module dependencies
+#
 # Author: Max Qian License: GPL3
 # =============================================================================
 
-# Avoid repeated inclusion
-if(DEFINED SCAN_MODULE_INCLUDED)
-  return()
-endif()
-set(SCAN_MODULE_INCLUDED TRUE)
+include_guard(GLOBAL)
 
-# =============================================================================
-# Module Scanning Functions
-# =============================================================================
-
-# Function to scan source files for module declarations and generate module list
-# Parameters: source_dir - Directory containing source files to scan return_var
-# - Variable name to store the result
-function(atom_scan_and_generate_modules source_dir return_var)
-  set(modules_name_r "")
-  file(GLOB_RECURSE CPP_FILES "${source_dir}/*.cpp")
-
-  foreach(cpp_file ${CPP_FILES})
-    file(READ ${cpp_file} file_content)
-    string(REGEX MATCH "ATOM_MODULE\\(([a-zA-Z0-9_]+)," match ${file_content})
-
-    if(match)
-      string(REGEX REPLACE "ATOM_MODULE\\(([a-zA-Z0-9_]+),.*" "\\1" module_name
-                           ${match})
-
-      if(NOT module_name)
-        message(
-          WARNING
-            "Found ATOM_MODULE macro in ${cpp_file} but could not extract module name."
-        )
-        continue()
-      endif()
-
-      set(modules_name_r ${module_name})
-      message(VERBOSE "Found module '${module_name}' in ${cpp_file}")
-    endif()
-  endforeach()
-
-  set(${return_var}
-      "${modules_name_r}"
-      PARENT_SCOPE)
-endfunction()
+# Include module dependencies data
+include(${CMAKE_CURRENT_LIST_DIR}/ModuleDependenciesData.cmake)
 
 # =============================================================================
 # Module Dependency Scanning
 # =============================================================================
 
-# Function: Scan module dependencies and enable necessary modules
+# Function: Scan module dependencies and enable necessary modules This function
+# dynamically checks all modules defined in ATOM_ALL_MODULES
 function(atom_scan_module_dependencies)
-  # Include module dependencies configuration
-  include(${CMAKE_SOURCE_DIR}/cmake/module_dependencies.cmake)
-
-  # Find all enabled modules
   set(enabled_modules)
 
-  # Map build options to module names
-  if(ATOM_BUILD_ERROR)
-    list(APPEND enabled_modules "atom-error")
-    message(STATUS "Module 'atom-error' is enabled")
-  endif()
+  # Dynamically iterate over all modules from ModuleDependenciesData.cmake
+  foreach(module ${ATOM_ALL_MODULES})
+    # Convert module name (atom-xxx) to build option name (ATOM_BUILD_XXX)
+    string(REPLACE "atom-" "" module_name "${module}")
+    string(TOUPPER "${module_name}" module_upper)
 
-  if(ATOM_BUILD_LOG)
-    list(APPEND enabled_modules "atom-log")
-    message(STATUS "Module 'atom-log' is enabled")
-  endif()
-
-  if(ATOM_BUILD_ALGORITHM)
-    list(APPEND enabled_modules "atom-algorithm")
-    message(STATUS "Module 'atom-algorithm' is enabled")
-  endif()
-
-  if(ATOM_BUILD_ASYNC)
-    list(APPEND enabled_modules "atom-async")
-    message(STATUS "Module 'atom-async' is enabled")
-  endif()
-
-  if(ATOM_BUILD_COMPONENTS)
-    list(APPEND enabled_modules "atom-components")
-    message(STATUS "Module 'atom-components' is enabled")
-  endif()
-
-  if(ATOM_BUILD_CONNECTION)
-    list(APPEND enabled_modules "atom-connection")
-    message(STATUS "Module 'atom-connection' is enabled")
-  endif()
-
-  if(ATOM_BUILD_CONTAINERS)
-    list(APPEND enabled_modules "atom-containers")
-    message(STATUS "Module 'atom-containers' is enabled")
-  endif()
-
-  if(ATOM_BUILD_IMAGE)
-    list(APPEND enabled_modules "atom-image")
-    message(STATUS "Module 'atom-image' is enabled")
-  endif()
-
-  if(ATOM_BUILD_IO)
-    list(APPEND enabled_modules "atom-io")
-    message(STATUS "Module 'atom-io' is enabled")
-  endif()
-
-  if(ATOM_BUILD_META)
-    list(APPEND enabled_modules "atom-meta")
-    message(STATUS "Module 'atom-meta' is enabled")
-  endif()
-
-  if(ATOM_BUILD_MEMORY)
-    list(APPEND enabled_modules "atom-memory")
-    message(STATUS "Module 'atom-memory' is enabled")
-  endif()
-
-  if(ATOM_BUILD_SEARCH)
-    list(APPEND enabled_modules "atom-search")
-    message(STATUS "Module 'atom-search' is enabled")
-  endif()
-
-  if(ATOM_BUILD_SECRET)
-    list(APPEND enabled_modules "atom-secret")
-    message(STATUS "Module 'atom-secret' is enabled")
-  endif()
-
-  if(ATOM_BUILD_SERIAL)
-    list(APPEND enabled_modules "atom-serial")
-    message(STATUS "Module 'atom-serial' is enabled")
-  endif()
-
-  if(ATOM_BUILD_SYSINFO)
-    list(APPEND enabled_modules "atom-sysinfo")
-    message(STATUS "Module 'atom-sysinfo' is enabled")
-  endif()
-
-  if(ATOM_BUILD_SYSTEM)
-    list(APPEND enabled_modules "atom-system")
-    message(STATUS "Module 'atom-system' is enabled")
-  endif()
-
-  if(ATOM_BUILD_TYPE)
-    list(APPEND enabled_modules "atom-type")
-    message(STATUS "Module 'atom-type' is enabled")
-  endif()
-
-  if(ATOM_BUILD_UTILS)
-    list(APPEND enabled_modules "atom-utils")
-    message(STATUS "Module 'atom-utils' is enabled")
-  endif()
-
-  if(ATOM_BUILD_WEB)
-    list(APPEND enabled_modules "atom-web")
-    message(STATUS "Module 'atom-web' is enabled")
-  endif()
+    if(ATOM_BUILD_${module_upper})
+      list(APPEND enabled_modules "${module}")
+      message(STATUS "Module '${module}' is enabled")
+    endif()
+  endforeach()
 
   # Store the enabled modules in a global property for later use
   set_property(GLOBAL PROPERTY ATOM_ENABLED_MODULES "${enabled_modules}")
@@ -314,33 +194,14 @@ function(atom_resolve_all_dependencies)
   # Include module dependencies to get the auto-resolve function
   include(${CMAKE_SOURCE_DIR}/cmake/ModuleDependencies.cmake)
 
-  # List of all possible modules
-  set(ALL_MODULES
-      ALGORITHM
-      ASYNC
-      COMPONENTS
-      CONNECTION
-      CONTAINERS
-      ERROR
-      IMAGE
-      IO
-      LOG
-      MEMORY
-      META
-      SEARCH
-      SECRET
-      SERIAL
-      SYSINFO
-      SYSTEM
-      TYPE
-      UTILS
-      WEB)
-
+  # Use ATOM_ALL_MODULES from ModuleDependenciesData.cmake (already included)
   # For each enabled module, resolve its dependencies
-  foreach(MODULE ${ALL_MODULES})
-    if(ATOM_BUILD_${MODULE})
-      string(TOLOWER ${MODULE} module_lower)
-      atom_auto_resolve_dependencies("atom-${module_lower}")
+  foreach(module ${ATOM_ALL_MODULES})
+    string(REPLACE "atom-" "" module_name "${module}")
+    string(TOUPPER "${module_name}" MODULE_UPPER)
+
+    if(ATOM_BUILD_${MODULE_UPPER})
+      atom_auto_resolve_dependencies("${module}")
     endif()
   endforeach()
 endfunction()

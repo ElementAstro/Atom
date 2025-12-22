@@ -236,7 +236,16 @@ cython_debug/
 # -----------------------------------------------------------------------------
 
 # Visual Studio Code
-.vscode/
+# Track shared configuration, exclude user-specific files
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/c_cpp_properties.json
+!.vscode/cmake-kits.json
+!.vscode/cmake-variants.yaml
+!.vscode/keybindings.json
 *.code-workspace
 
 # Visual Studio

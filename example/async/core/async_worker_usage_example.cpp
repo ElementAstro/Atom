@@ -38,11 +38,9 @@
 // UTILITY FUNCTIONS AND HELPERS
 // ============================================================================
 
-// Print mutex for thread-safe output
-std::mutex print_mutex;
+// Print mutex for thread-safe outputstd::mutex print_mutex;
 
-// Thread-safe print function with timestamp
-template <typename... Args>
+// Thread-safe print function with timestamptemplate <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(print_mutex);
     auto now = std::chrono::system_clock::now();
@@ -56,47 +54,44 @@ void print_safe(Args&&... args) {
     (std::cout << ... << args) << std::endl;
 }
 
-// Print section divider with enhanced formatting
-void print_section(const std::string& title) {
-    std::lock_guard<std::mutex> lock(print_mutex);
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n" << std::endl;
+// Print section divider with enhanced formattingvoid print_section(const
+// std::string& title) {
+std::lock_guard<std::mutex> lock(print_mutex);
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n" << std::endl;
 }
 
-// Helper function to get thread ID as string
-std::string get_thread_id() {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
+// Helper function to get thread ID as stringstd::string get_thread_id() {
+std::stringstream ss;
+ss << std::this_thread::get_id();
+return ss.str();
 }
 
-// Performance timer for measuring operations
-class PerformanceTimer {
+// Performance timer for measuring operationsclass PerformanceTimer {
 public:
-    void start(const std::string& operation) {
-        current_operation_ = operation;
-        start_time_ = std::chrono::high_resolution_clock::now();
-        print_safe("⏱️  Starting: ", operation);
-    }
+void start(const std::string& operation) {
+    current_operation_ = operation;
+    start_time_ = std::chrono::high_resolution_clock::now();
+    print_safe("⏱️  Starting: ", operation);
+}
 
-    void stop() {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                            end_time - start_time_)
-                            .count();
+void stop() {
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                        end_time - start_time_)
+                        .count();
 
-        print_safe("⏱️  Completed: ", current_operation_, " in ", duration,
-                   " μs");
-    }
+    print_safe("⏱️  Completed: ", current_operation_, " in ", duration, " μs");
+}
 
 private:
-    std::string current_operation_;
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
+std::string current_operation_;
+std::chrono::high_resolution_clock::time_point start_time_;
+}
+;
 
-// Validation helper
-template <typename T>
+// Validation helpertemplate <typename T>
 void validate_result(const T& result, const T& expected,
                      const std::string& test_name) {
     if (result == expected) {
@@ -372,25 +367,24 @@ void callback_and_validation_examples() {
     }
 }
 
-// Main function
-int main() {
-    try {
-        std::cout << "====== AsyncWorker Usage Examples ======" << std::endl;
+// Main functionint main() {
+try {
+    std::cout << "====== AsyncWorker Usage Examples ======" << std::endl;
 
-        basic_asyncworker_examples();
-        state_management_examples();
-        cancellation_and_timeout_examples();
-        callback_and_validation_examples();
+    basic_asyncworker_examples();
+    state_management_examples();
+    cancellation_and_timeout_examples();
+    callback_and_validation_examples();
 
-        std::cout << "\n====== All AsyncWorker Examples Completed ======"
-                  << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "Unknown unhandled exception in main" << std::endl;
-        return 1;
-    }
+    std::cout << "\n====== All AsyncWorker Examples Completed ======"
+              << std::endl;
+} catch (const std::exception& e) {
+    std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
+    return 1;
+} catch (...) {
+    std::cerr << "Unknown unhandled exception in main" << std::endl;
+    return 1;
+}
 
-    return 0;
+return 0;
 }

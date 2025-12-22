@@ -28,8 +28,7 @@
 
 using namespace atom::system;
 
-// Global variables for demonstration
-std::atomic<int> changeCount{0};
+// Global variables for demonstrationstd::atomic<int> changeCount{0};
 std::atomic<bool> monitoringActive{true};
 
 /**

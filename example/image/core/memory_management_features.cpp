@@ -24,36 +24,36 @@
 #include <unordered_map>
 #include <vector>
 
-// Portable aligned allocation fallback
-inline void* aligned_alloc_impl(size_t alignment, size_t size) {
+// Portable aligned allocation fallbackinline void* aligned_alloc_impl(size_t
+// alignment, size_t size) {
 #if defined(_WIN32) || defined(_WIN64)
-    return _aligned_malloc(size, alignment);
+return _aligned_malloc(size, alignment);
 #elif defined(__APPLE__)
-    // macOS doesn't have aligned_alloc, use posix_memalign
-    void* ptr = nullptr;
-    if (posix_memalign(&ptr, alignment, size) != 0) {
-        return nullptr;
-    }
-    return ptr;
+// macOS doesn't have aligned_alloc, use posix_memalign
+void* ptr = nullptr;
+if (posix_memalign(&ptr, alignment, size) != 0) {
+    return nullptr;
+}
+return ptr;
 #elif defined(__linux__)
-    // Linux has aligned_alloc but with stricter requirements
-    if (size % alignment == 0) {
-        return std::aligned_alloc(alignment, size);
-    } else {
-        // Fall back to posix_memalign
-        void* ptr = nullptr;
-        if (posix_memalign(&ptr, alignment, size) != 0) {
-            return nullptr;
-        }
-        return ptr;
-    }
-#else
-    // Generic fallback - use posix_memalign if available
+// Linux has aligned_alloc but with stricter requirements
+if (size % alignment == 0) {
+    return std::aligned_alloc(alignment, size);
+} else {
+    // Fall back to posix_memalign
     void* ptr = nullptr;
     if (posix_memalign(&ptr, alignment, size) != 0) {
         return nullptr;
     }
     return ptr;
+}
+#else
+// Generic fallback - use posix_memalign if available
+void* ptr = nullptr;
+if (posix_memalign(&ptr, alignment, size) != 0) {
+    return nullptr;
+}
+return ptr;
 #endif
 }
 

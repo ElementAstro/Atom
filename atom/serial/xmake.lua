@@ -58,7 +58,7 @@ target("atom-serial-object")
     add_headerfiles(table.unpack(header_files))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -85,7 +85,7 @@ target("atom-serial")
 
     -- Add dependencies
     add_deps("atom-serial-object")
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Platform-specific settings
     if is_plat("windows", "mingw") then

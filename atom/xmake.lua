@@ -14,22 +14,23 @@ set_project("atom")
 set_version("1.0.0")
 set_license("GPL-3.0")
 
--- Set languages (match CMake C++20/23)
+-- Set languages (match CMake C++20)
 set_languages("c11", "cxx20")
 
--- Add build modes
-add_rules("mode.debug", "mode.release")
+-- Add build modes (inherit from parent)
+add_rules("mode.debug", "mode.release", "mode.minsizerel", "mode.releasedbg")
+
+-- =============================================================================
+-- Platform Detection Helper (shared with parent)
+-- =============================================================================
+
+function is_windows_like()
+    return is_plat("windows") or is_plat("mingw") or is_plat("msys")
+end
 
 -- =============================================================================
 -- Configuration Options
 -- =============================================================================
-
--- Python support option
-option("python")
-    set_default(false)
-    set_description("Build Atom with Python support")
-    set_showmenu(true)
-option_end()
 
 -- Module build options are inherited from parent configuration
 local modules = {
@@ -37,13 +38,6 @@ local modules = {
     "error", "image", "io", "log", "memory", "meta", "search", "secret",
     "serial", "sysinfo", "system", "type", "utils", "web"
 }
-
--- Tests option
-option("tests")
-    set_default(false)
-    set_description("Build tests")
-    set_showmenu(true)
-option_end()
 
 -- Unified library option
 option("unified")
@@ -53,14 +47,15 @@ option("unified")
 option_end()
 
 -- =============================================================================
--- Python Support Configuration
+-- Common Compile Options for All Modules
 -- =============================================================================
 
-if has_config("python") then
-    local use_system_packages = has_config("use_system_packages")
-    add_requires("python3", {system = use_system_packages})
-    add_requires("pybind11", {system = use_system_packages})
-    print("Python support enabled")
+-- Add common compile definitions (matching CMake)
+add_defines("SPDLOG_COMPILED_LIB", "SPDLOG_FMT_EXTERNAL")
+
+-- Platform-specific definitions
+if is_windows_like() then
+    add_defines("_WIN32_WINNT=0x0A00", "WINVER=0x0A00", "NOMINMAX", "WIN32_LEAN_AND_MEAN")
 end
 
 -- =============================================================================

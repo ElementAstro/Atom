@@ -28,8 +28,7 @@ void printSection(const std::string& title) {
     std::cout << "========================================" << std::endl;
 }
 
-// Helper to print binary representation
-template <typename T>
+// Helper to print binary representationtemplate <typename T>
 void printBinary(const std::string& label, T value) {
     constexpr int bits = sizeof(T) * 8;
     std::cout << label << ": " << std::bitset<bits>(value) << " (0x" << std::hex

@@ -8,10 +8,10 @@
 
 Date: 2024-12-25
 
-Description: Game Entity System Example
-Demonstrates Entity-Component-System (ECS) pattern using the Atom component
-framework. Shows how to create game entities with different components like
-position, health, rendering, and AI behavior.
+Description: Game Entity System ExampleDemonstrates Entity-Component-System
+(ECS) pattern using the Atom componentframework. Shows how to create game
+entities with different components likeposition, health, rendering, and AI
+behavior.
 
 **************************************************/
 
@@ -40,8 +40,7 @@ position, health, rendering, and AI behavior.
 
 // Note: Registry and Component are in the global namespace, not
 // atom::components LifecycleManager and LifecyclePhase are in atom::components
-// namespace
-using atom::components::LifecycleManager;
+// namespaceusing atom::components::LifecycleManager;
 using atom::components::LifecyclePhase;
 
 /**

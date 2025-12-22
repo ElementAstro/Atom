@@ -19,7 +19,7 @@
 #include <thread>
 #include <vector>
 
-#include "atom/system/signal_monitor.hpp"
+#include "atom/system/signals/signal_monitor.hpp"
 
 namespace atom::system::test {
 
@@ -224,7 +224,7 @@ TEST_F(SignalMonitorTest, RemoveThresholdCallback_ValidId) {
     ASSERT_GE(callbackId, 0);
 
     // Remove the callback
-    EXPECT_NO_THROW(monitor->removeThresholdCallback(callbackId));
+    EXPECT_NO_THROW(monitor->removeCallback(callbackId));
 }
 
 /**
@@ -232,7 +232,7 @@ TEST_F(SignalMonitorTest, RemoveThresholdCallback_ValidId) {
  */
 TEST_F(SignalMonitorTest, RemoveThresholdCallback_InvalidId) {
     // Removing non-existent callback should be safe
-    EXPECT_NO_THROW(monitor->removeThresholdCallback(99999));
+    EXPECT_NO_THROW(monitor->removeCallback(99999));
 }
 
 /**
@@ -244,10 +244,10 @@ TEST_F(SignalMonitorTest, RemoveThresholdCallback_Twice) {
     int callbackId = monitor->addThresholdCallback(testSignal, 10, 5, callback);
     ASSERT_GE(callbackId, 0);
 
-    monitor->removeThresholdCallback(callbackId);
+    monitor->removeCallback(callbackId);
 
     // Removing again should be safe
-    EXPECT_NO_THROW(monitor->removeThresholdCallback(callbackId));
+    EXPECT_NO_THROW(monitor->removeCallback(callbackId));
 }
 
 // ============================================================================
@@ -347,7 +347,7 @@ TEST_F(SignalMonitorTest, Integration_ConcurrentCallbackOperations) {
 
     // Remove some callbacks while monitoring
     for (size_t i = 0; i < callbackIds.size(); i += 2) {
-        monitor->removeThresholdCallback(callbackIds[i]);
+        monitor->removeCallback(callbackIds[i]);
     }
 
     std::this_thread::sleep_for(200ms);

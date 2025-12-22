@@ -5,40 +5,38 @@
 #include <vector>
 #include "atom/search/sqlite.hpp"
 
-// Helper function to print query results
-void printResults(const SqliteDB::ResultSet& results) {
-    if (results.empty()) {
-        std::cout << "No results found.\n";
-        return;
-    }
-
-    // Calculate column widths for pretty printing
-    const size_t colWidth = 15;
-
-    // Print header row (first row of first result)
-    if (!results.empty() && !results[0].empty()) {
-        for (size_t i = 0; i < results[0].size(); ++i) {
-            std::cout << std::left << std::setw(colWidth)
-                      << "Column " + std::to_string(i) << " | ";
-        }
-        std::cout << "\n"
-                  << std::string(results[0].size() * (colWidth + 3), '-')
-                  << "\n";
-    }
-
-    // Print all rows
-    for (const auto& row : results) {
-        for (const auto& cell : row) {
-            std::cout << std::left << std::setw(colWidth) << cell << " | ";
-        }
-        std::cout << '\n';
-    }
-    std::cout << "\n";
+// Helper function to print query resultsvoid printResults(const
+// SqliteDB::ResultSet& results) {
+if (results.empty()) {
+    std::cout << "No results found.\n";
+    return;
 }
 
-// Custom error callback
-void errorCallback(std::string_view errorMsg) {
-    std::cerr << "SQL Error: " << errorMsg << std::endl;
+// Calculate column widths for pretty printing
+const size_t colWidth = 15;
+
+// Print header row (first row of first result)
+if (!results.empty() && !results[0].empty()) {
+    for (size_t i = 0; i < results[0].size(); ++i) {
+        std::cout << std::left << std::setw(colWidth)
+                  << "Column " + std::to_string(i) << " | ";
+    }
+    std::cout << "\n"
+              << std::string(results[0].size() * (colWidth + 3), '-') << "\n";
+}
+
+// Print all rows
+for (const auto& row : results) {
+    for (const auto& cell : row) {
+        std::cout << std::left << std::setw(colWidth) << cell << " | ";
+    }
+    std::cout << '\n';
+}
+std::cout << "\n";
+}
+
+// Custom error callbackvoid errorCallback(std::string_view errorMsg) {
+std::cerr << "SQL Error: " << errorMsg << std::endl;
 }
 
 int main() {

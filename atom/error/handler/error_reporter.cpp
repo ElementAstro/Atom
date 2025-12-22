@@ -14,7 +14,9 @@ Description: Error reporter implementation
 
 #include "error_reporter.hpp"
 
+#include <format>
 #include <iostream>
+#include <ranges>
 
 namespace atom::error {
 
@@ -41,7 +43,7 @@ ErrorReporter::ErrorReporter()
 ErrorReporter::~ErrorReporter() { stop(); }
 
 void ErrorReporter::start() {
-    std::lock_guard<std::mutex> lock(queueMutex_);
+    std::scoped_lock lock(queueMutex_);
     if (!running_.load()) {
         running_ = true;
         processingThread_ = std::thread(&ErrorReporter::processingLoop, this);
@@ -60,20 +62,21 @@ void ErrorReporter::stop() {
 auto ErrorReporter::isRunning() const -> bool { return running_.load(); }
 
 void ErrorReporter::reportError(std::shared_ptr<ErrorContext> context) {
-    if (!context)
-        return;
-
-    totalErrors_++;
-
-    std::unique_lock<std::mutex> lock(queueMutex_);
-
-    // Check queue size limit
-    if (errorQueue_.size() >= maxQueueSize_) {
-        droppedErrors_++;
+    if (!context) [[unlikely]] {
         return;
     }
 
-    errorQueue_.push(context);
+    ++totalErrors_;
+
+    std::unique_lock lock(queueMutex_);
+
+    // Check queue size limit
+    if (errorQueue_.size() >= maxQueueSize_) [[unlikely]] {
+        ++droppedErrors_;
+        return;
+    }
+
+    errorQueue_.push(std::move(context));
     lock.unlock();
 
     queueCondition_.notify_one();
@@ -81,32 +84,32 @@ void ErrorReporter::reportError(std::shared_ptr<ErrorContext> context) {
 
 void ErrorReporter::addHandler(const std::string& name,
                                ErrorHandlerCallback handler) {
-    std::unique_lock<std::shared_mutex> lock(handlersMutex_);
-    handlers_[name] = std::move(handler);
+    std::unique_lock lock(handlersMutex_);
+    handlers_.insert_or_assign(name, std::move(handler));
 }
 
 void ErrorReporter::removeHandler(const std::string& name) {
-    std::unique_lock<std::shared_mutex> lock(handlersMutex_);
+    std::unique_lock lock(handlersMutex_);
     handlers_.erase(name);
 }
 
 void ErrorReporter::addFilter(const std::string& name, ErrorFilter filter) {
-    std::unique_lock<std::shared_mutex> lock(handlersMutex_);
-    filters_[name] = std::move(filter);
+    std::unique_lock lock(handlersMutex_);
+    filters_.insert_or_assign(name, std::move(filter));
 }
 
 void ErrorReporter::removeFilter(const std::string& name) {
-    std::unique_lock<std::shared_mutex> lock(handlersMutex_);
+    std::unique_lock lock(handlersMutex_);
     filters_.erase(name);
 }
 
 void ErrorReporter::setAggregationStrategy(AggregationStrategy strategy) {
-    std::lock_guard<std::mutex> lock(aggregationMutex_);
+    std::scoped_lock lock(aggregationMutex_);
     aggregationStrategy_ = strategy;
 }
 
 void ErrorReporter::setAggregationWindow(std::chrono::milliseconds window) {
-    std::lock_guard<std::mutex> lock(aggregationMutex_);
+    std::scoped_lock lock(aggregationMutex_);
     aggregationWindow_ = window;
 }
 
@@ -134,27 +137,27 @@ auto ErrorReporter::getStatistics() const
 }
 
 void ErrorReporter::clearStatistics() {
-    totalErrors_ = 0;
-    processedErrors_ = 0;
-    filteredErrors_ = 0;
-    droppedErrors_ = 0;
+    totalErrors_.store(0);
+    processedErrors_.store(0);
+    filteredErrors_.store(0);
+    droppedErrors_.store(0);
 
-    for (auto& [severity, count] : severityStats_) {
-        count = 0;
+    for (auto& count : severityStats_ | std::views::values) {
+        count.store(0);
     }
 
-    for (auto& [category, count] : categoryStats_) {
-        count = 0;
+    for (auto& count : categoryStats_ | std::views::values) {
+        count.store(0);
     }
 }
 
 void ErrorReporter::setMaxQueueSize(size_t maxSize) {
-    std::lock_guard<std::mutex> lock(queueMutex_);
+    std::scoped_lock lock(queueMutex_);
     maxQueueSize_ = maxSize;
 }
 
 auto ErrorReporter::getQueueSize() const -> size_t {
-    std::lock_guard<std::mutex> lock(queueMutex_);
+    std::scoped_lock lock(queueMutex_);
     return errorQueue_.size();
 }
 
@@ -178,12 +181,13 @@ void ErrorReporter::processingLoop() {
 }
 
 void ErrorReporter::processError(std::shared_ptr<ErrorContext> context) {
-    if (!context)
+    if (!context) [[unlikely]] {
         return;
+    }
 
     // Apply filters
     if (!shouldProcess(context)) {
-        filteredErrors_++;
+        ++filteredErrors_;
         return;
     }
 
@@ -196,21 +200,21 @@ void ErrorReporter::processError(std::shared_ptr<ErrorContext> context) {
     }
 
     // Call handlers
-    std::shared_lock<std::shared_mutex> lock(handlersMutex_);
+    std::shared_lock lock(handlersMutex_);
     for (const auto& [name, handler] : handlers_) {
         try {
             handler(context);
         } catch (const std::exception& e) {
-            std::cerr << "Error in handler '" << name << "': " << e.what()
-                      << std::endl;
+            std::cerr << std::format("Error in handler '{}': {}\n", name,
+                                     e.what());
         }
     }
 
-    processedErrors_++;
+    ++processedErrors_;
 }
 
 bool ErrorReporter::shouldProcess(std::shared_ptr<ErrorContext> context) {
-    std::shared_lock<std::shared_mutex> lock(handlersMutex_);
+    std::shared_lock lock(handlersMutex_);
 
     for (const auto& [name, filter] : filters_) {
         try {
@@ -218,8 +222,8 @@ bool ErrorReporter::shouldProcess(std::shared_ptr<ErrorContext> context) {
                 return false;
             }
         } catch (const std::exception& e) {
-            std::cerr << "Error in filter '" << name << "': " << e.what()
-                      << std::endl;
+            std::cerr << std::format("Error in filter '{}': {}\n", name,
+                                     e.what());
         }
     }
 
@@ -227,31 +231,28 @@ bool ErrorReporter::shouldProcess(std::shared_ptr<ErrorContext> context) {
 }
 
 void ErrorReporter::updateStatistics(std::shared_ptr<ErrorContext> context) {
-    severityStats_[context->getSeverity()]++;
-    categoryStats_[context->getCategory()]++;
+    ++severityStats_[context->getSeverity()];
+    ++categoryStats_[context->getCategory()];
 }
 
 void ErrorReporter::aggregateError(std::shared_ptr<ErrorContext> context) {
-    std::lock_guard<std::mutex> lock(aggregationMutex_);
+    std::scoped_lock lock(aggregationMutex_);
 
-    std::string key = getAggregationKey(context);
-    auto now = std::chrono::steady_clock::now();
+    const auto key = getAggregationKey(context);
+    const auto now = std::chrono::steady_clock::now();
 
     // Check if we need to flush old aggregated errors
-    auto it = aggregationTimestamps_.find(key);
-    if (it != aggregationTimestamps_.end()) {
+    if (auto it = aggregationTimestamps_.find(key);
+        it != aggregationTimestamps_.end()) {
         if (now - it->second > aggregationWindow_) {
-            auto& errors = aggregatedErrors_[key];
-            if (!errors.empty()) {
-                errors.clear();
-            }
-            aggregationTimestamps_[key] = now;
+            aggregatedErrors_[key].clear();
+            it->second = now;
         }
     } else {
-        aggregationTimestamps_[key] = now;
+        aggregationTimestamps_.emplace(key, now);
     }
 
-    aggregatedErrors_[key].push_back(context);
+    aggregatedErrors_[key].emplace_back(std::move(context));
 }
 
 std::string ErrorReporter::getAggregationKey(

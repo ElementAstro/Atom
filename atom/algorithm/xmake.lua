@@ -8,17 +8,22 @@ set_version("1.0.0", {build = "%Y%m%d%H%M"})
 -- Set languages
 set_languages("c11", "cxx20")
 
--- Add build modes
-add_rules("mode.debug", "mode.release")
+-- Add build modes (including minsizerel for size optimization)
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
 
 -- Define dependencies
 local atom_algorithm_depends = {"atom-error"}
 
--- Add required packages
+-- Add required packages (use spdlog instead of loguru to match CMake)
 local use_system_packages = has_config("use_system_packages")
 add_requires("openssl", {system = use_system_packages})
-add_requires("tbb", {system = use_system_packages})
-add_requires("loguru", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
+
+-- TBB is optional - only add if use_tbb is enabled
+if has_config("use_tbb") then
+    add_requires("tbb", {system = use_system_packages, optional = true})
+end
 
 -- Define the main target
 target("atom-algorithm")
@@ -53,8 +58,11 @@ target("atom-algorithm")
     -- Add include directories
     add_includedirs(".", {public = true})
 
-    -- Add packages
-    add_packages("openssl", "tbb", "loguru")
+    -- Add packages (use spdlog instead of loguru)
+    add_packages("openssl", "spdlog", "fmt")
+    if has_config("use_tbb") then
+        add_packages("tbb")
+    end
 
     -- Add system libraries
     if is_plat("linux") then

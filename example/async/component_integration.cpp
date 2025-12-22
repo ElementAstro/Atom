@@ -53,11 +53,9 @@ using namespace atom::async;
 // UTILITY FUNCTIONS AND HELPERS
 // ============================================================================
 
-// Print mutex for thread-safe output
-std::mutex print_mutex;
+// Print mutex for thread-safe outputstd::mutex print_mutex;
 
-// Thread-safe print function with timestamp
-template <typename... Args>
+// Thread-safe print function with timestamptemplate <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(print_mutex);
     auto now = std::chrono::system_clock::now();
@@ -71,82 +69,78 @@ void print_safe(Args&&... args) {
     (std::cout << ... << args) << std::endl;
 }
 
-// Enhanced section separator
-void print_section(const std::string& title) {
-    std::lock_guard<std::mutex> lock(print_mutex);
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n" << std::endl;
+// Enhanced section separatorvoid print_section(const std::string& title) {
+std::lock_guard<std::mutex> lock(print_mutex);
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n" << std::endl;
 }
 
-// Performance timer
-class PerformanceTimer {
+// Performance timerclass PerformanceTimer {
 public:
-    void start(const std::string& operation) {
-        current_operation_ = operation;
-        start_time_ = std::chrono::high_resolution_clock::now();
-        print_safe("⏱️  Starting: ", operation);
-    }
+void start(const std::string& operation) {
+    current_operation_ = operation;
+    start_time_ = std::chrono::high_resolution_clock::now();
+    print_safe("⏱️  Starting: ", operation);
+}
 
-    void stop() {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                            end_time - start_time_)
-                            .count();
+void stop() {
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                        end_time - start_time_)
+                        .count();
 
-        print_safe("⏱️  Completed: ", current_operation_, " in ", duration,
-                   " μs");
-    }
+    print_safe("⏱️  Completed: ", current_operation_, " in ", duration, " μs");
+}
 
 private:
-    std::string current_operation_;
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
+std::string current_operation_;
+std::chrono::high_resolution_clock::time_point start_time_;
+}
+;
 
 // ============================================================================
 // MESSAGE TYPES FOR INTEGRATION EXAMPLES
 // ============================================================================
 
-// Data processing request
-struct DataRequest {
-    int request_id;
-    std::vector<int> data;
-    std::string operation;
+// Data processing requeststruct DataRequest {
+int request_id;
+std::vector<int> data;
+std::string operation;
 
-    DataRequest(int id, std::vector<int> data, std::string operation)
-        : request_id(id),
-          data(std::move(data)),
-          operation(std::move(operation)) {}
-};
+DataRequest(int id, std::vector<int> data, std::string operation)
+    : request_id(id), data(std::move(data)), operation(std::move(operation)) {}
+}
+;
 
-// Processing result
-struct ProcessingResult {
-    int request_id;
-    std::vector<int> result;
-    bool success;
-    std::string error_message;
+// Processing resultstruct ProcessingResult {
+int request_id;
+std::vector<int> result;
+bool success;
+std::string error_message;
 
-    ProcessingResult(int id, std::vector<int> result, bool success,
-                     std::string error = "")
-        : request_id(id),
-          result(std::move(result)),
-          success(success),
-          error_message(std::move(error)) {}
-};
+ProcessingResult(int id, std::vector<int> result, bool success,
+                 std::string error = "")
+    : request_id(id),
+      result(std::move(result)),
+      success(success),
+      error_message(std::move(error)) {}
+}
+;
 
-// System event
-struct SystemEvent {
-    enum class Type { STARTUP, SHUTDOWN, ERROR_EVENT, MAINTENANCE };
+// System eventstruct SystemEvent {
+enum class Type { STARTUP, SHUTDOWN, ERROR_EVENT, MAINTENANCE };
 
-    Type type;
-    std::string message;
-    std::chrono::system_clock::time_point timestamp;
+Type type;
+std::string message;
+std::chrono::system_clock::time_point timestamp;
 
-    SystemEvent(Type type, std::string message)
-        : type(type),
-          message(std::move(message)),
-          timestamp(std::chrono::system_clock::now()) {}
-};
+SystemEvent(Type type, std::string message)
+    : type(type),
+      message(std::move(message)),
+      timestamp(std::chrono::system_clock::now()) {}
+}
+;
 
 // ============================================================================
 // SECTION 1: PROMISE + EXECUTOR INTEGRATION
@@ -449,25 +443,23 @@ void threadpool_messagequeue_integration() {
     }
 }
 
-// Main function
-int main() {
-    try {
-        std::cout << "====== Component Integration Examples ======"
-                  << std::endl;
+// Main functionint main() {
+try {
+    std::cout << "====== Component Integration Examples ======" << std::endl;
 
-        promise_executor_integration();
-        messagebus_timer_integration();
-        threadpool_messagequeue_integration();
+    promise_executor_integration();
+    messagebus_timer_integration();
+    threadpool_messagequeue_integration();
 
-        std::cout << "\n====== All Integration Examples Completed ======"
-                  << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "Unknown unhandled exception in main" << std::endl;
-        return 1;
-    }
+    std::cout << "\n====== All Integration Examples Completed ======"
+              << std::endl;
+} catch (const std::exception& e) {
+    std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
+    return 1;
+} catch (...) {
+    std::cerr << "Unknown unhandled exception in main" << std::endl;
+    return 1;
+}
 
-    return 0;
+return 0;
 }

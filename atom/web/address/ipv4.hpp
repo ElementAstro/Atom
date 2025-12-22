@@ -4,11 +4,11 @@
 #include <array>
 #include <compare>
 #include <cstdint>
-#include <expected>
 #include <format>
 #include <optional>
 #include <span>
 #include "address.hpp"
+#include "atom/type/expected.hpp"
 
 namespace atom::web {
 
@@ -214,7 +214,7 @@ private:
      * @return Expected containing IPv4 or error.
      */
     [[nodiscard]] static auto tryParse(std::string_view address)
-        -> std::expected<IPv4, IPv4Error>;
+        -> atom::type::expected<IPv4, IPv4Error>;
 
     /**
      * @brief Try to parse CIDR notation.
@@ -222,7 +222,7 @@ private:
      * @return Expected containing (IPv4, prefix) or error.
      */
     [[nodiscard]] static auto tryParseCIDR(std::string_view cidr)
-        -> std::expected<std::pair<IPv4, int>, IPv4Error>;
+        -> atom::type::expected<std::pair<IPv4, int>, IPv4Error>;
 
     /**
      * @brief Check if this is a broadcast address.

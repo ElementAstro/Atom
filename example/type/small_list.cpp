@@ -18,20 +18,19 @@
 
 using namespace atom::type;
 
-// Helper function to print section headers
-void printSection(const std::string& title) {
-    std::cout << "\n==========================================" << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "==========================================" << std::endl;
+// Helper function to print section headersvoid printSection(const std::string&
+// title) {
+std::cout << "\n==========================================" << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "==========================================" << std::endl;
 }
 
-// Helper function to print subsection headers
-void printSubsection(const std::string& title) {
-    std::cout << "\n--- " << title << " ---" << std::endl;
+// Helper function to print subsection headersvoid printSubsection(const
+// std::string& title) {
+std::cout << "\n--- " << title << " ---" << std::endl;
 }
 
-// Helper function to display SmallList contents
-template <typename T>
+// Helper function to display SmallList contentstemplate <typename T>
 void printList(const SmallList<T>& list, const std::string& name) {
     std::cout << name << " (size=" << list.size() << "): [";
     bool first = true;
@@ -45,8 +44,7 @@ void printList(const SmallList<T>& list, const std::string& name) {
     std::cout << "]" << std::endl;
 }
 
-// Helper function to measure execution time
-template <typename Func>
+// Helper function to measure execution timetemplate <typename Func>
 double measureTime(Func&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();
@@ -54,37 +52,37 @@ double measureTime(Func&& func) {
     return std::chrono::duration<double, std::micro>(end - start).count();
 }
 
-// Custom class for testing
-class Person {
+// Custom class for testingclass Person {
 public:
-    Person() : name_("Unnamed"), age_(0) {}
+Person() : name_("Unnamed"), age_(0) {}
 
-    Person(std::string name, int age) : name_(std::move(name)), age_(age) {}
+Person(std::string name, int age) : name_(std::move(name)), age_(age) {}
 
-    std::string getName() const { return name_; }
-    int getAge() const { return age_; }
+std::string getName() const { return name_; }
+int getAge() const { return age_; }
 
-    void setName(const std::string& name) { name_ = name; }
-    void setAge(int age) { age_ = age; }
+void setName(const std::string& name) { name_ = name; }
+void setAge(int age) { age_ = age; }
 
-    bool operator==(const Person& other) const {
-        return name_ == other.name_ && age_ == other.age_;
-    }
+bool operator==(const Person& other) const {
+    return name_ == other.name_ && age_ == other.age_;
+}
 
-    bool operator!=(const Person& other) const { return !(*this == other); }
+bool operator!=(const Person& other) const { return !(*this == other); }
 
-    bool operator<(const Person& other) const {
-        return std::tie(name_, age_) < std::tie(other.name_, other.age_);
-    }
+bool operator<(const Person& other) const {
+    return std::tie(name_, age_) < std::tie(other.name_, other.age_);
+}
 
-    friend std::ostream& operator<<(std::ostream& os, const Person& person) {
-        return os << "{" << person.name_ << ", " << person.age_ << "}";
-    }
+friend std::ostream& operator<<(std::ostream& os, const Person& person) {
+    return os << "{" << person.name_ << ", " << person.age_ << "}";
+}
 
 private:
-    std::string name_;
-    int age_;
-};
+std::string name_;
+int age_;
+}
+;
 
 int main() {
     std::cout << "==========================================" << std::endl;

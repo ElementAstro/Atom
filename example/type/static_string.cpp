@@ -17,28 +17,26 @@
 #include <string>
 #include <vector>
 
-// Helper function to print section headers
-void printSection(const std::string& title) {
-    std::cout << "\n==========================================" << std::endl;
-    std::cout << "  " << title << std::endl;
-    std::cout << "==========================================" << std::endl;
+// Helper function to print section headersvoid printSection(const std::string&
+// title) {
+std::cout << "\n==========================================" << std::endl;
+std::cout << "  " << title << std::endl;
+std::cout << "==========================================" << std::endl;
 }
 
-// Helper function to print subsection headers
-void printSubsection(const std::string& title) {
-    std::cout << "\n--- " << title << " ---" << std::endl;
+// Helper function to print subsection headersvoid printSubsection(const
+// std::string& title) {
+std::cout << "\n--- " << title << " ---" << std::endl;
 }
 
-// Helper function to display StaticString details
-template <std::size_t N>
+// Helper function to display StaticString detailstemplate <std::size_t N>
 void printString(const StaticString<N>& str, const std::string& name) {
     std::cout << name << " (size=" << str.size()
               << ", capacity=" << str.capacity() << "): \"" << str << "\""
               << std::endl;
 }
 
-// Helper function to test and time string operations
-template <typename Func>
+// Helper function to test and time string operationstemplate <typename Func>
 void timeOperation(const std::string& operation, Func&& func) {
     std::cout << "Executing: " << operation << "... ";
 

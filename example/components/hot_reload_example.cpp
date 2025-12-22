@@ -8,10 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Hot Reload Example
-Demonstrates runtime component updates and hot reloading capabilities using
-the Atom component framework. Shows how components can be modified, reloaded,
-and updated without stopping the application.
+Description: Hot Reload ExampleDemonstrates runtime component updates and hot
+reloading capabilities usingthe Atom component framework. Shows how components
+can be modified, reloaded, and updated without stopping the application.
 
 **************************************************/
 

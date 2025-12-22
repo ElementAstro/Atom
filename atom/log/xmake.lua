@@ -1,19 +1,21 @@
--- filepath: d:\msys64\home\qwdma\Atom\atom\log\xmake.lua
 -- xmake configuration for Atom-Log module
 -- Author: Max Qian
 -- License: GPL3
 
--- Add standard build modes
-add_rules("mode.debug", "mode.release")
+-- Add standard build modes (including minsizerel for size optimization)
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
 
 -- Project configuration
 set_project("atom-log")
 set_version("1.0.0")
 set_license("GPL3")
 
+-- Set languages (match CMake C++20)
+set_languages("c11", "cxx20")
+
 local use_system_packages = has_config("use_system_packages")
 
-add_requires("spdlog", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
 add_requires("fmt", {system = use_system_packages})
 
 -- Define source files
@@ -46,9 +48,9 @@ target("atom-log-object")
     -- Set C++ standard
     set_languages("c++20")
 
-    -- Configure spdlog options
-    add_defines("SPDLOG_USE_STD_FORMAT=1", {public = true})
-    add_defines("SPDLOG_HEADER_ONLY", {public = true})
+    -- Configure spdlog options (use compiled lib, not header-only)
+    add_defines("SPDLOG_COMPILED_LIB", {public = true})
+    add_defines("SPDLOG_FMT_EXTERNAL", {public = true})
 target_end()
 
 -- Library target

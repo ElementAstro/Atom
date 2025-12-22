@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Advanced Bindings Example
-Demonstrates class binding, operator overloading, exception translation,
-and advanced binding features with the component system.
+Description: Advanced Bindings ExampleDemonstrates class binding, operator
+overloading, exception translation, and advanced binding features with the
+component system.
 
 **************************************************/
 

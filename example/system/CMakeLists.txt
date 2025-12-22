@@ -72,8 +72,7 @@ add_examples_from_subdir(shortcut "Shortcut")
 add_examples_from_subdir(signals "Signals")
 add_examples_from_subdir(storage "Storage")
 
-# Handle any remaining CPP files in the root directory (for backward
-# compatibility)
+# Handle any remaining CPP files in the root directory
 file(GLOB ROOT_CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 
 foreach(CPP_FILE ${ROOT_CPP_FILES})

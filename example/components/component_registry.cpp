@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Advanced Component Registry Example
-Demonstrates dependency resolution, initialization order, component metadata,
-performance monitoring, and advanced registry features.
+Description: Advanced Component Registry ExampleDemonstrates dependency
+resolution, initialization order, component metadata, performance monitoring,
+and advanced registry features.
 
 **************************************************/
 
@@ -26,9 +26,8 @@ performance monitoring, and advanced registry features.
 #include "atom/components/lifecycle/lifecycle.hpp"
 
 // Note: Registry, Component, and LifecycleManager are in the global namespace,
-// not atom::components
-using namespace atom::components;  // For DependencyType and other types that
-                                   // ARE in atom::components
+// not atom::componentsusing namespace atom::components;  // For DependencyType
+// and other types that ARE in atom::components
 
 /**
  * @brief Database component that other components depend on

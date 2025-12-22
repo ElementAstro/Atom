@@ -85,31 +85,45 @@ def _import_module(name, alias=None):
         return None
 
 
-# Import all modules
+# Import all modules from new subdirectory structure
+# Core modules
 _import_module(
-    "async", "async_core"
+    "core.async", "async_core"
 )  # Import async as async_core to avoid keyword conflict
-_import_module("future")
-_import_module("promise")
-_import_module("lock")
-_import_module("thread_wrapper")
-_import_module("threadlocal")
-_import_module("message_bus")
-_import_module("message_queue")
-_import_module("queue")
-_import_module("eventstack")
-_import_module("async_executor")
-_import_module("pool")
-_import_module("parallel")
-_import_module("packaged_task")
-_import_module("trigger")
-_import_module("limiter")
-_import_module("safetype")
-_import_module("slot")
-_import_module("timer")
-_import_module("generator")
-_import_module("daemon")
-_import_module("lodash")
+_import_module("core.future", "future")
+_import_module("core.promise", "promise")
+
+# Execution modules
+_import_module("execution.async_executor", "async_executor")
+_import_module("execution.pool", "pool")
+_import_module("execution.parallel", "parallel")
+_import_module("execution.packaged_task", "packaged_task")
+
+# Messaging modules
+_import_module("messaging.message_bus", "message_bus")
+_import_module("messaging.message_queue", "message_queue")
+_import_module("messaging.queue", "queue")
+_import_module("messaging.eventstack", "eventstack")
+
+# Sync modules
+_import_module("sync.trigger", "trigger")
+_import_module("sync.limiter", "limiter")
+_import_module("sync.safetype", "safetype")
+_import_module("sync.slot", "slot")
+
+# Threading modules
+_import_module("threading.lock", "lock")
+_import_module("threading.thread_wrapper", "thread_wrapper")
+_import_module("threading.threadlocal", "threadlocal")
+
+# Utility modules
+_import_module("utils.timer", "timer")
+_import_module("utils.generator", "generator")
+_import_module("utils.daemon", "daemon")
+_import_module("utils.lodash", "lodash")
+
+# Import submodule packages
+from . import core, execution, messaging, sync, threading, utils  # noqa: E402
 
 # Re-export commonly used classes and functions for convenience
 __all__ = [

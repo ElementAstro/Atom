@@ -17,11 +17,19 @@ Description: Stacktrace backend factory implementation
 #include "builtin_backend.hpp"
 #include "external_backends.hpp"
 
+#include <string_view>
+
 namespace atom::error {
+
+namespace {
+using namespace std::string_view_literals;
+}  // namespace
 
 std::unique_ptr<StackTraceBackend> StackTraceBackendFactory::create(
     const std::string& name) {
-    if (name == "auto") {
+    const std::string_view nameView = name;
+
+    if (nameView == "auto"sv) {
         return createBest();
     }
 
@@ -30,19 +38,19 @@ std::unique_ptr<StackTraceBackend> StackTraceBackendFactory::create(
     // ========================================================================
 
 #ifdef ATOM_USE_CPPTRACE
-    if (name == "cpptrace") {
+    if (nameView == "cpptrace"sv) {
         return std::make_unique<backends::CpptraceBackend>();
     }
 #endif
 
 #ifdef ATOM_USE_BACKWARD_CPP
-    if (name == "backward") {
+    if (nameView == "backward"sv) {
         return std::make_unique<backends::BackwardBackend>();
     }
 #endif
 
 #ifdef ATOM_USE_BOOST_STACKTRACE
-    if (name == "boost") {
+    if (nameView == "boost"sv) {
         return std::make_unique<backends::BoostBackend>();
     }
 #endif
@@ -52,7 +60,7 @@ std::unique_ptr<StackTraceBackend> StackTraceBackendFactory::create(
     // ========================================================================
 
 #ifdef ATOM_STACKTRACE_BACKEND_STD
-    if (name == "std" || name == "std::stacktrace") {
+    if (nameView == "std"sv || nameView == "std::stacktrace"sv) {
         return std::make_unique<backends::StdStacktraceBackend>();
     }
 #endif
@@ -62,25 +70,25 @@ std::unique_ptr<StackTraceBackend> StackTraceBackendFactory::create(
     // ========================================================================
 
 #ifdef ATOM_USE_LIBBACKTRACE
-    if (name == "libbacktrace") {
+    if (nameView == "libbacktrace"sv) {
         return std::make_unique<backends::LibbacktraceBackend>();
     }
 #endif
 
 #ifdef ATOM_USE_LIBUNWIND
-    if (name == "libunwind") {
+    if (nameView == "libunwind"sv) {
         return std::make_unique<backends::LibunwindBackend>();
     }
 #endif
 
 #ifdef ATOM_USE_EXECINFO
-    if (name == "execinfo" || name == "backtrace") {
+    if (nameView == "execinfo"sv || nameView == "backtrace"sv) {
         return std::make_unique<backends::ExecinfoBackend>();
     }
 #endif
 
 #ifdef ATOM_USE_ABSEIL_STACKTRACE
-    if (name == "abseil" || name == "absl") {
+    if (nameView == "abseil"sv || nameView == "absl"sv) {
         return std::make_unique<backends::AbseilBackend>();
     }
 #endif
@@ -89,7 +97,7 @@ std::unique_ptr<StackTraceBackend> StackTraceBackendFactory::create(
     // Built-in fallback backend
     // ========================================================================
 
-    if (name == "builtin") {
+    if (nameView == "builtin"sv) {
         return std::make_unique<backends::BuiltinBackend>();
     }
 
@@ -98,44 +106,45 @@ std::unique_ptr<StackTraceBackend> StackTraceBackendFactory::create(
 
 std::vector<std::string> StackTraceBackendFactory::getAvailable() {
     std::vector<std::string> available;
+    available.reserve(10);  // Pre-allocate for typical max backends
 
     // High-quality external backends
 #ifdef ATOM_USE_CPPTRACE
-    available.push_back("cpptrace");
+    available.emplace_back("cpptrace");
 #endif
 
 #ifdef ATOM_USE_BACKWARD_CPP
-    available.push_back("backward");
+    available.emplace_back("backward");
 #endif
 
 #ifdef ATOM_USE_BOOST_STACKTRACE
-    available.push_back("boost");
+    available.emplace_back("boost");
 #endif
 
     // C++23 standard library
 #ifdef ATOM_STACKTRACE_BACKEND_STD
-    available.push_back("std");
+    available.emplace_back("std");
 #endif
 
     // System-level backends
 #ifdef ATOM_USE_LIBBACKTRACE
-    available.push_back("libbacktrace");
+    available.emplace_back("libbacktrace");
 #endif
 
 #ifdef ATOM_USE_LIBUNWIND
-    available.push_back("libunwind");
+    available.emplace_back("libunwind");
 #endif
 
 #ifdef ATOM_USE_EXECINFO
-    available.push_back("execinfo");
+    available.emplace_back("execinfo");
 #endif
 
 #ifdef ATOM_USE_ABSEIL_STACKTRACE
-    available.push_back("abseil");
+    available.emplace_back("abseil");
 #endif
 
     // Built-in is always available
-    available.push_back("builtin");
+    available.emplace_back("builtin");
 
     return available;
 }
@@ -143,8 +152,8 @@ std::vector<std::string> StackTraceBackendFactory::getAvailable() {
 std::unique_ptr<StackTraceBackend> StackTraceBackendFactory::createBest() {
     // Priority order for backends (best quality first)
     for (const auto& name : getBackendPriority()) {
-        auto backend = create(name);
-        if (backend && backend->isAvailable()) {
+        if (auto backend = create(name); backend && backend->isAvailable())
+            [[likely]] {
             return backend;
         }
     }

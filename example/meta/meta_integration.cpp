@@ -27,24 +27,24 @@
 
 using namespace atom::meta;
 
-// Example classes for demonstration
-class Person {
+// Example classes for demonstrationclass Person {
 public:
-    Person(const std::string& name, int age) : name_(name), age_(age) {}
+Person(const std::string& name, int age) : name_(name), age_(age) {}
 
-    std::string getName() const { return name_; }
-    int getAge() const { return age_; }
-    void setAge(int age) { age_ = age; }
+std::string getName() const { return name_; }
+int getAge() const { return age_; }
+void setAge(int age) { age_ = age; }
 
-    void introduce() const {
-        std::cout << "Hello, I'm " << name_ << " and I'm " << age_
-                  << " years old.\n";
-    }
+void introduce() const {
+    std::cout << "Hello, I'm " << name_ << " and I'm " << age_
+              << " years old.\n";
+}
 
 private:
-    std::string name_;
-    int age_;
-};
+std::string name_;
+int age_;
+}
+;
 
 class Employee : public Person {
 public:
@@ -57,15 +57,14 @@ private:
     std::string department_;
 };
 
-// Example functions for function traits demonstration
-int add(int a, int b) { return a + b; }
+// Example functions for function traits demonstrationint add(int a, int b) {
+// return a + b; }
 double multiply(double x, double y) { return x * y; }
 std::string concatenate(const std::string& a, const std::string& b) {
     return a + b;
 }
 
-// Helper template function for SFINAE demonstration
-template <typename T>
+// Helper template function for SFINAE demonstrationtemplate <typename T>
 constexpr bool canProcess() {
     if constexpr (std::is_arithmetic_v<T>) {
         return true;

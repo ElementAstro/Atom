@@ -29,49 +29,48 @@
 #include "atom/search/search.hpp"
 #include "atom/search/sqlite.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Document structure for our system
-struct DocumentRecord {
-    std::string id;
-    std::string title;
-    std::string content;
-    std::string category;
-    std::vector<std::string> tags;
-    std::chrono::system_clock::time_point created_at;
-    int view_count;
+// Document structure for our systemstruct DocumentRecord {
+std::string id;
+std::string title;
+std::string content;
+std::string category;
+std::vector<std::string> tags;
+std::chrono::system_clock::time_point created_at;
+int view_count;
 
-    std::string toString() const {
-        std::string tags_str = "";
-        for (const auto& tag : tags) {
-            tags_str += tag + " ";
-        }
-        return "Document[id=" + id + ", title=" + title +
-               ", category=" + category + ", tags=" + tags_str +
-               ", views=" + std::to_string(view_count) + "]";
+std::string toString() const {
+    std::string tags_str = "";
+    for (const auto& tag : tags) {
+        tags_str += tag + " ";
     }
-};
+    return "Document[id=" + id + ", title=" + title + ", category=" + category +
+           ", tags=" + tags_str + ", views=" + std::to_string(view_count) + "]";
+}
+}
+;
 
-// Search result structure for caching
-struct SearchResult {
-    std::vector<DocumentRecord> documents;
-    std::chrono::system_clock::time_point timestamp;
-    size_t total_count;
-    std::string query;
+// Search result structure for cachingstruct SearchResult {
+std::vector<DocumentRecord> documents;
+std::chrono::system_clock::time_point timestamp;
+size_t total_count;
+std::string query;
 
-    SearchResult() : total_count(0) {}
+SearchResult() : total_count(0) {}
 
-    SearchResult(const std::vector<DocumentRecord>& docs, const std::string& q)
-        : documents(docs),
-          timestamp(std::chrono::system_clock::now()),
-          total_count(docs.size()),
-          query(q) {}
-};
+SearchResult(const std::vector<DocumentRecord>& docs, const std::string& q)
+    : documents(docs),
+      timestamp(std::chrono::system_clock::now()),
+      total_count(docs.size()),
+      query(q) {}
+}
+;
 
 /**
  * @brief Integrated Document Management System

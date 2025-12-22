@@ -12,72 +12,69 @@
 
 namespace atom::extra::curl {
 
-// Stub MultipartFormData class
-class MultipartFormData {
+// Stub MultipartFormData classclass MultipartFormData {
 public:
-    MultipartFormData() {
-        std::cout << "MultipartFormData created (stub implementation)"
-                  << std::endl;
-    }
+MultipartFormData() {
+    std::cout << "MultipartFormData created (stub implementation)" << std::endl;
+}
 
-    void add_field(const std::string& name, const std::string& value) {
-        std::cout << "Adding field (stub): " << name << " = " << value
-                  << std::endl;
-        fields_[name] = value;
-    }
+void add_field(const std::string& name, const std::string& value) {
+    std::cout << "Adding field (stub): " << name << " = " << value << std::endl;
+    fields_[name] = value;
+}
 
-    void add_file(const std::string& name, const std::string& filename,
-                  const std::string& content_type = "") {
-        std::cout << "Adding file (stub): " << name << " -> " << filename;
-        if (!content_type.empty())
-            std::cout << " (" << content_type << ")";
-        std::cout << std::endl;
-        files_[name] = filename;
-    }
+void add_file(const std::string& name, const std::string& filename,
+              const std::string& content_type = "") {
+    std::cout << "Adding file (stub): " << name << " -> " << filename;
+    if (!content_type.empty())
+        std::cout << " (" << content_type << ")";
+    std::cout << std::endl;
+    files_[name] = filename;
+}
 
-    std::string to_string() const { return "multipart/form-data (stub)"; }
+std::string to_string() const { return "multipart/form-data (stub)"; }
 
 private:
-    std::unordered_map<std::string, std::string> fields_;
-    std::unordered_map<std::string, std::string> files_;
+std::unordered_map<std::string, std::string> fields_;
+std::unordered_map<std::string, std::string> files_;
 };
 
-// Stub Response class
-class Response {
+// Stub Response classclass Response {
 public:
-    int status_code = 200;
-    std::string body = "Response body (stub)";
-    std::unordered_map<std::string, std::string> headers;
+int status_code = 200;
+std::string body = "Response body (stub)";
+std::unordered_map<std::string, std::string> headers;
 
-    Response() { headers["Content-Type"] = "application/json"; }
+Response() { headers["Content-Type"] = "application/json"; }
 
-    std::string text() const { return body; }
-};
+std::string text() const { return body; }
+}
+;
 
-// Stub Session class
-class Session {
+// Stub Session classclass Session {
 public:
-    Session() {
-        std::cout << "CURL Session created (stub implementation)" << std::endl;
-    }
+Session() {
+    std::cout << "CURL Session created (stub implementation)" << std::endl;
+}
 
-    Response post(const std::string& url, const MultipartFormData& form) {
-        std::cout << "POST multipart request (stub): " << url << std::endl;
-        std::cout << "  Form data: " << form.to_string() << std::endl;
-        Response response;
-        response.body = "Multipart POST response from " + url + " (stub)";
-        return response;
-    }
+Response post(const std::string& url, const MultipartFormData& form) {
+    std::cout << "POST multipart request (stub): " << url << std::endl;
+    std::cout << "  Form data: " << form.to_string() << std::endl;
+    Response response;
+    response.body = "Multipart POST response from " + url + " (stub)";
+    return response;
+}
 
-    void set_header(const std::string& name, const std::string& value) {
-        std::cout << "Setting header (stub): " << name << " = " << value
-                  << std::endl;
-        headers_[name] = value;
-    }
+void set_header(const std::string& name, const std::string& value) {
+    std::cout << "Setting header (stub): " << name << " = " << value
+              << std::endl;
+    headers_[name] = value;
+}
 
 private:
-    std::unordered_map<std::string, std::string> headers_;
-};
+std::unordered_map<std::string, std::string> headers_;
+}
+;
 
 }  // namespace atom::extra::curl
 

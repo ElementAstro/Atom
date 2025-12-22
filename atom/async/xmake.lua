@@ -5,15 +5,16 @@ set_xmakever("2.8.0")
 set_project("atom-async")
 set_version("1.0.0", {build = "%Y%m%d%H%M"})
 
--- Set languages
-set_languages("c11", "cxx17")
+-- Set languages (match CMake C++20)
+set_languages("c11", "cxx20")
 
 -- Add build modes
-add_rules("mode.debug", "mode.release")
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
 
--- Add required packages
+-- Add required packages (use spdlog instead of loguru to match CMake)
 local use_system_packages = has_config("use_system_packages")
-add_requires("loguru", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
 
 -- Define the main target
 target("atom-async")
@@ -38,8 +39,8 @@ target("atom-async")
     -- Add include directories
     add_includedirs(".", {public = true})
 
-    -- Add packages
-    add_packages("loguru")
+    -- Add packages (use spdlog instead of loguru)
+    add_packages("spdlog", "fmt")
 
     -- Add dependencies (assuming atom-utils is another xmake target)
     add_deps("atom-utils")
@@ -91,7 +92,7 @@ target("atom-async-object")
         "utils/*.hpp")
 
     add_includedirs(".", {public = true})
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
     add_deps("atom-utils")
 
     if is_plat("linux") then

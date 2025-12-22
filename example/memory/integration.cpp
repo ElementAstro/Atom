@@ -20,41 +20,41 @@
 #include "atom/memory/shared.hpp"
 #include "atom/memory/tracker.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+using namespace atom::memory;
+
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Example data structures for integration
-struct NetworkPacket {
-    uint32_t id;
-    uint32_t size;
-    std::chrono::steady_clock::time_point timestamp;
-    std::vector<uint8_t> data;
+// Example data structures for integrationstruct NetworkPacket {
+uint32_t id;
+uint32_t size;
+std::chrono::steady_clock::time_point timestamp;
+std::vector<uint8_t> data;
 
-    NetworkPacket()
-        : id(0), size(0), timestamp(std::chrono::steady_clock::now()) {}
+NetworkPacket() : id(0), size(0), timestamp(std::chrono::steady_clock::now()) {}
 
-    NetworkPacket(uint32_t packet_id, const std::vector<uint8_t>& packet_data)
-        : id(packet_id),
-          size(packet_data.size()),
-          timestamp(std::chrono::steady_clock::now()),
-          data(packet_data) {}
+NetworkPacket(uint32_t packet_id, const std::vector<uint8_t>& packet_data)
+    : id(packet_id),
+      size(packet_data.size()),
+      timestamp(std::chrono::steady_clock::now()),
+      data(packet_data) {}
 
-    void reset() {
-        id = 0;
-        size = 0;
-        timestamp = std::chrono::steady_clock::now();
-        data.clear();
-    }
+void reset() {
+    id = 0;
+    size = 0;
+    timestamp = std::chrono::steady_clock::now();
+    data.clear();
+}
 
-    bool isValid() const { return id > 0 && size > 0 && !data.empty(); }
-};
+bool isValid() const { return id > 0 && size > 0 && !data.empty(); }
+}
+;
 
-// Custom allocator using MemoryPool
-template <typename T>
+// Custom allocator using MemoryPooltemplate <typename T>
 class PoolAllocator {
 private:
     static MemoryPool<T>* pool_;

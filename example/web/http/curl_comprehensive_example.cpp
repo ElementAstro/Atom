@@ -7,7 +7,7 @@
  * CurlWrapper class
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/curl.hpp"
 
 #include <atomic>
@@ -20,8 +20,7 @@
 
 using namespace atom::web;
 
-// Global variables for async operations
-std::atomic<bool> asyncCompleted{false};
+// Global variables for async operationsstd::atomic<bool> asyncCompleted{false};
 std::atomic<size_t> asyncResponseCount{0};
 
 void demonstrateBasicHTTPMethods() {
@@ -359,12 +358,7 @@ void demonstrateErrorHandling() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("curl_comprehensive_example.log", loguru::Append,
-                     loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "     ATOM CURL COMPREHENSIVE DEMO          \n";
     std::cout << "============================================\n";

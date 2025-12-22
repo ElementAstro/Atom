@@ -1,0 +1,357 @@
+/**
+ * @file metadata.cpp
+ * @brief Python bindings for image metadata handling
+ */
+
+#include <pybind11/chrono.h>
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+
+#include "atom/image/metadata/exif.hpp"
+
+namespace py = pybind11;
+using namespace atom::image;
+
+void bind_metadata(py::module& m) {
+    // EXIF exception
+    py::register_exception<ExifException>(m, "ExifException",
+                                          R"pbdoc(
+        Exception class for EXIF parsing errors.
+
+        This exception is raised when EXIF data parsing or manipulation fails.
+        )pbdoc");
+
+    // GpsCoordinate struct
+    py::class_<GpsCoordinate>(m, "GpsCoordinate",
+                              R"pbdoc(
+        GPS coordinate representation.
+
+        Stores GPS coordinates in degrees, minutes, seconds format with
+        direction indicator (N/S for latitude, E/W for longitude).
+        )pbdoc")
+        .def(py::init<>(), "Default constructor")
+        .def(py::init<double, double, double, char>(), py::arg("degrees"),
+             py::arg("minutes"), py::arg("seconds"), py::arg("direction"),
+             "Construct with DMS values")
+        .def_readwrite("degrees", &GpsCoordinate::degrees, "Degrees component")
+        .def_readwrite("minutes", &GpsCoordinate::minutes, "Minutes component")
+        .def_readwrite("seconds", &GpsCoordinate::seconds, "Seconds component")
+        .def_readwrite("direction", &GpsCoordinate::direction,
+                       "Direction (N/S/E/W)")
+        .def("toDecimalDegrees", &GpsCoordinate::toDecimalDegrees,
+             R"pbdoc(
+            Convert to decimal degrees.
+
+            Returns:
+                Decimal degree representation (negative for S/W)
+            )pbdoc")
+        .def_static("fromDecimalDegrees", &GpsCoordinate::fromDecimalDegrees,
+                    py::arg("decimal"), py::arg("isLatitude"),
+                    R"pbdoc(
+            Create from decimal degrees.
+
+            Args:
+                decimal: Decimal degree value
+                isLatitude: True for latitude, False for longitude
+
+            Returns:
+                GpsCoordinate instance
+            )pbdoc")
+        .def("toString", &GpsCoordinate::toString,
+             "Convert to string representation")
+        .def("__str__", &GpsCoordinate::toString)
+        .def("__repr__", [](const GpsCoordinate& self) {
+            return "<GpsCoordinate " + self.toString() + ">";
+        });
+
+    // ExifData struct
+    py::class_<ExifData>(m, "ExifData",
+                         R"pbdoc(
+        EXIF metadata container.
+
+        Holds all EXIF (Exchangeable Image File Format) metadata extracted
+        from an image file, including camera settings, GPS coordinates,
+        timestamps, and more.
+
+        All fields are optional and will be None if not present in the image.
+        )pbdoc")
+        .def(py::init<>(), "Default constructor")
+        .def_readwrite("cameraMake", &ExifData::cameraMake,
+                       "Camera manufacturer")
+        .def_readwrite("cameraModel", &ExifData::cameraModel, "Camera model")
+        .def_readwrite("lensModel", &ExifData::lensModel, "Lens model")
+        .def_readwrite("software", &ExifData::software,
+                       "Software used to create image")
+        .def_readwrite("artist", &ExifData::artist, "Image creator/artist")
+        .def_readwrite("copyright", &ExifData::copyright, "Copyright notice")
+        .def_readwrite("dateTime", &ExifData::dateTime,
+                       "Date and time of image capture")
+        .def_readwrite("dateTimeOriginal", &ExifData::dateTimeOriginal,
+                       "Original date and time")
+        .def_readwrite("dateTimeDigitized", &ExifData::dateTimeDigitized,
+                       "Digitization date and time")
+        .def_readwrite("exposureTime", &ExifData::exposureTime,
+                       "Exposure time in seconds")
+        .def_readwrite("fNumber", &ExifData::fNumber, "F-number (aperture)")
+        .def_readwrite("isoSpeed", &ExifData::isoSpeed, "ISO speed rating")
+        .def_readwrite("focalLength", &ExifData::focalLength,
+                       "Focal length in millimeters")
+        .def_readwrite("focalLength35mm", &ExifData::focalLength35mm,
+                       "35mm equivalent focal length")
+        .def_readwrite("exposureBias", &ExifData::exposureBias,
+                       "Exposure bias value")
+        .def_readwrite("maxAperture", &ExifData::maxAperture,
+                       "Maximum aperture value")
+        .def_readwrite("meteringMode", &ExifData::meteringMode, "Metering mode")
+        .def_readwrite("flash", &ExifData::flash, "Flash status")
+        .def_readwrite("whiteBalance", &ExifData::whiteBalance,
+                       "White balance setting")
+        .def_readwrite("exposureMode", &ExifData::exposureMode, "Exposure mode")
+        .def_readwrite("exposureProgram", &ExifData::exposureProgram,
+                       "Exposure program")
+        .def_readwrite("gpsLatitude", &ExifData::gpsLatitude,
+                       "GPS latitude coordinate")
+        .def_readwrite("gpsLongitude", &ExifData::gpsLongitude,
+                       "GPS longitude coordinate")
+        .def_readwrite("gpsAltitude", &ExifData::gpsAltitude,
+                       "GPS altitude in meters")
+        .def_readwrite("gpsTimestamp", &ExifData::gpsTimestamp, "GPS timestamp")
+        .def_readwrite("orientation", &ExifData::orientation,
+                       "Image orientation (1-8)")
+        .def_readwrite("imageWidth", &ExifData::imageWidth,
+                       "Image width in pixels")
+        .def_readwrite("imageHeight", &ExifData::imageHeight,
+                       "Image height in pixels")
+        .def_readwrite("xResolution", &ExifData::xResolution, "X resolution")
+        .def_readwrite("yResolution", &ExifData::yResolution, "Y resolution")
+        .def_readwrite("resolutionUnit", &ExifData::resolutionUnit,
+                       "Resolution unit")
+        .def_readwrite("colorSpace", &ExifData::colorSpace, "Color space")
+        .def_readwrite("compression", &ExifData::compression,
+                       "Compression method")
+        .def_readwrite("bitsPerSample", &ExifData::bitsPerSample,
+                       "Bits per sample")
+        .def_readwrite("samplesPerPixel", &ExifData::samplesPerPixel,
+                       "Samples per pixel")
+        .def("getDateTimeString", &ExifData::getDateTimeString,
+             R"pbdoc(
+            Get date/time as ISO 8601 string.
+
+            Returns:
+                ISO 8601 formatted string or empty string
+            )pbdoc")
+        .def("setDateTimeFromString", &ExifData::setDateTimeFromString,
+             py::arg("dateTimeStr"),
+             R"pbdoc(
+            Set date/time from string.
+
+            Args:
+                dateTimeStr: Date/time string (EXIF format or ISO 8601)
+
+            Returns:
+                True if parsing succeeded
+            )pbdoc")
+        .def("hasGpsData", &ExifData::hasGpsData,
+             "Check if GPS data is present")
+        .def("getGpsDecimalCoordinates", &ExifData::getGpsDecimalCoordinates,
+             "Get GPS coordinates as decimal (lat, lon) pair")
+        .def("__repr__", [](const ExifData& self) {
+            std::string repr = "<ExifData";
+            if (self.cameraMake)
+                repr += " make=" + *self.cameraMake;
+            if (self.cameraModel)
+                repr += " model=" + *self.cameraModel;
+            if (self.imageWidth && self.imageHeight) {
+                repr += " size=" + std::to_string(*self.imageWidth) + "x" +
+                        std::to_string(*self.imageHeight);
+            }
+            repr += ">";
+            return repr;
+        });
+
+    // ExifParser class
+    py::class_<ExifParser>(m, "ExifParser",
+                           R"pbdoc(
+        EXIF data parser.
+
+        Parses EXIF metadata from image files. Supports common image formats
+        including JPEG, TIFF, and others that embed EXIF data.
+
+        Example:
+            >>> parser = ExifParser("photo.jpg")
+            >>> if parser.parse():
+            >>>     exif = parser.get_exif_data()
+            >>>     print(f"Camera: {exif.camera_make} {exif.camera_model}")
+            >>>     print(f"ISO: {exif.iso_speed}")
+        )pbdoc")
+        .def(py::init<std::string_view>(), py::arg("filename"),
+             "Construct parser for specified file")
+        .def("parse", &ExifParser::parse,
+             R"pbdoc(
+            Parse EXIF data from file.
+
+            Returns:
+                True if parsing was successful
+            )pbdoc")
+        .def("get_exif_data", &ExifParser::getExifData,
+             py::return_value_policy::reference_internal,
+             R"pbdoc(
+            Get parsed EXIF data.
+
+            Returns:
+                Reference to ExifData structure
+            )pbdoc")
+        .def("optimize", &ExifParser::optimize,
+             "Optimize memory usage of EXIF data")
+        .def("validate_data", &ExifParser::validateData,
+             R"pbdoc(
+            Validate data integrity.
+
+            Returns:
+                True if data is valid
+            )pbdoc")
+        .def("clone", &ExifParser::clone,
+             R"pbdoc(
+            Clone the parser instance.
+
+            Returns:
+                New ExifParser instance with same data
+            )pbdoc")
+        .def("serialize", &ExifParser::serialize,
+             R"pbdoc(
+            Serialize EXIF data to string.
+
+            Returns:
+                Serialized string representation
+            )pbdoc")
+        .def_static("deserialize", &ExifParser::deserialize, py::arg("data"),
+                    R"pbdoc(
+            Deserialize EXIF data from string.
+
+            Args:
+                data: Serialized data string
+
+            Returns:
+                New ExifParser instance
+            )pbdoc")
+        .def("__repr__", [](const ExifParser& self) { return "<ExifParser>"; });
+
+    // Convenience functions
+    m.def(
+        "extract_exif",
+        [](const std::string& filename) {
+            ExifParser parser(filename);
+            if (parser.parse()) {
+                return py::cast(parser.getExifData());
+            }
+            return py::none();
+        },
+        py::arg("filename"),
+        R"pbdoc(
+        Extract EXIF data from image file.
+
+        Convenience function that creates a parser, parses the file,
+        and returns the EXIF data.
+
+        Args:
+            filename: Path to image file
+
+        Returns:
+            ExifData object or None if parsing failed
+
+        Example:
+            >>> exif = extract_exif("photo.jpg")
+            >>> if exif:
+            >>>     print(f"Taken with {exif.camera_make} {exif.camera_model}")
+        )pbdoc");
+
+    m.def(
+        "has_exif",
+        [](const std::string& filename) {
+            ExifParser parser(filename);
+            return parser.parse();
+        },
+        py::arg("filename"),
+        R"pbdoc(
+        Check if file contains EXIF data.
+
+        Args:
+            filename: Path to image file
+
+        Returns:
+            True if file contains valid EXIF data
+        )pbdoc");
+
+    m.def(
+        "get_gps_coordinates",
+        [](const std::string& filename) -> py::object {
+            ExifParser parser(filename);
+            if (parser.parse()) {
+                const auto& exif = parser.getExifData();
+                if (exif.gpsLatitude && exif.gpsLongitude) {
+                    return py::make_tuple(
+                        exif.gpsLatitude->toDecimalDegrees(),
+                        exif.gpsLongitude->toDecimalDegrees());
+                }
+            }
+            return py::none();
+        },
+        py::arg("filename"),
+        R"pbdoc(
+        Extract GPS coordinates from image.
+
+        Args:
+            filename: Path to image file
+
+        Returns:
+            Tuple of (latitude, longitude) in decimal degrees, or None
+
+        Example:
+            >>> coords = get_gps_coordinates("photo.jpg")
+            >>> if coords:
+            >>>     lat, lon = coords
+            >>>     print(f"Location: {lat}, {lon}")
+        )pbdoc");
+
+    m.def(
+        "get_camera_info",
+        [](const std::string& filename) -> py::object {
+            ExifParser parser(filename);
+            if (parser.parse()) {
+                const auto& exif = parser.getExifData();
+                py::dict info;
+                if (exif.cameraMake)
+                    info["make"] = *exif.cameraMake;
+                if (exif.cameraModel)
+                    info["model"] = *exif.cameraModel;
+                if (exif.lensModel)
+                    info["lens"] = *exif.lensModel;
+                if (exif.focalLength)
+                    info["focal_length"] = *exif.focalLength;
+                if (exif.fNumber)
+                    info["aperture"] = *exif.fNumber;
+                if (exif.isoSpeed)
+                    info["iso"] = *exif.isoSpeed;
+                if (exif.exposureTime)
+                    info["exposure_time"] = *exif.exposureTime;
+                return info;
+            }
+            return py::none();
+        },
+        py::arg("filename"),
+        R"pbdoc(
+        Extract camera information from image.
+
+        Args:
+            filename: Path to image file
+
+        Returns:
+            Dictionary with camera information, or None
+
+        Example:
+            >>> info = get_camera_info("photo.jpg")
+            >>> if info:
+            >>>     print(f"Camera: {info['make']} {info['model']}")
+            >>>     print(f"Settings: ISO {info['iso']}, f/{info['aperture']}")
+        )pbdoc");
+}

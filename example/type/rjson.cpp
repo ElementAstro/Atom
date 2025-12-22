@@ -4,81 +4,81 @@
 
 #include "atom/type/rjson.hpp"
 
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
 }
 
-// Helper function to print JSON type
-std::string type_to_string(atom::type::JsonValue::Type type) {
-    switch (type) {
-        case atom::type::JsonValue::Type::Null:
-            return "Null";
-        case atom::type::JsonValue::Type::String:
-            return "String";
-        case atom::type::JsonValue::Type::Number:
-            return "Number";
-        case atom::type::JsonValue::Type::Bool:
-            return "Bool";
-        case atom::type::JsonValue::Type::Object:
-            return "Object";
-        case atom::type::JsonValue::Type::Array:
-            return "Array";
-        default:
-            return "Unknown";
-    }
+// Helper function to print JSON typestd::string
+// type_to_string(atom::type::JsonValue::Type type) {
+switch (type) {
+    case atom::type::JsonValue::Type::Null:
+        return "Null";
+    case atom::type::JsonValue::Type::String:
+        return "String";
+    case atom::type::JsonValue::Type::Number:
+        return "Number";
+    case atom::type::JsonValue::Type::Bool:
+        return "Bool";
+    case atom::type::JsonValue::Type::Object:
+        return "Object";
+    case atom::type::JsonValue::Type::Array:
+        return "Array";
+    default:
+        return "Unknown";
+}
 }
 
-// Helper function to print JsonValue recursively
-void print_json_value(const atom::type::JsonValue& value, int indent = 0) {
-    std::string spaces(indent * 2, ' ');
+// Helper function to print JsonValue recursivelyvoid print_json_value(const
+// atom::type::JsonValue& value, int indent = 0) {
+std::string spaces(indent * 2, ' ');
 
-    switch (value.type()) {
-        case atom::type::JsonValue::Type::Null:
-            std::cout << spaces << "null";
-            break;
-        case atom::type::JsonValue::Type::String:
-            std::cout << spaces << "\"" << value.asString() << "\"";
-            break;
-        case atom::type::JsonValue::Type::Number:
-            std::cout << spaces << value.asNumber();
-            break;
-        case atom::type::JsonValue::Type::Bool:
-            std::cout << spaces << (value.asBool() ? "true" : "false");
-            break;
-        case atom::type::JsonValue::Type::Object: {
-            std::cout << spaces << "{" << std::endl;
-            const auto& obj = value.asObject();
-            bool first = true;
-            for (const auto& [key, val] : obj) {
-                if (!first)
-                    std::cout << "," << std::endl;
-                std::cout << spaces << "  \"" << key << "\": ";
-                if (val.type() == atom::type::JsonValue::Type::Object ||
-                    val.type() == atom::type::JsonValue::Type::Array) {
-                    std::cout << std::endl;
-                    print_json_value(val, indent + 2);
-                } else {
-                    print_json_value(val, 0);
-                }
-                first = false;
+switch (value.type()) {
+    case atom::type::JsonValue::Type::Null:
+        std::cout << spaces << "null";
+        break;
+    case atom::type::JsonValue::Type::String:
+        std::cout << spaces << "\"" << value.asString() << "\"";
+        break;
+    case atom::type::JsonValue::Type::Number:
+        std::cout << spaces << value.asNumber();
+        break;
+    case atom::type::JsonValue::Type::Bool:
+        std::cout << spaces << (value.asBool() ? "true" : "false");
+        break;
+    case atom::type::JsonValue::Type::Object: {
+        std::cout << spaces << "{" << std::endl;
+        const auto& obj = value.asObject();
+        bool first = true;
+        for (const auto& [key, val] : obj) {
+            if (!first)
+                std::cout << "," << std::endl;
+            std::cout << spaces << "  \"" << key << "\": ";
+            if (val.type() == atom::type::JsonValue::Type::Object ||
+                val.type() == atom::type::JsonValue::Type::Array) {
+                std::cout << std::endl;
+                print_json_value(val, indent + 2);
+            } else {
+                print_json_value(val, 0);
             }
-            std::cout << std::endl << spaces << "}";
-            break;
+            first = false;
         }
-        case atom::type::JsonValue::Type::Array: {
-            std::cout << spaces << "[" << std::endl;
-            const auto& arr = value.asArray();
-            for (size_t i = 0; i < arr.size(); ++i) {
-                if (i > 0)
-                    std::cout << "," << std::endl;
-                print_json_value(arr[i], indent + 1);
-            }
-            std::cout << std::endl << spaces << "]";
-            break;
-        }
+        std::cout << std::endl << spaces << "}";
+        break;
     }
+    case atom::type::JsonValue::Type::Array: {
+        std::cout << spaces << "[" << std::endl;
+        const auto& arr = value.asArray();
+        for (size_t i = 0; i < arr.size(); ++i) {
+            if (i > 0)
+                std::cout << "," << std::endl;
+            print_json_value(arr[i], indent + 1);
+        }
+        std::cout << std::endl << spaces << "]";
+        break;
+    }
+}
 }
 
 int main() {

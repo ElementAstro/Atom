@@ -84,10 +84,10 @@ private:
     }
 };
 
-// Helper class for logging
-class Logger {
+// Helper class for internal logging
+class InternalLogger {
 public:
-    explicit Logger(LogLevel level) : level_(level) {}
+    explicit InternalLogger(LogLevel level) : level_(level) {}
 
     template <typename... Args>
     void debug(std::format_string<Args...> fmt, Args&&... args) const {
@@ -846,7 +846,7 @@ private:
     mutable std::mutex queue_mutex_;
     std::condition_variable message_cv_;
     ServerStats stats_;
-    Logger logger_;
+    InternalLogger logger_;
 
     std::mutex callback_mutex_;
     std::unordered_map<int, MessageCallback> message_callbacks_;
@@ -888,30 +888,6 @@ std::future<bool> FIFOServer::sendMessageAsync(std::string message,
                                                MessagePriority priority) {
     return impl_->sendMessageAsync(std::move(message), priority);
 }
-
-template <std::ranges::input_range R>
-    requires std::convertible_to<std::ranges::range_value_t<R>, std::string>
-size_t FIFOServer::sendMessages(R&& messages) {
-    return impl_->sendMessages(std::forward<R>(messages));
-}
-
-template <std::ranges::input_range R>
-    requires std::convertible_to<std::ranges::range_value_t<R>, std::string>
-size_t FIFOServer::sendMessages(R&& messages, MessagePriority priority) {
-    return impl_->sendMessages(std::forward<R>(messages), priority);
-}
-
-// Explicit instantiation of common template instances
-template size_t FIFOServer::sendMessages(std::vector<std::string>&);
-template size_t FIFOServer::sendMessages(const std::vector<std::string>&);
-template size_t FIFOServer::sendMessages(std::vector<std::string>&&);
-
-template size_t FIFOServer::sendMessages(std::vector<std::string>&,
-                                         MessagePriority);
-template size_t FIFOServer::sendMessages(const std::vector<std::string>&,
-                                         MessagePriority);
-template size_t FIFOServer::sendMessages(std::vector<std::string>&&,
-                                         MessagePriority);
 
 int FIFOServer::registerMessageCallback(MessageCallback callback) {
     return impl_->registerMessageCallback(std::move(callback));

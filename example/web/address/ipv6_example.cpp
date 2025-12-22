@@ -6,7 +6,7 @@
  * A comprehensive example demonstrating the use of the Atom IPv6 address class
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/address.hpp"
 
 #include <iomanip>
@@ -273,11 +273,7 @@ void demonstrateIPv6SpecialAddresses() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("ipv6_example.log", loguru::Append, loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "        ATOM IPv6 ADDRESS DEMO              \n";
     std::cout << "============================================\n";

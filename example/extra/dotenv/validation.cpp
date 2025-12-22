@@ -24,8 +24,7 @@ int main() {
                 .optional("PORT", "3000");
 
             std::string env_content = R"(
-DATABASE_URL=postgresql://localhost:5432/mydb
-API_KEY=secret123
+DATABASE_URL=postgresql://localhost:5432/mydbAPI_KEY=secret123
 )";
 
             Dotenv loader;
@@ -59,10 +58,7 @@ API_KEY=secret123
             schema.required("URL").rule("URL", rules::url());
 
             std::string env_content = R"(
-PORT=3000
-DEBUG=true
-EMAIL=user@example.com
-URL=https://example.com
+PORT=3000DEBUG=trueEMAIL=user@example.comURL=https://example.com
 )";
 
             Dotenv loader;
@@ -91,8 +87,7 @@ URL=https://example.com
             schema.required("PASSWORD").rule("PASSWORD", rules::minLength(8));
 
             std::string env_content = R"(
-USERNAME=john_doe
-PASSWORD=securepass123
+USERNAME=john_doePASSWORD=securepass123
 )";
 
             Dotenv loader;
@@ -211,8 +206,7 @@ CUSTOM_VALUE=testing123
                 .rule("APP_DEBUG", rules::boolean());
 
             std::string env_content = R"(
-APP_NAME=MyApplication
-APP_PORT=8080
+APP_NAME=MyApplicationAPP_PORT=8080
 )";
 
             // Write to temp file

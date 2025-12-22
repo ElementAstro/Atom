@@ -11,85 +11,83 @@
 
 namespace atom::extra::curl {
 
-// Stub Response class
-class Response {
+// Stub Response classclass Response {
 public:
-    int status_code = 200;
-    std::string body = "Response body (stub)";
-    std::unordered_map<std::string, std::string> headers;
+int status_code = 200;
+std::string body = "Response body (stub)";
+std::unordered_map<std::string, std::string> headers;
 
-    Response() {
-        headers["Content-Type"] = "application/json";
-        headers["Set-Cookie"] = "session_id=abc123; Path=/";
-    }
+Response() {
+    headers["Content-Type"] = "application/json";
+    headers["Set-Cookie"] = "session_id=abc123; Path=/";
+}
 
-    std::string text() const { return body; }
+std::string text() const { return body; }
 
-    std::string url() const { return "https://httpbin.org/cookies (stub)"; }
+std::string url() const { return "https://httpbin.org/cookies (stub)"; }
 };
 
-// Stub Session class
-class Session {
+// Stub Session classclass Session {
 public:
-    Session() {
-        std::cout << "CURL Session created (stub implementation)" << std::endl;
-    }
+Session() {
+    std::cout << "CURL Session created (stub implementation)" << std::endl;
+}
 
-    Response get(const std::string& url) {
-        std::cout << "GET request (stub): " << url << std::endl;
-        Response response;
-        response.body = "GET response from " + url + " (stub)";
-        return response;
-    }
+Response get(const std::string& url) {
+    std::cout << "GET request (stub): " << url << std::endl;
+    Response response;
+    response.body = "GET response from " + url + " (stub)";
+    return response;
+}
 
-    Response post(const std::string& url, const std::string& body) {
-        std::cout << "POST request (stub): " << url << std::endl;
-        Response response;
-        response.body = "POST response from " + url + " (stub)";
-        return response;
-    }
+Response post(const std::string& url, const std::string& body) {
+    std::cout << "POST request (stub): " << url << std::endl;
+    Response response;
+    response.body = "POST response from " + url + " (stub)";
+    return response;
+}
 
-    void set_cookie_jar(const std::string& jar_file) {
-        std::cout << "Setting cookie jar (stub): " << jar_file << std::endl;
-        cookie_jar_ = jar_file;
-    }
+void set_cookie_jar(const std::string& jar_file) {
+    std::cout << "Setting cookie jar (stub): " << jar_file << std::endl;
+    cookie_jar_ = jar_file;
+}
 
-    void set_cookie(const std::string& name, const std::string& value,
-                    const std::string& domain = "",
-                    const std::string& path = "", bool secure = false,
-                    bool http_only = false, int max_age = 0) {
-        std::cout << "Setting cookie (stub): " << name << " = " << value;
-        if (!domain.empty())
-            std::cout << " (domain: " << domain << ")";
-        if (!path.empty())
-            std::cout << " (path: " << path << ")";
-        if (secure)
-            std::cout << " (secure)";
-        if (http_only)
-            std::cout << " (httponly)";
-        if (max_age > 0)
-            std::cout << " (max-age: " << max_age << ")";
-        std::cout << std::endl;
+void set_cookie(const std::string& name, const std::string& value,
+                const std::string& domain = "", const std::string& path = "",
+                bool secure = false, bool http_only = false, int max_age = 0) {
+    std::cout << "Setting cookie (stub): " << name << " = " << value;
+    if (!domain.empty())
+        std::cout << " (domain: " << domain << ")";
+    if (!path.empty())
+        std::cout << " (path: " << path << ")";
+    if (secure)
+        std::cout << " (secure)";
+    if (http_only)
+        std::cout << " (httponly)";
+    if (max_age > 0)
+        std::cout << " (max-age: " << max_age << ")";
+    std::cout << std::endl;
 
-        cookies_[name] = value;
-    }
+    cookies_[name] = value;
+}
 
-    void delete_cookie(const std::string& name) {
-        std::cout << "Deleting cookie (stub): " << name << std::endl;
-        cookies_.erase(name);
-    }
+void delete_cookie(const std::string& name) {
+    std::cout << "Deleting cookie (stub): " << name << std::endl;
+    cookies_.erase(name);
+}
 
-    void set_follow_redirects(bool follow) {
-        std::cout << "Setting follow redirects (stub): "
-                  << (follow ? "true" : "false") << std::endl;
-        follow_redirects_ = follow;
-    }
+void set_follow_redirects(bool follow) {
+    std::cout << "Setting follow redirects (stub): "
+              << (follow ? "true" : "false") << std::endl;
+    follow_redirects_ = follow;
+}
 
 private:
-    std::unordered_map<std::string, std::string> cookies_;
-    std::string cookie_jar_;
-    bool follow_redirects_ = false;
-};
+std::unordered_map<std::string, std::string> cookies_;
+std::string cookie_jar_;
+bool follow_redirects_ = false;
+}
+;
 
 }  // namespace atom::extra::curl
 

@@ -30,8 +30,6 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
-#include <variant>
-
 // Atom Sysinfo module headers
 #include "atom/sysinfo/hardware/battery.hpp"
 
@@ -108,15 +106,14 @@ void demonstrateBatteryInformation() {
     try {
         std::cout << "Gathering comprehensive battery information...\n\n";
 
-        auto batteryResult = getBatteryInfo();
+        auto batteryInfoOpt = getBatteryInfo();
 
-        if (std::holds_alternative<BatteryError>(batteryResult)) {
-            auto error = std::get<BatteryError>(batteryResult);
-            std::cerr << "✗ Error: " << batteryErrorToString(error) << "\n";
+        if (!batteryInfoOpt) {
+            std::cerr << "✗ Error: Failed to get battery information\n";
             return;
         }
 
-        auto batteryInfo = std::get<BatteryInfo>(batteryResult);
+        auto batteryInfo = *batteryInfoOpt;
 
         if (!batteryInfo.isBatteryPresent) {
             std::cout << "No battery detected in this system.\n";

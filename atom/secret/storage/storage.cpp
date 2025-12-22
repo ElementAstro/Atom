@@ -5,6 +5,11 @@
 #include "file_storage.hpp"
 
 #if defined(_WIN32)
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+// Note: Do NOT define WIN32_LEAN_AND_MEAN here as wincred.h needs full
+// windows.h
 #include <wincred.h>
 #include <windows.h>
 #pragma comment(lib, "Advapi32.lib")

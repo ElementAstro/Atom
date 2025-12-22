@@ -7,18 +7,15 @@
  * - Queuing multiple concurrent requests
  * - Executing requests in parallel
  * - Handling responses from multiple requests
- * - Configuring concurrency limits
- *
- * @level Intermediate
- * @prerequisites Basic understanding of HTTP and async programming
- * @related_examples session.cpp, rest_client.cpp
  *
  * @author Atom Extra Examples
  * @date 2024
  */
 
 #include "atom/extra/curl/multi_session.hpp"
+#include "atom/extra/curl/request.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <iostream>
 #include <string>
@@ -46,34 +43,47 @@ void printSeparator(const std::string& title) {
 void basicMultiSessionExample() {
     printSeparator("Basic Multi-Session Example");
 
-    MultiSession client;
+    MultiSession session;
+    std::atomic<int> responseCount{0};
 
     std::cout << "Queuing multiple GET requests..." << std::endl;
 
-    // Queue multiple requests
-    client.addGet("https://httpbin.org/get?id=1");
-    client.addGet("https://httpbin.org/get?id=2");
-    client.addGet("https://httpbin.org/get?id=3");
+    // Queue multiple requests using Request builder
+    Request req1;
+    req1.method(Request::Method::GET).url("https://httpbin.org/get?id=1");
+    session.add_request(req1, [&responseCount](Response resp) {
+        std::cout << "Response 1 received, status: " << resp.status_code()
+                  << std::endl;
+        responseCount++;
+    });
 
-    std::cout << "Pending requests: " << client.pendingCount() << std::endl;
+    Request req2;
+    req2.method(Request::Method::GET).url("https://httpbin.org/get?id=2");
+    session.add_request(req2, [&responseCount](Response resp) {
+        std::cout << "Response 2 received, status: " << resp.status_code()
+                  << std::endl;
+        responseCount++;
+    });
+
+    Request req3;
+    req3.method(Request::Method::GET).url("https://httpbin.org/get?id=3");
+    session.add_request(req3, [&responseCount](Response resp) {
+        std::cout << "Response 3 received, status: " << resp.status_code()
+                  << std::endl;
+        responseCount++;
+    });
 
     std::cout << "Executing all requests concurrently..." << std::endl;
     auto start = std::chrono::high_resolution_clock::now();
 
-    auto responses = client.executeAll();
+    session.perform();
 
     auto end = std::chrono::high_resolution_clock::now();
     auto duration =
         std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
 
-    std::cout << "Received " << responses.size() << " responses in "
+    std::cout << "Received " << responseCount.load() << " responses in "
               << duration.count() << "ms" << std::endl;
-
-    for (size_t i = 0; i < responses.size(); ++i) {
-        std::cout << "Response " << (i + 1)
-                  << " length: " << responses[i].length() << " bytes"
-                  << std::endl;
-    }
 }
 
 /**
@@ -84,98 +94,65 @@ void basicMultiSessionExample() {
 void postRequestsExample() {
     printSeparator("POST Requests Example");
 
-    MultiSession client;
+    MultiSession session;
+    std::atomic<int> responseCount{0};
 
     std::cout << "Queuing POST requests..." << std::endl;
 
     // Queue POST requests with JSON bodies
-    client.addPost("https://httpbin.org/post", R"({"name": "Alice", "id": 1})",
-                   {{"Content-Type", "application/json"}});
-    client.addPost("https://httpbin.org/post", R"({"name": "Bob", "id": 2})",
-                   {{"Content-Type", "application/json"}});
-    client.addPost("https://httpbin.org/post",
-                   R"({"name": "Charlie", "id": 3})",
-                   {{"Content-Type", "application/json"}});
+    Request req1;
+    req1.method(Request::Method::POST)
+        .url("https://httpbin.org/post")
+        .header("Content-Type", "application/json")
+        .body(R"({"name": "Alice", "id": 1})");
+    session.add_request(req1, [&responseCount](Response resp) {
+        std::cout << "POST response 1: " << resp.status_code() << std::endl;
+        responseCount++;
+    });
+
+    Request req2;
+    req2.method(Request::Method::POST)
+        .url("https://httpbin.org/post")
+        .header("Content-Type", "application/json")
+        .body(R"({"name": "Bob", "id": 2})");
+    session.add_request(req2, [&responseCount](Response resp) {
+        std::cout << "POST response 2: " << resp.status_code() << std::endl;
+        responseCount++;
+    });
 
     std::cout << "Executing POST requests..." << std::endl;
-    auto responses = client.executeAll();
+    session.perform();
 
-    std::cout << "Received " << responses.size() << " responses" << std::endl;
-}
-
-/**
- * @brief Demonstrates configuring concurrency limits
- *
- * Shows how to limit the number of concurrent requests.
- */
-void concurrencyLimitExample() {
-    printSeparator("Concurrency Limit Example");
-
-    MultiSession client;
-
-    // Set maximum concurrent requests to 2
-    client.setMaxConcurrent(2);
-    client.setTimeout(5000);  // 5 second timeout
-
-    std::cout << "Queuing 5 requests with max 2 concurrent..." << std::endl;
-
-    for (int i = 1; i <= 5; ++i) {
-        client.addGet("https://httpbin.org/delay/1?id=" + std::to_string(i));
-    }
-
-    std::cout << "Executing with concurrency limit..." << std::endl;
-    auto start = std::chrono::high_resolution_clock::now();
-
-    auto responses = client.executeAll();
-
-    auto end = std::chrono::high_resolution_clock::now();
-    auto duration =
-        std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-
-    std::cout << "Completed " << responses.size() << " requests in "
-              << duration.count() << "ms" << std::endl;
-    std::cout << "(With unlimited concurrency, this would be ~1 second)"
+    std::cout << "Received " << responseCount.load() << " responses"
               << std::endl;
 }
 
 /**
- * @brief Demonstrates clearing and reusing a multi-session
+ * @brief Demonstrates error handling with multi-session
  *
- * Shows how to clear pending requests and reuse the client.
+ * Shows how to handle errors in concurrent requests.
  */
-void clearAndReuseExample() {
-    printSeparator("Clear and Reuse Example");
+void errorHandlingExample() {
+    printSeparator("Error Handling Example");
 
-    MultiSession client;
+    MultiSession session;
 
-    // Queue some requests
-    client.addGet("https://httpbin.org/get?batch=1");
-    client.addGet("https://httpbin.org/get?batch=1");
-    std::cout << "Queued batch 1: " << client.pendingCount() << " requests"
-              << std::endl;
+    // Request with error callback
+    Request req;
+    req.method(Request::Method::GET)
+        .url("https://invalid-domain-12345.org/test");
+    session.add_request(
+        req,
+        [](Response resp) {
+            std::cout << "Unexpected success: " << resp.status_code()
+                      << std::endl;
+        },
+        [](const Error& err) {
+            std::cout << "Expected error occurred: " << err.what() << std::endl;
+        });
 
-    // Execute first batch
-    auto batch1 = client.executeAll();
-    std::cout << "Batch 1 completed: " << batch1.size() << " responses"
-              << std::endl;
-
-    // Queue more requests (client is automatically cleared after executeAll)
-    client.addGet("https://httpbin.org/get?batch=2");
-    client.addGet("https://httpbin.org/get?batch=2");
-    client.addGet("https://httpbin.org/get?batch=2");
-    std::cout << "Queued batch 2: " << client.pendingCount() << " requests"
-              << std::endl;
-
-    // Clear without executing
-    client.clear();
-    std::cout << "After clear: " << client.pendingCount() << " requests"
-              << std::endl;
-
-    // Queue final batch
-    client.addGet("https://httpbin.org/get?batch=3");
-    auto batch3 = client.executeAll();
-    std::cout << "Batch 3 completed: " << batch3.size() << " responses"
-              << std::endl;
+    std::cout << "Executing request with error handling..." << std::endl;
+    session.perform();
 }
 
 // ============================================================================
@@ -192,8 +169,7 @@ int main() {
     try {
         basicMultiSessionExample();
         postRequestsExample();
-        concurrencyLimitExample();
-        clearAndReuseExample();
+        errorHandlingExample();
 
         std::cout << "\n=================================================="
                   << std::endl;

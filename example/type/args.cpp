@@ -5,44 +5,44 @@
 
 #include "atom/type/args.hpp"
 
-// Custom type for demonstration
-struct Person {
-    std::string name;
-    int age;
-    double salary;
+// Custom type for demonstrationstruct Person {
+std::string name;
+int age;
+double salary;
 
-    Person() = default;
-    Person(std::string n, int a, double s)
-        : name(std::move(n)), age(a), salary(s) {}
+Person() = default;
+Person(std::string n, int a, double s)
+    : name(std::move(n)), age(a), salary(s) {}
 
-    bool operator==(const Person& other) const {
-        return name == other.name && age == other.age && salary == other.salary;
-    }
-
-    friend std::ostream& operator<<(std::ostream& os, const Person& p) {
-        return os << "Person{name='" << p.name << "', age=" << p.age
-                  << ", salary=" << p.salary << "}";
-    }
-};
-
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+bool operator==(const Person& other) const {
+    return name == other.name && age == other.age && salary == other.salary;
 }
 
-// Validator functions for demonstration
-bool validate_positive_int(const atom::any_type& value) {
-    try {
+friend std::ostream& operator<<(std::ostream& os, const Person& p) {
+    return os << "Person{name='" << p.name << "', age=" << p.age
+              << ", salary=" << p.salary << "}";
+}
+}
+;
+
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
+}
+
+// Validator functions for demonstrationbool validate_positive_int(const
+// atom::any_type& value) {
+try {
 #ifdef ATOM_USE_BOOST
-        int val = boost::any_cast<int>(value);
+    int val = boost::any_cast<int>(value);
 #else
-        int val = std::any_cast<int>(value);
+    int val = std::any_cast<int>(value);
 #endif
-        return val > 0;
-    } catch (...) {
-        return false;
-    }
+    return val > 0;
+} catch (...) {
+    return false;
+}
 }
 
 bool validate_non_empty_string(const atom::any_type& value) {

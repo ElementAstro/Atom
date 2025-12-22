@@ -15,6 +15,7 @@ Description: Error context manager implementation
 #include "context_manager.hpp"
 
 #include <algorithm>
+#include <ranges>
 
 namespace atom::error {
 
@@ -25,84 +26,81 @@ auto ErrorContextManager::getInstance() -> ErrorContextManager& {
 
 void ErrorContextManager::registerContext(
     std::shared_ptr<ErrorContext> context) {
-    if (!context) {
+    if (!context) [[unlikely]] {
         return;
     }
 
-    std::unique_lock<std::shared_mutex> lock(contextsMutex_);
-    contexts_[context->getErrorId()] = std::move(context);
+    std::unique_lock lock(contextsMutex_);
+    contexts_.insert_or_assign(context->getErrorId(), std::move(context));
 }
 
 auto ErrorContextManager::getContext(const ErrorId& errorId) const
     -> std::shared_ptr<ErrorContext> {
-    std::shared_lock<std::shared_mutex> lock(contextsMutex_);
-    auto it = contexts_.find(errorId);
-    return it != contexts_.end() ? it->second : nullptr;
+    std::shared_lock lock(contextsMutex_);
+    if (auto it = contexts_.find(errorId); it != contexts_.end()) {
+        return it->second;
+    }
+    return nullptr;
 }
 
 auto ErrorContextManager::getContextsByCorrelation(
     const std::string& correlationId) const
     -> std::vector<std::shared_ptr<ErrorContext>> {
-    std::shared_lock<std::shared_mutex> lock(contextsMutex_);
-    std::vector<std::shared_ptr<ErrorContext>> result;
+    std::shared_lock lock(contextsMutex_);
 
-    for (const auto& [id, context] : contexts_) {
-        if (context && context->getCorrelationId() == correlationId) {
-            result.push_back(context);
-        }
-    }
+    auto matchingContexts =
+        contexts_ | std::views::values |
+        std::views::filter([&correlationId](const auto& ctx) {
+            return ctx && ctx->getCorrelationId() == correlationId;
+        });
 
-    return result;
+    return {matchingContexts.begin(), matchingContexts.end()};
 }
 
 auto ErrorContextManager::getStatistics() const
     -> std::unordered_map<std::string, int> {
-    std::shared_lock<std::shared_mutex> lock(contextsMutex_);
+    std::shared_lock lock(contextsMutex_);
     std::unordered_map<std::string, int> stats;
-
-    stats["total_contexts"] = static_cast<int>(contexts_.size());
-
     std::unordered_map<ErrorSeverity, int> severityCounts;
     std::unordered_map<ErrorCategory, int> categoryCounts;
 
-    for (const auto& [id, context] : contexts_) {
-        if (context) {
-            severityCounts[context->getSeverity()]++;
-            categoryCounts[context->getCategory()]++;
+    stats.emplace("total_contexts", static_cast<int>(contexts_.size()));
+
+    for (const auto& ctx : contexts_ | std::views::values) {
+        if (ctx) [[likely]] {
+            ++severityCounts[ctx->getSeverity()];
+            ++categoryCounts[ctx->getCategory()];
         }
     }
 
     for (const auto& [severity, count] : severityCounts) {
-        stats[std::string(severityToString(severity))] = count;
+        stats.emplace(severityToString(severity), count);
     }
 
     for (const auto& [category, count] : categoryCounts) {
-        stats[std::string(categoryToString(category))] = count;
+        stats.emplace(categoryToString(category), count);
     }
 
     return stats;
 }
 
 void ErrorContextManager::cleanup(std::chrono::minutes maxAge) {
-    std::unique_lock<std::shared_mutex> lock(contextsMutex_);
-    auto cutoff = std::chrono::system_clock::now() - maxAge;
+    std::unique_lock lock(contextsMutex_);
+    const auto cutoff = std::chrono::system_clock::now() - maxAge;
 
-    for (auto it = contexts_.begin(); it != contexts_.end();) {
-        if (it->second && it->second->getTimestamp() < cutoff) {
-            it = contexts_.erase(it);
-        } else {
-            ++it;
-        }
-    }
+    std::erase_if(contexts_, [&cutoff](const auto& pair) {
+        const auto& [id, ctx] = pair;
+        return ctx && ctx->getTimestamp() < cutoff;
+    });
 }
 
 void ErrorContextManager::clear() {
-    std::unique_lock<std::shared_mutex> lock(contextsMutex_);
+    std::unique_lock lock(contextsMutex_);
     contexts_.clear();
 }
 
 auto ErrorContextManager::size() const -> size_t {
-    std::shared_lock<std::shared_mutex> lock(contextsMutex_);
+    std::shared_lock lock(contextsMutex_);
     return contexts_.size();
 }
 

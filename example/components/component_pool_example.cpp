@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Component Pool and Memory Management Example
-Demonstrates memory pools, cache optimization, performance monitoring,
-and efficient component allocation/deallocation patterns.
+Description: Component Pool and Memory Management ExampleDemonstrates memory
+pools, cache optimization, performance monitoring, and efficient component
+allocation/deallocation patterns.
 
 **************************************************/
 
@@ -26,8 +26,7 @@ and efficient component allocation/deallocation patterns.
 #include "atom/components/core/registry.hpp"
 
 // Note: Registry and Component are in the global namespace, not
-// atom::components
-using atom::components::ComponentPool;
+// atom::componentsusing atom::components::ComponentPool;
 
 /**
  * @brief Lightweight component for pool testing

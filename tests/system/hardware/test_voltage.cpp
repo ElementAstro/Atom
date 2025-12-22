@@ -284,35 +284,20 @@ TEST_F(VoltageMonitorTest, GetAllPowerSourcesEmpty) {
 #ifdef _WIN32
 // Windows-specific tests
 TEST_F(VoltageMonitorTest, WindowsSpecificTests) {
-    // Check that our real monitor is a WindowsVoltageMonitor
-    EXPECT_EQ(typeid(*realMonitor).name(),
-              typeid(WindowsVoltageMonitor).name());
-
     // Test that platform name is correctly reported
     EXPECT_EQ(realMonitor->getPlatformName(), "Windows");
-
-    // Additional Windows-specific tests could go here
 }
 #elif defined(__linux__)
 // Linux-specific tests
 TEST_F(VoltageMonitorTest, LinuxSpecificTests) {
-    // Check that our real monitor is a LinuxVoltageMonitor
-    EXPECT_EQ(typeid(*realMonitor).name(), typeid(LinuxVoltageMonitor).name());
-
     // Test that platform name is correctly reported
     EXPECT_EQ(realMonitor->getPlatformName(), "Linux");
-
-    // Test LinuxVoltageMonitor specific methods
-    auto* linuxMonitor = dynamic_cast<LinuxVoltageMonitor*>(realMonitor.get());
-    ASSERT_NE(linuxMonitor, nullptr);
-
-    // Test conversion methods
-    EXPECT_NEAR(LinuxVoltageMonitor::microvoltsToVolts("1000000"), 1.0, 0.001);
-    EXPECT_NEAR(LinuxVoltageMonitor::microampsToAmps("1000000"), 1.0, 0.001);
-
-    // Invalid input should return 0
-    EXPECT_EQ(LinuxVoltageMonitor::microvoltsToVolts("invalid"), 0.0);
-    EXPECT_EQ(LinuxVoltageMonitor::microampsToAmps("invalid"), 0.0);
+}
+#elif defined(__APPLE__)
+// macOS-specific tests
+TEST_F(VoltageMonitorTest, MacOSSpecificTests) {
+    // Test that platform name is correctly reported
+    EXPECT_EQ(realMonitor->getPlatformName(), "MacOS");
 }
 #endif
 

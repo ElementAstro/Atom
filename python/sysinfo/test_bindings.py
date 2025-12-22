@@ -102,15 +102,40 @@ def test_new_modules_functionality():
         from atom.sysinfo import sn
 
         # Test class instantiation
-        _ = sn.HardwareInfo()
+        hw_info = sn.HardwareInfo()
         print("  ✓ SN: HardwareInfo class instantiation")
 
-        # Test function availability
+        # Test HardwareInfo methods
+        assert hasattr(
+            hw_info, "get_bios_serial_number"
+        ), "get_bios_serial_number method missing"
+        assert hasattr(
+            hw_info, "get_motherboard_serial_number"
+        ), "get_motherboard_serial_number method missing"
+        assert hasattr(
+            hw_info, "get_cpu_serial_number"
+        ), "get_cpu_serial_number method missing"
+        assert hasattr(
+            hw_info, "get_disk_serial_numbers"
+        ), "get_disk_serial_numbers method missing"
+        print("  ✓ SN: HardwareInfo methods available")
+
+        # Test convenience functions
         assert hasattr(sn, "get_bios_serial"), "get_bios_serial function missing"
+        assert hasattr(
+            sn, "get_motherboard_serial"
+        ), "get_motherboard_serial function missing"
+        assert hasattr(sn, "get_cpu_serial"), "get_cpu_serial function missing"
+        assert hasattr(
+            sn, "get_all_disk_serials"
+        ), "get_all_disk_serials function missing"
         assert hasattr(
             sn, "get_hardware_summary"
         ), "get_hardware_summary function missing"
-        print("  ✓ SN: Required functions available")
+        assert hasattr(
+            sn, "has_hardware_serials"
+        ), "has_hardware_serials function missing"
+        print("  ✓ SN: Convenience functions available")
 
     except Exception as e:
         print(f"  ✗ SN module test failed: {e}")
@@ -137,14 +162,31 @@ def test_new_modules_functionality():
         from atom.sysinfo import wm
 
         # Test class instantiation
-        _ = wm.SystemInfo()
+        sys_info = wm.SystemInfo()
         print("  ✓ WM: SystemInfo class instantiation")
+
+        # Test SystemInfo fields (matches C++ struct)
+        assert hasattr(
+            sys_info, "desktop_environment"
+        ), "desktop_environment field missing"
+        assert hasattr(sys_info, "window_manager"), "window_manager field missing"
+        assert hasattr(sys_info, "wm_theme"), "wm_theme field missing"
+        assert hasattr(sys_info, "icons"), "icons field missing"
+        assert hasattr(sys_info, "font"), "font field missing"
+        assert hasattr(sys_info, "cursor"), "cursor field missing"
+        print("  ✓ WM: SystemInfo fields available")
 
         # Test function availability
         assert hasattr(wm, "get_system_info"), "get_system_info function missing"
         assert hasattr(
             wm, "get_desktop_environment"
         ), "get_desktop_environment function missing"
+        assert hasattr(wm, "get_window_manager"), "get_window_manager function missing"
+        assert hasattr(wm, "get_wm_theme"), "get_wm_theme function missing"
+        assert hasattr(wm, "get_icon_theme"), "get_icon_theme function missing"
+        assert hasattr(wm, "get_system_font"), "get_system_font function missing"
+        assert hasattr(wm, "get_cursor_theme"), "get_cursor_theme function missing"
+        assert hasattr(wm, "get_wm_summary"), "get_wm_summary function missing"
         print("  ✓ WM: Required functions available")
 
     except Exception as e:
@@ -227,6 +269,12 @@ def test_documentation_availability():
         assert (
             virtual.is_virtual_machine.__doc__ is not None
         ), "is_virtual_machine missing documentation"
+        assert (
+            wm.get_system_info.__doc__ is not None
+        ), "get_system_info missing documentation"
+        assert (
+            sn.get_hardware_summary.__doc__ is not None
+        ), "get_hardware_summary missing documentation"
         print("  ✓ Function documentation available")
 
     except Exception as e:

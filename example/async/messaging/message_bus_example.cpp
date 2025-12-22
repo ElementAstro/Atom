@@ -45,11 +45,9 @@ using namespace atom::async;
 // UTILITY FUNCTIONS AND HELPERS
 // ============================================================================
 
-// Print mutex for thread-safe output
-std::mutex print_mutex;
+// Print mutex for thread-safe outputstd::mutex print_mutex;
 
-// Thread-safe print function with timestamp
-template <typename... Args>
+// Thread-safe print function with timestamptemplate <typename... Args>
 void print_safe(Args&&... args) {
     std::lock_guard<std::mutex> lock(print_mutex);
     auto now = std::chrono::system_clock::now();
@@ -63,96 +61,93 @@ void print_safe(Args&&... args) {
     (std::cout << ... << args) << std::endl;
 }
 
-// Enhanced section separator
-void print_section(const std::string& title) {
-    std::lock_guard<std::mutex> lock(print_mutex);
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n" << std::endl;
+// Enhanced section separatorvoid print_section(const std::string& title) {
+std::lock_guard<std::mutex> lock(print_mutex);
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n" << std::endl;
 }
 
-// Helper function to get thread ID as string
-std::string get_thread_id() {
-    std::stringstream ss;
-    ss << std::this_thread::get_id();
-    return ss.str();
+// Helper function to get thread ID as stringstd::string get_thread_id() {
+std::stringstream ss;
+ss << std::this_thread::get_id();
+return ss.str();
 }
 
-// Performance timer
-class PerformanceTimer {
+// Performance timerclass PerformanceTimer {
 public:
-    void start(const std::string& operation) {
-        current_operation_ = operation;
-        start_time_ = std::chrono::high_resolution_clock::now();
-        print_safe("⏱️  Starting: ", operation);
-    }
+void start(const std::string& operation) {
+    current_operation_ = operation;
+    start_time_ = std::chrono::high_resolution_clock::now();
+    print_safe("⏱️  Starting: ", operation);
+}
 
-    void stop() {
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-                            end_time - start_time_)
-                            .count();
+void stop() {
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+                        end_time - start_time_)
+                        .count();
 
-        print_safe("⏱️  Completed: ", current_operation_, " in ", duration,
-                   " μs");
-    }
+    print_safe("⏱️  Completed: ", current_operation_, " in ", duration, " μs");
+}
 
 private:
-    std::string current_operation_;
-    std::chrono::high_resolution_clock::time_point start_time_;
-};
+std::string current_operation_;
+std::chrono::high_resolution_clock::time_point start_time_;
+}
+;
 
 // ============================================================================
 // MESSAGE TYPES FOR EXAMPLES
 // ============================================================================
 
-// Basic message type
-struct BasicMessage {
-    std::string content;
-    int id;
+// Basic message typestruct BasicMessage {
+std::string content;
+int id;
 
-    BasicMessage(std::string content, int id)
-        : content(std::move(content)), id(id) {}
-};
+BasicMessage(std::string content, int id)
+    : content(std::move(content)), id(id) {}
+}
+;
 
-// User event message
-struct UserEvent {
-    std::string username;
-    std::string action;
-    std::chrono::system_clock::time_point timestamp;
+// User event messagestruct UserEvent {
+std::string username;
+std::string action;
+std::chrono::system_clock::time_point timestamp;
 
-    UserEvent(std::string username, std::string action)
-        : username(std::move(username)),
-          action(std::move(action)),
-          timestamp(std::chrono::system_clock::now()) {}
-};
+UserEvent(std::string username, std::string action)
+    : username(std::move(username)),
+      action(std::move(action)),
+      timestamp(std::chrono::system_clock::now()) {}
+}
+;
 
-// System notification message
-struct SystemNotification {
-    enum class Level { INFO, WARNING, ERROR_LEVEL, CRITICAL };
+// System notification messagestruct SystemNotification {
+enum class Level { INFO, WARNING, ERROR_LEVEL, CRITICAL };
 
-    Level level;
-    std::string message;
-    std::string component;
+Level level;
+std::string message;
+std::string component;
 
-    SystemNotification(Level level, std::string message, std::string component)
-        : level(level),
-          message(std::move(message)),
-          component(std::move(component)) {}
-};
+SystemNotification(Level level, std::string message, std::string component)
+    : level(level),
+      message(std::move(message)),
+      component(std::move(component)) {}
+}
+;
 
-// Data processing message
-struct DataProcessingMessage {
-    std::vector<int> data;
-    std::string operation;
-    int batch_id;
+// Data processing messagestruct DataProcessingMessage {
+std::vector<int> data;
+std::string operation;
+int batch_id;
 
-    DataProcessingMessage(std::vector<int> data, std::string operation,
-                          int batch_id)
-        : data(std::move(data)),
-          operation(std::move(operation)),
-          batch_id(batch_id) {}
-};
+DataProcessingMessage(std::vector<int> data, std::string operation,
+                      int batch_id)
+    : data(std::move(data)),
+      operation(std::move(operation)),
+      batch_id(batch_id) {}
+}
+;
 
 // ============================================================================
 // SECTION 1: BASIC PUBLISH-SUBSCRIBE PATTERNS
@@ -465,24 +460,23 @@ void namespace_and_global_examples() {
 #endif
 }
 
-// Main function
-int main() {
-    try {
-        std::cout << "====== MessageBus Usage Examples ======" << std::endl;
+// Main functionint main() {
+try {
+    std::cout << "====== MessageBus Usage Examples ======" << std::endl;
 
-        basic_pubsub_examples();
-        multiple_subscribers_examples();
-        namespace_and_global_examples();
+    basic_pubsub_examples();
+    multiple_subscribers_examples();
+    namespace_and_global_examples();
 
-        std::cout << "\n====== All MessageBus Examples Completed ======"
-                  << std::endl;
-    } catch (const std::exception& e) {
-        std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
-        return 1;
-    } catch (...) {
-        std::cerr << "Unknown unhandled exception in main" << std::endl;
-        return 1;
-    }
+    std::cout << "\n====== All MessageBus Examples Completed ======"
+              << std::endl;
+} catch (const std::exception& e) {
+    std::cerr << "Unhandled exception in main: " << e.what() << std::endl;
+    return 1;
+} catch (...) {
+    std::cerr << "Unknown unhandled exception in main" << std::endl;
+    return 1;
+}
 
-    return 0;
+return 0;
 }

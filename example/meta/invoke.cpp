@@ -25,40 +25,39 @@
 using namespace std::chrono_literals;
 using namespace atom::meta;
 
-// Simple class for member function examples
-class Calculator {
+// Simple class for member function examplesclass Calculator {
 public:
-    Calculator(int base = 0) : base_value(base) {}
+Calculator(int base = 0) : base_value(base) {}
 
-    int add(int a, int b) const { return a + b + base_value; }
+int add(int a, int b) const { return a + b + base_value; }
 
-    int subtract(int a, int b) {
-        call_count++;
-        return a - b - base_value;
-    }
-
-    static int multiply(int a, int b) { return a * b; }
-
-    int get_call_count() const { return call_count; }
-
-    int base_value{0};
-
-private:
-    int call_count{0};
-};
-
-// Function with custom validation
-bool is_valid_input(int a, int b) { return a >= 0 && b >= 0; }
-
-// Helper to print a section divider
-void print_section(const std::string& title) {
-    std::cout << "\n==================================================\n";
-    std::cout << "  " << title;
-    std::cout << "\n==================================================\n";
+int subtract(int a, int b) {
+    call_count++;
+    return a - b - base_value;
 }
 
-// Forward declarations for organization
-void demo_basic_invocation();
+static int multiply(int a, int b) { return a * b; }
+
+int get_call_count() const { return call_count; }
+
+int base_value{0};
+
+private:
+int call_count{0};
+}
+;
+
+// Function with custom validationbool is_valid_input(int a, int b) { return a
+// >= 0 && b >= 0; }
+
+// Helper to print a section dividervoid print_section(const std::string& title)
+// {
+std::cout << "\n==================================================\n";
+std::cout << "  " << title;
+std::cout << "\n==================================================\n";
+}
+
+// Forward declarations for organizationvoid demo_basic_invocation();
 void demo_error_handling();
 void demo_memoization_caching();
 void demo_parallel_async();
@@ -66,26 +65,25 @@ void demo_transformation_composition();
 void demo_timeout_retry();
 void demo_instrumentation();
 
-// Main function to run all examples
-int main() {
-    std::cout << "=== atom::meta::invoke Utility Functions Examples ===\n";
+// Main function to run all examplesint main() {
+std::cout << "=== atom::meta::invoke Utility Functions Examples ===\n";
 
-    try {
-        demo_basic_invocation();
-        demo_error_handling();
-        demo_memoization_caching();
-        demo_parallel_async();
-        demo_transformation_composition();
-        demo_timeout_retry();
-        demo_instrumentation();
+try {
+    demo_basic_invocation();
+    demo_error_handling();
+    demo_memoization_caching();
+    demo_parallel_async();
+    demo_transformation_composition();
+    demo_timeout_retry();
+    demo_instrumentation();
 
-        std::cout << "\nAll examples completed successfully!\n";
-    } catch (const std::exception& e) {
-        std::cerr << "\nException caught in main: " << e.what() << std::endl;
-        return 1;
-    }
+    std::cout << "\nAll examples completed successfully!\n";
+} catch (const std::exception& e) {
+    std::cerr << "\nException caught in main: " << e.what() << std::endl;
+    return 1;
+}
 
-    return 0;
+return 0;
 }
 
 //==============================================================================

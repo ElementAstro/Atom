@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Unified Scripting API Example
-Demonstrates cross-language scripting interface, engine abstraction,
-and unified scripting features that work across multiple scripting engines.
+Description: Unified Scripting API ExampleDemonstrates cross-language scripting
+interface, engine abstraction, and unified scripting features that work across
+multiple scripting engines.
 
 **************************************************/
 
@@ -34,8 +34,8 @@ and unified scripting features that work across multiple scripting engines.
 #include "atom/components/scripting/python_engine.hpp"
 #endif
 
-// Note: Component and Registry are in global namespace, not atom::components
-using namespace atom::components::scripting;
+// Note: Component and Registry are in global namespace, not
+// atom::componentsusing namespace atom::components::scripting;
 
 /**
  * @brief Component that can be controlled via any scripting engine
@@ -396,17 +396,14 @@ void demonstrateLanguageSpecificFeatures(UnifiedScriptingManager& manager) {
 #if ATOM_ENABLE_PYTHON
     std::cout << "\n--- Python-specific features ---" << std::endl;
     auto pythonResult = manager.executeOnEngine("python", R"(
-# Python list comprehension and dictionary
-character_data = {
+# Python list comprehension and dictionarycharacter_data = {
     'name': 'Python Hero',
     'stats': {'strength': 10, 'agility': 8, 'intelligence': 12}
 }
 
-# Calculate total stats using sum and values
-total_stats = sum(character_data['stats'].values())
+# Calculate total stats using sum and valuestotal_stats = sum(character_data['stats'].values())
 
-# Create skill list using list comprehension
-skills = [f"skill_{i}" for i in range(1, 6)]
+# Create skill list using list comprehensionskills = [f"skill_{i}" for i in range(1, 6)]
 
 f"Total stats: {total_stats}, Skills: {len(skills)}"
     )",

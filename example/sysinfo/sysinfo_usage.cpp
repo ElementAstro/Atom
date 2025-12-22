@@ -44,8 +44,7 @@
 
 using namespace atom::system;
 
-// Constants for formatting and thresholds
-namespace {
+// Constants for formatting and thresholdsnamespace {
 constexpr int64_t SECONDS_PER_DAY = 86400;
 constexpr int64_t SECONDS_PER_HOUR = 3600;
 constexpr int64_t SECONDS_PER_MINUTE = 60;

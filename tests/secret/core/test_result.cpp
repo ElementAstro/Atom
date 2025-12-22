@@ -89,8 +89,8 @@ TEST_F(ResultTest, HasValue) {
     auto success = Result<int>::success(42);
     auto error = Result<int>::error(ErrorCode::Unknown);
 
-    EXPECT_TRUE(success.hasValue());
-    EXPECT_FALSE(error.hasValue());
+    EXPECT_TRUE(success.isSuccess());
+    EXPECT_FALSE(error.isSuccess());
 }
 
 }  // namespace atom::secret::test

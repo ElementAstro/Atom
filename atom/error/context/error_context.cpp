@@ -15,9 +15,12 @@ Description: Error context implementation
 #include "error_context.hpp"
 #include "context_manager.hpp"
 
+#include "atom/utils/random/random.hpp"
+
 #include <algorithm>
+#include <format>
 #include <iomanip>
-#include <random>
+#include <ranges>
 #include <sstream>
 
 #ifdef _WIN32
@@ -27,8 +30,10 @@ Description: Error context implementation
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <psapi.h>
+// clang-format off
 #include <windows.h>
+#include <psapi.h>
+// clang-format on
 #else
 #include <sys/utsname.h>
 #include <unistd.h>
@@ -36,20 +41,30 @@ Description: Error context implementation
 
 namespace atom::error {
 
-ErrorId generateErrorId() {
-    static std::random_device rd;
-    static std::mt19937 gen(rd());
-    static std::uniform_int_distribution<> dis(0, 15);
+namespace {
+constexpr std::string_view HEX_CHARS = "0123456789abcdef";
+constexpr std::array DASH_POSITIONS = {8, 13, 18, 23};
 
-    std::stringstream ss;
-    ss << std::hex;
-    for (int i = 0; i < 32; ++i) {
-        ss << dis(gen);
-        if (i == 7 || i == 11 || i == 15 || i == 19) {
-            ss << "-";
+[[nodiscard]] auto createHexDigit(auto& rng) -> char {
+    return HEX_CHARS[static_cast<size_t>(rng())];
+}
+}  // namespace
+
+ErrorId generateErrorId() {
+    thread_local ::atom::utils::Random<std::mt19937,
+                                       std::uniform_int_distribution<int>>
+        rng(0, 15);
+
+    std::string result(36, '0');
+    size_t pos = 0;
+
+    for (size_t i = 0; i < 32; ++i) {
+        if (std::ranges::contains(DASH_POSITIONS, pos)) {
+            result[pos++] = '-';
         }
+        result[pos++] = createHexDigit(rng);
     }
-    return ss.str();
+    return result;
 }
 
 ErrorContext::ErrorContext(int errorCode, std::string message)
@@ -64,43 +79,47 @@ ErrorContext::ErrorContext(int errorCode, std::string message)
     initializeSystemInfo();
 }
 
-ErrorContext::ErrorContext(const ErrorContext& other)
-    : errorId_(other.errorId_),
-      errorCode_(other.errorCode_),
-      message_(other.message_),
-      timestamp_(other.timestamp_),
-      threadId_(other.threadId_),
-      metadata_(other.metadata_),
-      userData_(other.userData_),
-      systemInfo_(other.systemInfo_),
-      tags_(other.tags_),
-      correlationId_(other.correlationId_),
-      parentErrorId_(other.parentErrorId_),
-      childErrorIds_(other.childErrorIds_),
-      retryCount_(other.retryCount_),
-      maxRetries_(other.maxRetries_),
-      stackTrace_(other.stackTrace_) {}
+ErrorContext::ErrorContext(const ErrorContext& other) {
+    std::scoped_lock lock(other.mutex_);
+    errorId_ = other.errorId_;
+    errorCode_ = other.errorCode_;
+    message_ = other.message_;
+    timestamp_ = other.timestamp_;
+    threadId_ = other.threadId_;
+    metadata_ = other.metadata_;
+    userData_ = other.userData_;
+    systemInfo_ = other.systemInfo_;
+    tags_ = other.tags_;
+    correlationId_ = other.correlationId_;
+    parentErrorId_ = other.parentErrorId_;
+    childErrorIds_ = other.childErrorIds_;
+    retryCount_ = other.retryCount_;
+    maxRetries_ = other.maxRetries_;
+    stackTrace_ = other.stackTrace_;
+}
 
-ErrorContext::ErrorContext(ErrorContext&& other) noexcept
-    : errorId_(std::move(other.errorId_)),
-      errorCode_(other.errorCode_),
-      message_(std::move(other.message_)),
-      timestamp_(other.timestamp_),
-      threadId_(other.threadId_),
-      metadata_(std::move(other.metadata_)),
-      userData_(std::move(other.userData_)),
-      systemInfo_(std::move(other.systemInfo_)),
-      tags_(std::move(other.tags_)),
-      correlationId_(std::move(other.correlationId_)),
-      parentErrorId_(std::move(other.parentErrorId_)),
-      childErrorIds_(std::move(other.childErrorIds_)),
-      retryCount_(other.retryCount_),
-      maxRetries_(other.maxRetries_),
-      stackTrace_(std::move(other.stackTrace_)) {}
+ErrorContext::ErrorContext(ErrorContext&& other) noexcept {
+    std::scoped_lock lock(other.mutex_);
+    errorId_ = std::exchange(other.errorId_, {});
+    errorCode_ = std::exchange(other.errorCode_, 0);
+    message_ = std::exchange(other.message_, {});
+    timestamp_ = std::exchange(other.timestamp_, {});
+    threadId_ = std::exchange(other.threadId_, {});
+    metadata_ = std::exchange(other.metadata_, {});
+    userData_ = std::exchange(other.userData_, {});
+    systemInfo_ = std::exchange(other.systemInfo_, {});
+    tags_ = std::exchange(other.tags_, {});
+    correlationId_ = std::exchange(other.correlationId_, {});
+    parentErrorId_ = std::exchange(other.parentErrorId_, {});
+    childErrorIds_ = std::exchange(other.childErrorIds_, {});
+    retryCount_ = std::exchange(other.retryCount_, 0);
+    maxRetries_ = std::exchange(other.maxRetries_, 0);
+    stackTrace_ = std::exchange(other.stackTrace_, {});
+}
 
 ErrorContext& ErrorContext::operator=(const ErrorContext& other) {
     if (this != &other) {
-        std::lock_guard<std::mutex> lock(mutex_);
+        std::scoped_lock lock(mutex_, other.mutex_);
         errorId_ = other.errorId_;
         errorCode_ = other.errorCode_;
         message_ = other.message_;
@@ -122,61 +141,65 @@ ErrorContext& ErrorContext::operator=(const ErrorContext& other) {
 
 ErrorContext& ErrorContext::operator=(ErrorContext&& other) noexcept {
     if (this != &other) {
-        std::lock_guard<std::mutex> lock(mutex_);
-        errorId_ = std::move(other.errorId_);
-        errorCode_ = other.errorCode_;
-        message_ = std::move(other.message_);
-        timestamp_ = other.timestamp_;
-        threadId_ = other.threadId_;
-        metadata_ = std::move(other.metadata_);
-        userData_ = std::move(other.userData_);
-        systemInfo_ = std::move(other.systemInfo_);
-        tags_ = std::move(other.tags_);
-        correlationId_ = std::move(other.correlationId_);
-        parentErrorId_ = std::move(other.parentErrorId_);
-        childErrorIds_ = std::move(other.childErrorIds_);
-        retryCount_ = other.retryCount_;
-        maxRetries_ = other.maxRetries_;
-        stackTrace_ = std::move(other.stackTrace_);
+        std::scoped_lock lock(mutex_, other.mutex_);
+        errorId_ = std::exchange(other.errorId_, {});
+        errorCode_ = std::exchange(other.errorCode_, 0);
+        message_ = std::exchange(other.message_, {});
+        timestamp_ = std::exchange(other.timestamp_, {});
+        threadId_ = std::exchange(other.threadId_, {});
+        metadata_ = std::exchange(other.metadata_, {});
+        userData_ = std::exchange(other.userData_, {});
+        systemInfo_ = std::exchange(other.systemInfo_, {});
+        tags_ = std::exchange(other.tags_, {});
+        correlationId_ = std::exchange(other.correlationId_, {});
+        parentErrorId_ = std::exchange(other.parentErrorId_, {});
+        childErrorIds_ = std::exchange(other.childErrorIds_, {});
+        retryCount_ = std::exchange(other.retryCount_, 0);
+        maxRetries_ = std::exchange(other.maxRetries_, 0);
+        stackTrace_ = std::exchange(other.stackTrace_, {});
     }
     return *this;
 }
 
 auto ErrorContext::setUserData(const std::string& key,
                                std::any value) -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
-    userData_[key] = std::move(value);
+    std::scoped_lock lock(mutex_);
+    userData_.insert_or_assign(key, std::move(value));
     return *this;
 }
 
 auto ErrorContext::getUserData(const std::string& key) const -> std::any {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto it = userData_.find(key);
-    return it != userData_.end() ? it->second : std::any{};
+    std::scoped_lock lock(mutex_);
+    if (auto it = userData_.find(key); it != userData_.end()) {
+        return it->second;
+    }
+    return {};
 }
 
 auto ErrorContext::hasUserData(const std::string& key) const -> bool {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return userData_.find(key) != userData_.end();
+    std::scoped_lock lock(mutex_);
+    return userData_.contains(key);
 }
 
 auto ErrorContext::setSystemInfo(const std::string& key,
                                  std::string value) -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
-    systemInfo_[key] = std::move(value);
+    std::scoped_lock lock(mutex_);
+    systemInfo_.insert_or_assign(key, std::move(value));
     return *this;
 }
 
 auto ErrorContext::getSystemInfo(const std::string& key) const -> std::string {
-    std::lock_guard<std::mutex> lock(mutex_);
-    auto it = systemInfo_.find(key);
-    return it != systemInfo_.end() ? it->second : "";
+    std::scoped_lock lock(mutex_);
+    if (auto it = systemInfo_.find(key); it != systemInfo_.end()) {
+        return it->second;
+    }
+    return {};
 }
 
 auto ErrorContext::addTag(const std::string& tag) -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
-    if (std::find(tags_.begin(), tags_.end(), tag) == tags_.end()) {
-        tags_.push_back(tag);
+    std::scoped_lock lock(mutex_);
+    if (!std::ranges::contains(tags_, tag)) {
+        tags_.emplace_back(tag);
     }
     return *this;
 }
@@ -186,13 +209,13 @@ auto ErrorContext::getTags() const -> const std::vector<std::string>& {
 }
 
 auto ErrorContext::hasTag(const std::string& tag) const -> bool {
-    std::lock_guard<std::mutex> lock(mutex_);
-    return std::find(tags_.begin(), tags_.end(), tag) != tags_.end();
+    std::scoped_lock lock(mutex_);
+    return std::ranges::contains(tags_, tag);
 }
 
 auto ErrorContext::setCorrelationId(const std::string& correlationId)
     -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     correlationId_ = correlationId;
     return *this;
 }
@@ -202,7 +225,7 @@ auto ErrorContext::getCorrelationId() const -> const std::string& {
 }
 
 auto ErrorContext::setParentErrorId(const ErrorId& parentId) -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     parentErrorId_ = parentId;
     return *this;
 }
@@ -212,8 +235,8 @@ auto ErrorContext::getParentErrorId() const -> const ErrorId& {
 }
 
 auto ErrorContext::addChildErrorId(const ErrorId& childId) -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
-    childErrorIds_.push_back(childId);
+    std::scoped_lock lock(mutex_);
+    childErrorIds_.emplace_back(childId);
     return *this;
 }
 
@@ -222,7 +245,7 @@ auto ErrorContext::getChildErrorIds() const -> const std::vector<ErrorId>& {
 }
 
 auto ErrorContext::incrementRetryCount() -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     ++retryCount_;
     return *this;
 }
@@ -230,7 +253,7 @@ auto ErrorContext::incrementRetryCount() -> ErrorContext& {
 auto ErrorContext::getRetryCount() const -> int { return retryCount_; }
 
 auto ErrorContext::setMaxRetries(int maxRetries) -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     maxRetries_ = maxRetries;
     return *this;
 }
@@ -244,7 +267,7 @@ auto ErrorContext::canRetry() const -> bool {
 
 auto ErrorContext::setStackTrace(const std::string& stackTrace)
     -> ErrorContext& {
-    std::lock_guard<std::mutex> lock(mutex_);
+    std::scoped_lock lock(mutex_);
     stackTrace_ = stackTrace;
     return *this;
 }
@@ -255,29 +278,26 @@ auto ErrorContext::getStackTrace() const -> const std::string& {
 
 void ErrorContext::initializeSystemInfo() {
 #ifdef _WIN32
-    systemInfo_["pid"] = std::to_string(GetCurrentProcessId());
-#else
-    systemInfo_["pid"] = std::to_string(getpid());
-#endif
-
-#ifdef _WIN32
+    systemInfo_.emplace("pid", std::to_string(GetCurrentProcessId()));
     SYSTEM_INFO sysInfo;
     GetSystemInfo(&sysInfo);
-    systemInfo_["cpu_count"] = std::to_string(sysInfo.dwNumberOfProcessors);
+    systemInfo_.emplace("cpu_count",
+                        std::to_string(sysInfo.dwNumberOfProcessors));
 #else
-    systemInfo_["cpu_count"] = std::to_string(sysconf(_SC_NPROCESSORS_ONLN));
+    systemInfo_.emplace("pid", std::to_string(getpid()));
+    systemInfo_.emplace("cpu_count",
+                        std::to_string(sysconf(_SC_NPROCESSORS_ONLN)));
 
-    struct utsname unameData;
-    if (uname(&unameData) == 0) {
-        systemInfo_["os_name"] = unameData.sysname;
-        systemInfo_["os_version"] = unameData.release;
-        systemInfo_["hostname"] = unameData.nodename;
+    if (struct utsname unameData; uname(&unameData) == 0) {
+        systemInfo_.emplace("os_name", unameData.sysname);
+        systemInfo_.emplace("os_version", unameData.release);
+        systemInfo_.emplace("hostname", unameData.nodename);
     }
 #endif
 
-    std::stringstream ss;
-    ss << threadId_;
-    systemInfo_["thread_id"] = ss.str();
+    std::ostringstream oss;
+    oss << threadId_;
+    systemInfo_.emplace("thread_id", oss.str());
 }
 
 auto ErrorContext::create(int errorCode, const std::string& message)
@@ -296,93 +316,101 @@ auto ErrorContext::createWithCorrelation(
 }
 
 auto ErrorContext::toJson() const -> std::string {
-    std::lock_guard<std::mutex> lock(mutex_);
-    std::stringstream ss;
-    ss << "{\n";
-    ss << "  \"errorId\": \"" << errorId_ << "\",\n";
-    ss << "  \"errorCode\": " << errorCode_ << ",\n";
-    ss << "  \"message\": \"" << message_ << "\",\n";
-    ss << "  \"severity\": \"" << severityToString(metadata_.severity)
-       << "\",\n";
-    ss << "  \"category\": \"" << categoryToString(metadata_.category)
-       << "\",\n";
-    ss << "  \"recovery\": \"" << recoveryStrategyToString(metadata_.recovery)
-       << "\",\n";
+    std::scoped_lock lock(mutex_);
 
-    auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
-    ss << "  \"timestamp\": \""
-       << std::put_time(std::gmtime(&time_t), "%Y-%m-%dT%H:%M:%SZ") << "\",\n";
+    auto timeT = std::chrono::system_clock::to_time_t(timestamp_);
+    std::ostringstream timeOss;
+    timeOss << std::put_time(std::gmtime(&timeT), "%Y-%m-%dT%H:%M:%SZ");
 
-    ss << "  \"systemInfo\": {\n";
-    bool first = true;
-    for (const auto& [key, value] : systemInfo_) {
-        if (!first)
-            ss << ",\n";
-        ss << "    \"" << key << "\": \"" << value << "\"";
+    std::string sysInfoJson;
+    for (bool first = true; const auto& [key, value] : systemInfo_) {
+        if (!first) {
+            sysInfoJson += ",\n";
+        }
+        sysInfoJson += std::format("    \"{}\": \"{}\"", key, value);
         first = false;
     }
-    ss << "\n  },\n";
 
-    ss << "  \"tags\": [";
-    first = true;
-    for (const auto& tag : tags_) {
-        if (!first)
-            ss << ", ";
-        ss << "\"" << tag << "\"";
+    std::string tagsJson;
+    for (bool first = true; const auto& tag : tags_) {
+        if (!first) {
+            tagsJson += ", ";
+        }
+        tagsJson += std::format("\"{}\"", tag);
         first = false;
     }
-    ss << "],\n";
 
-    ss << "  \"correlationId\": \"" << correlationId_ << "\",\n";
-    ss << "  \"parentErrorId\": \"" << parentErrorId_ << "\",\n";
-    ss << "  \"retryCount\": " << retryCount_ << ",\n";
-    ss << "  \"maxRetries\": " << maxRetries_ << "\n";
-    ss << "}";
-
-    return ss.str();
+    return std::format(
+        R"({{
+  "errorId": "{}",
+  "errorCode": {},
+  "message": "{}",
+  "severity": "{}",
+  "category": "{}",
+  "recovery": "{}",
+  "timestamp": "{}",
+  "systemInfo": {{
+{}
+  }},
+  "tags": [{}],
+  "correlationId": "{}",
+  "parentErrorId": "{}",
+  "retryCount": {},
+  "maxRetries": {}
+}})",
+        errorId_, errorCode_, message_, severityToString(metadata_.severity),
+        categoryToString(metadata_.category),
+        recoveryStrategyToString(metadata_.recovery), timeOss.str(),
+        sysInfoJson, tagsJson, correlationId_, parentErrorId_, retryCount_,
+        maxRetries_);
 }
 
 auto ErrorContext::toString() const -> std::string {
-    std::lock_guard<std::mutex> lock(mutex_);
-    std::stringstream ss;
+    std::scoped_lock lock(mutex_);
 
-    ss << "Error Context [" << errorId_ << "]\n";
-    ss << "  Code: " << errorCode_ << "\n";
-    ss << "  Message: " << message_ << "\n";
-    ss << "  Severity: " << severityToString(metadata_.severity) << "\n";
-    ss << "  Category: " << categoryToString(metadata_.category) << "\n";
-    ss << "  Recovery: " << recoveryStrategyToString(metadata_.recovery)
-       << "\n";
+    auto timeT = std::chrono::system_clock::to_time_t(timestamp_);
+    std::ostringstream timeOss;
+    timeOss << std::put_time(std::localtime(&timeT), "%Y-%m-%d %H:%M:%S");
 
-    auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
-    ss << "  Timestamp: "
-       << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S") << "\n";
+    std::string result = std::format(
+        "Error Context [{}]\n"
+        "  Code: {}\n"
+        "  Message: {}\n"
+        "  Severity: {}\n"
+        "  Category: {}\n"
+        "  Recovery: {}\n"
+        "  Timestamp: {}\n",
+        errorId_, errorCode_, message_, severityToString(metadata_.severity),
+        categoryToString(metadata_.category),
+        recoveryStrategyToString(metadata_.recovery), timeOss.str());
 
     if (!correlationId_.empty()) {
-        ss << "  Correlation ID: " << correlationId_ << "\n";
+        result += std::format("  Correlation ID: {}\n", correlationId_);
     }
 
     if (!parentErrorId_.empty()) {
-        ss << "  Parent Error: " << parentErrorId_ << "\n";
+        result += std::format("  Parent Error: {}\n", parentErrorId_);
     }
 
     if (!tags_.empty()) {
-        ss << "  Tags: ";
-        for (size_t i = 0; i < tags_.size(); ++i) {
-            if (i > 0)
-                ss << ", ";
-            ss << tags_[i];
+        result += "  Tags: ";
+        for (bool first = true; const auto& tag : tags_) {
+            if (!first) {
+                result += ", ";
+            }
+            result += tag;
+            first = false;
         }
-        ss << "\n";
+        result += '\n';
     }
 
-    ss << "  Retry: " << retryCount_ << "/" << maxRetries_ << "\n";
+    result += std::format("  Retry: {}/{}\n", retryCount_, maxRetries_);
 
     if (!stackTrace_.empty()) {
-        ss << "  Stack Trace:\n" << stackTrace_ << "\n";
+        result += std::format("  Stack Trace:\n{}\n", stackTrace_);
     }
 
-    return ss.str();
+    return result;
 }
 
 }  // namespace atom::error

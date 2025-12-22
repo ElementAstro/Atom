@@ -11,8 +11,7 @@
 // 包含 Timer 类的头文件
 #include "atom/async/timer.hpp"
 
-// 用于同步输出的互斥锁
-std::mutex g_outputMutex;
+// 用于同步输出的互斥锁std::mutex g_outputMutex;
 
 // 辅助宏，用于格式化输出
 #define SECTION(name) std::cout << "\n=== " << name << " ===\n"
@@ -24,49 +23,45 @@ std::mutex g_outputMutex;
                   << "] " << msg << std::endl;                          \
     }
 
-// 获取当前时间的字符串表示
-std::string getCurrentTimeStr() {
-    auto now = std::chrono::system_clock::now();
-    auto time = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                  now.time_since_epoch()) %
-              1000;
+// 获取当前时间的字符串表示std::string getCurrentTimeStr() {
+auto now = std::chrono::system_clock::now();
+auto time = std::chrono::system_clock::to_time_t(now);
+auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+              now.time_since_epoch()) %
+          1000;
 
-    std::stringstream ss;
-    ss << std::put_time(std::localtime(&time), "%H:%M:%S") << '.'
-       << std::setfill('0') << std::setw(3) << ms.count();
-    return ss.str();
+std::stringstream ss;
+ss << std::put_time(std::localtime(&time), "%H:%M:%S") << '.'
+   << std::setfill('0') << std::setw(3) << ms.count();
+return ss.str();
 }
 
-// 简单任务函数
-void simpleTask() { LOG("执行简单任务 @ " + getCurrentTimeStr()); }
+// 简单任务函数void simpleTask() { LOG("执行简单任务 @ " + getCurrentTimeStr());
+// }
 
-// 带参数的任务函数
-void parameterizedTask(const std::string& message, int value) {
-    LOG("执行带参数任务: " + message + ", 值: " + std::to_string(value) +
-        " @ " + getCurrentTimeStr());
+// 带参数的任务函数void parameterizedTask(const std::string& message, int value)
+// {
+LOG("执行带参数任务: " + message + ", 值: " + std::to_string(value) + " @ " +
+    getCurrentTimeStr());
 }
 
-// 返回值的任务函数
-int taskWithReturn(int a, int b) {
-    int result = a + b;
-    LOG("执行带返回值任务: " + std::to_string(a) + " + " + std::to_string(b) +
-        " = " + std::to_string(result) + " @ " + getCurrentTimeStr());
-    return result;
+// 返回值的任务函数int taskWithReturn(int a, int b) {
+int result = a + b;
+LOG("执行带返回值任务: " + std::to_string(a) + " + " + std::to_string(b) +
+    " = " + std::to_string(result) + " @ " + getCurrentTimeStr());
+return result;
 }
 
-// 抛出异常的任务函数
-void throwingTask() {
-    LOG("执行将抛出异常的任务 @ " + getCurrentTimeStr());
-    throw std::runtime_error("这是一个测试异常");
+// 抛出异常的任务函数void throwingTask() {
+LOG("执行将抛出异常的任务 @ " + getCurrentTimeStr());
+throw std::runtime_error("这是一个测试异常");
 }
 
-// 长时间运行的任务函数
-void longRunningTask(int duration) {
-    LOG("开始长时间运行任务, 持续 " + std::to_string(duration) + " 毫秒 @ " +
-        getCurrentTimeStr());
-    std::this_thread::sleep_for(std::chrono::milliseconds(duration));
-    LOG("完成长时间运行任务 @ " + getCurrentTimeStr());
+// 长时间运行的任务函数void longRunningTask(int duration) {
+LOG("开始长时间运行任务, 持续 " + std::to_string(duration) + " 毫秒 @ " +
+    getCurrentTimeStr());
+std::this_thread::sleep_for(std::chrono::milliseconds(duration));
+LOG("完成长时间运行任务 @ " + getCurrentTimeStr());
 }
 
 int main() {

@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Lifecycle Management and Dependency Example
-Demonstrates lifecycle hooks, dependency constraints, event handling,
-and advanced lifecycle management features.
+Description: Lifecycle Management and Dependency ExampleDemonstrates lifecycle
+hooks, dependency constraints, event handling, and advanced lifecycle management
+features.
 
 **************************************************/
 
@@ -37,8 +37,7 @@ and advanced lifecycle management features.
 
 // Note: Registry and Component are in the global namespace, not
 // atom::components LifecycleManager and LifecyclePhase are in atom::components
-// namespace
-namespace ac = atom::components;
+// namespacenamespace ac = atom::components;
 
 /**
  * @brief Service component demonstrating lifecycle hooks

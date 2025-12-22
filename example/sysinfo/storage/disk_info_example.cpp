@@ -49,7 +49,7 @@ void demonstrateDiskInfo() {
 
             std::cout << "Disk " << (i + 1) << ":\n";
             std::cout << "  Path:                 " << disk.path << "\n";
-            std::cout << "  Filesystem:           " << disk.filesystem << "\n";
+            std::cout << "  Filesystem:           " << disk.fsType << "\n";
             std::cout << "  Total Space:          "
                       << formatBytes(disk.totalSpace) << "\n";
             std::cout << "  Free Space:           "
@@ -57,15 +57,15 @@ void demonstrateDiskInfo() {
             std::cout << "  Used Space:           "
                       << formatBytes(disk.totalSpace - disk.freeSpace) << "\n";
             std::cout << "  Usage:                " << std::fixed
-                      << std::setprecision(1) << disk.usagePercentage << "%\n";
+                      << std::setprecision(1) << disk.usagePercent << "%\n";
 
-            if (disk.usagePercentage > 90.0) {
+            if (disk.usagePercent > 90.0) {
                 std::cout
                     << "  Status:               🔴 CRITICAL - Nearly full\n";
-            } else if (disk.usagePercentage > 75.0) {
+            } else if (disk.usagePercent > 75.0) {
                 std::cout
                     << "  Status:               🟠 WARNING - Getting full\n";
-            } else if (disk.usagePercentage > 50.0) {
+            } else if (disk.usagePercent > 50.0) {
                 std::cout
                     << "  Status:               🟡 MODERATE - Half full\n";
             } else {

@@ -15,40 +15,37 @@
 
 #include "atom/memory/memory_pool.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Test class for memory pool allocations
-class TestObject {
+// Test class for memory pool allocationsclass TestObject {
 public:
-    TestObject() : id_(0), value_(0.0) {
-        std::cout << "TestObject default constructed" << std::endl;
-    }
+TestObject() : id_(0), value_(0.0) {
+    std::cout << "TestObject default constructed" << std::endl;
+}
 
-    TestObject(int id, double value) : id_(id), value_(value) {
-        std::cout << "TestObject constructed: ID=" << id_
-                  << ", Value=" << value_ << std::endl;
-    }
+TestObject(int id, double value) : id_(id), value_(value) {
+    std::cout << "TestObject constructed: ID=" << id_ << ", Value=" << value_
+              << std::endl;
+}
 
-    ~TestObject() {
-        std::cout << "TestObject destroyed: ID=" << id_ << std::endl;
-    }
+~TestObject() { std::cout << "TestObject destroyed: ID=" << id_ << std::endl; }
 
-    int getId() const { return id_; }
-    double getValue() const { return value_; }
-    void setValue(double value) { value_ = value; }
+int getId() const { return id_; }
+double getValue() const { return value_; }
+void setValue(double value) { value_ = value; }
 
 private:
-    int id_;
-    double value_;
-};
+int id_;
+double value_;
+}
+;
 
-// Helper function to measure execution time
-template <typename Func>
+// Helper function to measure execution timetemplate <typename Func>
 double measureTime(Func&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();

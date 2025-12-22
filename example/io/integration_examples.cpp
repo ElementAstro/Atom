@@ -278,11 +278,13 @@ private:
     void processScriptFile(const FileAnalysis& analysis) {
         // Check and set appropriate permissions for script files
         try {
-            auto currentPerms = atom::io::getFilePermissions(analysis.filePath);
+            auto currentPerms =
+                atom::io::getFilePermissions(analysis.filePath.string());
             std::cout << "  Current permissions: " << currentPerms << std::endl;
 
             // Set executable permissions
-            atom::io::changeFilePermissions(analysis.filePath, "rwxr-xr-x");
+            atom::io::changeFilePermissions(analysis.filePath.string(),
+                                            "rwxr-xr-x");
             std::cout << "  ✅ Set executable permissions" << std::endl;
 
         } catch (const std::exception& e) {
@@ -300,7 +302,7 @@ private:
         options.level = 6;
 
         auto result = atom::io::compressFile(
-            analysis.filePath, workingDir_ + "/processed", options);
+            analysis.filePath.string(), workingDir_ + "/processed", options);
 
         if (result.success) {
             double ratio = result.compression_ratio * 100;

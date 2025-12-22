@@ -1,4 +1,4 @@
-﻿/*
+/*
  * advanced_features.cpp - PugiXML Advanced Features Example (Minimal Stub
  * Implementation)
  */

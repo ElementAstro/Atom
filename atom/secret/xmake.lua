@@ -41,7 +41,7 @@ target("atom-secret-object")
     add_headerfiles(table.unpack(header_files))
 
     -- Add dependencies
-    add_packages("loguru", "openssl")
+    add_packages("spdlog", "fmt", "openssl")
     add_deps("atom-utils")
 
     -- Add include directories
@@ -68,7 +68,7 @@ target("atom-secret")
 
     -- Add dependencies
     add_deps("atom-secret-object", "atom-utils")
-    add_packages("loguru", "openssl")
+    add_packages("spdlog", "fmt", "openssl")
 
     -- Platform-specific settings
     if is_plat("windows", "mingw") then

@@ -29,15 +29,15 @@
 
 using namespace atom::meta;
 
-// Example structures for demonstration
-struct DatabaseConfig {
-    std::string host;
-    int port;
-    std::string username;
-    std::string password;
-    std::string database;
-    bool ssl_enabled;
-};
+// Example structures for demonstrationstruct DatabaseConfig {
+std::string host;
+int port;
+std::string username;
+std::string password;
+std::string database;
+bool ssl_enabled;
+}
+;
 
 struct ServerConfig {
     std::string bind_address;
@@ -57,10 +57,10 @@ struct ApplicationConfig {
     bool debug_mode;
 };
 
-// Custom validators
-auto validatePort = [](const int& port) -> bool {
-    return port > 0 && port <= 65535;
-};
+// Custom validatorsauto validatePort = [](const int& port) -> bool {
+return port > 0 && port <= 65535;
+}
+;
 
 auto validateHost = [](const std::string& host) -> bool {
     return !host.empty() && host.length() <= 255;
@@ -117,8 +117,7 @@ void basicYamlReflectionExample() {
         // Create YAML input for deserialization
         std::string yamlInput = R"(
 host: "192.168.1.100"
-port: 3306
-username: "dbuser"
+port: 3306username: "dbuser"
 password: "dbpass"
 database: "production_db"
 )";
@@ -173,10 +172,7 @@ void advancedYamlReflectionExample() {
         std::cout << "Testing valid server configuration:\n";
         std::string validYaml = R"(
 bind_address: "127.0.0.1"
-port: 9000
-max_connections: 200
-timeout_seconds: 60
-allowed_origins:
+port: 9000max_connections: 200timeout_seconds: 60allowed_origins:
   - "https://example.com"
   - "https://api.example.com"
   - "http://localhost:3000"
@@ -223,8 +219,7 @@ port: 70000
         std::cout << "\nTesting invalid timeout:\n";
         std::string invalidTimeoutYaml = R"(
 bind_address: "127.0.0.1"
-port: 8080
-timeout_seconds: 5000
+port: 8080timeout_seconds: 5000
 )";
 
         try {

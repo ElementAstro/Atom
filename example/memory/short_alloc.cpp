@@ -16,15 +16,14 @@
 
 #include "atom/memory/short_alloc.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Helper function to measure execution time
-template <typename Func>
+// Helper function to measure execution timetemplate <typename Func>
 double measureTime(Func&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();
@@ -33,78 +32,78 @@ double measureTime(Func&& func) {
     return duration.count();
 }
 
-// Small class for allocation testing
-class TestObject {
+// Small class for allocation testingclass TestObject {
 public:
-    TestObject() : value_(0), data_() { constructionCount++; }
+TestObject() : value_(0), data_() { constructionCount++; }
 
-    explicit TestObject(int val) : value_(val), data_() {
-        std::fill(data_.begin(), data_.end(), static_cast<char>(val % 256));
-        constructionCount++;
-    }
+explicit TestObject(int val) : value_(val), data_() {
+    std::fill(data_.begin(), data_.end(), static_cast<char>(val % 256));
+    constructionCount++;
+}
 
-    ~TestObject() { destructionCount++; }
+~TestObject() { destructionCount++; }
 
-    int getValue() const { return value_; }
+int getValue() const { return value_; }
 
-    void setValue(int value) {
-        value_ = value;
-        std::fill(data_.begin(), data_.end(), static_cast<char>(value % 256));
-    }
+void setValue(int value) {
+    value_ = value;
+    std::fill(data_.begin(), data_.end(), static_cast<char>(value % 256));
+}
 
-    static void resetCounters() {
-        constructionCount = 0;
-        destructionCount = 0;
-    }
+static void resetCounters() {
+    constructionCount = 0;
+    destructionCount = 0;
+}
 
-    static int getConstructionCount() { return constructionCount; }
-    static int getDestructionCount() { return destructionCount; }
+static int getConstructionCount() { return constructionCount; }
+static int getDestructionCount() { return destructionCount; }
 
 private:
-    int value_;
-    std::array<char, 128> data_;  // Make the object reasonably sized
+int value_;
+std::array<char, 128> data_;  // Make the object reasonably sized
 
-    static inline int constructionCount = 0;
-    static inline int destructionCount = 0;
-};
+static inline int constructionCount = 0;
+static inline int destructionCount = 0;
+}
+;
 
-// Large object for testing different allocation sizes
-class LargeObject {
+// Large object for testing different allocation sizesclass LargeObject {
 public:
-    LargeObject() : data_(1024, 0) {}
-    explicit LargeObject(int val) : data_(1024, static_cast<char>(val % 256)) {}
+LargeObject() : data_(1024, 0) {}
+explicit LargeObject(int val) : data_(1024, static_cast<char>(val % 256)) {}
 
-    std::vector<char>& getData() { return data_; }
-    const std::vector<char>& getData() const { return data_; }
+std::vector<char>& getData() { return data_; }
+const std::vector<char>& getData() const { return data_; }
 
 private:
-    std::vector<char> data_;  // 1KB of data
-};
+std::vector<char> data_;  // 1KB of data
+}
+;
 
-// Custom structure to test with Arena directly
-struct CustomStruct {
-    int id;
-    double values[16];
-    char name[64];
-    bool active;
+// Custom structure to test with Arena directlystruct CustomStruct {
+int id;
+double values[16];
+char name[64];
+bool active;
 
-    CustomStruct() : id(0), active(false) {
-        std::fill_n(values, 16, 0.0);
-        std::fill_n(name, 64, '\0');
-    }
+CustomStruct() : id(0), active(false) {
+    std::fill_n(values, 16, 0.0);
+    std::fill_n(name, 64, '\0');
+}
 
-    CustomStruct(int i, const std::string& n) : id(i), active(true) {
-        std::fill_n(values, 16, static_cast<double>(i));
-        std::strncpy(name, n.c_str(), 63);
-        name[63] = '\0';  // Ensure null termination
-    }
+CustomStruct(int i, const std::string& n) : id(i), active(true) {
+    std::fill_n(values, 16, static_cast<double>(i));
+    std::strncpy(name, n.c_str(), 63);
+    name[63] = '\0';  // Ensure null termination
+}
 
-    void print() const {
-        std::cout << "CustomStruct { id: " << id << ", name: \"" << name
-                  << "\", active: " << (active ? "true" : "false") << " }"
-                  << std::endl;
-    }
-};
+void print() const {
+    std::cout << "CustomStruct { id: " << id << ", name: \"" << name
+              << "\", active: " << (active ? "true" : "false") << " }"
+              << std::endl;
+}
+}
+;
 
 int main() {
     std::cout << "SHORT ALLOCATOR COMPREHENSIVE EXAMPLES\n";

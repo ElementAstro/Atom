@@ -27,7 +27,7 @@ target("atom-search-object")
     add_headerfiles("cache/*.hpp")
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add include directories
     add_includedirs(".", {public = true})
@@ -49,7 +49,7 @@ target("atom-search")
 
     -- Add dependencies
     add_deps("atom-search-object")
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Platform-specific settings
     if is_plat("linux") then

@@ -15,29 +15,28 @@
 
 #include "atom/utils/linq.hpp"
 
-// A simple data structure for demonstration
-struct Person {
-    std::string name;
-    int age;
-    std::string city;
-    double salary;
+// A simple data structure for demonstrationstruct Person {
+std::string name;
+int age;
+std::string city;
+double salary;
 
-    // For printing Person objects
-    friend std::ostream& operator<<(std::ostream& os, const Person& p) {
-        os << "{Name: " << p.name << ", Age: " << p.age << ", City: " << p.city
-           << ", Salary: " << p.salary << "}";
-        return os;
-    }
+// For printing Person objects
+friend std::ostream& operator<<(std::ostream& os, const Person& p) {
+    os << "{Name: " << p.name << ", Age: " << p.age << ", City: " << p.city
+       << ", Salary: " << p.salary << "}";
+    return os;
+}
 
-    // For comparison operations
-    bool operator==(const Person& other) const {
-        return name == other.name && age == other.age && city == other.city &&
-               salary == other.salary;
-    }
-};
+// For comparison operations
+bool operator==(const Person& other) const {
+    return name == other.name && age == other.age && city == other.city &&
+           salary == other.salary;
+}
+}
+;
 
-// Hash function for Person to use in unordered collections
-namespace std {
+// Hash function for Person to use in unordered collectionsnamespace std {
 template <>
 struct hash<Person> {
     std::size_t operator()(const Person& p) const {
@@ -47,8 +46,7 @@ struct hash<Person> {
 };
 }  // namespace std
 
-// Helper function to print vectors
-template <typename T>
+// Helper function to print vectorstemplate <typename T>
 void printVector(const std::vector<T>& vec, const std::string& label) {
     std::cout << "=== " << label << " ===" << std::endl;
     for (const auto& item : vec) {
@@ -57,8 +55,7 @@ void printVector(const std::vector<T>& vec, const std::string& label) {
     std::cout << std::endl;
 }
 
-// Helper to print simple vectors in one line
-template <typename T>
+// Helper to print simple vectors in one linetemplate <typename T>
 void printSimpleVector(const std::vector<T>& vec, const std::string& label) {
     std::cout << "=== " << label << " ===" << std::endl;
     std::cout << "[ ";
@@ -68,8 +65,7 @@ void printSimpleVector(const std::vector<T>& vec, const std::string& label) {
     std::cout << "]" << std::endl << std::endl;
 }
 
-// Helper function to demonstrate a specific LINQ operation
-template <typename T>
+// Helper function to demonstrate a specific LINQ operationtemplate <typename T>
 void demonstrateOperation(const std::vector<T>& /* data */,
                           const std::string& operationName,
                           const std::string& description, auto operation) {

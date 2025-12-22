@@ -8,34 +8,32 @@
 
 using json = nlohmann::json;
 
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
 }
 
-// Custom struct for serialization example
-struct Person {
-    std::string name;
-    int age;
-    std::string email;
-    std::vector<std::string> hobbies;
-};
+// Custom struct for serialization examplestruct Person {
+std::string name;
+int age;
+std::string email;
+std::vector<std::string> hobbies;
+}
+;
 
-// JSON serialization for Person
-void to_json(json& j, const Person& p) {
-    j = json{{"name", p.name},
-             {"age", p.age},
-             {"email", p.email},
-             {"hobbies", p.hobbies}};
+// JSON serialization for Personvoid to_json(json& j, const Person& p) {
+j = json{{"name", p.name},
+         {"age", p.age},
+         {"email", p.email},
+         {"hobbies", p.hobbies}};
 }
 
-// JSON deserialization for Person
-void from_json(const json& j, Person& p) {
-    j.at("name").get_to(p.name);
-    j.at("age").get_to(p.age);
-    j.at("email").get_to(p.email);
-    j.at("hobbies").get_to(p.hobbies);
+// JSON deserialization for Personvoid from_json(const json& j, Person& p) {
+j.at("name").get_to(p.name);
+j.at("age").get_to(p.age);
+j.at("email").get_to(p.email);
+j.at("hobbies").get_to(p.hobbies);
 }
 
 int main() {

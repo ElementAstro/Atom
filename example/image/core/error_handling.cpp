@@ -191,8 +191,7 @@ public:
     }
 };
 
-// Global error logger instance
-static ErrorLogger g_errorLogger;
+// Global error logger instancestatic ErrorLogger g_errorLogger;
 
 /**
  * @brief RAII resource manager for automatic cleanup

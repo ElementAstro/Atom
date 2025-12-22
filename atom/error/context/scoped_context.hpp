@@ -65,7 +65,7 @@ public:
     /**
      * @brief Check if context is valid
      */
-    explicit operator bool() const;
+    explicit operator bool() const noexcept;
 
     /**
      * @brief Add user data to context

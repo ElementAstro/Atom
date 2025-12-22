@@ -49,6 +49,8 @@ set(REQUIRED_CMAKE_MODULES
     VersionConfig.cmake
     PlatformSpecifics.cmake
     CompilerOptions.cmake
+    BuildOptimization.cmake
+    Options.cmake
     ModuleDependencies.cmake
     ExamplesBuildOptions.cmake
     TestsBuildOptions.cmake
@@ -66,6 +68,31 @@ foreach(MODULE ${REQUIRED_CMAKE_MODULES})
     message(WARNING "CMake module not found: ${MODULE_PATH}")
   endif()
 endforeach()
+
+# -----------------------------------------------------------------------------
+# Build Optimization Setup
+# -----------------------------------------------------------------------------
+
+# Setup build optimizations (ccache, PCH, Unity Build, fast linking) Options are
+# defined in BuildOptimization.cmake: ATOM_ENABLE_CCACHE, ATOM_ENABLE_PCH,
+# ATOM_ENABLE_UNITY_BUILD, ATOM_ENABLE_FAST_LINK
+if(COMMAND atom_setup_build_optimizations)
+  atom_setup_build_optimizations()
+endif()
+
+# Process module groups (defined in Options.cmake)
+if(COMMAND atom_process_module_groups)
+  atom_process_module_groups()
+endif()
+
+# Optional feature dependencies (large libraries moved to features)
+option(ATOM_USE_OPENCV "Enable OpenCV for image processing" OFF)
+option(ATOM_USE_TBB "Enable Intel TBB for parallel algorithms" OFF)
+option(ATOM_USE_MINIZIP "Enable minizip-ng for advanced compression" OFF)
+option(ATOM_USE_LIBUV "Enable libuv for async I/O" OFF)
+
+# Build size optimization
+option(ATOM_STRIP_BINARIES "Strip debug symbols from release binaries" ON)
 
 # -----------------------------------------------------------------------------
 # Options
@@ -312,7 +339,7 @@ endif()
 # Register all Atom components for modular installation (if function exists)
 if(COMMAND atom_register_component)
   # Include module dependencies data to get ATOM_ALL_MODULES
-  include(cmake/module_dependencies.cmake)
+  include(cmake/ModuleDependenciesData.cmake)
   foreach(MODULE ${ATOM_ALL_MODULES})
     # Extract module name without atom- prefix
     string(REPLACE "atom-" "" MODULE_NAME ${MODULE})
@@ -364,7 +391,48 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/atom_version_info.h
         DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/atom)
 
 # -----------------------------------------------------------------------------
+# Build Size Optimization
+# -----------------------------------------------------------------------------
+
+# Strip binaries in Release/MinSizeRel builds
+if(ATOM_STRIP_BINARIES AND NOT CMAKE_BUILD_TYPE MATCHES "Debug|RelWithDebInfo")
+  if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    # Add strip flag to linker
+    add_link_options(-s)
+    message(STATUS "Binary stripping enabled for release builds")
+  endif()
+endif()
+
+# Custom clean target for thorough cleanup
+add_custom_target(
+  clean-all
+  COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/CMakeFiles
+  COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/atom
+  COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/tests
+  COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/example
+  COMMAND ${CMAKE_COMMAND} -E remove_directory ${CMAKE_BINARY_DIR}/extra
+  COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/*.a
+  COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/*.lib
+  COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/*.dll
+  COMMAND ${CMAKE_COMMAND} -E remove -f ${CMAKE_BINARY_DIR}/*.exe
+  COMMENT "Deep cleaning build artifacts...")
+
+# -----------------------------------------------------------------------------
+# Configuration Validation & Summary
+# -----------------------------------------------------------------------------
+# Validate cmake configuration and print build summary
+if(COMMAND atom_validate_cmake_config)
+  atom_validate_cmake_config()
+endif()
+
+if(COMMAND atom_print_build_summary)
+  atom_print_build_summary()
+endif()
+
+# -----------------------------------------------------------------------------
 # IDE Folders & Final Message
 # -----------------------------------------------------------------------------
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 message(STATUS "Atom configured successfully")
+message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ standard: ${CMAKE_CXX_STANDARD}")

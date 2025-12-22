@@ -33,14 +33,17 @@ Examples:
     >>> print(trace.to_string())
 """
 
-# Import all submodules
-from .error_code import *  # noqa: F401, F403
-from .error_context import *  # noqa: F401, F403
-from .error_formatter import *  # noqa: F401, F403
-from .error_handler import *  # noqa: F401, F403
-from .error_recovery import *  # noqa: F401, F403
-from .exception import *  # noqa: F401, F403
-from .stacktrace import *  # noqa: F401, F403
+# Import submodule packages
+from . import context, core, exception, handler, stacktrace
+from .context.error_context import *  # noqa: F401, F403
+
+# Import all submodules from new structure
+from .core.error_code import *  # noqa: F401, F403
+from .exception.exception import *  # noqa: F401, F403
+from .handler.error_formatter import *  # noqa: F401, F403
+from .handler.error_handler import *  # noqa: F401, F403
+from .handler.error_recovery import *  # noqa: F401, F403
+from .stacktrace.stacktrace import *  # noqa: F401, F403
 
 __all__ = [
     # Error codes and enums

@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Lua Scripting Engine Example
-Demonstrates Lua integration, binding, script execution, error handling,
-and advanced Lua scripting features with the component system.
+Description: Lua Scripting Engine ExampleDemonstrates Lua integration, binding,
+script execution, error handling, and advanced Lua scripting features with the
+component system.
 
 **************************************************/
 
@@ -368,34 +368,29 @@ void demonstrateLuaFileExecution() {
 
     // Create a test Lua script file
     const std::string scriptContent = R"(
--- Test Lua script file
-print("Hello from Lua script file!")
+-- Test Lua script fileprint("Hello from Lua script file!")
 
 function factorial(n)
     if n <= 1 then
         return 1
     else
         return n * factorial(n - 1)
-    end
-end
+    endend
 
 function fibonacci(n)
     if n <= 1 then
         return n
     else
         return fibonacci(n - 1) + fibonacci(n - 2)
-    end
-end
+    endend
 
--- Calculate some values
-local fact5 = factorial(5)
+-- Calculate some valueslocal fact5 = factorial(5)
 local fib10 = fibonacci(10)
 
 print("Factorial of 5: " .. fact5)
 print("Fibonacci of 10: " .. fib10)
 
--- Return results
-return {
+-- Return resultsreturn {
     factorial_5 = fact5,
     fibonacci_10 = fib10,
     message = "Script executed successfully"

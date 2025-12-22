@@ -36,8 +36,8 @@ using namespace atom::system;
 
 namespace {
 constexpr int DISPLAY_WIDTH = 80;
-constexpr int BIOS_AGE_WARNING_DAYS = 730;    // 2 years
-constexpr int BIOS_AGE_CRITICAL_DAYS = 1825;  // 5 years
+constexpr int BIOS_AGE_WARNING_DAYS =
+    730;  // 2 yearsconstexpr int BIOS_AGE_CRITICAL_DAYS = 1825;  // 5 years
 }  // namespace
 
 /**

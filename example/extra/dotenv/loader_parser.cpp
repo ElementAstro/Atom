@@ -27,7 +27,7 @@
 #include <string>
 
 namespace fs = std::filesystem;
-using namespace atom::extra::dotenv;
+using namespace dotenv;
 
 // ============================================================================
 // UTILITY FUNCTIONS
@@ -37,12 +37,12 @@ void printSeparator(const std::string& title) {
     std::cout << "\n===== " << title << " =====\n" << std::endl;
 }
 
-// Create a temporary .env file for testing
-fs::path createTempEnvFile(const std::string& content) {
-    fs::path tempPath = fs::temp_directory_path() / "test_dotenv.env";
-    std::ofstream ofs(tempPath);
-    ofs << content;
-    return tempPath;
+// Create a temporary .env file for testingfs::path createTempEnvFile(const
+// std::string& content) {
+fs::path tempPath = fs::temp_directory_path() / "test_dotenv.env";
+std::ofstream ofs(tempPath);
+ofs << content;
+return tempPath;
 }
 
 // ============================================================================
@@ -60,14 +60,9 @@ void basicParserExample() {
     Parser parser;
 
     std::string content = R"(
-# Database configuration
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=myapp
+# Database configurationDB_HOST=localhostDB_PORT=5432DB_NAME=myapp
 
-# API settings
-API_KEY=secret123
-API_URL=https://api.example.com
+# API settingsAPI_KEY=secret123API_URL=https://api.example.com
 )";
 
     std::cout << "Parsing .env content..." << std::endl;
@@ -90,17 +85,13 @@ void quotedValuesExample() {
     Parser parser;
 
     std::string content = R"(
-# Single quotes preserve literal values
-SINGLE_QUOTED='Hello $USER'
+# Single quotes preserve literal valuesSINGLE_QUOTED='Hello $USER'
 
-# Double quotes allow variable expansion
-DOUBLE_QUOTED="Hello World"
+# Double quotes allow variable expansionDOUBLE_QUOTED="Hello World"
 
-# Values with spaces
-MESSAGE="This is a message with spaces"
+# Values with spacesMESSAGE="This is a message with spaces"
 
-# Values with special characters
-SPECIAL="value=with=equals"
+# Values with special charactersSPECIAL="value=with=equals"
 JSON_DATA='{"key": "value"}'
 )";
 
@@ -123,11 +114,9 @@ void multilineValuesExample() {
     Parser parser;
 
     std::string content = R"(
-# Multiline value with escaped newlines
-MULTILINE="Line 1\nLine 2\nLine 3"
+# Multiline value with escaped newlinesMULTILINE="Line 1\nLine 2\nLine 3"
 
-# Certificate or key content
-PRIVATE_KEY="-----BEGIN PRIVATE KEY-----
+# Certificate or key contentPRIVATE_KEY="-----BEGIN PRIVATE KEY-----
 MIIEvQIBADANBgkqhkiG9w0BAQEF
 -----END PRIVATE KEY-----"
 )";
@@ -155,19 +144,18 @@ void basicLoaderExample() {
 
     // Create a temporary .env file
     std::string content = R"(
-APP_NAME=MyApplication
-APP_VERSION=1.0.0
-DEBUG=true
-LOG_LEVEL=info
+APP_NAME=MyApplicationAPP_VERSION=1.0.0DEBUG=trueLOG_LEVEL=info
 )";
 
     fs::path envPath = createTempEnvFile(content);
     std::cout << "Created temp .env file: " << envPath << std::endl;
 
-    Loader loader;
+    FileLoader loader;
+    Parser parser;
 
     std::cout << "Loading .env file..." << std::endl;
-    auto result = loader.load(envPath.string());
+    std::string fileContent = loader.load(envPath);
+    auto result = parser.parse(fileContent);
 
     std::cout << "Loaded " << result.size() << " variables:" << std::endl;
     for (const auto& [key, value] : result) {
@@ -187,21 +175,20 @@ void variableExpansionExample() {
     printSeparator("Variable Expansion Example");
 
     std::string content = R"(
-BASE_URL=https://api.example.com
-API_VERSION=v1
-API_ENDPOINT=${BASE_URL}/${API_VERSION}
+BASE_URL=https://api.example.comAPI_VERSION=v1API_ENDPOINT=${BASE_URL}/${API_VERSION}
 
-HOME_DIR=/home/user
-CONFIG_PATH=${HOME_DIR}/.config
-DATA_PATH=${HOME_DIR}/data
+HOME_DIR=/home/userCONFIG_PATH=${HOME_DIR}/.configDATA_PATH=${HOME_DIR}/data
 )";
 
     fs::path envPath = createTempEnvFile(content);
 
-    Loader loader;
-    loader.setExpandVariables(true);
+    FileLoader loader;
+    ParseOptions options;
+    options.expand_variables = true;
+    Parser parser(options);
 
-    auto result = loader.load(envPath.string());
+    std::string fileContent = loader.load(envPath);
+    auto result = parser.parse(fileContent);
 
     std::cout << "Variables with expansion:" << std::endl;
     for (const auto& [key, value] : result) {
@@ -222,16 +209,12 @@ void multipleFilesExample() {
 
     // Create base .env file
     std::string baseContent = R"(
-APP_NAME=MyApp
-DB_HOST=localhost
-DB_PORT=5432
+APP_NAME=MyAppDB_HOST=localhostDB_PORT=5432
 )";
 
     // Create override .env file
     std::string overrideContent = R"(
-DB_HOST=production-db.example.com
-DB_PORT=5433
-NEW_VAR=added
+DB_HOST=production-db.example.comDB_PORT=5433NEW_VAR=added
 )";
 
     fs::path basePath = fs::temp_directory_path() / "base.env";
@@ -242,18 +225,23 @@ NEW_VAR=added
         std::ofstream(overridePath) << overrideContent;
     }
 
-    Loader loader;
+    FileLoader loader;
+    Parser parser;
 
     // Load base file
-    auto result = loader.load(basePath.string());
+    std::string baseFileContent = loader.load(basePath);
+    auto result = parser.parse(baseFileContent);
     std::cout << "After loading base.env:" << std::endl;
     for (const auto& [key, value] : result) {
         std::cout << "  " << key << " = " << value << std::endl;
     }
 
     // Load override file (merges with existing)
-    auto overrideResult = loader.load(overridePath.string());
-    result.insert(overrideResult.begin(), overrideResult.end());
+    std::string overrideFileContent = loader.load(overridePath);
+    auto overrideResult = parser.parse(overrideFileContent);
+    for (const auto& [key, value] : overrideResult) {
+        result[key] = value;
+    }
 
     std::cout << "\nAfter merging override.env:" << std::endl;
     for (const auto& [key, value] : result) {
@@ -277,9 +265,7 @@ void errorHandlingExample() {
 
     // Malformed content
     std::string malformedContent = R"(
-VALID_VAR=value
-INVALID LINE WITHOUT EQUALS
-ANOTHER_VALID=test
+VALID_VAR=valueINVALID LINE WITHOUT EQUALSANOTHER_VALID=test
 )";
 
     std::cout << "Parsing potentially malformed content..." << std::endl;
@@ -296,12 +282,12 @@ ANOTHER_VALID=test
     }
 
     // Non-existent file
-    Loader loader;
+    FileLoader loader;
     std::cout << "\nTrying to load non-existent file..." << std::endl;
 
     try {
-        loader.load("/nonexistent/path/.env");
-    } catch (const DotenvException& e) {
+        loader.load(fs::path("/nonexistent/path/.env"));
+    } catch (const std::exception& e) {
         std::cout << "Load error: " << e.what() << std::endl;
     }
 }

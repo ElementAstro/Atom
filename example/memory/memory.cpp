@@ -17,58 +17,59 @@
 
 #include "atom/memory/memory.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+using namespace atom::memory;
+
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Custom block size strategy for demonstration
-class LinearBlockSizeStrategy : public atom::memory::BlockSizeStrategy {
+// Custom block size strategy for demonstrationclass LinearBlockSizeStrategy :
+// public atom::memory::BlockSizeStrategy {
 public:
-    explicit LinearBlockSizeStrategy(size_t increment = 1024)
-        : increment_(increment) {}
+explicit LinearBlockSizeStrategy(size_t increment = 1024)
+    : increment_(increment) {}
 
-    [[nodiscard]] size_t calculate(
-        size_t requested_size) const noexcept override {
-        return requested_size + increment_;
-    }
+[[nodiscard]] size_t calculate(size_t requested_size) const noexcept override {
+    return requested_size + increment_;
+}
 
 private:
-    size_t increment_;
-};
+size_t increment_;
+}
+;
 
-// Test class for memory pool allocations
-class TestData {
+// Test class for memory pool allocationsclass TestData {
 public:
-    TestData() : id_(0), value_(0.0), data_(256, 0) {
-        std::cout << "TestData default constructed" << std::endl;
-    }
+TestData() : id_(0), value_(0.0), data_(256, 0) {
+    std::cout << "TestData default constructed" << std::endl;
+}
 
-    TestData(int id, double value)
-        : id_(id), value_(value), data_(256, static_cast<char>(id % 256)) {
-        std::cout << "TestData constructed: ID=" << id_ << ", Value=" << value_
-                  << std::endl;
-    }
+TestData(int id, double value)
+    : id_(id), value_(value), data_(256, static_cast<char>(id % 256)) {
+    std::cout << "TestData constructed: ID=" << id_ << ", Value=" << value_
+              << std::endl;
+}
 
-    ~TestData() { std::cout << "TestData destroyed: ID=" << id_ << std::endl; }
+~TestData() { std::cout << "TestData destroyed: ID=" << id_ << std::endl; }
 
-    int getId() const { return id_; }
-    double getValue() const { return value_; }
-    const std::vector<char>& getData() const { return data_; }
+int getId() const { return id_; }
+double getValue() const { return value_; }
+const std::vector<char>& getData() const { return data_; }
 
-    void setValue(double value) { value_ = value; }
-    void setData(char fill) { std::fill(data_.begin(), data_.end(), fill); }
+void setValue(double value) { value_ = value; }
+void setData(char fill) { std::fill(data_.begin(), data_.end(), fill); }
 
 private:
-    int id_;
-    double value_;
-    std::vector<char> data_;
-};
+int id_;
+double value_;
+std::vector<char> data_;
+}
+;
 
-// Helper function to measure execution time
-template <typename Func>
+// Helper function to measure execution timetemplate <typename Func>
 double measureTime(Func&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();

@@ -8,10 +8,10 @@
 
 Date: 2024-12-25
 
-Description: Type Conversion System Example
-Demonstrates type conversion capabilities using the component system's
-built-in type handling through std::any and component variables.
-Shows conversion between different types, validation, and error handling.
+Description: Type Conversion System ExampleDemonstrates type conversion
+capabilities using the component system'sbuilt-in type handling through std::any
+and component variables. Shows conversion between different types, validation,
+and error handling.
 
 **************************************************/
 

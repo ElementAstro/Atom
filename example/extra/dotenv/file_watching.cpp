@@ -11,14 +11,14 @@
 using namespace dotenv;
 using namespace std::chrono_literals;
 
-// Helper function to create/update test .env files
-void update_env_file(const std::string& filename, const std::string& content) {
-    std::ofstream file(filename);
-    if (file.is_open()) {
-        file << content;
-        file.close();
-        std::cout << "Updated file: " << filename << std::endl;
-    }
+// Helper function to create/update test .env filesvoid update_env_file(const
+// std::string& filename, const std::string& content) {
+std::ofstream file(filename);
+if (file.is_open()) {
+    file << content;
+    file.close();
+    std::cout << "Updated file: " << filename << std::endl;
+}
 }
 
 int main() {
@@ -32,11 +32,7 @@ int main() {
 
             // Create initial .env file
             update_env_file(watch_file, R"(
-# Initial configuration
-APP_NAME=WatchedApp
-VERSION=1.0.0
-DEBUG=false
-PORT=3000
+# Initial configurationAPP_NAME=WatchedAppVERSION=1.0.0DEBUG=falsePORT=3000
 )");
 
             Dotenv dotenv;
@@ -73,36 +69,21 @@ PORT=3000
 
             // Change 1: Update existing values
             update_env_file(watch_file, R"(
-# Updated configuration
-APP_NAME=WatchedApp
-VERSION=1.1.0
-DEBUG=true
-PORT=3001
-LOG_LEVEL=debug
+# Updated configurationAPP_NAME=WatchedAppVERSION=1.1.0DEBUG=truePORT=3001LOG_LEVEL=debug
 )");
 
             std::this_thread::sleep_for(2s);
 
             // Change 2: Add new variables
             update_env_file(watch_file, R"(
-# Further updated configuration
-APP_NAME=WatchedApp
-VERSION=1.2.0
-DEBUG=true
-PORT=3002
-LOG_LEVEL=info
-DATABASE_URL=postgresql://localhost:5432/myapp
-CACHE_ENABLED=true
+# Further updated configurationAPP_NAME=WatchedAppVERSION=1.2.0DEBUG=truePORT=3002LOG_LEVEL=infoDATABASE_URL=postgresql://localhost:5432/myappCACHE_ENABLED=true
 )");
 
             std::this_thread::sleep_for(2s);
 
             // Change 3: Remove some variables
             update_env_file(watch_file, R"(
-# Minimal configuration
-APP_NAME=WatchedApp
-VERSION=2.0.0
-PORT=4000
+# Minimal configurationAPP_NAME=WatchedAppVERSION=2.0.0PORT=4000
 )");
 
             std::this_thread::sleep_for(2s);
@@ -123,21 +104,15 @@ PORT=4000
 
             // Create initial files
             update_env_file("app.env", R"(
-APP_NAME=MultiWatchApp
-APP_VERSION=1.0.0
-DEBUG=false
+APP_NAME=MultiWatchAppAPP_VERSION=1.0.0DEBUG=false
 )");
 
             update_env_file("db.env", R"(
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=myapp
+DB_HOST=localhostDB_PORT=5432DB_NAME=myapp
 )");
 
             update_env_file("cache.env", R"(
-CACHE_HOST=localhost
-CACHE_PORT=6379
-CACHE_TTL=3600
+CACHE_HOST=localhostCACHE_PORT=6379CACHE_TTL=3600
 )");
 
             // Set up watchers for each file
@@ -163,31 +138,21 @@ CACHE_TTL=3600
 
             // Update app.env
             update_env_file("app.env", R"(
-APP_NAME=MultiWatchApp
-APP_VERSION=1.1.0
-DEBUG=true
-FEATURE_X=enabled
+APP_NAME=MultiWatchAppAPP_VERSION=1.1.0DEBUG=trueFEATURE_X=enabled
 )");
 
             std::this_thread::sleep_for(1s);
 
             // Update db.env
             update_env_file("db.env", R"(
-DB_HOST=db.example.com
-DB_PORT=5432
-DB_NAME=myapp
-DB_USER=admin
-DB_PASSWORD=secret
+DB_HOST=db.example.comDB_PORT=5432DB_NAME=myappDB_USER=adminDB_PASSWORD=secret
 )");
 
             std::this_thread::sleep_for(1s);
 
             // Update cache.env
             update_env_file("cache.env", R"(
-CACHE_HOST=cache.example.com
-CACHE_PORT=6379
-CACHE_TTL=7200
-CACHE_MAX_MEMORY=256mb
+CACHE_HOST=cache.example.comCACHE_PORT=6379CACHE_TTL=7200CACHE_MAX_MEMORY=256mb
 )");
 
             std::this_thread::sleep_for(2s);
@@ -208,8 +173,7 @@ CACHE_MAX_MEMORY=256mb
 
             // Create initial valid file
             update_env_file(error_file, R"(
-VALID_VAR=value1
-ANOTHER_VAR=value2
+VALID_VAR=value1ANOTHER_VAR=value2
 )");
 
             Dotenv dotenv;
@@ -236,9 +200,7 @@ ANOTHER_VAR=value2
 
             // Create invalid content
             update_env_file(error_file, R"(
-VALID_VAR=value1
-INVALID LINE WITHOUT EQUALS
-ANOTHER_VAR=value2
+VALID_VAR=value1INVALID LINE WITHOUT EQUALSANOTHER_VAR=value2
 =INVALID_KEY_EMPTY
 )");
 
@@ -246,9 +208,7 @@ ANOTHER_VAR=value2
 
             // Fix the file
             update_env_file(error_file, R"(
-VALID_VAR=fixed_value1
-FIXED_VAR=new_value
-ANOTHER_VAR=fixed_value2
+VALID_VAR=fixed_value1FIXED_VAR=new_valueANOTHER_VAR=fixed_value2
 )");
 
             std::this_thread::sleep_for(2s);
@@ -268,8 +228,7 @@ ANOTHER_VAR=fixed_value2
 
             // Create initial file
             update_env_file(perf_file, R"(
-COUNTER=0
-TIMESTAMP=0
+COUNTER=0TIMESTAMP=0
 )");
 
             Dotenv dotenv;
@@ -340,9 +299,7 @@ TIMESTAMP=0
 
             // Create initial file with variable expansion
             update_env_file(custom_file, R"(
-BASE_URL=https://api.example.com
-API_VERSION=v1
-FULL_URL=${BASE_URL}/${API_VERSION}
+BASE_URL=https://api.example.comAPI_VERSION=v1FULL_URL=${BASE_URL}/${API_VERSION}
 WHITESPACE_VAR=  trimmed value
 )");
 
@@ -364,11 +321,8 @@ WHITESPACE_VAR=  trimmed value
 
             // Update with more variable expansion
             update_env_file(custom_file, R"(
-BASE_URL=https://prod-api.example.com
-API_VERSION=v2
-FULL_URL=${BASE_URL}/${API_VERSION}
-BACKUP_URL=${BASE_URL}/backup
-WHITESPACE_VAR=  another trimmed value
+BASE_URL=https://prod-api.example.comAPI_VERSION=v2FULL_URL=${BASE_URL}/${API_VERSION}
+BACKUP_URL=${BASE_URL}/backupWHITESPACE_VAR=  another trimmed value
 )");
 
             std::this_thread::sleep_for(2s);

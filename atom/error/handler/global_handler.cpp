@@ -14,6 +14,7 @@ Description: Global error handler implementation
 
 #include "global_handler.hpp"
 
+#include <format>
 #include <iostream>
 
 #include "../core/error_codes.hpp"
@@ -26,7 +27,7 @@ auto GlobalErrorHandler::getInstance() -> GlobalErrorHandler& {
 }
 
 void GlobalErrorHandler::initialize() {
-    std::lock_guard<std::mutex> lock(initMutex_);
+    std::scoped_lock lock(initMutex_);
     if (!initialized_.load()) {
         reporter_ = std::make_unique<ErrorReporter>();
         aggregator_ = std::make_unique<ErrorAggregator>();
@@ -34,16 +35,16 @@ void GlobalErrorHandler::initialize() {
         // Add default handler that forwards to aggregator
         reporter_->addHandler("aggregator",
                               [this](std::shared_ptr<ErrorContext> context) {
-                                  aggregator_->addError(context);
+                                  aggregator_->addError(std::move(context));
                               });
 
         reporter_->start();
-        initialized_ = true;
+        initialized_.store(true);
     }
 }
 
 void GlobalErrorHandler::shutdown() {
-    std::lock_guard<std::mutex> lock(initMutex_);
+    std::scoped_lock lock(initMutex_);
     if (initialized_.load()) {
         globalHandler_ = nullptr;
         if (reporter_) {
@@ -51,16 +52,16 @@ void GlobalErrorHandler::shutdown() {
             reporter_.reset();
         }
         aggregator_.reset();
-        initialized_ = false;
+        initialized_.store(false);
     }
 }
 
 void GlobalErrorHandler::reportError(std::shared_ptr<ErrorContext> context) {
-    if (!initialized_.load()) {
+    if (!initialized_.load()) [[unlikely]] {
         initialize();
     }
 
-    if (reporter_) {
+    if (reporter_) [[likely]] {
         reporter_->reportError(context);
     }
 
@@ -68,7 +69,7 @@ void GlobalErrorHandler::reportError(std::shared_ptr<ErrorContext> context) {
         try {
             globalHandler_(context);
         } catch (const std::exception& e) {
-            std::cerr << "Error in global handler: " << e.what() << std::endl;
+            std::cerr << std::format("Error in global handler: {}\n", e.what());
         }
     }
 }
@@ -103,12 +104,12 @@ void GlobalErrorHandler::handleUnhandledException() {
         auto context =
             ErrorContext::create(static_cast<int>(ErrorCodeBase::Failed),
                                  "Unhandled exception occurred");
-        context->addTag("unhandled_exception");
-        context->setSystemInfo("severity", "fatal");
+        context->addTag("unhandled_exception")
+            .setSystemInfo("severity", "fatal");
 
-        reportError(context);
+        reportError(std::move(context));
     } catch (...) {
-        std::cerr << "Fatal: Unhandled exception in error handler" << std::endl;
+        std::cerr << "Fatal: Unhandled exception in error handler\n";
     }
 }
 
@@ -126,30 +127,30 @@ void ThreadLocalErrorHandler::setHandler(ErrorHandlerCallback handler) {
 
 void ThreadLocalErrorHandler::reportError(
     std::shared_ptr<ErrorContext> context) {
-    errorCount_++;
+    ++errorCount_;
 
     if (handler_) {
         try {
             handler_(context);
         } catch (const std::exception& e) {
-            std::cerr << "Error in thread-local handler: " << e.what()
-                      << std::endl;
+            std::cerr << std::format("Error in thread-local handler: {}\n",
+                                     e.what());
         }
     }
 
     // Also report to global handler
-    GlobalErrorHandler::getInstance().reportError(context);
+    GlobalErrorHandler::getInstance().reportError(std::move(context));
 }
 
 auto ThreadLocalErrorHandler::getStatistics() const
     -> std::unordered_map<std::string, int> {
     std::unordered_map<std::string, int> stats;
-    stats["thread_error_count"] = errorCount_.load();
+    stats.emplace("thread_error_count", errorCount_.load());
 
-    auto duration = std::chrono::steady_clock::now() - startTime_;
-    auto seconds =
+    const auto duration = std::chrono::steady_clock::now() - startTime_;
+    const auto seconds =
         std::chrono::duration_cast<std::chrono::seconds>(duration).count();
-    stats["thread_uptime_seconds"] = static_cast<int>(seconds);
+    stats.emplace("thread_uptime_seconds", static_cast<int>(seconds));
 
     return stats;
 }

@@ -12,12 +12,13 @@ set_xmakever("2.8.0")
 -- Set languages
 set_languages("c++20")
 
--- Add build modes
-add_rules("mode.debug", "mode.release")
+-- Add build modes (including minsizerel for size optimization)
+add_rules("mode.debug", "mode.release", "mode.minsizerel")
 
--- Add required packages
+-- Add required packages (use spdlog instead of loguru to match CMake)
 local use_system_packages = has_config("use_system_packages")
-add_requires("loguru", {system = use_system_packages})
+add_requires("spdlog", {system = use_system_packages, configs = {fmt_external = true}})
+add_requires("fmt", {system = use_system_packages})
 
 -- Define sources by module
 local core_sources = {
@@ -107,7 +108,7 @@ target("atom-error")
     set_kind("shared")
     add_files(sources)
     add_headerfiles(headers)
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
     add_includedirs(".", "..", {public = true})
 
     -- Platform-specific settings

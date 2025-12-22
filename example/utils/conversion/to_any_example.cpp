@@ -27,39 +27,36 @@ void printSection(const std::string& title) {
     std::cout << "========================================" << std::endl;
 }
 
-// Helper to print std::any value
-void printAnyValue(const std::any& value) {
-    if (!value.has_value()) {
-        std::cout << "(empty)";
-        return;
-    }
+// Helper to print std::any valuevoid printAnyValue(const std::any& value) {
+if (!value.has_value()) {
+    std::cout << "(empty)";
+    return;
+}
 
-    try {
-        if (value.type() == typeid(int)) {
-            std::cout << "int: " << std::any_cast<int>(value);
-        } else if (value.type() == typeid(long)) {
-            std::cout << "long: " << std::any_cast<long>(value);
-        } else if (value.type() == typeid(long long)) {
-            std::cout << "long long: " << std::any_cast<long long>(value);
-        } else if (value.type() == typeid(double)) {
-            std::cout << "double: " << std::any_cast<double>(value);
-        } else if (value.type() == typeid(float)) {
-            std::cout << "float: " << std::any_cast<float>(value);
-        } else if (value.type() == typeid(bool)) {
-            std::cout << "bool: " << std::boolalpha
-                      << std::any_cast<bool>(value);
-        } else if (value.type() == typeid(std::string)) {
-            std::cout << "string: \"" << std::any_cast<std::string>(value)
-                      << "\"";
-        } else if (value.type() == typeid(const char*)) {
-            std::cout << "const char*: \"" << std::any_cast<const char*>(value)
-                      << "\"";
-        } else {
-            std::cout << "unknown type: " << value.type().name();
-        }
-    } catch (const std::bad_any_cast& e) {
-        std::cout << "cast error: " << e.what();
+try {
+    if (value.type() == typeid(int)) {
+        std::cout << "int: " << std::any_cast<int>(value);
+    } else if (value.type() == typeid(long)) {
+        std::cout << "long: " << std::any_cast<long>(value);
+    } else if (value.type() == typeid(long long)) {
+        std::cout << "long long: " << std::any_cast<long long>(value);
+    } else if (value.type() == typeid(double)) {
+        std::cout << "double: " << std::any_cast<double>(value);
+    } else if (value.type() == typeid(float)) {
+        std::cout << "float: " << std::any_cast<float>(value);
+    } else if (value.type() == typeid(bool)) {
+        std::cout << "bool: " << std::boolalpha << std::any_cast<bool>(value);
+    } else if (value.type() == typeid(std::string)) {
+        std::cout << "string: \"" << std::any_cast<std::string>(value) << "\"";
+    } else if (value.type() == typeid(const char*)) {
+        std::cout << "const char*: \"" << std::any_cast<const char*>(value)
+                  << "\"";
+    } else {
+        std::cout << "unknown type: " << value.type().name();
     }
+} catch (const std::bad_any_cast& e) {
+    std::cout << "cast error: " << e.what();
+}
 }
 
 // ============================================

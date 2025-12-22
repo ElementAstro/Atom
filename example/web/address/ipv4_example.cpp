@@ -6,7 +6,7 @@
  * A comprehensive example demonstrating the use of the Atom IPv4 address class
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/address.hpp"
 
 #include <iomanip>
@@ -243,11 +243,7 @@ void demonstrateIPv4Comparison() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("ipv4_example.log", loguru::Append, loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "        ATOM IPv4 ADDRESS DEMO              \n";
     std::cout << "============================================\n";

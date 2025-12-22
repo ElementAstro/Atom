@@ -13,79 +13,78 @@
 #include "atom/type/rjson.hpp"
 #include "atom/type/weak_ptr.hpp"
 
-// Helper function to print section headers
-void print_header(const std::string& title) {
-    std::cout << "\n=== " << title << " ===" << std::endl;
-    std::cout << std::string(title.length() + 8, '=') << std::endl;
+// Helper function to print section headersvoid print_header(const std::string&
+// title) {
+std::cout << "\n=== " << title << " ===" << std::endl;
+std::cout << std::string(title.length() + 8, '=') << std::endl;
 }
 
-// Example 1: Configuration System using Args + Expected + JSON
-class ConfigurationManager {
+// Example 1: Configuration System using Args + Expected + JSONclass
+// ConfigurationManager {
 private:
-    atom::Args config_;
-    std::string config_file_;
+atom::Args config_;
+std::string config_file_;
 
 public:
-    explicit ConfigurationManager(const std::string& config_file)
-        : config_file_(config_file) {}
+explicit ConfigurationManager(const std::string& config_file)
+    : config_file_(config_file) {}
 
-    atom::type::expected<void, std::string> loadFromJson(
-        const std::string& json_str) {
-        try {
-            auto json_data = atom::type::JsonParser::parse(json_str);
+atom::type::expected<void, std::string> loadFromJson(
+    const std::string& json_str) {
+    try {
+        auto json_data = atom::type::JsonParser::parse(json_str);
 
-            if (json_data.type() != atom::type::JsonValue::Type::Object) {
-                return atom::type::Error<std::string>("Root must be an object");
-            }
-
-            const auto& obj = json_data.asObject();
-            for (const auto& [key, value] : obj) {
-                switch (value.type()) {
-                    case atom::type::JsonValue::Type::String:
-                        config_.set(key, value.asString());
-                        break;
-                    case atom::type::JsonValue::Type::Number:
-                        config_.set(key, value.asNumber());
-                        break;
-                    case atom::type::JsonValue::Type::Bool:
-                        config_.set(key, value.asBool());
-                        break;
-                    default:
-                        // Skip complex types for this example
-                        break;
-                }
-            }
-            return {};
-        } catch (const std::exception& e) {
-            return atom::type::Error<std::string>("JSON parse error: " +
-                                                  std::string(e.what()));
+        if (json_data.type() != atom::type::JsonValue::Type::Object) {
+            return atom::type::Error<std::string>("Root must be an object");
         }
-    }
 
-    template <typename T>
-    atom::type::expected<T, std::string> get(const std::string& key) const {
-        try {
-            return config_.get<T>(key);
-        } catch (const std::exception& e) {
-            return atom::type::Error<std::string>("Config key '" + key +
-                                                  "' not found or wrong type");
+        const auto& obj = json_data.asObject();
+        for (const auto& [key, value] : obj) {
+            switch (value.type()) {
+                case atom::type::JsonValue::Type::String:
+                    config_.set(key, value.asString());
+                    break;
+                case atom::type::JsonValue::Type::Number:
+                    config_.set(key, value.asNumber());
+                    break;
+                case atom::type::JsonValue::Type::Bool:
+                    config_.set(key, value.asBool());
+                    break;
+                default:
+                    // Skip complex types for this example
+                    break;
+            }
         }
+        return {};
+    } catch (const std::exception& e) {
+        return atom::type::Error<std::string>("JSON parse error: " +
+                                              std::string(e.what()));
     }
+}
 
-    template <typename T>
-    T getOr(const std::string& key, T&& default_value) const {
-        return config_.getOr<T>(key, std::forward<T>(default_value));
+template <typename T>
+atom::type::expected<T, std::string> get(const std::string& key) const {
+    try {
+        return config_.get<T>(key);
+    } catch (const std::exception& e) {
+        return atom::type::Error<std::string>("Config key '" + key +
+                                              "' not found or wrong type");
     }
+}
 
-    void set(const std::string& key, const auto& value) {
-        config_.set(key, value);
-    }
+template <typename T>
+T getOr(const std::string& key, T&& default_value) const {
+    return config_.getOr<T>(key, std::forward<T>(default_value));
+}
 
-    size_t size() const { return config_.size(); }
-};
+void set(const std::string& key, const auto& value) { config_.set(key, value); }
 
-// Example 2: Cache System using Concurrent Map + Weak Ptr + Expected
-template <typename Key, typename Value>
+size_t size() const { return config_.size(); }
+}
+;
+
+// Example 2: Cache System using Concurrent Map + Weak Ptr + Expectedtemplate
+// <typename Key, typename Value>
 class SmartCache {
 private:
     atom::type::concurrent_map<Key, std::shared_ptr<Value>> cache_;
@@ -138,55 +137,55 @@ public:
     size_t weakCacheSize() const { return weak_cache_.size(); }
 };
 
-// Example 3: Data Processing Pipeline using Expected + Optional + Args
-class DataProcessor {
+// Example 3: Data Processing Pipeline using Expected + Optional + Argsclass
+// DataProcessor {
 private:
-    atom::Args settings_;
+atom::Args settings_;
 
 public:
-    DataProcessor() {
-        // Set default processing settings
-        settings_.set("max_retries", 3);
-        settings_.set("timeout_ms", 5000);
-        settings_.set("enable_logging", true);
-    }
+DataProcessor() {
+    // Set default processing settings
+    settings_.set("max_retries", 3);
+    settings_.set("timeout_ms", 5000);
+    settings_.set("enable_logging", true);
+}
 
-    atom::type::expected<std::vector<int>, std::string> processNumbers(
-        const std::vector<std::string>& input) {
-        std::vector<int> results;
-        int max_retries = settings_.getOr<int>("max_retries", 3);
-        bool logging = settings_.getOr<bool>("enable_logging", false);
+atom::type::expected<std::vector<int>, std::string> processNumbers(
+    const std::vector<std::string>& input) {
+    std::vector<int> results;
+    int max_retries = settings_.getOr<int>("max_retries", 3);
+    bool logging = settings_.getOr<bool>("enable_logging", false);
 
-        for (const auto& str : input) {
-            auto parsed = parseWithRetry(str, max_retries);
-            if (!parsed) {
-                if (logging) {
-                    std::cout << "Failed to parse: " << str << std::endl;
-                }
-                return atom::type::Error<std::string>("Parse failed for: " +
-                                                      str);
+    for (const auto& str : input) {
+        auto parsed = parseWithRetry(str, max_retries);
+        if (!parsed) {
+            if (logging) {
+                std::cout << "Failed to parse: " << str << std::endl;
             }
-            results.push_back(*parsed);
+            return atom::type::Error<std::string>("Parse failed for: " + str);
         }
-
-        return results;
+        results.push_back(*parsed);
     }
+
+    return results;
+}
 
 private:
-    atom::type::optional<int> parseWithRetry(const std::string& str,
-                                             int max_retries) {
-        for (int attempt = 0; attempt < max_retries; ++attempt) {
-            try {
-                return std::stoi(str);
-            } catch (...) {
-                if (attempt < max_retries - 1) {
-                    std::this_thread::sleep_for(std::chrono::milliseconds(100));
-                }
+atom::type::optional<int> parseWithRetry(const std::string& str,
+                                         int max_retries) {
+    for (int attempt = 0; attempt < max_retries; ++attempt) {
+        try {
+            return std::stoi(str);
+        } catch (...) {
+            if (attempt < max_retries - 1) {
+                std::this_thread::sleep_for(std::chrono::milliseconds(100));
             }
         }
-        return atom::type::nullopt;
     }
-};
+    return atom::type::nullopt;
+}
+}
+;
 
 int main() {
     std::cout << "Advanced Type Integration Examples" << std::endl;

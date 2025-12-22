@@ -64,11 +64,7 @@ int main() {
         std::cout << "\n4. Parsing Content Directly:" << std::endl;
         {
             std::string env_content = R"(
-APP_NAME=DirectParsedApp
-APP_VERSION=3.0.0
-DEBUG=true
-DATABASE_URL=postgresql://localhost:5432/mydb
-API_KEY=secret123
+APP_NAME=DirectParsedAppAPP_VERSION=3.0.0DEBUG=trueDATABASE_URL=postgresql://localhost:5432/mydbAPI_KEY=secret123
 )";
 
             Dotenv loader;
@@ -84,9 +80,7 @@ API_KEY=secret123
         std::cout << "\n5. Variable Expansion:" << std::endl;
         {
             std::string env_content = R"(
-BASE_PATH=/usr/local
-BIN_PATH=${BASE_PATH}/bin
-LIB_PATH=${BASE_PATH}/lib
+BASE_PATH=/usr/localBIN_PATH=${BASE_PATH}/binLIB_PATH=${BASE_PATH}/lib
 )";
 
             Dotenv loader;

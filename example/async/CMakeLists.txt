@@ -48,6 +48,7 @@ add_examples_from_directory("execution" "execution")
 add_examples_from_directory("messaging" "messaging")
 add_examples_from_directory("sync" "sync")
 add_examples_from_directory("threading" "threading")
+# Utils examples - re-enabled for full coverage
 add_examples_from_directory("utils" "utils")
 
 # Add examples from root directory (for integration examples, etc.)

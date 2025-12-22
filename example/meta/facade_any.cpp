@@ -26,28 +26,28 @@
 
 using namespace atom::meta;
 
-// Example classes for demonstration
-class Person {
+// Example classes for demonstrationclass Person {
 public:
-    Person(const std::string& name, int age) : name_(name), age_(age) {}
+Person(const std::string& name, int age) : name_(name), age_(age) {}
 
-    std::string getName() const { return name_; }
-    int getAge() const { return age_; }
+std::string getName() const { return name_; }
+int getAge() const { return age_; }
 
-    std::string toString() const {
-        return "Person{name: " + name_ + ", age: " + std::to_string(age_) + "}";
-    }
+std::string toString() const {
+    return "Person{name: " + name_ + ", age: " + std::to_string(age_) + "}";
+}
 
-    bool operator==(const Person& other) const {
-        return name_ == other.name_ && age_ == other.age_;
-    }
+bool operator==(const Person& other) const {
+    return name_ == other.name_ && age_ == other.age_;
+}
 
-    void print(std::ostream& os) const { os << toString(); }
+void print(std::ostream& os) const { os << toString(); }
 
 private:
-    std::string name_;
-    int age_;
-};
+std::string name_;
+int age_;
+}
+;
 
 class Calculator {
 public:

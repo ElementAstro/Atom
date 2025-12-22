@@ -7,7 +7,7 @@
  * together
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/address.hpp"
 #include "atom/web/curl.hpp"
 #include "atom/web/downloader.hpp"
@@ -25,8 +25,8 @@
 
 using namespace atom::web;
 
-// Global variables for tracking operations
-std::atomic<size_t> completedDownloads{0};
+// Global variables for tracking operationsstd::atomic<size_t>
+// completedDownloads{0};
 std::atomic<bool> allDownloadsComplete{false};
 
 void demonstrateWebCrawlerIntegration() {
@@ -435,12 +435,7 @@ void cleanupIntegrationFiles() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("integration_example.log", loguru::Append,
-                     loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "      ATOM WEB INTEGRATION DEMO            \n";
     std::cout << "============================================\n";

@@ -1,4 +1,4 @@
-﻿/*
+/*
  * advanced_features.cpp - Injection Advanced Features Example (Minimal Stub
  * Implementation)
  */

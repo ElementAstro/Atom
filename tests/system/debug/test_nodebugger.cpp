@@ -16,11 +16,12 @@
 #include <chrono>
 #include <thread>
 
-#include "atom/system/nodebugger.hpp"
+#include "atom/system/debug/nodebugger.hpp"
 
 namespace atom::system::test {
 
 using namespace std::chrono_literals;
+using namespace atom::system;
 
 /**
  * @brief Test fixture for debugger detection tests

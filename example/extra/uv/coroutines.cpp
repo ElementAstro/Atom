@@ -8,15 +8,15 @@
 using namespace uv_coro;
 using namespace std::chrono_literals;
 
-// Example coroutine functions
-Task<std::string> fetch_data_async(const std::string& url) {
-    std::cout << "Starting to fetch data from: " << url << std::endl;
+// Example coroutine functionsTask<std::string> fetch_data_async(const
+// std::string& url) {
+std::cout << "Starting to fetch data from: " << url << std::endl;
 
-    // Simulate network delay
-    co_await timeout(500ms);
+// Simulate network delay
+co_await timeout(500ms);
 
-    std::cout << "Data fetched from: " << url << std::endl;
-    co_return "Data from " + url;
+std::cout << "Data fetched from: " << url << std::endl;
+co_return "Data from " + url;
 }
 
 Task<int> calculate_async(int a, int b) {

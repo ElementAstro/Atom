@@ -14,104 +14,103 @@ using namespace std::chrono_literals;
 
 namespace atom::extra::curl {
 
-// Stub Response class
-class Response {
+// Stub Response classclass Response {
 public:
-    int status_code = 200;
-    std::string body = "Response body (stub)";
-    std::unordered_map<std::string, std::string> headers;
+int status_code = 200;
+std::string body = "Response body (stub)";
+std::unordered_map<std::string, std::string> headers;
 
-    Response() {
-        headers["Content-Type"] = "application/json";
-        headers["Server"] = "Stub-Server/1.0";
-    }
+Response() {
+    headers["Content-Type"] = "application/json";
+    headers["Server"] = "Stub-Server/1.0";
+}
 
-    std::string header(const std::string& name) const {
-        auto it = headers.find(name);
-        return it != headers.end() ? it->second : "";
-    }
+std::string header(const std::string& name) const {
+    auto it = headers.find(name);
+    return it != headers.end() ? it->second : "";
+}
 
-    std::string text() const { return body; }
+std::string text() const { return body; }
 
-    std::string url() const { return "https://httpbin.org/get (stub)"; }
+std::string url() const { return "https://httpbin.org/get (stub)"; }
 };
 
-// Stub Session class
-class Session {
+// Stub Session classclass Session {
 public:
-    Session() {
-        std::cout << "CURL Session created (stub implementation)" << std::endl;
-    }
+Session() {
+    std::cout << "CURL Session created (stub implementation)" << std::endl;
+}
 
-    Response get(const std::string& url) {
-        std::cout << "GET request (stub): " << url << std::endl;
-        Response response;
-        response.body = "GET response from " + url + " (stub)";
-        return response;
-    }
+Response get(const std::string& url) {
+    std::cout << "GET request (stub): " << url << std::endl;
+    Response response;
+    response.body = "GET response from " + url + " (stub)";
+    return response;
+}
 
-    Response post(const std::string& url, const std::string& body,
-                  const std::string& content_type = "") {
-        std::cout << "POST request (stub): " << url << std::endl;
-        std::cout << "  Body: " << body.substr(0, 50) << "..." << std::endl;
-        Response response;
-        response.body = "POST response from " + url + " (stub)";
-        return response;
-    }
+Response post(const std::string& url, const std::string& body,
+              const std::string& content_type = "") {
+    std::cout << "POST request (stub): " << url << std::endl;
+    std::cout << "  Body: " << body.substr(0, 50) << "..." << std::endl;
+    Response response;
+    response.body = "POST response from " + url + " (stub)";
+    return response;
+}
 
-    Response put(const std::string& url, const std::string& body) {
-        std::cout << "PUT request (stub): " << url << std::endl;
-        Response response;
-        response.body = "PUT response from " + url + " (stub)";
-        return response;
-    }
+Response put(const std::string& url, const std::string& body) {
+    std::cout << "PUT request (stub): " << url << std::endl;
+    Response response;
+    response.body = "PUT response from " + url + " (stub)";
+    return response;
+}
 
-    Response delete_(const std::string& url) {
-        std::cout << "DELETE request (stub): " << url << std::endl;
-        Response response;
-        response.body = "DELETE response from " + url + " (stub)";
-        return response;
-    }
+Response delete_(const std::string& url) {
+    std::cout << "DELETE request (stub): " << url << std::endl;
+    Response response;
+    response.body = "DELETE response from " + url + " (stub)";
+    return response;
+}
 
-    void set_header(const std::string& name, const std::string& value) {
-        std::cout << "Setting header (stub): " << name << " = " << value
-                  << std::endl;
-        headers_[name] = value;
-    }
+void set_header(const std::string& name, const std::string& value) {
+    std::cout << "Setting header (stub): " << name << " = " << value
+              << std::endl;
+    headers_[name] = value;
+}
 
-    void set_timeout(std::chrono::seconds timeout) {
-        std::cout << "Setting timeout (stub): " << timeout.count() << " seconds"
-                  << std::endl;
-        timeout_ = timeout;
-    }
+void set_timeout(std::chrono::seconds timeout) {
+    std::cout << "Setting timeout (stub): " << timeout.count() << " seconds"
+              << std::endl;
+    timeout_ = timeout;
+}
 
-    void set_auth(const std::string& username, const std::string& password) {
-        std::cout << "Setting auth (stub): " << username << " / " << password
-                  << std::endl;
-        auth_username_ = username;
-        auth_password_ = password;
-    }
+void set_auth(const std::string& username, const std::string& password) {
+    std::cout << "Setting auth (stub): " << username << " / " << password
+              << std::endl;
+    auth_username_ = username;
+    auth_password_ = password;
+}
 
-    void set_verify_ssl(bool verify) {
-        std::cout << "Setting SSL verification (stub): "
-                  << (verify ? "true" : "false") << std::endl;
-        verify_ssl_ = verify;
-    }
+void set_verify_ssl(bool verify) {
+    std::cout << "Setting SSL verification (stub): "
+              << (verify ? "true" : "false") << std::endl;
+    verify_ssl_ = verify;
+}
 
-    void set_follow_redirects(bool follow) {
-        std::cout << "Setting follow redirects (stub): "
-                  << (follow ? "true" : "false") << std::endl;
-        follow_redirects_ = follow;
-    }
+void set_follow_redirects(bool follow) {
+    std::cout << "Setting follow redirects (stub): "
+              << (follow ? "true" : "false") << std::endl;
+    follow_redirects_ = follow;
+}
 
 private:
-    std::unordered_map<std::string, std::string> headers_;
-    std::chrono::seconds timeout_{30};
-    std::string auth_username_;
-    std::string auth_password_;
-    bool verify_ssl_ = true;
-    bool follow_redirects_ = false;
-};
+std::unordered_map<std::string, std::string> headers_;
+std::chrono::seconds timeout_{30};
+std::string auth_username_;
+std::string auth_password_;
+bool verify_ssl_ = true;
+bool follow_redirects_ = false;
+}
+;
 
 }  // namespace atom::extra::curl
 

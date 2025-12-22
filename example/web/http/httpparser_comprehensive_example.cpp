@@ -7,7 +7,7 @@
  * HttpHeaderParser class
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/httpparser.hpp"
 
 #include <iostream>
@@ -364,12 +364,7 @@ void demonstrateEdgeCases() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("httpparser_comprehensive_example.log", loguru::Append,
-                     loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "   ATOM HTTP PARSER COMPREHENSIVE DEMO     \n";
     std::cout << "============================================\n";

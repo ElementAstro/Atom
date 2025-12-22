@@ -1,5 +1,14 @@
 # SSH Examples CMakeLists.txt
 
+# SSH examples require ATOM_USE_SSH to be enabled and libssh to be available
+if(NOT ATOM_USE_SSH)
+  message(
+    STATUS
+      "SSH support not enabled (ATOM_USE_SSH=OFF) - SSH examples will not be built"
+  )
+  return()
+endif()
+
 # Check if libssh is available
 find_package(libssh QUIET)
 

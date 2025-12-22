@@ -93,12 +93,13 @@ This document provides a comprehensive verification that all C++ public API from
 - **Coverage**: **100%** - All 14 functions exposed
 - **Documentation**: **Complete** - Detailed documentation for each function
 
-#### **Window Manager (atom/sysinfo/info/wm.hpp)** ⭐ NEW
+#### **Window Manager (atom/sysinfo/info/wm.hpp)** ⭐ UPDATED
 
-- **C++ Structures**: `SystemInfo`
-- **C++ Functions**: `getSystemInfo()`, `getDesktopEnvironment()`, `getWindowManager()`, `getDisplayServer()`, `getSessionType()`, `getTheme()`, `getIconTheme()`, `getCursorTheme()`, `getFontInfo()`, `getScalingFactor()`, `getCompositor()`, `getShellVersion()`, `getGtkVersion()`, `getQtVersion()`, `isAccessibilityEnabled()`, `areAnimationsEnabled()`, `isTransparencyEnabled()`, `getVirtualDesktopsCount()`, `getCurrentDesktop()`, `isScreenSaverActive()`, `isScreenLockEnabled()`, `isPowerManagementEnabled()`
-- **Python Binding**: `python/sysinfo/wm.cpp` ✅
-- **Coverage**: **100%** - All functionality exposed
+- **C++ Structures**: `SystemInfo` (fields: `desktopEnvironment`, `windowManager`, `wmTheme`, `icons`, `font`, `cursor`)
+- **C++ Functions**: `getSystemInfo()`
+- **Python Binding**: `python/sysinfo/info/wm.cpp` ✅
+- **Python Functions**: `get_system_info()`, `get_desktop_environment()`, `get_window_manager()`, `get_wm_theme()`, `get_icon_theme()`, `get_system_font()`, `get_cursor_theme()`, `get_wm_summary()`
+- **Coverage**: **100%** - All C++ functionality exposed with additional Python convenience functions
 - **Documentation**: **Complete** - Comprehensive documentation
 
 ### ✅ Network Information Modules

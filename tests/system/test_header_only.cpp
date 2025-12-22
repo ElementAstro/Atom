@@ -1,6 +1,5 @@
-// Test runner for header-only test files in the system module
-// This file includes all header-only test files to ensure they are compiled and
-// run
+// Test runner placeholder for the system module
+// All tests are now implemented as separate .cpp files in subdirectories
 //
 // This project is licensed under the terms of the GPL3 license.
 // Author: Max Qian
@@ -8,31 +7,26 @@
 
 #include <gtest/gtest.h>
 
-// Include all header-only test files for the system module
-// These files contain complete test implementations in headers
+// This file serves as a placeholder for the test executable.
+// Actual tests are implemented in:
+// - clipboard/test_clipboard.cpp
+// - core/test_priority.cpp
+// - debug/test_crash_quotes.cpp, test_nodebugger.cpp
+// - hardware/test_device.cpp, test_gpio.cpp, test_voltage.cpp
+// - info/test_env.cpp, test_software.cpp, test_stat.cpp, test_user.cpp
+// - network/test_network_manager.cpp, test_virtual_network.cpp
+// - power/test_power.cpp
+// - process/test_command.cpp, test_pidwatcher.cpp, test_process.cpp,
+// test_process_manager.cpp
+// - registry/test_lregistry.cpp, test_wregistry.cpp
+// - scheduling/test_crontab.cpp
+// - shortcut/test_shortcut.cpp
+// - signals/test_signal_monitor.cpp, test_signal_utils.cpp
+// - storage/test_storage.cpp
 
-// Scheduling tests
-#include "test_crontab.hpp"
+namespace atom::system::test {
 
-// System information tests
-#include "test_env.hpp"
-#include "test_stat.hpp"
-#include "test_user.hpp"
+// Placeholder test to ensure the test executable builds
+TEST(SystemModuleTest, PlaceholderTest) { EXPECT_TRUE(true); }
 
-// Hardware tests
-#include "test_gpio.hpp"
-
-// Registry tests
-#include "test_lregistry.hpp"
-
-// Network tests
-#include "test_network_manager.hpp"
-
-// Process management tests
-#include "test_pidwatcher.hpp"
-
-// Signal handling tests
-#include "test_signal.hpp"
-
-// Main function is provided by gtest_main library (linked via atom-test-common)
-// This file just ensures all header-only tests are included in the build
+}  // namespace atom::system::test

@@ -46,12 +46,32 @@ protected:
         mockProcessManager =
             std::make_unique<::testing::NiceMock<MockProcessManager>>();
 
-        // Set up sample process data
-        sampleProcesses = {
-            {1234, "test_process_1", "running", 50.0, 1024, "/usr/bin/test1"},
-            {5678, "test_process_2", "sleeping", 25.0, 2048, "/usr/bin/test2"},
-            {9012, "background_task", "running", 10.0, 512,
-             "/usr/bin/bg_task"}};
+        // Set up sample process data with proper Process struct fields
+        Process p1;
+        p1.pid = 1234;
+        p1.name = "test_process_1";
+        p1.status = "running";
+        p1.resources.cpuUsage = 50.0;
+        p1.resources.memUsage = 1024;
+        p1.path = "/usr/bin/test1";
+
+        Process p2;
+        p2.pid = 5678;
+        p2.name = "test_process_2";
+        p2.status = "sleeping";
+        p2.resources.cpuUsage = 25.0;
+        p2.resources.memUsage = 2048;
+        p2.path = "/usr/bin/test2";
+
+        Process p3;
+        p3.pid = 9012;
+        p3.name = "background_task";
+        p3.status = "running";
+        p3.resources.cpuUsage = 10.0;
+        p3.resources.memUsage = 512;
+        p3.path = "/usr/bin/bg_task";
+
+        sampleProcesses = {p1, p2, p3};
 
         sampleOutput = {"Process output line 1", "Process output line 2",
                         "Process completed successfully"};
@@ -246,9 +266,9 @@ TEST_F(ProcessManagerTest, GetProcessInfo) {
     EXPECT_EQ(info.pid, 1234);
     EXPECT_EQ(info.name, "test_process_1");
     EXPECT_EQ(info.status, "running");
-    EXPECT_EQ(info.cpuUsage, 50.0);
-    EXPECT_EQ(info.memoryUsage, 1024);
-    EXPECT_EQ(info.executablePath, "/usr/bin/test1");
+    EXPECT_EQ(info.resources.cpuUsage, 50.0);
+    EXPECT_EQ(info.resources.memUsage, 1024);
+    EXPECT_EQ(info.path, "/usr/bin/test1");
 }
 
 // Test wait for completion
@@ -277,16 +297,16 @@ TEST_F(ProcessManagerTest, ProcessStructure) {
     process.pid = 9999;
     process.name = "test_app";
     process.status = "running";
-    process.cpuUsage = 75.5;
-    process.memoryUsage = 4096;
-    process.executablePath = "/usr/bin/test_app";
+    process.resources.cpuUsage = 75.5;
+    process.resources.memUsage = 4096;
+    process.path = "/usr/bin/test_app";
 
     EXPECT_EQ(process.pid, 9999);
     EXPECT_EQ(process.name, "test_app");
     EXPECT_EQ(process.status, "running");
-    EXPECT_EQ(process.cpuUsage, 75.5);
-    EXPECT_EQ(process.memoryUsage, 4096);
-    EXPECT_EQ(process.executablePath, "/usr/bin/test_app");
+    EXPECT_EQ(process.resources.cpuUsage, 75.5);
+    EXPECT_EQ(process.resources.memUsage, 4096);
+    EXPECT_EQ(process.path, "/usr/bin/test_app");
 }
 
 // Error handling tests
@@ -373,11 +393,14 @@ protected:
         // Create large process list for performance testing
         largeProcessList.reserve(1000);
         for (int i = 0; i < 1000; ++i) {
-            largeProcessList.push_back(
-                {1000 + i, "process_" + std::to_string(i),
-                 i % 2 == 0 ? "running" : "sleeping",
-                 static_cast<double>(i % 100), 1024 + (i * 10),
-                 "/usr/bin/process_" + std::to_string(i)});
+            Process p;
+            p.pid = 1000 + i;
+            p.name = "process_" + std::to_string(i);
+            p.status = i % 2 == 0 ? "running" : "sleeping";
+            p.resources.cpuUsage = static_cast<double>(i % 100);
+            p.resources.memUsage = 1024 + (i * 10);
+            p.path = "/usr/bin/process_" + std::to_string(i);
+            largeProcessList.push_back(p);
         }
 
         ON_CALL(*mockProcessManager, getRunningProcesses())
@@ -495,8 +518,8 @@ TEST_F(ProcessManagerIntegrationTest, GetRunningProcesses) {
         EXPECT_GT(process.pid, 0);
         EXPECT_FALSE(process.name.empty());
         EXPECT_FALSE(process.status.empty());
-        EXPECT_GE(process.cpuUsage, 0.0);
-        EXPECT_GE(process.memoryUsage, 0);
+        EXPECT_GE(process.resources.cpuUsage, 0.0);
+        EXPECT_GE(process.resources.memUsage, 0);
     }
 }
 

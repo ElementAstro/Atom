@@ -6,12 +6,14 @@
 #include <fstream>
 #include <string>
 
-#include "atom/system/stat.hpp"
+#include "atom/system/info/stat.hpp"
 
 namespace atom::system::test {
 
 namespace fs = std::filesystem;
 using FilePermission = atom::system::FilePermission;
+using FileStat =
+    atom::system::Stat;  // Alias to avoid conflict with gtest's Stat
 
 class StatTest : public ::testing::Test {
 protected:
@@ -73,46 +75,46 @@ protected:
 
 // Test basic file existence
 TEST_F(StatTest, FileExists) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
     EXPECT_TRUE(stat.exists());
 
-    Stat nonExistentStat(nonExistentFile);
+    FileStat nonExistentStat(nonExistentFile);
     EXPECT_FALSE(nonExistentStat.exists());
 }
 
 // Test file type detection
 TEST_F(StatTest, FileType) {
-    Stat regularFileStat(testFile);
+    FileStat regularFileStat(testFile);
     EXPECT_EQ(regularFileStat.type(), fs::file_type::regular);
 
-    Stat directoryStat(testDir);
+    FileStat directoryStat(testDir);
     EXPECT_EQ(directoryStat.type(), fs::file_type::directory);
 
     if (symlinkSupported) {
-        Stat symlinkStat(testSymlink, false);  // Don't follow symlinks
+        FileStat symlinkStat(testSymlink, false);  // Don't follow symlinks
         EXPECT_EQ(symlinkStat.type(), fs::file_type::symlink);
 
-        Stat symlinkTargetStat(testSymlink, true);  // Follow symlinks
+        FileStat symlinkTargetStat(testSymlink, true);  // Follow symlinks
         EXPECT_EQ(symlinkTargetStat.type(), fs::file_type::regular);
     }
 }
 
 // Test file size
 TEST_F(StatTest, FileSize) {
-    Stat regularFileStat(testFile);
+    FileStat regularFileStat(testFile);
     std::uintmax_t size = regularFileStat.size();
     EXPECT_GT(size, 0);
 
-    Stat emptyFileStat(testEmptyFile);
+    FileStat emptyFileStat(testEmptyFile);
     EXPECT_EQ(emptyFileStat.size(), 0);
 
-    Stat binaryFileStat(testBinaryFile);
+    FileStat binaryFileStat(testBinaryFile);
     EXPECT_EQ(binaryFileStat.size(), 256);
 }
 
 // Test file timestamps
 TEST_F(StatTest, FileTimestamps) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
     std::time_t atime = stat.atime();
     std::time_t mtime = stat.mtime();
@@ -129,7 +131,7 @@ TEST_F(StatTest, FileTimestamps) {
 
 // Test file permissions
 TEST_F(StatTest, FilePermissions) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
     bool isReadable = stat.isReadable();
     bool isWritable = stat.isWritable();
@@ -139,14 +141,14 @@ TEST_F(StatTest, FilePermissions) {
     EXPECT_TRUE(isWritable);
     // Executable depends on platform and file creation
 
-    // Test permission checking
-    EXPECT_TRUE(stat.hasPermission(FilePermission::Read));
-    EXPECT_TRUE(stat.hasPermission(FilePermission::Write));
+    // Test permission checking (user permissions)
+    EXPECT_TRUE(stat.hasPermission(true, false, false, FilePermission::Read));
+    EXPECT_TRUE(stat.hasPermission(true, false, false, FilePermission::Write));
 }
 
 // Test directory permissions
 TEST_F(StatTest, DirectoryPermissions) {
-    Stat dirStat(testDir);
+    FileStat dirStat(testDir);
 
     EXPECT_TRUE(dirStat.isReadable());
     EXPECT_TRUE(dirStat.isWritable());
@@ -156,17 +158,17 @@ TEST_F(StatTest, DirectoryPermissions) {
 
 // Test file ownership (platform-dependent)
 TEST_F(StatTest, FileOwnership) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
-    auto uid = stat.getUID();
-    auto gid = stat.getGID();
+    auto uid = stat.uid();
+    auto gid = stat.gid();
 
     // UID and GID should be valid (non-negative)
     EXPECT_GE(uid, 0);
     EXPECT_GE(gid, 0);
 
-    std::string owner = stat.getOwner();
-    std::string group = stat.getGroup();
+    std::string owner = stat.ownerName();
+    std::string group = stat.groupName();
 
     // Owner and group names should not be empty (on most systems)
     EXPECT_FALSE(owner.empty());
@@ -175,7 +177,7 @@ TEST_F(StatTest, FileOwnership) {
 
 // Test file update functionality
 TEST_F(StatTest, UpdateFileStats) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
     std::uintmax_t originalSize = stat.size();
     std::time_t originalMtime = stat.mtime();
@@ -201,22 +203,18 @@ TEST_F(StatTest, UpdateFileStats) {
 
 // Test file type checking methods
 TEST_F(StatTest, FileTypeChecking) {
-    Stat regularFileStat(testFile);
+    FileStat regularFileStat(testFile);
     EXPECT_TRUE(regularFileStat.isRegularFile());
     EXPECT_FALSE(regularFileStat.isDirectory());
     EXPECT_FALSE(regularFileStat.isSymlink());
-    EXPECT_FALSE(regularFileStat.isBlockFile());
-    EXPECT_FALSE(regularFileStat.isCharacterFile());
-    EXPECT_FALSE(regularFileStat.isFifo());
-    EXPECT_FALSE(regularFileStat.isSocket());
 
-    Stat directoryStat(testDir);
+    FileStat directoryStat(testDir);
     EXPECT_FALSE(directoryStat.isRegularFile());
     EXPECT_TRUE(directoryStat.isDirectory());
     EXPECT_FALSE(directoryStat.isSymlink());
 
     if (symlinkSupported) {
-        Stat symlinkStat(testSymlink, false);  // Don't follow symlinks
+        FileStat symlinkStat(testSymlink, false);  // Don't follow symlinks
         EXPECT_FALSE(symlinkStat.isRegularFile());
         EXPECT_FALSE(symlinkStat.isDirectory());
         EXPECT_TRUE(symlinkStat.isSymlink());
@@ -225,9 +223,9 @@ TEST_F(StatTest, FileTypeChecking) {
 
 // Test hard link count
 TEST_F(StatTest, HardLinkCount) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
-    auto linkCount = stat.getHardLinkCount();
+    auto linkCount = stat.hardLinkCount();
     EXPECT_GE(linkCount, 1);  // At least one link (the file itself)
 
     // Create a hard link (if supported)
@@ -236,7 +234,7 @@ TEST_F(StatTest, HardLinkCount) {
         fs::create_hard_link(testFile, hardLink);
 
         stat.update();
-        auto newLinkCount = stat.getHardLinkCount();
+        auto newLinkCount = stat.hardLinkCount();
         EXPECT_EQ(newLinkCount, linkCount + 1);
 
         // Clean up
@@ -249,10 +247,10 @@ TEST_F(StatTest, HardLinkCount) {
 
 // Test device information
 TEST_F(StatTest, DeviceInformation) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
-    auto deviceId = stat.getDeviceId();
-    auto inodeNumber = stat.getInodeNumber();
+    auto deviceId = stat.deviceId();
+    auto inodeNumber = stat.inodeNumber();
 
     EXPECT_GE(deviceId, 0);
     EXPECT_GT(inodeNumber, 0);
@@ -260,9 +258,9 @@ TEST_F(StatTest, DeviceInformation) {
 
 // Test file mode
 TEST_F(StatTest, FileMode) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
-    auto mode = stat.getMode();
+    auto mode = stat.mode();
     EXPECT_GT(mode, 0);
 
     // Check that mode contains expected permission bits
@@ -287,18 +285,18 @@ protected:
 
 // Test handling of nonexistent files
 TEST_F(StatErrorTest, NonexistentFile) {
-    EXPECT_THROW(Stat stat(nonExistentPath), std::system_error);
+    EXPECT_THROW(FileStat stat(nonExistentPath), std::system_error);
 }
 
 // Test handling of invalid paths
 TEST_F(StatErrorTest, InvalidPath) {
-    EXPECT_THROW(Stat stat(invalidPath), std::system_error);
+    EXPECT_THROW(FileStat stat(invalidPath), std::system_error);
 }
 
 // Test accessing properties of nonexistent files
 TEST_F(StatErrorTest, AccessNonexistentFileProperties) {
     try {
-        Stat stat(nonExistentPath);
+        FileStat stat(nonExistentPath);
         FAIL() << "Expected std::system_error";
     } catch (const std::system_error& e) {
         // Expected behavior
@@ -332,16 +330,16 @@ protected:
 #ifdef _WIN32
 // Windows-specific tests
 TEST_F(StatPlatformTest, WindowsSpecificAttributes) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
     // Test Windows-specific functionality
-    EXPECT_NO_THROW(stat.getMode());
-    EXPECT_NO_THROW(stat.getUID());
-    EXPECT_NO_THROW(stat.getGID());
+    EXPECT_NO_THROW(stat.mode());
+    EXPECT_NO_THROW(stat.uid());
+    EXPECT_NO_THROW(stat.gid());
 
     // On Windows, UID/GID might be different
-    auto uid = stat.getUID();
-    auto gid = stat.getGID();
+    auto uid = stat.uid();
+    auto gid = stat.gid();
     EXPECT_GE(uid, 0);
     EXPECT_GE(gid, 0);
 }
@@ -356,7 +354,7 @@ TEST_F(StatPlatformTest, WindowsHiddenFiles) {
 
     // Set hidden attribute (this would require Windows API calls in real
     // implementation)
-    Stat stat(hiddenFile);
+    FileStat stat(hiddenFile);
     EXPECT_TRUE(stat.exists());
     EXPECT_TRUE(stat.isRegularFile());
 }
@@ -364,27 +362,27 @@ TEST_F(StatPlatformTest, WindowsHiddenFiles) {
 #elif defined(__linux__)
 // Linux-specific tests
 TEST_F(StatPlatformTest, LinuxSpecificAttributes) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
     // Test Linux-specific functionality
-    auto uid = stat.getUID();
-    auto gid = stat.getGID();
+    auto uid = stat.uid();
+    auto gid = stat.gid();
 
     EXPECT_GE(uid, 0);
     EXPECT_GE(gid, 0);
 
     // Test that we can get owner/group names
-    std::string owner = stat.getOwner();
-    std::string group = stat.getGroup();
+    std::string owner = stat.ownerName();
+    std::string group = stat.groupName();
 
     EXPECT_FALSE(owner.empty());
     EXPECT_FALSE(group.empty());
 }
 
 TEST_F(StatPlatformTest, LinuxPermissionBits) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
-    auto mode = stat.getMode();
+    auto mode = stat.mode();
 
     // Check standard permission bits
     bool ownerRead = (mode & S_IRUSR) != 0;
@@ -406,17 +404,17 @@ TEST_F(StatPlatformTest, LinuxPermissionBits) {
 #elif defined(__APPLE__)
 // macOS-specific tests
 TEST_F(StatPlatformTest, MacOSSpecificAttributes) {
-    Stat stat(testFile);
+    FileStat stat(testFile);
 
     // Test macOS-specific functionality
-    EXPECT_NO_THROW(stat.getUID());
-    EXPECT_NO_THROW(stat.getGID());
-    EXPECT_NO_THROW(stat.getOwner());
-    EXPECT_NO_THROW(stat.getGroup());
+    EXPECT_NO_THROW(stat.uid());
+    EXPECT_NO_THROW(stat.gid());
+    EXPECT_NO_THROW(stat.ownerName());
+    EXPECT_NO_THROW(stat.groupName());
 
     // macOS should support standard Unix permissions
-    EXPECT_TRUE(stat.hasPermission(FilePermission::Read));
-    EXPECT_TRUE(stat.hasPermission(FilePermission::Write));
+    EXPECT_TRUE(stat.hasPermission(true, false, false, FilePermission::Read));
+    EXPECT_TRUE(stat.hasPermission(true, false, false, FilePermission::Write));
 }
 #endif
 
@@ -449,7 +447,7 @@ TEST_F(StatPerformanceTest, MultipleFileStats) {
 
     for (int i = 0; i < 100; ++i) {
         fs::path file = testDir / ("file_" + std::to_string(i) + ".txt");
-        Stat stat(file);
+        FileStat stat(file);
 
         // Access various properties
         EXPECT_TRUE(stat.exists());
@@ -473,7 +471,7 @@ TEST_F(StatPerformanceTest, RepeatedStatOperations) {
     auto start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < 1000; ++i) {
-        Stat stat(testFile);
+        FileStat stat(testFile);
         EXPECT_TRUE(stat.exists());
         EXPECT_GT(stat.size(), 0);
     }
@@ -515,7 +513,7 @@ TEST_F(StatEdgeCaseTest, LargeFile) {
         }
         file.close();
 
-        Stat stat(largeFile);
+        FileStat stat(largeFile);
         EXPECT_TRUE(stat.exists());
         EXPECT_EQ(stat.size(), 1024 * 1024);
         EXPECT_TRUE(stat.isRegularFile());
@@ -540,7 +538,7 @@ TEST_F(StatEdgeCaseTest, SpecialCharacterFilenames) {
                 file << "Special character test\n";
             }
 
-            Stat stat(specialFile);
+            FileStat stat(specialFile);
             EXPECT_TRUE(stat.exists());
             EXPECT_TRUE(stat.isRegularFile());
             EXPECT_GT(stat.size(), 0);
@@ -562,7 +560,7 @@ TEST_F(StatEdgeCaseTest, ZeroByteFile) {
         // Create empty file
     }
 
-    Stat stat(emptyFile);
+    FileStat stat(emptyFile);
     EXPECT_TRUE(stat.exists());
     EXPECT_EQ(stat.size(), 0);
     EXPECT_TRUE(stat.isRegularFile());

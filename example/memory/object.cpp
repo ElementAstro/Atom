@@ -16,171 +16,171 @@
 
 #include "atom/memory/object.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// A simple example class that satisfies the Resettable concept
-class Connection {
+// A simple example class that satisfies the Resettable conceptclass Connection
+// {
 private:
-    std::string host_;
-    int port_;
-    bool connected_;
-    std::string last_query_;
-    int query_count_;
-    int connection_id_;
-    static std::atomic<int> next_id_;
+std::string host_;
+int port_;
+bool connected_;
+std::string last_query_;
+int query_count_;
+int connection_id_;
+static std::atomic<int> next_id_;
 
 public:
-    Connection()
-        : host_("localhost"),
-          port_(8080),
-          connected_(false),
-          query_count_(0),
-          connection_id_(next_id_++) {
-        std::cout << "Creating Connection #" << connection_id_ << std::endl;
-    }
+Connection()
+    : host_("localhost"),
+      port_(8080),
+      connected_(false),
+      query_count_(0),
+      connection_id_(next_id_++) {
+    std::cout << "Creating Connection #" << connection_id_ << std::endl;
+}
 
-    ~Connection() {
-        std::cout << "Destroying Connection #" << connection_id_ << std::endl;
-    }
+~Connection() {
+    std::cout << "Destroying Connection #" << connection_id_ << std::endl;
+}
 
-    bool connect(const std::string& host, int port) {
-        // Simulate connection establishment
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-        host_ = host;
-        port_ = port;
-        connected_ = true;
-        std::cout << "Connection #" << connection_id_ << " established to "
-                  << host << ":" << port << std::endl;
+bool connect(const std::string& host, int port) {
+    // Simulate connection establishment
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+    host_ = host;
+    port_ = port;
+    connected_ = true;
+    std::cout << "Connection #" << connection_id_ << " established to " << host
+              << ":" << port << std::endl;
+    return true;
+}
+
+bool disconnect() {
+    if (connected_) {
+        // Simulate disconnection
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        connected_ = false;
+        std::cout << "Connection #" << connection_id_ << " disconnected from "
+                  << host_ << ":" << port_ << std::endl;
         return true;
     }
+    return false;
+}
 
-    bool disconnect() {
-        if (connected_) {
-            // Simulate disconnection
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            connected_ = false;
-            std::cout << "Connection #" << connection_id_
-                      << " disconnected from " << host_ << ":" << port_
-                      << std::endl;
-            return true;
-        }
+bool executeQuery(const std::string& query) {
+    if (!connected_) {
+        std::cout << "Error: Connection #" << connection_id_ << " not connected"
+                  << std::endl;
         return false;
     }
+    // Simulate query execution
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    last_query_ = query;
+    query_count_++;
+    return true;
+}
 
-    bool executeQuery(const std::string& query) {
-        if (!connected_) {
-            std::cout << "Error: Connection #" << connection_id_
-                      << " not connected" << std::endl;
-            return false;
-        }
-        // Simulate query execution
-        std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        last_query_ = query;
-        query_count_++;
-        return true;
-    }
+// Required by Resettable concept
+void reset() {
+    disconnect();
+    last_query_.clear();
+    query_count_ = 0;
+    host_ = "localhost";
+    port_ = 8080;
+}
 
-    // Required by Resettable concept
-    void reset() {
-        disconnect();
-        last_query_.clear();
-        query_count_ = 0;
-        host_ = "localhost";
-        port_ = 8080;
-    }
+bool isValid() const {
+    // Example validity check - could check actual connection status
+    return query_count_ < 100;  // Consider invalid after too many queries
+}
 
-    bool isValid() const {
-        // Example validity check - could check actual connection status
-        return query_count_ < 100;  // Consider invalid after too many queries
-    }
-
-    int getId() const { return connection_id_; }
-    bool isConnected() const { return connected_; }
-    int getQueryCount() const { return query_count_; }
-    std::string getHost() const { return host_; }
-    int getPort() const { return port_; }
-};
+int getId() const { return connection_id_; }
+bool isConnected() const { return connected_; }
+int getQueryCount() const { return query_count_; }
+std::string getHost() const { return host_; }
+int getPort() const { return port_; }
+}
+;
 
 std::atomic<int> Connection::next_id_(1);
 
-// A heavy resource class to demonstrate resource pooling benefits
-class HeavyResource {
+// A heavy resource class to demonstrate resource pooling benefitsclass
+// HeavyResource {
 private:
-    std::vector<double> data_;
-    bool initialized_;
-    int resource_id_;
-    static std::atomic<int> next_id_;
+std::vector<double> data_;
+bool initialized_;
+int resource_id_;
+static std::atomic<int> next_id_;
 
 public:
-    HeavyResource()
-        : data_(1000000, 0.0),  // 1M doubles - intentionally large
-          initialized_(false),
-          resource_id_(next_id_++) {
-        std::cout << "Creating HeavyResource #" << resource_id_
-                  << " (expensive!)" << std::endl;
-    }
+HeavyResource()
+    : data_(1000000, 0.0),  // 1M doubles - intentionally large
+      initialized_(false),
+      resource_id_(next_id_++) {
+    std::cout << "Creating HeavyResource #" << resource_id_ << " (expensive!)"
+              << std::endl;
+}
 
-    ~HeavyResource() {
-        std::cout << "Destroying HeavyResource #" << resource_id_ << std::endl;
-    }
+~HeavyResource() {
+    std::cout << "Destroying HeavyResource #" << resource_id_ << std::endl;
+}
 
-    bool initialize() {
-        if (!initialized_) {
-            // Simulate heavy initialization
-            std::cout << "Initializing HeavyResource #" << resource_id_ << "..."
-                      << std::endl;
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+bool initialize() {
+    if (!initialized_) {
+        // Simulate heavy initialization
+        std::cout << "Initializing HeavyResource #" << resource_id_ << "..."
+                  << std::endl;
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
 
-            // Fill with some values
-            std::mt19937 gen(resource_id_);
-            std::uniform_real_distribution<double> dist(0.0, 1.0);
-            for (auto& val : data_) {
-                val = dist(gen);
-            }
-            initialized_ = true;
-            std::cout << "HeavyResource #" << resource_id_ << " initialized"
-                      << std::endl;
-            return true;
+        // Fill with some values
+        std::mt19937 gen(resource_id_);
+        std::uniform_real_distribution<double> dist(0.0, 1.0);
+        for (auto& val : data_) {
+            val = dist(gen);
         }
-        return false;
+        initialized_ = true;
+        std::cout << "HeavyResource #" << resource_id_ << " initialized"
+                  << std::endl;
+        return true;
+    }
+    return false;
+}
+
+double compute() {
+    if (!initialized_) {
+        std::cout << "Error: HeavyResource #" << resource_id_
+                  << " not initialized" << std::endl;
+        return -1.0;
     }
 
-    double compute() {
-        if (!initialized_) {
-            std::cout << "Error: HeavyResource #" << resource_id_
-                      << " not initialized" << std::endl;
-            return -1.0;
-        }
-
-        // Simulate computation
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
-        double sum = 0.0;
-        for (const auto& val : data_) {
-            sum += val;
-        }
-        return sum / data_.size();
+    // Simulate computation
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    double sum = 0.0;
+    for (const auto& val : data_) {
+        sum += val;
     }
+    return sum / data_.size();
+}
 
-    // Required by Resettable concept
-    void reset() {
-        // Just mark as uninitialized rather than clearing all data
-        initialized_ = false;
-    }
+// Required by Resettable concept
+void reset() {
+    // Just mark as uninitialized rather than clearing all data
+    initialized_ = false;
+}
 
-    bool isValid() const { return initialized_; }
+bool isValid() const { return initialized_; }
 
-    int getId() const { return resource_id_; }
-};
+int getId() const { return resource_id_; }
+}
+;
 
 std::atomic<int> HeavyResource::next_id_(1);
 
-// Benchmark utility function
-template <typename FuncType>
+// Benchmark utility functiontemplate <typename FuncType>
 double measureExecutionTime(FuncType&& func) {
     auto start = std::chrono::high_resolution_clock::now();
     func();

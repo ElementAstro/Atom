@@ -11,26 +11,24 @@
 
 #include "atom/async/lock.hpp"
 
-// 共享资源
-struct SharedCounter {
-    int value = 0;
-};
+// 共享资源struct SharedCounter {
+int value = 0;
+}
+;
 
-// 帮助函数，打印当前线程ID
-void print_thread_info(const std::string& msg) {
-    std::cout << "[线程 " << std::this_thread::get_id() << "] " << msg
-              << std::endl;
+// 帮助函数，打印当前线程IDvoid print_thread_info(const std::string& msg) {
+std::cout << "[线程 " << std::this_thread::get_id() << "] " << msg << std::endl;
 }
 
-// 帮助函数，格式化函数执行时间
-std::string format_duration(std::chrono::nanoseconds ns) {
-    auto us = std::chrono::duration_cast<std::chrono::microseconds>(ns).count();
-    if (us < 1000) {
-        return std::to_string(us) + " μs";
-    } else {
-        auto ms = us / 1000.0;
-        return std::to_string(ms) + " ms";
-    }
+// 帮助函数，格式化函数执行时间std::string
+// format_duration(std::chrono::nanoseconds ns) {
+auto us = std::chrono::duration_cast<std::chrono::microseconds>(ns).count();
+if (us < 1000) {
+    return std::to_string(us) + " μs";
+} else {
+    auto ms = us / 1000.0;
+    return std::to_string(ms) + " ms";
+}
 }
 
 // =================== 基本用法示例 ===================
@@ -78,129 +76,126 @@ void basic_spinlock_example() {
     std::cout << "耗时: " << format_duration(duration) << std::endl;
 }
 
-// 使用作用域锁(ScopedLock)的示例
-void scoped_lock_example() {
-    std::cout << "\n===== ScopedLock 示例 =====\n";
+// 使用作用域锁(ScopedLock)的示例void scoped_lock_example() {
+std::cout << "\n===== ScopedLock 示例 =====\n";
 
-    atom::async::Spinlock spinlock;
-    SharedCounter counter;
-    std::vector<std::thread> threads;
+atom::async::Spinlock spinlock;
+SharedCounter counter;
+std::vector<std::thread> threads;
 
-    auto increment_function = [&spinlock, &counter](int iterations) {
-        for (int i = 0; i < iterations; ++i) {
-            // 使用 ScopedLock - 自动在作用域结束时释放锁
-            atom::async::ScopedLock<atom::async::Spinlock> lock(spinlock);
-            counter.value++;
-            // 锁在作用域结束时自动释放
-        }
-    };
-
-    const int thread_count = 5;
-    const int iterations_per_thread = 1000;
-
-    for (int i = 0; i < thread_count; ++i) {
-        threads.emplace_back(increment_function, iterations_per_thread);
+auto increment_function = [&spinlock, &counter](int iterations) {
+    for (int i = 0; i < iterations; ++i) {
+        // 使用 ScopedLock - 自动在作用域结束时释放锁
+        atom::async::ScopedLock<atom::async::Spinlock> lock(spinlock);
+        counter.value++;
+        // 锁在作用域结束时自动释放
     }
+};
 
-    for (auto& t : threads) {
-        t.join();
-    }
+const int thread_count = 5;
+const int iterations_per_thread = 1000;
 
-    std::cout << "使用 ScopedLock 的计数: " << counter.value << std::endl;
+for (int i = 0; i < thread_count; ++i) {
+    threads.emplace_back(increment_function, iterations_per_thread);
+}
+
+for (auto& t : threads) {
+    t.join();
+}
+
+std::cout << "使用 ScopedLock 的计数: " << counter.value << std::endl;
 }
 
 // =================== 高级用法示例 ===================
 
-// TicketSpinlock 示例
-void ticket_spinlock_example() {
-    std::cout << "\n===== TicketSpinlock 示例 =====\n";
+// TicketSpinlock 示例void ticket_spinlock_example() {
+std::cout << "\n===== TicketSpinlock 示例 =====\n";
 
-    atom::async::TicketSpinlock ticketLock;
-    SharedCounter counter;
-    std::vector<std::thread> threads;
-    std::atomic<int> waiting_threads{0};
+atom::async::TicketSpinlock ticketLock;
+SharedCounter counter;
+std::vector<std::thread> threads;
+std::atomic<int> waiting_threads{0};
 
-    auto increment_function = [&ticketLock, &counter, &waiting_threads](
-                                  int id, int iterations) {
-        for (int i = 0; i < iterations; ++i) {
-            waiting_threads++;
-            // 获取锁并获得票号
-            auto ticket = ticketLock.lock();
-            waiting_threads--;
+auto increment_function = [&ticketLock, &counter, &waiting_threads](
+                              int id, int iterations) {
+    for (int i = 0; i < iterations; ++i) {
+        waiting_threads++;
+        // 获取锁并获得票号
+        auto ticket = ticketLock.lock();
+        waiting_threads--;
 
-            if (i == 0) {  // 只在第一次迭代时打印
-                print_thread_info("获得票号: " + std::to_string(ticket));
-            }
-
-            // 临界区
-            counter.value++;
-
-            // 释放票号对应的锁
-            ticketLock.unlock(ticket);
+        if (i == 0) {  // 只在第一次迭代时打印
+            print_thread_info("获得票号: " + std::to_string(ticket));
         }
-    };
 
-    const int thread_count = 5;
-    const int iterations_per_thread = 1000;
+        // 临界区
+        counter.value++;
 
-    for (int i = 0; i < thread_count; ++i) {
-        threads.emplace_back(increment_function, i, iterations_per_thread);
+        // 释放票号对应的锁
+        ticketLock.unlock(ticket);
     }
+};
 
-    // 监控等待线程数
-    std::thread monitor([&ticketLock, &waiting_threads]() {
-        for (int i = 0; i < 5; ++i) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            std::cout << "等待线程数: " << waiting_threads
-                      << ", TicketLock内部等待线程计数: "
-                      << ticketLock.waitingThreads() << std::endl;
-        }
-    });
+const int thread_count = 5;
+const int iterations_per_thread = 1000;
 
-    for (auto& t : threads) {
-        t.join();
-    }
-    monitor.join();
-
-    std::cout << "使用 TicketSpinlock 的计数: " << counter.value << std::endl;
+for (int i = 0; i < thread_count; ++i) {
+    threads.emplace_back(increment_function, i, iterations_per_thread);
 }
 
-// 使用TicketSpinlock的作用域锁
-void scoped_ticket_lock_example() {
-    std::cout << "\n===== ScopedTicketLock 示例 =====\n";
-
-    atom::async::TicketSpinlock ticketLock;
-    SharedCounter counter;
-    std::vector<std::thread> threads;
-
-    auto increment_function = [&ticketLock, &counter](int iterations) {
-        for (int i = 0; i < iterations; ++i) {
-            // 使用作用域锁，自动处理锁的获取和释放
-            atom::async::ScopedTicketLock lock(ticketLock);
-            counter.value++;
-            // 锁在作用域结束时自动释放
-        }
-    };
-
-    const int thread_count = 5;
-    const int iterations_per_thread = 1000;
-
-    auto start_time = std::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < thread_count; ++i) {
-        threads.emplace_back(increment_function, iterations_per_thread);
+// 监控等待线程数
+std::thread monitor([&ticketLock, &waiting_threads]() {
+    for (int i = 0; i < 5; ++i) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::cout << "等待线程数: " << waiting_threads
+                  << ", TicketLock内部等待线程计数: "
+                  << ticketLock.waitingThreads() << std::endl;
     }
+});
 
-    for (auto& t : threads) {
-        t.join();
+for (auto& t : threads) {
+    t.join();
+}
+monitor.join();
+
+std::cout << "使用 TicketSpinlock 的计数: " << counter.value << std::endl;
+}
+
+// 使用TicketSpinlock的作用域锁void scoped_ticket_lock_example() {
+std::cout << "\n===== ScopedTicketLock 示例 =====\n";
+
+atom::async::TicketSpinlock ticketLock;
+SharedCounter counter;
+std::vector<std::thread> threads;
+
+auto increment_function = [&ticketLock, &counter](int iterations) {
+    for (int i = 0; i < iterations; ++i) {
+        // 使用作用域锁，自动处理锁的获取和释放
+        atom::async::ScopedTicketLock lock(ticketLock);
+        counter.value++;
+        // 锁在作用域结束时自动释放
     }
+};
 
-    auto end_time = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::nanoseconds>(
-        end_time - start_time);
+const int thread_count = 5;
+const int iterations_per_thread = 1000;
 
-    std::cout << "使用 ScopedTicketLock 的计数: " << counter.value << std::endl;
-    std::cout << "耗时: " << format_duration(duration) << std::endl;
+auto start_time = std::chrono::high_resolution_clock::now();
+
+for (int i = 0; i < thread_count; ++i) {
+    threads.emplace_back(increment_function, iterations_per_thread);
+}
+
+for (auto& t : threads) {
+    t.join();
+}
+
+auto end_time = std::chrono::high_resolution_clock::now();
+auto duration =
+    std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time);
+
+std::cout << "使用 ScopedTicketLock 的计数: " << counter.value << std::endl;
+std::cout << "耗时: " << format_duration(duration) << std::endl;
 }
 
 // =================== 尝试获取锁和超时示例 ===================
@@ -250,57 +245,55 @@ void trylock_example() {
     std::cout << "失败尝试次数: " << failed_attempts.load() << std::endl;
 }
 
-// 带超时的尝试获取锁示例
-void trylock_timeout_example() {
-    std::cout << "\n===== 带超时的 tryLock 示例 =====\n";
+// 带超时的尝试获取锁示例void trylock_timeout_example() {
+std::cout << "\n===== 带超时的 tryLock 示例 =====\n";
 
-    atom::async::Spinlock spinlock;
-    SharedCounter counter;
-    std::atomic<int> timeout_count{0};
+atom::async::Spinlock spinlock;
+SharedCounter counter;
+std::atomic<int> timeout_count{0};
 
-    // 先让一个线程长时间持有锁
-    std::thread holding_thread([&spinlock]() {
-        print_thread_info("获取锁并持有500ms");
-        spinlock.lock();
-        std::this_thread::sleep_for(std::chrono::milliseconds(500));
-        spinlock.unlock();
-        print_thread_info("释放锁");
+// 先让一个线程长时间持有锁
+std::thread holding_thread([&spinlock]() {
+    print_thread_info("获取锁并持有500ms");
+    spinlock.lock();
+    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    spinlock.unlock();
+    print_thread_info("释放锁");
+});
+
+// 稍等片刻确保第一个线程已获得锁
+std::this_thread::sleep_for(std::chrono::milliseconds(10));
+
+// 多个线程尝试使用超时获取锁
+std::vector<std::thread> threads;
+for (int i = 1; i <= 3; ++i) {
+    threads.emplace_back([&spinlock, &counter, &timeout_count, i]() {
+        print_thread_info("尝试获取锁，超时 " + std::to_string(i * 100) + "ms");
+
+        auto timeout = std::chrono::milliseconds(i * 100);
+        bool acquired = spinlock.tryLock(timeout);
+
+        if (acquired) {
+            print_thread_info("成功获取锁");
+            counter.value++;
+            spinlock.unlock();
+        } else {
+            print_thread_info("获取锁超时");
+            timeout_count++;
+        }
     });
 
-    // 稍等片刻确保第一个线程已获得锁
-    std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    // 稍微错开线程启动时间
+    std::this_thread::sleep_for(std::chrono::milliseconds(20));
+}
 
-    // 多个线程尝试使用超时获取锁
-    std::vector<std::thread> threads;
-    for (int i = 1; i <= 3; ++i) {
-        threads.emplace_back([&spinlock, &counter, &timeout_count, i]() {
-            print_thread_info("尝试获取锁，超时 " + std::to_string(i * 100) +
-                              "ms");
+holding_thread.join();
+for (auto& t : threads) {
+    t.join();
+}
 
-            auto timeout = std::chrono::milliseconds(i * 100);
-            bool acquired = spinlock.tryLock(timeout);
-
-            if (acquired) {
-                print_thread_info("成功获取锁");
-                counter.value++;
-                spinlock.unlock();
-            } else {
-                print_thread_info("获取锁超时");
-                timeout_count++;
-            }
-        });
-
-        // 稍微错开线程启动时间
-        std::this_thread::sleep_for(std::chrono::milliseconds(20));
-    }
-
-    holding_thread.join();
-    for (auto& t : threads) {
-        t.join();
-    }
-
-    std::cout << "成功获取锁次数: " << counter.value << std::endl;
-    std::cout << "超时次数: " << timeout_count.load() << std::endl;
+std::cout << "成功获取锁次数: " << counter.value << std::endl;
+std::cout << "超时次数: " << timeout_count.load() << std::endl;
 }
 
 // =================== 不同锁类型比较 ===================

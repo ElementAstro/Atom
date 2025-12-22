@@ -8,9 +8,9 @@
 
 Date: 2024-12-25
 
-Description: Python Scripting Engine Example
-Demonstrates Python integration, type conversion, advanced bindings,
-and Python scripting features with the component system.
+Description: Python Scripting Engine ExampleDemonstrates Python integration,
+type conversion, advanced bindings, and Python scripting features with the
+component system.
 
 **************************************************/
 
@@ -422,8 +422,7 @@ try:
     print(f"Division result: {result}")
 
     # This will raise an exception
-    bad_result = 10 / 0
-except ZeroDivisionError as e:
+    bad_result = 10 / 0except ZeroDivisionError as e:
     print(f"Caught exception: {e}")
     result = "Error handled"
 
@@ -500,8 +499,7 @@ void demonstratePythonFileExecution() {
 
     // Create a test Python script file
     const std::string scriptContent = R"(
-# Test Python script file
-print("Hello from Python script file!")
+# Test Python script fileprint("Hello from Python script file!")
 
 def fibonacci(n):
     """Calculate Fibonacci number using iteration."""
@@ -525,15 +523,13 @@ def prime_factors(n):
         factors.append(n)
     return factors
 
-# Calculate some values
-fib_15 = fibonacci(15)
+# Calculate some valuesfib_15 = fibonacci(15)
 factors_60 = prime_factors(60)
 
 print(f"Fibonacci of 15: {fib_15}")
 print(f"Prime factors of 60: {factors_60}")
 
-# Return results as a dictionary
-result = {
+# Return results as a dictionaryresult = {
     'fibonacci_15': fib_15,
     'prime_factors_60': factors_60,
     'message': 'Python script executed successfully'

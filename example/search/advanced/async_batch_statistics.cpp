@@ -33,266 +33,261 @@
 #include "atom/search/search.hpp"
 #include "atom/search/ttl.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Performance metrics collector
-class PerformanceMetrics {
+// Performance metrics collectorclass PerformanceMetrics {
 private:
-    std::atomic<size_t> total_operations_{0};
-    std::atomic<size_t> successful_operations_{0};
-    std::atomic<size_t> failed_operations_{0};
-    std::atomic<double> total_duration_ms_{0.0};
-    std::atomic<size_t> cache_hits_{0};
-    std::atomic<size_t> cache_misses_{0};
-    mutable std::mutex metrics_mutex_;
-    std::chrono::steady_clock::time_point start_time_;
+std::atomic<size_t> total_operations_{0};
+std::atomic<size_t> successful_operations_{0};
+std::atomic<size_t> failed_operations_{0};
+std::atomic<double> total_duration_ms_{0.0};
+std::atomic<size_t> cache_hits_{0};
+std::atomic<size_t> cache_misses_{0};
+mutable std::mutex metrics_mutex_;
+std::chrono::steady_clock::time_point start_time_;
 
 public:
-    PerformanceMetrics() : start_time_(std::chrono::steady_clock::now()) {}
+PerformanceMetrics() : start_time_(std::chrono::steady_clock::now()) {}
 
-    void recordOperation(bool success, double duration_ms) {
-        total_operations_++;
-        if (success) {
-            successful_operations_++;
-        } else {
-            failed_operations_++;
-        }
-        total_duration_ms_ += duration_ms;
+void recordOperation(bool success, double duration_ms) {
+    total_operations_++;
+    if (success) {
+        successful_operations_++;
+    } else {
+        failed_operations_++;
+    }
+    total_duration_ms_ += duration_ms;
+}
+
+void recordCacheHit() { cache_hits_++; }
+void recordCacheMiss() { cache_misses_++; }
+
+void printStatistics() const {
+    std::lock_guard<std::mutex> lock(metrics_mutex_);
+
+    auto now = std::chrono::steady_clock::now();
+    auto uptime =
+        std::chrono::duration_cast<std::chrono::seconds>(now - start_time_);
+
+    size_t total_ops = total_operations_.load();
+    size_t successful_ops = successful_operations_.load();
+    size_t failed_ops = failed_operations_.load();
+    double total_duration = total_duration_ms_.load();
+    size_t hits = cache_hits_.load();
+    size_t misses = cache_misses_.load();
+
+    std::cout << "\n=== Performance Metrics ===" << std::endl;
+    std::cout << "Uptime: " << uptime.count() << " seconds" << std::endl;
+    std::cout << "Total operations: " << total_ops << std::endl;
+    std::cout << "Successful operations: " << successful_ops << std::endl;
+    std::cout << "Failed operations: " << failed_ops << std::endl;
+
+    if (total_ops > 0) {
+        double success_rate =
+            static_cast<double>(successful_ops) / total_ops * 100;
+        double avg_duration = total_duration / total_ops;
+        std::cout << "Success rate: " << std::fixed << std::setprecision(2)
+                  << success_rate << "%" << std::endl;
+        std::cout << "Average operation time: " << avg_duration << " ms"
+                  << std::endl;
+        std::cout << "Operations per second: "
+                  << (total_ops / static_cast<double>(uptime.count()))
+                  << std::endl;
     }
 
-    void recordCacheHit() { cache_hits_++; }
-    void recordCacheMiss() { cache_misses_++; }
-
-    void printStatistics() const {
-        std::lock_guard<std::mutex> lock(metrics_mutex_);
-
-        auto now = std::chrono::steady_clock::now();
-        auto uptime =
-            std::chrono::duration_cast<std::chrono::seconds>(now - start_time_);
-
-        size_t total_ops = total_operations_.load();
-        size_t successful_ops = successful_operations_.load();
-        size_t failed_ops = failed_operations_.load();
-        double total_duration = total_duration_ms_.load();
-        size_t hits = cache_hits_.load();
-        size_t misses = cache_misses_.load();
-
-        std::cout << "\n=== Performance Metrics ===" << std::endl;
-        std::cout << "Uptime: " << uptime.count() << " seconds" << std::endl;
-        std::cout << "Total operations: " << total_ops << std::endl;
-        std::cout << "Successful operations: " << successful_ops << std::endl;
-        std::cout << "Failed operations: " << failed_ops << std::endl;
-
-        if (total_ops > 0) {
-            double success_rate =
-                static_cast<double>(successful_ops) / total_ops * 100;
-            double avg_duration = total_duration / total_ops;
-            std::cout << "Success rate: " << std::fixed << std::setprecision(2)
-                      << success_rate << "%" << std::endl;
-            std::cout << "Average operation time: " << avg_duration << " ms"
-                      << std::endl;
-            std::cout << "Operations per second: "
-                      << (total_ops / static_cast<double>(uptime.count()))
-                      << std::endl;
-        }
-
-        size_t total_cache_ops = hits + misses;
-        if (total_cache_ops > 0) {
-            double hit_rate = static_cast<double>(hits) / total_cache_ops * 100;
-            std::cout << "Cache hits: " << hits << std::endl;
-            std::cout << "Cache misses: " << misses << std::endl;
-            std::cout << "Cache hit rate: " << hit_rate << "%" << std::endl;
-        }
+    size_t total_cache_ops = hits + misses;
+    if (total_cache_ops > 0) {
+        double hit_rate = static_cast<double>(hits) / total_cache_ops * 100;
+        std::cout << "Cache hits: " << hits << std::endl;
+        std::cout << "Cache misses: " << misses << std::endl;
+        std::cout << "Cache hit rate: " << hit_rate << "%" << std::endl;
     }
-};
+}
+}
+;
 
-// Async search worker
-class AsyncSearchWorker {
+// Async search workerclass AsyncSearchWorker {
 private:
-    atom::search::SearchEngine& search_engine_;
+atom::search::SearchEngine& search_engine_;
+atom::search::ThreadSafeLRUCache<std::string, std::vector<std::string>>& cache_;
+PerformanceMetrics & metrics_;
+std::queue<std::string> task_queue_;
+std::mutex queue_mutex_;
+std::condition_variable queue_cv_;
+std::atomic<bool> should_stop_{false};
+std::vector<std::thread> worker_threads_;
+
+public:
+AsyncSearchWorker(
+    atom::search::SearchEngine& engine,
     atom::search::ThreadSafeLRUCache<std::string, std::vector<std::string>>&
-        cache_;
-    PerformanceMetrics& metrics_;
-    std::queue<std::string> task_queue_;
-    std::mutex queue_mutex_;
-    std::condition_variable queue_cv_;
-    std::atomic<bool> should_stop_{false};
-    std::vector<std::thread> worker_threads_;
+        cache,
+    PerformanceMetrics& metrics, size_t num_workers = 4)
+    : search_engine_(engine), cache_(cache), metrics_(metrics) {
+    // Start worker threads
+    for (size_t i = 0; i < num_workers; ++i) {
+        worker_threads_.emplace_back([this, i]() { workerLoop(i); });
+    }
+}
 
-public:
-    AsyncSearchWorker(
-        atom::search::SearchEngine& engine,
-        atom::search::ThreadSafeLRUCache<std::string, std::vector<std::string>>&
-            cache,
-        PerformanceMetrics& metrics, size_t num_workers = 4)
-        : search_engine_(engine), cache_(cache), metrics_(metrics) {
-        // Start worker threads
-        for (size_t i = 0; i < num_workers; ++i) {
-            worker_threads_.emplace_back([this, i]() { workerLoop(i); });
+~AsyncSearchWorker() { stop(); }
+
+void addSearchTask(const std::string& query) {
+    std::lock_guard<std::mutex> lock(queue_mutex_);
+    task_queue_.push(query);
+    queue_cv_.notify_one();
+}
+
+void stop() {
+    should_stop_ = true;
+    queue_cv_.notify_all();
+
+    for (auto& thread : worker_threads_) {
+        if (thread.joinable()) {
+            thread.join();
         }
     }
-
-    ~AsyncSearchWorker() { stop(); }
-
-    void addSearchTask(const std::string& query) {
-        std::lock_guard<std::mutex> lock(queue_mutex_);
-        task_queue_.push(query);
-        queue_cv_.notify_one();
-    }
-
-    void stop() {
-        should_stop_ = true;
-        queue_cv_.notify_all();
-
-        for (auto& thread : worker_threads_) {
-            if (thread.joinable()) {
-                thread.join();
-            }
-        }
-    }
+}
 
 private:
-    void workerLoop(size_t worker_id) {
-        std::cout << "Worker " << worker_id << " started" << std::endl;
+void workerLoop(size_t worker_id) {
+    std::cout << "Worker " << worker_id << " started" << std::endl;
 
-        while (!should_stop_) {
-            std::unique_lock<std::mutex> lock(queue_mutex_);
-            queue_cv_.wait(lock, [this]() {
-                return !task_queue_.empty() || should_stop_;
-            });
+    while (!should_stop_) {
+        std::unique_lock<std::mutex> lock(queue_mutex_);
+        queue_cv_.wait(
+            lock, [this]() { return !task_queue_.empty() || should_stop_; });
 
-            if (should_stop_)
-                break;
+        if (should_stop_)
+            break;
 
-            std::string query = task_queue_.front();
-            task_queue_.pop();
-            lock.unlock();
+        std::string query = task_queue_.front();
+        task_queue_.pop();
+        lock.unlock();
 
-            processSearchQuery(query, worker_id);
-        }
-
-        std::cout << "Worker " << worker_id << " stopped" << std::endl;
+        processSearchQuery(query, worker_id);
     }
 
-    void processSearchQuery(const std::string& query, size_t worker_id) {
-        auto start_time = std::chrono::high_resolution_clock::now();
-        bool success = false;
+    std::cout << "Worker " << worker_id << " stopped" << std::endl;
+}
 
-        try {
-            // Check cache first
-            auto cached_result = cache_.get(query);
-            if (cached_result) {
-                metrics_.recordCacheHit();
-                success = true;
-                std::cout << "Worker " << worker_id << ": Cache HIT for '"
-                          << query << "'" << std::endl;
-            } else {
-                metrics_.recordCacheMiss();
+void processSearchQuery(const std::string& query, size_t worker_id) {
+    auto start_time = std::chrono::high_resolution_clock::now();
+    bool success = false;
 
-                // Perform search
-                auto results = search_engine_.searchByContent(query);
+    try {
+        // Check cache first
+        auto cached_result = cache_.get(query);
+        if (cached_result) {
+            metrics_.recordCacheHit();
+            success = true;
+            std::cout << "Worker " << worker_id << ": Cache HIT for '" << query
+                      << "'" << std::endl;
+        } else {
+            metrics_.recordCacheMiss();
 
-                // Convert results to strings for caching
-                std::vector<std::string> result_ids;
-                for (const auto& doc : results) {
-                    result_ids.push_back(doc->getId());
-                }
+            // Perform search
+            auto results = search_engine_.searchByContent(query);
 
-                // Cache the results
-                cache_.put(query, result_ids, std::chrono::minutes(5));
-
-                success = true;
-                std::cout << "Worker " << worker_id << ": Processed '" << query
-                          << "' -> " << results.size() << " results"
-                          << std::endl;
+            // Convert results to strings for caching
+            std::vector<std::string> result_ids;
+            for (const auto& doc : results) {
+                result_ids.push_back(doc->getId());
             }
-        } catch (const std::exception& e) {
-            std::cerr << "Worker " << worker_id << ": Error processing '"
-                      << query << "': " << e.what() << std::endl;
+
+            // Cache the results
+            cache_.put(query, result_ids, std::chrono::minutes(5));
+
+            success = true;
+            std::cout << "Worker " << worker_id << ": Processed '" << query
+                      << "' -> " << results.size() << " results" << std::endl;
         }
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
-            end_time - start_time);
-        double duration_ms = duration.count() / 1000.0;
-
-        metrics_.recordOperation(success, duration_ms);
+    } catch (const std::exception& e) {
+        std::cerr << "Worker " << worker_id << ": Error processing '" << query
+                  << "': " << e.what() << std::endl;
     }
-};
 
-// Batch processor for high-throughput scenarios
-class BatchProcessor {
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(
+        end_time - start_time);
+    double duration_ms = duration.count() / 1000.0;
+
+    metrics_.recordOperation(success, duration_ms);
+}
+}
+;
+
+// Batch processor for high-throughput scenariosclass BatchProcessor {
 private:
-    atom::search::SearchEngine& search_engine_;
-    size_t batch_size_;
+atom::search::SearchEngine& search_engine_;
+size_t batch_size_;
 
 public:
-    BatchProcessor(atom::search::SearchEngine& engine, size_t batch_size = 100)
-        : search_engine_(engine), batch_size_(batch_size) {}
+BatchProcessor(atom::search::SearchEngine& engine, size_t batch_size = 100)
+    : search_engine_(engine), batch_size_(batch_size) {}
 
-    void processBatchDocuments(
-        const std::vector<atom::search::Document>& documents) {
-        std::cout << "Processing batch of " << documents.size()
-                  << " documents..." << std::endl;
+void processBatchDocuments(
+    const std::vector<atom::search::Document>& documents) {
+    std::cout << "Processing batch of " << documents.size() << " documents..."
+              << std::endl;
 
-        auto start_time = std::chrono::high_resolution_clock::now();
+    auto start_time = std::chrono::high_resolution_clock::now();
 
-        // Process documents in batches
-        for (size_t i = 0; i < documents.size(); i += batch_size_) {
-            size_t end = std::min(i + batch_size_, documents.size());
+    // Process documents in batches
+    for (size_t i = 0; i < documents.size(); i += batch_size_) {
+        size_t end = std::min(i + batch_size_, documents.size());
 
-            std::cout << "Processing batch " << (i / batch_size_ + 1)
-                      << " (documents " << i << "-" << (end - 1) << ")"
-                      << std::endl;
+        std::cout << "Processing batch " << (i / batch_size_ + 1)
+                  << " (documents " << i << "-" << (end - 1) << ")"
+                  << std::endl;
 
-            // Add documents to search engine
-            for (size_t j = i; j < end; ++j) {
-                try {
-                    search_engine_.addDocument(documents[j]);
-                } catch (const std::exception& e) {
-                    std::cerr << "Error adding document "
-                              << documents[j].getId() << ": " << e.what()
-                              << std::endl;
-                }
+        // Add documents to search engine
+        for (size_t j = i; j < end; ++j) {
+            try {
+                search_engine_.addDocument(documents[j]);
+            } catch (const std::exception& e) {
+                std::cerr << "Error adding document " << documents[j].getId()
+                          << ": " << e.what() << std::endl;
             }
-
-            // Small delay to prevent overwhelming the system
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
 
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
-            end_time - start_time);
-
-        std::cout << "Batch processing completed in " << duration.count()
-                  << " ms (" << (documents.size() / (duration.count() / 1000.0))
-                  << " docs/sec)" << std::endl;
+        // Small delay to prevent overwhelming the system
+        std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
+
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(
+        end_time - start_time);
+
+    std::cout << "Batch processing completed in " << duration.count() << " ms ("
+              << (documents.size() / (duration.count() / 1000.0))
+              << " docs/sec)" << std::endl;
+}
+
+std::vector<std::future<std::vector<std::shared_ptr<atom::search::Document>>>>
+processBatchQueries(const std::vector<std::string>& queries) {
+    std::cout << "Processing batch of " << queries.size()
+              << " queries asynchronously..." << std::endl;
 
     std::vector<
         std::future<std::vector<std::shared_ptr<atom::search::Document>>>>
-    processBatchQueries(const std::vector<std::string>& queries) {
-        std::cout << "Processing batch of " << queries.size()
-                  << " queries asynchronously..." << std::endl;
+        futures;
 
-        std::vector<
-            std::future<std::vector<std::shared_ptr<atom::search::Document>>>>
-            futures;
-
-        for (const auto& query : queries) {
-            futures.push_back(std::async(std::launch::async, [this, query]() {
-                return search_engine_.searchByContent(query);
-            }));
-        }
-
-        return futures;
+    for (const auto& query : queries) {
+        futures.push_back(std::async(std::launch::async, [this, query]() {
+            return search_engine_.searchByContent(query);
+        }));
     }
-};
+
+    return futures;
+}
+}
+;
 
 int main() {
     std::cout << "=== Advanced Features: Async, Batch, and Statistics ===\n";

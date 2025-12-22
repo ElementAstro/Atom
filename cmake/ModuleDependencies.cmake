@@ -1,5 +1,24 @@
-# ModuleDependencies.cmake Helper functions for module-specific dependency
-# management
+# ModuleDependencies.cmake - Helper functions for module-specific dependency
+# management This file provides functions to configure module dependencies,
+# compile features, and platform-specific settings in a standardized way.
+#
+# Main functions: atom_configure_module()       - Configure a module with
+# standard settings atom_setup_module_dependencies() - Setup dependencies for a
+# module atom_auto_resolve_dependencies() - Auto-enable required dependencies
+# atom_validate_module_dependencies() - Validate dependencies are satisfied
+#
+# Dependency helper functions: atom_find_tbb()              - Find and link TBB
+# atom_setup_logging_deps()    - Setup logging (spdlog/loguru)
+# atom_setup_xml_deps()        - Setup XML (tinyxml2)
+# atom_setup_networking_deps() - Setup networking (asio, openssl)
+# atom_setup_crypto_deps()     - Setup crypto (openssl)
+# atom_setup_formatting_deps() - Setup formatting (fmt)
+
+include_guard(GLOBAL)
+
+# =============================================================================
+# Module Configuration Functions
+# =============================================================================
 
 # Function to setup common dependencies for a module
 function(atom_setup_module_dependencies module_name)
@@ -135,28 +154,9 @@ function(atom_configure_module module_name)
   set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
 endfunction()
 
-# Function to setup standard Atom module dependencies (legacy compatibility)
-function(atom_setup_standard_dependencies module_name)
-  # All modules depend on error handling
-  if(TARGET atom-error)
-    target_link_libraries(${module_name} PUBLIC atom-error)
-  endif()
-
-  # Most modules need threading
-  find_package(Threads REQUIRED)
-  target_link_libraries(${module_name} PUBLIC Threads::Threads)
-
-  # Platform-specific libraries
-  if(WIN32)
-    # Windows-specific libraries that many modules need
-    target_link_libraries(${module_name} PUBLIC ws2_32 wsock32)
-  endif()
-
-  # Add to global module registry
-  get_property(ATOM_MODULE_TARGETS GLOBAL PROPERTY ATOM_MODULE_TARGETS)
-  list(APPEND ATOM_MODULE_TARGETS ${module_name})
-  set_property(GLOBAL PROPERTY ATOM_MODULE_TARGETS "${ATOM_MODULE_TARGETS}")
-endfunction()
+# NOTE: atom_setup_standard_dependencies has been deprecated. Use
+# atom_configure_module() instead which provides the same functionality plus
+# additional features like header-only support and optional dependencies.
 
 # Function to automatically resolve and enable module dependencies
 function(atom_auto_resolve_dependencies MODULE_NAME)
@@ -201,6 +201,61 @@ function(atom_validate_module_dependencies MODULE_NAME)
     endforeach()
   endif()
 endfunction()
+
+# =============================================================================
+# Unified Dependency Setup Function
+# =============================================================================
+# This function provides a single entry point for setting up common dependencies
+# Usage: atom_setup_dependencies(target_name LOGGING XML NETWORKING CRYPTO TBB)
+
+function(atom_setup_dependencies target_name)
+  set(options
+      LOGGING
+      XML
+      NETWORKING
+      CRYPTO
+      TBB
+      FORMATTING
+      COMPRESSION
+      DATABASE)
+  cmake_parse_arguments(ASD "${options}" "" "" ${ARGN})
+
+  if(ASD_LOGGING)
+    atom_setup_logging_deps(${target_name})
+  endif()
+
+  if(ASD_XML)
+    atom_setup_xml_deps(${target_name})
+  endif()
+
+  if(ASD_NETWORKING)
+    atom_setup_networking_deps(${target_name})
+  endif()
+
+  if(ASD_CRYPTO)
+    atom_setup_crypto_deps(${target_name})
+  endif()
+
+  if(ASD_TBB)
+    atom_find_tbb(${target_name})
+  endif()
+
+  if(ASD_FORMATTING)
+    atom_setup_formatting_deps(${target_name})
+  endif()
+
+  if(ASD_COMPRESSION)
+    atom_setup_compression_deps(${target_name})
+  endif()
+
+  if(ASD_DATABASE)
+    atom_setup_database_deps(${target_name})
+  endif()
+endfunction()
+
+# =============================================================================
+# Individual Dependency Setup Functions
+# =============================================================================
 
 # Function to find and setup TBB (Intel Threading Building Blocks)
 function(atom_find_tbb module_name)
@@ -385,4 +440,107 @@ function(atom_setup_test_deps test_name)
   endif()
 endfunction()
 
-# Macro removed; function implementation above handles module configuration
+# =============================================================================
+# Configuration Validation Functions
+# =============================================================================
+
+# Function to validate cmake configuration
+function(atom_validate_cmake_config)
+  set(validation_passed TRUE)
+  set(validation_messages "")
+
+  # Check CMake version
+  if(CMAKE_VERSION VERSION_LESS "3.16")
+    list(APPEND validation_messages
+         "CMake 3.16+ recommended for PCH and Unity Build support")
+  endif()
+
+  # Check C++ standard
+  if(NOT CMAKE_CXX_STANDARD OR CMAKE_CXX_STANDARD LESS 20)
+    list(APPEND validation_messages "C++20 or higher is recommended")
+  endif()
+
+  # Check required dependencies
+  if(NOT spdlog_FOUND AND NOT SPDLOG_FOUND)
+    list(APPEND validation_messages "spdlog not found - logging may be limited")
+  endif()
+
+  if(NOT fmt_FOUND)
+    list(APPEND validation_messages "fmt not found - formatting may be limited")
+  endif()
+
+  # Print validation results
+  if(validation_messages)
+    message(STATUS "")
+    message(STATUS "=== Configuration Warnings ===")
+    foreach(msg ${validation_messages})
+      message(STATUS "  - ${msg}")
+    endforeach()
+    message(STATUS "==============================")
+    message(STATUS "")
+  endif()
+endfunction()
+
+# Function to print build configuration summary
+function(atom_print_build_summary)
+  message(STATUS "")
+  message(STATUS "=== Atom Build Configuration ===")
+  message(STATUS "Platform: ${ATOM_PLATFORM} (${ATOM_ARCH})")
+  message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+  message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+  message(
+    STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID} ${CMAKE_CXX_COMPILER_VERSION}")
+
+  # Build optimizations
+  message(STATUS "")
+  message(STATUS "Build Optimizations:")
+  if(ATOM_ENABLE_CCACHE)
+    message(STATUS "  [x] Compiler Cache (ccache/sccache)")
+  else()
+    message(STATUS "  [ ] Compiler Cache")
+  endif()
+  if(ATOM_ENABLE_PCH)
+    message(STATUS "  [x] Precompiled Headers")
+  else()
+    message(STATUS "  [ ] Precompiled Headers")
+  endif()
+  if(ATOM_ENABLE_UNITY_BUILD)
+    message(STATUS "  [x] Unity Build")
+  else()
+    message(STATUS "  [ ] Unity Build")
+  endif()
+  if(ATOM_ENABLE_FAST_LINK)
+    message(STATUS "  [x] Fast Linking")
+  else()
+    message(STATUS "  [ ] Fast Linking")
+  endif()
+
+  # Enabled modules
+  get_property(enabled_modules GLOBAL PROPERTY ATOM_ENABLED_MODULES)
+  list(LENGTH enabled_modules module_count)
+  message(STATUS "")
+  message(STATUS "Enabled Modules: ${module_count}")
+
+  message(STATUS "================================")
+  message(STATUS "")
+endfunction()
+
+# Function to check if all required targets exist
+function(atom_check_targets)
+  set(missing_targets "")
+
+  foreach(module ${ATOM_ALL_MODULES})
+    string(REPLACE "atom-" "" module_name "${module}")
+    string(TOUPPER "${module_name}" module_upper)
+
+    if(ATOM_BUILD_${module_upper} AND NOT TARGET ${module})
+      list(APPEND missing_targets ${module})
+    endif()
+  endforeach()
+
+  if(missing_targets)
+    message(
+      WARNING
+        "The following targets are enabled but not created: ${missing_targets}")
+  endif()
+endfunction()

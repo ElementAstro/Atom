@@ -366,4 +366,134 @@ void stopAntiDebugMonitoring() {
         g_monitoringThread.join();
     }
 }
+
+// Basic API (backward compatible)
+void checkDebuggerAndExit() {
+    if (isDebuggerAttached(DebuggerDetectionMethod::BASIC_CHECK)) {
+        std::exit(EXIT_FAILURE);
+    }
+}
+
+// Anti-tampering functions
+void protectMemoryRegion(void* address, size_t size) {
+#ifdef _WIN32
+    DWORD oldProtect;
+    VirtualProtect(address, size, PAGE_READONLY, &oldProtect);
+#elif defined(__linux__) || defined(__APPLE__)
+    // On Unix-like systems, we would use mprotect
+    // For now, this is a no-op as it requires page-aligned addresses
+    (void)address;
+    (void)size;
+#else
+    (void)address;
+    (void)size;
+#endif
+}
+
+void installIntegrityChecks(const void* codeStart, size_t codeSize,
+                            const uint8_t* hash) {
+    // Store the expected hash and periodically verify code integrity
+    // This is a simplified implementation
+    static std::vector<uint8_t> expectedHash;
+    static const void* monitoredCode = nullptr;
+    static size_t monitoredSize = 0;
+
+    if (hash != nullptr) {
+        expectedHash.assign(hash, hash + 32);  // Assume SHA-256 hash
+        monitoredCode = codeStart;
+        monitoredSize = codeSize;
+    }
+
+    // In a real implementation, you would:
+    // 1. Compute hash of the code region
+    // 2. Compare with expected hash
+    // 3. Take action if mismatch detected
+    (void)codeStart;
+    (void)codeSize;
+}
+
+void preventDumping() {
+#ifdef _WIN32
+    // Prevent memory dumping by setting certain flags
+    HANDLE hProcess = GetCurrentProcess();
+
+    // Try to prevent process from being debugged
+    typedef NTSTATUS(NTAPI * pNtSetInformationProcess)(
+        HANDLE ProcessHandle, PROCESSINFOCLASS ProcessInformationClass,
+        PVOID ProcessInformation, ULONG ProcessInformationLength);
+
+    HMODULE hNtdll = GetModuleHandleA("ntdll.dll");
+    if (hNtdll) {
+        auto NtSetInformationProcess =
+            reinterpret_cast<pNtSetInformationProcess>(
+                GetProcAddress(hNtdll, "NtSetInformationProcess"));
+        if (NtSetInformationProcess) {
+            // ProcessBreakOnTermination = 0x1D
+            ULONG breakOnTermination = 1;
+            NtSetInformationProcess(hProcess,
+                                    static_cast<PROCESSINFOCLASS>(0x1D),
+                                    &breakOnTermination, sizeof(ULONG));
+        }
+    }
+#elif defined(__linux__)
+    // On Linux, we can use prctl to prevent ptrace
+    // prctl(PR_SET_DUMPABLE, 0);
+#endif
+}
+
+#ifdef _WIN32
+void hidePEBDebuggingFlags() {
+    // Access the Process Environment Block and clear debugging flags
+    PPEB pPeb = reinterpret_cast<PPEB>(__readgsqword(0x60));
+    if (pPeb) {
+        pPeb->BeingDebugged = 0;
+
+        // Also clear NtGlobalFlag
+        // Offset 0x68 on x86, 0xBC on x64
+#ifdef _WIN64
+        *reinterpret_cast<DWORD*>(reinterpret_cast<BYTE*>(pPeb) + 0xBC) = 0;
+#else
+        *reinterpret_cast<DWORD*>(reinterpret_cast<BYTE*>(pPeb) + 0x68) = 0;
+#endif
+    }
+}
+
+void detectRemoteThreads() {
+    // Detect threads that were not created by the current process
+    HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+    if (hSnapshot == INVALID_HANDLE_VALUE) {
+        return;
+    }
+
+    THREADENTRY32 te32;
+    te32.dwSize = sizeof(THREADENTRY32);
+
+    DWORD currentPID = GetCurrentProcessId();
+    std::vector<DWORD> suspiciousThreads;
+
+    if (Thread32First(hSnapshot, &te32)) {
+        do {
+            if (te32.th32OwnerProcessID == currentPID) {
+                // Check if thread was created externally
+                HANDLE hThread = OpenThread(THREAD_QUERY_INFORMATION, FALSE,
+                                            te32.th32ThreadID);
+                if (hThread) {
+                    // Additional checks can be performed here
+                    // For now, just track the thread
+                    CloseHandle(hThread);
+                }
+            }
+        } while (Thread32Next(hSnapshot, &te32));
+    }
+
+    CloseHandle(hSnapshot);
+}
+
+void enableSelfModifyingCode(void* codeAddress, size_t codeSize) {
+    // Make the code region writable and executable
+    DWORD oldProtect;
+    VirtualProtect(codeAddress, codeSize, PAGE_EXECUTE_READWRITE, &oldProtect);
+}
+#endif
+
 }  // namespace atom::system

@@ -27,7 +27,7 @@ target("atom-web-time-object")
     add_files(table.unpack(time_sources))
 
     -- Add dependencies
-    add_packages("loguru")
+    add_packages("spdlog", "fmt")
 
     -- Add include directories
     add_includedirs("$(projectdir)/atom", {public = true})

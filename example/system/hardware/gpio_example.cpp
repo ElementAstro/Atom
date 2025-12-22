@@ -30,8 +30,7 @@
 
 using namespace atom::system;
 
-// Global variables for interrupt handling
-std::atomic<int> interruptCount{0};
+// Global variables for interrupt handlingstd::atomic<int> interruptCount{0};
 std::atomic<bool> buttonPressed{false};
 
 /**

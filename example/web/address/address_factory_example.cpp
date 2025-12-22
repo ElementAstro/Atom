@@ -7,7 +7,7 @@
  * and polymorphic address handling
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/address.hpp"
 
 #include <iostream>
@@ -293,12 +293,7 @@ void demonstrateErrorHandling() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("address_factory_example.log", loguru::Append,
-                     loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "     ATOM ADDRESS FACTORY DEMO             \n";
     std::cout << "============================================\n";

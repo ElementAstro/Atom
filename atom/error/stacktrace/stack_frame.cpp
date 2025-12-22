@@ -15,45 +15,44 @@ Description: Stack frame implementation
 #include "stack_frame.hpp"
 #include "stacktrace_utils.hpp"
 
-#include <sstream>
+#include <format>
 
 namespace atom::error {
 
 std::string StackFrame::toString(const StackTraceConfig& config) const {
-    std::ostringstream oss;
-
     // Function name
     std::string funcName = function.empty() ? config.unknownFunction : function;
     if (config.demangle && !function.empty()) {
         funcName = stacktrace_utils::demangle(funcName);
     }
-    oss << funcName;
+
+    std::string result = funcName;
 
     // Memory address
     if (config.includeAddresses && address != nullptr) {
-        oss << " at "
-            << stacktrace_utils::formatAddress(
-                   reinterpret_cast<uintptr_t>(address));
+        result +=
+            std::format(" at {}", stacktrace_utils::formatAddress(
+                                      reinterpret_cast<uintptr_t>(address)));
     }
 
     // Module information
     if (config.includeModules && !module.empty()) {
-        std::string modName = module == config.unknownModule
-                                  ? module
-                                  : stacktrace_utils::getBaseName(module);
-        oss << " in " << modName;
+        const std::string modName = (module == config.unknownModule)
+                                        ? module
+                                        : stacktrace_utils::getBaseName(module);
+        result += std::format(" in {}", modName);
         if (offset > 0) {
-            oss << " (+" << std::hex << offset << std::dec << ")";
+            result += std::format(" (+{:x})", offset);
         }
     }
 
     // Source information
     if (config.includeSourceInfo && !sourceFile.empty() && sourceLine > 0) {
-        oss << " (" << stacktrace_utils::getBaseName(sourceFile) << ":"
-            << sourceLine << ")";
+        result += std::format(
+            " ({}:{})", stacktrace_utils::getBaseName(sourceFile), sourceLine);
     }
 
-    return oss.str();
+    return result;
 }
 
 }  // namespace atom::error

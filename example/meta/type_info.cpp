@@ -17,11 +17,11 @@
 
 #include "atom/meta/type_info.hpp"
 
-// Example custom types for testing TypeInfo
-struct SimpleStruct {
-    int a;
-    double b;
-};
+// Example custom types for testing TypeInfostruct SimpleStruct {
+int a;
+double b;
+}
+;
 
 class ComplexClass {
 public:
@@ -78,8 +78,7 @@ enum class Color { Red, Green, Blue };
 
 enum LegacyEnum { One, Two, Three };
 
-// Custom smart pointer for testing
-template <typename T>
+// Custom smart pointer for testingtemplate <typename T>
 class CustomPtr {
 private:
     T* ptr;
@@ -92,59 +91,53 @@ public:
     T* get() const { return ptr; }
 };
 
-// Example function for testing function traits
-int exampleFunction(double a, std::string b) {
-    return static_cast<int>(a) + b.length();
+// Example function for testing function traitsint exampleFunction(double a,
+// std::string b) {
+return static_cast<int>(a) + b.length();
 }
 
-// Simple utility to print section headers
-void printSection(const std::string& title) {
-    std::cout << "\n============== " << title << " ==============\n";
+// Simple utility to print section headersvoid printSection(const std::string&
+// title) {
+std::cout << "\n============== " << title << " ==============\n";
 }
 
-// Utility to print TypeInfo
-void printTypeInfo(const std::string& label, const atom::meta::TypeInfo& info) {
-    std::cout << "Type information for " << label << ":\n";
-    std::cout << "  - Name: " << info.name() << "\n";
-    std::cout << "  - Bare name: " << info.bareName() << "\n";
-    std::cout << "  - Is class: " << (info.isClass() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is pointer: " << (info.isPointer() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is reference: " << (info.isReference() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is arithmetic: " << (info.isArithmetic() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is enum: " << (info.isEnum() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is array: " << (info.isArray() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is const: " << (info.isConst() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is void: " << (info.isVoid() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is function: " << (info.isFunction() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is trivial: " << (info.isTrivial() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is standard layout: "
-              << (info.isStandardLayout() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is POD: " << (info.isPod() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is default constructible: "
-              << (info.isDefaultConstructible() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is moveable: " << (info.isMoveable() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is copyable: " << (info.isCopyable() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is aggregate: " << (info.isAggregate() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is bounded array: "
-              << (info.isBoundedArray() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is unbounded array: "
-              << (info.isUnboundedArray() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is scoped enum: " << (info.isScopedEnum() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is final: " << (info.isFinal() ? "Yes" : "No") << "\n";
-    std::cout << "  - Is abstract: " << (info.isAbstract() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is polymorphic: " << (info.isPolymorphic() ? "Yes" : "No")
-              << "\n";
-    std::cout << "  - Is empty: " << (info.isEmpty() ? "Yes" : "No") << "\n";
+// Utility to print TypeInfovoid printTypeInfo(const std::string& label, const
+// atom::meta::TypeInfo& info) {
+std::cout << "Type information for " << label << ":\n";
+std::cout << "  - Name: " << info.name() << "\n";
+std::cout << "  - Bare name: " << info.bareName() << "\n";
+std::cout << "  - Is class: " << (info.isClass() ? "Yes" : "No") << "\n";
+std::cout << "  - Is pointer: " << (info.isPointer() ? "Yes" : "No") << "\n";
+std::cout << "  - Is reference: " << (info.isReference() ? "Yes" : "No")
+          << "\n";
+std::cout << "  - Is arithmetic: " << (info.isArithmetic() ? "Yes" : "No")
+          << "\n";
+std::cout << "  - Is enum: " << (info.isEnum() ? "Yes" : "No") << "\n";
+std::cout << "  - Is array: " << (info.isArray() ? "Yes" : "No") << "\n";
+std::cout << "  - Is const: " << (info.isConst() ? "Yes" : "No") << "\n";
+std::cout << "  - Is void: " << (info.isVoid() ? "Yes" : "No") << "\n";
+std::cout << "  - Is function: " << (info.isFunction() ? "Yes" : "No") << "\n";
+std::cout << "  - Is trivial: " << (info.isTrivial() ? "Yes" : "No") << "\n";
+std::cout << "  - Is standard layout: "
+          << (info.isStandardLayout() ? "Yes" : "No") << "\n";
+std::cout << "  - Is POD: " << (info.isPod() ? "Yes" : "No") << "\n";
+std::cout << "  - Is default constructible: "
+          << (info.isDefaultConstructible() ? "Yes" : "No") << "\n";
+std::cout << "  - Is moveable: " << (info.isMoveable() ? "Yes" : "No") << "\n";
+std::cout << "  - Is copyable: " << (info.isCopyable() ? "Yes" : "No") << "\n";
+std::cout << "  - Is aggregate: " << (info.isAggregate() ? "Yes" : "No")
+          << "\n";
+std::cout << "  - Is bounded array: " << (info.isBoundedArray() ? "Yes" : "No")
+          << "\n";
+std::cout << "  - Is unbounded array: "
+          << (info.isUnboundedArray() ? "Yes" : "No") << "\n";
+std::cout << "  - Is scoped enum: " << (info.isScopedEnum() ? "Yes" : "No")
+          << "\n";
+std::cout << "  - Is final: " << (info.isFinal() ? "Yes" : "No") << "\n";
+std::cout << "  - Is abstract: " << (info.isAbstract() ? "Yes" : "No") << "\n";
+std::cout << "  - Is polymorphic: " << (info.isPolymorphic() ? "Yes" : "No")
+          << "\n";
+std::cout << "  - Is empty: " << (info.isEmpty() ? "Yes" : "No") << "\n";
 }
 
 int main() {

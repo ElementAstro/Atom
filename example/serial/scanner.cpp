@@ -93,7 +93,6 @@ void demonstrateAdvancedFeatures() {
     config.detect_ch340 = true;
     config.include_virtual_ports = true;
     config.scan_timeout = std::chrono::milliseconds(2000);
-    config.enable_caching = true;
     config.enable_background_monitoring = true;
     config.monitor_interval = std::chrono::milliseconds(5000);
     config.enable_performance_logging = true;

@@ -7,7 +7,7 @@
  * class
  */
 
-#include "atom/log/loguru.hpp"
+#include "atom/log/atomlog.hpp"
 #include "atom/web/downloader.hpp"
 
 #include <atomic>
@@ -20,8 +20,8 @@
 
 using namespace atom::web;
 
-// Global variables for tracking download progress
-std::atomic<bool> downloadCompleted{false};
+// Global variables for tracking download progressstd::atomic<bool>
+// downloadCompleted{false};
 std::atomic<size_t> completedDownloads{0};
 std::atomic<size_t> failedDownloads{0};
 
@@ -373,12 +373,7 @@ void demonstrateTaskManagement() {
     }
 }
 
-int main(int argc, char** argv) {
-    // Initialize logging
-    loguru::init(argc, argv);
-    loguru::add_file("downloader_example.log", loguru::Append,
-                     loguru::Verbosity_MAX);
-
+int main([[maybe_unused]] int argc, [[maybe_unused]] char** argv) {
     std::cout << "============================================\n";
     std::cout << "        ATOM DOWNLOAD MANAGER DEMO          \n";
     std::cout << "============================================\n";

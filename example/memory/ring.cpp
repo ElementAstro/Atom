@@ -17,15 +17,14 @@
 
 #include "atom/memory/ring.hpp"
 
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
 }
 
-// Helper function to print buffer contents
-template <typename T>
+// Helper function to print buffer contentstemplate <typename T>
 void printBuffer(const atom::memory::RingBuffer<T>& buffer,
                  const std::string& label = "Buffer contents") {
     std::cout << label << " (size " << buffer.size() << "/" << buffer.capacity()
@@ -44,122 +43,120 @@ void printBuffer(const atom::memory::RingBuffer<T>& buffer,
     std::cout << std::endl;
 }
 
-// A sample class to demonstrate using RingBuffer with complex types
-class SensorReading {
+// A sample class to demonstrate using RingBuffer with complex typesclass
+// SensorReading {
 private:
-    int id_;
-    double value_;
-    std::chrono::system_clock::time_point timestamp_;
+int id_;
+double value_;
+std::chrono::system_clock::time_point timestamp_;
 
 public:
-    SensorReading()
-        : id_(0), value_(0.0), timestamp_(std::chrono::system_clock::now()) {}
+SensorReading()
+    : id_(0), value_(0.0), timestamp_(std::chrono::system_clock::now()) {}
 
-    SensorReading(int id, double value)
-        : id_(id),
-          value_(value),
-          timestamp_(std::chrono::system_clock::now()) {}
+SensorReading(int id, double value)
+    : id_(id), value_(value), timestamp_(std::chrono::system_clock::now()) {}
 
-    int getId() const { return id_; }
-    double getValue() const { return value_; }
-    std::chrono::system_clock::time_point getTimestamp() const {
-        return timestamp_;
-    }
-
-    std::string getTimeString() const {
-        auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&time_t), "%H:%M:%S");
-        return ss.str();
-    }
-
-    // Comparison operator for contains() and other operations
-    bool operator==(const SensorReading& other) const {
-        return id_ == other.id_ &&
-               std::abs(value_ - other.value_) <
-                   0.001;  // Handle floating point comparison
-    }
-
-    // String representation for printing
-    friend std::ostream& operator<<(std::ostream& os,
-                                    const SensorReading& reading) {
-        os << "Reading{id=" << reading.id_ << ", value=" << std::fixed
-           << std::setprecision(2) << reading.value_
-           << ", time=" << reading.getTimeString() << "}";
-        return os;
-    }
-};
-
-// Function to simulate sensor data collection
-std::vector<SensorReading> collectSensorData(int count, int start_id = 0) {
-    std::vector<SensorReading> readings;
-    readings.reserve(count);
-
-    // Random number generation for simulated sensor values
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_real_distribution<> dis(10.0, 30.0);
-
-    for (int i = 0; i < count; ++i) {
-        readings.emplace_back(start_id + i, dis(gen));
-        std::this_thread::sleep_for(
-            std::chrono::milliseconds(5));  // Small delay for unique timestamps
-    }
-
-    return readings;
+int getId() const { return id_; }
+double getValue() const { return value_; }
+std::chrono::system_clock::time_point getTimestamp() const {
+    return timestamp_;
 }
 
-// Define a simple log entry class
-class LogEntry {
+std::string getTimeString() const {
+    auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time_t), "%H:%M:%S");
+    return ss.str();
+}
+
+// Comparison operator for contains() and other operations
+bool operator==(const SensorReading& other) const {
+    return id_ == other.id_ && std::abs(value_ - other.value_) <
+                                   0.001;  // Handle floating point comparison
+}
+
+// String representation for printing
+friend std::ostream& operator<<(std::ostream& os,
+                                const SensorReading& reading) {
+    os << "Reading{id=" << reading.id_ << ", value=" << std::fixed
+       << std::setprecision(2) << reading.value_
+       << ", time=" << reading.getTimeString() << "}";
+    return os;
+}
+}
+;
+
+// Function to simulate sensor data collectionstd::vector<SensorReading>
+// collectSensorData(int count, int start_id = 0) {
+std::vector<SensorReading> readings;
+readings.reserve(count);
+
+// Random number generation for simulated sensor values
+std::random_device rd;
+std::mt19937 gen(rd());
+std::uniform_real_distribution<> dis(10.0, 30.0);
+
+for (int i = 0; i < count; ++i) {
+    readings.emplace_back(start_id + i, dis(gen));
+    std::this_thread::sleep_for(
+        std::chrono::milliseconds(5));  // Small delay for unique timestamps
+}
+
+return readings;
+}
+
+// Define a simple log entry classclass LogEntry {
 public:
-    LogEntry() = default;
+LogEntry() = default;
 
 public:
-    enum class Level { DEBUG, INFO, WARNING, ERROR, CRITICAL };
+enum class Level { DEBUG, INFO, WARNING, ERROR, CRITICAL };
 
-    LogEntry(Level level, std::string message)
-        : level_(level),
-          message_(std::move(message)),
-          timestamp_(std::chrono::system_clock::now()) {}
+LogEntry(Level level, std::string message)
+    : level_(level),
+      message_(std::move(message)),
+      timestamp_(std::chrono::system_clock::now()) {}
 
-    std::string getLevelString() const {
-        switch (level_) {
-            case Level::DEBUG:
-                return "DEBUG";
-            case Level::INFO:
-                return "INFO";
-            case Level::WARNING:
-                return "WARNING";
-            case Level::ERROR:
-                return "ERROR";
-            case Level::CRITICAL:
-                return "CRITICAL";
-            default:
-                return "UNKNOWN";
-        }
+std::string getLevelString() const {
+    switch (level_) {
+        case Level::DEBUG:
+            return "DEBUG";
+        case Level::INFO:
+            return "INFO";
+        case Level::WARNING:
+            return "WARNING";
+        case Level::ERROR:
+            return "ERROR";
+        case Level::CRITICAL:
+            return "CRITICAL";
+        default:
+            return "UNKNOWN";
     }
+}
 
-    std::string getTimeString() const {
-        auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
-        std::stringstream ss;
-        ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
-        return ss.str();
-    }
+std::string getTimeString() const {
+    auto time_t = std::chrono::system_clock::to_time_t(timestamp_);
+    std::stringstream ss;
+    ss << std::put_time(std::localtime(&time_t), "%Y-%m-%d %H:%M:%S");
+    return ss.str();
+}
 
-    Level getLevel() const { return level_; }
-    const std::string& getMessage() const { return message_; }
+Level getLevel() const { return level_; }
+const std::string& getMessage() const { return message_; }
 
-    friend std::ostream& operator<<(std::ostream& os, const LogEntry& entry) {
-        os << "[" << entry.getTimeString() << "] " << std::setw(8) << std::left
-           << entry.getLevelString() << " " << entry.getMessage();
-        return os;
-    }
+friend std::ostream& operator<<(std::ostream& os, const LogEntry& entry) {
+    os << "[" << entry.getTimeString() << "] " << std::setw(8) << std::left
+       << entry.getLevelString() << " " << entry.getMessage();
+    return os;
+}
 
 private:
-    Level level_;
-    std::string message_;
-    std::chrono::system_clock::time_point timestamp_;
-};
+Level level_;
+std::string message_;
+std::chrono::system_clock::time_point timestamp_;
+}
+;
 
 int main() {
     std::cout << "RING BUFFER COMPREHENSIVE EXAMPLES\n";

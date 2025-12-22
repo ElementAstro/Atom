@@ -15,128 +15,121 @@
 
 #include "atom/memory/utils.hpp"
 
-// Custom class to demonstrate memory utilities
-class TestObject {
+// Custom class to demonstrate memory utilitiesclass TestObject {
 public:
-    // Default constructor
-    TestObject() : id_(-1), name_("Default") {
-        std::cout << "TestObject default constructed: " << toString()
-                  << std::endl;
-    }
-
-    // Constructor with parameters
-    TestObject(int id, const std::string& name) : id_(id), name_(name) {
-        std::cout << "TestObject constructed: " << toString() << std::endl;
-    }
-
-    // Constructor with just id
-    explicit TestObject(int id)
-        : id_(id), name_("Unnamed-" + std::to_string(id)) {
-        std::cout << "TestObject constructed with ID: " << toString()
-                  << std::endl;
-    }
-
-    // Copy constructor
-    TestObject(const TestObject& other)
-        : id_(other.id_), name_(other.name_ + " (copy)") {
-        std::cout << "TestObject copy constructed: " << toString() << std::endl;
-    }
-
-    // Move constructor
-    TestObject(TestObject&& other) noexcept
-        : id_(other.id_), name_(std::move(other.name_)) {
-        other.id_ = -1;
-        std::cout << "TestObject move constructed: " << toString() << std::endl;
-    }
-
-    // Destructor
-    ~TestObject() {
-        std::cout << "TestObject destroyed: " << toString() << std::endl;
-    }
-
-    // Utility method to get string representation
-    std::string toString() const {
-        return "[ID: " + std::to_string(id_) + ", Name: " + name_ + "]";
-    }
-
-    // Getters
-    int getId() const { return id_; }
-    const std::string& getName() const { return name_; }
-
-    // Setters
-    void setId(int id) { id_ = id; }
-    void setName(const std::string& name) { name_ = name; }
-
-private:
-    int id_;
-    std::string name_;
-};
-
-// Custom deleter for demonstration
-struct CustomDeleter {
-    void operator()(TestObject* obj) const {
-        std::cout << "CustomDeleter called for: " << obj->toString()
-                  << std::endl;
-        delete obj;
-    }
-};
-
-// Singleton class for demonstration
-class MySingleton {
-public:
-    MySingleton() { std::cout << "MySingleton constructed" << std::endl; }
-
-    ~MySingleton() { std::cout << "MySingleton destroyed" << std::endl; }
-
-    void doSomething() {
-        std::cout << "MySingleton is doing something..." << std::endl;
-    }
-
-    int getValue() const { return value_; }
-
-    void setValue(int value) { value_ = value; }
-
-private:
-    int value_ = 42;
-};
-
-// Helper function to print section titles
-void printSection(const std::string& title) {
-    std::cout << "\n" << std::string(80, '=') << "\n";
-    std::cout << "  " << title << "\n";
-    std::cout << std::string(80, '=') << "\n";
+// Default constructor
+TestObject() : id_(-1), name_("Default") {
+    std::cout << "TestObject default constructed: " << toString() << std::endl;
 }
 
-// Function to demonstrate multi-threaded singleton access
-void testSingletonInThread(int threadId) {
-    std::cout << "Thread " << threadId << " starting" << std::endl;
+// Constructor with parameters
+TestObject(int id, const std::string& name) : id_(id), name_(name) {
+    std::cout << "TestObject constructed: " << toString() << std::endl;
+}
 
-    // Simulate some work before accessing the singleton
-    std::this_thread::sleep_for(std::chrono::milliseconds(10 * threadId));
+// Constructor with just id
+explicit TestObject(int id) : id_(id), name_("Unnamed-" + std::to_string(id)) {
+    std::cout << "TestObject constructed with ID: " << toString() << std::endl;
+}
 
-    // Get singleton instance
-    auto instance =
-        atom::memory::ThreadSafeSingleton<MySingleton>::getInstance();
+// Copy constructor
+TestObject(const TestObject& other)
+    : id_(other.id_), name_(other.name_ + " (copy)") {
+    std::cout << "TestObject copy constructed: " << toString() << std::endl;
+}
 
-    // Use the singleton
-    std::cout << "Thread " << threadId
-              << " got singleton, value = " << instance->getValue()
-              << std::endl;
+// Move constructor
+TestObject(TestObject&& other) noexcept
+    : id_(other.id_), name_(std::move(other.name_)) {
+    other.id_ = -1;
+    std::cout << "TestObject move constructed: " << toString() << std::endl;
+}
 
-    // Modify the singleton (to demonstrate shared state)
-    instance->setValue(instance->getValue() + threadId);
-    std::cout << "Thread " << threadId << " updated value to "
-              << instance->getValue() << std::endl;
+// Destructor
+~TestObject() {
+    std::cout << "TestObject destroyed: " << toString() << std::endl;
+}
 
-    // Simulate more work
-    std::this_thread::sleep_for(std::chrono::milliseconds(5 * threadId));
+// Utility method to get string representation
+std::string toString() const {
+    return "[ID: " + std::to_string(id_) + ", Name: " + name_ + "]";
+}
 
-    // Access the singleton again
-    auto instance2 =
-        atom::memory::ThreadSafeSingleton<MySingleton>::getInstance();
-    std::cout << "Thread " << threadId
-              << " got singleton again, value = " << instance2->getValue()
-              << std::endl;
+// Getters
+int getId() const { return id_; }
+const std::string& getName() const { return name_; }
+
+// Setters
+void setId(int id) { id_ = id; }
+void setName(const std::string& name) { name_ = name; }
+
+private:
+int id_;
+std::string name_;
+}
+;
+
+// Custom deleter for demonstrationstruct CustomDeleter {
+void operator()(TestObject* obj) const {
+    std::cout << "CustomDeleter called for: " << obj->toString() << std::endl;
+    delete obj;
+}
+}
+;
+
+// Singleton class for demonstrationclass MySingleton {
+public:
+MySingleton() { std::cout << "MySingleton constructed" << std::endl; }
+
+~MySingleton() { std::cout << "MySingleton destroyed" << std::endl; }
+
+void doSomething() {
+    std::cout << "MySingleton is doing something..." << std::endl;
+}
+
+int getValue() const { return value_; }
+
+void setValue(int value) { value_ = value; }
+
+private:
+int value_ = 42;
+}
+;
+
+// Helper function to print section titlesvoid printSection(const std::string&
+// title) {
+std::cout << "\n" << std::string(80, '=') << "\n";
+std::cout << "  " << title << "\n";
+std::cout << std::string(80, '=') << "\n";
+}
+
+// Function to demonstrate multi-threaded singleton accessvoid
+// testSingletonInThread(int threadId) {
+std::cout << "Thread " << threadId << " starting" << std::endl;
+
+// Simulate some work before accessing the singleton
+std::this_thread::sleep_for(std::chrono::milliseconds(10 * threadId));
+
+// Get singleton instance
+auto instance = atom::memory::ThreadSafeSingleton<MySingleton>::getInstance();
+
+// Use the singleton
+std::cout << "Thread " << threadId
+          << " got singleton, value = " << instance->getValue() << std::endl;
+
+// Modify the singleton (to demonstrate shared state)
+instance->setValue(instance->getValue() + threadId);
+std::cout << "Thread " << threadId << " updated value to "
+          << instance->getValue() << std::endl;
+
+// Simulate more work
+std::this_thread::sleep_for(std::chrono::milliseconds(5 * threadId));
+
+// Access the singleton again
+auto instance2 = atom::memory::ThreadSafeSingleton<MySingleton>::getInstance();
+std::cout << "Thread " << threadId
+          << " got singleton again, value = " << instance2->getValue()
+          << std::endl;
 }
 
 int main() {

@@ -80,7 +80,7 @@ auto monitorSoftwareUsage(
  * @param monitor_id The monitoring ID returned by monitorSoftwareUsage.
  * @return true if monitoring was stopped successfully, false otherwise.
  */
-auto stopMonitoring(int monitor_id) -> bool;
+auto stopSoftwareMonitoring(int monitor_id) -> bool;
 
 /**
  * @brief Check if a software has updates available.

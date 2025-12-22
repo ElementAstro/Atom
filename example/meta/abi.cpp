@@ -1,4 +1,4 @@
-﻿#include "" atom / meta / abi.hpp ""
+#include "atom/meta/abi.hpp"
 
 #include <chrono>
 #include <functional>
@@ -11,26 +11,24 @@
 #include <variant>
 #include <vector>
 
-// Example of custom types
-template <typename T, typename U>
+// Example of custom typestemplate <typename T, typename U>
 class MyCustomClass {
 public:
     T data;
     U otherData;
 };
 
-// Custom class hierarchy
-struct Base {
-    virtual ~Base() = default;
-    virtual void doSomething() = 0;
-};
+// Custom class hierarchystruct Base {
+virtual ~Base() = default;
+virtual void doSomething() = 0;
+}
+;
 
 struct Derived : Base {
     void doSomething() override {}
 };
 
-// Template for complex type generation
-template <int N>
+// Template for complex type generationtemplate <int N>
 struct ComplexTemplate {
     using type = std::pair<typename ComplexTemplate<N - 1>::type,
                            typename ComplexTemplate<N - 2>::type>;
@@ -46,53 +44,51 @@ struct ComplexTemplate<0> {
     using type = double;
 };
 
-// Helper function to separate different sections of the output
-void printSection(const std::string& title) {
-    std::cout << ""\n\n "" << std::string(80, '=') << std::endl;
-    std::cout << ""
-                 ""
-              << title << std::endl;
-    std::cout << std::string(80, '=') << std::endl;
+// Helper function to separate different sections of the outputvoid
+// printSection(const std::string& title) {
+std::cout << "\n\n" << std::string(80, '=') << std::endl;
+std::cout << " " << title << std::endl;
+std::cout << std::string(80, '=') << std::endl;
 }
 
 int main() {
-    std::cout << "" Comprehensive Example of ABI Parsing Tool Library ""
+    std::cout << "Comprehensive Example of ABI Parsing Tool Library"
               << std::endl;
 
     //---------------------------------------------------------------------
-    printSection("" 1. Basic Type Parsing "");
+    printSection("1. Basic Type Parsing");
     //---------------------------------------------------------------------
 
-    std::cout << "" Basic Types : "" << std::endl;
-    std::cout << "" int : "" << atom::meta::DemangleHelper::demangleType<int>()
+    std::cout << "Basic Types:" << std::endl;
+    std::cout << "  int: " << atom::meta::DemangleHelper::demangleType<int>()
               << std::endl;
-    std::cout << "" double : ""
+    std::cout << "  double: "
               << atom::meta::DemangleHelper::demangleType<double>()
               << std::endl;
-    std::cout << "" std::string : ""
+    std::cout << "  std::string: "
               << atom::meta::DemangleHelper::demangleType<std::string>()
               << std::endl;
 
-    std::cout << ""\nPointers and References : "" << std::endl;
-    std::cout << "" int * : ""
-              << atom::meta::DemangleHelper::demangleType<int*>() << std::endl;
-    std::cout << "" const char * : ""
+    std::cout << "\nPointers and References:" << std::endl;
+    std::cout << "  int*: " << atom::meta::DemangleHelper::demangleType<int*>()
+              << std::endl;
+    std::cout << "  const char*: "
               << atom::meta::DemangleHelper::demangleType<const char*>()
               << std::endl;
-    std::cout << "" int &
-        : "" << atom::meta::DemangleHelper::demangleType<int&>() << std::endl;
+    std::cout << "  int&: " << atom::meta::DemangleHelper::demangleType<int&>()
+              << std::endl;
 
-    std::cout << ""\nStandard Container Types : "" << std::endl;
-    std::cout << "" std::vector<int> : ""
+    std::cout << "\nStandard Container Types:" << std::endl;
+    std::cout << "  std::vector<int>: "
               << atom::meta::DemangleHelper::demangleType<std::vector<int>>()
               << std::endl;
-    std::cout << "" std::map<int, std::string> : ""
+    std::cout << "  std::map<int, std::string>: "
               << atom::meta::DemangleHelper::demangleType<
                      std::map<int, std::string>>()
               << std::endl;
 
     //---------------------------------------------------------------------
-    printSection("" 2. Complex Type Parsing "");
+    printSection("2. Complex Type Parsing");
     //---------------------------------------------------------------------
 
     // Define some complex types
@@ -104,17 +100,17 @@ int main() {
     using ComplexType4 =
         typename ComplexTemplate<5>::type;  // Recursive template type
 
-    std::cout << "" Complex Type Parsing : "" << std::endl;
-    std::cout << "" Type1 : ""
+    std::cout << "Complex Type Parsing:" << std::endl;
+    std::cout << "  Type1: "
               << atom::meta::DemangleHelper::demangleType<ComplexType1>()
               << std::endl;
-    std::cout << "" Type2 : ""
+    std::cout << "  Type2: "
               << atom::meta::DemangleHelper::demangleType<ComplexType2>()
               << std::endl;
-    std::cout << "" Type3 : ""
+    std::cout << "  Type3: "
               << atom::meta::DemangleHelper::demangleType<ComplexType3>()
               << std::endl;
-    std::cout << "" Type4 : ""
+    std::cout << "  Type4: "
               << atom::meta::DemangleHelper::demangleType<ComplexType4>()
               << std::endl;
 
@@ -122,199 +118,190 @@ int main() {
     std::vector<int> myVector{1, 2, 3};
     std::function<void(int)> myFunction = [](int x) { std::cout << x; };
 
-    std::cout << ""\nGetting Type from Instance : "" << std::endl;
-    std::cout << "" myVector : ""
+    std::cout << "\nGetting Type from Instance:" << std::endl;
+    std::cout << "  myVector: "
               << atom::meta::DemangleHelper::demangleType(myVector)
               << std::endl;
-    std::cout << "" myFunction : ""
+    std::cout << "  myFunction: "
               << atom::meta::DemangleHelper::demangleType(myFunction)
               << std::endl;
 
     // With source location information
-    std::cout << ""\nType with Source Location Info : "" << std::endl;
-    std::cout << ""
-                 ""
+    std::cout << "\nType with Source Location Info:" << std::endl;
+    std::cout << "  "
               << atom::meta::DemangleHelper::demangle(
                      typeid(ComplexType1).name(),
                      std::source_location::current())
               << std::endl;
 
     //---------------------------------------------------------------------
-    printSection("" 3. NEW : Type Analysis Utilities "");
+    printSection("3. NEW: Type Analysis Utilities");
     //---------------------------------------------------------------------
 
-    std::cout << "" GetBareTypeName Examples : "" << std::endl;
-    std::cout << "" 'const std::vector<int>'-> '""
+    std::cout << "GetBareTypeName Examples:" << std::endl;
+    std::cout << "  'const std::vector<int>' -> '"
               << atom::meta::DemangleHelper::getBareTypeName(
-                     "" const std::vector < int > "")
-              << "" '"" << std::endl; std::cout << "" ' std::map <
-        int,
-        string > '-> ' "" << atom::meta::DemangleHelper::getBareTypeName(
-                                 "" std::map < int, string > "")
-                          << ""'"" << std::endl; std::cout
-                          << "" 'atom::meta::DemangleHelper'-> '""
-                          << atom::meta::DemangleHelper::getBareTypeName(
-                                 "" atom::meta::DemangleHelper "")
-                          << ""'"" << std::endl;
+                     "const std::vector<int>")
+              << "'" << std::endl;
+    std::cout << "  'std::map<int, string>' -> '"
+              << atom::meta::DemangleHelper::getBareTypeName(
+                     "std::map<int, string>")
+              << "'" << std::endl;
+    std::cout << "  'atom::meta::DemangleHelper' -> '"
+              << atom::meta::DemangleHelper::getBareTypeName(
+                     "atom::meta::DemangleHelper")
+              << "'" << std::endl;
 
-                     std::cout
-                          << ""\nExtractNamespace Examples : "" << std::endl;
-    std::cout << "" 'std::string'-> '""
-              << atom::meta::DemangleHelper::extractNamespace("" std::string "")
-              << ""'"" << std::endl; std::cout
-              << "" 'atom::meta::DemangleHelper'-> '""
+    std::cout << "\nExtractNamespace Examples:" << std::endl;
+    std::cout << "  'std::string' -> '"
+              << atom::meta::DemangleHelper::extractNamespace("std::string")
+              << "'" << std::endl;
+    std::cout << "  'atom::meta::DemangleHelper' -> '"
               << atom::meta::DemangleHelper::extractNamespace(
-                     "" atom::meta::DemangleHelper "")
-              << "" '"" << std::endl; std::cout << "" ' int '-> ' ""
-              << atom::meta::DemangleHelper::extractNamespace("" int "")
-              << ""' (empty for non-namespaced types)"" << std::endl;
+                     "atom::meta::DemangleHelper")
+              << "'" << std::endl;
+    std::cout << "  'int' -> '"
+              << atom::meta::DemangleHelper::extractNamespace("int")
+              << "' (empty for non-namespaced types)" << std::endl;
 
-        std::cout
-              << ""\nExtractTemplateArgs Examples : "" << std::endl;
-    auto args1 =
-        atom::meta::DemangleHelper::extractTemplateArgs("" vector < int > "");
-    std::cout << "" 'vector<int>' args : "";
+    std::cout << "\nExtractTemplateArgs Examples:" << std::endl;
+    auto args1 = atom::meta::DemangleHelper::extractTemplateArgs("vector<int>");
+    std::cout << "  'vector<int>' args: ";
     for (const auto& arg : args1)
-        std::cout << "" '"" << arg << ""' "";
+        std::cout << "'" << arg << "' ";
     std::cout << std::endl;
 
     auto args2 = atom::meta::DemangleHelper::extractTemplateArgs(
-        "" map < string, vector < int >> "");
-    std::cout << "" 'map<string, vector<int>>' args : "";
+        "map<string, vector<int>>");
+    std::cout << "  'map<string, vector<int>>' args: ";
     for (const auto& arg : args2)
-        std::cout << "" '"" << arg << ""' "";
+        std::cout << "'" << arg << "' ";
     std::cout << std::endl;
 
     //---------------------------------------------------------------------
-    printSection("" 4. NEW : Type Classification "");
+    printSection("4. NEW: Type Classification");
     //---------------------------------------------------------------------
 
-    std::cout << "" isPointerType Examples : "" << std::endl;
-    std::cout << "" 'int*'->""
-              << (atom::meta::DemangleHelper::isPointerType("" int * "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "isPointerType Examples:" << std::endl;
+    std::cout << "  'int*' -> "
+              << (atom::meta::DemangleHelper::isPointerType("int*") ? "true"
+                                                                    : "false")
               << std::endl;
-    std::cout << "" 'int'->""
-              << (atom::meta::DemangleHelper::isPointerType("" int "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "  'int' -> "
+              << (atom::meta::DemangleHelper::isPointerType("int") ? "true"
+                                                                   : "false")
               << std::endl;
 
-    std::cout << ""\nisReferenceType Examples : "" << std::endl;
-    std::cout << "" 'int&'->""
-              << (atom::meta::DemangleHelper::isReferenceType("" int & "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "\nisReferenceType Examples:" << std::endl;
+    std::cout << "  'int&' -> "
+              << (atom::meta::DemangleHelper::isReferenceType("int&") ? "true"
+                                                                      : "false")
               << std::endl;
-    std::cout << "" 'int&&'->""
-              << (atom::meta::DemangleHelper::isReferenceType("" int && "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "  'int&&' -> "
+              << (atom::meta::DemangleHelper::isReferenceType("int&&")
+                      ? "true"
+                      : "false")
               << std::endl;
-    std::cout << "" 'int'->""
-              << (atom::meta::DemangleHelper::isReferenceType("" int "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "  'int' -> "
+              << (atom::meta::DemangleHelper::isReferenceType("int") ? "true"
+                                                                     : "false")
               << std::endl;
 
-    std::cout << ""\nisConstType Examples : "" << std::endl;
-    std::cout << "" 'const int'->""
-              << (atom::meta::DemangleHelper::isConstType("" const int "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "\nisConstType Examples:" << std::endl;
+    std::cout << "  'const int' -> "
+              << (atom::meta::DemangleHelper::isConstType("const int")
+                      ? "true"
+                      : "false")
               << std::endl;
-    std::cout << "" 'int const*'->""
-              << (atom::meta::DemangleHelper::isConstType("" int const * "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "  'int const*' -> "
+              << (atom::meta::DemangleHelper::isConstType("int const*")
+                      ? "true"
+                      : "false")
               << std::endl;
-    std::cout << "" 'int'->""
-              << (atom::meta::DemangleHelper::isConstType("" int "")
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "  'int' -> "
+              << (atom::meta::DemangleHelper::isConstType("int") ? "true"
+                                                                 : "false")
               << std::endl;
 
-    std::cout << ""\nisTemplateType Examples : "" << std::endl;
+    std::cout << "\nisTemplateType Examples:" << std::endl;
     auto vecType = atom::meta::DemangleHelper::demangleType<std::vector<int>>();
     auto intType = atom::meta::DemangleHelper::demangleType<int>();
-    std::cout << "" vector<int>->""
-              << (atom::meta::DemangleHelper::isTemplateType(vecType)
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "  vector<int> -> "
+              << (atom::meta::DemangleHelper::isTemplateType(vecType) ? "true"
+                                                                      : "false")
               << std::endl;
-    std::cout << "" int->""
-              << (atom::meta::DemangleHelper::isTemplateType(intType)
-                      ? "" true ""
-                      : "" false "")
+    std::cout << "  int -> "
+              << (atom::meta::DemangleHelper::isTemplateType(intType) ? "true"
+                                                                      : "false")
               << std::endl;
 
     //---------------------------------------------------------------------
-    printSection("" 5. NEW : Type Category Detection "");
+    printSection("5. NEW: Type Category Detection");
     //---------------------------------------------------------------------
 
-    std::cout << "" getTypeCategory Examples : "" << std::endl;
-    std::cout << "" void : ""
+    std::cout << "getTypeCategory Examples:" << std::endl;
+    std::cout << "  void: "
               << atom::meta::DemangleHelper::getTypeCategory<void>()
               << std::endl;
-    std::cout << "" int : ""
-              << atom::meta::DemangleHelper::getTypeCategory<int>()
+    std::cout << "  int: " << atom::meta::DemangleHelper::getTypeCategory<int>()
               << std::endl;
-    std::cout << "" double : ""
+    std::cout << "  double: "
               << atom::meta::DemangleHelper::getTypeCategory<double>()
               << std::endl;
-    std::cout << "" int[10] : ""
+    std::cout << "  int[10]: "
               << atom::meta::DemangleHelper::getTypeCategory<int[10]>()
               << std::endl;
 
     enum class MyEnum { A, B };
-    std::cout << "" enum class : ""
+    std::cout << "  enum class: "
               << atom::meta::DemangleHelper::getTypeCategory<MyEnum>()
               << std::endl;
-    std::cout << "" std::string : ""
+    std::cout << "  std::string: "
               << atom::meta::DemangleHelper::getTypeCategory<std::string>()
               << std::endl;
-    std::cout << "" int * : ""
+    std::cout << "  int*: "
               << atom::meta::DemangleHelper::getTypeCategory<int*>()
               << std::endl;
-    std::cout << "" int &
-        : "" << atom::meta::DemangleHelper::getTypeCategory<int&>()
-             << std::endl;
-    std::cout << "" int &&
-        : "" << atom::meta::DemangleHelper::getTypeCategory<int&&>()
-             << std::endl;
+    std::cout << "  int&: "
+              << atom::meta::DemangleHelper::getTypeCategory<int&>()
+              << std::endl;
+    std::cout << "  int&&: "
+              << atom::meta::DemangleHelper::getTypeCategory<int&&>()
+              << std::endl;
 
     struct TestStruct {
         int member;
         void func() {}
     };
-    std::cout << "" member pointer
-        : "" << atom::meta::DemangleHelper::getTypeCategory<int TestStruct::*>()
-              << std::endl;
     std::cout
-        << "" member function pointer : ""
+        << "  member pointer: "
+        << atom::meta::DemangleHelper::getTypeCategory<int TestStruct::*>()
+        << std::endl;
+    std::cout
+        << "  member function pointer: "
         << atom::meta::DemangleHelper::getTypeCategory<void (TestStruct::*)()>()
         << std::endl;
 
     //---------------------------------------------------------------------
-    printSection("" 6. NEW : TryDemangle(No - throw API) "");
+    printSection("6. NEW: TryDemangle (No-throw API)");
     //---------------------------------------------------------------------
 
-    std::cout << "" tryDemangle Examples : "" << std::endl;
+    std::cout << "tryDemangle Examples:" << std::endl;
 
     auto result1 = atom::meta::DemangleHelper::tryDemangle(typeid(int).name());
-    std::cout << "" int->hasValue : ""
-              << (result1.hasValue() ? "" true "" : "" false "") << "",
-        value : "" << result1.value << std::endl;
+    std::cout << "  int -> hasValue: "
+              << (result1.hasValue() ? "true" : "false")
+              << ", value: " << result1.value << std::endl;
 
     auto result2 =
-        atom::meta::DemangleHelper::tryDemangle("" invalid_mangled_name "");
-    std::cout << "" invalid name->hasValue : ""
-              << (result2.hasValue() ? "" true "" : "" false "") << "",
-        error code : "" << static_cast<int>(result2.error) << std::endl;
+        atom::meta::DemangleHelper::tryDemangle("invalid_mangled_name");
+    std::cout << "  invalid name -> hasValue: "
+              << (result2.hasValue() ? "true" : "false")
+              << ", error code: " << static_cast<int>(result2.error)
+              << std::endl;
 
     //---------------------------------------------------------------------
-    printSection("" 7. Batch Parsing of Multiple Types "");
+    printSection("7. Batch Parsing of Multiple Types");
     //---------------------------------------------------------------------
 
     atom::meta::containers::Vector<std::string_view> mangledNames{
