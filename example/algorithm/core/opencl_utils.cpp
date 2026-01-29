@@ -18,53 +18,53 @@ using namespace atom::algorithm::opencl;
 
 #if ATOM_OPENCL_AVAILABLE
 
-// Demonstrate platform and device enumerationvoid
-// demonstratePlatformEnumeration() {
-std::cout << "\n=== OpenCL Platform Enumeration ===\n";
+// Demonstrate platform and device enumeration
+void demonstratePlatformEnumeration() {
+    std::cout << "\n=== OpenCL Platform Enumeration ===\n";
 
-auto platforms = Platform::getPlatforms();
-std::cout << "Found " << platforms.size() << " OpenCL platform(s)\n";
+    auto platforms = Platform::getPlatforms();
+    std::cout << "Found " << platforms.size() << " OpenCL platform(s)\n";
 
-for (usize i = 0; i < platforms.size(); ++i) {
-    std::cout << "\nPlatform " << i << ":\n";
+    for (usize i = 0; i < platforms.size(); ++i) {
+        std::cout << "\nPlatform " << i << ":\n";
 
-    auto devices = Platform::getDevices(platforms[i], DeviceType::ALL);
-    std::cout << "  Found " << devices.size() << " device(s)\n";
+        auto devices = Platform::getDevices(platforms[i], DeviceType::ALL);
+        std::cout << "  Found " << devices.size() << " device(s)\n";
 
-    for (usize j = 0; j < devices.size(); ++j) {
-        auto info = Platform::getDeviceInfo(devices[j]);
-        std::cout << "\n  Device " << j << ":\n";
-        std::cout << "    Name: " << info.name << "\n";
-        std::cout << "    Vendor: " << info.vendor << "\n";
-        std::cout << "    Version: " << info.version << "\n";
-        std::cout << "    Type: ";
-        switch (info.type) {
-            case DeviceType::CPU:
-                std::cout << "CPU";
-                break;
-            case DeviceType::GPU:
-                std::cout << "GPU";
-                break;
-            case DeviceType::ACCELERATOR:
-                std::cout << "Accelerator";
-                break;
-            default:
-                std::cout << "Unknown";
-                break;
+        for (usize j = 0; j < devices.size(); ++j) {
+            auto info = Platform::getDeviceInfo(devices[j]);
+            std::cout << "\n  Device " << j << ":\n";
+            std::cout << "    Name: " << info.name << "\n";
+            std::cout << "    Vendor: " << info.vendor << "\n";
+            std::cout << "    Version: " << info.version << "\n";
+            std::cout << "    Type: ";
+            switch (info.type) {
+                case DeviceType::CPU:
+                    std::cout << "CPU";
+                    break;
+                case DeviceType::GPU:
+                    std::cout << "GPU";
+                    break;
+                case DeviceType::ACCELERATOR:
+                    std::cout << "Accelerator";
+                    break;
+                default:
+                    std::cout << "Unknown";
+                    break;
+            }
+            std::cout << "\n";
+            std::cout << "    Max compute units: " << info.max_compute_units
+                      << "\n";
+            std::cout << "    Max work group size: " << info.max_work_group_size
+                      << "\n";
+            std::cout << "    Global memory: "
+                      << (info.global_memory_size / (1024 * 1024)) << " MB\n";
+            std::cout << "    Local memory: " << (info.local_memory_size / 1024)
+                      << " KB\n";
+            std::cout << "    Double precision: "
+                      << (info.supports_double ? "Yes" : "No") << "\n";
         }
-        std::cout << "\n";
-        std::cout << "    Max compute units: " << info.max_compute_units
-                  << "\n";
-        std::cout << "    Max work group size: " << info.max_work_group_size
-                  << "\n";
-        std::cout << "    Global memory: "
-                  << (info.global_memory_size / (1024 * 1024)) << " MB\n";
-        std::cout << "    Local memory: " << (info.local_memory_size / 1024)
-                  << " KB\n";
-        std::cout << "    Double precision: "
-                  << (info.supports_double ? "Yes" : "No") << "\n";
     }
-}
 }
 
 // Demonstrate context and command queue creationvoid

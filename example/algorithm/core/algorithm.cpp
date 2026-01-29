@@ -29,8 +29,8 @@
 
 using namespace atom::algorithm;
 
-// Template function for policy-based algorithm designtemplate <typename
-// Container, typename Predicate>
+// Template function for policy-based algorithm design
+template <typename Container, typename Predicate>
 auto count_if_policy(const Container& container, Predicate pred) {
     return std::count_if(container.begin(), container.end(), pred);
 }
