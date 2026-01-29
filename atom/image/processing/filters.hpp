@@ -45,6 +45,7 @@ enum class FilterType {
 
     // Edge detection
     SOBEL,
+    SCHARR,
     PREWITT,
     ROBERTS,
     CANNY,
@@ -52,9 +53,12 @@ enum class FilterType {
 
     // Noise reduction
     MEDIAN,
+    MEAN,
     BILATERAL,
     NON_LOCAL_MEANS,
     WIENER,
+    MIN_FILTER,
+    MAX_FILTER,
 
     // Morphological operations
     EROSION,
@@ -78,6 +82,13 @@ enum class FilterType {
     FIND_EDGES,
     SMOOTH,
     SMOOTH_MORE,
+    OIL_PAINT,
+    PENCIL_SKETCH,
+    CARTOON,
+    POSTERIZE,
+    PIXELATE,
+    VIGNETTE,
+    SEPIA,
 
     // Custom
     CUSTOM_KERNEL
@@ -130,6 +141,11 @@ struct FilterParams {
     // Frequency domain
     double cutoffFreq = 0.5;  // Cutoff frequency (0-1)
     double bandwidth = 0.1;   // Bandwidth for band filters
+
+    // Artistic filter parameters
+    int levels = 4;     // Posterize levels
+    int blockSize = 8;  // Pixelate block size
+    int radius = 3;     // Oil paint radius
 
     // Custom parameters
     std::unordered_map<std::string, double> custom;
@@ -350,6 +366,60 @@ protected:
     virtual std::vector<std::byte> bilateralFilter(
         const std::vector<std::byte>& input, const FilterParams& params,
         int width, int height, int channels) const;
+
+    /**
+     * @brief Apply min/max filter for morphological operations
+     */
+    std::vector<std::byte> minMaxFilter(const std::vector<std::byte>& input,
+                                        int kernelSize, int width, int height,
+                                        int channels, bool isMin) const;
+
+    /**
+     * @brief Apply oil paint artistic effect
+     */
+    std::vector<std::byte> oilPaintFilter(const std::vector<std::byte>& input,
+                                          int radius, int width, int height,
+                                          int channels) const;
+
+    /**
+     * @brief Apply pencil sketch artistic effect
+     */
+    std::vector<std::byte> pencilSketchFilter(
+        const std::vector<std::byte>& input, int width, int height,
+        int channels) const;
+
+    /**
+     * @brief Apply cartoon artistic effect
+     */
+    std::vector<std::byte> cartoonFilter(const std::vector<std::byte>& input,
+                                         int width, int height,
+                                         int channels) const;
+
+    /**
+     * @brief Apply posterize effect (reduce color levels)
+     */
+    std::vector<std::byte> posterizeFilter(const std::vector<std::byte>& input,
+                                           int levels) const;
+
+    /**
+     * @brief Apply pixelate effect
+     */
+    std::vector<std::byte> pixelateFilter(const std::vector<std::byte>& input,
+                                          int blockSize, int width, int height,
+                                          int channels) const;
+
+    /**
+     * @brief Apply vignette effect
+     */
+    std::vector<std::byte> vignetteFilter(const std::vector<std::byte>& input,
+                                          int width, int height, int channels,
+                                          double strength) const;
+
+    /**
+     * @brief Apply sepia tone effect
+     */
+    std::vector<std::byte> sepiaFilter(const std::vector<std::byte>& input,
+                                       int channels) const;
 };
 
 /**

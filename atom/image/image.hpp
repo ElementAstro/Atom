@@ -14,6 +14,9 @@
  * @version 1.0.0
  */
 
+// Exception types
+#include "exceptions.hpp"
+
 // Core image functionality
 #include "core/image_blob.hpp"
 
@@ -31,13 +34,8 @@
 #include "processing/ocr/ocr.hpp"
 #endif
 
-// Format support
-#include "formats/advanced_formats.hpp"
-#include "formats/fits_data.hpp"
-#include "formats/fits_file.hpp"
-#include "formats/fits_header.hpp"
-#include "formats/fits_utils.hpp"
-#include "formats/hdu.hpp"
+// Format support - unified FITS header
+#include "formats/fits.hpp"
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
 #include "formats/ser/frame_processor.h"

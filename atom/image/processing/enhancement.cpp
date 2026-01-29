@@ -85,6 +85,80 @@ blob ImageEnhancement::equalizeHistogram(
             }
             break;
         }
+        case HistogramMethod::LOCAL: {
+            // Local histogram equalization with overlapping windows
+            dst = src.clone();
+            int windowSize = params.tileGridSize * 4;
+            if (windowSize % 2 == 0)
+                windowSize++;
+            int halfWin = windowSize / 2;
+
+            cv::Mat gray;
+            if (src.channels() > 1) {
+                cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+            } else {
+                gray = src.clone();
+            }
+
+            cv::Mat localEq = gray.clone();
+            for (int y = halfWin; y < gray.rows - halfWin; ++y) {
+                for (int x = halfWin; x < gray.cols - halfWin; ++x) {
+                    cv::Rect roi(x - halfWin, y - halfWin, windowSize,
+                                 windowSize);
+                    cv::Mat window = gray(roi);
+                    cv::Mat eqWindow;
+                    cv::equalizeHist(window, eqWindow);
+                    localEq.at<uint8_t>(y, x) =
+                        eqWindow.at<uint8_t>(halfWin, halfWin);
+                }
+            }
+
+            if (src.channels() > 1) {
+                cv::Mat yuv;
+                cv::cvtColor(src, yuv, cv::COLOR_BGR2YUV);
+                std::vector<cv::Mat> channels;
+                cv::split(yuv, channels);
+                channels[0] = localEq;
+                cv::merge(channels, yuv);
+                cv::cvtColor(yuv, dst, cv::COLOR_YUV2BGR);
+            } else {
+                dst = localEq;
+            }
+            break;
+        }
+        case HistogramMethod::MULTI_SCALE: {
+            // Multi-scale histogram equalization combining different scales
+            dst = src.clone();
+            std::vector<cv::Mat> scales;
+
+            // Apply CLAHE at multiple scales
+            std::vector<int> tileSizes = {4, 8, 16};
+            for (int tileSize : tileSizes) {
+                auto clahe = cv::createCLAHE(params.clipLimit,
+                                             cv::Size(tileSize, tileSize));
+                cv::Mat scaleResult;
+
+                if (src.channels() == 1) {
+                    clahe->apply(src, scaleResult);
+                } else {
+                    cv::Mat lab;
+                    cv::cvtColor(src, lab, cv::COLOR_BGR2Lab);
+                    std::vector<cv::Mat> channels;
+                    cv::split(lab, channels);
+                    clahe->apply(channels[0], channels[0]);
+                    cv::merge(channels, lab);
+                    cv::cvtColor(lab, scaleResult, cv::COLOR_Lab2BGR);
+                }
+                scales.push_back(scaleResult);
+            }
+
+            // Blend scales with equal weights
+            dst = cv::Mat::zeros(src.size(), src.type());
+            for (const auto& scale : scales) {
+                cv::addWeighted(dst, 1.0, scale, 1.0 / scales.size(), 0, dst);
+            }
+            break;
+        }
         default:
             THROW_RUNTIME_ERROR("Unsupported histogram equalization method");
     }
@@ -1176,6 +1250,315 @@ double ImageEnhancement::hueToRgb(double p, double q, double t) const {
     if (t < 2.0 / 6)
         return p + (q - p) * (2.0 / 3 - t) * 6;
     return p;
+}
+
+// Implement autoEnhance
+blob ImageEnhancement::autoEnhance(const blob& input, const std::string& preset,
+                                   double strength) const {
+    (void)strength;  // Strength parameter for future use
+    if (input.isEmpty()) {
+        return blob{};
+    }
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    cv::Mat src = input.to_mat();
+    cv::Mat dst = src.clone();
+
+    if (preset == "portrait") {
+        // Portrait preset: softer, warmer, skin-friendly
+        // 1. Light denoise
+        cv::bilateralFilter(src, dst, 5, 50, 50);
+
+        // 2. Slight warmth
+        std::vector<cv::Mat> channels;
+        cv::split(dst, channels);
+        channels[2].convertTo(channels[2], -1, 1.02);  // Slight red boost
+        channels[0].convertTo(channels[0], -1, 0.98);  // Slight blue reduction
+        cv::merge(channels, dst);
+
+        // 3. Light contrast enhancement
+        cv::Mat lab;
+        cv::cvtColor(dst, lab, cv::COLOR_BGR2Lab);
+        cv::split(lab, channels);
+        auto clahe = cv::createCLAHE(1.5, cv::Size(8, 8));
+        clahe->apply(channels[0], channels[0]);
+        cv::merge(channels, lab);
+        cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+
+    } else if (preset == "landscape") {
+        // Landscape preset: vivid, high contrast, saturated
+        // 1. Strong contrast
+        cv::Mat lab;
+        cv::cvtColor(src, lab, cv::COLOR_BGR2Lab);
+        std::vector<cv::Mat> channels;
+        cv::split(lab, channels);
+        auto clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+        clahe->apply(channels[0], channels[0]);
+        cv::merge(channels, lab);
+        cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+
+        // 2. Boost saturation
+        cv::Mat hsv;
+        cv::cvtColor(dst, hsv, cv::COLOR_BGR2HSV);
+        cv::split(hsv, channels);
+        channels[1].convertTo(channels[1], -1, 1.3);  // Saturation boost
+        cv::merge(channels, hsv);
+        cv::cvtColor(hsv, dst, cv::COLOR_HSV2BGR);
+
+    } else if (preset == "night") {
+        // Night preset: denoise, brighten shadows, reduce highlights
+        // 1. Strong denoise
+        cv::fastNlMeansDenoisingColored(src, dst, 10, 10, 7, 21);
+
+        // 2. Shadow lift
+        cv::Mat lab;
+        cv::cvtColor(dst, lab, cv::COLOR_BGR2Lab);
+        std::vector<cv::Mat> channels;
+        cv::split(lab, channels);
+
+        // Lift shadows (low L values)
+        for (int y = 0; y < channels[0].rows; ++y) {
+            for (int x = 0; x < channels[0].cols; ++x) {
+                uint8_t& l = channels[0].at<uint8_t>(y, x);
+                if (l < 80) {
+                    l = static_cast<uint8_t>(std::min(255.0, l * 1.3 + 20));
+                }
+            }
+        }
+        cv::merge(channels, lab);
+        cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+
+    } else if (preset == "hdr") {
+        // HDR-like preset: expanded dynamic range
+        cv::Mat floatSrc;
+        src.convertTo(floatSrc, CV_32F, 1.0 / 255.0);
+
+        auto tonemap = cv::createTonemapReinhard(1.5, 0, 0, 0);
+        cv::Mat tonemapped;
+        tonemap->process(floatSrc, tonemapped);
+        tonemapped.convertTo(dst, CV_8U, 255.0);
+
+        // Boost local contrast
+        cv::Mat lab;
+        cv::cvtColor(dst, lab, cv::COLOR_BGR2Lab);
+        std::vector<cv::Mat> channels;
+        cv::split(lab, channels);
+        auto clahe = cv::createCLAHE(2.5, cv::Size(8, 8));
+        clahe->apply(channels[0], channels[0]);
+        cv::merge(channels, lab);
+        cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+
+    } else if (preset == "vintage") {
+        // Vintage preset: warm tones, slight vignette, desaturation
+        dst = src.clone();
+
+        // 1. Desaturate slightly
+        cv::Mat hsv;
+        cv::cvtColor(dst, hsv, cv::COLOR_BGR2HSV);
+        std::vector<cv::Mat> channels;
+        cv::split(hsv, channels);
+        channels[1].convertTo(channels[1], -1, 0.7);
+        cv::merge(channels, hsv);
+        cv::cvtColor(hsv, dst, cv::COLOR_HSV2BGR);
+
+        // 2. Warm color cast
+        cv::split(dst, channels);
+        channels[2].convertTo(channels[2], -1, 1.1);   // Red boost
+        channels[1].convertTo(channels[1], -1, 1.05);  // Green slight boost
+        channels[0].convertTo(channels[0], -1, 0.9);   // Blue reduction
+        cv::merge(channels, dst);
+
+        // 3. Vignette
+        cv::Mat vignette = cv::Mat::zeros(dst.size(), CV_32F);
+        int cx = dst.cols / 2, cy = dst.rows / 2;
+        double maxDist = std::sqrt(cx * cx + cy * cy);
+        for (int y = 0; y < dst.rows; ++y) {
+            for (int x = 0; x < dst.cols; ++x) {
+                double dist =
+                    std::sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                vignette.at<float>(y, x) = static_cast<float>(
+                    1.0 - 0.5 * (dist / maxDist) * (dist / maxDist));
+            }
+        }
+        std::vector<cv::Mat> dstChannels;
+        cv::split(dst, dstChannels);
+        for (auto& ch : dstChannels) {
+            cv::Mat temp;
+            ch.convertTo(temp, CV_32F);
+            temp = temp.mul(vignette);
+            temp.convertTo(ch, CV_8U);
+        }
+        cv::merge(dstChannels, dst);
+
+    } else {
+        // Default: balanced auto-enhancement
+        // 1. White balance
+        cv::Scalar mean = cv::mean(src);
+        double avgR = mean[2], avgG = mean[1], avgB = mean[0];
+        double scaleR = 128.0 / avgR, scaleG = 128.0 / avgG,
+               scaleB = 128.0 / avgB;
+
+        std::vector<cv::Mat> channels;
+        cv::split(src, channels);
+        channels[0].convertTo(channels[0], -1, scaleB);
+        channels[1].convertTo(channels[1], -1, scaleG);
+        channels[2].convertTo(channels[2], -1, scaleR);
+        cv::merge(channels, dst);
+
+        // 2. CLAHE
+        cv::Mat lab;
+        cv::cvtColor(dst, lab, cv::COLOR_BGR2Lab);
+        cv::split(lab, channels);
+        auto clahe = cv::createCLAHE(2.0, cv::Size(8, 8));
+        clahe->apply(channels[0], channels[0]);
+        cv::merge(channels, lab);
+        cv::cvtColor(lab, dst, cv::COLOR_Lab2BGR);
+
+        // 3. Light sharpening
+        cv::Mat blurred;
+        cv::GaussianBlur(dst, blurred, cv::Size(0, 0), 1.5);
+        cv::addWeighted(dst, 1.2, blurred, -0.2, 0, dst);
+    }
+
+    return blob(dst);
+#else
+    // Manual auto-enhance: basic brightness/contrast adjustment
+    (void)preset;
+    return adjustBrightnessContrast(input, 10, 1.1);
+#endif
+}
+
+// Implement convertColorSpace
+blob ImageEnhancement::convertColorSpace(const blob& input,
+                                         ColorSpace fromSpace,
+                                         ColorSpace toSpace) const {
+    if (input.isEmpty() || fromSpace == toSpace) {
+        return input;
+    }
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    cv::Mat src = input.to_mat();
+    cv::Mat dst;
+
+    // First convert to BGR if not already
+    cv::Mat bgr;
+    switch (fromSpace) {
+        case ColorSpace::RGB:
+            cv::cvtColor(src, bgr, cv::COLOR_RGB2BGR);
+            break;
+        case ColorSpace::HSV:
+            cv::cvtColor(src, bgr, cv::COLOR_HSV2BGR);
+            break;
+        case ColorSpace::HSL:
+            cv::cvtColor(src, bgr, cv::COLOR_HLS2BGR);
+            break;
+        case ColorSpace::LAB:
+            cv::cvtColor(src, bgr, cv::COLOR_Lab2BGR);
+            break;
+        case ColorSpace::YUV:
+            cv::cvtColor(src, bgr, cv::COLOR_YUV2BGR);
+            break;
+        case ColorSpace::XYZ:
+            cv::cvtColor(src, bgr, cv::COLOR_XYZ2BGR);
+            break;
+        case ColorSpace::GRAY:
+            cv::cvtColor(src, bgr, cv::COLOR_GRAY2BGR);
+            break;
+        case ColorSpace::BGR:
+        default:
+            bgr = src;
+            break;
+    }
+
+    // Then convert from BGR to target
+    switch (toSpace) {
+        case ColorSpace::RGB:
+            cv::cvtColor(bgr, dst, cv::COLOR_BGR2RGB);
+            break;
+        case ColorSpace::HSV:
+            cv::cvtColor(bgr, dst, cv::COLOR_BGR2HSV);
+            break;
+        case ColorSpace::HSL:
+            cv::cvtColor(bgr, dst, cv::COLOR_BGR2HLS);
+            break;
+        case ColorSpace::LAB:
+            cv::cvtColor(bgr, dst, cv::COLOR_BGR2Lab);
+            break;
+        case ColorSpace::YUV:
+            cv::cvtColor(bgr, dst, cv::COLOR_BGR2YUV);
+            break;
+        case ColorSpace::XYZ:
+            cv::cvtColor(bgr, dst, cv::COLOR_BGR2XYZ);
+            break;
+        case ColorSpace::GRAY:
+            cv::cvtColor(bgr, dst, cv::COLOR_BGR2GRAY);
+            break;
+        case ColorSpace::BGR:
+        default:
+            dst = bgr;
+            break;
+    }
+
+    return blob(dst);
+#else
+    // Manual color space conversion
+    int width = input.getCols();
+    int height = input.getRows();
+    int channels = input.getChannels();
+
+    if (channels < 3) {
+        return input;  // Need at least 3 channels for color conversion
+    }
+
+    std::vector<std::byte> inputData(input.begin(), input.end());
+    std::vector<std::byte> outputData(inputData.size());
+
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            int idx = (y * width + x) * channels;
+
+            // Get RGB values
+            std::array<uint8_t, 3> rgb = {
+                static_cast<uint8_t>(inputData[idx]),
+                static_cast<uint8_t>(inputData[idx + 1]),
+                static_cast<uint8_t>(inputData[idx + 2])};
+
+            // Convert from source to RGB if needed
+            if (fromSpace != ColorSpace::RGB && fromSpace != ColorSpace::BGR) {
+                std::array<double, 3> values = {rgb[0] / 255.0, rgb[1] / 255.0,
+                                                rgb[2] / 255.0};
+                rgb = colorSpaceToRgb(values, fromSpace);
+            }
+
+            // Convert from RGB to target
+            std::array<double, 3> result;
+            if (toSpace == ColorSpace::RGB || toSpace == ColorSpace::BGR) {
+                result = {rgb[0] / 255.0, rgb[1] / 255.0, rgb[2] / 255.0};
+            } else {
+                result = rgbToColorSpace(rgb, toSpace);
+            }
+
+            // Scale back to 0-255
+            outputData[idx] = static_cast<std::byte>(static_cast<uint8_t>(
+                std::clamp(result[0] * 255.0, 0.0, 255.0)));
+            outputData[idx + 1] = static_cast<std::byte>(static_cast<uint8_t>(
+                std::clamp(result[1] * 255.0, 0.0, 255.0)));
+            outputData[idx + 2] = static_cast<std::byte>(static_cast<uint8_t>(
+                std::clamp(result[2] * 255.0, 0.0, 255.0)));
+
+            // Copy alpha if present
+            if (channels >= 4) {
+                outputData[idx + 3] = inputData[idx + 3];
+            }
+        }
+    }
+
+    blob result;
+    for (const auto& byte : outputData) {
+        result.append(&byte, 1);
+    }
+    return result;
+#endif
 }
 
 // Implement factory

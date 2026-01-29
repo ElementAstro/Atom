@@ -1,11 +1,9 @@
 #include "image_processor.hpp"
 
 #include <algorithm>
-#include <cctype>
 #include <cmath>
 #include <execution>
 #include <limits>
-#include <numeric>
 #include <thread>
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
@@ -138,34 +136,24 @@ blob ImageProcessor::crop(const blob& input, int x, int y, int width,
 blob ImageProcessor::applyFilter(
     const blob& input, FilterType filterType,
     const std::unordered_map<std::string, double>& parameters) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    switch (filterType) {
-        case FilterType::GAUSSIAN_BLUR: {
-            double sigma =
-                parameters.count("sigma") ? parameters.at("sigma") : 1.0;
-            return applyGaussianBlur(input, sigma);
-        }
-        case FilterType::SHARPEN: {
-            double strength =
-                parameters.count("strength") ? parameters.at("strength") : 1.0;
-            return applySharpen(input, strength);
-        }
-        case FilterType::MEDIAN: {
-            int kernelSize = parameters.count("kernelSize")
-                                 ? static_cast<int>(parameters.at("kernelSize"))
-                                 : 5;
-            return applyMedianFilter(input, kernelSize);
-        }
-        case FilterType::CANNY:
-        case FilterType::FIND_EDGES: {
-            return detectEdges(input, "canny");
-        }
-        default:
-            THROW_RUNTIME_ERROR("Unsupported filter type");
+    // Delegate to ImageFilter to avoid code duplication
+    FilterParams params;
+    if (parameters.count("sigma")) {
+        params.sigma = parameters.at("sigma");
     }
-#else
-    THROW_RUNTIME_ERROR("Filter operations require OpenCV support");
-#endif
+    if (parameters.count("strength")) {
+        params.strength = parameters.at("strength");
+    }
+    if (parameters.count("kernelSize")) {
+        params.kernelSize = static_cast<int>(parameters.at("kernelSize"));
+    }
+    if (parameters.count("threshold1")) {
+        params.threshold1 = parameters.at("threshold1");
+    }
+    if (parameters.count("threshold2")) {
+        params.threshold2 = parameters.at("threshold2");
+    }
+    return m_filter.applyFilter(input, filterType, params);
 }
 
 blob ImageProcessor::applyCustomKernel(const blob& input [[maybe_unused]],
@@ -189,197 +177,57 @@ blob ImageProcessor::applyCustomKernel(const blob& input [[maybe_unused]],
 #endif
 }
 
-blob ImageProcessor::adjustBrightnessContrast(
-    const blob& input [[maybe_unused]], double brightness [[maybe_unused]],
-    double contrast [[maybe_unused]]) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat outputMat;
-
-    // Convert brightness and contrast to OpenCV format
-    double alpha = (contrast + 100.0) / 100.0;  // Contrast multiplier
-    double beta = brightness;                   // Brightness offset
-
-    inputMat.convertTo(outputMat, -1, alpha, beta);
-    return blob(outputMat);
-#else
-    THROW_RUNTIME_ERROR(
-        "Brightness/contrast adjustment requires OpenCV support");
-#endif
+blob ImageProcessor::adjustBrightnessContrast(const blob& input,
+                                              double brightness,
+                                              double contrast) const {
+    // Delegate to ImageEnhancement to avoid code duplication
+    // Convert contrast from [-100, 100] to [0.0, 2.0] range
+    double contrastNorm = (contrast + 100.0) / 100.0;
+    return m_enhancement.adjustBrightnessContrast(input, brightness,
+                                                  contrastNorm);
 }
 
-blob ImageProcessor::adjustGamma(const blob& input [[maybe_unused]],
-                                 double gamma [[maybe_unused]]) const {
-    if (gamma <= 0.0) {
-        THROW_RUNTIME_ERROR("Gamma value must be positive");
-    }
-
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat outputMat;
-
-    // Create lookup table for gamma correction
-    cv::Mat lookupTable(1, 256, CV_8U);
-    uchar* p = lookupTable.ptr();
-    for (int i = 0; i < 256; ++i) {
-        p[i] =
-            cv::saturate_cast<uchar>(std::pow(i / 255.0, 1.0 / gamma) * 255.0);
-    }
-
-    cv::LUT(inputMat, lookupTable, outputMat);
-    return blob(outputMat);
-#else
-    THROW_RUNTIME_ERROR("Gamma adjustment requires OpenCV support");
-#endif
+blob ImageProcessor::adjustGamma(const blob& input, double gamma) const {
+    // Delegate to ImageEnhancement to avoid code duplication
+    return m_enhancement.gammaCorrection(input, gamma);
 }
 
-blob ImageProcessor::enhanceHistogram(const blob& input [[maybe_unused]],
-                                      bool adaptive [[maybe_unused]]) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat outputMat;
-
-    if (inputMat.channels() == 1) {
-        // Grayscale image
-        if (adaptive) {
-            cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-            clahe->setClipLimit(2.0);
-            clahe->apply(inputMat, outputMat);
-        } else {
-            cv::equalizeHist(inputMat, outputMat);
-        }
-    } else {
-        // Color image - convert to LAB and equalize L channel
-        cv::Mat labImage;
-        cv::cvtColor(inputMat, labImage, cv::COLOR_BGR2Lab);
-
-        std::vector<cv::Mat> labChannels;
-        cv::split(labImage, labChannels);
-
-        if (adaptive) {
-            cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-            clahe->setClipLimit(2.0);
-            clahe->apply(labChannels[0], labChannels[0]);
-        } else {
-            cv::equalizeHist(labChannels[0], labChannels[0]);
-        }
-
-        cv::merge(labChannels, labImage);
-        cv::cvtColor(labImage, outputMat, cv::COLOR_Lab2BGR);
-    }
-
-    return blob(outputMat);
-#else
-    THROW_RUNTIME_ERROR("Histogram enhancement requires OpenCV support");
-#endif
+blob ImageProcessor::enhanceHistogram(const blob& input, bool adaptive) const {
+    // Delegate to ImageEnhancement to avoid code duplication
+    HistogramMethod method =
+        adaptive ? HistogramMethod::CLAHE : HistogramMethod::GLOBAL;
+    return m_enhancement.equalizeHistogram(input, method);
 }
 
-blob ImageProcessor::detectEdges(const blob& input [[maybe_unused]],
-                                 const std::string& algorithm [[maybe_unused]],
-                                 const std::vector<double>& threshold
-                                 [[maybe_unused]]) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat gray;
-    if (inputMat.channels() > 1) {
-        cv::cvtColor(inputMat, gray, cv::COLOR_BGR2GRAY);
-    } else {
-        gray = inputMat;
+blob ImageProcessor::detectEdges(const blob& input,
+                                 const std::string& algorithm,
+                                 const std::vector<double>& threshold) const {
+    // Delegate to ImageFilter to avoid code duplication
+    FilterParams params;
+    if (!threshold.empty()) {
+        params.threshold1 = threshold[0];
+    }
+    if (threshold.size() > 1) {
+        params.threshold2 = threshold[1];
     }
 
-    auto toLower = [](std::string value) {
-        std::transform(value.begin(), value.end(), value.begin(),
-                       [](unsigned char ch) {
-                           return static_cast<char>(std::tolower(ch));
-                       });
-        return value;
-    };
-
-    const std::string algo = toLower(algorithm);
-    cv::Mat edges;
-
-    if (algo == "sobel") {
-        cv::Mat gradX;
-        cv::Mat gradY;
-        cv::Sobel(gray, gradX, CV_16S, 1, 0, 3);
-        cv::Sobel(gray, gradY, CV_16S, 0, 1, 3);
-
-        cv::Mat absGradX;
-        cv::Mat absGradY;
-        cv::convertScaleAbs(gradX, absGradX);
-        cv::convertScaleAbs(gradY, absGradY);
-        cv::addWeighted(absGradX, 0.5, absGradY, 0.5, 0, edges);
-    } else if (algo == "laplacian") {
-        cv::Mat laplace;
-        cv::Laplacian(gray, laplace, CV_16S, 3);
-        cv::convertScaleAbs(laplace, edges);
-    } else {
-        const double lower = !threshold.empty() ? threshold[0] : 50.0;
-        const double upper = threshold.size() > 1 ? threshold[1] : 150.0;
-        cv::Canny(gray, edges, lower, upper);
+    // Map algorithm name to FilterType
+    FilterType filterType = FilterType::CANNY;
+    if (algorithm == "sobel") {
+        filterType = FilterType::SOBEL;
+    } else if (algorithm == "laplacian") {
+        filterType = FilterType::LAPLACIAN;
+    } else if (algorithm == "prewitt") {
+        filterType = FilterType::PREWITT;
     }
 
-    return blob(edges);
-#else
-    THROW_RUNTIME_ERROR("Edge detection requires OpenCV support");
-#endif
+    return m_filter.applyFilter(input, filterType, params);
 }
 
-blob ImageProcessor::denoise(const blob& input [[maybe_unused]],
-                             const std::string& algorithm [[maybe_unused]],
-                             double strength [[maybe_unused]]) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat outputMat;
-
-    const double clampedStrength = std::clamp(strength, 0.0, 1.0);
-
-    auto toLower = [](std::string value) {
-        std::transform(value.begin(), value.end(), value.begin(),
-                       [](unsigned char ch) {
-                           return static_cast<char>(std::tolower(ch));
-                       });
-        return value;
-    };
-
-    const std::string algo = toLower(algorithm);
-
-    if (algo == "gaussian") {
-        const int kernelSize =
-            std::max(3, static_cast<int>(clampedStrength * 10.0) | 1);
-        const double sigma = 0.1 + clampedStrength * 2.0;
-        cv::GaussianBlur(inputMat, outputMat, cv::Size(kernelSize, kernelSize),
-                         sigma);
-    } else if (algo == "median") {
-        int kernelSize = std::max(3, static_cast<int>(clampedStrength * 10.0));
-        kernelSize |= 1;  // ensure odd
-        cv::medianBlur(inputMat, outputMat, kernelSize);
-    } else if (algo == "bilateral") {
-        const int diameter =
-            std::max(5, static_cast<int>(clampedStrength * 15.0));
-        const double sigmaColor = 25.0 + clampedStrength * 75.0;
-        const double sigmaSpace = 25.0 + clampedStrength * 75.0;
-        cv::bilateralFilter(inputMat, outputMat, diameter, sigmaColor,
-                            sigmaSpace);
-    } else if (algo == "nlmeans") {
-        if (inputMat.channels() == 1) {
-            cv::fastNlMeansDenoising(
-                inputMat, outputMat,
-                static_cast<float>(clampedStrength * 30.0f));
-        } else {
-            cv::fastNlMeansDenoisingColored(
-                inputMat, outputMat,
-                static_cast<float>(clampedStrength * 30.0f),
-                static_cast<float>(clampedStrength * 20.0f));
-        }
-    } else {
-        THROW_RUNTIME_ERROR("Unsupported denoise algorithm");
-    }
-
-    return blob(outputMat);
-#else
-    THROW_RUNTIME_ERROR("Denoise operation requires OpenCV support");
-#endif
+blob ImageProcessor::denoise(const blob& input, const std::string& algorithm,
+                             double strength) const {
+    // Delegate to ImageEnhancement to avoid code duplication
+    return m_enhancement.denoise(input, strength, algorithm);
 }
 
 std::vector<blob> ImageProcessor::processBatch(
@@ -500,57 +348,6 @@ void ImageProcessor::setOptions(const ProcessingOptions& options) {
 
 const ProcessingOptions& ImageProcessor::getOptions() const noexcept {
     return m_options;
-}
-
-// Private helper methods
-blob ImageProcessor::applyGaussianBlur(const blob& input [[maybe_unused]],
-                                       double sigma [[maybe_unused]]) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat outputMat;
-
-    int kernelSize = static_cast<int>(2 * std::ceil(3 * sigma) + 1);
-    if (kernelSize % 2 == 0)
-        kernelSize++;  // Ensure odd kernel size
-
-    cv::GaussianBlur(inputMat, outputMat, cv::Size(kernelSize, kernelSize),
-                     sigma);
-    return blob(outputMat);
-#else
-    THROW_RUNTIME_ERROR("Gaussian blur requires OpenCV support");
-#endif
-}
-
-blob ImageProcessor::applySharpen(const blob& input [[maybe_unused]],
-                                  double strength [[maybe_unused]]) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat blurred, outputMat;
-
-    cv::GaussianBlur(inputMat, blurred, cv::Size(0, 0), 1.0);
-    cv::addWeighted(inputMat, 1.0 + strength, blurred, -strength, 0, outputMat);
-
-    return blob(outputMat);
-#else
-    THROW_RUNTIME_ERROR("Sharpen filter requires OpenCV support");
-#endif
-}
-
-blob ImageProcessor::applyMedianFilter(const blob& input [[maybe_unused]],
-                                       int kernelSize [[maybe_unused]]) const {
-#ifdef ATOM_IMAGE_HAS_OPENCV
-    if (kernelSize <= 0 || kernelSize % 2 == 0) {
-        THROW_RUNTIME_ERROR(
-            "Median filter kernel size must be positive and odd");
-    }
-
-    cv::Mat inputMat = input.to_mat();
-    cv::Mat outputMat;
-    cv::medianBlur(inputMat, outputMat, kernelSize);
-    return blob(outputMat);
-#else
-    THROW_RUNTIME_ERROR("Median filter requires OpenCV support");
-#endif
 }
 
 // Format-specific converters

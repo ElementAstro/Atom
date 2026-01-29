@@ -90,6 +90,7 @@ set(TEST_HEADERS
     test_performance.hpp
     test_ocr.hpp
     test_ser.hpp
+    test_ser_enhanced.hpp
     test_computer_vision.hpp
     test_gpu_acceleration.hpp
     test_realtime.hpp

@@ -12,11 +12,17 @@ find_package(spdlog QUIET)
 
 # Find optional packages
 find_package(OpenCV REQUIRED) # Change to REQUIRED for computer vision
+find_package(nlohmann_json QUIET)
 find_package(PkgConfig QUIET)
 if(PkgConfig_FOUND)
   pkg_check_modules(CFITSIO cfitsio)
   pkg_check_modules(TESSERACT tesseract)
   pkg_check_modules(LEPTONICA lept)
+endif()
+
+# Check for nlohmann_json
+if(nlohmann_json_FOUND)
+  set(ATOM_IMAGE_HAS_JSON ON)
 endif()
 
 # Define source files
@@ -25,6 +31,20 @@ set(ATOM_IMAGE_SOURCES
     core/image_metadata.cpp
     # Metadata sources
     metadata/exif.cpp
+    metadata/types/gps_types.cpp
+    metadata/utils/datetime_utils.cpp
+    metadata/exif/exif_tags.cpp
+    metadata/exif/ifd_parser.cpp
+    metadata/exif/gps_parser.cpp
+    metadata/exif/exif_reader.cpp
+    metadata/exif/exif_writer.cpp
+    metadata/iptc/iptc_reader.cpp
+    metadata/iptc/iptc_writer.cpp
+    metadata/xmp/xmp_parser.cpp
+    metadata/xmp/xmp_writer.cpp
+    metadata/tools/metadata_validator.cpp
+    metadata/tools/privacy_sanitizer.cpp
+    metadata/tools/batch_processor.cpp
     # Format sources
     formats/fits_data.cpp
     formats/fits_file.cpp
@@ -32,6 +52,13 @@ set(ATOM_IMAGE_SOURCES
     formats/fits_utils.cpp
     formats/hdu.cpp
     formats/advanced_formats.cpp
+    formats/fits_image_types.cpp
+    formats/fits_loader.cpp
+    formats/fits_wcs.cpp
+    formats/fits_compression.cpp
+    formats/binary_table_hdu.cpp
+    formats/ascii_table_hdu.cpp
+    formats/calibration.cpp
     # I/O sources
     io/format_detector.cpp
     io/image_loader.cpp
@@ -44,12 +71,13 @@ set(ATOM_IMAGE_SOURCES
     processing/computer_vision.cpp # Uncommented
     processing/ml_processing.cpp
     processing/gpu_acceleration.cpp
-    processing/realtime_stub.cpp)
+    processing/realtime.cpp)
 
 # Define header files
 set(ATOM_IMAGE_HEADERS
     # Main header
     image.hpp
+    exceptions.hpp
     # Core headers
     core/image_blob.hpp
     core/image_metadata.hpp
@@ -57,13 +85,42 @@ set(ATOM_IMAGE_HEADERS
     core/cache_manager.hpp
     # Metadata headers
     metadata/exif.hpp
+    metadata/metadata.hpp
+    metadata/types/exif_types.hpp
+    metadata/types/gps_types.hpp
+    metadata/types/iptc_types.hpp
+    metadata/types/xmp_types.hpp
+    metadata/types/metadata_value.hpp
+    metadata/utils/byte_reader.hpp
+    metadata/utils/byte_writer.hpp
+    metadata/utils/datetime_utils.hpp
+    metadata/exif/exif_tags.hpp
+    metadata/exif/ifd_parser.hpp
+    metadata/exif/gps_parser.hpp
+    metadata/exif/exif_reader.hpp
+    metadata/exif/exif_writer.hpp
+    metadata/iptc/iptc_reader.hpp
+    metadata/iptc/iptc_writer.hpp
+    metadata/xmp/xmp_parser.hpp
+    metadata/xmp/xmp_writer.hpp
+    metadata/tools/metadata_validator.hpp
+    metadata/tools/privacy_sanitizer.hpp
+    metadata/tools/batch_processor.hpp
     # Format headers
+    formats/fits.hpp
     formats/fits_data.hpp
     formats/fits_file.hpp
     formats/fits_header.hpp
     formats/fits_utils.hpp
     formats/hdu.hpp
     formats/advanced_formats.hpp
+    formats/fits_image_types.hpp
+    formats/fits_loader.hpp
+    formats/fits_wcs.hpp
+    formats/fits_compression.hpp
+    formats/binary_table_hdu.hpp
+    formats/ascii_table_hdu.hpp
+    formats/calibration.hpp
     # I/O headers
     io/format_detector.hpp
     io/image_loader.hpp
@@ -80,8 +137,26 @@ set(ATOM_IMAGE_HEADERS
 
 # Add OCR sources if Tesseract is available
 if(TESSERACT_FOUND AND LEPTONICA_FOUND)
-  list(APPEND ATOM_IMAGE_SOURCES processing/ocr/ocr.cpp)
-  list(APPEND ATOM_IMAGE_HEADERS processing/ocr/ocr.hpp)
+  list(
+    APPEND
+    ATOM_IMAGE_SOURCES
+    processing/ocr/ocr_config.cpp
+    processing/ocr/progress_reporter.cpp
+    processing/ocr/ocr_cache.cpp
+    processing/ocr/spell_checker.cpp
+    processing/ocr/ocr_processor.cpp
+    processing/ocr/model_manager.cpp)
+  list(
+    APPEND
+    ATOM_IMAGE_HEADERS
+    processing/ocr/ocr.hpp
+    processing/ocr/ocr_types.hpp
+    processing/ocr/ocr_config.hpp
+    processing/ocr/progress_reporter.hpp
+    processing/ocr/ocr_cache.hpp
+    processing/ocr/spell_checker.hpp
+    processing/ocr/ocr_processor.hpp
+    processing/ocr/model_manager.hpp)
   set(ATOM_IMAGE_HAS_OCR ON)
 endif()
 
@@ -96,7 +171,13 @@ if(OpenCV_FOUND)
     formats/ser/quality.cpp
     formats/ser/registration.cpp
     formats/ser/stacking.cpp
-    formats/ser/utils.cpp)
+    formats/ser/utils.cpp
+    formats/ser/ser_analyzer.cpp
+    formats/ser/debayer.cpp
+    formats/ser/lucky_imaging.cpp
+    formats/ser/drizzle.cpp
+    formats/ser/video_export.cpp
+    formats/ser/ser_batch.cpp)
 
   list(
     APPEND
@@ -110,7 +191,13 @@ if(OpenCV_FOUND)
     formats/ser/ser_format.h
     formats/ser/stacking.h
     formats/ser/utils.h
-    formats/ser/exception.h)
+    formats/ser/exception.h
+    formats/ser/ser_analyzer.h
+    formats/ser/debayer.h
+    formats/ser/lucky_imaging.h
+    formats/ser/drizzle.h
+    formats/ser/video_export.h
+    formats/ser/ser_batch.h)
 endif()
 
 # Create library target
@@ -143,6 +230,17 @@ if(ATOM_IMAGE_HAS_OCR)
   target_include_directories(atom-image PUBLIC ${TESSERACT_INCLUDE_DIRS}
                                                ${LEPTONICA_INCLUDE_DIRS})
   target_compile_definitions(atom-image PUBLIC ATOM_IMAGE_HAS_OCR)
+
+  # Link WinHTTP on Windows for model downloading
+  if(WIN32)
+    target_link_libraries(atom-image PRIVATE winhttp)
+  endif()
+
+  # Link nlohmann_json if available for config parsing
+  if(ATOM_IMAGE_HAS_JSON)
+    target_link_libraries(atom-image PUBLIC nlohmann_json::nlohmann_json)
+    target_compile_definitions(atom-image PUBLIC ATOM_OCR_HAS_JSON=1)
+  endif()
 endif()
 
 # Install library target

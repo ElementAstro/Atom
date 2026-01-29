@@ -115,6 +115,7 @@ struct Detection {
     double x, y, width, height;       // Bounding box
     std::vector<double> mask;         // Segmentation mask (if available)
     std::vector<Keypoint> keypoints;  // Object keypoints (if available)
+    int trackId = -1;                 // Tracking ID for multi-frame tracking
 
     Detection(int id = -1, const std::string& name = "", double conf = 0.0,
               double x = 0, double y = 0, double w = 0, double h = 0)

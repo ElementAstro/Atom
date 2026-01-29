@@ -863,8 +863,7 @@ bool GPUImageProcessor::loadBuiltinKernels() {
 
 std::string GPUImageProcessor::getKernelSource(
     const std::string& operation) const {
-    // Return placeholder kernel sources
-    // In a real implementation, these would be optimized GPU kernels
+    // OpenCL kernel sources for GPU image processing operations
 
     if (operation == "gaussian_blur") {
         return R"(
@@ -879,20 +878,16 @@ std::string GPUImageProcessor::getKernelSource(
                 if (gx >= width || gy >= height) return;
 
                 int center = kernel_size / 2;
-                float sum = 0.0f;
 
                 for (int c = 0; c < channels; ++c) {
                     float pixel_sum = 0.0f;
 
                     for (int ky = 0; ky < kernel_size; ++ky) {
                         for (int kx = 0; kx < kernel_size; ++kx) {
-                            int px = gx + kx - center;
-                            int py = gy + ky - center;
-
-                            if (px >= 0 && px < width && py >= 0 && py < height) {
-                                int idx = (py * width + px) * channels + c;
-                                pixel_sum += input[idx] * kernel[ky * kernel_size + kx];
-                            }
+                            int px = clamp(gx + kx - center, 0, width - 1);
+                            int py = clamp(gy + ky - center, 0, height - 1);
+                            int idx = (py * width + px) * channels + c;
+                            pixel_sum += input[idx] * kernel[ky * kernel_size + kx];
                         }
                     }
 
@@ -901,13 +896,13 @@ std::string GPUImageProcessor::getKernelSource(
                 }
             }
         )";
-    } else if (operation == "convolution") {
+    } else if (operation == "convolve" || operation == "convolution") {
         return R"(
-            __kernel void convolution(__global const uchar* input,
-                                    __global uchar* output,
-                                    __global const float* kernel,
-                                    int width, int height, int channels,
-                                    int kernel_size) {
+            __kernel void convolve(__global const uchar* input,
+                                  __global uchar* output,
+                                  __global const float* kernel,
+                                  int width, int height, int channels,
+                                  int kernel_size) {
                 int gx = get_global_id(0);
                 int gy = get_global_id(1);
 
@@ -920,18 +915,282 @@ std::string GPUImageProcessor::getKernelSource(
 
                     for (int ky = 0; ky < kernel_size; ++ky) {
                         for (int kx = 0; kx < kernel_size; ++kx) {
-                            int px = gx + kx - center;
-                            int py = gy + ky - center;
-
-                            if (px >= 0 && px < width && py >= 0 && py < height) {
-                                int idx = (py * width + px) * channels + c;
-                                sum += input[idx] * kernel[ky * kernel_size + kx];
-                            }
+                            int px = clamp(gx + kx - center, 0, width - 1);
+                            int py = clamp(gy + ky - center, 0, height - 1);
+                            int idx = (py * width + px) * channels + c;
+                            sum += input[idx] * kernel[ky * kernel_size + kx];
                         }
                     }
 
                     int out_idx = (gy * width + gx) * channels + c;
                     output[out_idx] = (uchar)clamp(sum, 0.0f, 255.0f);
+                }
+            }
+        )";
+    } else if (operation == "resize") {
+        return R"(
+            __kernel void resize(__global const uchar* input,
+                                __global uchar* output,
+                                int src_width, int src_height,
+                                int dst_width, int dst_height,
+                                int channels, int interp_mode) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= dst_width || gy >= dst_height) return;
+
+                float sx = (float)gx * src_width / dst_width;
+                float sy = (float)gy * src_height / dst_height;
+
+                for (int c = 0; c < channels; ++c) {
+                    float value = 0.0f;
+
+                    if (interp_mode == 0) {
+                        // Nearest neighbor
+                        int px = (int)(sx + 0.5f);
+                        int py = (int)(sy + 0.5f);
+                        px = clamp(px, 0, src_width - 1);
+                        py = clamp(py, 0, src_height - 1);
+                        value = input[(py * src_width + px) * channels + c];
+                    } else if (interp_mode == 1) {
+                        // Bilinear interpolation
+                        int x0 = (int)sx;
+                        int y0 = (int)sy;
+                        int x1 = min(x0 + 1, src_width - 1);
+                        int y1 = min(y0 + 1, src_height - 1);
+                        float fx = sx - x0;
+                        float fy = sy - y0;
+
+                        float p00 = input[(y0 * src_width + x0) * channels + c];
+                        float p10 = input[(y0 * src_width + x1) * channels + c];
+                        float p01 = input[(y1 * src_width + x0) * channels + c];
+                        float p11 = input[(y1 * src_width + x1) * channels + c];
+
+                        value = (1-fx)*(1-fy)*p00 + fx*(1-fy)*p10 + (1-fx)*fy*p01 + fx*fy*p11;
+                    } else {
+                        // Bicubic (simplified)
+                        int x0 = (int)sx;
+                        int y0 = (int)sy;
+                        x0 = clamp(x0, 0, src_width - 1);
+                        y0 = clamp(y0, 0, src_height - 1);
+                        value = input[(y0 * src_width + x0) * channels + c];
+                    }
+
+                    int out_idx = (gy * dst_width + gx) * channels + c;
+                    output[out_idx] = (uchar)clamp(value, 0.0f, 255.0f);
+                }
+            }
+        )";
+    } else if (operation == "morphological") {
+        return R"(
+            __kernel void morphological(__global const uchar* input,
+                                        __global uchar* output,
+                                        __global const int* struct_elem,
+                                        int struct_width, int struct_height,
+                                        int width, int height, int channels,
+                                        int op_type) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= width || gy >= height) return;
+
+                int cx = struct_width / 2;
+                int cy = struct_height / 2;
+
+                for (int c = 0; c < channels; ++c) {
+                    uchar result;
+                    if (op_type == 0) {
+                        // Erosion: find minimum
+                        result = 255;
+                        for (int sy = 0; sy < struct_height; ++sy) {
+                            for (int sx = 0; sx < struct_width; ++sx) {
+                                if (struct_elem[sy * struct_width + sx]) {
+                                    int px = clamp(gx + sx - cx, 0, width - 1);
+                                    int py = clamp(gy + sy - cy, 0, height - 1);
+                                    uchar val = input[(py * width + px) * channels + c];
+                                    result = min(result, val);
+                                }
+                            }
+                        }
+                    } else {
+                        // Dilation: find maximum
+                        result = 0;
+                        for (int sy = 0; sy < struct_height; ++sy) {
+                            for (int sx = 0; sx < struct_width; ++sx) {
+                                if (struct_elem[sy * struct_width + sx]) {
+                                    int px = clamp(gx + sx - cx, 0, width - 1);
+                                    int py = clamp(gy + sy - cy, 0, height - 1);
+                                    uchar val = input[(py * width + px) * channels + c];
+                                    result = max(result, val);
+                                }
+                            }
+                        }
+                    }
+
+                    int out_idx = (gy * width + gx) * channels + c;
+                    output[out_idx] = result;
+                }
+            }
+        )";
+    } else if (operation == "edge_detection") {
+        return R"(
+            __kernel void detect_edges(__global const uchar* input,
+                                       __global uchar* output,
+                                       int width, int height,
+                                       int method_type,
+                                       float threshold1, float threshold2) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= width || gy >= height) return;
+                if (gx == 0 || gy == 0 || gx >= width-1 || gy >= height-1) {
+                    output[gy * width + gx] = 0;
+                    return;
+                }
+
+                // Sobel kernels
+                float gx_kernel[9] = {-1, 0, 1, -2, 0, 2, -1, 0, 1};
+                float gy_kernel[9] = {-1, -2, -1, 0, 0, 0, 1, 2, 1};
+
+                float grad_x = 0.0f;
+                float grad_y = 0.0f;
+
+                for (int ky = -1; ky <= 1; ++ky) {
+                    for (int kx = -1; kx <= 1; ++kx) {
+                        int idx = (gy + ky) * width + (gx + kx);
+                        int kidx = (ky + 1) * 3 + (kx + 1);
+                        float val = input[idx];
+                        grad_x += val * gx_kernel[kidx];
+                        grad_y += val * gy_kernel[kidx];
+                    }
+                }
+
+                float magnitude = sqrt(grad_x * grad_x + grad_y * grad_y);
+                uchar edge_val = (magnitude > threshold1) ? 255 : 0;
+                output[gy * width + gx] = edge_val;
+            }
+        )";
+    } else if (operation == "histogram") {
+        return R"(
+            __kernel void compute_histogram(__global const uchar* input,
+                                           __global int* histogram,
+                                           int width, int height, int channels) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= width || gy >= height) return;
+
+                for (int c = 0; c < channels; ++c) {
+                    int idx = (gy * width + gx) * channels + c;
+                    uchar val = input[idx];
+                    atomic_inc(&histogram[c * 256 + val]);
+                }
+            }
+
+            __kernel void equalize_histogram(__global const uchar* input,
+                                             __global uchar* output,
+                                             __global const float* cdf,
+                                             int width, int height, int channels) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= width || gy >= height) return;
+
+                for (int c = 0; c < channels; ++c) {
+                    int idx = (gy * width + gx) * channels + c;
+                    uchar val = input[idx];
+                    output[idx] = (uchar)(cdf[c * 256 + val] * 255.0f);
+                }
+            }
+        )";
+    } else if (operation == "color_convert") {
+        return R"(
+            __kernel void rgb_to_gray(__global const uchar* input,
+                                      __global uchar* output,
+                                      int width, int height) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= width || gy >= height) return;
+
+                int idx = (gy * width + gx) * 3;
+                float r = input[idx];
+                float g = input[idx + 1];
+                float b = input[idx + 2];
+
+                // ITU-R BT.601 conversion
+                float gray = 0.299f * r + 0.587f * g + 0.114f * b;
+                output[gy * width + gx] = (uchar)clamp(gray, 0.0f, 255.0f);
+            }
+
+            __kernel void rgb_to_hsv(__global const uchar* input,
+                                     __global uchar* output,
+                                     int width, int height) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= width || gy >= height) return;
+
+                int idx = (gy * width + gx) * 3;
+                float r = input[idx] / 255.0f;
+                float g = input[idx + 1] / 255.0f;
+                float b = input[idx + 2] / 255.0f;
+
+                float maxC = fmax(fmax(r, g), b);
+                float minC = fmin(fmin(r, g), b);
+                float delta = maxC - minC;
+
+                float h = 0.0f, s = 0.0f, v = maxC;
+
+                if (delta > 0.0f) {
+                    s = delta / maxC;
+                    if (maxC == r) h = 60.0f * fmod((g - b) / delta, 6.0f);
+                    else if (maxC == g) h = 60.0f * ((b - r) / delta + 2.0f);
+                    else h = 60.0f * ((r - g) / delta + 4.0f);
+                }
+
+                if (h < 0.0f) h += 360.0f;
+
+                output[idx] = (uchar)(h / 2.0f);  // H: 0-180
+                output[idx + 1] = (uchar)(s * 255.0f);  // S: 0-255
+                output[idx + 2] = (uchar)(v * 255.0f);  // V: 0-255
+            }
+        )";
+    } else if (operation == "threshold") {
+        return R"(
+            __kernel void threshold(__global const uchar* input,
+                                   __global uchar* output,
+                                   int width, int height, int channels,
+                                   uchar thresh_val, uchar max_val,
+                                   int thresh_type) {
+                int gx = get_global_id(0);
+                int gy = get_global_id(1);
+
+                if (gx >= width || gy >= height) return;
+
+                for (int c = 0; c < channels; ++c) {
+                    int idx = (gy * width + gx) * channels + c;
+                    uchar val = input[idx];
+                    uchar result;
+
+                    if (thresh_type == 0) {
+                        // Binary threshold
+                        result = (val > thresh_val) ? max_val : 0;
+                    } else if (thresh_type == 1) {
+                        // Binary inverted
+                        result = (val > thresh_val) ? 0 : max_val;
+                    } else if (thresh_type == 2) {
+                        // Truncate
+                        result = (val > thresh_val) ? thresh_val : val;
+                    } else if (thresh_type == 3) {
+                        // To zero
+                        result = (val > thresh_val) ? val : 0;
+                    } else {
+                        // To zero inverted
+                        result = (val > thresh_val) ? 0 : val;
+                    }
+
+                    output[idx] = result;
                 }
             }
         )";

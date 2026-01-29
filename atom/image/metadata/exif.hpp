@@ -5,21 +5,15 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <stdexcept>
 #include <string>
 #include <string_view>
 
+#include "../exceptions.hpp"
+
 namespace atom::image {
 
-/**
- * @class ExifException
- * @brief Exception class for EXIF parsing errors
- */
-class ExifException : public std::runtime_error {
-public:
-    explicit ExifException(const std::string& message)
-        : std::runtime_error(message) {}
-};
+// ExifException is now defined in exceptions.hpp
+// This comment kept for documentation purposes
 
 /**
  * @struct GpsCoordinate

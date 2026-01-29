@@ -110,9 +110,14 @@ public:
     /**
      * @brief Reads a FITS file from the specified filename.
      * @param filename The name of the file to read.
+     * @param useMmap Whether to use memory-mapped I/O for large files.
+     * @param validateData Whether to validate data after reading.
      * @throws FITSFileException if file cannot be opened or read
+     * @note This is a convenience wrapper for the full readFITS with options
      */
-    void readFITS(const std::string& filename);
+    // Note: Removed simple overload - use readFITS(filename, false, true)
+    // instead The overloaded version with default parameters at line 228
+    // handles this case
 
     /**
      * @brief Reads a FITS file asynchronously.

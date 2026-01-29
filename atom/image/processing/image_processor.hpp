@@ -1,7 +1,6 @@
 #ifndef ATOM_IMAGE_PROCESSOR_HPP
 #define ATOM_IMAGE_PROCESSOR_HPP
 
-#include <concepts>
 #include <functional>
 #include <memory>
 #include <string>
@@ -10,12 +9,8 @@
 
 #include "../core/image_blob.hpp"
 #include "../io/format_detector.hpp"
+#include "enhancement.hpp"
 #include "filters.hpp"
-
-// Forward declare error macros for header
-#ifndef THROW_RUNTIME_ERROR
-#define THROW_RUNTIME_ERROR(msg) throw std::runtime_error(msg)
-#endif
 
 namespace atom::image {
 
@@ -218,11 +213,9 @@ public:
 private:
     ProcessingOptions m_options;
 
-    // Internal helper methods
-    [[nodiscard]] blob applyGaussianBlur(const blob& input, double sigma) const;
-    [[nodiscard]] blob applySharpen(const blob& input, double strength) const;
-    [[nodiscard]] blob applyMedianFilter(const blob& input,
-                                         int kernelSize) const;
+    // Delegate to specialized processors (avoid code duplication)
+    ImageFilter m_filter;
+    ImageEnhancement m_enhancement;
 
     // Format-specific converters
     [[nodiscard]] blob convertToJPEG(const blob& input) const;

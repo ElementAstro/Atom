@@ -190,9 +190,8 @@ void FitsImage::save(const std::string& filename) const {
 
 void FitsImage::load(const std::string& filename) {
     try {
-        // Use the simple readFITS version to avoid ambiguity
-        (fitsFile.get()->*static_cast<void (FITSFile::*)(const std::string&)>(
-                              &FITSFile::readFITS))(filename);
+        // Call readFITS with explicit default parameters
+        fitsFile->readFITS(filename, false, true);
 
         // 从BITPIX确定数据类型
         if (fitsFile->getHDUCount() > 0) {

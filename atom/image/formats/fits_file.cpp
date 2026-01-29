@@ -62,11 +62,6 @@ void FITSFile::reportProgress(float progress, const std::string& status) const {
     }
 }
 
-// Original implementation for backward compatibility
-void FITSFile::readFITS(const std::string& filename) {
-    readFITS(filename, false, true);
-}
-
 void FITSFile::readFITS(const std::string& filename, bool useMmap,
                         bool validateData) {
     using namespace std::chrono;

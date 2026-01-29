@@ -13,6 +13,7 @@
 #include <execution>
 
 #include "../core/image_metadata.hpp"
+#include "../processing/image_processor.hpp"
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
 #include <opencv2/imgcodecs.hpp>
@@ -416,7 +417,9 @@ blob ImageLoader::applyPostProcessing(const blob& imageData,
         }
 
 #ifdef ATOM_IMAGE_HAS_OPENCV
-        processed.resize(newHeight, newWidth);
+        // Use ImageProcessor for resizing instead of removed blob.resize()
+        ImageProcessor processor;
+        processed = processor.resize(processed, newWidth, newHeight);
 #endif
     }
 

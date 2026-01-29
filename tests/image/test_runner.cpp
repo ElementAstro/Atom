@@ -14,6 +14,7 @@
 #include "test_computer_vision.hpp"
 #include "test_realtime.hpp"
 #include "test_ser.hpp"
+#include "test_ser_enhanced.hpp"
 #endif
 #include "test_advanced_formats.hpp"
 #include "test_gpu_acceleration.hpp"

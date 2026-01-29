@@ -15,6 +15,7 @@
  */
 
 #include <atomic>
+#include <chrono>
 #include <condition_variable>
 #include <functional>
 #include <memory>
@@ -22,8 +23,17 @@
 #include <queue>
 #include <string>
 #include <thread>
+#include <unordered_map>
 #include <vector>
 #include "../core/image_blob.hpp"
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+#include <opencv2/videoio.hpp>
+#endif
+
+// Include processing headers for complete types
+#include "enhancement.hpp"  // namespace atom::image
+#include "filters.hpp"
 
 namespace atom::image {
 
@@ -43,6 +53,7 @@ enum class CaptureSource {
  * @brief Real-time processing modes
  */
 enum class ProcessingMode {
+    NORMAL,       // Normal processing
     PASSTHROUGH,  // No processing (passthrough)
     FILTER,       // Apply filters
     ENHANCE,      // Image enhancement
@@ -69,16 +80,21 @@ struct FrameInfo {
  * @brief Processing statistics
  */
 struct ProcessingStats {
-    double averageFPS = 0.0;      // Average processing FPS
-    double currentFPS = 0.0;      // Current processing FPS
-    double averageLatency = 0.0;  // Average processing latency (ms)
-    double currentLatency = 0.0;  // Current processing latency (ms)
-    int64_t framesProcessed = 0;  // Total frames processed
-    int64_t framesDropped = 0;    // Total frames dropped
-    double cpuUsage = 0.0;        // CPU usage percentage
-    double memoryUsage = 0.0;     // Memory usage (MB)
-    double gpuUsage = 0.0;        // GPU usage percentage
-    std::string status = "idle";  // Current status
+    double averageFPS = 0.0;           // Average processing FPS
+    double currentFPS = 0.0;           // Current processing FPS
+    double averageLatency = 0.0;       // Average processing latency (ms)
+    double currentLatency = 0.0;       // Current processing latency (ms)
+    int64_t framesProcessed = 0;       // Total frames processed
+    int64_t framesDropped = 0;         // Total frames dropped
+    int64_t processedFrames = 0;       // Alias for framesProcessed
+    int64_t capturedFrames = 0;        // Total frames captured
+    double totalProcessingTime = 0.0;  // Total processing time (ms)
+    double cpuUsage = 0.0;             // CPU usage percentage
+    double memoryUsage = 0.0;          // Memory usage (MB)
+    double gpuUsage = 0.0;             // GPU usage percentage
+    std::string status = "idle";       // Current status
+    std::chrono::high_resolution_clock::time_point
+        startTime;  // Processing start time
 };
 
 /**
@@ -410,6 +426,47 @@ private:
     // Capture state
     std::atomic<bool> recording_{false};
     std::string recordingPath_;
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    // OpenCV capture (conditionally compiled)
+    std::unique_ptr<cv::VideoCapture> capture_;
+    std::unique_ptr<cv::VideoWriter> writer_;
+#endif
+
+    // Capture settings
+    int captureWidth_ = 0;
+    int captureHeight_ = 0;
+    double captureFPS_ = 30.0;
+    double targetFPS_ = 30.0;
+    int maxBufferSize_ = 10;
+    bool enableFrameDropping_ = true;
+    CaptureSource captureSource_ = CaptureSource::CAMERA;
+    std::string sourcePath_;
+
+    // Processing state
+    ProcessingMode processingMode_ = ProcessingMode::NORMAL;
+    std::unordered_map<std::string, std::unordered_map<std::string, double>>
+        filters_;
+    std::unique_ptr<ImageFilter> filter_;
+    std::unique_ptr<ImageEnhancement> enhancement_;
+    std::unordered_map<std::string, double> modeParams_;
+
+    // Frame management
+    std::mutex frameMutex_;
+    std::mutex filterMutex_;
+    std::condition_variable frameCondition_;
+    std::vector<blob> frameBuffer_vec_;
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    std::unique_ptr<cv::VideoWriter> videoWriter_;
+#endif
+
+    // Helper methods for processing pipeline
+    blob applyFilter(const blob& input, const std::string& filterName,
+                     const std::unordered_map<std::string, double>& params);
+    blob applyEnhancement(const blob& input);
+    blob applyDetection(const blob& input, const FrameInfo& frameInfo);
+    blob applyTracking(const blob& input, const FrameInfo& frameInfo);
 };
 
 /**

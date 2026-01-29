@@ -21,7 +21,7 @@ bool RealtimeProcessor::initialize(const RealtimeParams& params) {
         // Store parameters
         targetFPS_ = params.targetFPS;
         maxBufferSize_ = params.maxBufferSize;
-        enableFrameDropping_ = params.enableFrameDropping;
+        enableFrameDropping_ = params.dropFrames;
         processingMode_ = params.mode;
 
         // Initialize statistics
@@ -84,12 +84,13 @@ void RealtimeProcessor::stop() {
 
     // Clear frame buffer
     std::lock_guard<std::mutex> lock(frameMutex_);
-    frameBuffer_.clear();
+    while (!frameBuffer_.empty())
+        frameBuffer_.pop();
 }
 
 blob RealtimeProcessor::processFrame(const blob& input,
                                      const FrameInfo& frameInfo) {
-    if (input.empty()) {
+    if (input.isEmpty()) {
         return blob{};
     }
 
@@ -110,7 +111,7 @@ blob RealtimeProcessor::processFrame(const blob& input,
 
 bool RealtimeProcessor::addFrame(const blob& frame,
                                  const FrameInfo& frameInfo) {
-    if (frame.empty()) {
+    if (frame.isEmpty()) {
         return false;
     }
 
@@ -121,7 +122,7 @@ bool RealtimeProcessor::addFrame(const blob& frame,
         if (enableFrameDropping_) {
             // Drop oldest frame
             frameBuffer_.pop();
-            stats_.droppedFrames++;
+            stats_.framesDropped++;
         } else {
             return false;  // Buffer full
         }
@@ -410,7 +411,7 @@ void RealtimeProcessor::captureThread() {
 
 blob RealtimeProcessor::applyProcessingPipeline(const blob& input,
                                                 const FrameInfo& frameInfo) {
-    if (input.empty()) {
+    if (input.isEmpty()) {
         return blob{};
     }
 
@@ -457,7 +458,8 @@ blob RealtimeProcessor::applyProcessingPipeline(const blob& input,
 void RealtimeProcessor::updateStatistics(double processingTime) {
     stats_.totalProcessingTime += processingTime;
     stats_.averageLatency =
-        stats_.totalProcessingTime / std::max(1UL, stats_.processedFrames);
+        stats_.totalProcessingTime /
+        std::max(static_cast<int64_t>(1), stats_.processedFrames);
 
     // Calculate FPS
     auto currentTime = std::chrono::high_resolution_clock::now();
@@ -530,7 +532,7 @@ void RealtimeProcessor::cleanupCapture() {
 }
 
 blob RealtimeProcessor::resizeFrame(const blob& input) {
-    if (input.empty() || (captureWidth_ <= 0 && captureHeight_ <= 0)) {
+    if (input.isEmpty() || (captureWidth_ <= 0 && captureHeight_ <= 0)) {
         return input;
     }
 
@@ -548,7 +550,7 @@ blob RealtimeProcessor::resizeFrame(const blob& input) {
 
 blob RealtimeProcessor::convertFormat(const blob& input,
                                       const std::string& targetFormat) {
-    if (input.empty()) {
+    if (input.isEmpty()) {
         return input;
     }
 
@@ -574,7 +576,7 @@ blob RealtimeProcessor::convertFormat(const blob& input,
 blob RealtimeProcessor::applyFilter(
     const blob& input, const std::string& filterName,
     const std::unordered_map<std::string, double>& params) {
-    if (input.empty()) {
+    if (input.isEmpty()) {
         return input;
     }
 
@@ -606,7 +608,7 @@ blob RealtimeProcessor::applyFilter(
 }
 
 blob RealtimeProcessor::applyEnhancement(const blob& input) {
-    if (input.empty()) {
+    if (input.isEmpty()) {
         return input;
     }
 
@@ -639,16 +641,249 @@ blob RealtimeProcessor::applyEnhancement(const blob& input) {
 
 blob RealtimeProcessor::applyDetection(const blob& input,
                                        const FrameInfo& frameInfo) {
-    // Placeholder for object detection
-    // In a real implementation, this would run object detection models
+    if (input.isEmpty()) {
+        return input;
+    }
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    cv::Mat src = input.to_mat();
+    cv::Mat dst = src.clone();
+
+    // Get detection parameters
+    double threshold =
+        modeParams_.count("threshold") ? modeParams_.at("threshold") : 0.5;
+    std::string detectionType = "face";  // Default to face detection
+    if (modeParams_.count("detection_type")) {
+        // Map numeric value to detection type
+        int typeVal = static_cast<int>(modeParams_.at("detection_type"));
+        switch (typeVal) {
+            case 0:
+                detectionType = "face";
+                break;
+            case 1:
+                detectionType = "motion";
+                break;
+            case 2:
+                detectionType = "contour";
+                break;
+            default:
+                detectionType = "face";
+                break;
+        }
+    }
+
+    std::vector<cv::Rect> detections;
+
+    if (detectionType == "face") {
+        // Face detection using Haar cascade
+        cv::CascadeClassifier faceCascade;
+        std::string cascadePath = "haarcascade_frontalface_default.xml";
+
+        // Try to load cascade from common locations
+        std::vector<std::string> cascadePaths = {
+            cascadePath, "/usr/share/opencv4/haarcascades/" + cascadePath,
+            "/usr/share/opencv/haarcascades/" + cascadePath,
+            "C:/opencv/data/haarcascades/" + cascadePath};
+
+        bool loaded = false;
+        for (const auto& path : cascadePaths) {
+            if (faceCascade.load(path)) {
+                loaded = true;
+                break;
+            }
+        }
+
+        if (loaded) {
+            cv::Mat gray;
+            if (src.channels() > 1) {
+                cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+            } else {
+                gray = src.clone();
+            }
+            cv::equalizeHist(gray, gray);
+
+            faceCascade.detectMultiScale(gray, detections, 1.1, 3, 0,
+                                         cv::Size(30, 30));
+        }
+    } else if (detectionType == "motion") {
+        // Motion detection using frame differencing
+        static cv::Mat prevFrame;
+        if (!prevFrame.empty() && prevFrame.size() == src.size()) {
+            cv::Mat gray, prevGray, diff;
+            cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+            cv::cvtColor(prevFrame, prevGray, cv::COLOR_BGR2GRAY);
+            cv::absdiff(gray, prevGray, diff);
+            cv::threshold(diff, diff, 25, 255, cv::THRESH_BINARY);
+
+            // Find contours of motion regions
+            std::vector<std::vector<cv::Point>> contours;
+            cv::findContours(diff, contours, cv::RETR_EXTERNAL,
+                             cv::CHAIN_APPROX_SIMPLE);
+
+            for (const auto& contour : contours) {
+                double area = cv::contourArea(contour);
+                if (area > 500) {  // Minimum area threshold
+                    detections.push_back(cv::boundingRect(contour));
+                }
+            }
+        }
+        prevFrame = src.clone();
+    } else if (detectionType == "contour") {
+        // General contour detection
+        cv::Mat gray, edges;
+        cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+        cv::Canny(gray, edges, 50, 150);
+
+        std::vector<std::vector<cv::Point>> contours;
+        cv::findContours(edges, contours, cv::RETR_EXTERNAL,
+                         cv::CHAIN_APPROX_SIMPLE);
+
+        for (const auto& contour : contours) {
+            double area = cv::contourArea(contour);
+            if (area > 1000) {
+                detections.push_back(cv::boundingRect(contour));
+            }
+        }
+    }
+
+    // Draw detection results
+    for (const auto& rect : detections) {
+        cv::rectangle(dst, rect, cv::Scalar(0, 255, 0), 2);
+    }
+
+    // Call analysis callback if set
+    if (analysisCallback_ && !detections.empty()) {
+        std::unordered_map<std::string, double> analysisResult;
+        analysisResult["detection_count"] =
+            static_cast<double>(detections.size());
+        analysisResult["frame_number"] =
+            static_cast<double>(frameInfo.frameNumber);
+        analysisCallback_(analysisResult);
+    }
+
+    return blob(dst);
+#else
     return input;
+#endif
 }
 
 blob RealtimeProcessor::applyTracking(const blob& input,
                                       const FrameInfo& frameInfo) {
-    // Placeholder for object tracking
-    // In a real implementation, this would track objects across frames
+    if (input.isEmpty()) {
+        return input;
+    }
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    cv::Mat src = input.to_mat();
+    cv::Mat dst = src.clone();
+
+    // Simple tracking using optical flow
+    static cv::Mat prevGray;
+    static std::vector<cv::Point2f> prevPoints;
+    static bool initialized = false;
+
+    cv::Mat gray;
+    if (src.channels() > 1) {
+        cv::cvtColor(src, gray, cv::COLOR_BGR2GRAY);
+    } else {
+        gray = src.clone();
+    }
+
+    if (!initialized || prevPoints.empty()) {
+        // Initialize tracking points using good features to track
+        int maxCorners = modeParams_.count("max_points")
+                             ? static_cast<int>(modeParams_.at("max_points"))
+                             : 100;
+        double qualityLevel = modeParams_.count("quality_level")
+                                  ? modeParams_.at("quality_level")
+                                  : 0.01;
+        double minDistance = modeParams_.count("min_distance")
+                                 ? modeParams_.at("min_distance")
+                                 : 10.0;
+
+        cv::goodFeaturesToTrack(gray, prevPoints, maxCorners, qualityLevel,
+                                minDistance);
+        prevGray = gray.clone();
+        initialized = true;
+
+        // Draw initial points
+        for (const auto& pt : prevPoints) {
+            cv::circle(dst, pt, 3, cv::Scalar(0, 255, 0), -1);
+        }
+    } else {
+        // Track points using Lucas-Kanade optical flow
+        std::vector<cv::Point2f> nextPoints;
+        std::vector<uchar> status;
+        std::vector<float> err;
+
+        cv::calcOpticalFlowPyrLK(prevGray, gray, prevPoints, nextPoints, status,
+                                 err);
+
+        // Draw tracking results
+        std::vector<cv::Point2f> goodNew;
+        for (size_t i = 0; i < nextPoints.size(); ++i) {
+            if (status[i]) {
+                goodNew.push_back(nextPoints[i]);
+
+                // Draw line from previous to current position
+                cv::line(dst, prevPoints[i], nextPoints[i],
+                         cv::Scalar(0, 255, 0), 2);
+                cv::circle(dst, nextPoints[i], 3, cv::Scalar(0, 0, 255), -1);
+            }
+        }
+
+        // Re-detect points if too few remain
+        if (goodNew.size() < 20) {
+            std::vector<cv::Point2f> newPoints;
+            cv::goodFeaturesToTrack(gray, newPoints, 100, 0.01, 10);
+            goodNew.insert(goodNew.end(), newPoints.begin(), newPoints.end());
+        }
+
+        prevPoints = goodNew;
+        prevGray = gray.clone();
+
+        // Call analysis callback with tracking info
+        if (analysisCallback_) {
+            std::unordered_map<std::string, double> analysisResult;
+            analysisResult["tracked_points"] =
+                static_cast<double>(goodNew.size());
+            analysisResult["frame_number"] =
+                static_cast<double>(frameInfo.frameNumber);
+
+            // Calculate average motion
+            double avgMotionX = 0, avgMotionY = 0;
+            int validCount = 0;
+            for (size_t i = 0;
+                 i < std::min(prevPoints.size(), nextPoints.size()); ++i) {
+                if (i < status.size() && status[i]) {
+                    avgMotionX += nextPoints[i].x - prevPoints[i].x;
+                    avgMotionY += nextPoints[i].y - prevPoints[i].y;
+                    validCount++;
+                }
+            }
+            if (validCount > 0) {
+                analysisResult["avg_motion_x"] = avgMotionX / validCount;
+                analysisResult["avg_motion_y"] = avgMotionY / validCount;
+            }
+
+            analysisCallback_(analysisResult);
+        }
+    }
+
+    return blob(dst);
+#else
     return input;
+#endif
+}
+
+// Factory function
+std::unique_ptr<RealtimeProcessor> createRealtimeProcessor(
+    const RealtimeParams& params) {
+    auto processor = std::make_unique<RealtimeProcessor>();
+    if (processor->initialize(params)) {
+        return processor;
+    }
+    return nullptr;
 }
 
 }  // namespace atom::image

@@ -8,46 +8,19 @@
 #include <future>
 #include <memory>
 #include <span>
-#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "../exceptions.hpp"
 #include "fits_data.hpp"
 #include "fits_header.hpp"
 
-/**
- * @class FileOperationException
- * @brief Exception class for errors related to file operations.
- *
- * This exception is thrown when file operations like opening, reading, or
- * writing fail.
- */
-class FileOperationException : public std::runtime_error {
-public:
-    /**
-     * @brief Constructs a FileOperationException with a specific message.
-     * @param message The error message describing the file operation failure.
-     */
-    explicit FileOperationException(const std::string& message)
-        : std::runtime_error(message) {}
-};
-
-/**
- * @class DataFormatException
- * @brief Exception class for errors related to data format issues.
- *
- * This exception is thrown when data does not conform to the expected format,
- * such as during parsing or validation.
- */
-class DataFormatException : public std::runtime_error {
-public:
-    /**
-     * @brief Constructs a DataFormatException with a specific message.
-     * @param message The error message describing the data format issue.
-     */
-    explicit DataFormatException(const std::string& message)
-        : std::runtime_error(message) {}
-};
+// Backward compatibility aliases for legacy code
+using FileOperationException = atom::image::IOException;
+using DataFormatException = atom::image::FormatException;
+using HDUException = atom::image::HDUException;
+using ImageProcessingException = atom::image::ProcessingException;
 
 /**
  * @concept FitsNumeric
@@ -59,41 +32,6 @@ public:
  */
 template <typename T>
 concept FitsNumeric = std::integral<T> || std::floating_point<T>;
-
-/**
- * @class HDUException
- * @brief Exception class for errors specific to HDU (Header Data Unit)
- * operations.
- *
- * This exception is thrown for errors occurring during the processing or
- * manipulation of FITS HDUs, such as invalid HDU structure or header issues.
- */
-class HDUException : public std::runtime_error {
-public:
-    /**
-     * @brief Constructs an HDUException with a specific message.
-     * @param message The error message describing the HDU-related issue.
-     */
-    explicit HDUException(const std::string& message)
-        : std::runtime_error(message) {}
-};
-
-/**
- * @class ImageProcessingException
- * @brief Exception class for errors during image processing operations.
- *
- * This exception is thrown when an error occurs within an image processing
- * algorithm, such as invalid parameters or unsupported operations.
- */
-class ImageProcessingException : public std::runtime_error {
-public:
-    /**
-     * @brief Constructs an ImageProcessingException with a specific message.
-     * @param message The error message describing the image processing failure.
-     */
-    explicit ImageProcessingException(const std::string& message)
-        : std::runtime_error(message) {}
-};
 
 /**
  * @enum FilterType

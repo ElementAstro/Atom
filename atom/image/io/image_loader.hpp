@@ -20,7 +20,9 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+
 #include "../core/image_blob.hpp"
+#include "../exceptions.hpp"
 #include "format_detector.hpp"
 
 namespace atom::image {

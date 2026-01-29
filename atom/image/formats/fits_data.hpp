@@ -11,6 +11,8 @@
 #include <system_error>
 #include <vector>
 
+#include "../exceptions.hpp"
+
 /**
  * @enum FITSDataErrorCode
  * @brief Error codes for FITS data operations.
@@ -34,24 +36,9 @@ enum class FITSDataErrorCode {
  */
 std::error_code make_error_code(FITSDataErrorCode);
 
-/**
- * @class FITSDataException
- * @brief Exception class for FITS data operations.
- */
-class FITSDataException : public std::system_error {
-public:
-    explicit FITSDataException(FITSDataErrorCode code,
-                               const std::string& message = "")
-        : std::system_error(make_error_code(code), message) {}
-
-    explicit FITSDataException(const std::string& message)
-        : std::system_error(make_error_code(FITSDataErrorCode::InternalError),
-                            message) {}
-
-    [[nodiscard]] FITSDataErrorCode errorCode() const noexcept {
-        return static_cast<FITSDataErrorCode>(code().value());
-    }
-};
+// Use unified FITSException from exceptions.hpp
+// Backward compatibility alias
+using FITSDataException = atom::image::FITSException;
 
 /**
  * @brief Callback type for progress reporting.

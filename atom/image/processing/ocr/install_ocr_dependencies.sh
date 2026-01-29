@@ -56,7 +56,10 @@ detect_os() {
         fi
     elif [[ "$OSTYPE" == "darwin"* ]]; then
         OS="macos"
-    elif [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
+    elif [[ "$OSTYPE" == "msys" ]] || [[ "$MSYSTEM" == "MINGW64" ]] || [[ "$MSYSTEM" == "MINGW32" ]] || [[ "$MSYSTEM" == "UCRT64" ]]; then
+        # MSYS2/MinGW environment
+        OS="msys2"
+    elif [[ "$OSTYPE" == "cygwin" ]] || [[ "$OSTYPE" == "win32" ]]; then
         OS="windows"
     else
         OS="unknown"
@@ -126,7 +129,7 @@ download_models() {
     # Download English dictionary for spell checking
     log "Downloading English dictionary for spell checking..."
     if command -v wget &> /dev/null; then
-        wget -O "$DICT_DIR/english.txt.gz" \
+        wget -O "$DICT_DIR/english.txt" \
              "https://raw.githubusercontent.com/dwyl/english-words/master/words.txt" || {
             error "Failed to download dictionary with wget. Trying with curl..."
             if command -v curl &> /dev/null; then
@@ -392,7 +395,50 @@ install_macos() {
     # Optional: Install additional language data
     brew install tesseract-lang
 
+    # Install nlohmann-json for config parsing
+    brew install nlohmann-json
+
     success "Dependencies installed successfully on macOS"
+}
+
+# Install dependencies on MSYS2/MinGW64
+install_msys2() {
+    log "Installing dependencies on MSYS2/MinGW64..."
+
+    # Update package database
+    pacman -Syu --noconfirm
+
+    # Install build tools
+    pacman -S --noconfirm \
+        mingw-w64-x86_64-gcc \
+        mingw-w64-x86_64-cmake \
+        mingw-w64-x86_64-make \
+        mingw-w64-x86_64-ninja \
+        git \
+        wget \
+        curl
+
+    # Install OpenCV with contrib modules
+    pacman -S --noconfirm \
+        mingw-w64-x86_64-opencv
+
+    # Install Tesseract OCR and language data
+    pacman -S --noconfirm \
+        mingw-w64-x86_64-tesseract-ocr \
+        mingw-w64-x86_64-tesseract-data-eng \
+        mingw-w64-x86_64-leptonica
+
+    # Install nlohmann-json for config parsing
+    pacman -S --noconfirm \
+        mingw-w64-x86_64-nlohmann-json
+
+    # Optional: Install additional language packs
+    pacman -S --noconfirm \
+        mingw-w64-x86_64-tesseract-data-fra \
+        mingw-w64-x86_64-tesseract-data-deu \
+        mingw-w64-x86_64-tesseract-data-spa 2>/dev/null || true
+
+    success "Dependencies installed successfully on MSYS2/MinGW64"
 }
 
 # Install dependencies on Windows using Chocolatey and vcpkg
@@ -703,18 +749,23 @@ main() {
         macos)
             install_macos
             ;;
+        msys2)
+            install_msys2
+            ;;
         windows)
             create_windows_script
-            log "For Windows, please use the generated PowerShell script."
+            log "For Windows, please use the generated PowerShell script: Install-OCRDependencies.ps1"
+            log "Or run this script in MSYS2/MinGW64 shell for automatic installation."
             exit 0
             ;;
         linux-unknown)
             error "Unsupported Linux distribution. Please install dependencies manually."
             cat << EOF
 Required dependencies:
-- OpenCV (>= 4.5.0)
+- OpenCV (>= 4.5.0) with contrib modules
 - Tesseract OCR (>= 4.1.1)
 - Leptonica
+- nlohmann-json
 - Build tools (gcc/g++, cmake)
 - Git
 

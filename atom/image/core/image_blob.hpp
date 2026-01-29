@@ -3,11 +3,9 @@
 
 #include <algorithm>
 #include <array>
-#include <cmath>
 #include <concepts>
 #include <cstddef>
 #include <cstring>
-#include <limits>
 #include <span>
 #include <stdexcept>
 #include <vector>
@@ -512,56 +510,21 @@ public:
     }
 
 #if __has_include(<opencv2/core.hpp>)
-    cv::Mat to_mat() const {
+    // Conversion to/from OpenCV Mat
+    [[nodiscard]] cv::Mat to_mat() const {
         int type = CV_MAKETYPE(depth_, channels_);
         cv::Mat mat(rows_, cols_, type);
         std::memcpy(mat.data, storage_.data(), size());
         return mat;
     }
 
-    void apply_filter(const cv::Mat& kernel) {
-        cv::Mat src = to_mat();
-        cv::Mat dst;
-        cv::filter2D(src, dst, -1, kernel);
-        *this = Blob(dst);
-    }
-
-    void resize(int new_rows, int new_cols) {
-        cv::Mat src = to_mat();
-        cv::Mat dst;
-        cv::resize(src, dst, cv::Size(new_cols, new_rows));
-        *this = Blob(dst);
-    }
-
-    void convert_color(int code) {
-        cv::Mat src = to_mat();
-        cv::Mat dst;
-        cv::cvtColor(src, dst, code);
-        *this = Blob(dst);
-    }
-
-    void rotate(double angle) {
-        cv::Mat src = to_mat();
-        cv::Mat dst;
-        cv::Point2f center(src.cols / 2.0, src.rows / 2.0);
-        cv::Mat rot = cv::getRotationMatrix2D(center, angle, 1.0);
-        cv::warpAffine(src, dst, rot, src.size());
-        *this = Blob(dst);
-    }
-
-    void flip(int flipCode) {
-        cv::Mat src = to_mat();
-        cv::Mat dst;
-        cv::flip(src, dst, flipCode);
-        *this = Blob(dst);
-    }
-
+    // Basic I/O (use ImageLoader/ImageSaver for advanced operations)
     void save(const std::string& filename) const {
         cv::Mat mat = to_mat();
         cv::imwrite(filename, mat);
     }
 
-    static Blob load(const std::string& filename) {
+    [[nodiscard]] static Blob load(const std::string& filename) {
         cv::Mat mat = cv::imread(filename, cv::IMREAD_UNCHANGED);
         if (mat.empty()) {
             THROW_RUNTIME_ERROR("Failed to load image from file");
@@ -569,7 +532,8 @@ public:
         return Blob(mat);
     }
 
-    std::vector<Blob> split_channels() const {
+    // Channel operations
+    [[nodiscard]] std::vector<Blob> split_channels() const {
         cv::Mat src = to_mat();
         std::vector<cv::Mat> channels;
         cv::split(src, channels);
@@ -580,7 +544,8 @@ public:
         return channel_blobs;
     }
 
-    static Blob merge_channels(const std::vector<Blob>& channel_blobs) {
+    [[nodiscard]] static Blob merge_channels(
+        const std::vector<Blob>& channel_blobs) {
         std::vector<cv::Mat> channels;
         for (const auto& blob : channel_blobs) {
             channels.push_back(blob.to_mat());
@@ -589,6 +554,10 @@ public:
         cv::merge(channels, merged);
         return Blob(merged);
     }
+
+    // NOTE: Processing methods (apply_filter, resize, rotate, flip,
+    // convert_color) have been removed. Use ImageProcessor or ImageFilter
+    // classes instead.
 #endif
 
     [[nodiscard]] constexpr auto getRows() const noexcept -> int {

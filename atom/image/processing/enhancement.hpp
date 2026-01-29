@@ -27,6 +27,7 @@ namespace atom::image {
  */
 enum class ColorSpace {
     RGB,  // Red, Green, Blue
+    BGR,  // Blue, Green, Red (OpenCV default)
     HSV,  // Hue, Saturation, Value
     HSL,  // Hue, Saturation, Lightness
     LAB,  // L*a*b* color space

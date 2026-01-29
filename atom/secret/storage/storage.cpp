@@ -8,11 +8,14 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-// Note: Do NOT define WIN32_LEAN_AND_MEAN here as wincred.h needs full
-// windows.h
+// MinGW has incomplete wincred.h - only enable Windows Credential Manager for
+// MSVC
+#if defined(_MSC_VER)
+#define HAS_WINDOWS_CREDENTIAL_MANAGER 1
 #include <wincred.h>
 #include <windows.h>
 #pragma comment(lib, "Advapi32.lib")
+#endif
 #elif defined(__APPLE__)
 #include <Security/Security.h>
 #elif defined(__linux__)
@@ -27,7 +30,7 @@
 
 namespace atom::secret {
 
-#if defined(_WIN32)
+#if defined(HAS_WINDOWS_CREDENTIAL_MANAGER)
 
 /**
  * @brief Windows Credential Manager storage implementation.
@@ -45,19 +48,15 @@ public:
                        const std::vector<uint8_t>& data) override {
         std::string targetName = appName_ + "/" + std::string(key);
 
-        CREDENTIALW cred = {};
+        CREDENTIAL cred = {};
         cred.Type = CRED_TYPE_GENERIC;
-
-        std::wstring wTargetName(targetName.begin(), targetName.end());
-        cred.TargetName = const_cast<LPWSTR>(wTargetName.c_str());
+        cred.TargetName = const_cast<LPSTR>(targetName.c_str());
         cred.CredentialBlobSize = static_cast<DWORD>(data.size());
         cred.CredentialBlob = const_cast<LPBYTE>(data.data());
         cred.Persist = CRED_PERSIST_LOCAL_MACHINE;
+        cred.Comment = const_cast<LPSTR>(appName_.c_str());
 
-        std::wstring wAppName(appName_.begin(), appName_.end());
-        cred.Comment = const_cast<LPWSTR>(wAppName.c_str());
-
-        if (!CredWriteW(&cred, 0)) {
+        if (!CredWrite(&cred, 0)) {
             return Result<void>::error(ErrorCode::StorageWriteFailed,
                                        "Failed to store credential: " +
                                            std::to_string(GetLastError()));
@@ -79,10 +78,9 @@ public:
 
     Result<std::vector<uint8_t>> retrieveBytes(std::string_view key) override {
         std::string targetName = appName_ + "/" + std::string(key);
-        std::wstring wTargetName(targetName.begin(), targetName.end());
 
-        PCREDENTIALW pCred = nullptr;
-        if (!CredReadW(wTargetName.c_str(), CRED_TYPE_GENERIC, 0, &pCred)) {
+        PCREDENTIAL pCred = nullptr;
+        if (!CredRead(targetName.c_str(), CRED_TYPE_GENERIC, 0, &pCred)) {
             return Result<std::vector<uint8_t>>::error(
                 ErrorCode::StorageKeyNotFound, "Key not found");
         }
@@ -97,9 +95,8 @@ public:
 
     Result<void> remove(std::string_view key) override {
         std::string targetName = appName_ + "/" + std::string(key);
-        std::wstring wTargetName(targetName.begin(), targetName.end());
 
-        if (!CredDeleteW(wTargetName.c_str(), CRED_TYPE_GENERIC, 0)) {
+        if (!CredDelete(targetName.c_str(), CRED_TYPE_GENERIC, 0)) {
             DWORD error = GetLastError();
             if (error == ERROR_NOT_FOUND) {
                 return Result<void>::success();  // Already deleted
@@ -114,10 +111,9 @@ public:
 
     bool exists(std::string_view key) override {
         std::string targetName = appName_ + "/" + std::string(key);
-        std::wstring wTargetName(targetName.begin(), targetName.end());
 
-        PCREDENTIALW pCred = nullptr;
-        if (CredReadW(wTargetName.c_str(), CRED_TYPE_GENERIC, 0, &pCred)) {
+        PCREDENTIAL pCred = nullptr;
+        if (CredRead(targetName.c_str(), CRED_TYPE_GENERIC, 0, &pCred)) {
             CredFree(pCred);
             return true;
         }
@@ -127,15 +123,13 @@ public:
     Result<std::vector<std::string>> getAllKeys() override {
         std::vector<std::string> keys;
         std::string filter = appName_ + "/*";
-        std::wstring wFilter(filter.begin(), filter.end());
 
         DWORD count = 0;
-        PCREDENTIALW* pCredentials = nullptr;
+        PCREDENTIAL* pCredentials = nullptr;
 
-        if (CredEnumerateW(wFilter.c_str(), 0, &count, &pCredentials)) {
+        if (CredEnumerate(filter.c_str(), 0, &count, &pCredentials)) {
             for (DWORD i = 0; i < count; ++i) {
-                std::wstring wTarget = pCredentials[i]->TargetName;
-                std::string target(wTarget.begin(), wTarget.end());
+                std::string target = pCredentials[i]->TargetName;
 
                 size_t prefixLen = appName_.length() + 1;
                 if (target.length() > prefixLen) {
@@ -506,7 +500,7 @@ std::unique_ptr<SecureStorage> SecureStorage::create(
 
     switch (backend) {
         case StorageBackend::System:
-#if defined(_WIN32)
+#if defined(HAS_WINDOWS_CREDENTIAL_MANAGER)
             spdlog::info("Using Windows Credential Manager for secure storage");
             return std::make_unique<WindowsSecureStorage>(options.appName);
 #elif defined(__APPLE__)
@@ -540,7 +534,7 @@ std::unique_ptr<SecureStorage> SecureStorage::create(
 bool SecureStorage::isBackendAvailable(StorageBackend backend) noexcept {
     switch (backend) {
         case StorageBackend::System:
-#if defined(_WIN32) || defined(__APPLE__)
+#if defined(HAS_WINDOWS_CREDENTIAL_MANAGER) || defined(__APPLE__)
             return true;
 #elif defined(__linux__) && defined(HAS_LIBSECRET)
             return true;

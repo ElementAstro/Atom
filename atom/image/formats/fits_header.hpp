@@ -20,43 +20,28 @@
 #include <unordered_map>
 #include <vector>
 
+#include "../exceptions.hpp"
+
 /**
  * @namespace FITSHeaderErrors
  * @brief Namespace containing exceptions for FITS header operations
+ * @note These are now aliases to unified exceptions for backward compatibility
  */
 namespace FITSHeaderErrors {
 
-/**
- * @class BaseException
- * @brief Base exception class for all FITS header exceptions
- */
-class BaseException : public std::runtime_error {
-public:
-    /**
-     * @brief Constructor with error message
-     * @param message The error message describing the exception
-     */
-    explicit BaseException(const std::string& message)
-        : std::runtime_error(message) {}
-};
+// Base exception - use unified FITSException
+using BaseException = atom::image::FITSException;
 
 /**
  * @class KeywordNotFoundException
  * @brief Exception thrown when a requested keyword is not found
  */
-class KeywordNotFoundException : public BaseException {
+class KeywordNotFoundException : public std::runtime_error {
 public:
-    /**
-     * @brief Constructor with the name of the keyword not found
-     * @param keyword The name of the keyword that was not found
-     */
     explicit KeywordNotFoundException(const std::string& keyword)
-        : BaseException("Keyword not found: " + keyword), keyword_(keyword) {}
+        : std::runtime_error("Keyword not found: " + keyword),
+          keyword_(keyword) {}
 
-    /**
-     * @brief Get the name of the keyword that was not found
-     * @return The name of the missing keyword
-     */
     [[nodiscard]] const std::string& getKeyword() const noexcept {
         return keyword_;
     }
@@ -65,38 +50,14 @@ private:
     std::string keyword_;
 };
 
-/**
- * @class InvalidDataException
- * @brief Exception thrown when FITS data is malformed or invalid
- */
-class InvalidDataException : public BaseException {
-public:
-    /**
-     * @brief Constructor with error message
-     * @param message The error message describing the exception
-     */
-    explicit InvalidDataException(const std::string& message)
-        : BaseException("Invalid FITS data: " + message) {}
-};
-
-/**
- * @class DeserializationException
- * @brief Exception thrown during header deserialization errors
- */
-class DeserializationException : public BaseException {
-public:
-    /**
-     * @brief Constructor with error message
-     * @param message The error message describing the exception
-     */
-    explicit DeserializationException(const std::string& message)
-        : BaseException("FITS header deserialization error: " + message) {}
-};
+// Aliases for other exception types
+using InvalidDataException = atom::image::ValidationException;
+using DeserializationException = atom::image::FormatException;
 
 }  // namespace FITSHeaderErrors
 
-// 保持向后兼容
-using FITSHeaderException = FITSHeaderErrors::BaseException;
+// Backward compatibility
+using FITSHeaderException = atom::image::FITSException;
 
 /**
  * @class FITSHeader

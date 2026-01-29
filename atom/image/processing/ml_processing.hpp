@@ -406,6 +406,13 @@ protected:
                                             MLModelType model,
                                             const MLParams& params = {}) const;
 
+    /**
+     * @brief Get model file path for a given model type
+     * @param model Model type
+     * @return Full path to the model file
+     */
+    std::string getModelPath(MLModelType model) const;
+
 private:
     std::string modelDir_;
     MLBackend currentBackend_ = MLBackend::AUTO;

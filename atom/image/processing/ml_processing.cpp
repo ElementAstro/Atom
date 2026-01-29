@@ -1,5 +1,6 @@
 #include "ml_processing.hpp"
 #include <chrono>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 
@@ -614,8 +615,17 @@ bool MLImageProcessor::downloadModel(
 }
 
 bool MLImageProcessor::isModelAvailable(MLModelType model) const {
+#ifdef ATOM_IMAGE_HAS_ONNX
+    std::string modelPath = getModelPath(model);
+    if (modelPath.empty()) {
+        return false;
+    }
+    std::ifstream file(modelPath);
+    return file.good();
+#else
     (void)model;
-    return false;  // Placeholder
+    return false;
+#endif
 }
 
 std::unordered_map<std::string, std::string> MLImageProcessor::getModelInfo(
@@ -679,9 +689,69 @@ bool MLImageProcessor::setBackend(MLBackend backend, int deviceId) {
 
 bool MLImageProcessor::loadModel(MLModelType model,
                                  const MLParams& params) const {
+#ifdef ATOM_IMAGE_HAS_ONNX
+    try {
+        std::string modelPath = getModelPath(model);
+        if (modelPath.empty()) {
+            return false;
+        }
+
+        // Check if model file exists
+        std::ifstream file(modelPath);
+        if (!file.good()) {
+            return false;
+        }
+
+        // Model loading is handled in runInference for ONNX Runtime
+        // This just validates the model exists
+        return true;
+    } catch (const std::exception&) {
+        return false;
+    }
+#else
     (void)model;
     (void)params;
     return false;
+#endif
+}
+
+std::string MLImageProcessor::getModelPath(MLModelType model) const {
+    std::string filename;
+    switch (model) {
+        case MLModelType::REAL_ESRGAN:
+            filename = "realesrgan_x4plus.onnx";
+            break;
+        case MLModelType::ESRGAN:
+            filename = "esrgan_x4.onnx";
+            break;
+        case MLModelType::SRCNN:
+            filename = "srcnn_x2.onnx";
+            break;
+        case MLModelType::DNCNN:
+            filename = "dncnn_color.onnx";
+            break;
+        case MLModelType::FFDNet:
+            filename = "ffdnet_color.onnx";
+            break;
+        case MLModelType::SWINIR:
+            filename = "swinir_real_sr_x4.onnx";
+            break;
+        case MLModelType::NAFNET:
+            filename = "nafnet_deblur.onnx";
+            break;
+        case MLModelType::COLORIZATION:
+            filename = "colorization_siggraph.onnx";
+            break;
+        case MLModelType::BACKGROUND_REMOVAL:
+            filename = "u2net.onnx";
+            break;
+        case MLModelType::FACE_RESTORATION:
+            filename = "gfpgan_v1.4.onnx";
+            break;
+        default:
+            return "";
+    }
+    return modelDir_.empty() ? filename : modelDir_ + "/" + filename;
 }
 
 std::vector<float> MLImageProcessor::preprocessImage(
@@ -776,13 +846,205 @@ blob MLImageProcessor::postprocessOutput(
 std::vector<float> MLImageProcessor::runInference(
     const std::vector<float>& input, MLModelType model,
     const MLParams& params) const {
-    std::vector<float> result =
-        input;  // Placeholder: return input as is for fallback
+#ifdef ATOM_IMAGE_HAS_ONNX
+    try {
+        std::string modelPath = getModelPath(model);
+        if (modelPath.empty()) {
+            return input;  // Fallback to passthrough
+        }
+
+        // Initialize ONNX Runtime
+        Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "MLImageProcessor");
+        Ort::SessionOptions sessionOptions;
+
+        // Configure session options
+        sessionOptions.SetIntraOpNumThreads(
+            params.numThreads > 0 ? params.numThreads : 4);
+        sessionOptions.SetGraphOptimizationLevel(
+            GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+
+        // Enable GPU execution if requested
+        if (useGPU_) {
+#ifdef ATOM_IMAGE_HAS_CUDA
+            OrtCUDAProviderOptions cuda_options;
+            cuda_options.device_id = 0;
+            sessionOptions.AppendExecutionProvider_CUDA(cuda_options);
+#endif
+        }
+
+        // Create session
+        Ort::Session session(env, modelPath.c_str(), sessionOptions);
+
+        // Get input/output info
+        Ort::AllocatorWithDefaultOptions allocator;
+
+        // Get input name
+        auto inputNameAllocated = session.GetInputNameAllocated(0, allocator);
+        const char* inputName = inputNameAllocated.get();
+
+        // Get output name
+        auto outputNameAllocated = session.GetOutputNameAllocated(0, allocator);
+        const char* outputName = outputNameAllocated.get();
+
+        // Get input shape info
+        auto inputTypeInfo = session.GetInputTypeInfo(0);
+        auto tensorInfo = inputTypeInfo.GetTensorTypeAndShapeInfo();
+        auto inputShape = tensorInfo.GetShape();
+
+        // Prepare input tensor
+        // Assume NCHW format for most image models
+        int batchSize = 1;
+        int channels = 3;
+        int height = params.tileSize > 0 ? params.tileSize : 256;
+        int width = height;
+
+        // Adjust shape based on model requirements
+        if (inputShape.size() == 4) {
+            if (inputShape[0] > 0)
+                batchSize = static_cast<int>(inputShape[0]);
+            if (inputShape[1] > 0)
+                channels = static_cast<int>(inputShape[1]);
+            // Height and width might be dynamic (-1)
+        }
+
+        std::vector<int64_t> inputDims = {batchSize, channels, height, width};
+        size_t inputTensorSize = batchSize * channels * height * width;
+
+        // Prepare input data (convert from HWC to NCHW if needed)
+        std::vector<float> inputTensor(inputTensorSize);
+
+        if (input.size() == inputTensorSize) {
+            // Already correct size, assume NCHW
+            inputTensor = input;
+        } else if (input.size() ==
+                   static_cast<size_t>(height * width * channels)) {
+            // Convert HWC to NCHW
+            for (int c = 0; c < channels; ++c) {
+                for (int h = 0; h < height; ++h) {
+                    for (int w = 0; w < width; ++w) {
+                        int hwcIdx = h * width * channels + w * channels + c;
+                        int nchwIdx = c * height * width + h * width + w;
+                        if (hwcIdx < static_cast<int>(input.size())) {
+                            inputTensor[nchwIdx] = input[hwcIdx];
+                        }
+                    }
+                }
+            }
+        } else {
+            // Size mismatch, return input as fallback
+            return input;
+        }
+
+        // Create input tensor
+        auto memoryInfo =
+            Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+        Ort::Value inputOrtTensor = Ort::Value::CreateTensor<float>(
+            memoryInfo, inputTensor.data(), inputTensorSize, inputDims.data(),
+            inputDims.size());
+
+        // Run inference
+        const char* inputNames[] = {inputName};
+        const char* outputNames[] = {outputName};
+
+        auto outputTensors = session.Run(Ort::RunOptions{nullptr}, inputNames,
+                                         &inputOrtTensor, 1, outputNames, 1);
+
+        // Get output data
+        auto& outputTensor = outputTensors[0];
+        auto outputInfo = outputTensor.GetTensorTypeAndShapeInfo();
+        auto outputShape = outputInfo.GetShape();
+        size_t outputSize = outputInfo.GetElementCount();
+
+        const float* outputData = outputTensor.GetTensorData<float>();
+        std::vector<float> result(outputData, outputData + outputSize);
+
+        // Convert NCHW back to HWC if needed for postprocessing
+        if (outputShape.size() == 4) {
+            int outC = static_cast<int>(outputShape[1]);
+            int outH = static_cast<int>(outputShape[2]);
+            int outW = static_cast<int>(outputShape[3]);
+
+            std::vector<float> hwcOutput(outH * outW * outC);
+            for (int c = 0; c < outC; ++c) {
+                for (int h = 0; h < outH; ++h) {
+                    for (int w = 0; w < outW; ++w) {
+                        int nchwIdx = c * outH * outW + h * outW + w;
+                        int hwcIdx = h * outW * outC + w * outC + c;
+                        hwcOutput[hwcIdx] = result[nchwIdx];
+                    }
+                }
+            }
+            return hwcOutput;
+        }
+
+        return result;
+    } catch (const Ort::Exception& e) {
+        // ONNX Runtime error - fall through to fallback
+        (void)e;
+    } catch (const std::exception&) {
+        // General error - fall through to fallback
+    }
+#endif
+
+    // Fallback: apply simple enhancement based on model type
+    std::vector<float> result = input;
+
+#ifdef ATOM_IMAGE_HAS_OPENCV
+    // Simple fallback processing
+    switch (model) {
+        case MLModelType::ESRGAN:
+        case MLModelType::REAL_ESRGAN:
+        case MLModelType::SRCNN:
+        case MLModelType::VDSR:
+        case MLModelType::EDSR: {
+            // Simple bicubic upscaling as fallback
+            int channels = 3;
+            int size = static_cast<int>(std::sqrt(input.size() / channels));
+            if (size > 0) {
+                cv::Mat mat(size, size, CV_32FC3,
+                            const_cast<float*>(input.data()));
+                cv::Mat upscaled;
+                int scaleFactor =
+                    params.scaleFactor > 0 ? params.scaleFactor : 4;
+                cv::resize(mat, upscaled, cv::Size(), scaleFactor, scaleFactor,
+                           cv::INTER_CUBIC);
+                result.assign((float*)upscaled.data,
+                              (float*)upscaled.data +
+                                  upscaled.total() * upscaled.channels());
+            }
+            break;
+        }
+        case MLModelType::DNCNN:
+        case MLModelType::FFDNet:
+        case MLModelType::RIDNET:
+        case MLModelType::CBDNet: {
+            // Simple bilateral filter as denoising fallback
+            int channels = 3;
+            int size = static_cast<int>(std::sqrt(input.size() / channels));
+            if (size > 0) {
+                cv::Mat mat(size, size, CV_32FC3,
+                            const_cast<float*>(input.data()));
+                cv::Mat denoised;
+                cv::Mat mat8u;
+                mat.convertTo(mat8u, CV_8UC3, 255.0);
+                cv::bilateralFilter(mat8u, denoised, 9, 75, 75);
+                cv::Mat result32f;
+                denoised.convertTo(result32f, CV_32FC3, 1.0 / 255.0);
+                result.assign((float*)result32f.data,
+                              (float*)result32f.data +
+                                  result32f.total() * result32f.channels());
+            }
+            break;
+        }
+        default:
+            // Return input unchanged for other model types
+            break;
+    }
+#else
     (void)model;
     (void)params;
-    // In real, would run model inference
-    // For example, for super resolution, apply simple interpolation in
-    // frequency or something, but placeholder copy
+#endif
+
     return result;
 }
 
