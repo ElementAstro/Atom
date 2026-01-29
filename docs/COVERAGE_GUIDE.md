@@ -5,6 +5,7 @@ This guide explains how to use the comprehensive coverage analysis system for th
 ## Overview
 
 The Atom project includes a sophisticated coverage analysis system that:
+
 - Generates coverage reports for both C++ and Python code
 - Creates unified HTML reports combining both languages
 - Integrates with CI/CD pipelines
@@ -14,6 +15,7 @@ The Atom project includes a sophisticated coverage analysis system that:
 ## Quick Start
 
 ### Generate Full Coverage Report
+
 ```bash
 # Build and run all tests with coverage
 make test-coverage
@@ -26,6 +28,7 @@ make coverage-unified-open
 ```
 
 ### Python-Only Coverage
+
 ```bash
 # Generate Python coverage report
 make coverage-python
@@ -35,6 +38,7 @@ python scripts/python_coverage.py --open
 ```
 
 ### C++ Module-Specific Coverage
+
 ```bash
 # Generate coverage for specific module
 make coverage-module MODULE=algorithm
@@ -46,6 +50,7 @@ cd build && make coverage-algorithm
 ## Coverage Tools and Scripts
 
 ### 1. Unified Coverage Script (`scripts/unified_coverage.py`)
+
 Generates comprehensive coverage reports combining C++ and Python results.
 
 ```bash
@@ -63,6 +68,7 @@ python scripts/unified_coverage.py --open
 ```
 
 ### 2. Python Coverage Script (`scripts/python_coverage.py`)
+
 Dedicated Python coverage analysis with advanced options.
 
 ```bash
@@ -80,6 +86,7 @@ python scripts/python_coverage.py --report-only --open
 ```
 
 ### 3. C++ Coverage Script (`scripts/coverage.sh`)
+
 Comprehensive C++ coverage analysis with multiple options.
 
 ```bash
@@ -94,6 +101,7 @@ Comprehensive C++ coverage analysis with multiple options.
 ```
 
 ### 4. Coverage Badge Generator (`scripts/coverage_badge.py`)
+
 Generates coverage badges for README and documentation.
 
 **Cross-platform usage:**
@@ -114,6 +122,7 @@ python scripts\coverage_badge.py
 ```
 
 **Options:**
+
 ```bash
 # Update README with coverage badges
 python scripts/coverage_badge.py
@@ -133,6 +142,7 @@ python scripts/coverage_badge.py --coverage-file coverage\unified\coverage.json
 ### CMake Configuration
 
 Enable coverage in CMake:
+
 ```bash
 cmake -B build \
   -DCMAKE_BUILD_TYPE=Debug \
@@ -197,6 +207,7 @@ make coverage-module MODULE=algorithm
 ### Report Features
 
 #### Unified HTML Report
+
 - Combined C++ and Python coverage statistics
 - Interactive charts and graphs
 - Module-by-module breakdown
@@ -204,10 +215,12 @@ make coverage-module MODULE=algorithm
 - Responsive design for mobile viewing
 
 #### Language-Specific Reports
+
 - **C++ (lcov/genhtml)**: Line and branch coverage with source highlighting
 - **Python (coverage.py)**: Line and branch coverage with missing line indicators
 
 #### JSON Report Format
+
 ```json
 {
   "timestamp": "2024-01-01T12:00:00",
@@ -253,6 +266,7 @@ The project includes a comprehensive GitHub Actions workflow (`.github/workflows
 ### Pull Request Integration
 
 Coverage results are automatically commented on pull requests with:
+
 - Coverage badges
 - Detailed breakdown by language
 - Comparison with base branch
@@ -261,12 +275,14 @@ Coverage results are automatically commented on pull requests with:
 ## Configuration Files
 
 ### CMake Coverage Configuration (`cmake/CoverageConfig.cmake`)
+
 - Coverage tool detection
 - Compiler flag setup
 - Target creation functions
 - Module-specific coverage targets
 
 ### Python Coverage Configuration (`pyproject.toml`)
+
 ```toml
 [tool.coverage.run]
 source = ["atom", "python"]
@@ -280,6 +296,7 @@ precision = 2
 ```
 
 ### Pytest Configuration
+
 ```toml
 [tool.pytest.ini_options]
 addopts = [
@@ -344,16 +361,19 @@ if TYPE_CHECKING:  # pragma: no cover
 The coverage system fully supports Windows with the following considerations:
 
 #### Path Handling
+
 - Use backslashes (`\`) or forward slashes (`/`) in paths
 - The system automatically normalizes paths for the current platform
 - Batch and PowerShell wrappers handle path conversion
 
 #### Encoding
+
 - All files are read/written with UTF-8 encoding
 - Console output uses UTF-8 for proper Unicode display
 - Line endings are automatically converted (CRLF on Windows, LF on Unix)
 
 #### Execution Methods
+
 ```cmd
 REM Command Prompt
 python scripts\coverage_badge.py
@@ -365,6 +385,7 @@ python scripts\coverage_badge.py
 ```
 
 #### Common Windows Issues
+
 - **Permission errors**: Run as administrator or close files in editors
 - **Unicode display**: Use Windows Terminal or Git Bash for better Unicode support
 - **Path issues**: Use quotes around paths with spaces
@@ -373,6 +394,7 @@ python scripts\coverage_badge.py
 ### macOS/Linux Support
 
 Standard Unix behavior with additional features:
+
 - Native path handling with forward slashes
 - Full Unicode terminal support
 - Standard shell script execution
@@ -445,11 +467,13 @@ python scripts/unified_coverage.py
 ### Performance Impact
 
 Coverage analysis adds overhead:
+
 - **Build time**: +20-30% due to instrumentation
 - **Test execution**: +10-20% due to data collection
 - **Binary size**: +50-100% due to debug symbols
 
 For performance-critical testing, consider:
+
 - Running coverage analysis separately from regular CI
 - Using sampling-based coverage tools
 - Focusing coverage on critical code paths
@@ -462,6 +486,7 @@ For performance-critical testing, consider:
 - **CI/CD**: `.github/workflows/coverage.yml`
 
 For questions or issues with coverage analysis, please:
+
 1. Check this documentation
 2. Review existing GitHub issues
 3. Create a new issue with detailed information about the problem

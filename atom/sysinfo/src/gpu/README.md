@@ -5,6 +5,7 @@ The GPU module provides comprehensive GPU information retrieval and monitoring c
 ## Features
 
 ### Core Functionality
+
 - **Multi-GPU Support**: Detect and monitor multiple GPUs in the system
 - **Cross-Platform**: Windows, Linux, and macOS support
 - **Detailed Information**: Comprehensive GPU specifications and capabilities
@@ -12,6 +13,7 @@ The GPU module provides comprehensive GPU information retrieval and monitoring c
 - **Driver Information**: Version, features, and API support details
 
 ### Enhanced Features
+
 - **Performance Benchmarking**: Built-in GPU performance testing
 - **Thermal Monitoring**: Temperature tracking with alert thresholds
 - **Power Management**: Power consumption monitoring and efficiency calculations
@@ -124,14 +126,18 @@ for (const auto& monitor : monitors) {
 ## Data Structures
 
 ### GPUInfo
+
 Comprehensive GPU information including:
+
 - Basic identification (name, vendor, device ID)
 - Hardware specifications (memory, architecture, type)
 - Performance capabilities (compute units, clock speeds)
 - Driver information (version, API support)
 
 ### GPUPerformanceMetrics
+
 Real-time performance data:
+
 - Utilization percentages (GPU, memory, encoder, decoder)
 - Clock speeds (core, memory, base, boost)
 - Thermal information (temperature, hotspot, memory temp)
@@ -139,13 +145,17 @@ Real-time performance data:
 - Fan information (speed percentage, RPM)
 
 ### GPUMemoryInfo
+
 Memory subsystem details:
+
 - Capacity information (total, free, used, shared)
 - Memory specifications (type, bus width, clock speed)
 - Bandwidth and usage statistics
 
 ### MonitorInfo
+
 Display information:
+
 - Basic specs (resolution, refresh rate, size)
 - Color capabilities (color space, bit depth, HDR)
 - Connection details (type, connected GPU)
@@ -153,18 +163,21 @@ Display information:
 ## Platform-Specific Features
 
 ### Windows
+
 - WMI integration for comprehensive GPU information
 - DirectX feature detection and capabilities
 - Performance counters for real-time metrics
 - NVIDIA/AMD vendor-specific APIs when available
 
 ### Linux
+
 - sysfs integration for hardware information
 - DRM subsystem support for display information
 - X11/Xrandr for monitor detection
 - Vendor-specific driver interfaces (nvidia-ml, amdgpu)
 
 ### macOS
+
 - IOKit integration for hardware enumeration
 - Metal framework support for GPU capabilities
 - Core Graphics for display management
@@ -183,21 +196,25 @@ make atom_sysinfo_gpu
 ### Dependencies
 
 **All Platforms:**
+
 - C++17 compatible compiler
 - CMake 3.15+
 - spdlog for logging
 
 **Windows:**
+
 - Windows SDK
 - WMI libraries (wbemuuid, ole32, oleaut32)
 - SetupAPI
 
 **Linux:**
+
 - X11 development libraries
 - Xrandr extension (optional)
 - DRM libraries (optional)
 
 **macOS:**
+
 - Xcode command line tools
 - IOKit framework
 - CoreGraphics framework
@@ -206,6 +223,7 @@ make atom_sysinfo_gpu
 ## Error Handling
 
 The module uses comprehensive error handling:
+
 - Invalid GPU indices return empty/default structures
 - Platform-specific errors are logged via spdlog
 - Graceful degradation when optional features are unavailable

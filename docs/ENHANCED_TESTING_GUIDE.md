@@ -5,6 +5,7 @@ This guide provides comprehensive information about the enhanced testing infrast
 ## Overview
 
 The enhanced testing suite covers:
+
 - **AdvancedExecutor**: Environment variable handling, concurrent execution, caching, security
 - **Enhanced Crontab System**: Modular components including cache, monitor, security
 - **Sysinfo Enhanced Features**: New API features, export functionality, caching mechanisms
@@ -15,6 +16,7 @@ The enhanced testing suite covers:
 ### System Tests (`/tests/system/`)
 
 #### Core Test Files
+
 - `test_command.cpp` - Basic command execution tests
 - `test_advanced_executor.cpp` - **NEW** Advanced executor functionality
 - `test_cron_components.cpp` - **NEW** Enhanced crontab components
@@ -23,9 +25,11 @@ The enhanced testing suite covers:
 - `test_wregistry.cpp` - Windows registry tests
 
 #### Advanced Executor Tests
+
 **File**: `test_advanced_executor.cpp`
 
 **Coverage**:
+
 - CancellationToken functionality
 - ExecutionResourcePool management
 - Environment variable handling
@@ -38,6 +42,7 @@ The enhanced testing suite covers:
 - Performance benchmarks
 
 **Key Test Cases**:
+
 ```cpp
 TEST_F(AdvancedExecutorTest, EnvironmentVariableHandling)
 TEST_F(AdvancedExecutorTest, CommandCancellation)
@@ -46,15 +51,18 @@ TEST_F(AdvancedExecutorTest, ResourcePoolConcurrentExecution)
 ```
 
 #### Crontab Component Tests
+
 **File**: `test_cron_components.cpp`
 
 **Coverage**:
+
 - CronCache: TTL, statistics, cleanup
 - CronMonitor: Event logging, performance metrics, alerts
 - CronSecurity: Permissions, command validation, resource limits
 - Integration scenarios
 
 **Key Test Cases**:
+
 ```cpp
 TEST_F(CronCacheTest, CacheExpiration)
 TEST_F(CronMonitorTest, PerformanceMetrics)
@@ -65,6 +73,7 @@ TEST_F(CronIntegrationTest, EndToEndJobExecution)
 ### Sysinfo Tests (`/tests/sysinfo/`)
 
 #### Core Test Files
+
 - `battery.cpp` - Battery information tests
 - `bios.cpp` - BIOS information tests
 - `cpu.cpp` - CPU information tests
@@ -80,9 +89,11 @@ TEST_F(CronIntegrationTest, EndToEndJobExecution)
 - `test_enhanced_features.cpp` - **NEW** Enhanced sysinfo features
 
 #### Enhanced Features Tests
+
 **File**: `test_enhanced_features.cpp`
 
 **Coverage**:
+
 - Comprehensive system information API
 - Caching mechanisms and invalidation
 - JSON/XML export functionality
@@ -94,6 +105,7 @@ TEST_F(CronIntegrationTest, EndToEndJobExecution)
 - Error handling
 
 **Key Test Cases**:
+
 ```cpp
 TEST_F(EnhancedSysinfoTest, ComprehensiveSystemInfo)
 TEST_F(EnhancedSysinfoTest, CachingFunctionality)
@@ -125,6 +137,7 @@ TEST_F(EnhancedSysinfoTest, DataAnonymization)
 ### Manual Test Execution
 
 #### Building Tests
+
 ```bash
 cd build
 
@@ -140,6 +153,7 @@ make test_enhanced_features_test
 ```
 
 #### Running Tests
+
 ```bash
 # Run all system tests
 ./tests/system/atom_system.test
@@ -181,24 +195,28 @@ ctest -j$(nproc)
 ## Test Categories
 
 ### Unit Tests
+
 - Individual component functionality
 - API contract validation
 - Error condition handling
 - Edge case coverage
 
 ### Integration Tests
+
 - Cross-component interactions
 - End-to-end workflows
 - System-level integration
 - Resource sharing scenarios
 
 ### Performance Tests
+
 - Execution time benchmarks
 - Memory usage validation
 - Concurrent access performance
 - Cache efficiency metrics
 
 ### Stress Tests
+
 - High-load scenarios
 - Resource exhaustion handling
 - Long-running operations
@@ -207,6 +225,7 @@ ctest -j$(nproc)
 ## Test Configuration
 
 ### Environment Variables
+
 ```bash
 # Enable debug logging
 export ATOM_TEST_DEBUG=1
@@ -222,6 +241,7 @@ export ATOM_TEST_PROFILE=1
 ```
 
 ### CMake Options
+
 ```bash
 # Enable testing
 cmake -DBUILD_TESTING=ON ..
@@ -239,23 +259,29 @@ cmake -DENABLE_SANITIZERS=ON ..
 ## Test Data and Mocking
 
 ### Mock System Information
+
 Tests use mock data when real system information is not available or for consistent testing across platforms.
 
 ### Temporary Files
+
 Tests that create files use temporary directories that are automatically cleaned up.
 
 ### Cross-Platform Considerations
+
 Tests are designed to work across Windows, Linux, and macOS with platform-specific command variations.
 
 ## Continuous Integration
 
 ### GitHub Actions
+
 The test suite integrates with GitHub Actions for automated testing on multiple platforms.
 
 ### Coverage Reports
+
 Code coverage reports are generated and can be viewed to identify untested code paths.
 
 ### Performance Regression Detection
+
 Performance benchmarks help detect regressions in critical code paths.
 
 ## Troubleshooting
@@ -278,6 +304,7 @@ Performance benchmarks help detect regressions in critical code paths.
    - Consider system load
 
 ### Debug Mode
+
 ```bash
 # Build with debug symbols
 cmake -DCMAKE_BUILD_TYPE=Debug ..
@@ -287,6 +314,7 @@ gdb ./tests/system/atom_system.test
 ```
 
 ### Logging
+
 ```bash
 # Enable verbose logging
 export SPDLOG_LEVEL=debug

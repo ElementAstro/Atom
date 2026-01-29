@@ -5,12 +5,14 @@ A comprehensive, modular system information formatting and reporting library for
 ## Features
 
 ### 🎨 Advanced Formatting
+
 - **Modular Formatters**: Separate formatters for each system component (CPU, Memory, Disk, etc.)
 - **Customizable Output**: Support for multiple output formats and styles
 - **Template-Based**: Flexible template engine for custom formatting
 - **Table Utilities**: Advanced table formatting with alignment and styling
 
 ### 📊 Comprehensive Reports
+
 - **Full System Report**: Complete hardware and software information
 - **Performance Report**: Focus on performance metrics and benchmarks
 - **Security Report**: Security-related information and vulnerabilities
@@ -19,6 +21,7 @@ A comprehensive, modular system information formatting and reporting library for
 - **Custom Reports**: Build your own reports with custom templates
 
 ### 📤 Multiple Export Formats
+
 - **HTML**: Rich, styled HTML reports with CSS
 - **JSON**: Structured data for programmatic access
 - **Markdown**: Documentation-friendly format
@@ -27,6 +30,7 @@ A comprehensive, modular system information formatting and reporting library for
 - **PDF**: Professional reports (future feature)
 
 ### 🔧 Enhanced API
+
 - **Real-time Monitoring**: Live system information updates
 - **Caching**: Intelligent caching for performance
 - **Error Handling**: Robust error handling and recovery
@@ -188,6 +192,7 @@ This project is part of the Atom system information library.
 ## Changelog
 
 ### Version 1.0.0
+
 - Initial modular implementation
 - Separated formatters, exporters, and reports
 - Added template engine support
@@ -202,6 +207,7 @@ This project is part of the Atom system information library.
 If you're migrating from the original sysinfo_printer implementation, the process is seamless:
 
 #### No Changes Required
+
 ```cpp
 // This code continues to work exactly as before
 #include "atom/sysinfo/sysinfo_printer.hpp"
@@ -211,6 +217,7 @@ bool success = atom::system::SystemInfoPrinter::exportToHTML("report.html");
 ```
 
 #### Enhanced Features Available
+
 ```cpp
 // New enhanced API (optional upgrade)
 #include "atom/sysinfo/sysinfo_printer/printer.hpp"
@@ -229,6 +236,7 @@ printer.exportReport(report, "enhanced_report.html", ExportFormat::HTML);
 ### File Structure Changes
 
 The original files have been reorganized:
+
 - `sysinfo_printer.hpp` → Compatibility wrapper (unchanged API)
 - `sysinfo_printer.cpp` → Compatibility implementation
 - `sysinfo_printer/` → New modular implementation
@@ -236,6 +244,7 @@ The original files have been reorganized:
 ### Build System Changes
 
 Add to your CMakeLists.txt:
+
 ```cmake
 find_package(atom_sysinfo_printer REQUIRED)
 target_link_libraries(your_target PRIVATE atom_sysinfo_printer)

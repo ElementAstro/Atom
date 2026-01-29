@@ -10,8 +10,7 @@ set(REPORT_SOURCES
     security_report.cpp
     hardware_report.cpp
     software_report.cpp
-    custom_report.cpp
-)
+    custom_report.cpp)
 
 set(REPORT_HEADERS
     base_report.hpp
@@ -21,29 +20,23 @@ set(REPORT_HEADERS
     security_report.hpp
     hardware_report.hpp
     software_report.hpp
-    custom_report.hpp
-)
+    custom_report.hpp)
 
 # Create reports library
 add_library(atom_sysinfo_reports STATIC ${REPORT_SOURCES} ${REPORT_HEADERS})
 
 # Link dependencies
-target_link_libraries(atom_sysinfo_reports
-    PRIVATE
-        spdlog::spdlog
-        atom_sysinfo_formatters
-)
+target_link_libraries(atom_sysinfo_reports PRIVATE spdlog::spdlog
+                                                   atom_sysinfo_formatters)
 
 # Set target properties
-set_target_properties(atom_sysinfo_reports PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED ON
-    CXX_EXTENSIONS OFF
-)
+set_target_properties(
+  atom_sysinfo_reports
+  PROPERTIES CXX_STANDARD 20
+             CXX_STANDARD_REQUIRED ON
+             CXX_EXTENSIONS OFF)
 
 # Include directories
-target_include_directories(atom_sysinfo_reports
-    PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/..
-        ${CMAKE_CURRENT_SOURCE_DIR}/../..
-)
+target_include_directories(
+  atom_sysinfo_reports PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..
+                              ${CMAKE_CURRENT_SOURCE_DIR}/../..)

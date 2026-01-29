@@ -4,21 +4,22 @@
 # Author: Max Qian
 # License: GPL3
 
-import pytest
-import sys
 import platform
+
+import pytest
 
 # Try to import the sysinfo module
 try:
     import atom_sysinfo
+
     SYSINFO_AVAILABLE = True
 except ImportError:
     SYSINFO_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
-    not SYSINFO_AVAILABLE,
-    reason="atom_sysinfo module not available"
+    not SYSINFO_AVAILABLE, reason="atom_sysinfo module not available"
 )
+
 
 class TestSysinfoModule:
     """Test cases for the sysinfo module."""
@@ -29,7 +30,8 @@ class TestSysinfoModule:
 
     def test_module_attributes(self):
         """Test that the module has expected attributes."""
-        assert hasattr(atom_sysinfo, '__doc__')
+        assert hasattr(atom_sysinfo, "__doc__")
+
 
 class TestSystemInfo:
     """Test cases for system information functions."""
@@ -57,17 +59,19 @@ class TestSystemInfo:
         # Placeholder for disk info tests
         pass
 
+
 class TestBatteryInfo:
     """Test cases for battery information."""
 
     @pytest.mark.skipif(
         platform.system() == "Linux" and not Path("/sys/class/power_supply").exists(),
-        reason="Battery information not available on this system"
+        reason="Battery information not available on this system",
     )
     def test_battery_info(self):
         """Test battery information retrieval."""
         # Placeholder for battery info tests
         pass
+
 
 @pytest.mark.slow
 class TestSystemMonitoring:

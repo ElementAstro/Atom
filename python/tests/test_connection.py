@@ -4,22 +4,22 @@
 # Author: Max Qian
 # License: GPL3
 
-import pytest
 import socket
-import threading
-import time
+
+import pytest
 
 # Try to import the connection module
 try:
     import atom_connection
+
     CONNECTION_AVAILABLE = True
 except ImportError:
     CONNECTION_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
-    not CONNECTION_AVAILABLE,
-    reason="atom_connection module not available"
+    not CONNECTION_AVAILABLE, reason="atom_connection module not available"
 )
+
 
 class TestConnectionModule:
     """Test cases for the connection module."""
@@ -30,7 +30,8 @@ class TestConnectionModule:
 
     def test_module_attributes(self):
         """Test that the module has expected attributes."""
-        assert hasattr(atom_connection, '__doc__')
+        assert hasattr(atom_connection, "__doc__")
+
 
 class TestTCPConnection:
     """Test cases for TCP connection functionality."""
@@ -47,6 +48,7 @@ class TestTCPConnection:
         # Placeholder for connection lifecycle tests
         pass
 
+
 class TestUDPConnection:
     """Test cases for UDP connection functionality."""
 
@@ -56,18 +58,20 @@ class TestUDPConnection:
         # Placeholder for UDP client tests
         pass
 
+
 class TestFIFOConnection:
     """Test cases for FIFO connection functionality."""
 
     @pytest.mark.integration
     @pytest.mark.skipif(
-        not hasattr(socket, 'AF_UNIX'),
-        reason="UNIX domain sockets not supported on this platform"
+        not hasattr(socket, "AF_UNIX"),
+        reason="UNIX domain sockets not supported on this platform",
     )
     def test_fifo_connection(self):
         """Test FIFO connection functionality."""
         # Placeholder for FIFO tests
         pass
+
 
 @pytest.mark.slow
 class TestConnectionPerformance:

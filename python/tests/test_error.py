@@ -9,14 +9,15 @@ import pytest
 # Try to import the error module
 try:
     import atom_error
+
     ERROR_AVAILABLE = True
 except ImportError:
     ERROR_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
-    not ERROR_AVAILABLE,
-    reason="atom_error module not available"
+    not ERROR_AVAILABLE, reason="atom_error module not available"
 )
+
 
 class TestErrorModule:
     """Test cases for the error module."""
@@ -27,7 +28,8 @@ class TestErrorModule:
 
     def test_module_attributes(self):
         """Test that the module has expected attributes."""
-        assert hasattr(atom_error, '__doc__')
+        assert hasattr(atom_error, "__doc__")
+
 
 class TestErrorFunctionality:
     """Test cases for error functionality."""
@@ -42,6 +44,7 @@ class TestErrorFunctionality:
         """Test error integration."""
         # TODO: Implement integration tests
         pass
+
 
 @pytest.mark.slow
 class TestErrorPerformance:

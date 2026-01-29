@@ -5,6 +5,7 @@ This module provides comprehensive detection and analysis of virtualization and 
 ## Features
 
 ### Core Capabilities
+
 - **Comprehensive Virtualization Detection**: Detects VMware, VirtualBox, Hyper-V, KVM/QEMU, Xen, Parallels, and cloud hypervisors
 - **Container Detection**: Supports Docker, LXC/LXD, Podman, Kubernetes, systemd-nspawn, and advanced runtimes
 - **Platform Support**: Windows, Linux, and macOS with platform-specific optimizations
@@ -12,6 +13,7 @@ This module provides comprehensive detection and analysis of virtualization and 
 - **Backward Compatibility**: Original API remains functional
 
 ### Advanced Features
+
 - **Cloud Platform Detection**: AWS Nitro, Google Cloud, Microsoft Azure
 - **Security Analysis**: Container isolation, capabilities, security profiles
 - **Performance Profiling**: Hardware fingerprinting and timing analysis
@@ -115,6 +117,7 @@ std::string type = getVirtualizationType();
 ## Detection Methods
 
 ### Virtualization Detection
+
 - **CPUID Analysis**: Hypervisor bit and vendor strings
 - **BIOS/UEFI Information**: Manufacturer and product strings
 - **Hardware Fingerprinting**: Network adapters, disk drives, graphics cards
@@ -123,6 +126,7 @@ std::string type = getVirtualizationType();
 - **Timing Analysis**: Performance characteristics and time drift
 
 ### Container Detection
+
 - **Filesystem Markers**: `.dockerenv`, `.containerenv`, cgroup information
 - **Process Analysis**: Container runtimes and orchestrators
 - **Environment Variables**: Container-specific variables
@@ -132,18 +136,21 @@ std::string type = getVirtualizationType();
 ## Platform-Specific Features
 
 ### Linux
+
 - DMI information parsing
 - cgroup analysis
 - Kernel module detection
 - systemd container detection
 
 ### Windows
+
 - WMI system information
 - Registry analysis
 - Service detection
 - Hardware enumeration
 
 ### macOS
+
 - IOKit hardware information
 - System profiler analysis
 - sysctl virtualization flags
@@ -169,6 +176,7 @@ make run_virtual_benchmark
 ## Testing
 
 Comprehensive test suite includes:
+
 - Unit tests for all detection methods
 - Platform-specific tests
 - Performance benchmarks
@@ -189,15 +197,19 @@ make virtual_coverage
 ## Examples
 
 ### Demo Application
+
 ```bash
 ./virtual_demo
 ```
+
 Shows comprehensive detection results and demonstrates all features.
 
 ### Benchmark Application
+
 ```bash
 ./virtual_benchmark
 ```
+
 Measures performance of detection methods and provides timing analysis.
 
 ## Configuration
@@ -228,6 +240,7 @@ auto methods = detector.getAvailableDetectionMethods();
 The original `virtual.cpp` functions are now implemented as inline wrappers around the new modular system. No code changes are required for existing users, but new features are available through the enhanced API.
 
 ### Recommended Migration Path
+
 1. Continue using existing API for compatibility
 2. Gradually adopt new `VirtualizationDetector` class for enhanced features
 3. Use specialized namespaces (`hypervisor::`, `container::`) for detailed analysis
@@ -235,12 +248,14 @@ The original `virtual.cpp` functions are now implemented as inline wrappers arou
 ## Performance
 
 The modular design provides:
+
 - **Faster Quick Checks**: Optimized paths for simple yes/no questions
 - **Configurable Detection**: Enable only needed methods
 - **Caching**: Results cached within detector instances
 - **Platform Optimization**: Native APIs for each platform
 
 Typical performance (on modern hardware):
+
 - Quick virtual check: < 1ms
 - Full detection: 10-50ms depending on enabled methods
 - Container detection: < 5ms
@@ -248,6 +263,7 @@ Typical performance (on modern hardware):
 ## Contributing
 
 When adding new detection methods:
+
 1. Add to appropriate namespace in detection/, hypervisor/, or container/
 2. Update the main VirtualizationDetector class
 3. Add platform-specific implementations as needed

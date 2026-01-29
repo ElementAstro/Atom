@@ -5,6 +5,7 @@ This document outlines the standardized testing conventions for the Atom project
 ## Directory Structure
 
 ### C++ Tests
+
 ```
 tests/
 ├── algorithm/          # Algorithm module tests
@@ -20,6 +21,7 @@ tests/
 ```
 
 ### Python Tests
+
 ```
 python/tests/
 ├── __init__.py        # Test package initialization
@@ -34,6 +36,7 @@ python/tests/
 ## File Naming Conventions
 
 ### C++ Test Files
+
 - **Pattern**: `test_<module_name>.cpp` or `test_<specific_feature>.cpp`
 - **Examples**:
   - `test_algorithm.cpp`
@@ -42,6 +45,7 @@ python/tests/
 - **Header files**: `test_<module_name>.hpp` (for header-only tests)
 
 ### Python Test Files
+
 - **Pattern**: `test_<module_name>.py`
 - **Examples**:
   - `test_algorithm.py`
@@ -51,6 +55,7 @@ python/tests/
 ## Class Naming Conventions
 
 ### C++ Test Classes
+
 - **Pattern**: `<ModuleName>Test` or `<FeatureName>Test`
 - **Examples**:
   - `class AlgorithmTest : public ::testing::Test`
@@ -58,6 +63,7 @@ python/tests/
   - `class KMPTest : public ::testing::Test`
 
 ### Python Test Classes
+
 - **Pattern**: `Test<ModuleName>` or `Test<FeatureName>`
 - **Examples**:
   - `class TestAlgorithmModule:`
@@ -67,6 +73,7 @@ python/tests/
 ## Test Method Naming Conventions
 
 ### C++ Test Methods
+
 - **Pattern**: `TEST_F(ClassName, MethodName)` where MethodName describes the test
 - **Naming style**: PascalCase for method names
 - **Examples**:
@@ -75,6 +82,7 @@ python/tests/
   - `TEST_F(KMPTest, BasicPatternMatching)`
 
 ### Python Test Methods
+
 - **Pattern**: `test_<description>` using snake_case
 - **Examples**:
   - `def test_module_import(self):`
@@ -84,14 +92,18 @@ python/tests/
 ## Test Categories and Markers
 
 ### C++ Test Categories
+
 Tests should be organized into logical groups within test files:
+
 - Basic functionality tests
 - Edge case tests
 - Performance tests
 - Integration tests
 
 ### Python Test Markers
+
 Use pytest markers to categorize tests:
+
 - `@pytest.mark.unit` - Unit tests
 - `@pytest.mark.integration` - Integration tests
 - `@pytest.mark.slow` - Slow-running tests
@@ -101,6 +113,7 @@ Use pytest markers to categorize tests:
 ## Documentation Standards
 
 ### Test Documentation
+
 - Each test class should have a docstring explaining its purpose
 - Complex test methods should have docstrings explaining the test scenario
 - Use clear, descriptive names that explain what is being tested
@@ -108,6 +121,7 @@ Use pytest markers to categorize tests:
 ### Examples
 
 #### C++ Test Documentation
+
 ```cpp
 /**
  * @brief Test fixture for memory pool functionality
@@ -129,6 +143,7 @@ TEST_F(MemoryPoolTest, AllocateExceedingBlockSize) {
 ```
 
 #### Python Test Documentation
+
 ```python
 class TestMemoryPool:
     """Test cases for memory pool functionality.
@@ -146,11 +161,13 @@ class TestMemoryPool:
 ## Build Integration
 
 ### C++ Tests
+
 - Each module should have its own CMakeLists.txt in the test directory
 - Tests should be registered with CTest using `add_test()`
 - Coverage should be enabled for all test targets
 
 ### Python Tests
+
 - Tests should be discoverable by pytest
 - Coverage should be configured in pyproject.toml
 - Tests should run in CI/CD pipelines
@@ -158,11 +175,13 @@ class TestMemoryPool:
 ## Coverage Requirements
 
 ### Minimum Coverage Targets
+
 - **C++ modules**: 80% line coverage, 70% branch coverage
 - **Python modules**: 75% line coverage, 65% branch coverage
 - **Critical modules** (memory, error handling): 90% coverage
 
 ### Coverage Exclusions
+
 - Test files themselves
 - Generated code
 - Platform-specific code that cannot be tested
@@ -171,6 +190,7 @@ class TestMemoryPool:
 ## Best Practices
 
 ### General Guidelines
+
 1. **One concept per test**: Each test should verify one specific behavior
 2. **Descriptive names**: Test names should clearly indicate what is being tested
 3. **Arrange-Act-Assert**: Structure tests with clear setup, execution, and verification phases
@@ -178,12 +198,14 @@ class TestMemoryPool:
 5. **Deterministic**: Tests should produce consistent results
 
 ### C++ Specific
+
 1. Use RAII for resource management in tests
-2. Prefer EXPECT_* over ASSERT_* unless test cannot continue
+2. Prefer EXPECT_*over ASSERT_* unless test cannot continue
 3. Use test fixtures for common setup/teardown
 4. Mock external dependencies
 
 ### Python Specific
+
 1. Use fixtures for common test data and setup
 2. Parametrize tests when testing multiple similar scenarios
 3. Use appropriate markers for test categorization
@@ -192,11 +214,13 @@ class TestMemoryPool:
 ## Continuous Integration
 
 ### Automated Testing
+
 - All tests must pass before code can be merged
 - Coverage reports should be generated for each PR
 - Performance regression tests should be run for critical paths
 
 ### Test Execution
+
 - Unit tests: Run on every commit
 - Integration tests: Run on PR creation/update
 - Performance tests: Run nightly or on release branches
@@ -205,12 +229,14 @@ class TestMemoryPool:
 ## Tools and Dependencies
 
 ### C++ Testing Stack
+
 - **Framework**: Google Test (GTest) with GMock
 - **Coverage**: gcov/lcov for coverage analysis
 - **Build**: CMake with CTest integration
 - **CI**: GitHub Actions or similar
 
 ### Python Testing Stack
+
 - **Framework**: pytest with pytest-cov
 - **Coverage**: coverage.py for coverage analysis
 - **Benchmarking**: pytest-benchmark for performance tests
@@ -230,6 +256,7 @@ When updating existing tests to follow these conventions:
 ## Enforcement
 
 These conventions should be enforced through:
+
 - Code review processes
 - Automated linting and formatting tools
 - CI/CD pipeline checks

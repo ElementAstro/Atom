@@ -25,6 +25,7 @@ sysinfo_printer/
 ### 🔧 Core Components
 
 #### 1. Formatters (9 classes)
+
 - **BaseFormatter**: Abstract base with common functionality
 - **CpuFormatter**: CPU information formatting with performance metrics
 - **MemoryFormatter**: Memory usage and configuration formatting
@@ -38,6 +39,7 @@ sysinfo_printer/
 - **SystemFormatter**: Desktop environment and window manager formatting
 
 #### 2. Exporters (6 classes)
+
 - **BaseExporter**: Abstract base with common export functionality
 - **HtmlExporter**: Rich HTML with CSS styling and interactivity
 - **JsonExporter**: Structured JSON with pretty-print options
@@ -46,6 +48,7 @@ sysinfo_printer/
 - **CsvExporter**: CSV format for spreadsheet applications
 
 #### 3. Reports (6 classes)
+
 - **BaseReport**: Abstract base for report generation
 - **FullReport**: Complete system information
 - **SimpleReport**: Essential information overview
@@ -56,6 +59,7 @@ sysinfo_printer/
 - **CustomReport**: User-defined report sections
 
 #### 4. Utilities (5 modules)
+
 - **format_utils**: Comprehensive formatting functions (15+ utilities)
 - **string_utils**: String manipulation utilities (15+ functions)
 - **table_utils**: Advanced table formatting and alignment
@@ -119,23 +123,27 @@ printer.exportReport(report, "report.html", ExportFormat::HTML);
 ## File Structure Summary
 
 ### Core Implementation (24 files)
+
 - **Headers**: 12 header files with complete API definitions
 - **Sources**: 12 implementation files with full functionality
 - **Templates**: 3 template files (HTML, Markdown, JSON)
 
 ### Examples (4 applications)
+
 - **basic_usage.cpp**: Demonstrates basic functionality
 - **custom_formatting.cpp**: Shows advanced formatting options
 - **export_examples.cpp**: Covers all export formats
 - **advanced_reports.cpp**: Performance monitoring and caching
 
 ### Tests (4 test suites)
+
 - **test_compatibility.cpp**: Backward compatibility verification
 - **test_formatters.cpp**: Formatter functionality tests
 - **test_exporters.cpp**: Export format validation
 - **test_reports.cpp**: Report generation tests
 
 ### Documentation (5 documents)
+
 - **README.md**: Comprehensive user guide
 - **API_REFERENCE.md**: Complete API documentation
 - **MIGRATION_GUIDE.md**: Migration instructions
@@ -144,6 +152,7 @@ printer.exportReport(report, "report.html", ExportFormat::HTML);
 ## Technical Specifications
 
 ### Language Features Used
+
 - **C++20**: Modern C++ with concepts and ranges
 - **RAII**: Resource management and exception safety
 - **Templates**: Generic programming for flexibility
@@ -151,11 +160,13 @@ printer.exportReport(report, "report.html", ExportFormat::HTML);
 - **Standard Library**: Extensive use of STL containers and algorithms
 
 ### Dependencies
+
 - **spdlog**: Logging framework
 - **Standard Library**: No external dependencies for core functionality
 - **Optional**: GTest for advanced testing (falls back to simple tests)
 
 ### Platform Support
+
 - **Linux**: Full support with platform-specific optimizations
 - **Windows**: Cross-platform compatibility
 - **macOS**: Cross-platform compatibility
@@ -164,16 +175,19 @@ printer.exportReport(report, "report.html", ExportFormat::HTML);
 ## Performance Characteristics
 
 ### Memory Usage
+
 - **Efficient**: Minimal memory footprint
 - **Caching**: Optional caching reduces repeated system calls
 - **RAII**: Automatic cleanup prevents memory leaks
 
 ### Execution Speed
+
 - **Fast**: Optimized system information gathering
 - **Lazy Loading**: Information loaded only when needed
 - **Parallel**: Thread-safe design allows concurrent usage
 
 ### Scalability
+
 - **Modular**: Easy to extend with new formatters/exporters
 - **Configurable**: Extensive customization options
 - **Maintainable**: Clean architecture with separation of concerns
@@ -181,18 +195,21 @@ printer.exportReport(report, "report.html", ExportFormat::HTML);
 ## Quality Assurance
 
 ### Code Quality
+
 - **Modern C++**: Uses C++20 features and best practices
 - **Exception Safety**: Comprehensive error handling
 - **Thread Safety**: Safe for concurrent usage
 - **Documentation**: Extensive inline and external documentation
 
 ### Testing
+
 - **Unit Tests**: Individual component testing
 - **Integration Tests**: End-to-end functionality testing
 - **Compatibility Tests**: Backward compatibility verification
 - **Example Tests**: Working example applications
 
 ### Validation
+
 - **Static Analysis**: Code quality checks
 - **Memory Safety**: RAII and smart pointer usage
 - **Performance**: Benchmarking and optimization
@@ -203,6 +220,7 @@ printer.exportReport(report, "report.html", ExportFormat::HTML);
 The modular architecture enables easy extension:
 
 ### Adding New Formatters
+
 ```cpp
 class CustomFormatter : public BaseFormatter {
     auto format(const CustomInfo& info) -> std::string override;
@@ -210,6 +228,7 @@ class CustomFormatter : public BaseFormatter {
 ```
 
 ### Adding New Exporters
+
 ```cpp
 class CustomExporter : public BaseExporter {
     bool exportToFile(const std::string& content, const std::string& filename) override;
@@ -218,6 +237,7 @@ class CustomExporter : public BaseExporter {
 ```
 
 ### Adding New Reports
+
 ```cpp
 class CustomReport : public BaseReport {
     auto generate() -> std::string override;
@@ -241,6 +261,7 @@ The implementation provides a solid foundation for future development while main
 ## Next Steps
 
 Potential future enhancements:
+
 - Plugin system for custom formatters
 - Real-time monitoring dashboard
 - Database export capabilities

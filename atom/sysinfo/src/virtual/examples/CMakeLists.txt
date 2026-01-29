@@ -7,25 +7,16 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR}/..)
 include_directories(${CMAKE_SOURCE_DIR})
 
 # Define example sources
-set(VIRTUAL_EXAMPLE_SOURCES
-    virtual_demo.cpp
-    virtual_benchmark.cpp
-)
+set(VIRTUAL_EXAMPLE_SOURCES virtual_demo.cpp virtual_benchmark.cpp)
 
 # Create example executables
 add_executable(virtual_demo virtual_demo.cpp)
 add_executable(virtual_benchmark virtual_benchmark.cpp)
 
 # Link libraries
-target_link_libraries(virtual_demo
-    PRIVATE
-    atom_sysinfo_virtual
-)
+target_link_libraries(virtual_demo PRIVATE atom_sysinfo_virtual)
 
-target_link_libraries(virtual_benchmark
-    PRIVATE
-    atom_sysinfo_virtual
-)
+target_link_libraries(virtual_benchmark PRIVATE atom_sysinfo_virtual)
 
 # Set C++ standard
 target_compile_features(virtual_demo PUBLIC cxx_std_20)
@@ -33,62 +24,46 @@ target_compile_features(virtual_benchmark PUBLIC cxx_std_20)
 
 # Compiler-specific options
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    target_compile_options(virtual_demo
-        PRIVATE
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wno-unused-parameter
-    )
-    target_compile_options(virtual_benchmark
-        PRIVATE
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wno-unused-parameter
-    )
+  target_compile_options(virtual_demo PRIVATE -Wall -Wextra -Wpedantic
+                                              -Wno-unused-parameter)
+  target_compile_options(virtual_benchmark PRIVATE -Wall -Wextra -Wpedantic
+                                                   -Wno-unused-parameter)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-    target_compile_options(virtual_demo
-        PRIVATE
-            /W4
-            /wd4100  # unreferenced formal parameter
-    )
-    target_compile_options(virtual_benchmark
-        PRIVATE
-            /W4
-            /wd4100  # unreferenced formal parameter
-    )
+  target_compile_options(
+    virtual_demo PRIVATE /W4 /wd4100 # unreferenced formal parameter
+  )
+  target_compile_options(
+    virtual_benchmark PRIVATE /W4 /wd4100 # unreferenced formal parameter
+  )
 endif()
 
 # Create custom target for all examples
-add_custom_target(virtual_examples
-    DEPENDS virtual_demo virtual_benchmark
-    COMMENT "Building virtual module examples"
-)
+add_custom_target(
+  virtual_examples
+  DEPENDS virtual_demo virtual_benchmark
+  COMMENT "Building virtual module examples")
 
 # Custom target to run the demo
-add_custom_target(run_virtual_demo
-    COMMAND virtual_demo
-    DEPENDS virtual_demo
-    COMMENT "Running virtual detection demo"
-)
+add_custom_target(
+  run_virtual_demo
+  COMMAND virtual_demo
+  DEPENDS virtual_demo
+  COMMENT "Running virtual detection demo")
 
 # Custom target to run the benchmark
-add_custom_target(run_virtual_benchmark
-    COMMAND virtual_benchmark
-    DEPENDS virtual_benchmark
-    COMMENT "Running virtual detection benchmark"
-)
+add_custom_target(
+  run_virtual_benchmark
+  COMMAND virtual_benchmark
+  DEPENDS virtual_benchmark
+  COMMENT "Running virtual detection benchmark")
 
 # Installation rules for examples
 install(TARGETS virtual_demo virtual_benchmark
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples
-)
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}/examples)
 
 # Install source files as documentation
 install(FILES ${VIRTUAL_EXAMPLE_SOURCES}
-    DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples/virtual
-)
+        DESTINATION ${CMAKE_INSTALL_DOCDIR}/examples/virtual)
 
 message(STATUS "Virtual module examples configured successfully")
 message(STATUS "Available example targets:")

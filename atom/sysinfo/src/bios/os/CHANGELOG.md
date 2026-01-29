@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 This represents a complete redesign and enhancement of the original OS module, moved to the BIOS folder structure with comprehensive new features while maintaining full backward compatibility.
 
 #### 📁 **New File Structure**
+
 ```
 bios/os/
 ├── common.hpp          # Enhanced shared interfaces and structures
@@ -29,6 +30,7 @@ bios/os/
 ### 🚀 **New Enhanced Features**
 
 #### **Core System Information**
+
 - **Enhanced OS Detection**: Comprehensive OS type and architecture detection
 - **Extended System Info**: Build numbers, edition details, installation dates
 - **Hardware Integration**: CPU, memory, and motherboard information
@@ -36,6 +38,7 @@ bios/os/
 - **Virtualization Detection**: Container and VM environment detection
 
 #### **Real-time Monitoring**
+
 - **Performance Metrics**: CPU, memory, disk, and network usage monitoring
 - **System Health Monitoring**: Automated health checks and recommendations
 - **Resource Analysis**: Detailed resource usage analysis and trending
@@ -43,6 +46,7 @@ bios/os/
 - **Configurable Intervals**: Customizable monitoring frequencies
 
 #### **Security Analysis**
+
 - **Security Status**: Firewall, antivirus, and security feature detection
 - **Vulnerability Assessment**: System vulnerability scanning
 - **Security Events**: Real-time security event monitoring
@@ -50,6 +54,7 @@ bios/os/
 - **Platform-specific Security**: SELinux, AppArmor, SIP, Gatekeeper support
 
 #### **Network Management**
+
 - **Network Configuration**: Complete network interface and configuration details
 - **Connection Monitoring**: Network adapter status and performance
 - **DNS Management**: DNS server configuration and resolution
@@ -57,6 +62,7 @@ bios/os/
 - **Network Security**: Network security feature detection
 
 #### **System Optimization**
+
 - **Automated Optimization**: Memory, disk, and performance optimization
 - **Service Management**: System service control and optimization
 - **Cleanup Operations**: Temporary file and cache cleanup
@@ -64,6 +70,7 @@ bios/os/
 - **Resource Optimization**: CPU and memory usage optimization
 
 #### **Cross-platform Management**
+
 - **Service Control**: Start, stop, restart, enable, disable services
 - **Update Management**: System update detection and installation
 - **Software Management**: Installed software tracking and management
@@ -73,6 +80,7 @@ bios/os/
 ### 🔧 **Platform-specific Enhancements**
 
 #### **Windows Enhancements**
+
 - **WMI Integration**: Complete Windows Management Instrumentation support
 - **Registry Management**: Windows registry reading and writing
 - **Windows Services**: Comprehensive Windows service management
@@ -83,6 +91,7 @@ bios/os/
 - **Performance Counters**: Windows performance counter integration
 
 #### **Linux Enhancements**
+
 - **Distribution Detection**: Comprehensive Linux distribution identification
 - **Package Management**: Support for apt, yum, dnf, pacman, zypper
 - **Service Management**: systemd, sysvinit, upstart support
@@ -93,6 +102,7 @@ bios/os/
 - **System Logs**: journalctl and syslog integration
 
 #### **macOS Enhancements**
+
 - **IOKit Integration**: Complete IOKit framework support
 - **System Profiler**: system_profiler command integration
 - **Security Features**: SIP, Gatekeeper, XProtect, FileVault support
@@ -105,6 +115,7 @@ bios/os/
 ### 🔄 **API Enhancements**
 
 #### **New Classes and Structures**
+
 - `EnhancedOSManager`: Singleton manager for comprehensive OS operations
 - `EnhancedOSInfo`: Extended OS information structure
 - `SystemPerformanceMetrics`: Real-time performance metrics
@@ -114,6 +125,7 @@ bios/os/
 - Platform-specific implementation classes
 
 #### **New Functions**
+
 - `getEnhancedOperatingSystemInfo()`: Get comprehensive OS information
 - `getSystemMetrics()`: Get real-time performance metrics
 - `getSystemSecurity()`: Get security status and information
@@ -123,6 +135,7 @@ bios/os/
 - `analyzeResourceUsage()`: Detailed resource usage analysis
 
 #### **Enhanced Monitoring**
+
 - Configurable monitoring intervals and callbacks
 - Real-time performance and security event notifications
 - System health monitoring with automated recommendations
@@ -132,6 +145,7 @@ bios/os/
 ### 🔒 **Backward Compatibility**
 
 #### **Legacy API Support**
+
 - All original functions remain available and functional
 - Original `OperatingSystemInfo` structure preserved
 - Existing code continues to work without modifications
@@ -139,6 +153,7 @@ bios/os/
 - Seamless migration path to enhanced features
 
 #### **Compatibility Functions**
+
 - `getOSInfo()`: Alias for `getOperatingSystemInfo()`
 - `getOSName()`, `getOSVersion()`: Convenience functions
 - `getSystemMetrics()`: Easy access to performance data
@@ -147,6 +162,7 @@ bios/os/
 ### 🏗️ **Build System Enhancements**
 
 #### **CMake Improvements**
+
 - Enhanced CMakeLists.txt with comprehensive configuration
 - Platform-specific library linking and dependencies
 - Automatic dependency detection and linking
@@ -155,6 +171,7 @@ bios/os/
 - Installation and packaging support
 
 #### **Dependencies**
+
 - **Required**: spdlog, C++20 compiler, CMake 3.15+
 - **Windows**: WMI libraries, Windows SDK
 - **Linux**: Standard system libraries, optional pkg-config
@@ -163,6 +180,7 @@ bios/os/
 ### 📚 **Documentation**
 
 #### **Comprehensive Documentation**
+
 - Detailed README.md with usage examples
 - API documentation with code samples
 - Platform-specific usage guides
@@ -171,6 +189,7 @@ bios/os/
 - Contributing guidelines
 
 #### **Examples**
+
 - Basic usage examples for all platforms
 - Advanced monitoring and management examples
 - Platform-specific feature demonstrations
@@ -180,6 +199,7 @@ bios/os/
 ### 🧪 **Testing**
 
 #### **Test Suite**
+
 - Comprehensive unit tests for all platforms
 - Integration tests for cross-platform functionality
 - Performance benchmarks and stress tests
@@ -189,6 +209,7 @@ bios/os/
 ### 🔮 **Future Enhancements**
 
 #### **Planned Features**
+
 - Web-based monitoring dashboard
 - REST API for remote system management
 - Machine learning-based performance optimization
@@ -197,6 +218,7 @@ bios/os/
 - Mobile device support (Android/iOS)
 
 #### **Performance Improvements**
+
 - Asynchronous operation support
 - Caching and optimization for frequent operations
 - Memory usage optimization

@@ -10,22 +10,16 @@ include_directories(${CMAKE_SOURCE_DIR})
 add_executable(wifi_demo wifi_demo.cpp)
 
 # Link libraries
-target_link_libraries(wifi_demo
-    PRIVATE
-    atom_sysinfo_wifi
-    loguru
-)
+target_link_libraries(wifi_demo PRIVATE atom_sysinfo_wifi loguru)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(wifi_demo PRIVATE ws2_32 iphlpapi wlanapi pdh icmp)
+  target_link_libraries(wifi_demo PRIVATE ws2_32 iphlpapi wlanapi pdh icmp)
 elseif(UNIX AND NOT APPLE)
-    target_link_libraries(wifi_demo PRIVATE pthread)
+  target_link_libraries(wifi_demo PRIVATE pthread)
 elseif(APPLE)
-    target_link_libraries(wifi_demo PRIVATE
-        "-framework CoreFoundation"
-        "-framework SystemConfiguration"
-    )
+  target_link_libraries(wifi_demo PRIVATE "-framework CoreFoundation"
+                                          "-framework SystemConfiguration")
 endif()
 
 # Set C++ standard
@@ -33,24 +27,22 @@ target_compile_features(wifi_demo PRIVATE cxx_std_20)
 
 # Compiler-specific options
 if(MSVC)
-    target_compile_options(wifi_demo PRIVATE /W4)
+  target_compile_options(wifi_demo PRIVATE /W4)
 else()
-    target_compile_options(wifi_demo PRIVATE -Wall -Wextra -Wpedantic)
+  target_compile_options(wifi_demo PRIVATE -Wall -Wextra -Wpedantic)
 endif()
 
 # Install demo executable (optional)
 if(INSTALL_EXAMPLES)
-    install(TARGETS wifi_demo
-        RUNTIME DESTINATION bin/examples
-    )
+  install(TARGETS wifi_demo RUNTIME DESTINATION bin/examples)
 endif()
 
 # Create a custom target to run the demo
-add_custom_target(run_wifi_demo
-    COMMAND wifi_demo
-    DEPENDS wifi_demo
-    COMMENT "Running WiFi module demonstration"
-)
+add_custom_target(
+  run_wifi_demo
+  COMMAND wifi_demo
+  DEPENDS wifi_demo
+  COMMENT "Running WiFi module demonstration")
 
 message(STATUS "WiFi module examples configured successfully")
 message(STATUS "Available example targets:")

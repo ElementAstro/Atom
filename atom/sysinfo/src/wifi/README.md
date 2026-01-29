@@ -5,6 +5,7 @@ A comprehensive, cross-platform C++ library for WiFi and network information gat
 ## Features
 
 ### Core Functionality
+
 - **Internet Connectivity Detection**: Check if the system is connected to the internet
 - **WiFi Information**: Get current WiFi network name and connection status
 - **Network Interfaces**: Enumerate and analyze network interfaces
@@ -12,6 +13,7 @@ A comprehensive, cross-platform C++ library for WiFi and network information gat
 - **Network Statistics**: Real-time network performance metrics
 
 ### Advanced Features
+
 - **Network Scanning**: Discover available WiFi networks
 - **Quality Analysis**: Comprehensive network quality assessment including jitter, packet loss, and throughput
 - **Real-time Monitoring**: Continuous network performance monitoring with event callbacks
@@ -20,6 +22,7 @@ A comprehensive, cross-platform C++ library for WiFi and network information gat
 - **Security Analysis**: Analyze network security configurations
 
 ### Performance & Reliability
+
 - **Intelligent Caching**: Multi-level caching system with configurable TTL
 - **Error Handling**: Comprehensive error reporting and recovery
 - **Performance Monitoring**: Built-in performance metrics and optimization
@@ -127,6 +130,7 @@ config.autoTune();
 ## Building
 
 ### Requirements
+
 - C++20 compatible compiler
 - CMake 3.16 or later
 - Platform-specific dependencies:
@@ -228,16 +232,19 @@ Comprehensive error handling with:
 ## Platform Support
 
 ### Windows
+
 - Uses WinSock2 and Windows API for network operations
 - Supports Windows 10 and later
 - Requires appropriate permissions for network scanning
 
 ### Linux
+
 - Uses standard Linux networking APIs
 - Supports most modern Linux distributions
 - May require root privileges for some advanced features
 
 ### macOS
+
 - Uses CoreFoundation and SystemConfiguration frameworks
 - Supports macOS 10.15 and later
 - Requires appropriate entitlements for network access
@@ -245,6 +252,7 @@ Comprehensive error handling with:
 ## API Reference
 
 ### Core Functions
+
 - `isConnectedToInternet()`: Check internet connectivity
 - `getCurrentWifi()`: Get current WiFi network name
 - `getNetworkStats()`: Get real-time network statistics
@@ -252,16 +260,19 @@ Comprehensive error handling with:
 - `measureBandwidth()`: Measure network throughput
 
 ### Monitoring Functions
+
 - `initializeNetworkMonitoring()`: Initialize monitoring system
 - `getGlobalNetworkMonitor()`: Get global monitor instance
 - `NetworkMonitor::start()/stop()`: Control monitoring
 
 ### Quality Analysis
+
 - `NetworkQualityAnalyzer::performComprehensiveAnalysis()`: Full quality assessment
 - `NetworkQualityAnalyzer::measureJitter()`: Measure network jitter
 - `NetworkQualityAnalyzer::measurePacketLoss()`: Measure packet loss
 
 ### Configuration
+
 - `initializeConfiguration()`: Initialize configuration system
 - `getGlobalConfigManager()`: Get configuration manager
 - `WiFiConfigManager::setParameter()`: Set configuration values

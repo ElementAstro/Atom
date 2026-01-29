@@ -9,14 +9,13 @@ import pytest
 # Try to import the io module
 try:
     import atom_io
+
     IO_AVAILABLE = True
 except ImportError:
     IO_AVAILABLE = False
 
-pytestmark = pytest.mark.skipif(
-    not IO_AVAILABLE,
-    reason="atom_io module not available"
-)
+pytestmark = pytest.mark.skipif(not IO_AVAILABLE, reason="atom_io module not available")
+
 
 class TestIoModule:
     """Test cases for the io module."""
@@ -27,7 +26,8 @@ class TestIoModule:
 
     def test_module_attributes(self):
         """Test that the module has expected attributes."""
-        assert hasattr(atom_io, '__doc__')
+        assert hasattr(atom_io, "__doc__")
+
 
 class TestIoFunctionality:
     """Test cases for io functionality."""
@@ -42,6 +42,7 @@ class TestIoFunctionality:
         """Test io integration."""
         # TODO: Implement integration tests
         pass
+
 
 @pytest.mark.slow
 class TestIoPerformance:

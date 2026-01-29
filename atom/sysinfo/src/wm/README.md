@@ -9,6 +9,7 @@ The Window Manager module provides a unified API for interacting with window man
 ## Features
 
 ### System Information
+
 - Desktop environment detection
 - Window manager identification
 - Theme information (light/dark mode)
@@ -17,6 +18,7 @@ The Window Manager module provides a unified API for interacting with window man
 - Font and cursor information
 
 ### Window Management
+
 - Window enumeration and filtering
 - Window state manipulation (minimize, maximize, etc.)
 - Window positioning and resizing
@@ -24,6 +26,7 @@ The Window Manager module provides a unified API for interacting with window man
 - Cross-platform window operations
 
 ### Advanced Features
+
 - Real-time window monitoring
 - Theme change detection
 - Workspace management
@@ -176,17 +179,20 @@ if (isError(result)) {
 ## Platform-Specific Notes
 
 ### Windows
+
 - Uses Win32 API and Desktop Window Manager (DWM)
 - Virtual desktop support requires Windows 10+
 - Some operations require elevated privileges
 
 ### Linux
+
 - Requires X11 or Wayland
 - Uses wmctrl for window management
 - Supports GNOME, KDE, and other desktop environments
 - Some features require specific tools (wmctrl, xrandr)
 
 ### macOS
+
 - Uses Core Graphics and Accessibility APIs
 - Requires accessibility permissions for window control
 - Spaces (workspaces) support through private APIs
@@ -206,6 +212,7 @@ The module integrates with the existing Atom build system. Platform-specific imp
 ## Examples
 
 See the `examples/` directory for complete usage examples:
+
 - `basic_system_info.cpp` - Basic system information retrieval
 - `window_management.cpp` - Window enumeration and control
 - `theme_monitoring.cpp` - Theme change detection
@@ -226,6 +233,7 @@ auto result = atom::system::wm::getSystemInfo();
 ## Contributing
 
 When adding new features:
+
 1. Implement in platform-specific files (windows.cpp, linux.cpp, macos.cpp)
 2. Add cross-platform wrapper in wm.cpp
 3. Update the header files with appropriate declarations

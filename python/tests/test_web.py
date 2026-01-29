@@ -9,14 +9,15 @@ import pytest
 # Try to import the web module
 try:
     import atom_web
+
     WEB_AVAILABLE = True
 except ImportError:
     WEB_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
-    not WEB_AVAILABLE,
-    reason="atom_web module not available"
+    not WEB_AVAILABLE, reason="atom_web module not available"
 )
+
 
 class TestWebModule:
     """Test cases for the web module."""
@@ -27,7 +28,8 @@ class TestWebModule:
 
     def test_module_attributes(self):
         """Test that the module has expected attributes."""
-        assert hasattr(atom_web, '__doc__')
+        assert hasattr(atom_web, "__doc__")
+
 
 class TestWebFunctionality:
     """Test cases for web functionality."""
@@ -42,6 +44,7 @@ class TestWebFunctionality:
         """Test web integration."""
         # TODO: Implement integration tests
         pass
+
 
 @pytest.mark.slow
 class TestWebPerformance:

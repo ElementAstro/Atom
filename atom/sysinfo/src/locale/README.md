@@ -9,6 +9,7 @@ The locale module provides a modern, feature-rich API for handling system locale
 ## Features
 
 ### Core Features
+
 - **Cross-platform support**: Windows, Linux, and macOS
 - **Advanced locale detection**: Automatic system locale detection with fallback mechanisms
 - **Comprehensive validation**: Multi-level locale validation with detailed error reporting
@@ -17,6 +18,7 @@ The locale module provides a modern, feature-rich API for handling system locale
 - **Performance monitoring**: Built-in metrics collection and performance analysis
 
 ### Enhanced Capabilities
+
 - **Locale compatibility checking**: Cross-platform compatibility analysis
 - **Automatic fallback**: Smart fallback to compatible locales
 - **Configuration management**: Flexible configuration via files or environment variables
@@ -170,18 +172,21 @@ locale/
 ## Platform-Specific Features
 
 ### Windows
+
 - Native Windows API integration
 - Support for Windows locale identifiers
 - UI language detection
 - Registry-based configuration
 
 ### Linux/Unix
+
 - POSIX locale support
 - Environment variable detection
 - System configuration file parsing
 - ICU library integration (optional)
 
 ### macOS
+
 - Core Foundation integration
 - Cocoa framework support
 - System preferences integration

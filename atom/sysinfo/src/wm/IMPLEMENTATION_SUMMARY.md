@@ -69,23 +69,27 @@ auto theme = atom::system::getThemeInfo();        // Uses new implementation
 ## Enhanced Features
 
 ### 1. System Information
+
 - **Enhanced SystemInfo structure** with monitors, workspaces, and detailed theme info
 - **Cross-platform theme detection** with light/dark mode support
 - **Monitor enumeration** with resolution, position, and DPI information
 - **Workspace/virtual desktop support** where available
 
 ### 2. Window Management
+
 - **Window enumeration** with detailed information (title, process, state, position)
 - **Window control operations** (focus, move, resize, close, state changes)
 - **Window filtering and searching** by process name, title, workspace
 - **Real-time window monitoring** with callback support
 
 ### 3. Advanced Classes
+
 - **WindowManager class** for advanced window operations and monitoring
 - **ThemeManager class** for theme detection and change monitoring
 - **WorkspaceManager class** for workspace operations
 
 ### 4. Error Handling
+
 - **Robust error handling** with `WMResult<T>` type
 - **Detailed error codes** for different failure scenarios
 - **Helper functions** for error checking and value extraction
@@ -102,6 +106,7 @@ auto theme = atom::system::getThemeInfo();        // Uses new implementation
 | Workspace Support | ⚠️ Limited | ✅ Full | ⚠️ Stub | Windows: Virtual Desktops, Linux: wmctrl, macOS: Spaces API needed |
 
 **Legend:**
+
 - ✅ Full: Complete implementation
 - ⚠️ Limited/Basic/Stub: Partial implementation or placeholder
 - ❌ None: Not implemented
@@ -109,12 +114,14 @@ auto theme = atom::system::getThemeInfo();        // Uses new implementation
 ## Technical Implementation
 
 ### Architecture
+
 - **Modular design** with platform-specific implementations
 - **RAII classes** for resource management
 - **Template-based result types** for type-safe error handling
 - **Thread-safe monitoring** with proper cleanup
 
 ### Dependencies
+
 - **spdlog** for logging
 - **Platform libraries:**
   - Windows: `dwmapi.lib`, `shell32.lib`, `psapi.lib`
@@ -122,6 +129,7 @@ auto theme = atom::system::getThemeInfo();        // Uses new implementation
   - macOS: Core Graphics, Core Foundation frameworks
 
 ### Build System
+
 - **CMake-based** with proper package configuration
 - **Optional components** (examples, tests)
 - **Cross-platform compilation** with appropriate flags
@@ -130,12 +138,14 @@ auto theme = atom::system::getThemeInfo();        // Uses new implementation
 ## Testing
 
 ### Test Coverage
+
 - **Unit tests** for all core functionality
 - **Integration tests** for cross-platform compatibility
 - **Error handling tests** for robustness
 - **Platform-specific tests** where applicable
 
 ### Test Categories
+
 1. **Common tests** - Data structures and utility functions
 2. **System info tests** - Information retrieval and consistency
 3. **Window management tests** - Window operations and filtering
@@ -144,6 +154,7 @@ auto theme = atom::system::getThemeInfo();        // Uses new implementation
 ## Usage Examples
 
 ### Basic System Information
+
 ```cpp
 #include "atom/sysinfo/wm/wm.hpp"
 using namespace atom::system::wm;
@@ -157,6 +168,7 @@ if (!isError(result)) {
 ```
 
 ### Window Management
+
 ```cpp
 WindowManager wm;
 auto windows = wm.getWindowsByProcess("chrome.exe");
@@ -169,6 +181,7 @@ if (!isError(windows)) {
 ```
 
 ### Theme Monitoring
+
 ```cpp
 ThemeManager tm;
 tm.startMonitoring([](const ThemeInfo& theme) {
@@ -179,12 +192,14 @@ tm.startMonitoring([](const ThemeInfo& theme) {
 ## Future Enhancements
 
 ### Short Term
+
 1. **Complete macOS implementation** using Core Graphics and Accessibility APIs
 2. **Enhanced Windows virtual desktop support** using Windows 10+ APIs
 3. **Wayland support** for Linux environments
 4. **Additional window properties** (opacity, always-on-top, etc.)
 
 ### Long Term
+
 1. **Window decoration control** (borders, title bars)
 2. **Multi-monitor window management** utilities
 3. **Workspace automation** features
@@ -194,12 +209,14 @@ tm.startMonitoring([](const ThemeInfo& theme) {
 ## Migration Notes
 
 ### For Existing Code
+
 - **No immediate changes required** - old API continues to work
 - **Gradual migration recommended** to take advantage of new features
 - **Enhanced error handling** available in new API
 - **Additional functionality** accessible through new namespace
 
 ### For New Code
+
 - **Use new `atom::system::wm` namespace** for full functionality
 - **Implement proper error handling** with `WMResult<T>`
 - **Take advantage of monitoring classes** for real-time updates

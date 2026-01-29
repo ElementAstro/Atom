@@ -7,6 +7,7 @@ The BIOS Information Module provides comprehensive access to system BIOS/UEFI fi
 ## Features
 
 ### Core Features
+
 - **BIOS Information Retrieval**: Version, manufacturer, release date, serial number
 - **Health Monitoring**: System health checks, error detection, age analysis
 - **SMBIOS Data Access**: Complete SMBIOS table information
@@ -15,6 +16,7 @@ The BIOS Information Module provides comprehensive access to system BIOS/UEFI fi
 - **Settings Backup/Restore**: BIOS settings backup and restoration
 
 ### Enhanced Features (New)
+
 - **Firmware Information**: Detailed firmware type, version, and capabilities
 - **Boot Configuration Management**: Boot order, boot devices, boot settings
 - **Power Management**: ACPI settings, wake-on-LAN, power profiles
@@ -107,18 +109,21 @@ bool valid = BiosUtils::isValidBiosVersion("1.2.3");
 ## Platform Support
 
 ### Windows
+
 - Uses WMI (Windows Management Instrumentation) for data retrieval
 - Supports UEFI variable access
 - Requires administrator privileges for modifications
 - COM interface management with RAII
 
 ### Linux
+
 - Uses `dmidecode` for BIOS information
 - Accesses `/sys/firmware/efi` for UEFI data
 - Uses `/sys/class/thermal` for temperature monitoring
 - Requires root privileges for system modifications
 
 ### macOS
+
 - Uses IOKit framework for hardware information
 - Integrates with `system_profiler` for detailed data
 - Uses `pmset` for power management

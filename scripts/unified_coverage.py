@@ -9,24 +9,26 @@ License: GPL3
 """
 
 import json
-import os
 import subprocess
 import sys
 import webbrowser
-from pathlib import Path
-from typing import Dict, List, Optional
 import xml.etree.ElementTree as ET
+from pathlib import Path
+from typing import Dict
+
 
 class Colors:
-    RED = '\033[0;31m'
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    BLUE = '\033[0;34m'
-    NC = '\033[0m'
+    RED = "\033[0;31m"
+    GREEN = "\033[0;32m"
+    YELLOW = "\033[1;33m"
+    BLUE = "\033[0;34m"
+    NC = "\033[0m"
+
 
 def print_colored(message: str, color: str = Colors.NC) -> None:
     """Print a colored message."""
     print(f"{color}{message}{Colors.NC}")
+
 
 class UnifiedCoverageReporter:
     """Generate unified coverage reports for C++ and Python."""
@@ -49,9 +51,12 @@ class UnifiedCoverageReporter:
 
         try:
             # Build with coverage
-            result = subprocess.run([
-                "cmake", "--build", str(self.build_dir), "--target", "coverage"
-            ], capture_output=True, text=True, cwd=self.project_root)
+            result = subprocess.run(
+                ["cmake", "--build", str(self.build_dir), "--target", "coverage"],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root,
+            )
 
             if result.returncode != 0:
                 print_colored(f"C++ coverage failed: {result.stderr}", Colors.RED)
@@ -70,27 +75,42 @@ class UnifiedCoverageReporter:
 
         try:
             # Run Python coverage
-            result = subprocess.run([
-                sys.executable, "scripts/python_coverage.py", "--no-run"
-            ], capture_output=True, text=True, cwd=self.project_root)
+            result = subprocess.run(
+                [sys.executable, "scripts/python_coverage.py", "--no-run"],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root,
+            )
 
             if result.returncode != 0:
-                print_colored(f"Python coverage setup failed: {result.stderr}", Colors.RED)
+                print_colored(
+                    f"Python coverage setup failed: {result.stderr}", Colors.RED
+                )
                 return False
 
             # Run tests with coverage
-            result = subprocess.run([
-                sys.executable, "-m", "pytest",
-                "python/tests/",
-                "--cov=atom",
-                "--cov=python",
-                f"--cov-report=xml:{self.python_coverage_dir}/coverage.xml",
-                f"--cov-report=html:{self.python_coverage_dir}/html",
-                "--cov-branch"
-            ], capture_output=True, text=True, cwd=self.project_root)
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "pytest",
+                    "python/tests/",
+                    "--cov=atom",
+                    "--cov=python",
+                    f"--cov-report=xml:{self.python_coverage_dir}/coverage.xml",
+                    f"--cov-report=html:{self.python_coverage_dir}/html",
+                    "--cov-branch",
+                ],
+                capture_output=True,
+                text=True,
+                cwd=self.project_root,
+            )
 
             if result.returncode != 0:
-                print_colored("Python tests failed, but continuing with coverage...", Colors.YELLOW)
+                print_colored(
+                    "Python tests failed, but continuing with coverage...",
+                    Colors.YELLOW,
+                )
 
             print_colored("Python coverage completed", Colors.GREEN)
             return True
@@ -106,7 +126,7 @@ class UnifiedCoverageReporter:
             "total_lines": 0,
             "covered_lines": 0,
             "coverage_percentage": 0.0,
-            "modules": {}
+            "modules": {},
         }
 
         # Look for lcov info files
@@ -116,18 +136,18 @@ class UnifiedCoverageReporter:
             return coverage_data
 
         try:
-            with open(cpp_info_file, 'r') as f:
+            with open(cpp_info_file) as f:
                 content = f.read()
 
             # Parse lcov format
             current_file = None
-            for line in content.split('\n'):
-                if line.startswith('SF:'):
+            for line in content.split("\n"):
+                if line.startswith("SF:"):
                     current_file = line[3:]
-                elif line.startswith('LH:'):
+                elif line.startswith("LH:"):
                     covered = int(line[3:])
                     coverage_data["covered_lines"] += covered
-                elif line.startswith('LF:'):
+                elif line.startswith("LF:"):
                     total = int(line[3:])
                     coverage_data["total_lines"] += total
 
@@ -148,7 +168,7 @@ class UnifiedCoverageReporter:
             "total_lines": 0,
             "covered_lines": 0,
             "coverage_percentage": 0.0,
-            "modules": {}
+            "modules": {},
         }
 
         xml_file = self.python_coverage_dir / "coverage.xml"
@@ -161,19 +181,21 @@ class UnifiedCoverageReporter:
             root = tree.getroot()
 
             # Parse coverage XML
-            for package in root.findall('.//package'):
-                for class_elem in package.findall('classes/class'):
-                    filename = class_elem.get('filename', '')
-                    lines = class_elem.find('lines')
+            for package in root.findall(".//package"):
+                for class_elem in package.findall("classes/class"):
+                    filename = class_elem.get("filename", "")
+                    lines = class_elem.find("lines")
                     if lines is not None:
-                        for line in lines.findall('line'):
+                        for line in lines.findall("line"):
                             coverage_data["total_lines"] += 1
-                            if line.get('hits', '0') != '0':
+                            if line.get("hits", "0") != "0":
                                 coverage_data["covered_lines"] += 1
 
             # Get overall coverage from root
-            if 'line-rate' in root.attrib:
-                coverage_data["coverage_percentage"] = float(root.attrib['line-rate']) * 100
+            if "line-rate" in root.attrib:
+                coverage_data["coverage_percentage"] = (
+                    float(root.attrib["line-rate"]) * 100
+                )
 
         except Exception as e:
             print_colored(f"Error parsing Python coverage: {e}", Colors.RED)
@@ -385,23 +407,25 @@ class UnifiedCoverageReporter:
         overall_coverage = (total_covered / total_lines * 100) if total_lines > 0 else 0
 
         json_data = {
-            "timestamp": __import__('datetime').datetime.now().isoformat(),
+            "timestamp": __import__("datetime").datetime.now().isoformat(),
             "overall": {
                 "coverage_percentage": round(overall_coverage, 2),
                 "total_lines": total_lines,
-                "covered_lines": total_covered
+                "covered_lines": total_covered,
             },
             "cpp": cpp_data,
-            "python": python_data
+            "python": python_data,
         }
 
         json_file = self.unified_dir / "coverage.json"
-        with open(json_file, 'w') as f:
+        with open(json_file, "w") as f:
             json.dump(json_data, f, indent=2)
 
         return str(json_file)
 
-    def run_unified_coverage(self, skip_cpp: bool = False, skip_python: bool = False) -> bool:
+    def run_unified_coverage(
+        self, skip_cpp: bool = False, skip_python: bool = False
+    ) -> bool:
         """Run unified coverage analysis."""
         print_colored("Starting unified coverage analysis...", Colors.BLUE)
 
@@ -427,31 +451,26 @@ class UnifiedCoverageReporter:
 
         return cpp_success and python_success
 
+
 def main():
     """Main function."""
     import argparse
 
     parser = argparse.ArgumentParser(
         description="Generate unified coverage reports for C++ and Python",
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
 
     parser.add_argument(
-        "--skip-cpp",
-        action="store_true",
-        help="Skip C++ coverage analysis"
+        "--skip-cpp", action="store_true", help="Skip C++ coverage analysis"
     )
 
     parser.add_argument(
-        "--skip-python",
-        action="store_true",
-        help="Skip Python coverage analysis"
+        "--skip-python", action="store_true", help="Skip Python coverage analysis"
     )
 
     parser.add_argument(
-        "--open",
-        action="store_true",
-        help="Open the unified report in browser"
+        "--open", action="store_true", help="Open the unified report in browser"
     )
 
     args = parser.parse_args()
@@ -463,8 +482,7 @@ def main():
 
     reporter = UnifiedCoverageReporter(project_root)
     success = reporter.run_unified_coverage(
-        skip_cpp=args.skip_cpp,
-        skip_python=args.skip_python
+        skip_cpp=args.skip_cpp, skip_python=args.skip_python
     )
 
     if args.open:
@@ -475,6 +493,7 @@ def main():
             print_colored("Unified report not found", Colors.RED)
 
     return 0 if success else 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

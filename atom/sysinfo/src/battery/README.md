@@ -5,12 +5,14 @@ A comprehensive cross-platform battery management and monitoring library for C++
 ## Features
 
 ### Core Functionality
+
 - **Battery Information**: Get detailed battery status, health, and specifications
 - **Real-time Monitoring**: Monitor battery changes with customizable intervals
 - **Cross-platform Support**: Windows, macOS, and Linux compatibility
 - **Power Management**: Control system power plans and profiles
 
 ### Advanced Features
+
 - **Battery Analytics**: Historical data tracking and statistics
 - **Alert System**: Configurable alerts for low battery, high temperature, etc.
 - **Thermal Management**: Monitor and respond to battery temperature changes
@@ -45,6 +47,7 @@ manager.setAlertCallback([](AlertType type, const BatteryInfo& info) {
 ## API Overview
 
 ### Core Classes
+
 - `BatteryInfo`: Comprehensive battery information structure
 - `BatteryMonitor`: Real-time battery status monitoring
 - `BatteryManager`: Advanced battery management with alerts and analytics
@@ -53,6 +56,7 @@ manager.setAlertCallback([](AlertType type, const BatteryInfo& info) {
 - `ThermalManager`: Battery thermal monitoring and management
 
 ### Platform Support
+
 - **Windows**: Full support via Windows API and WMI
 - **macOS**: IOKit integration for comprehensive battery data
 - **Linux**: sysfs and upower integration
@@ -66,19 +70,24 @@ make -j$(nproc)
 ```
 
 ## Dependencies
+
 - C++20 compatible compiler
 - spdlog for logging
 - Platform-specific libraries (automatically linked)
 
 ## Examples
+
 See the `examples/` directory for comprehensive usage examples.
 
 ## Testing
+
 Run tests with:
+
 ```bash
 cd build
 ctest
 ```
 
 ## License
+
 Copyright (C) 2023-2024 Max Qian <lightapt.com>

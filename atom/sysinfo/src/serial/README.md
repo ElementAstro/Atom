@@ -5,6 +5,7 @@ A comprehensive, cross-platform C++ library for collecting system hardware ident
 ## Features
 
 ### Core Functionality
+
 - **Hardware Serial Numbers**: BIOS, motherboard, CPU, and disk serial numbers
 - **System Identification**: System UUID, machine ID, boot ID, hostname, domain name
 - **Network Interfaces**: MAC addresses, interface details, driver information
@@ -12,6 +13,7 @@ A comprehensive, cross-platform C++ library for collecting system hardware ident
 - **System Fingerprinting**: Unique hardware-based system identification
 
 ### Enhanced Features
+
 - **Cross-Platform Support**: Windows (WMI) and Linux (filesystem/DMI)
 - **Caching System**: Configurable result caching with timeout
 - **Error Handling**: Comprehensive error reporting and validation
@@ -109,9 +111,11 @@ int main() {
 ### Core Classes
 
 #### `atom::system::SystemInfo`
+
 Main class for collecting system information with enhanced features.
 
 **Key Methods:**
+
 - `getHardwareSerials()` - Get hardware serial numbers
 - `getSystemIdentification()` - Get system identification data
 - `getMemoryModules()` - Get memory module information
@@ -121,9 +125,11 @@ Main class for collecting system information with enhanced features.
 - `exportToJson()` / `exportToXml()` - Export data in various formats
 
 #### `HardwareInfo` (Backward Compatibility)
+
 Original API maintained for backward compatibility.
 
 **Key Methods:**
+
 - `getBiosSerialNumber()` - Get BIOS serial number
 - `getMotherboardSerialNumber()` - Get motherboard serial number
 - `getCpuSerialNumber()` - Get CPU serial number
@@ -134,28 +140,35 @@ Original API maintained for backward compatibility.
 ### Data Structures
 
 #### `HardwareSerialData`
+
 Contains hardware serial number information.
 
 #### `SystemIdentificationData`
+
 Contains system identification information including UUID, machine ID, MAC addresses.
 
 #### `MemoryModuleInfo`
+
 Contains detailed memory module information.
 
 #### `NetworkInterfaceInfo`
+
 Contains network interface details.
 
 #### `ComprehensiveSystemInfo`
+
 Contains all available system information.
 
 ## Platform Support
 
 ### Windows
+
 - Uses Windows Management Instrumentation (WMI)
 - Requires Windows Vista or later
 - Supports all hardware serial numbers, memory modules, and network interfaces
 
 ### Linux
+
 - Uses DMI (Desktop Management Interface) via `/sys/class/dmi/id`
 - Uses `/proc` and `/sys` filesystems
 - Supports most hardware information on modern Linux distributions
@@ -163,6 +176,7 @@ Contains all available system information.
 ## Building
 
 ### Requirements
+
 - C++20 compatible compiler
 - CMake 3.16 or later
 - spdlog library
@@ -230,6 +244,7 @@ This module is part of the Atom project and follows the same licensing terms.
 ## Contributing
 
 Contributions are welcome! Please ensure:
+
 - Code follows the existing style
 - Tests are included for new features
 - Documentation is updated

@@ -156,17 +156,20 @@ make -j$(nproc)
 The framework includes comprehensive performance testing:
 
 ### Memory Benchmarks
+
 - Sequential read/write performance
 - Random access patterns
 - Cache hierarchy analysis
 - Bandwidth utilization measurement
 
 ### Latency Profiling
+
 - Memory access latency across different sizes
 - Cache level identification
 - NUMA node access characteristics
 
 ### Stress Testing
+
 - Memory allocation under pressure
 - Fragmentation behavior
 - System stability validation
@@ -176,12 +179,14 @@ The framework includes comprehensive performance testing:
 The leak detection tests validate:
 
 ### Detection Algorithms
+
 - Gradual leak pattern recognition
 - Sudden allocation spike detection
 - Periodic leak identification
 - Allocation tracking accuracy
 
 ### Pattern Analysis
+
 - Confidence scoring validation
 - Severity classification
 - Recommendation generation
@@ -192,12 +197,14 @@ The leak detection tests validate:
 NUMA-specific tests cover:
 
 ### Topology Detection
+
 - Node enumeration
 - CPU-memory binding
 - Distance matrix validation
 - Bandwidth characteristics
 
 ### Performance Analysis
+
 - Local vs remote access patterns
 - Hit ratio calculations
 - Migration statistics
@@ -212,6 +219,7 @@ Generate test coverage reports:
 ```
 
 This will:
+
 1. Rebuild with coverage flags
 2. Run all tests
 3. Generate coverage data
@@ -226,6 +234,7 @@ Run tests with Valgrind for memory error detection:
 ```
 
 This performs:
+
 - Memory leak detection
 - Buffer overflow checking
 - Use-after-free detection
@@ -292,16 +301,19 @@ When adding new tests:
 ## Test Results Interpretation
 
 ### Performance Metrics
+
 - Read/write speeds should be reasonable for the hardware
 - Latency should increase with memory hierarchy levels
 - Bandwidth utilization should not exceed 100%
 
 ### Memory Pressure
+
 - Pressure scores range from 0-100
 - Levels: NONE(0), LOW(1), MEDIUM(2), HIGH(3), CRITICAL(4)
 - Recommendations should be actionable
 
 ### Leak Detection
+
 - Confidence scores range from 0-100%
 - Higher confidence indicates more reliable detection
 - Severity levels guide response urgency

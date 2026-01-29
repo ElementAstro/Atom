@@ -18,24 +18,28 @@ This directory contains a comprehensive set of C++ components for disk and stora
 ### Key Features
 
 #### 🚀 Performance Optimizations
+
 - **Async Operations**: Non-blocking disk operations with futures
 - **Intelligent Caching**: Multi-level caching with automatic expiration
 - **SIMD Optimizations**: Vectorized calculations for batch operations
 - **Lock-free Data Structures**: High-performance concurrent access
 
 #### 📊 Advanced Monitoring
+
 - **Event-driven Architecture**: Real-time device change notifications
 - **Configurable Intervals**: Adaptive monitoring frequencies
 - **Performance Metrics**: IOPS, throughput, latency, and health tracking
 - **Anomaly Detection**: Statistical analysis for performance anomalies
 
 #### 🔒 Security Features
+
 - **Device Fingerprinting**: Unique device identification and verification
 - **Encryption Detection**: Support for LUKS, BitLocker, and other encryption
 - **Threat Scanning**: ML-based malware and threat detection
 - **Access Control**: Whitelist management and security policies
 
 #### 🔮 Predictive Analytics
+
 - **Usage Pattern Analysis**: Temporal and behavioral pattern recognition
 - **Capacity Planning**: Growth prediction and expansion recommendations
 - **Health Prediction**: Failure prediction with confidence intervals
@@ -158,6 +162,7 @@ for (const auto& alert : alerts) {
 For complex applications, use the manager classes that provide higher-level abstractions:
 
 ### DiskInfoManager
+
 ```cpp
 DiskInfoManager infoManager;
 auto diskInfos = infoManager.getDiskInfo(true);
@@ -165,6 +170,7 @@ auto stats = infoManager.getCacheStats();
 ```
 
 ### DeviceManager
+
 ```cpp
 DeviceManager deviceManager;
 deviceManager.startMonitoring(
@@ -174,6 +180,7 @@ deviceManager.startMonitoring(
 ```
 
 ### PerformanceManager
+
 ```cpp
 PerformanceManager perfManager;
 perfManager.addDevice("/dev/sda");
@@ -183,6 +190,7 @@ perfManager.startMonitoring([](const std::string& path, const ExtendedPerformanc
 ```
 
 ### SecurityManager
+
 ```cpp
 SecurityManager secManager;
 secManager.addDeviceToWhitelist("/dev/sda");
@@ -192,6 +200,7 @@ secManager.startSecurityMonitoring([](const SecurityAuditResult& result) {
 ```
 
 ### DiskAnalytics
+
 ```cpp
 DiskAnalytics analytics;
 analytics.addDevice("/dev/sda");
@@ -203,6 +212,7 @@ analytics.startMonitoring([](const MaintenanceAlert& alert) {
 ## Configuration
 
 ### Monitoring Configuration
+
 ```cpp
 AdvancedMonitorConfig config;
 config.pollInterval = std::chrono::seconds(1);
@@ -214,6 +224,7 @@ config.spaceWarningThreshold = 90.0f;
 ```
 
 ### Performance Configuration
+
 ```cpp
 PerformanceMonitorConfig config;
 config.sampleInterval = std::chrono::seconds(2);
@@ -224,6 +235,7 @@ config.anomalyThreshold = 2.5f;
 ```
 
 ### Security Configuration
+
 ```cpp
 SecurityScanConfig config;
 config.enableMLPatterns = true;
@@ -234,6 +246,7 @@ config.quarantineThreshold = ThreatLevel::MEDIUM;
 ```
 
 ### Analytics Configuration
+
 ```cpp
 AnalyticsConfig config;
 config.analysisWindow = std::chrono::hours(24 * 7);
@@ -292,12 +305,14 @@ All functions use modern C++ error handling patterns:
 ## Testing
 
 Comprehensive test suite included:
+
 - Unit tests (`disk_components_test.cpp`)
 - Performance benchmarks (`disk_performance_test.cpp`)
 - Integration tests (`disk_integration_test.cpp`)
 - Stress tests (`disk_stress_test.cpp`)
 
 Run tests with:
+
 ```bash
 make test_disk_all
 ```

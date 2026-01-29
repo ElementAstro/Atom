@@ -4,21 +4,21 @@
 # Author: Max Qian
 # License: GPL3
 
+
 import pytest
-import tempfile
-import os
 
 # Try to import the search module
 try:
     import atom_search
+
     SEARCH_AVAILABLE = True
 except ImportError:
     SEARCH_AVAILABLE = False
 
 pytestmark = pytest.mark.skipif(
-    not SEARCH_AVAILABLE,
-    reason="atom_search module not available"
+    not SEARCH_AVAILABLE, reason="atom_search module not available"
 )
+
 
 class TestSearchModule:
     """Test cases for the search module."""
@@ -29,7 +29,8 @@ class TestSearchModule:
 
     def test_module_attributes(self):
         """Test that the module has expected attributes."""
-        assert hasattr(atom_search, '__doc__')
+        assert hasattr(atom_search, "__doc__")
+
 
 class TestCacheSystem:
     """Test cases for cache system functionality."""
@@ -44,6 +45,7 @@ class TestCacheSystem:
         # Placeholder for cache operation tests
         pass
 
+
 class TestLRUCache:
     """Test cases for LRU cache functionality."""
 
@@ -57,6 +59,7 @@ class TestLRUCache:
         # Placeholder for eviction policy tests
         pass
 
+
 class TestTTLCache:
     """Test cases for TTL cache functionality."""
 
@@ -69,6 +72,7 @@ class TestTTLCache:
         """Test TTL expiration functionality."""
         # Placeholder for TTL expiration tests
         pass
+
 
 class TestDatabaseIntegration:
     """Test cases for database integration."""
@@ -85,12 +89,14 @@ class TestDatabaseIntegration:
         # Placeholder for MySQL integration tests
         pass
 
+
 @pytest.mark.benchmark
 class TestSearchPerformance:
     """Performance tests for search module."""
 
     def test_search_performance(self, benchmark):
         """Benchmark search performance."""
+
         def _dummy_search():
             return [i for i in range(1000) if i % 2 == 0]
 

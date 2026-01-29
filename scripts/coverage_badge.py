@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 
 """
 coverage_badge.py - Generate coverage badges for README
@@ -22,16 +21,19 @@ import sys
 from pathlib import Path
 from typing import Dict
 
+
 def is_windows() -> bool:
     """Check if running on Windows."""
-    return platform.system().lower() == 'windows'
+    return platform.system().lower() == "windows"
+
 
 def normalize_path(path: Path) -> Path:
     """Normalize path for the current platform."""
     if is_windows():
         # Convert forward slashes to backslashes on Windows
-        return Path(str(path).replace('/', os.sep))
+        return Path(str(path).replace("/", os.sep))
     return path
+
 
 def get_coverage_color(percentage: float) -> str:
     """Get color for coverage badge based on percentage."""
@@ -48,9 +50,11 @@ def get_coverage_color(percentage: float) -> str:
     else:
         return "red"
 
+
 def generate_badge_url(label: str, message: str, color: str) -> str:
     """Generate shields.io badge URL."""
     return f"https://img.shields.io/badge/{label}-{message}-{color}"
+
 
 def generate_coverage_badges(coverage_file: Path) -> Dict[str, str]:
     """Generate coverage badge URLs from coverage data."""
@@ -63,10 +67,9 @@ def generate_coverage_badges(coverage_file: Path) -> Dict[str, str]:
         print(f"Coverage file not found: {coverage_file}")
         return badges
 
-
     try:
         # Use UTF-8 encoding explicitly for cross-platform compatibility
-        with open(coverage_file, 'r', encoding='utf-8') as f:
+        with open(coverage_file, encoding="utf-8") as f:
             data = json.load(f)
 
         # Overall coverage badge
@@ -93,7 +96,9 @@ def generate_coverage_badges(coverage_file: Path) -> Dict[str, str]:
     except FileNotFoundError:
         print(f"❌ Coverage file not found: {coverage_file}")
         if is_windows():
-            print("💡 Make sure to use backslashes in Windows paths or forward slashes with quotes")
+            print(
+                "💡 Make sure to use backslashes in Windows paths or forward slashes with quotes"
+            )
     except PermissionError:
         print(f"❌ Permission denied reading: {coverage_file}")
         if is_windows():
@@ -106,6 +111,7 @@ def generate_coverage_badges(coverage_file: Path) -> Dict[str, str]:
             print("💡 Check file encoding and ensure it's UTF-8")
 
     return badges
+
 
 def generate_badge_markdown(badges: Dict[str, str]) -> str:
     """Generate markdown for coverage badges."""
@@ -122,6 +128,7 @@ def generate_badge_markdown(badges: Dict[str, str]) -> str:
 
     return " ".join(markdown_lines)
 
+
 def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
     """Update README.md with coverage badges."""
     # Normalize path for current platform
@@ -131,62 +138,50 @@ def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
         print(f"README file not found: {readme_file}")
         return False
 
-
     try:
         # Use UTF-8 encoding and handle different line endings
-        content = readme_file.read_text(encoding='utf-8')
+        content = readme_file.read_text(encoding="utf-8")
 
         # Normalize line endings for cross-platform compatibility
-        content = content.replace('\r\n', '\n').replace('\r', '\n')
+        content = content.replace("\r\n", "\n").replace("\r", "\n")
 
         # Look for existing coverage badges section
         start_marker = "<!-- COVERAGE-BADGES-START -->"
         end_marker = "<!-- COVERAGE-BADGES-END -->"
 
-
         start_idx = content.find(start_marker)
         end_idx = content.find(end_marker)
-
 
         if start_idx != -1 and end_idx != -1:
             # Replace existing badges
             new_content = (
-                content[:start_idx + len(start_marker)] +
-                f"\n{badges_markdown}\n" +
-                content[end_idx:]
+                content[: start_idx + len(start_marker)]
+                + f"\n{badges_markdown}\n"
+                + content[end_idx:]
             )
         else:
             # Add badges section at the top after title
-            lines = content.split('\n')
+            lines = content.split("\n")
             insert_idx = 0
-
 
             # Find the first heading
             for i, line in enumerate(lines):
-                if line.startswith('# '):
+                if line.startswith("# "):
                     insert_idx = i + 1
                     break
 
-
             # Insert badges section
-            badge_section = [
-                "",
-                start_marker,
-                badges_markdown,
-                end_marker,
-                ""
-            ]
-
+            badge_section = ["", start_marker, badges_markdown, end_marker, ""]
 
             lines[insert_idx:insert_idx] = badge_section
-            new_content = '\n'.join(lines)
+            new_content = "\n".join(lines)
 
         # Use platform-appropriate line endings when writing
         if is_windows():
-            new_content = new_content.replace('\n', '\r\n')
+            new_content = new_content.replace("\n", "\r\n")
 
         # Write with UTF-8 encoding
-        readme_file.write_text(new_content, encoding='utf-8')
+        readme_file.write_text(new_content, encoding="utf-8")
         return True
 
     except FileNotFoundError:
@@ -206,6 +201,7 @@ def update_readme_badges(readme_file: Path, badges_markdown: str) -> bool:
         print(f"❌ Error updating README: {e}")
         return False
 
+
 def get_default_coverage_file() -> Path:
     """Get default coverage file path for the current platform."""
     if is_windows():
@@ -213,9 +209,11 @@ def get_default_coverage_file() -> Path:
         return Path("coverage\\unified\\coverage.json")
     return Path("coverage/unified/coverage.json")
 
+
 def get_default_readme_file() -> Path:
     """Get default README file path for the current platform."""
     return Path("README.md")
+
 
 def main():
     """Main function."""
@@ -236,34 +234,31 @@ Examples:
   Unix/Linux/macOS:
     python scripts/coverage_badge.py
     python scripts/coverage_badge.py --coverage-file coverage/unified/coverage.json
-        """
+        """,
     )
-
 
     parser.add_argument(
         "--coverage-file",
         type=Path,
         default=get_default_coverage_file(),
-        help="Path to coverage JSON file"
+        help="Path to coverage JSON file",
     )
-
 
     parser.add_argument(
         "--readme-file",
         type=Path,
         default=get_default_readme_file(),
-        help="Path to README.md file"
+        help="Path to README.md file",
     )
 
     parser.add_argument(
         "--output",
         choices=["markdown", "urls", "update-readme"],
         default="update-readme",
-        help="Output format"
+        help="Output format",
     )
 
     args = parser.parse_args()
-
 
     print("Coverage Badge Generator")
     print("=" * 25)
@@ -310,13 +305,16 @@ Examples:
         else:
             print(f"❌ Failed to update {readme_file}")
             if is_windows():
-                print("💡 Check file permissions and ensure the file is not open in another program")
+                print(
+                    "💡 Check file permissions and ensure the file is not open in another program"
+                )
             return 1
 
     print()
     print("🎉 Coverage badge generation completed successfully!")
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

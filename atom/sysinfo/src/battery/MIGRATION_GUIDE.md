@@ -7,6 +7,7 @@ This guide helps you migrate from the old monolithic battery module to the new m
 ## What's New
 
 ### Enhanced Features
+
 - **Multi-battery support**: Handle systems with multiple batteries
 - **Advanced monitoring**: Real-time alerts and statistics
 - **Battery calibration**: Optimize battery health and accuracy
@@ -16,6 +17,7 @@ This guide helps you migrate from the old monolithic battery module to the new m
 - **Enhanced data logging**: CSV export and historical data tracking
 
 ### Improved Architecture
+
 - **Modular design**: Platform-specific implementations separated
 - **Better error handling**: More detailed error information
 - **Enhanced type safety**: Stronger typing with enums
@@ -86,6 +88,7 @@ if (auto* info = std::get_if<BatteryInfo>(&result)) {
 ### Step 3: Utilize New Features
 
 #### Multi-Battery Support
+
 ```cpp
 // Get information for all batteries
 auto allBatteries = getAllBatteries();
@@ -100,6 +103,7 @@ if (!allBatteries.isEmpty()) {
 ```
 
 #### Advanced Monitoring with Alerts
+
 ```cpp
 // Old monitoring (still works)
 BatteryMonitor::startMonitoring([](const BatteryInfo& info) {
@@ -132,6 +136,7 @@ manager.startRecording("battery_log.csv");
 ```
 
 #### Enhanced Battery Information
+
 ```cpp
 // Access new battery properties
 auto result = getDetailedBatteryInfo();
@@ -149,6 +154,7 @@ if (auto* info = std::get_if<BatteryInfo>(&result)) {
 ### Step 4: Power Management Enhancements
 
 #### Adaptive Power Management
+
 ```cpp
 // Enable adaptive power management
 if (AdaptivePowerManager::enableAdaptivePower()) {
@@ -160,6 +166,7 @@ if (AdaptivePowerManager::enableAdaptivePower()) {
 ```
 
 #### Enhanced Power Plan Control
+
 ```cpp
 // Old way (still works)
 PowerPlanManager::setPowerPlan(PowerPlan::POWER_SAVER);
@@ -176,6 +183,7 @@ if (result && *result) {
 ```
 
 ### Step 5: Thermal Management
+
 ```cpp
 // Configure thermal management
 ThermalSettings thermalSettings;
@@ -198,6 +206,7 @@ if (temp) {
 ```
 
 ### Step 6: Battery Calibration
+
 ```cpp
 // Check if calibration is needed
 if (BatteryCalibrator::needsCalibration()) {
@@ -222,10 +231,13 @@ if (BatteryCalibrator::needsCalibration()) {
 ## Breaking Changes
 
 ### None for Basic Usage
+
 The new module maintains full backward compatibility for basic battery information retrieval and monitoring.
 
 ### Advanced Features Only
+
 Breaking changes only affect advanced features that didn't exist in the old module:
+
 - New enum values in existing enums
 - New optional parameters in some functions
 - Enhanced error reporting (more detailed error types)
@@ -233,16 +245,19 @@ Breaking changes only affect advanced features that didn't exist in the old modu
 ## Performance Improvements
 
 ### Reduced Memory Usage
+
 - More efficient data structures
 - Better memory management
 - Reduced allocations in hot paths
 
 ### Improved Platform Integration
+
 - Native platform APIs used more efficiently
 - Reduced system call overhead
 - Better caching of frequently accessed data
 
 ### Enhanced Threading
+
 - Better thread safety
 - Reduced lock contention
 - More efficient background monitoring
@@ -250,21 +265,25 @@ Breaking changes only affect advanced features that didn't exist in the old modu
 ## Recommended Migration Timeline
 
 ### Phase 1: Update Dependencies
+
 - Update to the new battery module
 - Verify existing functionality works
 - Run existing tests
 
 ### Phase 2: Enhance Error Handling
+
 - Update error handling to use new detailed error types
 - Add proper error recovery logic
 - Update logging to include more detailed error information
 
 ### Phase 3: Add New Features
+
 - Implement battery alerts where appropriate
 - Add thermal monitoring for critical applications
 - Consider adaptive power management for mobile applications
 
 ### Phase 4: Optimize
+
 - Use multi-battery support if applicable
 - Implement battery calibration workflows
 - Add comprehensive logging and monitoring
@@ -272,21 +291,25 @@ Breaking changes only affect advanced features that didn't exist in the old modu
 ## Support and Resources
 
 ### Documentation
+
 - [API Reference](API_REFERENCE.md)
 - [README](README.md)
 - Inline code documentation
 
 ### Examples
+
 - See `examples/` directory for comprehensive usage examples
 - Each example demonstrates specific features
 - Examples include error handling and best practices
 
 ### Testing
+
 - Run the test suite to verify functionality
 - Use `simple_test.cpp` for basic validation
 - Platform-specific tests available
 
 ### Getting Help
+
 - Check the examples for similar use cases
 - Review the API documentation for detailed function descriptions
 - Test on your target platforms to ensure compatibility

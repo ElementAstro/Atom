@@ -9,12 +9,14 @@ The sysinfo_printer module has been successfully refactored into a modular, exte
 ### 🏗️ Architecture
 
 **Before:**
+
 - Single monolithic files: `sysinfo_printer.hpp` and `sysinfo_printer.cpp`
 - All functionality in one class
 - Limited customization options
 - Basic export formats
 
 **After:**
+
 - Modular folder structure with specialized components
 - Separate formatters, exporters, and report generators
 - Extensive customization and configuration options
@@ -72,6 +74,7 @@ auto row = atom::system::SystemInfoPrinter::createTableRow("Label", "Value");
 ### 🔄 Compatibility Layer
 
 The original `sysinfo_printer.hpp` now acts as a compatibility wrapper that:
+
 - Preserves all original function signatures
 - Delegates to the new modular implementation
 - Maintains identical behavior and output
@@ -229,21 +232,25 @@ Verify your existing code still works by running your current tests.
 ## Benefits of the New Architecture
 
 ### 🚀 Performance
+
 - Modular loading - only load what you need
 - Optimized formatters for specific components
 - Efficient memory usage
 
 ### 🎨 Customization
+
 - Extensive formatting options
 - Custom templates and themes
 - Pluggable architecture
 
 ### 🔧 Maintainability
+
 - Clear separation of concerns
 - Easy to extend and modify
 - Comprehensive test coverage
 
 ### 📈 Scalability
+
 - Add new formatters easily
 - Support for new export formats
 - Plugin system ready
@@ -265,6 +272,7 @@ Verify your existing code still works by running your current tests.
 ## Future Considerations
 
 The new modular architecture provides a foundation for:
+
 - Plugin system for custom formatters
 - Real-time monitoring capabilities
 - Web-based dashboards

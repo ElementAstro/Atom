@@ -13,26 +13,30 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, Optional
+
 
 class Colors:
-    RED = '\033[0;31m'
-    GREEN = '\033[0;32m'
-    YELLOW = '\033[1;33m'
-    BLUE = '\033[0;34m'
-    CYAN = '\033[0;36m'
-    BOLD = '\033[1m'
-    NC = '\033[0m'
+    RED = "\033[0;31m"
+    GREEN = "\033[0;32m"
+    YELLOW = "\033[1;33m"
+    BLUE = "\033[0;34m"
+    CYAN = "\033[0;36m"
+    BOLD = "\033[1m"
+    NC = "\033[0m"
+
 
 def print_colored(message: str, color: str = Colors.NC) -> None:
     """Print a colored message."""
     print(f"{color}{message}{Colors.NC}")
+
 
 def print_section(title: str) -> None:
     """Print a section header."""
     print_colored(f"\n{Colors.BOLD}{'='*60}{Colors.NC}")
     print_colored(f"{Colors.BOLD}{title}{Colors.NC}")
     print_colored(f"{Colors.BOLD}{'='*60}{Colors.NC}")
+
 
 def check_command(command: str) -> bool:
     """Check if a command is available."""
@@ -42,13 +46,15 @@ def check_command(command: str) -> bool:
     except (subprocess.CalledProcessError, FileNotFoundError):
         return False
 
+
 def check_python_package(package: str) -> bool:
     """Check if a Python package is installed."""
     try:
-        __import__(package.replace('-', '_'))
+        __import__(package.replace("-", "_"))
         return True
     except ImportError:
         return False
+
 
 def get_file_count(directory: Path, pattern: str) -> int:
     """Get count of files matching pattern in directory."""
@@ -56,22 +62,26 @@ def get_file_count(directory: Path, pattern: str) -> int:
         return 0
     return len(list(directory.rglob(pattern)))
 
+
 def get_coverage_data() -> Optional[Dict]:
     """Get coverage data if available."""
     coverage_file = Path("coverage/unified/coverage.json")
     if coverage_file.exists():
         try:
-            with open(coverage_file, 'r') as f:
+            with open(coverage_file) as f:
                 return json.load(f)
         except Exception:
             pass
     return None
 
+
 def main():
     """Main function."""
     project_root = Path.cwd()
 
-    print_colored(f"{Colors.CYAN}{Colors.BOLD}Atom Testing & Coverage System Status{Colors.NC}")
+    print_colored(
+        f"{Colors.CYAN}{Colors.BOLD}Atom Testing & Coverage System Status{Colors.NC}"
+    )
     print_colored(f"{Colors.CYAN}Project: {project_root.name}{Colors.NC}")
     print_colored(f"{Colors.CYAN}Path: {project_root}{Colors.NC}")
 
@@ -93,13 +103,17 @@ def main():
             "pytest": check_python_package("pytest"),
             "pytest-cov": check_python_package("pytest_cov"),
             "coverage": check_python_package("coverage"),
-        }
+        },
     }
 
     for category, tools in dependencies.items():
         print_colored(f"\n{Colors.BOLD}{category}:{Colors.NC}")
         for tool, available in tools.items():
-            status = f"{Colors.GREEN}✓{Colors.NC}" if available else f"{Colors.RED}✗{Colors.NC}"
+            status = (
+                f"{Colors.GREEN}✓{Colors.NC}"
+                if available
+                else f"{Colors.RED}✗{Colors.NC}"
+            )
             print(f"  {status} {tool}")
 
     # Test Directory Structure
@@ -150,7 +164,11 @@ def main():
     }
 
     for name, path in config_files.items():
-        status = f"{Colors.GREEN}✓{Colors.NC}" if path.exists() else f"{Colors.RED}✗{Colors.NC}"
+        status = (
+            f"{Colors.GREEN}✓{Colors.NC}"
+            if path.exists()
+            else f"{Colors.RED}✗{Colors.NC}"
+        )
         print(f"  {status} {name}")
 
     # Scripts
@@ -169,8 +187,14 @@ def main():
 
     for name, script in scripts.items():
         script_path = scripts_dir / script
-        status = f"{Colors.GREEN}✓{Colors.NC}" if script_path.exists() else f"{Colors.RED}✗{Colors.NC}"
-        executable = "🔧" if script_path.exists() and os.access(script_path, os.X_OK) else ""
+        status = (
+            f"{Colors.GREEN}✓{Colors.NC}"
+            if script_path.exists()
+            else f"{Colors.RED}✗{Colors.NC}"
+        )
+        executable = (
+            "🔧" if script_path.exists() and os.access(script_path, os.X_OK) else ""
+        )
         print(f"  {status} {name} {executable}")
 
     # Documentation
@@ -188,7 +212,11 @@ def main():
             doc_path = docs_dir / doc
         else:
             doc_path = doc
-        status = f"{Colors.GREEN}✓{Colors.NC}" if doc_path.exists() else f"{Colors.RED}✗{Colors.NC}"
+        status = (
+            f"{Colors.GREEN}✓{Colors.NC}"
+            if doc_path.exists()
+            else f"{Colors.RED}✗{Colors.NC}"
+        )
         print(f"  {status} {name}")
 
     # Coverage Status
@@ -227,7 +255,7 @@ def main():
 
             # Check for coverage configuration
             try:
-                with open(cmake_cache, 'r') as f:
+                with open(cmake_cache) as f:
                     cache_content = f.read()
                     if "ATOM_ENABLE_COVERAGE:BOOL=ON" in cache_content:
                         print("  ✅ Coverage enabled in build")
@@ -257,9 +285,12 @@ def main():
         print(f"  📝 {description}:")
         print_colored(f"     {command}", Colors.CYAN)
 
-    print_colored(f"\n{Colors.GREEN}✨ Testing system status check complete!{Colors.NC}")
+    print_colored(
+        f"\n{Colors.GREEN}✨ Testing system status check complete!{Colors.NC}"
+    )
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

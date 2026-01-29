@@ -58,6 +58,7 @@ struct BatteryInfo {
 ### Enumerations
 
 #### BatteryError
+
 ```cpp
 enum class BatteryError {
     NOT_PRESENT,    // Battery not detected
@@ -69,6 +70,7 @@ enum class BatteryError {
 ```
 
 #### BatteryChemistry
+
 ```cpp
 enum class BatteryChemistry {
     UNKNOWN,
@@ -82,6 +84,7 @@ enum class BatteryChemistry {
 ```
 
 #### PowerState
+
 ```cpp
 enum class PowerState {
     UNKNOWN,
@@ -94,6 +97,7 @@ enum class PowerState {
 ```
 
 #### PowerPlan
+
 ```cpp
 enum class PowerPlan {
     BALANCED,
@@ -107,6 +111,7 @@ enum class PowerPlan {
 ```
 
 #### AlertType
+
 ```cpp
 enum class AlertType {
     LOW_BATTERY,
@@ -127,21 +132,27 @@ enum class AlertType {
 ### Battery Information Retrieval
 
 #### getBatteryInfo()
+
 ```cpp
 auto getBatteryInfo() -> std::optional<BatteryInfo>;
 ```
+
 Gets basic battery information. Returns `std::nullopt` if no battery is present or accessible.
 
 #### getDetailedBatteryInfo()
+
 ```cpp
 auto getDetailedBatteryInfo() -> BatteryResult;
 ```
+
 Gets detailed battery information including manufacturer, model, and advanced metrics. Returns either `BatteryInfo` or `BatteryError`.
 
 #### getAllBatteries()
+
 ```cpp
 auto getAllBatteries() -> MultiBatteryInfo;
 ```
+
 Gets information for all batteries in the system. Useful for laptops with multiple batteries.
 
 ## Classes
@@ -163,6 +174,7 @@ public:
 ```
 
 **Usage Example:**
+
 ```cpp
 BatteryMonitor::startMonitoring([](const BatteryInfo& info) {
     std::cout << "Battery: " << info.batteryLifePercent << "%" << std::endl;
@@ -193,6 +205,7 @@ public:
 ```
 
 **Usage Example:**
+
 ```cpp
 auto& manager = BatteryManager::getInstance();
 manager.setAlertCallback([](AlertType type, const BatteryInfo& info) {
@@ -218,6 +231,7 @@ public:
 ```
 
 **Usage Example:**
+
 ```cpp
 // Set power plan based on battery level
 auto batteryInfo = getBatteryInfo();
@@ -277,18 +291,21 @@ public:
 ## Platform Support
 
 ### Windows
+
 - Full support via Windows API and WMI
 - Advanced battery information through device APIs
 - Power plan management through Windows power APIs
 - Thermal information where available
 
 ### macOS
+
 - IOKit integration for comprehensive battery data
 - Power source information through IOPowerSources
 - Limited power plan control (macOS manages power automatically)
 - Thermal monitoring through system APIs
 
 ### Linux
+
 - sysfs integration for battery information
 - UPower support where available
 - powerprofilesctl integration for power plan management
