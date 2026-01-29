@@ -319,6 +319,46 @@ blob ImageFilter::applyFilter(const blob& input, FilterType filterType,
     return result;
 }
 
+blob ImageFilter::applyFilterV2(const blob& input, FilterType filterType,
+                                const FilterParamMap& params) const {
+    // Convert FilterParamMap to FilterParams
+    FilterParams filterParams;
+
+    // Extract parameters from variant map
+    auto getInt = [&params](const std::string& key, int defaultVal) -> int {
+        auto it = params.find(key);
+        if (it != params.end()) {
+            if (auto* val = std::get_if<int>(&it->second)) {
+                return *val;
+            }
+        }
+        return defaultVal;
+    };
+
+    auto getDouble = [&params](const std::string& key,
+                               double defaultVal) -> double {
+        auto it = params.find(key);
+        if (it != params.end()) {
+            if (auto* val = std::get_if<double>(&it->second)) {
+                return *val;
+            }
+        }
+        return defaultVal;
+    };
+
+    filterParams.kernelSize = getInt("kernelSize", 3);
+    filterParams.sigma = getDouble("sigma", 1.0);
+    filterParams.sigmaColor = getDouble("sigmaColor", 75.0);
+    filterParams.sigmaSpace = getDouble("sigmaSpace", 75.0);
+    filterParams.threshold1 = getDouble("threshold1", 50.0);
+    filterParams.threshold2 = getDouble("threshold2", 150.0);
+    filterParams.angle = getDouble("angle", 0.0);
+    filterParams.distance = getDouble("distance", 10.0);
+    filterParams.strength = getDouble("strength", 1.0);
+
+    return applyFilter(input, filterType, filterParams);
+}
+
 blob ImageFilter::applyCustomKernel(
     const blob& input, const std::vector<std::vector<double>>& kernel,
     bool normalize) const {

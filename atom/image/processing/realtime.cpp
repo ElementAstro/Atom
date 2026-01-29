@@ -886,4 +886,14 @@ std::unique_ptr<RealtimeProcessor> createRealtimeProcessor(
     return nullptr;
 }
 
+// Factory function for optimal processor configuration
+std::unique_ptr<RealtimeProcessor> createOptimalRealtimeProcessor(
+    bool useGPU, int numThreads) {
+    RealtimeParams params;
+    params.useGPU = useGPU;
+    params.numThreads =
+        numThreads > 0 ? numThreads : std::thread::hardware_concurrency();
+    return createRealtimeProcessor(params);
+}
+
 }  // namespace atom::image

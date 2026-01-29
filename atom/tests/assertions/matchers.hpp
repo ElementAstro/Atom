@@ -575,11 +575,11 @@ public:
         : pattern_(std::move(pattern)), regex_(pattern_) {}
 
     [[nodiscard]] bool matches(const std::string& value) const override {
-        return std::regex_match(value, regex_);
+        return std::regex_search(value, regex_);
     }
 
     [[nodiscard]] std::string describe() const override {
-        return "fully matches regex \"" + pattern_ + "\"";
+        return "contains regex \"" + pattern_ + "\"";
     }
 
 private:

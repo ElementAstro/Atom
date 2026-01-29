@@ -291,8 +291,10 @@ TEST_F(ContainerMatchersTest, ContainerEqMatcher) {
     auto matcher = ContainerEq(expected);
     EXPECT_TRUE(matcher.matches(vec));
 
-    expected.push_back(6);
-    EXPECT_FALSE(matcher.matches(vec));
+    // Test with a different expected container
+    std::vector<int> different = {1, 2, 3, 4, 5, 6};
+    auto matcher2 = ContainerEq(different);
+    EXPECT_FALSE(matcher2.matches(vec));
 }
 
 // ============================================================================

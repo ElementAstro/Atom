@@ -312,30 +312,22 @@ inline auto ContainsNone(std::initializer_list<std::string> substrs) {
 }
 
 /**
- * @brief Is numeric string matcher
+ * @brief Is numeric string matcher (supports integers, floats, and scientific
+ * notation)
  */
 class IsNumericMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
         if (value.empty())
             return false;
-        size_t start = 0;
-        if (value[0] == '-' || value[0] == '+')
-            start = 1;
-        if (start >= value.size())
-            return false;
 
-        bool hasDecimal = false;
-        for (size_t i = start; i < value.size(); ++i) {
-            if (value[i] == '.') {
-                if (hasDecimal)
-                    return false;
-                hasDecimal = true;
-            } else if (!std::isdigit(static_cast<unsigned char>(value[i]))) {
-                return false;
-            }
-        }
-        return true;
+        // Use strtod for robust numeric parsing including scientific notation
+        char* endptr = nullptr;
+        const char* str = value.c_str();
+        std::strtod(str, &endptr);
+
+        // Check if entire string was consumed (valid number)
+        return endptr != str && *endptr == '\0';
     }
 
     [[nodiscard]] std::string describe() const { return "is numeric"; }
@@ -556,13 +548,13 @@ public:
 inline auto IsEmail() { return IsEmailMatcher{}; }
 
 /**
- * @brief URL format matcher
+ * @brief URL format matcher (HTTP/HTTPS only)
  */
 class IsUrlMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
-        static const std::regex urlPattern(
-            R"(^(https?|ftp)://[^\s/$.?#].[^\s]*$)", std::regex::icase);
+        static const std::regex urlPattern(R"(^https?://[^\s/$.?#].[^\s]*$)",
+                                           std::regex::icase);
         return std::regex_match(value, urlPattern);
     }
 
@@ -588,17 +580,77 @@ public:
 inline auto IsUuid() { return IsUuidMatcher{}; }
 
 /**
- * @brief JSON format matcher (basic)
+ * @brief JSON format matcher (supports objects, arrays, and primitives)
  */
 class IsJsonMatcher {
 public:
     [[nodiscard]] bool matches(const std::string& value) const {
         if (value.empty())
             return false;
-        // Very basic check - starts with { or [ and ends with } or ]
+
         char first = value.front();
         char last = value.back();
-        return (first == '{' && last == '}') || (first == '[' && last == ']');
+
+        // Check for JSON objects
+        if (first == '{' && last == '}') {
+            // Empty object is valid
+            if (value == "{}")
+                return true;
+            // Must have quoted keys for valid JSON objects
+            // Check for at least one colon after a quoted string
+            bool hasQuotedKey = false;
+            bool inString = false;
+            for (size_t i = 1; i < value.size() - 1; ++i) {
+                char c = value[i];
+                if (c == '"' && (i == 0 || value[i - 1] != '\\')) {
+                    inString = !inString;
+                    if (!inString) {
+                        // Check if next non-space char is ':'
+                        for (size_t j = i + 1; j < value.size(); ++j) {
+                            if (value[j] == ':') {
+                                hasQuotedKey = true;
+                                break;
+                            } else if (!std::isspace(static_cast<unsigned char>(
+                                           value[j])))
+                                break;
+                        }
+                    }
+                }
+            }
+            return hasQuotedKey;
+        }
+
+        // Check for JSON arrays
+        if (first == '[' && last == ']') {
+            // Empty array is valid
+            if (value == "[]")
+                return true;
+            // Check for trailing comma (invalid)
+            for (size_t i = value.size() - 2; i > 0; --i) {
+                char c = value[i];
+                if (c == ',')
+                    return false;  // Trailing comma
+                if (!std::isspace(static_cast<unsigned char>(c)))
+                    break;
+            }
+            return true;
+        }
+
+        // Check for JSON primitives
+        if (value == "null" || value == "true" || value == "false")
+            return true;
+
+        // Check for JSON string (quoted)
+        if (first == '"' && last == '"' && value.size() >= 2)
+            return true;
+
+        // Check for JSON number
+        char* endptr = nullptr;
+        std::strtod(value.c_str(), &endptr);
+        if (endptr != value.c_str() && *endptr == '\0')
+            return true;
+
+        return false;
     }
 
     [[nodiscard]] std::string describe() const { return "appears to be JSON"; }

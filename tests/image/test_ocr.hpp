@@ -12,6 +12,14 @@
 #include <opencv2/imgproc.hpp>
 #include <opencv2/opencv.hpp>
 #include "atom/image/processing/ocr/ocr.hpp"
+
+// Using declarations for OCR types
+using atom::image::EnhancedOCRProcessor;
+using atom::image::OCRCache;
+using atom::image::OCRConfig;
+using atom::image::OCRResult;
+using atom::image::ProgressReporter;
+using atom::image::SpellChecker;
 #endif
 
 namespace fs = std::filesystem;
